@@ -26,6 +26,13 @@ CPPFLAGS +=				\
 
 LDLIBS += -lm
 
+TAGSFLAGS =								\
+	-e								\
+	-a								\
+	--if0=no							\
+	--langmap=c:.c.h.i						\
+	--line-directives=yes
+
 ifeq ($(MODE), tiny)
 CPPFLAGS += -DNDEBUG
 CFLAGS += -Os -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops

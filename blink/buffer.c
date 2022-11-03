@@ -69,7 +69,7 @@ int AppendFmt(struct Buffer *b, const char *fmt, ...) {
   va_list va;
   tmp = NULL;
   va_start(va, fmt);
-  bytes = vasprintf_(&tmp, fmt, va);
+  bytes = vasprintf(&tmp, fmt, va);
   va_end(va);
   if (bytes != -1) AppendData(b, tmp, bytes);
   free(tmp);

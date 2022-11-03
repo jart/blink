@@ -41,7 +41,7 @@ char *GetElfString(const Elf64_Ehdr *elf, size_t mapsize, const char *strtab,
   intptr_t addr = (intptr_t)strtab + rva;
   CheckElfAddress(elf, mapsize, addr, 0);
   CheckElfAddress(elf, mapsize, addr,
-                  strnlen_((char *)addr, (intptr_t)elf + mapsize - addr) + 1);
+                  strnlen((char *)addr, (intptr_t)elf + mapsize - addr) + 1);
   return (char *)addr;
 }
 
