@@ -1,0 +1,4 @@
+# -*- conf -*-
+*.xz binary
+*.com binary
+*.elf binary

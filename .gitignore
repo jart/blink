@@ -1,0 +1,7 @@
+# -*- conf -*-
+*.xz
+/o
+/HTAGS
+/TAGS
+/perf.data
+/perf.data.old

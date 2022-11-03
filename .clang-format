@@ -1,0 +1,16 @@
+---
+BasedOnStyle: Google
+StatementMacros:
+  - INITIALIZER
+AlignConsecutiveMacros: true
+AlignConsecutiveDeclarations: false
+AlwaysBreakBeforeMultilineStrings: false
+AllowShortFunctionsOnASingleLine: false
+KeepEmptyLinesAtTheStartOfBlocks: true
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+---
+Language: Cpp
+AllowShortFunctionsOnASingleLine: false
+---
+Language: Proto
+...
