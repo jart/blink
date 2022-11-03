@@ -23,6 +23,9 @@
 #if defined(__linux)
 #include <sys/syscall.h>
 #endif
+#if defined(__APPLE__)
+#include <sys/random.h>
+#endif
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
 #include <sys/param.h>
 #endif
