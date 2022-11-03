@@ -23,6 +23,7 @@
 
 #include "blink/address.h"
 #include "blink/alu.h"
+#include "blink/assert.h"
 #include "blink/bitscan.h"
 #include "blink/case.h"
 #include "blink/clmul.h"
@@ -38,6 +39,7 @@
 #include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/op101.h"
+#include "blink/random.h"
 #include "blink/sse.h"
 #include "blink/ssefloat.h"
 #include "blink/ssemov.h"
@@ -447,14 +449,31 @@ static void OpCmpxchg16b(struct Machine *m, uint32_t rde) {
   }
 }
 
-static void OpRdrand(struct Machine *m, uint32_t rde) {
-  WriteRegister(rde, RegRexbRm(m, rde),
-                (uint64_t)rand() << 62 | (uint64_t)rand() << 31 | rand());
+static uint64_t Vigna(uint64_t s[1]) {
+  uint64_t z = (s[0] += 0x9e3779b97f4a7c15);
+  z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
+  z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+  return z ^ (z >> 31);
+}
+
+static void OpRand(struct Machine *m, uint32_t rde, uint64_t x) {
+  WriteRegister(rde, RegRexbRm(m, rde), x);
   m->flags = SetFlag(m->flags, FLAGS_CF, true);
 }
 
+static void OpRdrand(struct Machine *m, uint32_t rde) {
+  static unsigned i;
+  static uint64_t s;
+  if (!(i++ % 16)) {
+    unassert(GetRandom(&s, 8) == 8);
+  }
+  OpRand(m, rde, Vigna(&s));
+}
+
 static void OpRdseed(struct Machine *m, uint32_t rde) {
-  OpRdrand(m, rde);
+  uint64_t x;
+  unassert(GetRandom(&x, 8) == 8);
+  OpRand(m, rde, x);
 }
 
 static void Op1c7(struct Machine *m, uint32_t rde) {

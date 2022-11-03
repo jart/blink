@@ -5,7 +5,7 @@ TAGS ?= /usr/bin/ctags
 
 CFLAGS +=				\
 	-g				\
-	-Og				\
+	-O2				\
 	-Wall				\
 	-std=c11			\
 	-fdebug-prefix-map="$(PWD)"=	\
@@ -15,14 +15,16 @@ CFLAGS +=				\
 	-fstrict-overflow		\
 	-fno-omit-frame-pointer		\
 	-fno-unwind-tables		\
-	-fno-asynchronous-unwind-tables
+	-fno-asynchronous-unwind-tables	\
+	-Wno-unused-function
 
 CPPFLAGS +=				\
 	-iquote.			\
 	-D_POSIX_C_SOURCE=200809L	\
 	-D_XOPEN_SOURCE=700		\
 	-D_DARWIN_C_SOURCE		\
-	-D_DEFAULT_SOURCE
+	-D_DEFAULT_SOURCE		\
+	-D_GNU_SOURCE
 
 LDLIBS += -lm
 

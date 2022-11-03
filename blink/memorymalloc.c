@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include "blink/endian.h"
+#include "blink/errno.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/memory.h"
@@ -149,9 +150,9 @@ int ReserveVirtual(struct Machine *m, int64_t virt, size_t size, uint64_t key) {
   int64_t ti, mi, pt, end, level;
   for (end = virt + size;;) {
     for (pt = m->cr3, level = 39; level >= 12; level -= 9) {
-      pt = pt & 0x7ffffffff000;
+      pt = pt & PAGE_TA;
       ti = (virt >> level) & 511;
-      mi = (pt & 0x7ffffffff000) + ti * 8;
+      mi = (pt & PAGE_TA) + ti * 8;
       pt = MachineRead64(m, mi);
       if (level > 12) {
         if (!(pt & 1)) {
@@ -166,7 +167,7 @@ int ReserveVirtual(struct Machine *m, int64_t virt, size_t size, uint64_t key) {
           MachineWrite64(m, mi, key);
           ++m->memstat.reserved;
         }
-        if ((virt += 0x1000) >= end) return 0;
+        if ((virt += 4096) >= end) return 0;
         if (++ti == 512) break;
         pt = MachineRead64(m, (mi += 8));
       }
@@ -179,17 +180,16 @@ int64_t FindVirtual(struct Machine *m, int64_t virt, size_t size) {
   got = 0;
   do {
     if (virt >= 0x800000000000) {
-      errno = ENOMEM;
-      return -1;
+      return enomem();
     }
     for (pt = m->cr3, i = 39; i >= 12; i -= 9) {
-      pt = MachineRead64(m, (pt & 0x7ffffffff000) + ((virt >> i) & 511) * 8);
+      pt = MachineRead64(m, (pt & PAGE_TA) + ((virt >> i) & 511) * 8);
       if (!(pt & 1)) break;
     }
     if (i >= 12) {
       got += 1ull << i;
     } else {
-      virt += 0x1000;
+      virt += 4096;
       got = 0;
     }
   } while (got < size);
@@ -199,10 +199,10 @@ int64_t FindVirtual(struct Machine *m, int64_t virt, size_t size) {
 static void AppendRealFree(struct Machine *m, uint64_t real) {
   struct MachineRealFree *rf;
   if (m->realfree && real == m->realfree->i + m->realfree->n) {
-    m->realfree->n += 0x1000;
+    m->realfree->n += 4096;
   } else if ((rf = malloc(sizeof(struct MachineRealFree)))) {
     rf->i = real;
-    rf->n = 0x1000;
+    rf->n = 4096;
     rf->next = m->realfree;
     m->realfree = rf;
   }
@@ -212,17 +212,17 @@ int FreeVirtual(struct Machine *m, int64_t base, size_t size) {
   uint64_t i, mi, pt, end, virt;
   for (virt = base, end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = m->cr3, i = 39;; i -= 9) {
-      mi = (pt & 0x7ffffffff000) + ((virt >> i) & 511) * 8;
+      mi = (pt & PAGE_TA) + ((virt >> i) & 511) * 8;
       pt = MachineRead64(m, mi);
       if (!(pt & 1)) {
         break;
       } else if (i == 12) {
         ++m->memstat.freed;
-        if (pt & 0x0e00) {
+        if (pt & PAGE_RSRV) {
           --m->memstat.reserved;
         } else {
           --m->memstat.committed;
-          AppendRealFree(m, pt & 0x7ffffffff000);
+          AppendRealFree(m, pt & PAGE_TA);
         }
         MachineWrite64(m, mi, 0);
         break;

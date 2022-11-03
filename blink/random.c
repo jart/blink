@@ -16,73 +16,66 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/endian.h"
-#include "blink/machine.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <time.h>
+#include <unistd.h>
+#if defined(__linux)
+#include <sys/syscall.h>
+#endif
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#include <sys/param.h>
+#endif
+#if defined(__FreeBSD__)
+#include <sys/sysctl.h>
+#include <sys/types.h>
+#endif
+#include "blink/assert.h"
+#include "blink/errno.h"
+#include "blink/random.h"
 
-void OpCpuid(struct Machine *m, uint32_t rde) {
-  uint32_t ax, bx, cx, dx;
-  ax = 0;
-  bx = 0;
-  cx = 0;
-  dx = 0;
-  switch (Read32(m->ax)) {
-    case 0:
-    case 0x80000000:
-      ax = 7;
-      bx = 'G' | 'e' << 8 | 'n' << 16 | 'u' << 24;
-      dx = 'i' | 'n' << 8 | 'e' << 16 | 'C' << 24;
-      cx = 'o' | 's' << 8 | 'm' << 16 | 'o' << 24;
-      break;
-    case 1:
-      cx |= 1 << 0;  /* sse3 */
-      cx |= 1 << 1;  /* pclmulqdq */
-      cx |= 1 << 9;  /* ssse3 */
-      cx |= 1 << 23; /* popcnt */
-      cx |= 1 << 30; /* rdrnd */
-      cx |= 0 << 25; /* aes */
-      cx |= 1 << 13; /* cmpxchg16b */
-      dx |= 1 << 0;  /* fpu */
-      dx |= 1 << 4;  /* tsc */
-      dx |= 1 << 6;  /* pae */
-      dx |= 1 << 8;  /* cmpxchg8b */
-      dx |= 1 << 15; /* cmov */
-      dx |= 1 << 19; /* clflush */
-      dx |= 1 << 23; /* mmx */
-      dx |= 1 << 24; /* fxsave */
-      dx |= 1 << 25; /* sse */
-      dx |= 1 << 26; /* sse2 */
-      break;
-    case 7:
-      switch (Read32(m->cx)) {
-        case 0:
-          bx |= 1 << 0;  /* fsgsbase */
-          bx |= 1 << 9;  /* erms */
-          bx |= 1 << 18; /* rdseed */
-          cx |= 1 << 22; /* rdpid */
-          break;
-        default:
-          break;
+static ssize_t GetDevRandom(char *p, size_t n) {
+  int fd;
+  ssize_t rc;
+  if ((fd = open("/dev/urandom", O_RDONLY)) == -1) return -1;
+  rc = read(fd, p, n);
+  close(fd);
+  return rc;
+}
+
+#if (defined(__FreeBSD__) || defined(__NetBSD__)) && defined(KERN_ARND)
+static ssize_t GetKernArnd(char *p, size_t n) {
+  size_t m, i = 0;
+  int cmd[2] = {CTL_KERN, KERN_ARND};
+#if defined(__FreeBSD__)
+  if (n % sizeof(long)) return enosys();
+#endif
+  for (;;) {
+    m = n - i;
+    if (sysctl(cmd, 2, p + i, &m, 0, 0) != -1) {
+      if ((i += m) == n) {
+        return n;
       }
-      break;
-    case 0x80000001:
-      cx |= 1 << 0;  /* lahf */
-      dx |= 1 << 0;  /* fpu */
-      dx |= 1 << 8;  /* cmpxchg8b */
-      dx |= 1 << 11; /* syscall */
-      dx |= 1 << 15; /* cmov */
-      dx |= 1 << 23; /* mmx */
-      dx |= 1 << 24; /* fxsave */
-      dx |= 1 << 27; /* rdtscp */
-      dx |= 1 << 29; /* long */
-      break;
-    case 0x80000007:
-      dx |= 1 << 8; /* invtsc */
-      break;
-    default:
-      break;
+    } else {
+      return i ? i : -1;
+    }
   }
-  Write64(m->ax, ax);
-  Write64(m->bx, bx);
-  Write64(m->cx, cx);
-  Write64(m->dx, dx);
+}
+#endif
+
+ssize_t GetRandom(void *p, size_t n) {
+  ssize_t rc;
+#if defined(__linux) && defined(SYS_getrandom)
+  rc = syscall(SYS_getrandom, p, n, 0);
+#elif defined(__OpenBSD__) || defined(__APPLE__)
+  rc = !getentropy(p, n) ? n : -1;
+#elif defined(KERN_ARND) &&  \
+    (defined(__FreeBSD__) || \
+     (defined(__NetBSD__) && __NetBSD_Version__ >= 400000000))
+  rc = GetKernArnd(p, n);
+#endif
+  if (rc == -1 && errno == ENOSYS) {
+    rc = GetDevRandom(p, n);
+  }
+  return rc;
 }

@@ -45,6 +45,7 @@
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/pml4t.h"
+#include "blink/random.h"
 #include "blink/signal.h"
 #include "blink/syscall.h"
 #include "blink/throw.h"
@@ -849,6 +850,20 @@ static int64_t OpGetcwd(struct Machine *m, int64_t bufaddr, size_t size) {
   }
 }
 
+static ssize_t OpGetrandom(struct Machine *m, int64_t a, size_t n, int f) {
+  char *p;
+  ssize_t rc;
+  if ((p = malloc(n))) {
+    if ((rc = GetRandom(p, n)) != -1) {
+      VirtualRecvWrite(m, a, p, rc);
+    }
+    free(p);
+  } else {
+    rc = enomem();
+  }
+  return rc;
+}
+
 static int OpSigaction(struct Machine *m, int sig, int64_t act, int64_t old,
                        uint64_t sigsetsize) {
   if ((sig = XlatSignal(sig) - 1) != -1 &&
@@ -1286,6 +1301,7 @@ void OpSyscall(struct Machine *m, uint32_t rde) {
     SYSCALL(0x10B, OpReadlinkat(m, di, si, dx, r0));
     SYSCALL(0x10D, OpFaccessat(m, di, si, dx, r0));
     SYSCALL(0x120, OpAccept4(m, di, si, dx, r0));
+    SYSCALL(0x13e, OpGetrandom(m, di, si, dx));
     case 0x3C:
       OpExit(m, di);
     case 0xE7:

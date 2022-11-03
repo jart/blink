@@ -51,7 +51,6 @@ static int Exec(char *prog, char **argv, char **envp) {
   int rc;
   struct Elf elf;
   struct Machine *o;
-  /* execve(prog, argv, envp); */
   o = m;
   m = NewMachine();
   m->exec = Exec;
