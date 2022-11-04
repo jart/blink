@@ -12,10 +12,10 @@ You can compile blink on x86-64 Linux, Darwin, FreeBSD, NetBSD, OpenBSD,
 or Apple Silicon with Rosetta installed, using your platform toolchain.
 
 ```sh
-$ build/bootstrap/make.com -j8 o///blink/blink
-$ o///blink/blink third_party/cosmo/hello.com
+$ build/bootstrap/make.com -j8 o//blink/blink
+$ o//blink/blink third_party/cosmo/hello.com
 hello world
-$ o///blink/blink third_party/cosmo/tinyhello.elf
+$ o//blink/blink third_party/cosmo/tinyhello.elf
 hello world
 ```
 
@@ -23,7 +23,7 @@ There's a terminal interface for debugging:
 
 ```
 $ build/bootstrap/make.com -j8 o///blink/tui
-$ o///blink/tui -t third_party/cosmo/tinyhello.elf
+$ o//blink/tui -t third_party/cosmo/tinyhello.elf
 ```
 
 On x86-64 Linux you can cross-compile blink for Linux systems with x86,
