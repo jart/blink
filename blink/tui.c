@@ -99,6 +99,7 @@ ARGUMENTS\r\n\
 FEATURES\r\n\
 \r\n\
   8086, 8087, i386, x86_64, SSE3, SSSE3, POPCNT, MDA, CGA, TTY\r\n\
+  Type ? for keyboard shortcuts and CLI flags inside emulator.\r\n\
 \r\n"
 
 #define HELP \
