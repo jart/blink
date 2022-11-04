@@ -103,23 +103,23 @@ FEATURES\r\n\
 
 #define HELP \
   "\033[1mBLINKENLIGHTS v1.o\033[22m\
-                 https://justine.lol/blinkenlights/\r\n\
-\r\n\
-KEYBOARD SHORTCUTS                 CLI FLAGS\r\n\
-\r\n\
-ctrl-c  interrupt                  -t       tui mode\r\n\
-s       step                       -r       real mode\r\n\
-n       next                       -s       statistics\r\n\
-c       continue                   -b ADDR  push breakpoint\r\n\
-q       quit                       -L PATH  log file location\r\n\
-f       finish                     -R       reactive tui mode\r\n\
-R       restart                    -H       disable highlighting\r\n\
-x       hex                        -v       increase verbosity\r\n\
-?       help                       -?       help\r\n\
-t       sse type\r\n\
-w       sse width\r\n\
-B       pop breakpoint\r\n\
-ctrl-t  turbo\r\n\
+                 https://justine.lol/blinkenlights/\n\
+\n\
+KEYBOARD SHORTCUTS                 CLI FLAGS\n\
+\n\
+ctrl-c  interrupt                  -t       tui mode\n\
+s       step                       -r       real mode\n\
+n       next                       -s       statistics\n\
+c       continue                   -b ADDR  push breakpoint\n\
+q       quit                       -L PATH  log file location\n\
+f       finish                     -R       reactive tui mode\n\
+R       restart                    -H       disable highlighting\n\
+x       hex                        -v       increase verbosity\n\
+?       help                       -?       help\n\
+t       sse type\n\
+w       sse width\n\
+B       pop breakpoint\n\
+ctrl-t  turbo\n\
 alt-t   slowmo"
 
 #define MAXZOOM    16
