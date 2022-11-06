@@ -99,27 +99,28 @@ ARGUMENTS\r\n\
 FEATURES\r\n\
 \r\n\
   8086, 8087, i386, x86_64, SSE3, SSSE3, POPCNT, MDA, CGA, TTY\r\n\
+  Type ? for keyboard shortcuts and CLI flags inside emulator.\r\n\
 \r\n"
 
 #define HELP \
   "\033[1mBLINKENLIGHTS v1.o\033[22m\
-                 https://justine.lol/blinkenlights/\r\n\
-\r\n\
-KEYBOARD SHORTCUTS                 CLI FLAGS\r\n\
-\r\n\
-ctrl-c  interrupt                  -t       tui mode\r\n\
-s       step                       -r       real mode\r\n\
-n       next                       -s       statistics\r\n\
-c       continue                   -b ADDR  push breakpoint\r\n\
-q       quit                       -L PATH  log file location\r\n\
-f       finish                     -R       reactive tui mode\r\n\
-R       restart                    -H       disable highlighting\r\n\
-x       hex                        -v       increase verbosity\r\n\
-?       help                       -?       help\r\n\
-t       sse type\r\n\
-w       sse width\r\n\
-B       pop breakpoint\r\n\
-ctrl-t  turbo\r\n\
+                 https://justine.lol/blinkenlights/\n\
+\n\
+KEYBOARD SHORTCUTS                 CLI FLAGS\n\
+\n\
+ctrl-c  interrupt                  -t       tui mode\n\
+s       step                       -r       real mode\n\
+n       next                       -s       statistics\n\
+c       continue                   -b ADDR  push breakpoint\n\
+q       quit                       -L PATH  log file location\n\
+f       finish                     -R       reactive tui mode\n\
+R       restart                    -H       disable highlighting\n\
+x       hex                        -v       increase verbosity\n\
+?       help                       -?       help\n\
+t       sse type\n\
+w       sse width\n\
+B       pop breakpoint\n\
+ctrl-t  turbo\n\
 alt-t   slowmo"
 
 #define MAXZOOM    16
@@ -836,7 +837,7 @@ static int PickNumberOfXmmRegistersToShow(void) {
 }
 
 void SetupDraw(void) {
-  int i, j, n, a, b, yn, cpuy, ssey, dx[2], c2y[3], c3y[5];
+  int i, j, n, a, b, c, yn, cpuy, ssey, dx[2], c2y[3], c3y[5];
 
   cpuy = 9;
   if (IsSegNonZero()) cpuy += 2;
@@ -845,8 +846,14 @@ void SetupDraw(void) {
 
   a = 12 + 1 + DUMPWIDTH;
   b = DISPWIDTH + 1;
-  dx[1] = txn >= a + b ? txn - a : txn;
-  dx[0] = txn >= a + b + b ? txn - a - b : dx[1];
+  c = txn - a - b;
+  if (c > DISPWIDTH) c = DISPWIDTH;
+  if (c > 0) {
+    dx[1] = txn >= a + b ? txn - a : txn;
+  } else {
+    dx[1] = txn - a;
+  }
+  dx[0] = txn >= a + c ? txn - a - c: dx[1];
 
   yn = tyn - 1;
   a = 1 / 8. * yn;
@@ -1041,9 +1048,9 @@ static void DrawHr(struct Panel *p, const char *s) {
   int64_t i, wp, ws, wl, wr;
   if (p->bottom - p->top < 1) return;
   wp = p->right - p->left;
-  ws = strwidth(s, 0);
+  ws = 8;
   wl = wp / 4 - ws / 2;
-  wr = wp - (wl + ws);
+  wr = wp - (wl + strwidth(s, 0));
   for (i = 0; i < wl; ++i) AppendWide(&p->lines[0], HR);
   AppendStr(&p->lines[0], s);
   for (i = 0; i < wr; ++i) AppendWide(&p->lines[0], HR);
@@ -1051,7 +1058,7 @@ static void DrawHr(struct Panel *p, const char *s) {
 }
 
 static void DrawTerminalHr(struct Panel *p) {
-  int64_t i;
+  int64_t i, wp, ws, wl;
   struct itimerval it;
   if (p->bottom == p->top) return;
   if (pty->conf & kPtyBell) {
@@ -1065,20 +1072,24 @@ static void DrawTerminalHr(struct Panel *p) {
     }
     AppendStr(&p->lines[0], "\033[1m");
   }
+  wp = p->right - p->left;
+  ws = 8;
+  wl = wp / 4 - ws / 2;
+  for (i = 0; i < wl; ++i) AppendWide(&p->lines[0], HR);
 #ifdef IUTF8
-  AppendFmt(&p->lines[0], "──────────TELETYPEWRITER──%s──%s──%s──%s",
+  AppendFmt(&p->lines[0], "TELETYPEWRITER──%s──%s──%s──%s",
             (pty->conf & kPtyLed1) ? "\033[1;31m◎\033[0m" : "○",
             (pty->conf & kPtyLed2) ? "\033[1;32m◎\033[0m" : "○",
             (pty->conf & kPtyLed3) ? "\033[1;33m◎\033[0m" : "○",
             (pty->conf & kPtyLed4) ? "\033[1;34m◎\033[0m" : "○");
 #else
-  AppendFmt(&p->lines[0], "----------TELETYPEWRITER--%s--%s--%s--%s",
+  AppendFmt(&p->lines[0], "TELETYPEWRITER--%s--%s--%s--%s",
             (pty->conf & kPtyLed1) ? "\033[1;31m@\033[0m" : "o",
             (pty->conf & kPtyLed2) ? "\033[1;32m@\033[0m" : "o",
             (pty->conf & kPtyLed3) ? "\033[1;33m@\033[0m" : "o",
             (pty->conf & kPtyLed4) ? "\033[1;34m@\033[0m" : "o");
 #endif
-  for (i = 36; i < p->right - p->left; ++i) {
+  for (i = 26+wl; i < p->right - p->left; ++i) {
     AppendWide(&p->lines[0], HR);
   }
 }
