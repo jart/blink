@@ -81,7 +81,6 @@ ssize_t PrintPanels(int fd, long pn, struct Panel *p, long tyn, long txn) {
           AppendChar(&b, ' ');
           x += 1;
         }
-        AppendFmt(&b, "\033[%d;%dH", y + 1, x + 1);  // bsd utf-8 :(
         while (x < p[i].right || j < l->i) {
           wc = '\0';
           width = 0;
@@ -98,7 +97,7 @@ ssize_t PrintPanels(int fd, long pn, struct Panel *p, long tyn, long txn) {
                     j += abs(tpdecode(l->p + j, &wc));
                     if (x < p[i].right) {
                       width = wcwidth(wc);
-                      width = MAX(0, width);
+                      width = MAX(1, width);
                     } else {
                       wc = 0;
                     }
