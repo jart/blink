@@ -10,7 +10,6 @@ o/$(MODE)/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/%.o)
 o/$(MODE)/i486/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/i486/%.o)
 o/$(MODE)/m68k/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/m68k/%.o)
 o/$(MODE)/x86_64/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/x86_64/%.o)
-o/$(MODE)/x86_64-gcc48/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/x86_64-gcc48/%.o)
 o/$(MODE)/arm/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/arm/%.o)
 o/$(MODE)/aarch64/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/aarch64/%.o)
 o/$(MODE)/riscv64/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/riscv64/%.o)
@@ -31,8 +30,6 @@ o/$(MODE)/m68k/blink/blink: o/$(MODE)/m68k/blink/blink.o o/$(MODE)/m68k/blink/bl
 	o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/x86_64/blink/blink: o/$(MODE)/x86_64/blink/blink.o o/$(MODE)/x86_64/blink/blink.a
 	o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/x86_64-gcc48/blink/blink: o/$(MODE)/x86_64-gcc48/blink/blink.o o/$(MODE)/x86_64-gcc48/blink/blink.a
-	o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/arm/blink/blink: o/$(MODE)/arm/blink/blink.o o/$(MODE)/arm/blink/blink.a
 	o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/aarch64/blink/blink: o/$(MODE)/aarch64/blink/blink.o o/$(MODE)/aarch64/blink/blink.a
@@ -64,8 +61,6 @@ o/$(MODE)/m68k/blink/tui: o/$(MODE)/m68k/blink/tui.o o/$(MODE)/m68k/blink/blink.
 	o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/x86_64/blink/tui: o/$(MODE)/x86_64/blink/tui.o o/$(MODE)/x86_64/blink/blink.a
 	o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/x86_64-gcc48/blink/tui: o/$(MODE)/x86_64-gcc48/blink/tui.o o/$(MODE)/x86_64-gcc48/blink/blink.a
-	o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/arm/blink/tui: o/$(MODE)/arm/blink/tui.o o/$(MODE)/arm/blink/blink.a
 	o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/aarch64/blink/tui: o/$(MODE)/aarch64/blink/tui.o o/$(MODE)/aarch64/blink/blink.a

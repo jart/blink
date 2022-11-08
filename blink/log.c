@@ -16,17 +16,101 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
+#include <fcntl.h>
+#include <limits.h>
 #include <stdarg.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <time.h>
+#include <unistd.h>
 
+#include "blink/assert.h"
 #include "blink/log.h"
+#include "blink/macros.h"
 
-FILE *g_log;
+#define APPEND(F, ...) n += F(b + n, PIPE_BUF - n, __VA_ARGS__)
+
+static int g_log;
+
+static char *GetTimestamp(void) {
+  int x;
+  struct timespec ts;
+  static _Thread_local char s[27];
+  static _Thread_local int64_t last;
+  static _Thread_local struct tm tm;
+  clock_gettime(CLOCK_REALTIME, &ts);
+  if (ts.tv_sec != last) {
+    localtime_r(&ts.tv_sec, &tm);
+    x = tm.tm_year + 1900;
+    s[0] = '0' + x / 1000;
+    s[1] = '0' + x / 100 % 10;
+    s[2] = '0' + x / 10 % 10;
+    s[3] = '0' + x % 10;
+    s[4] = '-';
+    x = tm.tm_mon + 1;
+    s[5] = '0' + x / 10;
+    s[6] = '0' + x % 10;
+    s[7] = '-';
+    x = tm.tm_mday;
+    s[8] = '0' + x / 10;
+    s[9] = '0' + x % 10;
+    s[10] = 'T';
+    x = tm.tm_hour;
+    s[11] = '0' + x / 10;
+    s[12] = '0' + x % 10;
+    s[13] = ':';
+    x = tm.tm_min;
+    s[14] = '0' + x / 10;
+    s[15] = '0' + x % 10;
+    s[16] = ':';
+    x = tm.tm_sec;
+    s[17] = '0' + x / 10;
+    s[18] = '0' + x % 10;
+    s[19] = '.';
+    s[26] = 0;
+    last = ts.tv_sec;
+  }
+  x = ts.tv_nsec;
+  s[20] = '0' + x / 100000000;
+  s[21] = '0' + x / 10000000 % 10;
+  s[22] = '0' + x / 1000000 % 10;
+  s[23] = '0' + x / 100000 % 10;
+  s[24] = '0' + x / 10000 % 10;
+  s[25] = '0' + x / 1000 % 10;
+  return s;
+}
 
 void Log(const char *file, int line, const char *fmt, ...) {
   va_list va;
+  int rc, n = 0;
+  char b[PIPE_BUF];
   va_start(va, fmt);
-  fprintf(g_log, "%s:%d: ", file, line);
-  vfprintf(g_log, fmt, va);
-  fprintf(g_log, "\r\n");
+  APPEND(snprintf, "I%s:%s:%d: ", GetTimestamp(), file, line);
+  APPEND(vsnprintf, fmt, va);
+  APPEND(snprintf, "\n");
   va_end(va);
+  if (n > PIPE_BUF - 1) {
+    n = PIPE_BUF - 1;
+    b[--n] = '\n';
+    b[--n] = '.';
+    b[--n] = '.';
+    b[--n] = '.';
+  }
+  do rc = write(g_log > 0 ? g_log : 2, b, n);
+  while (rc == -1 && errno == EINTR);
+}
+
+void OpenLog(const char *path) {
+  int fd;
+  if (!path) {
+    path = "/tmp/blink.log";
+  }
+  fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+  if (fd == -1) {
+    perror(path);
+    exit(1);
+  }
+  unassert((g_log = fcntl(fd, F_DUPFD_CLOEXEC, 100)) != -1);
+  unassert(!close(fd));
 }

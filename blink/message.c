@@ -25,6 +25,7 @@
 
 #include "blink/buffer.h"
 #include "blink/lines.h"
+#include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/panel.h"
 #include "blink/strwidth.h"
@@ -66,7 +67,7 @@ void PrintMessageBox(int fd, const char *msg, long tyn, long txn) {
   AppendFmt(&b, "\033[%d;%dH", y++, x);
   for (i = 0; i < w; ++i) AppendStr(&b, " ");
   if (WriteBuffer(&b, fd) == -1) {
-    fprintf(stderr, "WriteBuffer failed: %s\r\n", strerror(errno));
+    LOGF("WriteBuffer failed: %s", strerror(errno));
     exit(1);
   }
   free(b.p);

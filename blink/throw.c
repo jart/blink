@@ -24,6 +24,7 @@
 
 #include "blink/address.h"
 #include "blink/endian.h"
+#include "blink/log.h"
 #include "blink/throw.h"
 
 static bool IsHaltingInitialized(struct Machine *m) {
@@ -44,16 +45,15 @@ void ThrowDivideError(struct Machine *m) {
 void ThrowSegmentationFault(struct Machine *m, int64_t va) {
   m->faultaddr = va;
   if (m->xedd) m->ip -= m->xedd->length;
-  fprintf(stderr,
-          "SEGMENTATION FAULT ADDR %012" PRIx64 " IP %012" PRIx64 " AX %" PRIx64
-          " CX %" PRIx64 " DX %" PRIx64 " BX %" PRIx64 " SP %" PRIx64 " "
-          "BP %" PRIx64 " SI %" PRIx64 " DI %" PRIx64 " R8 %" PRIx64
-          " R9 %" PRIx64 " R10 %" PRIx64 " R11 %" PRIx64 " R12 %" PRIx64 " "
-          "R13 %" PRIx64 " R14 %" PRIx64 " R15 %" PRIx64 "\r\n",
-          va, m->ip, Read64(m->ax), Read64(m->cx), Read64(m->dx), Read64(m->bx),
-          Read64(m->sp), Read64(m->bp), Read64(m->si), Read64(m->di),
-          Read64(m->r8), Read64(m->r9), Read64(m->r10), Read64(m->r11),
-          Read64(m->r12), Read64(m->r13), Read64(m->r14), Read64(m->r15));
+  LOGF("SEGMENTATION FAULT ADDR %012" PRIx64 " IP %012" PRIx64 " AX %" PRIx64
+       " CX %" PRIx64 " DX %" PRIx64 " BX %" PRIx64 " SP %" PRIx64 " "
+       "BP %" PRIx64 " SI %" PRIx64 " DI %" PRIx64 " R8 %" PRIx64 " R9 %" PRIx64
+       " R10 %" PRIx64 " R11 %" PRIx64 " R12 %" PRIx64 " "
+       "R13 %" PRIx64 " R14 %" PRIx64 " R15 %" PRIx64,
+       va, m->ip, Read64(m->ax), Read64(m->cx), Read64(m->dx), Read64(m->bx),
+       Read64(m->sp), Read64(m->bp), Read64(m->si), Read64(m->di),
+       Read64(m->r8), Read64(m->r9), Read64(m->r10), Read64(m->r11),
+       Read64(m->r12), Read64(m->r13), Read64(m->r14), Read64(m->r15));
   HaltMachine(m, kMachineSegmentationFault);
 }
 

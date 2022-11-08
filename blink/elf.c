@@ -23,16 +23,15 @@
 
 #include "blink/elf.h"
 #include "blink/endian.h"
+#include "blink/log.h"
 #include "blink/util.h"
 
 void CheckElfAddress(const Elf64_Ehdr *elf, size_t mapsize, intptr_t addr,
                      size_t addrsize) {
   if (addr < (intptr_t)elf || addr + addrsize > (intptr_t)elf + mapsize) {
-    fprintf(stderr,
-            "CheckElfAddress failed: %#" PRIxPTR "..%#" PRIxPTR
-            " %p..%#" PRIxPTR "\r\n",
-            addr, addr + addrsize, (void *)elf, (intptr_t)elf + mapsize);
-    exit(1);
+    LOGF("CheckElfAddress failed: %#" PRIxPTR "..%#" PRIxPTR " %p..%#" PRIxPTR,
+         addr, addr + addrsize, (void *)elf, (intptr_t)elf + mapsize);
+    exit(202);
   }
 }
 

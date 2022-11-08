@@ -9,6 +9,12 @@ MAKEFLAGS += --no-builtin-rules
 .FEATURES: output-sync
 .PHONY: o clean
 
+ifneq ($(m),)
+ifeq ($(MODE),)
+MODE := $(m)
+endif
+endif
+
 o: o/$(MODE)/blink
 test: o/$(MODE)/test
 clean:; rm -rf o
@@ -65,8 +71,6 @@ o/$(MODE)/depend.m68k: build/bootstrap/mkdeps.com o/$(MODE)/srcs.txt o/$(MODE)/h
 	build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/m68k/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
 o/$(MODE)/depend.x86_64: build/bootstrap/mkdeps.com o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
 	build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/x86_64/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.x86_64-gcc48: build/bootstrap/mkdeps.com o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
-	build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/x86_64-gcc48/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
 o/$(MODE)/depend.arm: build/bootstrap/mkdeps.com o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
 	build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/arm/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
 o/$(MODE)/depend.aarch64: build/bootstrap/mkdeps.com o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt

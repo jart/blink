@@ -14,8 +14,6 @@ o/$(MODE)/m68k/test/blink/machine_test.com: o/$(MODE)/m68k/test/blink/machine_te
 	o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/x86_64/test/blink/machine_test.com: o/$(MODE)/x86_64/test/blink/machine_test.o o/$(MODE)/x86_64/blink/blink.a
 	o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/x86_64-gcc48/test/blink/machine_test.com: o/$(MODE)/x86_64-gcc48/test/blink/machine_test.o o/$(MODE)/x86_64-gcc48/blink/blink.a
-	o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/arm/test/blink/machine_test.com: o/$(MODE)/arm/test/blink/machine_test.o o/$(MODE)/arm/blink/blink.a
 	o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/aarch64/test/blink/machine_test.com: o/$(MODE)/aarch64/test/blink/machine_test.o o/$(MODE)/aarch64/blink/blink.a
@@ -47,8 +45,6 @@ o/$(MODE)/m68k/test/blink/divmul_test.com: o/$(MODE)/m68k/test/blink/divmul_test
 	o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/x86_64/test/blink/divmul_test.com: o/$(MODE)/x86_64/test/blink/divmul_test.o o/$(MODE)/x86_64/blink/blink.a
 	o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/x86_64-gcc48/test/blink/divmul_test.com: o/$(MODE)/x86_64-gcc48/test/blink/divmul_test.o o/$(MODE)/x86_64-gcc48/blink/blink.a
-	o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/arm/test/blink/divmul_test.com: o/$(MODE)/arm/test/blink/divmul_test.o o/$(MODE)/arm/blink/blink.a
 	o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/aarch64/test/blink/divmul_test.com: o/$(MODE)/aarch64/test/blink/divmul_test.o o/$(MODE)/aarch64/blink/blink.a
@@ -80,8 +76,6 @@ o/$(MODE)/m68k/test/blink/modrm_test.com: o/$(MODE)/m68k/test/blink/modrm_test.o
 	o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/x86_64/test/blink/modrm_test.com: o/$(MODE)/x86_64/test/blink/modrm_test.o o/$(MODE)/x86_64/blink/blink.a
 	o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/x86_64-gcc48/test/blink/modrm_test.com: o/$(MODE)/x86_64-gcc48/test/blink/modrm_test.o o/$(MODE)/x86_64-gcc48/blink/blink.a
-	o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/arm/test/blink/modrm_test.com: o/$(MODE)/arm/test/blink/modrm_test.o o/$(MODE)/arm/blink/blink.a
 	o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/aarch64/test/blink/modrm_test.com: o/$(MODE)/aarch64/test/blink/modrm_test.o o/$(MODE)/aarch64/blink/blink.a
@@ -113,8 +107,6 @@ o/$(MODE)/m68k/test/blink/iovs_test.com: o/$(MODE)/m68k/test/blink/iovs_test.o o
 	o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/x86_64/test/blink/iovs_test.com: o/$(MODE)/x86_64/test/blink/iovs_test.o o/$(MODE)/x86_64/blink/blink.a
 	o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/x86_64-gcc48/test/blink/iovs_test.com: o/$(MODE)/x86_64-gcc48/test/blink/iovs_test.o o/$(MODE)/x86_64-gcc48/blink/blink.a
-	o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/arm/test/blink/iovs_test.com: o/$(MODE)/arm/test/blink/iovs_test.o o/$(MODE)/arm/blink/blink.a
 	o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/aarch64/test/blink/iovs_test.com: o/$(MODE)/aarch64/test/blink/iovs_test.o o/$(MODE)/aarch64/blink/blink.a
@@ -146,8 +138,6 @@ o/$(MODE)/m68k/test/blink/x86_test.com: o/$(MODE)/m68k/test/blink/x86_test.o o/$
 	o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/x86_64/test/blink/x86_test.com: o/$(MODE)/x86_64/test/blink/x86_test.o o/$(MODE)/x86_64/blink/blink.a
 	o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/x86_64-gcc48/test/blink/x86_test.com: o/$(MODE)/x86_64-gcc48/test/blink/x86_test.o o/$(MODE)/x86_64-gcc48/blink/blink.a
-	o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/arm/test/blink/x86_test.com: o/$(MODE)/arm/test/blink/x86_test.o o/$(MODE)/arm/blink/blink.a
 	o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/aarch64/test/blink/x86_test.com: o/$(MODE)/aarch64/test/blink/x86_test.o o/$(MODE)/aarch64/blink/blink.a
@@ -179,8 +169,6 @@ o/$(MODE)/m68k/test/blink/ldbl_test.com: o/$(MODE)/m68k/test/blink/ldbl_test.o o
 	o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/x86_64/test/blink/ldbl_test.com: o/$(MODE)/x86_64/test/blink/ldbl_test.o o/$(MODE)/x86_64/blink/blink.a
 	o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/x86_64-gcc48/test/blink/ldbl_test.com: o/$(MODE)/x86_64-gcc48/test/blink/ldbl_test.o o/$(MODE)/x86_64-gcc48/blink/blink.a
-	o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/arm/test/blink/ldbl_test.com: o/$(MODE)/arm/test/blink/ldbl_test.o o/$(MODE)/arm/blink/blink.a
 	o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/aarch64/test/blink/ldbl_test.com: o/$(MODE)/aarch64/test/blink/ldbl_test.o o/$(MODE)/aarch64/blink/blink.a
@@ -209,7 +197,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/i486/blink/blink				\
 		o/$(MODE)/m68k/blink/blink				\
 		o/$(MODE)/x86_64/blink/blink				\
-		o/$(MODE)/x86_64-gcc48/blink/blink			\
 		o/$(MODE)/arm/blink/blink				\
 		o/$(MODE)/aarch64/blink/blink				\
 		o/$(MODE)/riscv64/blink/blink				\
@@ -225,7 +212,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/i486/blink/blink				\
 		o/$(MODE)/m68k/blink/blink				\
 		o/$(MODE)/x86_64/blink/blink				\
-		o/$(MODE)/x86_64-gcc48/blink/blink			\
 		o/$(MODE)/arm/blink/blink				\
 		o/$(MODE)/aarch64/blink/blink				\
 		o/$(MODE)/riscv64/blink/blink				\
@@ -241,7 +227,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/i486/test/blink/machine_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/machine_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/machine_test.com.runs	\
-		o/$(MODE)/x86_64-gcc48/test/blink/machine_test.com.runs	\
 		o/$(MODE)/arm/test/blink/machine_test.com.runs		\
 		o/$(MODE)/aarch64/test/blink/machine_test.com.runs	\
 		o/$(MODE)/riscv64/test/blink/machine_test.com.runs	\
@@ -257,7 +242,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/i486/test/blink/divmul_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/divmul_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/divmul_test.com.runs	\
-		o/$(MODE)/x86_64-gcc48/test/blink/divmul_test.com.runs	\
 		o/$(MODE)/arm/test/blink/divmul_test.com.runs		\
 		o/$(MODE)/aarch64/test/blink/divmul_test.com.runs	\
 		o/$(MODE)/riscv64/test/blink/divmul_test.com.runs	\
@@ -273,7 +257,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/i486/test/blink/modrm_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/modrm_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/modrm_test.com.runs		\
-		o/$(MODE)/x86_64-gcc48/test/blink/modrm_test.com.runs	\
 		o/$(MODE)/arm/test/blink/modrm_test.com.runs		\
 		o/$(MODE)/aarch64/test/blink/modrm_test.com.runs	\
 		o/$(MODE)/riscv64/test/blink/modrm_test.com.runs	\
@@ -289,7 +272,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/i486/test/blink/iovs_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/iovs_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/iovs_test.com.runs		\
-		o/$(MODE)/x86_64-gcc48/test/blink/iovs_test.com.runs	\
 		o/$(MODE)/arm/test/blink/iovs_test.com.runs		\
 		o/$(MODE)/aarch64/test/blink/iovs_test.com.runs		\
 		o/$(MODE)/riscv64/test/blink/iovs_test.com.runs		\
@@ -305,7 +287,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/i486/test/blink/x86_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/x86_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/x86_test.com.runs		\
-		o/$(MODE)/x86_64-gcc48/test/blink/x86_test.com.runs	\
 		o/$(MODE)/arm/test/blink/x86_test.com.runs		\
 		o/$(MODE)/aarch64/test/blink/x86_test.com.runs		\
 		o/$(MODE)/riscv64/test/blink/x86_test.com.runs		\
@@ -321,7 +302,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/i486/test/blink/ldbl_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/ldbl_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/ldbl_test.com.runs		\
-		o/$(MODE)/x86_64-gcc48/test/blink/ldbl_test.com.runs	\
 		o/$(MODE)/arm/test/blink/ldbl_test.com.runs		\
 		o/$(MODE)/aarch64/test/blink/ldbl_test.com.runs		\
 		o/$(MODE)/riscv64/test/blink/ldbl_test.com.runs		\

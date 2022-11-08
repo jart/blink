@@ -31,6 +31,7 @@
 #include "blink/argv.h"
 #include "blink/endian.h"
 #include "blink/loader.h"
+#include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/memory.h"
@@ -64,14 +65,14 @@ static void LoadElfLoadSegment(struct Machine *m, void *code, size_t codesize,
   assert(felf + Read64(phdr->p_offset) - fstart ==
          Read64(phdr->p_vaddr) - vstart);
   if (ReserveVirtual(m, vstart, fend - fstart, 0x0207) == -1) {
-    fprintf(stderr, "ReserveVirtual failed\r\n");
-    exit(1);
+    LOGF("ReserveVirtual failed");
+    exit(200);
   }
   VirtualRecv(m, vstart, (void *)(uintptr_t)fstart, fend - fstart);
   if (bsssize) {
     if (ReserveVirtual(m, vbss, bsssize, 0x0207) == -1) {
-      fprintf(stderr, "ReserveVirtual failed\r\n");
-      exit(1);
+      LOGF("ReserveVirtual failed");
+      exit(200);
     }
   }
   if (Read64(phdr->p_memsz) - Read64(phdr->p_filesz) > bsssize) {
@@ -116,8 +117,8 @@ static void BootProgram(struct Machine *m, struct Elf *elf, size_t codesize) {
   m->ip = 0x7c00;
   elf->base = 0x7c00;
   if (ReserveReal(m, 0x00f00000) == -1) {
-    fprintf(stderr, "ReserveReal failed\r\n");
-    exit(1);
+    LOGF("ReserveReal failed");
+    exit(201);
   }
   memset(m->real.p, 0, 0x00f00000);
   Write16(m->real.p + 0x400, 0x3F8);
@@ -162,22 +163,21 @@ static int GetElfHeader(char ehdr[64], const char *prog, const char *image) {
       if (i < 64) {
         ehdr[i++] = c;
       } else {
-        fprintf(stderr, "%s: ape printf elf header too long\n", prog);
+        LOGF("%s: ape printf elf header too long\n", prog);
         return -1;
       }
     }
     if (i != 64) {
-      fprintf(stderr, "%s: ape printf elf header too short\n", prog);
+      LOGF("%s: ape printf elf header too short\n", prog);
       return -1;
     }
     if (READ32(ehdr) != READ32("\177ELF")) {
-      fprintf(stderr, "%s: ape printf elf header didn't have elf magic\n",
-              prog);
+      LOGF("%s: ape printf elf header didn't have elf magic\n", prog);
       return -1;
     }
     return 0;
   }
-  fprintf(stderr, "%s: printf statement not found in first 4096 bytes\n", prog);
+  LOGF("%s: printf statement not found in first 4096 bytes\n", prog);
   return -1;
 }
 
@@ -191,16 +191,15 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
   elf->prog = prog;
   if ((fd = open(prog, O_RDONLY)) == -1 ||
       (fstat(fd, &st) == -1 || !st.st_size)) {
-    fputs(prog, stderr);
-    fputs(": not found\r\n", stderr);
-    exit(1);
+    LOGF("%s: not found", prog);
+    exit(201);
   }
   elf->mapsize = st.st_size;
   elf->map =
       mmap(NULL, elf->mapsize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
   if (elf->map == MAP_FAILED) {
-    fprintf(stderr, "mmap failed: %s\r\n", strerror(errno));
-    exit(1);
+    LOGF("mmap failed: %s", strerror(errno));
+    exit(200);
   }
   close(fd);
   ResetCpu(m);
@@ -211,8 +210,8 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
     Write64(m->sp, sp);
     m->cr3 = AllocateLinearPage(m);
     if (ReserveVirtual(m, sp - 0x100000, 0x100000, 0x0207) == -1) {
-      fprintf(stderr, "ReserveVirtual failed\r\n");
-      exit(1);
+      LOGF("ReserveVirtual failed");
+      exit(200);
     }
     LoadArgv(m, prog, args, vars);
     if (memcmp(elf->map, "\177ELF", 4) == 0) {

@@ -74,7 +74,7 @@
 #define POLLHUP_LINUX       0x10
 #define POLLNVAL_LINUX      0x20
 
-#define SYSCALL(x, y) CASE(x, LOGF("%s\r\n", #y); ax = y)
+#define SYSCALL(x, y) CASE(x, LOGF("%s", #y); ax = y)
 #define ASSIGN(D, S)  memcpy(&D, &S, MIN(sizeof(S), sizeof(D)))
 
 const struct MachineFdCb kMachineFdCbHost = {
@@ -1310,7 +1310,7 @@ void OpSyscall(struct Machine *m, uint32_t rde) {
       OpRestore(m);
       return;
     default:
-      LOGF("missing syscall 0x%03" PRIx64 "\r\n", ax);
+      LOGF("missing syscall 0x%03" PRIx64, ax);
       ax = enosys();
       break;
   }

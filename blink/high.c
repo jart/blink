@@ -26,7 +26,7 @@ struct High g_high;
 char *HighStart(char *p, int h) {
   if (h) {
     p = stpcpy(p, "\033[38;5;");
-    p += sprintf(p, "%u", h);
+    p += snprintf(p, 12, "%u", h);
     p = stpcpy(p, "m");
     g_high.active = true;
   }

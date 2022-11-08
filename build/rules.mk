@@ -17,8 +17,6 @@ o/$(MODE)/m68k/%.a:
 	o/third_party/gcc/m68k/bin/m68k-linux-musl-ar rcsD $@ $^
 o/$(MODE)/x86_64/%.a:
 	o/third_party/gcc/x86_64/bin/x86_64-linux-musl-ar rcsD $@ $^
-o/$(MODE)/x86_64-gcc48/%.a:
-	o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-ar rcsD $@ $^
 o/$(MODE)/arm/%.a:
 	o/third_party/gcc/arm/bin/arm-linux-musleabi-ar rcsD $@ $^
 o/$(MODE)/aarch64/%.a:

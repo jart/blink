@@ -105,13 +105,13 @@ static char *DisRegisterWord(struct Dis *d, uint32_t rde, char *p, bool g,
 
 static char *DisInt(char *p, int64_t x) {
   if (-15 <= x && x <= 15) {
-    p += sprintf(p, "%" PRId64, x);
+    p += snprintf(p, 32, "%" PRId64, x);
   } else if (x == INT64_MIN) {
     p = stpcpy(p, "-0x8000000000000000");
   } else if (x < 0 && -x < 0xFFFFFFFF) {
-    p += sprintf(p, "-0x%" PRIx64, -x);
+    p += snprintf(p, 32, "-0x%" PRIx64, -x);
   } else {
-    p += sprintf(p, "0x%" PRIx64, x);
+    p += snprintf(p, 32, "0x%" PRIx64, x);
   }
   return p;
 }
@@ -443,13 +443,13 @@ static char *DisOne(struct Dis *d, uint32_t rde, char *p) {
 
 static char *DisJbs(struct Dis *d, uint32_t rde, char *p) {
   if (d->xedd->op.disp > 0) *p++ = '+';
-  p += sprintf(p, "%" PRId64, d->xedd->op.disp);
+  p += snprintf(p, 32, "%" PRId64, d->xedd->op.disp);
   return p;
 }
 
 static char *DisJb(struct Dis *d, uint32_t rde, char *p) {
   if (d->xedd->op.disp > 0) *p++ = '+';
-  p += sprintf(p, "%d", (int)(d->xedd->op.disp & 0xff));
+  p += snprintf(p, 32, "%d", (int)(d->xedd->op.disp & 0xff));
   return p;
 }
 
@@ -494,7 +494,7 @@ static char *DisXmm(struct Dis *d, uint32_t rde, char *p, const char *s,
   p = HighStart(p, g_high.reg);
   *p++ = '%';
   p = stpcpy(p, s);
-  p += sprintf(p, "%u", reg);
+  p += snprintf(p, 32, "%u", reg);
   p = HighEnd(p);
   return p;
 }

@@ -258,7 +258,6 @@ static uint64_t readaddr;
 static uint64_t readsize;
 static uint64_t writeaddr;
 static uint64_t writesize;
-static const char *logpath;
 static char *statusmessage;
 static int64_t framesstart;
 static uint64_t last_opcount;
@@ -853,7 +852,7 @@ void SetupDraw(void) {
   } else {
     dx[1] = txn - a;
   }
-  dx[0] = txn >= a + c ? txn - a - c: dx[1];
+  dx[0] = txn >= a + c ? txn - a - c : dx[1];
 
   yn = tyn - 1;
   a = 1 / 8. * yn;
@@ -1089,7 +1088,7 @@ static void DrawTerminalHr(struct Panel *p) {
             (pty->conf & kPtyLed3) ? "\033[1;33m@\033[0m" : "o",
             (pty->conf & kPtyLed4) ? "\033[1;34m@\033[0m" : "o");
 #endif
-  for (i = 26+wl; i < p->right - p->left; ++i) {
+  for (i = 26 + wl; i < p->right - p->left; ++i) {
     AppendWide(&p->lines[0], HR);
   }
 }
@@ -1913,6 +1912,7 @@ static void OnDiskServiceReadSectors(void) {
   sector = (m->cx[0] & 63) - 1;
   size = sectors * 512;
   offset = sector * 512 + head * 512 * 63 + cylinder * 512 * 63 * 255;
+  (void)drive;
   LOGF("bios read sectors %" PRId64 " "
        "@ sector %" PRId64 " cylinder %" PRId64 " head %" PRId64
        " drive %" PRId64 " offset %#" PRIx64 "",
@@ -2777,7 +2777,7 @@ static void Tui(void) {
 
 static void GetOpts(int argc, char *argv[]) {
   int opt;
-  logpath = "/tmp/blink.log";
+  const char *logpath = 0;
   while ((opt = getopt(argc, argv, "hvtrzRsb:HL:")) != -1) {
     switch (opt) {
       case 't':
@@ -2817,8 +2817,7 @@ static void GetOpts(int argc, char *argv[]) {
         PrintUsage(48, stderr);
     }
   }
-  g_log = fopen(logpath, "w");
-  setvbuf(g_log, malloc(4096), _IOLBF, 4096);
+  OpenLog(logpath);
 }
 
 static int OpenDevTty(void) {
