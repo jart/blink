@@ -202,6 +202,41 @@ int XlatSignal(int x) {
   }
 }
 
+int XlatResource(int x) {
+  switch (x) {
+    XLAT(0, RLIMIT_CPU);
+    XLAT(1, RLIMIT_FSIZE);
+    XLAT(2, RLIMIT_DATA);
+    XLAT(3, RLIMIT_STACK);
+    XLAT(4, RLIMIT_CORE);
+    XLAT(5, RLIMIT_RSS);
+    XLAT(6, RLIMIT_NPROC);
+    XLAT(7, RLIMIT_NOFILE);
+    XLAT(8, RLIMIT_MEMLOCK);
+    XLAT(9, RLIMIT_AS);
+#ifdef RLIMIT_LOCKS
+    XLAT(10, RLIMIT_LOCKS);
+#endif
+#ifdef RLIMIT_SIGPENDING
+    XLAT(11, RLIMIT_SIGPENDING);
+#endif
+#ifdef RLIMIT_MSGQUEUE
+    XLAT(12, RLIMIT_MSGQUEUE);
+#endif
+#ifdef RLIMIT_NICE
+    XLAT(13, RLIMIT_NICE);
+#endif
+#ifdef RLIMIT_RTPRIO
+    XLAT(14, RLIMIT_RTPRIO);
+#endif
+#ifdef RLIMIT_RTTIME
+    XLAT(15, RLIMIT_RTTIME);
+#endif
+    default:
+      return einval();
+  }
+}
+
 int UnXlatSignal(int x) {
   switch (x) {
     XLAT(SIGHUP, 1);
@@ -617,6 +652,16 @@ void XlatRusageToLinux(struct rusage_linux *dst, const struct rusage *src) {
   Write64(dst->ru_nsignals, src->ru_nsignals);
   Write64(dst->ru_nvcsw, src->ru_nvcsw);
   Write64(dst->ru_nivcsw, src->ru_nivcsw);
+}
+
+void XlatRlimitToLinux(struct rlimit_linux *dst, const struct rlimit *src) {
+  Write64(dst->rlim_cur, src->rlim_cur);
+  Write64(dst->rlim_max, src->rlim_max);
+}
+
+void XlatLinuxToRlimit(struct rlimit *dst, const struct rlimit_linux *src) {
+  dst->rlim_cur = Read64(src->rlim_cur);
+  dst->rlim_max = Read64(src->rlim_max);
 }
 
 void XlatItimervalToLinux(struct itimerval_linux *dst,

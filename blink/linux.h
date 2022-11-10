@@ -160,4 +160,18 @@ struct ucontext_linux {
   uint8_t uc_sigmask[8];
 };
 
+struct utsname_linux {
+  char sysname[65];
+  char nodename[65];
+  char release[65];
+  char version[65];
+  char machine[65];
+  char domainname[65];
+};
+
+struct rlimit_linux {
+  uint8_t rlim_cur[8];
+  uint8_t rlim_max[8];
+};
+
 #endif /* BLINK_LINUX_H_ */

@@ -31,6 +31,7 @@ int XlatSocketOptname(int, int);
 int XlatSocketProtocol(int);
 int XlatSocketType(int);
 int XlatWait(int);
+int XlatResource(int);
 
 void XlatSockaddrToHost(struct sockaddr_in *, const struct sockaddr_in_linux *);
 void XlatSockaddrToLinux(struct sockaddr_in_linux *,
@@ -44,5 +45,7 @@ void XlatTermiosToLinux(struct termios_linux *, const struct termios *);
 void XlatWinsizeToLinux(struct winsize_linux *, const struct winsize *);
 void XlatSigsetToLinux(uint8_t[8], const sigset_t *);
 void XlatLinuxToSigset(sigset_t *, const uint8_t[8]);
+void XlatRlimitToLinux(struct rlimit_linux *, const struct rlimit *);
+void XlatLinuxToRlimit(struct rlimit *, const struct rlimit_linux *);
 
 #endif /* BLINK_XLAT_H_ */

@@ -85,8 +85,8 @@ FLAGS\r\n\
   -r        real mode\r\n\
   -s        statistics\r\n\
   -H        disable highlight\r\n\
-  -t        tui debugger mode\r\n\
-  -R        reactive tui mode\r\n\
+  -t        disable tui mode\r\n\
+  -R        disable reactive\r\n\
   -b ADDR   push a breakpoint\r\n\
   -L PATH   log file location\r\n\
 \r\n\
@@ -2781,10 +2781,10 @@ static void GetOpts(int argc, char *argv[]) {
   while ((opt = getopt(argc, argv, "hvtrzRsb:HL:")) != -1) {
     switch (opt) {
       case 't':
-        tuimode = true;
+        tuimode = false;
         break;
       case 'R':
-        react = true;
+        react = false;
         break;
       case 'r':
         m->mode = XED_MACHINE_MODE_REAL;
@@ -2871,6 +2871,8 @@ int Emulator(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
   static struct sigaction sa;
+  react = true;
+  tuimode = true;
   pty = NewPty();
   m = NewMachine();
   m->mode = XED_MACHINE_MODE_LONG_64;
