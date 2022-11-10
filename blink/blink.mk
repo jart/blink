@@ -84,6 +84,9 @@ o/$(MODE)/powerpc/blink/tui: o/$(MODE)/powerpc/blink/tui.o o/$(MODE)/powerpc/bli
 o/$(MODE)/powerpc64le/blink/tui: o/$(MODE)/powerpc64le/blink/tui.o o/$(MODE)/powerpc64le/blink/blink.a
 	o/third_party/gcc/powerpc64le/bin/powerpc64le-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
+o/$(MODE)/blink/oneoff.com: o/$(MODE)/blink/oneoff.o o/$(MODE)/blink/blink.a
+	$(CC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
+
 o/$(MODE)/blink:				\
 		o/$(MODE)/blink/tui		\
 		o/$(MODE)/blink/blink		\
