@@ -47,7 +47,7 @@ static void ReadInstruction(struct Machine *m, uint8_t *p, unsigned n) {
   struct XedDecodedInst xedd[1];
   InitializeInstruction(xedd, m->mode);
   if (!DecodeInstruction(xedd, p, n)) {
-    memcpy(m->xedd, xedd, sizeof(m->icache[0]));
+    memcpy(m->xedd, xedd, kInstructionBytes);
   } else {
     HaltMachine(m, kMachineDecodeError);
   }
@@ -73,15 +73,15 @@ void LoadInstruction(struct Machine *m) {
   unsigned key;
   uint8_t *addr;
   ip = Read64(m->cs) + MaskAddress(m->mode & 3, m->ip);
-  key = ip & (ARRAYLEN(m->icache) - 1);
-  m->xedd = (struct XedDecodedInst *)m->icache[key];
+  key = ip & (ARRAYLEN(m->opcache->icache) - 1);
+  m->xedd = (struct XedDecodedInst *)m->opcache->icache[key];
   if ((ip & 0xfff) < 0x1000 - 15) {
-    if (ip - (ip & 0xfff) == m->codevirt && m->codehost) {
-      addr = m->codehost + (ip & 0xfff);
+    if (ip - (ip & 0xfff) == m->opcache->codevirt && m->opcache->codehost) {
+      addr = m->opcache->codehost + (ip & 0xfff);
     } else {
-      m->codevirt = ip - (ip & 0xfff);
-      m->codehost = ResolveAddress(m, m->codevirt);
-      addr = m->codehost + (ip & 0xfff);
+      m->opcache->codevirt = ip - (ip & 0xfff);
+      m->opcache->codehost = ResolveAddress(m, m->opcache->codevirt);
+      addr = m->opcache->codehost + (ip & 0xfff);
     }
     if (!IsOpcodeEqual(m->xedd, addr)) {
       ReadInstruction(m, addr, 15);

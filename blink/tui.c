@@ -2654,7 +2654,7 @@ static void Tui(void) {
           LOGF("BREAK %012" PRIx64 "", breakpoints.p[bp].addr);
         }
       } else {
-        m->xedd = (struct XedDecodedInst *)m->icache[0];
+        m->xedd = (struct XedDecodedInst *)m->opcache->icache[0];
         m->xedd->length = 1;
         m->xedd->bytes[0] = 0xCC;
         m->xedd->op.opcode = 0xCC;

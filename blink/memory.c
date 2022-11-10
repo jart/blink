@@ -161,11 +161,11 @@ void VirtualRecvWrite(struct Machine *m, int64_t addr, void *src, uint64_t n) {
 
 void *ReserveAddress(struct Machine *m, int64_t v, size_t n) {
   void *r;
-  assert(n <= sizeof(m->stash));
+  assert(n <= sizeof(m->opcache->stash));
   if ((v & 4095) + n <= 4096) return ResolveAddress(m, v);
-  m->stashaddr = v;
-  m->stashsize = n;
-  r = m->stash;
+  m->opcache->stashaddr = v;
+  m->opcache->stashsize = n;
+  r = m->opcache->stash;
   VirtualSend(m, r, v, n);
   return r;
 }

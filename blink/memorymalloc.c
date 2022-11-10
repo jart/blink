@@ -32,6 +32,7 @@ struct Machine *NewMachine(void) {
   struct Machine *m;
   m = malloc(sizeof(struct Machine));
   memset(m, 0, sizeof(struct Machine));
+  m->opcache = calloc(1, sizeof(struct OpCache));
   ResetCpu(m);
   ResetMem(m);
   return m;
@@ -52,6 +53,7 @@ void FreeMachine(struct Machine *m) {
       free(m->freelist.p[i]);
     }
     FreeMachineRealFree(m);
+    free(m->opcache);
     free(m->real.p);
     free(m);
   }

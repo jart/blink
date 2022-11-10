@@ -2298,8 +2298,9 @@ void ExecuteInstruction(struct Machine *m) {
   } else {
     ExecuteSparseInstruction(m, m->xedd->op.rde, dispatch);
   }
-  if (m->stashaddr) {
-    VirtualRecv(m, m->stashaddr, m->stash, m->stashsize);
-    m->stashaddr = 0;
+  if (m->opcache->stashaddr) {
+    VirtualRecv(m, m->opcache->stashaddr, m->opcache->stash,
+                m->opcache->stashsize);
+    m->opcache->stashaddr = 0;
   }
 }

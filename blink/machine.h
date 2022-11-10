@@ -17,6 +17,8 @@
 #define kMachineProtectionFault      -8
 #define kMachineSimdException        -9
 
+#define kInstructionBytes 40
+
 struct MachineFpu {
   double st[8];
   uint32_t cw;
@@ -52,18 +54,24 @@ struct MachineState {
   struct MachineMemstat memstat;
 };
 
+struct OpCache {
+  uint64_t codevirt;   /* current rip page in guest memory */
+  uint8_t *codehost;   /* current rip page in host memory */
+  uint32_t stashsize;  /* for writes that overlap page */
+  int64_t stashaddr;   /* for writes that overlap page */
+  uint8_t stash[4096]; /* for writes that overlap page */
+  uint64_t icache[1024][kInstructionBytes / 8];
+};
+
 struct Machine {
   struct XedDecodedInst *xedd;
+  struct OpCache *opcache;
   uint64_t ip;
   uint8_t cs[8];
   uint8_t ss[8];
-  uint64_t codevirt;
-  uint8_t *codehost;
   uint32_t mode;
   uint32_t flags;
   uint32_t tlbindex;
-  uint32_t stashsize;
-  int64_t stashaddr;
   int64_t readaddr;
   int64_t writeaddr;
   uint32_t readsize;
@@ -129,8 +137,6 @@ struct Machine {
   bool dlab;
   bool isfork;
   struct MachineFds fds;
-  uint8_t stash[4096];
-  uint64_t icache[1024][5];
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
   void (*redraw)(void);
