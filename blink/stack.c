@@ -294,15 +294,15 @@ void OpCallf(struct Machine *m, uint32_t rde) {
   Push(m, rde, m->ip);
   Write64(m->cs, m->xedd->op.uimm0 << 4);
   m->ip = m->xedd->op.disp & (Osz(rde) ? 0xffff : 0xffffffff);
-  if (m->onlongbranch) {
-    m->onlongbranch(m);
+  if (m->system->onlongbranch) {
+    m->system->onlongbranch(m);
   }
 }
 
 void OpRetf(struct Machine *m, uint32_t rde) {
   m->ip = Pop(m, rde, 0);
   Write64(m->cs, Pop(m, rde, m->xedd->op.uimm0) << 4);
-  if (m->onlongbranch) {
-    m->onlongbranch(m);
+  if (m->system->onlongbranch) {
+    m->system->onlongbranch(m);
   }
 }

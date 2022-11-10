@@ -19,6 +19,22 @@
 
 #define kInstructionBytes 40
 
+struct FreeList {
+  size_t n;
+  void **p;
+};
+
+struct MachineReal {
+  size_t i, n;
+  uint8_t *p;
+};
+
+struct MachineRealFree {
+  uint64_t i;
+  uint64_t n;
+  struct MachineRealFree *next;
+};
+
 struct MachineFpu {
   double st[8];
   uint32_t cw;
@@ -63,6 +79,32 @@ struct OpCache {
   uint64_t icache[1024][kInstructionBytes / 8];
 };
 
+struct Machine;
+
+struct System {
+  uint64_t cr3;
+  bool dlab;
+  bool isfork;
+  struct MachineReal real;
+  struct MachineRealFree *realfree;
+  struct MachineMemstat memstat;
+  struct MachineFds fds;
+  struct sigaction_linux hands[32];
+  int64_t brk;
+  jmp_buf onhalt;
+  void (*onbinbase)(struct Machine *);
+  void (*onlongbranch)(struct Machine *);
+  int (*exec)(char *, char **, char **);
+  void (*redraw)(void);
+  uint64_t gdt_base;
+  uint64_t idt_base;
+  uint16_t gdt_limit;
+  uint16_t idt_limit;
+  uint64_t cr0;
+  uint64_t cr2;
+  uint64_t cr4;
+};
+
 struct Machine {
   struct XedDecodedInst *xedd;
   struct OpCache *opcache;
@@ -101,51 +143,21 @@ struct Machine {
     int64_t virt;
     uint64_t entry;
   } tlb[16];
-  struct MachineReal {
-    size_t i, n;
-    uint8_t *p;
-  } real;
-  uint64_t cr3;
   uint8_t xmm[16][16];
   uint8_t es[8];
   uint8_t ds[8];
   uint8_t fs[8];
   uint8_t gs[8];
   struct MachineFpu fpu;
-  uint64_t cr0;
-  uint64_t cr2;
-  uint64_t cr4;
-  uint64_t gdt_base;
-  uint64_t idt_base;
-  uint16_t gdt_limit;
-  uint16_t idt_limit;
   uint32_t mxcsr;
-  struct MachineRealFree {
-    uint64_t i;
-    uint64_t n;
-    struct MachineRealFree *next;
-  } * realfree;
-  struct FreeList {
-    size_t n;
-    void **p;
-  } freelist;
-  struct MachineMemstat memstat;
-  int64_t brk;
+  struct FreeList freelist;
   int64_t bofram[2];
-  jmp_buf onhalt;
   int64_t faultaddr;
-  bool dlab;
-  bool isfork;
-  struct MachineFds fds;
-  void (*onbinbase)(struct Machine *);
-  void (*onlongbranch)(struct Machine *);
-  void (*redraw)(void);
-  int (*exec)(char *, char **, char **);
-  struct sigaction_linux hands[32];
   uint8_t sigmask[8];
   int sig;
   uint64_t siguc;
   uint64_t sigfp;
+  struct System *system;
 };
 
 struct Machine *NewMachine(void);

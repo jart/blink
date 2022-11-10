@@ -34,7 +34,7 @@ static void FindContiguousMemoryRangesImpl(
     unsigned level, int64_t pt, int64_t a, int64_t b) {
   int64_t i, page, entry;
   for (i = a; i < b; ++i) {
-    entry = Read64(m->real.p + pt + i * 8);
+    entry = Read64(m->system->real.p + pt + i * 8);
     if (!(entry & 1)) continue;
     entry &= 0x7ffffffff000;
     page = (addr | i << level) << 16 >> 16;
@@ -44,7 +44,7 @@ static void FindContiguousMemoryRangesImpl(
       } else {
         AppendContiguousMemoryRange(ranges, page, page + 0x1000);
       }
-    } else if (entry + 512 * 8 <= m->real.n) {
+    } else if (entry + 512 * 8 <= m->system->real.n) {
       FindContiguousMemoryRangesImpl(m, ranges, page, level - 9, entry, 0, 512);
     }
   }
@@ -55,10 +55,10 @@ void FindContiguousMemoryRanges(struct Machine *m,
   uint64_t cr3;
   ranges->i = 0;
   if ((m->mode & 3) == XED_MODE_LONG) {
-    cr3 = m->cr3 & 0x7ffffffff000;
+    cr3 = m->system->cr3 & 0x7ffffffff000;
     FindContiguousMemoryRangesImpl(m, ranges, 0, 39, cr3, 256, 512);
     FindContiguousMemoryRangesImpl(m, ranges, 0, 39, cr3, 0, 256);
   } else {
-    AppendContiguousMemoryRange(ranges, 0, m->real.n);
+    AppendContiguousMemoryRange(ranges, 0, m->system->real.n);
   }
 }

@@ -54,7 +54,7 @@ static void LoadElfLoadSegment(struct Machine *m, void *code, size_t codesize,
   fstart = felf + ROUNDDOWN(Read64(phdr->p_offset), align);
   fend = felf + Read64(phdr->p_offset) + Read64(phdr->p_filesz);
   bsssize = vend - vbss;
-  m->brk = MAX(m->brk, vend);
+  m->system->brk = MAX(m->system->brk, vend);
   assert(vend >= vstart);
   assert(fend >= fstart);
   assert(felf <= fstart);
@@ -120,14 +120,14 @@ static void BootProgram(struct Machine *m, struct Elf *elf, size_t codesize) {
     LOGF("ReserveReal failed");
     exit(201);
   }
-  memset(m->real.p, 0, 0x00f00000);
-  Write16(m->real.p + 0x400, 0x3F8);
-  Write16(m->real.p + 0x40E, 0xb0000 >> 4);
-  Write16(m->real.p + 0x413, 0xb0000 / 1024);
-  Write16(m->real.p + 0x44A, 80);
+  memset(m->system->real.p, 0, 0x00f00000);
+  Write16(m->system->real.p + 0x400, 0x3F8);
+  Write16(m->system->real.p + 0x40E, 0xb0000 >> 4);
+  Write16(m->system->real.p + 0x413, 0xb0000 / 1024);
+  Write16(m->system->real.p + 0x44A, 80);
   Write64(m->cs, 0);
   Write64(m->dx, 0);
-  memcpy(m->real.p + 0x7c00, elf->map, 512);
+  memcpy(m->system->real.p + 0x7c00, elf->map, 512);
   if (memcmp(elf->map, "\177ELF", 4) == 0) {
     elf->ehdr = (void *)elf->map;
     elf->size = codesize;
@@ -208,7 +208,7 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
   } else {
     sp = 0x800000000000;
     Write64(m->sp, sp);
-    m->cr3 = AllocateLinearPage(m);
+    m->system->cr3 = AllocateLinearPage(m);
     if (ReserveVirtual(m, sp - 0x100000, 0x100000, 0x0207) == -1) {
       LOGF("ReserveVirtual failed");
       exit(200);

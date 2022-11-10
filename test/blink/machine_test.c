@@ -96,32 +96,32 @@ struct Machine *m;
 void SetUp(void) {
   m = NewMachine();
   m->mode = XED_MACHINE_MODE_LONG_64;
-  m->cr3 = AllocateLinearPage(m);
+  m->system->cr3 = AllocateLinearPage(m);
   ReserveVirtual(m, 0, 4096, 0x0207);
-  ASSERT_EQ(0x1007, Read64(m->real.p + 0x0000));  // PML4T
-  ASSERT_EQ(0x2007, Read64(m->real.p + 0x1000));  // PDPT
-  ASSERT_EQ(0x3007, Read64(m->real.p + 0x2000));  // PDE
-  ASSERT_EQ(0x0207, Read64(m->real.p + 0x3000));  // PT
-  ASSERT_EQ(0x4000, m->real.i);
-  ASSERT_EQ(1, m->memstat.reserved);
-  ASSERT_EQ(4, m->memstat.committed);
-  ASSERT_EQ(4, m->memstat.allocated);
-  ASSERT_EQ(3, m->memstat.pagetables);
+  ASSERT_EQ(0x1007, Read64(m->system->real.p + 0x0000));  // PML4T
+  ASSERT_EQ(0x2007, Read64(m->system->real.p + 0x1000));  // PDPT
+  ASSERT_EQ(0x3007, Read64(m->system->real.p + 0x2000));  // PDE
+  ASSERT_EQ(0x0207, Read64(m->system->real.p + 0x3000));  // PT
+  ASSERT_EQ(0x4000, m->system->real.i);
+  ASSERT_EQ(1, m->system->memstat.reserved);
+  ASSERT_EQ(4, m->system->memstat.committed);
+  ASSERT_EQ(4, m->system->memstat.allocated);
+  ASSERT_EQ(3, m->system->memstat.pagetables);
   Write64(m->sp, 4096);
 }
 
 void TearDown(void) {
   FreeVirtual(m, 0, 4096);
-  ASSERT_EQ(0x1007, Read64(m->real.p + 0x0000));  // PML4T
-  ASSERT_EQ(0x2007, Read64(m->real.p + 0x1000));  // PDPT
-  ASSERT_EQ(0x3007, Read64(m->real.p + 0x2000));  // PDE
-  ASSERT_EQ(0x0000, Read64(m->real.p + 0x3000));  // PT
+  ASSERT_EQ(0x1007, Read64(m->system->real.p + 0x0000));  // PML4T
+  ASSERT_EQ(0x2007, Read64(m->system->real.p + 0x1000));  // PDPT
+  ASSERT_EQ(0x3007, Read64(m->system->real.p + 0x2000));  // PDE
+  ASSERT_EQ(0x0000, Read64(m->system->real.p + 0x3000));  // PT
   FreeMachine(m);
 }
 
 int ExecuteUntilHalt(struct Machine *m) {
   int rc;
-  if (!(rc = setjmp(m->onhalt))) {
+  if (!(rc = setjmp(m->system->onhalt))) {
     for (;;) {
       LoadInstruction(m);
       ExecuteInstruction(m);

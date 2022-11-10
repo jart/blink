@@ -41,10 +41,10 @@ static void OnSignal(int sig, siginfo_t *si, void *uc) {
 }
 
 static void AddHostFd(struct Machine *m, int fd) {
-  int i = m->fds.i++;
-  m->fds.p[i].fd = dup(fd);
-  assert(m->fds.p[i].fd != -1);
-  m->fds.p[i].cb = &kMachineFdCbHost;
+  int i = m->system->fds.i++;
+  m->system->fds.p[i].fd = dup(fd);
+  assert(m->system->fds.p[i].fd != -1);
+  m->system->fds.p[i].cb = &kMachineFdCbHost;
 }
 
 static int Exec(char *prog, char **argv, char **envp) {
@@ -53,20 +53,20 @@ static int Exec(char *prog, char **argv, char **envp) {
   struct Machine *o;
   o = m;
   m = NewMachine();
-  m->exec = Exec;
+  m->system->exec = Exec;
   m->mode = XED_MACHINE_MODE_LONG_64;
   LoadProgram(m, prog, argv, envp, &elf);
   if (!o) {
-    m->fds.n = 8;
-    m->fds.p = calloc(m->fds.n, sizeof(struct MachineFd));
+    m->system->fds.n = 8;
+    m->system->fds.p = calloc(m->system->fds.n, sizeof(struct MachineFd));
     AddHostFd(m, 0);
     AddHostFd(m, 1);
     AddHostFd(m, 2);
   } else {
-    m->fds = o->fds;
+    m->system->fds = o->system->fds;
     FreeMachine(o);
   }
-  if (!(rc = setjmp(m->onhalt))) {
+  if (!(rc = setjmp(m->system->onhalt))) {
     for (;;) {
       LoadInstruction(m);
       ExecuteInstruction(m);

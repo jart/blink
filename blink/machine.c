@@ -208,11 +208,12 @@ static void OpMovEvqpSw(struct Machine *m, uint32_t rde) {
 
 static int GetDescriptor(struct Machine *m, int selector,
                          uint64_t *out_descriptor) {
-  assert(m->gdt_base + m->gdt_limit <= m->real.n);
+  assert(m->system->gdt_base + m->system->gdt_limit <= m->system->real.n);
   selector &= -8;
-  if (8 <= selector && selector + 8 <= m->gdt_limit) {
-    SetReadAddr(m, m->gdt_base + selector, 8);
-    *out_descriptor = Read64(m->real.p + m->gdt_base + selector);
+  if (8 <= selector && selector + 8 <= m->system->gdt_limit) {
+    SetReadAddr(m, m->system->gdt_base + selector, 8);
+    *out_descriptor =
+        Read64(m->system->real.p + m->system->gdt_base + selector);
     return 0;
   } else {
     return -1;
@@ -238,7 +239,7 @@ static int GetDescriptorMode(uint64_t d) {
 }
 
 static bool IsProtectedMode(struct Machine *m) {
-  return m->cr0 & 1;
+  return m->system->cr0 & 1;
 }
 
 static void OpMovSwEvqp(struct Machine *m, uint32_t rde) {
@@ -283,8 +284,8 @@ static void OpJmpf(struct Machine *m, uint32_t rde) {
   } else {
     ThrowProtectionFault(m);
   }
-  if (m->onlongbranch) {
-    m->onlongbranch(m);
+  if (m->system->onlongbranch) {
+    m->system->onlongbranch(m);
   }
 }
 
@@ -1662,8 +1663,8 @@ static void OpBofram(struct Machine *m, uint32_t rde) {
 }
 
 static void OpBinbase(struct Machine *m, uint32_t rde) {
-  if (m->onbinbase) {
-    m->onbinbase(m);
+  if (m->system->onbinbase) {
+    m->system->onbinbase(m);
   }
 }
 
@@ -1695,16 +1696,16 @@ static void OpNop(struct Machine *m, uint32_t rde) {
 static void OpMovRqCq(struct Machine *m, uint32_t rde) {
   switch (ModrmReg(rde)) {
     case 0:
-      Write64(RegRexbRm(m, rde), m->cr0);
+      Write64(RegRexbRm(m, rde), m->system->cr0);
       break;
     case 2:
-      Write64(RegRexbRm(m, rde), m->cr2);
+      Write64(RegRexbRm(m, rde), m->system->cr2);
       break;
     case 3:
-      Write64(RegRexbRm(m, rde), m->cr3);
+      Write64(RegRexbRm(m, rde), m->system->cr3);
       break;
     case 4:
-      Write64(RegRexbRm(m, rde), m->cr4);
+      Write64(RegRexbRm(m, rde), m->system->cr4);
       break;
     default:
       OpUd(m, rde);
@@ -1715,21 +1716,21 @@ static void OpMovCqRq(struct Machine *m, uint32_t rde) {
   int64_t cr3;
   switch (ModrmReg(rde)) {
     case 0:
-      m->cr0 = Read64(RegRexbRm(m, rde));
+      m->system->cr0 = Read64(RegRexbRm(m, rde));
       break;
     case 2:
-      m->cr2 = Read64(RegRexbRm(m, rde));
+      m->system->cr2 = Read64(RegRexbRm(m, rde));
       break;
     case 3:
       cr3 = Read64(RegRexbRm(m, rde));
-      if (0 <= cr3 && cr3 + 512 * 8 <= m->real.n) {
-        m->cr3 = cr3;
+      if (0 <= cr3 && cr3 + 512 * 8 <= m->system->real.n) {
+        m->system->cr3 = cr3;
       } else {
         ThrowProtectionFault(m);
       }
       break;
     case 4:
-      m->cr4 = Read64(RegRexbRm(m, rde));
+      m->system->cr4 = Read64(RegRexbRm(m, rde));
       break;
     default:
       OpUd(m, rde);

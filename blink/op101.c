@@ -29,16 +29,16 @@ static void StoreDescriptorTable(struct Machine *m, uint32_t rde,
                                  uint16_t limit, uint64_t base) {
   uint64_t l;
   l = ComputeAddress(m, rde);
-  if (l + 10 <= m->real.n) {
-    Write16(m->real.p + l, limit);
+  if (l + 10 <= m->system->real.n) {
+    Write16(m->system->real.p + l, limit);
     if (Rexw(rde)) {
-      Write64(m->real.p + l + 2, base);
+      Write64(m->system->real.p + l + 2, base);
       SetWriteAddr(m, l, 10);
     } else if (!Osz(rde)) {
-      Write32(m->real.p + l + 2, base);
+      Write32(m->system->real.p + l + 2, base);
       SetWriteAddr(m, l, 6);
     } else {
-      Write16(m->real.p + l + 2, base);
+      Write16(m->system->real.p + l + 2, base);
       SetWriteAddr(m, l, 4);
     }
   } else {
@@ -51,19 +51,19 @@ static void LoadDescriptorTable(struct Machine *m, uint32_t rde,
   uint16_t limit;
   uint64_t l, base;
   l = ComputeAddress(m, rde);
-  if (l + 10 <= m->real.n) {
-    limit = Read16(m->real.p + l);
+  if (l + 10 <= m->system->real.n) {
+    limit = Read16(m->system->real.p + l);
     if (Rexw(rde)) {
-      base = Read64(m->real.p + l + 2) & 0x00ffffff;
+      base = Read64(m->system->real.p + l + 2) & 0x00ffffff;
       SetReadAddr(m, l, 10);
     } else if (!Osz(rde)) {
-      base = Read32(m->real.p + l + 2);
+      base = Read32(m->system->real.p + l + 2);
       SetReadAddr(m, l, 6);
     } else {
-      base = Read16(m->real.p + l + 2);
+      base = Read16(m->system->real.p + l + 2);
       SetReadAddr(m, l, 4);
     }
-    if (base + limit <= m->real.n) {
+    if (base + limit <= m->system->real.n) {
       *out_limit = limit;
       *out_base = base;
     } else {
@@ -75,19 +75,19 @@ static void LoadDescriptorTable(struct Machine *m, uint32_t rde,
 }
 
 static void SgdtMs(struct Machine *m, uint32_t rde) {
-  StoreDescriptorTable(m, rde, m->gdt_limit, m->gdt_base);
+  StoreDescriptorTable(m, rde, m->system->gdt_limit, m->system->gdt_base);
 }
 
 static void LgdtMs(struct Machine *m, uint32_t rde) {
-  LoadDescriptorTable(m, rde, &m->gdt_limit, &m->gdt_base);
+  LoadDescriptorTable(m, rde, &m->system->gdt_limit, &m->system->gdt_base);
 }
 
 static void SidtMs(struct Machine *m, uint32_t rde) {
-  StoreDescriptorTable(m, rde, m->idt_limit, m->idt_base);
+  StoreDescriptorTable(m, rde, m->system->idt_limit, m->system->idt_base);
 }
 
 static void LidtMs(struct Machine *m, uint32_t rde) {
-  LoadDescriptorTable(m, rde, &m->idt_limit, &m->idt_base);
+  LoadDescriptorTable(m, rde, &m->system->idt_limit, &m->system->idt_base);
 }
 
 static void Monitor(struct Machine *m, uint32_t rde) {
@@ -117,18 +117,18 @@ static void InvlpgM(struct Machine *m, uint32_t rde) {
 
 static void Smsw(struct Machine *m, uint32_t rde, bool ismem) {
   if (ismem) {
-    Write16(GetModrmRegisterWordPointerWrite2(m, rde), m->cr0);
+    Write16(GetModrmRegisterWordPointerWrite2(m, rde), m->system->cr0);
   } else if (Rexw(rde)) {
-    Write64(RegRexrReg(m, rde), m->cr0);
+    Write64(RegRexrReg(m, rde), m->system->cr0);
   } else if (!Osz(rde)) {
-    Write64(RegRexrReg(m, rde), m->cr0 & 0xffffffff);
+    Write64(RegRexrReg(m, rde), m->system->cr0 & 0xffffffff);
   } else {
-    Write16(RegRexrReg(m, rde), m->cr0);
+    Write16(RegRexrReg(m, rde), m->system->cr0);
   }
 }
 
 static void Lmsw(struct Machine *m, uint32_t rde) {
-  m->cr0 = Read16(GetModrmRegisterWordPointerRead2(m, rde));
+  m->system->cr0 = Read16(GetModrmRegisterWordPointerRead2(m, rde));
 }
 
 void Op101(struct Machine *m, uint32_t rde) {

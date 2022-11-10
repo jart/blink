@@ -30,12 +30,12 @@
 static bool IsHaltingInitialized(struct Machine *m) {
   jmp_buf zb;
   memset(zb, 0, sizeof(zb));
-  return memcmp(m->onhalt, zb, sizeof(m->onhalt)) != 0;
+  return memcmp(m->system->onhalt, zb, sizeof(m->system->onhalt)) != 0;
 }
 
 void HaltMachine(struct Machine *m, int code) {
   if (!IsHaltingInitialized(m)) abort();
-  longjmp(m->onhalt, code);
+  longjmp(m->system->onhalt, code);
 }
 
 void ThrowDivideError(struct Machine *m) {

@@ -89,9 +89,9 @@ const struct MachineFdCb kMachineFdCbHost = {
 };
 
 static int GetFd(struct Machine *m, int fd) {
-  if (!(0 <= fd && fd < m->fds.i)) return ebadf();
-  if (!m->fds.p[fd].cb) return ebadf();
-  return m->fds.p[fd].fd;
+  if (!(0 <= fd && fd < m->system->fds.i)) return ebadf();
+  if (!m->system->fds.p[fd].cb) return ebadf();
+  return m->system->fds.p[fd].fd;
 }
 
 static int GetAfd(struct Machine *m, int fd) {
@@ -143,7 +143,7 @@ static int AppendIovsGuest(struct Machine *m, struct Iovs *iv, int64_t iovaddr,
 }
 
 _Noreturn static void OpExit(struct Machine *m, int rc) {
-  if (m->isfork) {
+  if (m->system->isfork) {
     _exit(rc);
   } else {
     HaltMachine(m, rc | 0x100);
@@ -153,7 +153,7 @@ _Noreturn static void OpExit(struct Machine *m, int rc) {
 static int OpFork(struct Machine *m) {
   int pid;
   pid = fork();
-  if (!pid) m->isfork = true;
+  if (!pid) m->system->isfork = true;
   return pid;
 }
 
@@ -191,17 +191,17 @@ static int OpMadvise(struct Machine *m, int64_t addr, size_t len, int advice) {
 
 static int64_t OpBrk(struct Machine *m, int64_t addr) {
   addr = ROUNDUP(addr, 4096);
-  if (addr > m->brk) {
-    if (ReserveVirtual(m, m->brk, addr - m->brk,
+  if (addr > m->system->brk) {
+    if (ReserveVirtual(m, m->system->brk, addr - m->system->brk,
                        PAGE_V | PAGE_RW | PAGE_U | PAGE_RSRV) != -1) {
-      m->brk = addr;
+      m->system->brk = addr;
     }
-  } else if (addr < m->brk) {
-    if (FreeVirtual(m, addr, m->brk - addr) != -1) {
-      m->brk = addr;
+  } else if (addr < m->system->brk) {
+    if (FreeVirtual(m, addr, m->system->brk - addr) != -1) {
+      m->system->brk = addr;
     }
   }
-  return m->brk;
+  return m->system->brk;
 }
 
 static int OpMunmap(struct Machine *m, int64_t virt, uint64_t size) {
@@ -226,8 +226,8 @@ static int64_t OpMmap(struct Machine *m, int64_t virt, size_t size, int prot,
     if (fd != -1 && (fd = GetFd(m, fd)) == -1) return -1;
     if (!(flags & MAP_FIXED)) {
       if (!virt) {
-        if ((virt = FindVirtual(m, m->brk, size)) == -1) return -1;
-        m->brk = virt + size;
+        if ((virt = FindVirtual(m, m->system->brk, size)) == -1) return -1;
+        m->system->brk = virt + size;
       } else {
         if ((virt = FindVirtual(m, virt, size)) == -1) return -1;
       }
@@ -262,10 +262,10 @@ static int OpMsync(struct Machine *m, int64_t virt, size_t size, int flags) {
 
 static int OpClose(struct Machine *m, int fd) {
   int rc;
-  if (0 <= fd && fd < m->fds.i) {
-    if (!m->fds.p[fd].cb) return ebadf();
-    rc = m->fds.p[fd].cb->close(m->fds.p[fd].fd);
-    MachineFdRemove(&m->fds, fd);
+  if (0 <= fd && fd < m->system->fds.i) {
+    if (!m->system->fds.p[fd].cb) return ebadf();
+    rc = m->system->fds.p[fd].cb->close(m->system->fds.p[fd].fd);
+    MachineFdRemove(&m->system->fds, fd);
     return rc;
   } else {
     return ebadf();
@@ -278,9 +278,9 @@ static ssize_t OpCloseRange(struct Machine *m, uint32_t first, uint32_t last,
   if (flags || last > INT_MAX || first > INT_MAX || first > last) {
     return einval();
   }
-  if (m->fds.i > 0) {
-    for (fd = first; fd <= MIN(last, m->fds.i - 1); ++fd) {
-      MachineFdRemove(&m->fds, fd);
+  if (m->system->fds.i > 0) {
+    for (fd = first; fd <= MIN(last, m->system->fds.i - 1); ++fd) {
+      MachineFdRemove(&m->system->fds, fd);
     }
   }
   return 0;
@@ -292,14 +292,14 @@ static int OpOpenat(struct Machine *m, int dirfd, int64_t pathaddr, int flags,
   const char *path;
   flags = XlatOpenFlags(flags);
   if ((dirfd = GetAfd(m, dirfd)) == -1) return -1;
-  if ((i = MachineFdAdd(&m->fds)) == -1) return -1;
+  if ((i = MachineFdAdd(&m->system->fds)) == -1) return -1;
   path = LoadStr(m, pathaddr);
   if ((fd = openat(dirfd, path, flags, mode)) != -1) {
-    m->fds.p[i].cb = &kMachineFdCbHost;
-    m->fds.p[i].fd = fd;
+    m->system->fds.p[i].cb = &kMachineFdCbHost;
+    m->system->fds.p[i].fd = fd;
     fd = i;
   } else {
-    MachineFdRemove(&m->fds, i);
+    MachineFdRemove(&m->system->fds, i);
   }
   return fd;
 }
@@ -307,21 +307,21 @@ static int OpOpenat(struct Machine *m, int dirfd, int64_t pathaddr, int flags,
 static int OpPipe(struct Machine *m, int64_t pipefds_addr) {
   int i, j, hpipefds[2];
   uint8_t gpipefds[2][4];
-  if ((i = MachineFdAdd(&m->fds)) != -1) {
-    if ((j = MachineFdAdd(&m->fds)) != -1) {
+  if ((i = MachineFdAdd(&m->system->fds)) != -1) {
+    if ((j = MachineFdAdd(&m->system->fds)) != -1) {
       if (pipe(hpipefds) != -1) {
-        m->fds.p[i].cb = &kMachineFdCbHost;
-        m->fds.p[i].fd = hpipefds[0];
-        m->fds.p[j].cb = &kMachineFdCbHost;
-        m->fds.p[j].fd = hpipefds[1];
+        m->system->fds.p[i].cb = &kMachineFdCbHost;
+        m->system->fds.p[i].fd = hpipefds[0];
+        m->system->fds.p[j].cb = &kMachineFdCbHost;
+        m->system->fds.p[j].fd = hpipefds[1];
         Write32(gpipefds[0], i);
         Write32(gpipefds[1], j);
         VirtualRecvWrite(m, pipefds_addr, gpipefds, sizeof(gpipefds));
         return 0;
       }
-      MachineFdRemove(&m->fds, j);
+      MachineFdRemove(&m->system->fds, j);
     }
-    MachineFdRemove(&m->fds, i);
+    MachineFdRemove(&m->system->fds, i);
   }
   return -1;
 }
@@ -329,13 +329,13 @@ static int OpPipe(struct Machine *m, int64_t pipefds_addr) {
 static int OpDup(struct Machine *m, int fd) {
   int i;
   if ((fd = GetFd(m, fd)) != -1) {
-    if ((i = MachineFdAdd(&m->fds)) != -1) {
+    if ((i = MachineFdAdd(&m->system->fds)) != -1) {
       if ((fd = dup(fd)) != -1) {
-        m->fds.p[i].cb = &kMachineFdCbHost;
-        m->fds.p[i].fd = fd;
+        m->system->fds.p[i].cb = &kMachineFdCbHost;
+        m->system->fds.p[i].fd = fd;
         return i;
       }
-      MachineFdRemove(&m->fds, i);
+      MachineFdRemove(&m->system->fds, i);
     }
   }
   return -1;
@@ -345,19 +345,19 @@ static int OpDup3(struct Machine *m, int fd, int newfd, int flags) {
   int i, rc;
   if (!(flags & ~O_CLOEXEC_LINUX)) {
     if ((fd = GetFd(m, fd)) == -1) return -1;
-    if ((0 <= newfd && newfd < m->fds.i)) {
-      if ((rc = dup2(fd, m->fds.p[newfd].fd)) != -1) {
+    if ((0 <= newfd && newfd < m->system->fds.i)) {
+      if ((rc = dup2(fd, m->system->fds.p[newfd].fd)) != -1) {
         if (flags & O_CLOEXEC_LINUX) {
           fcntl(rc, F_SETFD, FD_CLOEXEC);
         }
-        m->fds.p[newfd].cb = &kMachineFdCbHost;
-        m->fds.p[newfd].fd = rc;
+        m->system->fds.p[newfd].cb = &kMachineFdCbHost;
+        m->system->fds.p[newfd].fd = rc;
         rc = newfd;
       }
-    } else if ((i = MachineFdAdd(&m->fds)) != -1) {
+    } else if ((i = MachineFdAdd(&m->system->fds)) != -1) {
       if ((rc = dup(fd)) != -1) {
-        m->fds.p[i].cb = &kMachineFdCbHost;
-        m->fds.p[i].fd = rc;
+        m->system->fds.p[i].cb = &kMachineFdCbHost;
+        m->system->fds.p[i].fd = rc;
         rc = i;
       }
     } else {
@@ -372,16 +372,16 @@ static int OpDup3(struct Machine *m, int fd, int newfd, int flags) {
 static int OpDup2(struct Machine *m, int fd, int newfd) {
   int i, rc;
   if ((fd = GetFd(m, fd)) == -1) return -1;
-  if ((0 <= newfd && newfd < m->fds.i)) {
-    if ((rc = dup2(fd, m->fds.p[newfd].fd)) != -1) {
-      m->fds.p[newfd].cb = &kMachineFdCbHost;
-      m->fds.p[newfd].fd = rc;
+  if ((0 <= newfd && newfd < m->system->fds.i)) {
+    if ((rc = dup2(fd, m->system->fds.p[newfd].fd)) != -1) {
+      m->system->fds.p[newfd].cb = &kMachineFdCbHost;
+      m->system->fds.p[newfd].fd = rc;
       rc = newfd;
     }
-  } else if ((i = MachineFdAdd(&m->fds)) != -1) {
+  } else if ((i = MachineFdAdd(&m->system->fds)) != -1) {
     if ((rc = dup(fd)) != -1) {
-      m->fds.p[i].cb = &kMachineFdCbHost;
-      m->fds.p[i].fd = rc;
+      m->system->fds.p[i].cb = &kMachineFdCbHost;
+      m->system->fds.p[i].fd = rc;
       rc = i;
     }
   } else {
@@ -395,13 +395,13 @@ static int OpSocket(struct Machine *m, int family, int type, int protocol) {
   if ((family = XlatSocketFamily(family)) == -1) return -1;
   if ((type = XlatSocketType(type)) == -1) return -1;
   if ((protocol = XlatSocketProtocol(protocol)) == -1) return -1;
-  if ((i = MachineFdAdd(&m->fds)) == -1) return -1;
+  if ((i = MachineFdAdd(&m->system->fds)) == -1) return -1;
   if ((fd = socket(family, type, protocol)) != -1) {
-    m->fds.p[i].cb = &kMachineFdCbHost;
-    m->fds.p[i].fd = fd;
+    m->system->fds.p[i].cb = &kMachineFdCbHost;
+    m->system->fds.p[i].fd = fd;
     fd = i;
   } else {
-    MachineFdRemove(&m->fds, i);
+    MachineFdRemove(&m->system->fds, i);
   }
   return fd;
 }
@@ -455,14 +455,14 @@ static int OpAccept4(struct Machine *m, int fd, int64_t aa, int64_t asa,
   uint8_t gaddrsize[4];
   struct sockaddr_in addr;
   struct sockaddr_in_linux gaddr;
-  if (m->redraw) m->redraw();
+  if (m->system->redraw) m->system->redraw();
   if (!(flags & ~SOCK_CLOEXEC_LINUX)) {
     if ((fd = GetFd(m, fd)) == -1) return -1;
     if (aa) {
       VirtualSendRead(m, gaddrsize, asa, sizeof(gaddrsize));
       if (Read32(gaddrsize) < sizeof(gaddr)) return einval();
     }
-    if ((i = rc = MachineFdAdd(&m->fds)) != -1) {
+    if ((i = rc = MachineFdAdd(&m->system->fds)) != -1) {
       addrsize = sizeof(addr);
       if ((rc = accept(fd, (struct sockaddr *)&addr, &addrsize)) != -1) {
         if (flags & SOCK_CLOEXEC_LINUX) {
@@ -474,11 +474,11 @@ static int OpAccept4(struct Machine *m, int fd, int64_t aa, int64_t asa,
           VirtualRecv(m, asa, gaddrsize, sizeof(gaddrsize));
           VirtualRecvWrite(m, aa, &gaddr, sizeof(gaddr));
         }
-        m->fds.p[i].cb = &kMachineFdCbHost;
-        m->fds.p[i].fd = rc;
+        m->system->fds.p[i].cb = &kMachineFdCbHost;
+        m->system->fds.p[i].fd = rc;
         rc = i;
       } else {
-        MachineFdRemove(&m->fds, i);
+        MachineFdRemove(&m->system->fds, i);
       }
     }
     return rc;
@@ -523,10 +523,11 @@ static int OpSetsockopt(struct Machine *m, int fd, int level, int optname,
 static int64_t OpRead(struct Machine *m, int fd, int64_t addr, uint64_t size) {
   int64_t rc;
   struct Iovs iv;
-  if ((0 <= fd && fd < m->fds.i) && m->fds.p[fd].cb) {
+  if ((0 <= fd && fd < m->system->fds.i) && m->system->fds.p[fd].cb) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
-      if ((rc = m->fds.p[fd].cb->readv(m->fds.p[fd].fd, iv.p, iv.i)) != -1) {
+      if ((rc = m->system->fds.p[fd].cb->readv(m->system->fds.p[fd].fd, iv.p,
+                                               iv.i)) != -1) {
         SetWriteAddr(m, addr, rc);
       }
     }
@@ -543,8 +544,8 @@ static int OpGetdents(struct Machine *m, int fd, int64_t addr, uint32_t size) {
   struct dirent *ent;
   if (size < sizeof(struct dirent)) errno = EINVAL;
   return -1;
-  if (0 <= fd && fd < m->fds.i) {
-    if ((dir = fdopendir(m->fds.p[fd].fd))) {
+  if (0 <= fd && fd < m->system->fds.i) {
+    if ((dir = fdopendir(m->system->fds.p[fd].fd))) {
       rc = 0;
       while (rc + sizeof(struct dirent) <= size) {
         if (!(ent = readdir(dir))) break;
@@ -568,10 +569,11 @@ static long OpSetTidAddress(struct Machine *m, int64_t tidptr) {
 static int64_t OpWrite(struct Machine *m, int fd, int64_t addr, uint64_t size) {
   int64_t rc;
   struct Iovs iv;
-  if ((0 <= fd && fd < m->fds.i) && m->fds.p[fd].cb) {
+  if ((0 <= fd && fd < m->system->fds.i) && m->system->fds.p[fd].cb) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
-      if ((rc = m->fds.p[fd].cb->writev(m->fds.p[fd].fd, iv.p, iv.i)) != -1) {
+      if ((rc = m->system->fds.p[fd].cb->writev(m->system->fds.p[fd].fd, iv.p,
+                                                iv.i)) != -1) {
         SetReadAddr(m, addr, rc);
       }
     }
@@ -617,9 +619,10 @@ static int IoctlTcsets(struct Machine *m, int fd, int request, int64_t addr,
 
 static int OpIoctl(struct Machine *m, int fd, uint64_t request, int64_t addr) {
   int (*fn)(int, int, ...);
-  if (!(0 <= fd && fd < m->fds.i) || !m->fds.p[fd].cb) return ebadf();
-  fn = m->fds.p[fd].cb->ioctl;
-  fd = m->fds.p[fd].fd;
+  if (!(0 <= fd && fd < m->system->fds.i) || !m->system->fds.p[fd].cb)
+    return ebadf();
+  fn = m->system->fds.p[fd].cb->ioctl;
+  fd = m->system->fds.p[fd].fd;
   switch (request) {
     case TIOCGWINSZ_LINUX:
       return IoctlTiocgwinsz(m, fd, addr, fn);
@@ -640,10 +643,10 @@ static int64_t OpReadv(struct Machine *m, int32_t fd, int64_t iovaddr,
                        int32_t iovlen) {
   int64_t rc;
   struct Iovs iv;
-  if ((0 <= fd && fd < m->fds.i) && m->fds.p[fd].cb) {
+  if ((0 <= fd && fd < m->system->fds.i) && m->system->fds.p[fd].cb) {
     InitIovs(&iv);
     if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
-      rc = m->fds.p[fd].cb->readv(m->fds.p[fd].fd, iv.p, iv.i);
+      rc = m->system->fds.p[fd].cb->readv(m->system->fds.p[fd].fd, iv.p, iv.i);
     }
     FreeIovs(&iv);
     return rc;
@@ -656,10 +659,10 @@ static int64_t OpWritev(struct Machine *m, int32_t fd, int64_t iovaddr,
                         int32_t iovlen) {
   int64_t rc;
   struct Iovs iv;
-  if ((0 <= fd && fd < m->fds.i) && m->fds.p[fd].cb) {
+  if ((0 <= fd && fd < m->system->fds.i) && m->system->fds.p[fd].cb) {
     InitIovs(&iv);
     if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
-      rc = m->fds.p[fd].cb->writev(m->fds.p[fd].fd, iv.p, iv.i);
+      rc = m->system->fds.p[fd].cb->writev(m->system->fds.p[fd].fd, iv.p, iv.i);
     }
     FreeIovs(&iv);
     return rc;
@@ -805,8 +808,9 @@ static int OpRenameat(struct Machine *m, int srcdirfd, int64_t src,
 }
 
 static int OpExecve(struct Machine *m, int64_t pa, int64_t aa, int64_t ea) {
-  if (m->exec) {
-    _exit(m->exec(LoadStr(m, pa), LoadStrList(m, aa), LoadStrList(m, ea)));
+  if (m->system->exec) {
+    _exit(m->system->exec(LoadStr(m, pa), LoadStrList(m, aa),
+                          LoadStrList(m, ea)));
   } else {
     return enosys();
   }
@@ -915,9 +919,13 @@ static ssize_t OpGetrandom(struct Machine *m, int64_t a, size_t n, int f) {
 static int OpSigaction(struct Machine *m, int sig, int64_t act, int64_t old,
                        uint64_t sigsetsize) {
   if ((sig = XlatSignal(sig) - 1) != -1 &&
-      (0 <= sig && sig < ARRAYLEN(m->hands)) && sigsetsize == 8) {
-    if (old) VirtualRecvWrite(m, old, &m->hands[sig], sizeof(m->hands[0]));
-    if (act) VirtualSendRead(m, &m->hands[sig], act, sizeof(m->hands[0]));
+      (0 <= sig && sig < ARRAYLEN(m->system->hands)) && sigsetsize == 8) {
+    if (old)
+      VirtualRecvWrite(m, old, &m->system->hands[sig],
+                       sizeof(m->system->hands[0]));
+    if (act)
+      VirtualSendRead(m, &m->system->hands[sig], act,
+                      sizeof(m->system->hands[0]));
     return 0;
   } else {
     return einval();
@@ -1051,13 +1059,13 @@ static int OpPoll(struct Machine *m, int64_t fdsaddr, uint64_t nfds,
       for (;;) {
         for (i = 0; i < nfds; ++i) {
           fd = Read32(gfds[i].fd);
-          if ((0 <= fd && fd < m->fds.i) && m->fds.p[fd].cb) {
-            hfds[0].fd = m->fds.p[fd].fd;
+          if ((0 <= fd && fd < m->system->fds.i) && m->system->fds.p[fd].cb) {
+            hfds[0].fd = m->system->fds.p[fd].fd;
             ev = Read16(gfds[i].events);
             hfds[0].events = (((ev & POLLIN_LINUX) ? POLLIN : 0) |
                               ((ev & POLLOUT_LINUX) ? POLLOUT : 0) |
                               ((ev & POLLPRI_LINUX) ? POLLPRI : 0));
-            switch (m->fds.p[fd].cb->poll(hfds, 1, 0)) {
+            switch (m->system->fds.p[fd].cb->poll(hfds, 1, 0)) {
               case 0:
                 Write16(gfds[i].revents, 0);
                 break;

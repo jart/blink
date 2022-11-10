@@ -47,9 +47,9 @@ uint64_t HandlePageFault(struct Machine *m, uint64_t entry, uint64_t table,
   long page;
   uint64_t x;
   if ((page = AllocateLinearPage(m)) != -1) {
-    --m->memstat.reserved;
+    --m->system->memstat.reserved;
     x = page | (entry & ~(PAGE_TA | PAGE_IGN1));
-    Write64(m->real.p + table + index * 8, x);
+    Write64(m->system->real.p + table + index * 8, x);
     return x;
   } else {
     return 0;
@@ -66,12 +66,12 @@ uint64_t FindPage(struct Machine *m, int64_t virt) {
     }
   }
   level = 39;
-  entry = m->cr3;
+  entry = m->system->cr3;
   do {
     table = entry & PAGE_TA;
-    assert(table < m->real.n);
+    assert(table < m->system->real.n);
     index = (virt >> level) & 511;
-    entry = Read64(m->real.p + table + index * 8);
+    entry = Read64(m->system->real.p + table + index * 8);
     if (!(entry & 1)) return 0;
   } while ((level -= 9) >= 12);
   if ((entry & PAGE_RSRV) &&
@@ -90,12 +90,12 @@ void *FindReal(struct Machine *m, int64_t virt) {
   if ((m->mode & 3) != XED_MODE_REAL) {
     if (-0x800000000000 <= virt && virt < 0x800000000000) {
       if (!(entry = FindPage(m, virt))) return NULL;
-      return m->real.p + (entry & PAGE_TA) + (virt & 4095);
+      return m->system->real.p + (entry & PAGE_TA) + (virt & 4095);
     } else {
       return NULL;
     }
-  } else if (0 <= virt && virt + 4095 < m->real.n) {
-    return m->real.p + virt;
+  } else if (0 <= virt && virt + 4095 < m->system->real.n) {
+    return m->system->real.p + virt;
   } else {
     return NULL;
   }

@@ -1106,13 +1106,13 @@ static void DrawDisplay(struct Panel *p) {
   switch (vidya) {
     case 7:
       DrawHr(&pan.displayhr, "MONOCHROME DISPLAY ADAPTER");
-      if (0xb0000 + 25 * 80 * 2 > m->real.n) return;
-      DrawMda(p, (void *)(m->real.p + 0xb0000));
+      if (0xb0000 + 25 * 80 * 2 > m->system->real.n) return;
+      DrawMda(p, (void *)(m->system->real.p + 0xb0000));
       break;
     case 3:
       DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
-      if (0xb8000 + 25 * 80 * 2 > m->real.n) return;
-      DrawCga(p, (void *)(m->real.p + 0xb8000));
+      if (0xb8000 + 25 * 80 * 2 > m->system->real.n) return;
+      DrawCga(p, (void *)(m->system->real.p + 0xb8000));
       break;
     default:
       DrawTerminalHr(&pan.displayhr);
@@ -1568,17 +1568,17 @@ static void DrawStatus(struct Panel *p) {
   xn = p->right - p->left;
   if (!yn || !xn) return;
   rw = 0;
-  a = &m->memstat;
+  a = &m->system->memstat;
   b = &lastmemstat;
   s = malloc(sizeof(struct Buffer));
   memset(s, 0, sizeof(*s));
   if (ips > 0) rw += AppendStat(s, "ips", ips, false);
-  rw += AppendStat(s, "kb", m->real.n / 1024, false);
+  rw += AppendStat(s, "kb", m->system->real.n / 1024, false);
   rw += AppendStat(s, "reserve", a->reserved, a->reserved != b->reserved);
   rw += AppendStat(s, "commit", a->committed, a->committed != b->committed);
   rw += AppendStat(s, "freed", a->freed, a->freed != b->freed);
   rw += AppendStat(s, "tables", a->pagetables, a->pagetables != b->pagetables);
-  rw += AppendStat(s, "fds", m->fds.i, false);
+  rw += AppendStat(s, "fds", m->system->fds.i, false);
   AppendFmt(&p->lines[0], "\033[7m%-*s%s\033[0m", xn - rw,
             statusmessage && nowl() < statusexpires ? statusmessage
                                                     : "das blinkenlights",
@@ -1919,9 +1919,9 @@ static void OnDiskServiceReadSectors(void) {
        sectors, sector, cylinder, head, drive, offset);
   if (0 <= sector && offset + size <= elf->mapsize) {
     addr = Read64(m->es) + Read16(m->bx);
-    if (addr + size <= m->real.n) {
+    if (addr + size <= m->system->real.n) {
       SetWriteAddr(m, addr, size);
-      memcpy(m->real.p + addr, elf->map + offset, size);
+      memcpy(m->system->real.p + addr, elf->map + offset, size);
       m->ax[1] = 0x00;
       SetCarry(false);
     } else {
@@ -2103,12 +2103,12 @@ static void OnE820(void) {
   uint64_t addr;
   addr = Read64(m->es) + Read16(m->di);
   if (Read32(m->dx) == 0x534D4150 && Read32(m->cx) == 24 &&
-      addr + sizeof(p) <= m->real.n) {
+      addr + sizeof(p) <= m->system->real.n) {
     if (!Read32(m->bx)) {
       Write64(p + 0, 0);
-      Write64(p + 8, m->real.n);
+      Write64(p + 8, m->system->real.n);
       Write32(p + 16, 1);
-      memcpy(m->real.p + addr, p, sizeof(p));
+      memcpy(m->system->real.p + addr, p, sizeof(p));
       SetWriteAddr(m, addr, sizeof(p));
       Write32(m->cx, sizeof(p));
       Write32(m->bx, 1);
@@ -2571,7 +2571,7 @@ static void Exec(void) {
   ssize_t bp;
   int interrupt;
   ExecSetup();
-  if (!(interrupt = setjmp(m->onhalt))) {
+  if (!(interrupt = setjmp(m->system->onhalt))) {
     if (!(action & CONTINUE) &&
         (bp = IsAtBreakpoint(&breakpoints, GetIp())) != -1) {
       LOGF("BREAK1 %012" PRIx64 "", breakpoints.p[bp].addr);
@@ -2644,7 +2644,7 @@ static void Tui(void) {
   TuiSetup();
   SetupDraw();
   ScrollOp(&pan.disassembly, GetDisIndex());
-  if (!(interrupt = setjmp(m->onhalt))) {
+  if (!(interrupt = setjmp(m->system->onhalt))) {
     do {
       if (!(action & FAILURE)) {
         LoadInstruction(m);
@@ -2825,14 +2825,14 @@ static int OpenDevTty(void) {
 }
 
 static void AddHostFd(int fd) {
-  int i = m->fds.i++;
-  m->fds.p[i].fd = fd;
-  m->fds.p[i].cb = &kMachineFdCbHost;
+  int i = m->system->fds.i++;
+  m->system->fds.p[i].fd = fd;
+  m->system->fds.p[i].cb = &kMachineFdCbHost;
 }
 
 int Emulator(int argc, char *argv[]) {
   codepath = argv[optind++];
-  m->fds.p = calloc((m->fds.n = 8), sizeof(struct MachineFd));
+  m->system->fds.p = calloc((m->system->fds.n = 8), sizeof(struct MachineFd));
   do {
     action = 0;
     LoadProgram(m, codepath, argv + optind, environ, elf);
@@ -2852,9 +2852,9 @@ int Emulator(int argc, char *argv[]) {
       tyn = 24;
       txn = 80;
       GetTtySize(ttyout);
-      if (isatty(0)) m->fds.p[0].cb = &kMachineFdCbPty;
-      if (isatty(1)) m->fds.p[1].cb = &kMachineFdCbPty;
-      if (isatty(2)) m->fds.p[2].cb = &kMachineFdCbPty;
+      if (isatty(0)) m->system->fds.p[0].cb = &kMachineFdCbPty;
+      if (isatty(1)) m->system->fds.p[1].cb = &kMachineFdCbPty;
+      if (isatty(2)) m->system->fds.p[2].cb = &kMachineFdCbPty;
     }
     do {
       if (!tuimode) {
@@ -2876,9 +2876,9 @@ int main(int argc, char *argv[]) {
   pty = NewPty();
   m = NewMachine();
   m->mode = XED_MACHINE_MODE_LONG_64;
-  m->redraw = Redraw;
-  m->onbinbase = OnBinbase;
-  m->onlongbranch = OnLongBranch;
+  m->system->redraw = Redraw;
+  m->system->onbinbase = OnBinbase;
+  m->system->onlongbranch = OnLongBranch;
   speed = 16;
   SetXmmSize(2);
   SetXmmDisp(kXmmHex);

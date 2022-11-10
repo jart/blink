@@ -64,8 +64,8 @@ static void FormatEndPage(struct Pml4tFormater *pp, int64_t end) {
 }
 
 static uint8_t *GetPt(struct Machine *m, uint64_t r) {
-  assert(r + 0x1000 <= m->real.n);
-  return m->real.p + r;
+  assert(r + 0x1000 <= m->system->real.n);
+  return m->system->real.p + r;
 }
 
 char *FormatPml4t(struct Machine *m) {
@@ -74,7 +74,7 @@ char *FormatPml4t(struct Machine *m) {
   struct Pml4tFormater pp = {0};
   uint16_t range[][2] = {{256, 512}, {0, 256}};
   if ((m->mode & 3) != XED_MODE_LONG) return strdup("");
-  pd[0] = GetPt(m, m->cr3);
+  pd[0] = GetPt(m, m->system->cr3);
   for (i = 0; i < ARRAYLEN(range); ++i) {
     a[0] = range[i][0];
     do {

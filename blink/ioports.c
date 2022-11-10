@@ -26,9 +26,10 @@ static int OpE9Read(struct Machine *m) {
   int fd;
   uint8_t b;
   fd = 0;
-  if (fd >= m->fds.i) return -1;
-  if (!m->fds.p[fd].cb) return -1;
-  if (m->fds.p[fd].cb->readv(m->fds.p[fd].fd, &(struct iovec){&b, 1}, 1) == 1) {
+  if (fd >= m->system->fds.i) return -1;
+  if (!m->system->fds.p[fd].cb) return -1;
+  if (m->system->fds.p[fd].cb->readv(m->system->fds.p[fd].fd,
+                                     &(struct iovec){&b, 1}, 1) == 1) {
     return b;
   } else {
     return -1;
@@ -38,19 +39,20 @@ static int OpE9Read(struct Machine *m) {
 static void OpE9Write(struct Machine *m, uint8_t b) {
   int fd;
   fd = 1;
-  if (fd >= m->fds.i) return;
-  if (!m->fds.p[fd].cb) return;
-  m->fds.p[fd].cb->writev(m->fds.p[fd].fd, &(struct iovec){&b, 1}, 1);
+  if (fd >= m->system->fds.i) return;
+  if (!m->system->fds.p[fd].cb) return;
+  m->system->fds.p[fd].cb->writev(m->system->fds.p[fd].fd,
+                                  &(struct iovec){&b, 1}, 1);
 }
 
 static int OpE9Poll(struct Machine *m) {
   int rc, fd = 0;
   struct pollfd pf;
-  if (fd >= m->fds.i) return -1;
-  if (!m->fds.p[fd].cb) return -1;
-  pf.fd = m->fds.p[fd].fd;
+  if (fd >= m->system->fds.i) return -1;
+  if (!m->system->fds.p[fd].cb) return -1;
+  pf.fd = m->system->fds.p[fd].fd;
   pf.events = POLLIN | POLLOUT;
-  rc = m->fds.p[fd].cb->poll(&pf, 1, 20);
+  rc = m->system->fds.p[fd].cb->poll(&pf, 1, 20);
   if (rc <= 0) return rc;
   return pf.revents;
 }
@@ -59,7 +61,7 @@ static int OpSerialIn(struct Machine *m, int r) {
   int p, s;
   switch (r) {
     case UART_DLL:
-      if (!m->dlab) {
+      if (!m->system->dlab) {
         return OpE9Read(m);
       } else {
         return 0x01;
@@ -78,12 +80,12 @@ static int OpSerialIn(struct Machine *m, int r) {
 static void OpSerialOut(struct Machine *m, int r, uint32_t x) {
   switch (r) {
     case UART_DLL:
-      if (!m->dlab) {
+      if (!m->system->dlab) {
         return OpE9Write(m, x);
       }
       break;
     case UART_LCR:
-      m->dlab = !!(x & UART_DLAB);
+      m->system->dlab = !!(x & UART_DLAB);
       break;
     default:
       break;

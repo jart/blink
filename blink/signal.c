@@ -115,12 +115,12 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   m->siguc = sp;
   m->sig = sig;
   sp -= 8;
-  VirtualRecvWrite(m, sp, m->hands[sig - 1].restorer, 8);
+  VirtualRecvWrite(m, sp, m->system->hands[sig - 1].restorer, 8);
   Write64(m->sp, sp);
   Write64(m->di, sig);
   Write64(m->si, siaddr);
   Write64(m->dx, m->siguc);
-  m->ip = Read64(m->hands[sig - 1].handler);
+  m->ip = Read64(m->system->hands[sig - 1].handler);
 }
 
 void EnqueueSignal(struct Machine *m, struct Signals *ss, int sig, int code) {
@@ -137,10 +137,11 @@ int ConsumeSignal(struct Machine *m, struct Signals *ss) {
   sig = ss->p[ss->i].sig;
   code = ss->p[ss->i].code;
   if (!m->sig ||
-      ((sig != m->sig || (Read64(m->hands[m->sig - 1].flags) & 0x40000000)) &&
-       !(Read64(m->hands[m->sig - 1].mask) & (1ull << (m->sig - 1))))) {
+      ((sig != m->sig ||
+        (Read64(m->system->hands[m->sig - 1].flags) & 0x40000000)) &&
+       !(Read64(m->system->hands[m->sig - 1].mask) & (1ull << (m->sig - 1))))) {
     if (++ss->i == ss->n) ss->i = ss->n = 0;
-    handler = Read64(m->hands[sig - 1].handler);
+    handler = Read64(m->system->hands[sig - 1].handler);
     if (!handler) {
       if (sig == SIGCHLD_LINUX || sig == SIGURG_LINUX ||
           sig == SIGWINCH_LINUX) {
@@ -158,7 +159,7 @@ int ConsumeSignal(struct Machine *m, struct Signals *ss) {
 }
 
 void TerminateSignal(struct Machine *m, int sig) {
-  if (m->isfork) {
+  if (m->system->isfork) {
     _exit(28 + sig);
   } else {
     exit(128 + sig);

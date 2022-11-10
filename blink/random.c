@@ -76,6 +76,8 @@ ssize_t GetRandom(void *p, size_t n) {
     (defined(__FreeBSD__) || \
      (defined(__NetBSD__) && __NetBSD_Version__ >= 400000000))
   rc = GetKernArnd(p, n);
+#else
+  rc = -1;
 #endif
   if (rc == -1 && errno == ENOSYS) {
     rc = GetDevRandom(p, n);
