@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -28,6 +27,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/loader.h"
 #include "blink/log.h"
@@ -44,8 +44,7 @@ static void LoadElfLoadSegment(struct Machine *m, void *code, size_t codesize,
   int64_t align, bsssize;
   int64_t felf, fstart, fend, vstart, vbss, vend;
   align = MAX(Read64(phdr->p_align), 4096);
-  assert(1 == popcount(align));
-  assert(0 == (Read64(phdr->p_vaddr) - Read64(phdr->p_offset)) % align);
+  unassert(0 == (Read64(phdr->p_vaddr) - Read64(phdr->p_offset)) % align);
   felf = (int64_t)(intptr_t)code;
   vstart = ROUNDDOWN(Read64(phdr->p_vaddr), align);
   vbss = ROUNDUP(Read64(phdr->p_vaddr) + Read64(phdr->p_filesz), align);
@@ -54,15 +53,15 @@ static void LoadElfLoadSegment(struct Machine *m, void *code, size_t codesize,
   fend = felf + Read64(phdr->p_offset) + Read64(phdr->p_filesz);
   bsssize = vend - vbss;
   m->system->brk = MAX(m->system->brk, vend);
-  assert(vend >= vstart);
-  assert(fend >= fstart);
-  assert(felf <= fstart);
-  assert(vstart >= -0x800000000000);
-  assert(vend <= 0x800000000000);
-  assert(vend - vstart >= fstart - fend);
-  assert(Read64(phdr->p_filesz) <= Read64(phdr->p_memsz));
-  assert(felf + Read64(phdr->p_offset) - fstart ==
-         Read64(phdr->p_vaddr) - vstart);
+  unassert(vend >= vstart);
+  unassert(fend >= fstart);
+  unassert(felf <= fstart);
+  unassert(vstart >= -0x800000000000);
+  unassert(vend <= 0x800000000000);
+  unassert(vend - vstart >= fstart - fend);
+  unassert(Read64(phdr->p_filesz) <= Read64(phdr->p_memsz));
+  unassert(felf + Read64(phdr->p_offset) - fstart ==
+           Read64(phdr->p_vaddr) - vstart);
   if (ReserveVirtual(m, vstart, fend - fstart, 0x0207) == -1) {
     LOGF("ReserveVirtual failed");
     exit(200);
@@ -116,7 +115,6 @@ static void BootProgram(struct Machine *m, struct Elf *elf, size_t codesize) {
   m->ip = 0x7c00;
   elf->base = 0x7c00;
   if (ReserveReal(m, 0x00f00000) == -1) {
-    LOGF("ReserveReal failed");
     exit(201);
   }
   memset(m->system->real.p, 0, 0x00f00000);
@@ -186,7 +184,7 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
   int64_t sp;
   char ehdr[64];
   struct stat st;
-  assert(prog);
+  unassert(prog);
   elf->prog = prog;
   if ((fd = open(prog, O_RDONLY)) == -1 ||
       (fstat(fd, &st) == -1 || !st.st_size)) {
@@ -194,8 +192,7 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
     exit(201);
   }
   elf->mapsize = st.st_size;
-  elf->map =
-      mmap(NULL, elf->mapsize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+  elf->map = mmap(0, elf->mapsize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
   if (elf->map == MAP_FAILED) {
     LOGF("mmap failed: %s", strerror(errno));
     exit(200);
@@ -217,7 +214,8 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
       elf->ehdr = (void *)elf->map;
       elf->size = elf->mapsize;
       LoadElf(m, elf);
-    } else if (READ64(elf->map) == READ64("MZqFpD='") &&
+    } else if ((READ64(elf->map) == READ64("MZqFpD='") ||
+                READ64(elf->map) == READ64("jartsr='")) &&
                !GetElfHeader(ehdr, prog, elf->map)) {
       memcpy(elf->map, ehdr, 64);
       elf->ehdr = (void *)elf->map;

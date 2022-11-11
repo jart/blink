@@ -16,9 +16,12 @@ endif
 endif
 
 o: o/$(MODE)/blink
-test: o/$(MODE)/test
 clean:; rm -rf o
 tags: TAGS HTAGS
+
+test:	o/$(MODE)/test			\
+	o/$(MODE)/third_party/cosmo/ok	\
+	o/$(MODE)/third_party/cosmo/emulates
 
 include build/config.mk
 include build/rules.mk
@@ -27,6 +30,7 @@ include test/test.mk
 include test/blink/test.mk
 include third_party/gcc/gcc.mk
 include third_party/qemu/qemu.mk
+include third_party/cosmo/cosmo.mk
 
 OBJS	 = $(foreach x,$(PKGS),$($(x)_OBJS))
 SRCS	:= $(foreach x,$(PKGS),$($(x)_SRCS))

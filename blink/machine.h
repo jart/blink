@@ -48,6 +48,15 @@ struct MachineFpu {
 };
 
 struct MachineMemstat {
+#if !defined(__m68k__) && !defined(__mips__)
+  _Atomic(int) freed;
+  _Atomic(int) resizes;
+  _Atomic(int) reserved;
+  _Atomic(int) committed;
+  _Atomic(int) allocated;
+  _Atomic(int) reclaimed;
+  _Atomic(int) pagetables;
+#else
   int freed;
   int resizes;
   int reserved;
@@ -55,6 +64,7 @@ struct MachineMemstat {
   int allocated;
   int reclaimed;
   int pagetables;
+#endif
 };
 
 struct MachineState {
@@ -163,7 +173,7 @@ struct Machine {
   jmp_buf onhalt;
   pthread_mutex_t lock;
   int64_t ctid;
-  int32_t tid;
+  _Atomic(int) tid;
 };
 
 struct Machine *NewMachine(void);

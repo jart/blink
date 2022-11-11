@@ -37,7 +37,8 @@ static void AluEb(struct Machine *m, uint32_t rde, aluop_f op) {
     x = Read8(p);
     do {
       z = op(x, 0, &m->flags);
-    } while (!atomic_compare_exchange_weak((atomic_uchar *)p, &x, z));
+    } while (!atomic_compare_exchange_weak_explicit(
+        (atomic_uchar *)p, &x, z, memory_order_release, memory_order_relaxed));
 #else
     OpUd(m, rde);
 #endif
@@ -76,7 +77,9 @@ static void AluEvqp(struct Machine *m, uint32_t rde, const aluop_f ops[4]) {
       do {
         z = ops[ALU_INT64](SWAP64LE(x), 0, &m->flags);
         z = SWAP64LE(z);
-      } while (!atomic_compare_exchange_weak((atomic_ulong *)p, &x, z));
+      } while (!atomic_compare_exchange_weak_explicit((atomic_ulong *)p, &x, z,
+                                                      memory_order_release,
+                                                      memory_order_relaxed));
 #else
       OpUd(m, rde);
 #endif
@@ -91,7 +94,8 @@ static void AluEvqp(struct Machine *m, uint32_t rde, const aluop_f ops[4]) {
       do {
         z = ops[ALU_INT32](SWAP32LE(x), 0, &m->flags);
         z = SWAP32LE(z);
-      } while (!atomic_compare_exchange_weak((atomic_uint *)p, &x, z));
+      } while (!atomic_compare_exchange_weak_explicit(
+          (atomic_uint *)p, &x, z, memory_order_release, memory_order_relaxed));
     } else {
       Write32(p, ops[ALU_INT32](Read32(p), 0, &m->flags));
     }

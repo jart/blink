@@ -24,6 +24,7 @@
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
+#include "blink/races.h"
 
 static const uint8_t kStackOsz[2][3] = {
     [0][XED_MODE_REAL] = 2, [0][XED_MODE_LEGACY] = 4, [0][XED_MODE_LONG] = 8,
@@ -36,6 +37,7 @@ static const uint8_t kCallOsz[2][3] = {
 };
 
 static void WriteStackWord(uint8_t *p, uint32_t rde, uint32_t osz, uint64_t x) {
+  IGNORE_RACES_START();
   if (osz == 8) {
     Write64(p, x);
   } else if (osz == 2) {
@@ -43,20 +45,26 @@ static void WriteStackWord(uint8_t *p, uint32_t rde, uint32_t osz, uint64_t x) {
   } else {
     Write32(p, x);
   }
+  IGNORE_RACES_END();
 }
 
 static uint64_t ReadStackWord(uint8_t *p, uint32_t osz) {
+  uint64_t x;
+  IGNORE_RACES_START();
   if (osz == 8) {
-    return Read64(p);
+    x = Read64(p);
   } else if (osz == 2) {
-    return Read16(p);
+    x = Read16(p);
   } else {
-    return Read32(p);
+    x = Read32(p);
   }
+  IGNORE_RACES_END();
+  return x;
 }
 
 static void PushN(struct Machine *m, uint32_t rde, uint64_t x, unsigned mode,
                   unsigned osz) {
+  uint8_t *w;
   uint64_t v;
   void *p[2];
   uint8_t b[8];
@@ -78,8 +86,11 @@ static void PushN(struct Machine *m, uint32_t rde, uint64_t x, unsigned mode,
     default:
       __builtin_unreachable();
   }
-  WriteStackWord(AccessRam(m, v, osz, p, b, false), rde, osz, x);
+  w = AccessRam(m, v, osz, p, b, false);
+  IGNORE_RACES_START();
+  WriteStackWord(w, rde, osz, x);
   EndStore(m, v, osz, p, b);
+  IGNORE_RACES_END();
 }
 
 void Push(struct Machine *m, uint32_t rde, uint64_t x) {

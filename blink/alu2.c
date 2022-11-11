@@ -39,7 +39,8 @@ static void Alub(struct Machine *m, uint32_t rde, aluop_f op) {
     y = Read8(q);
     do {
       z = op(x, y, &m->flags);
-    } while (!atomic_compare_exchange_weak((atomic_uchar *)p, &x, z));
+    } while (!atomic_compare_exchange_weak_explicit(
+        (atomic_uchar *)p, &x, z, memory_order_release, memory_order_relaxed));
 #else
     OpUd(m, rde);
 #endif
@@ -89,7 +90,9 @@ void OpAluw(struct Machine *m, uint32_t rde) {
         z = kAlu[(m->xedd->op.opcode & 070) >> 3][ALU_INT64](SWAP64LE(x), y,
                                                              &m->flags);
         z = SWAP64LE(z);
-      } while (!atomic_compare_exchange_weak((atomic_ulong *)p, &x, z));
+      } while (!atomic_compare_exchange_weak_explicit((atomic_ulong *)p, &x, z,
+                                                      memory_order_release,
+                                                      memory_order_relaxed));
 #else
       OpUd(m, rde);
 #endif
@@ -110,7 +113,8 @@ void OpAluw(struct Machine *m, uint32_t rde) {
         z = kAlu[(m->xedd->op.opcode & 070) >> 3][ALU_INT32](SWAP32LE(x), y,
                                                              &m->flags);
         z = SWAP32LE(z);
-      } while (!atomic_compare_exchange_weak((atomic_uint *)p, &x, z));
+      } while (!atomic_compare_exchange_weak_explicit(
+          (atomic_uint *)p, &x, z, memory_order_release, memory_order_relaxed));
     } else {
       x = Read32(p);
       y = Read32(q);

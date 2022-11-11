@@ -8,14 +8,12 @@ CFLAGS +=				\
 	-O2				\
 	-Wall				\
 	-std=c11			\
-	-fdebug-prefix-map="$(PWD)"=	\
+	-pthread			\
 	-fno-ident			\
 	-fno-common			\
 	-fstrict-aliasing		\
 	-fstrict-overflow		\
 	-fno-omit-frame-pointer		\
-	-fno-unwind-tables		\
-	-fno-asynchronous-unwind-tables	\
 	-Wno-unused-function
 
 CPPFLAGS +=				\
@@ -26,7 +24,7 @@ CPPFLAGS +=				\
 	-D_DEFAULT_SOURCE		\
 	-D_GNU_SOURCE
 
-LDLIBS += -lm
+LDLIBS += -lm -lrt -pthread
 
 TAGSFLAGS =								\
 	-e								\

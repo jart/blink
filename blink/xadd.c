@@ -40,7 +40,8 @@ void OpXaddEbGb(struct Machine *m, uint32_t rde) {
       *p = z;
       break;
     }
-  } while (!atomic_compare_exchange_weak((atomic_uchar *)p, &x, *q));
+  } while (!atomic_compare_exchange_weak_explicit(
+      (atomic_uchar *)p, &x, *q, memory_order_acq_rel, memory_order_relaxed));
 #else
   if (!Lock(rde)) {
     z = Add8(x, y, &m->flags);
@@ -67,7 +68,9 @@ void OpXaddEvqpGvqp(struct Machine *m, uint32_t rde) {
         atomic_store_explicit((atomic_ulong *)q, x, memory_order_relaxed);
         z = kAlu[ALU_ADD][ALU_INT64](SWAP64LE(x), y, &m->flags);
         z = SWAP64LE(z);
-      } while (!atomic_compare_exchange_weak((atomic_ulong *)p, &x, z));
+      } while (!atomic_compare_exchange_weak_explicit((atomic_ulong *)p, &x, z,
+                                                      memory_order_acq_rel,
+                                                      memory_order_relaxed));
 #else
       OpUd(m, rde);
 #endif
@@ -88,7 +91,8 @@ void OpXaddEvqpGvqp(struct Machine *m, uint32_t rde) {
         atomic_store_explicit((atomic_uint *)q, x, memory_order_relaxed);
         z = kAlu[ALU_ADD][ALU_INT32](SWAP32LE(x), y, &m->flags);
         z = SWAP32LE(z);
-      } while (!atomic_compare_exchange_weak((atomic_uint *)p, &x, z));
+      } while (!atomic_compare_exchange_weak_explicit(
+          (atomic_uint *)p, &x, z, memory_order_acq_rel, memory_order_relaxed));
     } else {
       x = Read32(p);
       y = Read32(q);

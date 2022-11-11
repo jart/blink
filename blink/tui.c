@@ -36,6 +36,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
+#include "blink/assert.h"
 #include <wctype.h>
 
 #include "blink/address.h"
@@ -2209,7 +2210,7 @@ static void SetStatus(const char *fmt, ...) {
   va_list va;
   struct itimerval it;
   va_start(va, fmt);
-  vasprintf(&s, fmt, va);
+  unassert(vasprintf(&s, fmt, va) >= 0);
   va_end(va);
   free(statusmessage);
   statusmessage = s;

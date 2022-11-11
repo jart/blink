@@ -23,8 +23,10 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <poll.h>
+#include <pthread.h>
 #include <sched.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -52,6 +54,7 @@
 #include "blink/pml4t.h"
 #include "blink/random.h"
 #include "blink/signal.h"
+#include "blink/swap.h"
 #include "blink/timeval.h"
 #include "blink/util.h"
 #include "blink/xlat.h"
@@ -78,7 +81,6 @@
 #define POLLNVAL_LINUX      0x20
 #define TIMER_ABSTIME_LINUX 0x01
 
-#define dog                   0x01290f00
 #define CLONE_VM_             0x00000100
 #define CLONE_THREAD_         0x00010000
 #define CLONE_FS_             0x00000200
@@ -155,8 +157,8 @@ static int AppendIovsGuest(struct Machine *m, struct Iovs *iv, int64_t iovaddr,
 }
 
 _Noreturn static void OpExit(struct Machine *m, int rc) {
-  unassert(!pthread_mutex_lock(&m->lock));
-  Write32(ResolveAddress(m, m->ctid), 0);
+  atomic_store_explicit((atomic_int *)ResolveAddress(m, m->ctid), 0,
+                        memory_order_release);
   m->system = 0;
   FreeMachine(m);
   pthread_exit(0);
@@ -178,22 +180,22 @@ static int OpFork(struct Machine *m) {
 }
 
 static void *Actor(void *arg) {
-  int rc;
+  int rc, tid;
   sigset_t ss;
   struct Machine *m = arg;
   sigfillset(&ss);
   unassert(!sigprocmask(SIG_SETMASK, &ss, 0));
   if (!(rc = setjmp(m->onhalt))) {
-    m->tid = syscall(SYS_gettid);
-    unassert(!pthread_mutex_unlock(&m->lock));
-    Write32(ResolveAddress(m, m->ctid), m->tid);
+    tid = syscall(SYS_gettid);
+    atomic_store_explicit(&m->tid, tid, memory_order_release);
+    atomic_store_explicit((atomic_int *)ResolveAddress(m, m->ctid),
+                          SWAP32LE(tid), memory_order_release);
     for (;;) {
       LoadInstruction(m);
       ExecuteInstruction(m);
     }
   } else {
     LOGF("halting machine from thread: %d", rc);
-    unassert(!pthread_mutex_lock(&m->lock));
     _Exit(rc);
   }
 }
@@ -203,7 +205,6 @@ static int OpClone(struct Machine *m, uint64_t flags, uint64_t stack,
   int rc;
   pthread_t th;
   pthread_attr_t attr;
-  pthread_mutexattr_t mattr;
   struct OpCache *oc = 0;
   struct Machine *m2 = 0;
   if (flags == 17 && !stack) {
@@ -220,22 +221,15 @@ static int OpClone(struct Machine *m, uint64_t flags, uint64_t stack,
     Write64(m2->ax, 0);
     Write64(m2->fs, tls);
     Write64(m2->sp, stack);
-    unassert(!pthread_mutexattr_init(&mattr));
-    unassert(!pthread_mutexattr_settype(&mattr, PTHREAD_MUTEX_NORMAL));
-    unassert(!pthread_mutex_init(&m2->lock, &mattr));
-    unassert(!pthread_mutexattr_destroy(&mattr));
-    unassert(!pthread_mutex_lock(&m2->lock));
     unassert(!pthread_attr_init(&attr));
     unassert(!pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
     rc = pthread_create(&th, 0, Actor, m2);
     unassert(!pthread_attr_destroy(&attr));
-    if (rc) {
-      unassert(!pthread_mutex_destroy(&m2->lock));
-      goto RaiseEagain;
+    if (rc) goto RaiseEagain;
+    while (!(rc = atomic_load_explicit(&m2->tid, memory_order_acquire))) {
+      sched_yield();
     }
-    unassert(!pthread_mutex_lock(&m2->lock));
-    Write32(ResolveAddress(m, ptid), (rc = m2->tid));
-    unassert(!pthread_mutex_unlock(&m2->lock));
+    Write32(ResolveAddress(m, ptid), rc);
     return rc;
   RaiseEagain:
     free(m2->opcache);

@@ -30,9 +30,9 @@ void OpCmpxchgEbAlGb(struct Machine *m, uint32_t rde) {
   bool didit;
   if (!IsModrmRegister(rde)) {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
-    didit = atomic_compare_exchange_strong(
+    didit = atomic_compare_exchange_strong_explicit(
         (atomic_uchar *)ComputeReserveAddressWrite1(m, rde), m->ax,
-        *ByteRexrReg(m, rde));
+        *ByteRexrReg(m, rde), memory_order_acq_rel, memory_order_relaxed);
 #else
     OpUd(m, rde);
 #endif
@@ -61,9 +61,10 @@ void OpCmpxchgEvqpRaxGvqp(struct Machine *m, uint32_t rde) {
   if (Rexw(rde)) {
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64
-      didit = atomic_compare_exchange_strong(
+      didit = atomic_compare_exchange_strong_explicit(
           (atomic_ulong *)p, (unsigned long *)m->ax,
-          atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed));
+          atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
+          memory_order_acq_rel, memory_order_relaxed);
 #else
       OpUd(m, rde);
 #endif
@@ -80,9 +81,10 @@ void OpCmpxchgEvqpRaxGvqp(struct Machine *m, uint32_t rde) {
     }
   } else if (!Osz(rde)) {
     if (Lock(rde) && !((intptr_t)p & 3)) {
-      didit = atomic_compare_exchange_strong(
+      didit = atomic_compare_exchange_strong_explicit(
           (atomic_uint *)p, (unsigned int *)m->ax,
-          atomic_load_explicit((atomic_uint *)q, memory_order_relaxed));
+          atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
+          memory_order_acq_rel, memory_order_relaxed);
     } else {
       uint32_t x, y, z;
       x = Read32(p);
