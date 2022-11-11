@@ -3,7 +3,7 @@
 blink is an emulator for running x86-64-linux programs on different
 operating systems and hardware architectures. It's designed to do the
 same thing as the `qemu-x86_64` command, except rather than being a 10mb
-binary, blink only has a ~200kb footprint. For further details on the
+binary, blink only has a ~142kb footprint. For further details on the
 motivations for this tool, please read <https://justine.lol/ape.html>.
 
 ## Getting Started
