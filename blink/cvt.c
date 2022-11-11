@@ -20,7 +20,6 @@
 #include <string.h>
 
 #include "blink/builtin.h"
-#include "blink/cvt.h"
 #include "blink/endian.h"
 #include "blink/fpu.h"
 #include "blink/machine.h"
@@ -28,7 +27,6 @@
 #include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/pun.h"
-#include "blink/throw.h"
 
 #define kOpCvt0f2a  0
 #define kOpCvtt0f2c 4
@@ -363,7 +361,7 @@ static void OpVdqWpdCvtpd2dq(struct Machine *m, uint32_t rde) {
 }
 
 static void OpCvt(struct Machine *m, uint32_t rde, unsigned long op) {
-  switch (op | Rep(rde) | Osz(rde)) {
+  switch (op | m->xedd->op.rep | Osz(rde)) {
     case kOpCvt0f2a + 0:
       OpVpsQpiCvtpi2ps(m, rde);
       break;

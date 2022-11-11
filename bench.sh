@@ -11,6 +11,11 @@ fi
 )
 
 tests="
+$HOME/cosmo/o/test/libc/intrin/pthread_spin_lock_test.com
+$HOME/cosmo/o/test/libc/intrin/pthread_mutex_lock_test.com
+$HOME/cosmo/o/test/libc/intrin/pthread_mutex_lock2_test.com
+$HOME/cosmo/o/test/libc/intrin/lock_test.com
+$HOME/cosmo/o/test/libc/intrin/lockscale_test.com
 $HOME/cosmo/o/test/libc/intrin/kprintf_test.com
 $HOME/cosmo/o/test/libc/intrin/intrin_test.com
 $HOME/cosmo/o/test/libc/intrin/countbits_test.com

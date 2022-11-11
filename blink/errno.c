@@ -34,6 +34,10 @@ long einval(void) {
   return ReturnErrno(EINVAL);
 }
 
+long eagain(void) {
+  return ReturnErrno(EAGAIN);
+}
+
 long enomem(void) {
   return ReturnErrno(ENOMEM);
 }

@@ -19,7 +19,7 @@
 #include <poll.h>
 #include <sys/uio.h>
 
-#include "blink/ioports.h"
+#include "blink/machine.h"
 #include "blink/uart.h"
 
 static int OpE9Read(struct Machine *m) {

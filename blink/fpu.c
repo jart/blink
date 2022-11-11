@@ -32,7 +32,6 @@
 #include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/pun.h"
-#include "blink/throw.h"
 
 #define FPUREG 0
 #define MEMORY 1

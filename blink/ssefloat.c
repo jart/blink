@@ -26,7 +26,6 @@
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/pun.h"
-#include "blink/throw.h"
 
 static void pshufw(int16_t b[4], const int16_t a[4], int m) {
   int16_t t[4];
@@ -131,7 +130,7 @@ void OpShuffle(struct Machine *m, uint32_t rde) {
   int16_t q16[4];
   int16_t x16[8];
   int32_t x32[4];
-  switch (Rep(rde) | Osz(rde)) {
+  switch (m->xedd->op.rep | Osz(rde)) {
     case 0:
       memcpy(q16, GetModrmRegisterXmmPointerRead8(m, rde), 8);
       pshufw(q16, q16, m->xedd->op.uimm0);
@@ -204,7 +203,7 @@ void OpShufpsd(struct Machine *m, uint32_t rde) {
 }
 
 void OpSqrtpsd(struct Machine *m, uint32_t rde) {
-  switch (Rep(rde) | Osz(rde)) {
+  switch (m->xedd->op.rep | Osz(rde)) {
     case 0: {
       int i;
       uint8_t *p;
@@ -255,7 +254,7 @@ void OpSqrtpsd(struct Machine *m, uint32_t rde) {
 }
 
 void OpRsqrtps(struct Machine *m, uint32_t rde) {
-  if (Rep(rde) != 3) {
+  if (m->xedd->op.rep != 3) {
     int i;
     uint8_t *p;
     union FloatPun u[4];
@@ -279,7 +278,7 @@ void OpRsqrtps(struct Machine *m, uint32_t rde) {
 }
 
 void OpRcpps(struct Machine *m, uint32_t rde) {
-  if (Rep(rde) != 3) {
+  if (m->xedd->op.rep != 3) {
     int i;
     uint8_t *p;
     union FloatPun u[4];
@@ -348,13 +347,13 @@ void OpComissVsWs(struct Machine *m, uint32_t rde) {
 static inline void OpPsd(struct Machine *m, uint32_t rde,
                          float fs(float x, float y),
                          double fd(double x, double y)) {
-  if (Rep(rde) == 2) {
+  if (m->xedd->op.rep == 2) {
     union DoublePun x, y;
     y.i = Read64(GetModrmRegisterXmmPointerRead8(m, rde));
     x.i = Read64(XmmRexrReg(m, rde));
     x.f = fd(x.f, y.f);
     Write64(XmmRexrReg(m, rde), x.i);
-  } else if (Rep(rde) == 3) {
+  } else if (m->xedd->op.rep == 3) {
     union FloatPun x, y;
     y.i = Read32(GetModrmRegisterXmmPointerRead4(m, rde));
     x.i = Read32(XmmRexrReg(m, rde));
@@ -517,13 +516,13 @@ static int32_t Cmpd(int imm, double x, double y) {
 
 void OpCmppsd(struct Machine *m, uint32_t rde) {
   int imm = m->xedd->op.uimm0;
-  if (Rep(rde) == 2) {
+  if (m->xedd->op.rep == 2) {
     union DoublePun x, y;
     y.i = Read64(GetModrmRegisterXmmPointerRead8(m, rde));
     x.i = Read64(XmmRexrReg(m, rde));
     x.f = Cmpd(imm, x.f, y.f);
     Write64(XmmRexrReg(m, rde), x.i);
-  } else if (Rep(rde) == 3) {
+  } else if (m->xedd->op.rep == 3) {
     union FloatPun x, y;
     y.i = Read32(GetModrmRegisterXmmPointerRead4(m, rde));
     x.i = Read32(XmmRexrReg(m, rde));
@@ -604,7 +603,7 @@ void OpXorpsd(struct Machine *m, uint32_t rde) {
 
 void OpHaddpsd(struct Machine *m, uint32_t rde) {
   uint8_t *p;
-  if (Rep(rde) == 2) {
+  if (m->xedd->op.rep == 2) {
     union FloatPun x[4], y[4], z[4];
     p = GetModrmRegisterXmmPointerRead16(m, rde);
     y[0].i = Read32(p + 0 * 4);
@@ -643,7 +642,7 @@ void OpHaddpsd(struct Machine *m, uint32_t rde) {
 
 void OpHsubpsd(struct Machine *m, uint32_t rde) {
   uint8_t *p;
-  if (Rep(rde) == 2) {
+  if (m->xedd->op.rep == 2) {
     union FloatPun x[4], y[4], z[4];
     p = GetModrmRegisterXmmPointerRead16(m, rde);
     y[0].i = Read32(p + 0 * 4);
@@ -682,7 +681,7 @@ void OpHsubpsd(struct Machine *m, uint32_t rde) {
 
 void OpAddsubpsd(struct Machine *m, uint32_t rde) {
   uint8_t *p;
-  if (Rep(rde) == 2) {
+  if (m->xedd->op.rep == 2) {
     union FloatPun x[4], y[4], z[4];
     p = GetModrmRegisterXmmPointerRead16(m, rde);
     y[0].i = Read32(p + 0 * 4);

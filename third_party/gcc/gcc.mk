@@ -7,7 +7,7 @@ third_party/gcc/%.xz: third_party/gcc/%.xz.sha256
 
 o/$(MODE)/i486/%.o: %.c o/third_party/gcc/i486/bin/i486-linux-musl-gcc
 	@mkdir -p $(@D)
-	o/third_party/gcc/i486/bin/i486-linux-musl-gcc -static -Werror $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
+	o/third_party/gcc/i486/bin/i486-linux-musl-gcc -fno-sync-libcalls -static -Werror $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
 
 o/$(MODE)/m68k/%.o: %.c o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc
 	@mkdir -p $(@D)

@@ -28,6 +28,8 @@ struct MachineFds {
   struct MachineFdClosed *closed;
 };
 
+extern const struct MachineFdCb kMachineFdCbHost;
+
 int MachineFdAdd(struct MachineFds *);
 void MachineFdRemove(struct MachineFds *, int);
 

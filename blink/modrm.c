@@ -24,7 +24,6 @@
 #include "blink/machine.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
-#include "blink/throw.h"
 #include "blink/x86.h"
 
 struct AddrSeg LoadEffectiveAddress(const struct Machine *m, uint32_t rde) {

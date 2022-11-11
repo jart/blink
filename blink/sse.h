@@ -2,9 +2,6 @@
 #define BLINK_SSE_H_
 #include "blink/machine.h"
 
-void Op171(struct Machine *, uint32_t);
-void Op172(struct Machine *, uint32_t);
-void Op173(struct Machine *, uint32_t);
 void OpSsePabsb(struct Machine *, uint32_t);
 void OpSsePabsd(struct Machine *, uint32_t);
 void OpSsePabsw(struct Machine *, uint32_t);

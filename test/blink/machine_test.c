@@ -121,7 +121,7 @@ void TearDown(void) {
 
 int ExecuteUntilHalt(struct Machine *m) {
   int rc;
-  if (!(rc = setjmp(m->system->onhalt))) {
+  if (!(rc = setjmp(m->onhalt))) {
     for (;;) {
       LoadInstruction(m);
       ExecuteInstruction(m);

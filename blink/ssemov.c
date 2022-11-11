@@ -24,7 +24,6 @@
 #include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/ssemov.h"
-#include "blink/throw.h"
 
 static uint32_t pmovmskb(const uint8_t p[16]) {
   uint32_t i, m;
@@ -308,7 +307,7 @@ static void MovapdWpdVpd(struct Machine *m, uint32_t rde) {
 }
 
 void OpMovWpsVps(struct Machine *m, uint32_t rde) {
-  switch (Rep(rde) | Osz(rde)) {
+  switch (m->xedd->op.rep | Osz(rde)) {
     case 0:
       MovupsWpsVps(m, rde);
       break;
@@ -353,7 +352,7 @@ void OpMov0f6e(struct Machine *m, uint32_t rde) {
 void OpMov0f6f(struct Machine *m, uint32_t rde) {
   if (Osz(rde)) {
     MovdqaVdqWdq(m, rde);
-  } else if (Rep(rde) == 3) {
+  } else if (m->xedd->op.rep == 3) {
     MovdquVdqWdq(m, rde);
   } else {
     MovqPqQq(m, rde);
@@ -369,7 +368,7 @@ void OpMov0fE7(struct Machine *m, uint32_t rde) {
 }
 
 void OpMov0f7e(struct Machine *m, uint32_t rde) {
-  if (Rep(rde) == 3) {
+  if (m->xedd->op.rep == 3) {
     MovqVqWq(m, rde);
   } else if (Osz(rde)) {
     if (Rexw(rde)) {
@@ -387,7 +386,7 @@ void OpMov0f7e(struct Machine *m, uint32_t rde) {
 }
 
 void OpMov0f7f(struct Machine *m, uint32_t rde) {
-  if (Rep(rde) == 3) {
+  if (m->xedd->op.rep == 3) {
     MovdquWdqVdq(m, rde);
   } else if (Osz(rde)) {
     MovdqaWdqVdq(m, rde);
@@ -397,7 +396,7 @@ void OpMov0f7f(struct Machine *m, uint32_t rde) {
 }
 
 void OpMov0f10(struct Machine *m, uint32_t rde) {
-  switch (Rep(rde) | Osz(rde)) {
+  switch (m->xedd->op.rep | Osz(rde)) {
     case 0:
       MovupsVpsWps(m, rde);
       break;
@@ -432,7 +431,7 @@ void OpMov0f2b(struct Machine *m, uint32_t rde) {
 }
 
 void OpMov0f12(struct Machine *m, uint32_t rde) {
-  switch (Rep(rde) | Osz(rde)) {
+  switch (m->xedd->op.rep | Osz(rde)) {
     case 0:
       if (IsModrmRegister(rde)) {
         MovhlpsVqUq(m, rde);
@@ -463,7 +462,7 @@ void OpMov0f13(struct Machine *m, uint32_t rde) {
 }
 
 void OpMov0f16(struct Machine *m, uint32_t rde) {
-  switch (Rep(rde) | Osz(rde)) {
+  switch (m->xedd->op.rep | Osz(rde)) {
     case 0:
       if (IsModrmRegister(rde)) {
         MovlhpsVqUq(m, rde);
@@ -492,9 +491,9 @@ void OpMov0f17(struct Machine *m, uint32_t rde) {
 }
 
 void OpMov0fD6(struct Machine *m, uint32_t rde) {
-  if (Rep(rde) == 3) {
+  if (m->xedd->op.rep == 3) {
     Movq2dqVdqNq(m, rde);
-  } else if (Rep(rde) == 2) {
+  } else if (m->xedd->op.rep == 2) {
     Movdq2qPqUq(m, rde);
   } else if (Osz(rde)) {
     MovqWqVq(m, rde);

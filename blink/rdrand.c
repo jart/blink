@@ -16,76 +16,53 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <string.h>
-
-#include "blink/address.h"
-#include "blink/bitscan.h"
+#include "blink/assert.h"
 #include "blink/endian.h"
+#include "blink/flags.h"
 #include "blink/machine.h"
-#include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
-#include "blink/x86.h"
+#include "blink/random.h"
 
-static bool IsOpcodeEqual(struct XedDecodedInst *xedd, uint8_t *a) {
-  uint64_t w;
-  unsigned n;
-  if ((n = xedd->length)) {
-    if (n <= 7) {
-      w = Read64(a) ^ Read64(xedd->bytes);
-      return !w || (bsf(w) >> 3) >= n;
-    } else {
-      return !memcmp(a, xedd->bytes, n);
-    }
-  } else {
-    return false;
-  }
+#define RESEED_INTERVAL 16
+
+static struct Rdrand {
+  pthread_mutex_t lock;
+  uint64_t state;
+  unsigned count;
+} g_rdrand = {
+    .lock = PTHREAD_MUTEX_INITIALIZER,
+};
+
+static uint64_t Vigna(uint64_t s[1]) {
+  uint64_t z = (s[0] += 0x9e3779b97f4a7c15);
+  z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
+  z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
+  return z ^ (z >> 31);
 }
 
-static void ReadInstruction(struct Machine *m, uint8_t *p, unsigned n) {
-  struct XedDecodedInst xedd[1];
-  InitializeInstruction(xedd, m->mode);
-  if (!DecodeInstruction(xedd, p, n)) {
-    memcpy(m->xedd, xedd, kInstructionBytes);
+static void OpRand(struct Machine *m, uint32_t rde, uint64_t x) {
+  uint8_t *q = RegRexbRm(m, rde);
+  if (Rexw(rde)) {
+    Write64(q, x);
+  } else if (!Osz(rde)) {
+    Write64(q, (uint32_t)x);
   } else {
-    HaltMachine(m, kMachineDecodeError);
+    Write16(q, x);
   }
+  m->flags = SetFlag(m->flags, FLAGS_CF, true);
 }
 
-static void LoadInstructionSlow(struct Machine *m, uint64_t ip) {
-  unsigned i;
-  uint8_t *addr;
-  uint8_t copy[15], *toil;
-  i = 0x1000 - (ip & 0xfff);
-  addr = ResolveAddress(m, ip);
-  if ((toil = FindReal(m, ip + i))) {
-    memcpy(copy, addr, i);
-    memcpy(copy + i, toil, 15 - i);
-    ReadInstruction(m, copy, 15);
-  } else {
-    ReadInstruction(m, addr, i);
+void OpRdrand(struct Machine *m, uint32_t rde) {
+  pthread_mutex_lock(&g_rdrand.lock);
+  if (!(g_rdrand.count++ % RESEED_INTERVAL)) {
+    unassert(GetRandom(&g_rdrand.state, 8) == 8);
   }
+  OpRand(m, rde, Vigna(&g_rdrand.state));
+  pthread_mutex_unlock(&g_rdrand.lock);
 }
 
-void LoadInstruction(struct Machine *m) {
-  uint64_t ip;
-  unsigned key;
-  uint8_t *addr;
-  ip = Read64(m->cs) + MaskAddress(m->mode & 3, m->ip);
-  key = ip & (ARRAYLEN(m->opcache->icache) - 1);
-  m->xedd = (struct XedDecodedInst *)m->opcache->icache[key];
-  if ((ip & 0xfff) < 0x1000 - 15) {
-    if (ip - (ip & 0xfff) == m->opcache->codevirt && m->opcache->codehost) {
-      addr = m->opcache->codehost + (ip & 0xfff);
-    } else {
-      m->opcache->codevirt = ip - (ip & 0xfff);
-      m->opcache->codehost = ResolveAddress(m, m->opcache->codevirt);
-      addr = m->opcache->codehost + (ip & 0xfff);
-    }
-    if (!IsOpcodeEqual(m->xedd, addr)) {
-      ReadInstruction(m, addr, 15);
-    }
-  } else {
-    LoadInstructionSlow(m, ip);
-  }
+void OpRdseed(struct Machine *m, uint32_t rde) {
+  uint64_t x;
+  unassert(GetRandom(&x, 8) == 8);
+  OpRand(m, rde, x);
 }

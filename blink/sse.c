@@ -25,7 +25,6 @@
 #include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/sse.h"
-#include "blink/throw.h"
 
 static void MmxPor(uint8_t x[8], const uint8_t y[8]) {
   unsigned i;

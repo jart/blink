@@ -32,12 +32,14 @@
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
+#include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
 #include "blink/case.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
@@ -50,8 +52,6 @@
 #include "blink/pml4t.h"
 #include "blink/random.h"
 #include "blink/signal.h"
-#include "blink/syscall.h"
-#include "blink/throw.h"
 #include "blink/timeval.h"
 #include "blink/util.h"
 #include "blink/xlat.h"
@@ -76,6 +76,18 @@
 #define POLLERR_LINUX       0x08
 #define POLLHUP_LINUX       0x10
 #define POLLNVAL_LINUX      0x20
+#define TIMER_ABSTIME_LINUX 0x01
+
+#define dog                   0x01290f00
+#define CLONE_VM_             0x00000100
+#define CLONE_THREAD_         0x00010000
+#define CLONE_FS_             0x00000200
+#define CLONE_FILES_          0x00000400
+#define CLONE_SIGHAND_        0x00000800
+#define CLONE_SETTLS_         0x00080000
+#define CLONE_PARENT_SETTID_  0x00100000
+#define CLONE_CHILD_CLEARTID_ 0x00200000
+#define CLONE_CHILD_SETTID_   0x01000000
 
 #define SYSCALL(x, y) CASE(x, /* LOGF("%s", #y); */ ax = y)
 #define ASSIGN(D, S)  memcpy(&D, &S, MIN(sizeof(S), sizeof(D)))
@@ -143,6 +155,14 @@ static int AppendIovsGuest(struct Machine *m, struct Iovs *iv, int64_t iovaddr,
 }
 
 _Noreturn static void OpExit(struct Machine *m, int rc) {
+  unassert(!pthread_mutex_lock(&m->lock));
+  Write32(ResolveAddress(m, m->ctid), 0);
+  m->system = 0;
+  FreeMachine(m);
+  pthread_exit(0);
+}
+
+_Noreturn static void OpExitGroup(struct Machine *m, int rc) {
   if (m->system->isfork) {
     _exit(rc);
   } else {
@@ -155,6 +175,76 @@ static int OpFork(struct Machine *m) {
   pid = fork();
   if (!pid) m->system->isfork = true;
   return pid;
+}
+
+static void *Actor(void *arg) {
+  int rc;
+  sigset_t ss;
+  struct Machine *m = arg;
+  sigfillset(&ss);
+  unassert(!sigprocmask(SIG_SETMASK, &ss, 0));
+  if (!(rc = setjmp(m->onhalt))) {
+    m->tid = syscall(SYS_gettid);
+    unassert(!pthread_mutex_unlock(&m->lock));
+    Write32(ResolveAddress(m, m->ctid), m->tid);
+    for (;;) {
+      LoadInstruction(m);
+      ExecuteInstruction(m);
+    }
+  } else {
+    LOGF("halting machine from thread: %d", rc);
+    unassert(!pthread_mutex_lock(&m->lock));
+    _Exit(rc);
+  }
+}
+
+static int OpClone(struct Machine *m, uint64_t flags, uint64_t stack,
+                   uint64_t ptid, uint64_t ctid, uint64_t tls, uint64_t func) {
+  int rc;
+  pthread_t th;
+  pthread_attr_t attr;
+  pthread_mutexattr_t mattr;
+  struct OpCache *oc = 0;
+  struct Machine *m2 = 0;
+  if (flags == 17 && !stack) {
+    return OpFork(m);
+  } else if (flags == (CLONE_VM_ | CLONE_THREAD_ | CLONE_FS_ | CLONE_FILES_ |
+                       CLONE_SIGHAND_ | CLONE_SETTLS_ | CLONE_PARENT_SETTID_ |
+                       CLONE_CHILD_CLEARTID_ | CLONE_CHILD_SETTID_)) {
+    if (!(m2 = malloc(sizeof(*m2)))) goto RaiseEagain;
+    if (!(oc = malloc(sizeof(*oc)))) goto RaiseEagain;
+    memcpy(m2, m, sizeof(*m));
+    memcpy((m2->opcache = oc), m->opcache, sizeof(*m->opcache));
+    memset(&m->freelist, 0, sizeof(m->freelist));
+    m2->ctid = ctid;
+    Write64(m2->ax, 0);
+    Write64(m2->fs, tls);
+    Write64(m2->sp, stack);
+    unassert(!pthread_mutexattr_init(&mattr));
+    unassert(!pthread_mutexattr_settype(&mattr, PTHREAD_MUTEX_NORMAL));
+    unassert(!pthread_mutex_init(&m2->lock, &mattr));
+    unassert(!pthread_mutexattr_destroy(&mattr));
+    unassert(!pthread_mutex_lock(&m2->lock));
+    unassert(!pthread_attr_init(&attr));
+    unassert(!pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
+    rc = pthread_create(&th, 0, Actor, m2);
+    unassert(!pthread_attr_destroy(&attr));
+    if (rc) {
+      unassert(!pthread_mutex_destroy(&m2->lock));
+      goto RaiseEagain;
+    }
+    unassert(!pthread_mutex_lock(&m2->lock));
+    Write32(ResolveAddress(m, ptid), (rc = m2->tid));
+    unassert(!pthread_mutex_unlock(&m2->lock));
+    return rc;
+  RaiseEagain:
+    free(m2->opcache);
+    free(m2);
+    return eagain();
+  } else {
+    LOGF("invalid flags %#x", flags);
+    return einval();
+  }
 }
 
 static int OpPrctl(struct Machine *m, int op, int64_t a, int64_t b, int64_t c,
@@ -968,12 +1058,35 @@ static int OpNanosleep(struct Machine *m, int64_t req, int64_t rem) {
     hreq.tv_sec = Read64(gtimespec.tv_sec);
     hreq.tv_nsec = Read64(gtimespec.tv_nsec);
   }
-  if ((rc = nanosleep(req ? &hreq : 0, rem ? &hrem : 0)) != -1) {
-    if (rem) {
-      Write64(gtimespec.tv_sec, hrem.tv_sec);
-      Write64(gtimespec.tv_nsec, hrem.tv_nsec);
-      VirtualRecvWrite(m, rem, &gtimespec, sizeof(gtimespec));
-    }
+  rc = nanosleep(req ? &hreq : 0, rem ? &hrem : 0);
+  if (rc == -1 && errno == EINTR && rem) {
+    Write64(gtimespec.tv_sec, hrem.tv_sec);
+    Write64(gtimespec.tv_nsec, hrem.tv_nsec);
+    VirtualRecvWrite(m, rem, &gtimespec, sizeof(gtimespec));
+  }
+  return rc;
+}
+
+static int OpClockNanosleep(struct Machine *m, int clock, int flags,
+                            int64_t req, int64_t rem) {
+  int rc;
+  struct timespec hreq, hrem;
+  struct timespec_linux gtimespec;
+  if ((clock = XlatClock(clock)) == -1) return -1;
+  if (flags & ~TIMER_ABSTIME_LINUX) return einval();
+  flags = flags & TIMER_ABSTIME_LINUX ? TIMER_ABSTIME : 0;
+  VirtualSendRead(m, &gtimespec, req, sizeof(gtimespec));
+  hreq.tv_sec = Read64(gtimespec.tv_sec);
+  hreq.tv_nsec = Read64(gtimespec.tv_nsec);
+  rc = clock_nanosleep(clock, flags, &hreq, rem ? &hrem : 0);
+  if (!flags && rc == EINTR && rem) {
+    Write64(gtimespec.tv_sec, hrem.tv_sec);
+    Write64(gtimespec.tv_nsec, hrem.tv_nsec);
+    VirtualRecvWrite(m, rem, &gtimespec, sizeof(gtimespec));
+  }
+  if (rc) {
+    errno = rc;
+    rc = -1;
   }
   return rc;
 }
@@ -987,15 +1100,32 @@ static int OpSigsuspend(struct Machine *m, int64_t maskaddr) {
 }
 
 static int OpSigaltstack(struct Machine *m, int64_t newaddr, int64_t oldaddr) {
-  LOGF("sigaltstack() not supported yet");
   return 0;
 }
 
-static int OpClockGettime(struct Machine *m, int clockid, int64_t ts) {
+static int OpClockGettime(struct Machine *m, int clock, int64_t ts) {
   int rc;
   struct timespec htimespec;
   struct timespec_linux gtimespec;
-  if ((rc = clock_gettime(XlatClock(clockid), ts ? &htimespec : 0)) != -1) {
+  if ((clock = XlatClock(clock)) == -1) return -1;
+  if (!ts) return 0;
+  if ((rc = clock_gettime(clock, &htimespec)) != -1) {
+    if (ts) {
+      Write64(gtimespec.tv_sec, htimespec.tv_sec);
+      Write64(gtimespec.tv_nsec, htimespec.tv_nsec);
+      VirtualRecvWrite(m, ts, &gtimespec, sizeof(gtimespec));
+    }
+  }
+  return rc;
+}
+
+static int OpClockGetres(struct Machine *m, int clock, int64_t ts) {
+  int rc;
+  struct timespec htimespec;
+  struct timespec_linux gtimespec;
+  if ((clock = XlatClock(clock)) == -1) return -1;
+  if (!ts) return 0;
+  if ((rc = clock_getres(clock, &htimespec)) != -1) {
     if (ts) {
       Write64(gtimespec.tv_sec, htimespec.tv_sec);
       Write64(gtimespec.tv_nsec, htimespec.tv_nsec);
@@ -1170,7 +1300,7 @@ static int OpGetpid(struct Machine *m) {
 }
 
 static int OpGettid(struct Machine *m) {
-  return getpid();
+  return syscall(SYS_gettid);
 }
 
 static int OpGetppid(struct Machine *m) {
@@ -1221,10 +1351,6 @@ static int OpSetpgid(struct Machine *m, int pid, int gid) {
   return setpgid(pid, gid);
 }
 
-_Noreturn static void OpExitGroup(struct Machine *m, int rc) {
-  OpExit(m, rc);
-}
-
 static int OpCreat(struct Machine *m, int64_t path, int mode) {
   return OpOpenat(m, -100, path, 0x241, mode);
 }
@@ -1247,15 +1373,6 @@ static int OpOpen(struct Machine *m, int64_t path, int flags, int mode) {
 
 static int OpAccept(struct Machine *m, int fd, int64_t sa, int64_t sas) {
   return OpAccept4(m, fd, sa, sas, 0);
-}
-
-static int OpClone(struct Machine *m, uint64_t flags, uint64_t stack,
-                   uint64_t ptid, uint64_t ctid, uint64_t tls, uint64_t func) {
-  if (flags == 17 && !stack) {
-    return OpFork(m);
-  } else {
-    return enosys();
-  }
 }
 
 void OpSyscall(struct Machine *m, uint32_t rde) {
@@ -1356,6 +1473,8 @@ void OpSyscall(struct Machine *m, uint32_t rde) {
     SYSCALL(0x0D9, OpGetdents(m, di, si, dx));
     SYSCALL(0x0DA, OpSetTidAddress(m, di));
     SYSCALL(0x0E4, OpClockGettime(m, di, si));
+    SYSCALL(0x0E5, OpClockGetres(m, di, si));
+    SYSCALL(0x0E6, OpClockNanosleep(m, di, si, dx, r0));
     SYSCALL(0x0EB, OpUtimes(m, di, si));
     SYSCALL(0x101, OpOpenat(m, di, si, dx, r0));
     SYSCALL(0x102, OpMkdirat(m, di, si, dx));

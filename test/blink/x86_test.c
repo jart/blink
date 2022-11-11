@@ -30,7 +30,7 @@ TEST(x86, testPopR10) {
   ASSERT_EQ(0132, xedd.op.opcode);
   ASSERT_EQ(0, Osz(xedd.op.rde));
   ASSERT_EQ(0, Asz(xedd.op.rde));
-  ASSERT_EQ(0, Rep(xedd.op.rde));
+  ASSERT_EQ(0, xedd.op.rep);
   ASSERT_EQ(1, Rex(xedd.op.rde));
   ASSERT_EQ(1, Rexb(xedd.op.rde));
   ASSERT_EQ(1, Rexw(xedd.op.rde));
@@ -48,7 +48,7 @@ TEST(x86, tesRepzCmpsb) {
   ASSERT_EQ(0246, xedd.op.opcode);
   ASSERT_EQ(0, Osz(xedd.op.rde));
   ASSERT_EQ(0, Asz(xedd.op.rde));
-  ASSERT_EQ(3, Rep(xedd.op.rde));
+  ASSERT_EQ(3, xedd.op.rep);
   ASSERT_EQ(0, Rex(xedd.op.rde));
   ASSERT_EQ(0, Rexb(xedd.op.rde));
   ASSERT_EQ(0, Rexw(xedd.op.rde));

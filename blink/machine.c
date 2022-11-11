@@ -26,27 +26,20 @@
 #include "blink/assert.h"
 #include "blink/bitscan.h"
 #include "blink/case.h"
-#include "blink/clmul.h"
-#include "blink/cpuid.h"
-#include "blink/cvt.h"
-#include "blink/divmul.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/fpu.h"
-#include "blink/ioports.h"
+#include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
-#include "blink/op101.h"
 #include "blink/random.h"
 #include "blink/sse.h"
 #include "blink/ssefloat.h"
 #include "blink/ssemov.h"
-#include "blink/stack.h"
 #include "blink/string.h"
-#include "blink/syscall.h"
-#include "blink/throw.h"
+#include "blink/swap.h"
 #include "blink/time.h"
 #include "blink/util.h"
 
@@ -260,9 +253,9 @@ static void OpLsl(struct Machine *m, uint32_t rde) {
   if (GetDescriptor(m, Read16(GetModrmRegisterWordPointerRead2(m, rde)),
                     &descriptor) != -1) {
     WriteRegister(rde, RegRexrReg(m, rde), GetDescriptorLimit(descriptor));
-    SetFlag(m->flags, FLAGS_ZF, true);
+    m->flags = SetFlag(m->flags, FLAGS_ZF, true);
   } else {
-    SetFlag(m->flags, FLAGS_ZF, false);
+    m->flags = SetFlag(m->flags, FLAGS_ZF, false);
   }
 }
 
@@ -345,19 +338,6 @@ static void OpOutDxAx(struct Machine *m, uint32_t rde) {
   OpOut(m, Read16(m->dx), ReadEaxAx(m, rde));
 }
 
-static void AluEb(struct Machine *m, uint32_t rde, aluop_f op) {
-  uint8_t *p;
-  p = GetModrmRegisterBytePointerWrite(m, rde);
-  Write8(p, op(Read8(p), 0, &m->flags));
-}
-
-static void AluEvqp(struct Machine *m, uint32_t rde, const aluop_f ops[4]) {
-  uint8_t *p;
-  p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
-  WriteRegisterOrMemory(rde, p,
-                        ops[RegLog2(rde)](ReadMemory(rde, p), 0, &m->flags));
-}
-
 static void OpXchgZvqp(struct Machine *m, uint32_t rde) {
   uint64_t x, y;
   x = Read64(m->ax);
@@ -366,132 +346,10 @@ static void OpXchgZvqp(struct Machine *m, uint32_t rde) {
   WriteRegister(rde, RegRexbSrm(m, rde), x);
 }
 
-static void OpXchgGbEb(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  uint8_t x, y;
-  p = GetModrmRegisterBytePointerWrite(m, rde);
-  x = Read8(ByteRexrReg(m, rde));
-  y = Read8(p);
-  Write8(ByteRexrReg(m, rde), y);
-  Write8(p, x);
-}
-
-static void OpXchgGvqpEvqp(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  uint64_t x, y;
-  p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
-  x = ReadMemory(rde, RegRexrReg(m, rde));
-  y = ReadMemory(rde, p);
-  WriteRegister(rde, RegRexrReg(m, rde), y);
-  WriteRegisterOrMemory(rde, p, x);
-}
-
-static void OpCmpxchgEbAlGb(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  uint8_t x, y, z;
-  p = GetModrmRegisterBytePointerWrite(m, rde);
-  x = Read8(m->ax);
-  y = Read8(p);
-  z = Read8(ByteRexrReg(m, rde));
-  Sub8(x, y, &m->flags);
-  if (GetFlag(m->flags, FLAGS_ZF)) {
-    Write8(p, z);
-  } else {
-    Write8(m->ax, y);
-  }
-}
-
-static void OpCmpxchgEvqpRaxGvqp(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  uint64_t x, y, z;
-  p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
-  x = ReadMemory(rde, m->ax);
-  y = ReadMemory(rde, p);
-  z = ReadMemory(rde, RegRexrReg(m, rde));
-  kAlu[ALU_SUB][RegLog2(rde)](x, y, &m->flags);
-  if (GetFlag(m->flags, FLAGS_ZF)) {
-    WriteRegisterOrMemory(rde, p, z);
-  } else {
-    WriteRegister(rde, m->ax, y);
-  }
-}
-
-static void OpCmpxchg8b(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  uint32_t d, a;
-  p = GetModrmRegisterXmmPointerRead8(m, rde);
-  a = Read32(p + 0);
-  d = Read32(p + 4);
-  if (a == Read32(m->ax) && d == Read32(m->dx)) {
-    SetFlag(m->flags, FLAGS_ZF, true);
-    memcpy(p + 0, m->bx, 4);
-    memcpy(p + 4, m->cx, 4);
-  } else {
-    SetFlag(m->flags, FLAGS_ZF, false);
-    Write32(m->ax, a);
-    Write32(m->dx, d);
-  }
-}
-
-static void OpCmpxchg16b(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  uint64_t d, a;
-  p = GetModrmRegisterXmmPointerRead16(m, rde);
-  a = Read64(p + 0);
-  d = Read64(p + 8);
-  if (a == Read64(m->ax) && d == Read64(m->dx)) {
-    SetFlag(m->flags, FLAGS_ZF, true);
-    memcpy(p + 0, m->bx, 8);
-    memcpy(p + 8, m->cx, 8);
-  } else {
-    SetFlag(m->flags, FLAGS_ZF, false);
-    Write64(m->ax, a);
-    Write64(m->dx, d);
-  }
-}
-
-static uint64_t Vigna(uint64_t s[1]) {
-  uint64_t z = (s[0] += 0x9e3779b97f4a7c15);
-  z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
-  z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
-  return z ^ (z >> 31);
-}
-
-static void OpRand(struct Machine *m, uint32_t rde, uint64_t x) {
-  WriteRegister(rde, RegRexbRm(m, rde), x);
-  m->flags = SetFlag(m->flags, FLAGS_CF, true);
-}
-
-static void OpRdrand(struct Machine *m, uint32_t rde) {
-  static unsigned i;
-  static uint64_t s;
-  if (!(i++ % 16)) {
-    unassert(GetRandom(&s, 8) == 8);
-  }
-  OpRand(m, rde, Vigna(&s));
-}
-
-static void OpRdseed(struct Machine *m, uint32_t rde) {
-  uint64_t x;
-  unassert(GetRandom(&x, 8) == 8);
-  OpRand(m, rde, x);
-}
-
 static void Op1c7(struct Machine *m, uint32_t rde) {
   bool ismem;
   ismem = !IsModrmRegister(rde);
   switch (ModrmReg(rde)) {
-    case 1:
-      if (ismem) {
-        if (Rexw(rde)) {
-          OpCmpxchg16b(m, rde);
-        } else {
-          OpCmpxchg8b(m, rde);
-        }
-      } else {
-        OpUd(m, rde);
-      }
-      break;
     case 6:
       if (!ismem) {
         OpRdrand(m, rde);
@@ -501,7 +359,7 @@ static void Op1c7(struct Machine *m, uint32_t rde) {
       break;
     case 7:
       if (!ismem) {
-        if (Rep(rde) == 3) {
+        if (m->xedd->op.rep == 3) {
           OpRdpid(m, rde);
         } else {
           OpRdseed(m, rde);
@@ -513,28 +371,6 @@ static void Op1c7(struct Machine *m, uint32_t rde) {
     default:
       OpUd(m, rde);
   }
-}
-
-static void OpXaddEbGb(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  uint8_t x, y, z;
-  p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
-  x = Read8(p);
-  y = Read8(RegRexrReg(m, rde));
-  z = Add8(x, y, &m->flags);
-  Write8(p, z);
-  Write8(RegRexrReg(m, rde), x);
-}
-
-static void OpXaddEvqpGvqp(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  uint64_t x, y, z;
-  p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
-  x = ReadMemory(rde, p);
-  y = ReadMemory(rde, RegRexrReg(m, rde));
-  z = kAlu[ALU_ADD][RegLog2(rde)](x, y, &m->flags);
-  WriteRegisterOrMemory(rde, p, z);
-  WriteRegister(rde, RegRexrReg(m, rde), x);
 }
 
 static uint64_t Bts(uint64_t x, uint64_t y) {
@@ -556,6 +392,7 @@ static void OpBit(struct Machine *m, uint32_t rde) {
   int64_t disp;
   uint64_t v, x, y, z;
   uint8_t w, W[2][2] = {{2, 3}, {1, 3}};
+  unassert(!Lock(rde));
   w = W[Osz(rde)][Rexw(rde)];
   if (m->xedd->op.opcode == 0xBA) {
     op = ModrmReg(rde);
@@ -739,39 +576,6 @@ static void OpMovsxdGdqpEd(struct Machine *m, uint32_t rde) {
           (int32_t)Read32(GetModrmRegisterWordPointerRead4(m, rde)));
 }
 
-static void Alub(struct Machine *m, uint32_t rde, aluop_f op) {
-  uint8_t *a = GetModrmRegisterBytePointerWrite(m, rde);
-  Write8(a, op(Read8(a), Read8(ByteRexrReg(m, rde)), &m->flags));
-}
-
-static void OpAlubAdd(struct Machine *m, uint32_t rde) {
-  Alub(m, rde, Add8);
-}
-
-static void OpAlubOr(struct Machine *m, uint32_t rde) {
-  Alub(m, rde, Or8);
-}
-
-static void OpAlubAdc(struct Machine *m, uint32_t rde) {
-  Alub(m, rde, Adc8);
-}
-
-static void OpAlubSbb(struct Machine *m, uint32_t rde) {
-  Alub(m, rde, Sbb8);
-}
-
-static void OpAlubAnd(struct Machine *m, uint32_t rde) {
-  Alub(m, rde, And8);
-}
-
-static void OpAlubSub(struct Machine *m, uint32_t rde) {
-  Alub(m, rde, Sub8);
-}
-
-static void OpAlubXor(struct Machine *m, uint32_t rde) {
-  Alub(m, rde, Xor8);
-}
-
 static void AlubRo(struct Machine *m, uint32_t rde, aluop_f op) {
   op(Read8(GetModrmRegisterBytePointerRead(m, rde)), Read8(ByteRexrReg(m, rde)),
      &m->flags);
@@ -848,15 +652,6 @@ static void OpAlubiReg(struct Machine *m, uint32_t rde) {
   } else {
     Alubi(m, rde, kAlu[ModrmReg(rde)][0]);
   }
-}
-
-static void OpAluw(struct Machine *m, uint32_t rde) {
-  uint8_t *a;
-  a = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
-  WriteRegisterOrMemory(
-      rde, a,
-      kAlu[(m->xedd->op.opcode & 070) >> 3][RegLog2(rde)](
-          ReadMemory(rde, a), Read64(RegRexrReg(m, rde)), &m->flags));
 }
 
 static void AluwRo(struct Machine *m, uint32_t rde, const aluop_f ops[4]) {
@@ -1325,7 +1120,7 @@ static uint64_t AluBsr(struct Machine *m, uint32_t rde, uint64_t x) {
     x &= 0xffff;
     n = 16;
   }
-  if (Rep(rde) == 3) {
+  if (m->xedd->op.rep == 3) {
     if (!x) {
       m->flags = SetFlag(m->flags, FLAGS_CF, true);
       m->flags = SetFlag(m->flags, FLAGS_ZF, false);
@@ -1353,7 +1148,7 @@ static uint64_t AluBsf(struct Machine *m, uint32_t rde, uint64_t x) {
     x &= 0xffff;
     n = 16;
   }
-  if (Rep(rde) == 3) {
+  if (m->xedd->op.rep == 3) {
     if (!x) {
       m->flags = SetFlag(m->flags, FLAGS_CF, true);
       m->flags = SetFlag(m->flags, FLAGS_ZF, false);
@@ -1386,19 +1181,11 @@ static void OpBsr(struct Machine *m, uint32_t rde) {
 }
 
 static void Op1b8(struct Machine *m, uint32_t rde) {
-  if (Rep(rde) == 3) {
+  if (m->xedd->op.rep == 3) {
     Bitscan(m, rde, AluPopcnt);
   } else {
     OpUd(m, rde);
   }
-}
-
-static void OpNotEb(struct Machine *m, uint32_t rde) {
-  AluEb(m, rde, Not8);
-}
-
-static void OpNegEb(struct Machine *m, uint32_t rde) {
-  AluEb(m, rde, Neg8);
 }
 
 static void LoadFarPointer(struct Machine *m, uint32_t rde, uint8_t seg[8]) {
@@ -1464,14 +1251,6 @@ static void OpTestEvqpIvds(struct Machine *m, uint32_t rde) {
   AluwiRo(m, rde, kAlu[ALU_AND]);
 }
 
-static void OpNotEvqp(struct Machine *m, uint32_t rde) {
-  AluEvqp(m, rde, kAlu[ALU_NOT]);
-}
-
-static void OpNegEvqp(struct Machine *m, uint32_t rde) {
-  AluEvqp(m, rde, kAlu[ALU_NEG]);
-}
-
 static const nexgen32e_f kOp0f7[] = {
     OpTestEvqpIvds,
     OpTestEvqpIvds,
@@ -1485,27 +1264,6 @@ static const nexgen32e_f kOp0f7[] = {
 
 static void Op0f7(struct Machine *m, uint32_t rde) {
   kOp0f7[ModrmReg(rde)](m, rde);
-}
-
-static void Op0fe(struct Machine *m, uint32_t rde) {
-  switch (ModrmReg(rde)) {
-    case 0:
-      AluEb(m, rde, Inc8);
-      break;
-    case 1:
-      AluEb(m, rde, Dec8);
-      break;
-    default:
-      OpUd(m, rde);
-  }
-}
-
-static void OpIncEvqp(struct Machine *m, uint32_t rde) {
-  AluEvqp(m, rde, kAlu[ALU_INC]);
-}
-
-static void OpDecEvqp(struct Machine *m, uint32_t rde) {
-  AluEvqp(m, rde, kAlu[ALU_DEC]);
 }
 
 static const nexgen32e_f kOp0ff[] = {OpIncEvqp, OpDecEvqp, OpCallEq,  OpUd,
@@ -1686,7 +1444,7 @@ static void OpNopEv(struct Machine *m, uint32_t rde) {
 static void OpNop(struct Machine *m, uint32_t rde) {
   if (Rexb(rde)) {
     OpXchgZvqp(m, rde);
-  } else if (Rep(rde) == 3) {
+  } else if (m->xedd->op.rep == 3) {
     OpPause(m, rde);
   } else {
     OpNoop(m, rde);

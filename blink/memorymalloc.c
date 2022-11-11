@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/machine.h"
@@ -30,10 +31,16 @@
 
 struct Machine *NewMachine(void) {
   struct Machine *m;
+  pthread_mutexattr_t mattr;
   m = malloc(sizeof(struct Machine));
   memset(m, 0, sizeof(struct Machine));
   m->system = calloc(1, sizeof(struct System));
   m->opcache = calloc(1, sizeof(struct OpCache));
+  unassert(!pthread_mutexattr_init(&mattr));
+  unassert(!pthread_mutexattr_settype(&mattr, PTHREAD_MUTEX_NORMAL));
+  unassert(!pthread_mutex_init(&m->lock, &mattr));
+  unassert(!pthread_mutex_init(&m->system->lock, &mattr));
+  unassert(!pthread_mutexattr_destroy(&mattr));
   ResetCpu(m);
   ResetMem(m);
   return m;
@@ -53,10 +60,14 @@ void FreeMachine(struct Machine *m) {
     for (i = 0; i < m->freelist.n; ++i) {
       free(m->freelist.p[i]);
     }
-    FreeMachineRealFree(m);
+    if (m->system) {
+      FreeMachineRealFree(m);
+      unassert(!pthread_mutex_destroy(&m->system->lock));
+      free(m->system->real.p);
+      free(m->system);
+    }
+    unassert(!pthread_mutex_destroy(&m->lock));
     free(m->opcache);
-    free(m->system);
-    free(m->system->real.p);
     free(m);
   }
 }

@@ -71,7 +71,7 @@ enum XedIldMap {
 };
 
 struct XedOperands { /*
-  ┌rep
+  ┌lock
   │ ┌log₂𝑏
   │ │ ┌mode
   │ │ │ ┌eamode
@@ -90,22 +90,22 @@ struct XedOperands { /*
   │ │ │ │ │ ││  ││││  │││  ││┌rex
   │ │ │ │ │ ││  ││││  │││  │││┌rexr
   │ │ │ │ │ ││  ││││  │││  ││││┌reg
-  │3│2│2│2│2││  ││││  │││  │││││
-  │0│8│6│4│2││18││││12│││ 7│││││ 0
-  ├┐├┐├┐├┐├┐│├─┐│││├─┐││├─┐││││├─┐
+  │ │2│2│2│2││  ││││  │││  │││││
+  │ │8│6│4│2││18││││12│││ 7│││││ 0
+  │ ├┐├┐├┐├┐│├─┐│││├─┐││├─┐││││├─┐
   00000000000000000000000000000000*/
   uint32_t rde;
   uint8_t sib;
   uint8_t opcode;
-  uint8_t map;    /* enum XedIldMap */
+  uint8_t map; /* enum XedIldMap */
+  uint8_t rep;
   uint64_t uimm0; /* $immediate mostly sign-extended */
   int64_t disp;   /* displacement(%xxx) mostly sign-extended */
   unsigned out_of_bytes : 1;
   unsigned is_intel_specific : 1;
   unsigned has_sib : 1;
   unsigned realmode : 1;
-  unsigned lock : 1;
-  uint8_t has_modrm : 2;
+  unsigned has_modrm : 2;
   unsigned imm_signed : 1;    /* internal */
   unsigned disp_unsigned : 1; /* internal */
   uint8_t error : 5;          /* enum XedError */

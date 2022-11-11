@@ -509,7 +509,7 @@ static void XED_LF_RESOLVE_BYREG_IMM_WIDTH_map0x0_op0xf7_l1(
 }
 
 static void xed_ild_hasimm_map0x0F_op0x78_l1(struct XedDecodedInst *x) {
-  if (Osz(x->op.rde) || Rep(x->op.rde) == 2) {
+  if (Osz(x->op.rde) || x->op.rep == 2) {
     x->op.imm_width = xed_bytes2bits(1);
   }
 }
@@ -577,66 +577,62 @@ static void xed_prefix_scanner(struct XedDecodedInst *d) {
     b = d->bytes[length];
     if (xed_get_prefix_table_bit(b) == 0) goto out;
     switch (b) {
-      case 0x66:
+      case 0x66:  // osz
         rex = 0;
         osz = 1;
         rde |= osz << 5;
         break;
-      case 0x67:
+      case 0x67:  // asz
         rex = 0;
         asz = 1;
         rde |= asz << 21;
         break;
-      case 0x2E:
+      case 0x2E:  // cs
         if (!islong) {
           rde &= 037770777777;
           rde |= 000002000000;
         }
         rex = 0;
         break;
-      case 0x3E:
+      case 0x3E:  // ds
         if (!islong) {
           rde &= 037770777777;
           rde |= 000004000000;
         }
         rex = 0;
         break;
-      case 0x26:
+      case 0x26:  // es
         if (!islong) {
           rde &= 037770777777;
           rde |= 000001000000;
         }
         rex = 0;
         break;
-      case 0x36:
+      case 0x36:  // ss
         if (!islong) {
           rde &= 037770777777;
           rde |= 000003000000;
         }
         rex = 0;
         break;
-      case 0x64:
+      case 0x64:  // fs
         rde &= 037770777777;
         rde |= 000005000000;
         rex = 0;
         break;
-      case 0x65:
+      case 0x65:  // gs
         rde &= 037770777777;
         rde |= 000006000000;
         rex = 0;
         break;
-      case 0xF0:
-        d->op.lock = 1;
-        rex = 0;
-        break;
-      case 0xF3:
-        rde &= 007777777777;
-        rde |= 030000000000;
-        rex = 0;
-        break;
-      case 0xF2:
-        rde &= 007777777777;
+      case 0xF0:  // lock
+        rde &= 017777777777;
         rde |= 020000000000;
+        rex = 0;
+        break;
+      case 0xF2:  // rep
+      case 0xF3:
+        d->op.rep = b & 3;
         rex = 0;
         break;
       default:

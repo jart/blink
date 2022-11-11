@@ -24,6 +24,11 @@
 #define BSU_SAL 6
 #define BSU_SAR 7
 
+#define ALU_INT8  0
+#define ALU_INT16 1
+#define ALU_INT32 2
+#define ALU_INT64 3
+
 typedef int64_t (*aluop_f)(uint64_t, uint64_t, uint32_t *);
 
 extern const aluop_f kAlu[12][4];
@@ -104,6 +109,24 @@ int64_t Rcl32(uint64_t, uint64_t, uint32_t *);
 int64_t Rcl64(uint64_t, uint64_t, uint32_t *);
 
 uint64_t BsuDoubleShift(int, uint64_t, uint64_t, uint8_t, bool, uint32_t *);
+
+void OpAluw(struct Machine *, uint32_t);
+void OpXaddEbGb(struct Machine *, uint32_t);
+void OpXaddEvqpGvqp(struct Machine *, uint32_t);
+void Op0fe(struct Machine *, uint32_t);
+void OpNegEb(struct Machine *, uint32_t);
+void OpNotEb(struct Machine *, uint32_t);
+void OpAlubAdd(struct Machine *, uint32_t);
+void OpAlubOr(struct Machine *, uint32_t);
+void OpAlubAdc(struct Machine *, uint32_t);
+void OpAlubSbb(struct Machine *, uint32_t);
+void OpAlubAnd(struct Machine *, uint32_t);
+void OpAlubSub(struct Machine *, uint32_t);
+void OpAlubXor(struct Machine *, uint32_t);
+void OpNotEvqp(struct Machine *, uint32_t);
+void OpNegEvqp(struct Machine *, uint32_t);
+void OpIncEvqp(struct Machine *, uint32_t);
+void OpDecEvqp(struct Machine *, uint32_t);
 
 void OpDas(struct Machine *, uint32_t);
 void OpAaa(struct Machine *, uint32_t);

@@ -28,7 +28,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "blink/argv.h"
 #include "blink/endian.h"
 #include "blink/loader.h"
 #include "blink/log.h"

@@ -19,7 +19,6 @@
 #include "blink/alu.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
-#include "blink/throw.h"
 
 const aluop_f kAlu[12][4] = {
     {Add8, Add16, Add32, Add64}, {Or8, Or16, Or32, Or64},

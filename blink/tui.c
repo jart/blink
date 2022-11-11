@@ -60,10 +60,8 @@
 #include "blink/pty.h"
 #include "blink/signal.h"
 #include "blink/strwidth.h"
-#include "blink/syscall.h"
 #include "blink/termios.h"
 #include "blink/thompike.h"
-#include "blink/throw.h"
 #include "blink/tpenc.h"
 #include "blink/util.h"
 #include "blink/xlat.h"
@@ -2571,7 +2569,7 @@ static void Exec(void) {
   ssize_t bp;
   int interrupt;
   ExecSetup();
-  if (!(interrupt = setjmp(m->system->onhalt))) {
+  if (!(interrupt = setjmp(m->onhalt))) {
     if (!(action & CONTINUE) &&
         (bp = IsAtBreakpoint(&breakpoints, GetIp())) != -1) {
       LOGF("BREAK1 %012" PRIx64 "", breakpoints.p[bp].addr);
@@ -2644,7 +2642,7 @@ static void Tui(void) {
   TuiSetup();
   SetupDraw();
   ScrollOp(&pan.disassembly, GetDisIndex());
-  if (!(interrupt = setjmp(m->system->onhalt))) {
+  if (!(interrupt = setjmp(m->onhalt))) {
     do {
       if (!(action & FAILURE)) {
         LoadInstruction(m);

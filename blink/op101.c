@@ -19,10 +19,9 @@
 #include <stdio.h>
 
 #include "blink/endian.h"
+#include "blink/machine.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
-#include "blink/op101.h"
-#include "blink/throw.h"
 #include "blink/time.h"
 
 static void StoreDescriptorTable(struct Machine *m, uint32_t rde,

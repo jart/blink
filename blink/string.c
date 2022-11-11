@@ -25,13 +25,11 @@
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
-#include "blink/ioports.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/string.h"
-#include "blink/throw.h"
 
 static uint64_t ReadInt(uint8_t p[8], unsigned long w) {
   switch (w) {
@@ -137,7 +135,7 @@ static void StringOp(struct Machine *m, uint32_t rde, int op) {
   n = 1 << RegLog2(rde);
   sgn = GetFlag(m->flags, FLAGS_DF) ? -1 : 1;
   do {
-    if (Rep(rde) && !ReadCx(m, rde)) break;
+    if (m->xedd->op.rep && !ReadCx(m, rde)) break;
     switch (op) {
       case STRING_CMPS:
         kAlu[ALU_SUB][RegLog2(rde)](
@@ -146,8 +144,8 @@ static void StringOp(struct Machine *m, uint32_t rde, int op) {
             &m->flags);
         AddDi(m, rde, sgn * n);
         AddSi(m, rde, sgn * n);
-        stop = (Rep(rde) == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
-               (Rep(rde) == 3 && !GetFlag(m->flags, FLAGS_ZF));
+        stop = (m->xedd->op.rep == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
+               (m->xedd->op.rep == 3 && !GetFlag(m->flags, FLAGS_ZF));
         break;
       case STRING_MOVS:
         memcpy(BeginStore(m, (v = AddressDi(m, rde)), n, p, s[0]),
@@ -170,8 +168,8 @@ static void StringOp(struct Machine *m, uint32_t rde, int op) {
             ReadInt(Load(m, AddressDi(m, rde), n, s[1]), RegLog2(rde)),
             ReadInt(m->ax, RegLog2(rde)), &m->flags);
         AddDi(m, rde, sgn * n);
-        stop = (Rep(rde) == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
-               (Rep(rde) == 3 && !GetFlag(m->flags, FLAGS_ZF));
+        stop = (m->xedd->op.rep == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
+               (m->xedd->op.rep == 3 && !GetFlag(m->flags, FLAGS_ZF));
         break;
       case STRING_OUTS:
         OpOut(m, Read16(m->dx),
@@ -187,7 +185,7 @@ static void StringOp(struct Machine *m, uint32_t rde, int op) {
       default:
         abort();
     }
-    if (Rep(rde)) {
+    if (m->xedd->op.rep) {
       SubtractCx(m, rde, 1);
     } else {
       break;
@@ -263,7 +261,7 @@ void OpOuts(struct Machine *m, uint32_t rde) {
 }
 
 void OpMovsb(struct Machine *m, uint32_t rde) {
-  if (Rep(rde) && !GetFlag(m->flags, FLAGS_DF)) {
+  if (m->xedd->op.rep && !GetFlag(m->flags, FLAGS_DF)) {
     RepMovsbEnhanced(m, rde);
   } else {
     OpMovs(m, rde);
@@ -271,7 +269,7 @@ void OpMovsb(struct Machine *m, uint32_t rde) {
 }
 
 void OpStosb(struct Machine *m, uint32_t rde) {
-  if (Rep(rde) && !GetFlag(m->flags, FLAGS_DF)) {
+  if (m->xedd->op.rep && !GetFlag(m->flags, FLAGS_DF)) {
     RepStosbEnhanced(m, rde);
   } else {
     OpStos(m, rde);

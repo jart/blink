@@ -516,11 +516,30 @@ int XlatClock(int x) {
     XLAT(0, CLOCK_REALTIME);
     XLAT(1, CLOCK_MONOTONIC);
     XLAT(2, CLOCK_PROCESS_CPUTIME_ID);
+    XLAT(3, CLOCK_THREAD_CPUTIME_ID);
+#ifdef CLOCK_REALTIME_COARSE
+    XLAT(5, CLOCK_REALTIME_COARSE);
+#elif defined(CLOCK_REALTIME_FAST)
+    XLAT(5, CLOCK_REALTIME_FAST);
+#endif
+#ifdef CLOCK_MONOTONIC_COARSE
+    XLAT(6, CLOCK_MONOTONIC_COARSE);
+#elif defined(CLOCK_REALTIME_FAST)
+    XLAT(6, CLOCK_MONOTONIC_FAST);
+#endif
 #ifdef CLOCK_MONOTONIC_RAW
     XLAT(4, CLOCK_MONOTONIC_RAW);
+#else
+    XLAT(4, CLOCK_MONOTONIC);
+#endif
+#ifdef CLOCK_BOOTTIME
+    XLAT(7, CLOCK_BOOTTIME);
+#endif
+#ifdef CLOCK_TAI
+    XLAT(11, CLOCK_TAI);
 #endif
     default:
-      return x;
+      return einval();
   }
 }
 

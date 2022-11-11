@@ -16,76 +16,82 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <string.h>
+#include <limits.h>
+#include <stdatomic.h>
 
-#include "blink/address.h"
-#include "blink/bitscan.h"
+#include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
-#include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
-#include "blink/x86.h"
 
-static bool IsOpcodeEqual(struct XedDecodedInst *xedd, uint8_t *a) {
-  uint64_t w;
-  unsigned n;
-  if ((n = xedd->length)) {
-    if (n <= 7) {
-      w = Read64(a) ^ Read64(xedd->bytes);
-      return !w || (bsf(w) >> 3) >= n;
+void OpXchgGbEb(struct Machine *m, uint32_t rde) {
+  uint8_t *q;
+  q = ByteRexrReg(m, rde);
+  if (!IsModrmRegister(rde)) {
+#if !defined(__riscv) && !defined(__MICROBLAZE__)
+    *q = atomic_exchange((atomic_uchar *)ComputeReserveAddressWrite1(m, rde),
+                         *q);
+#else
+    OpUd(m, rde);
+#endif
+  } else {
+    uint8_t *p;
+    uint8_t x, y;
+    p = ByteRexbRm(m, rde);
+    x = Read8(q);
+    y = Read8(p);
+    Write8(q, y);
+    Write8(p, x);
+  }
+}
+
+void OpXchgGvqpEvqp(struct Machine *m, uint32_t rde) {
+  uint8_t *q = RegRexrReg(m, rde);
+  uint8_t *p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
+  if (Rexw(rde)) {
+    if (!IsModrmRegister(rde) && !((intptr_t)p & 7)) {
+#if LONG_BIT == 64
+      atomic_store_explicit(
+          (atomic_ulong *)q,
+          atomic_exchange(
+              (atomic_ulong *)p,
+              atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed)),
+          memory_order_relaxed);
+#else
+      OpUd(m, rde);
+#endif
     } else {
-      return !memcmp(a, xedd->bytes, n);
+      uint64_t x, y;
+      x = Read64(q);
+      y = Read64(p);
+      Write64(q, y);
+      Write64(p, x);
     }
-  } else {
-    return false;
-  }
-}
-
-static void ReadInstruction(struct Machine *m, uint8_t *p, unsigned n) {
-  struct XedDecodedInst xedd[1];
-  InitializeInstruction(xedd, m->mode);
-  if (!DecodeInstruction(xedd, p, n)) {
-    memcpy(m->xedd, xedd, kInstructionBytes);
-  } else {
-    HaltMachine(m, kMachineDecodeError);
-  }
-}
-
-static void LoadInstructionSlow(struct Machine *m, uint64_t ip) {
-  unsigned i;
-  uint8_t *addr;
-  uint8_t copy[15], *toil;
-  i = 0x1000 - (ip & 0xfff);
-  addr = ResolveAddress(m, ip);
-  if ((toil = FindReal(m, ip + i))) {
-    memcpy(copy, addr, i);
-    memcpy(copy + i, toil, 15 - i);
-    ReadInstruction(m, copy, 15);
-  } else {
-    ReadInstruction(m, addr, i);
-  }
-}
-
-void LoadInstruction(struct Machine *m) {
-  uint64_t ip;
-  unsigned key;
-  uint8_t *addr;
-  ip = Read64(m->cs) + MaskAddress(m->mode & 3, m->ip);
-  key = ip & (ARRAYLEN(m->opcache->icache) - 1);
-  m->xedd = (struct XedDecodedInst *)m->opcache->icache[key];
-  if ((ip & 0xfff) < 0x1000 - 15) {
-    if (ip - (ip & 0xfff) == m->opcache->codevirt && m->opcache->codehost) {
-      addr = m->opcache->codehost + (ip & 0xfff);
+  } else if (!Osz(rde)) {
+    if (!IsModrmRegister(rde) && !((intptr_t)p & 3)) {
+      atomic_store_explicit(
+          (atomic_uint *)q,
+          atomic_exchange(
+              (atomic_uint *)p,
+              atomic_load_explicit((atomic_uint *)q, memory_order_relaxed)),
+          memory_order_relaxed);
     } else {
-      m->opcache->codevirt = ip - (ip & 0xfff);
-      m->opcache->codehost = ResolveAddress(m, m->opcache->codevirt);
-      addr = m->opcache->codehost + (ip & 0xfff);
+      uint32_t x, y;
+      x = Read32(q);
+      y = Read32(p);
+      Write32(q, y);
+      Write32(p, x);
     }
-    if (!IsOpcodeEqual(m->xedd, addr)) {
-      ReadInstruction(m, addr, 15);
+    Write32(q + 4, 0);
+    if (IsModrmRegister(rde)) {
+      Write32(p + 4, 0);
     }
   } else {
-    LoadInstructionSlow(m, ip);
+    uint16_t x, y;
+    unassert(IsModrmRegister(rde));
+    x = Read16(q);
+    y = Read16(p);
+    Write16(q, y);
+    Write16(p, x);
   }
 }

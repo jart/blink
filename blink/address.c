@@ -20,7 +20,6 @@
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/modrm.h"
-#include "blink/throw.h"
 #include "blink/x86.h"
 
 uint64_t AddressOb(struct Machine *m, uint32_t rde) {

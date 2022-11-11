@@ -24,8 +24,6 @@
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
-#include "blink/stack.h"
-#include "blink/throw.h"
 
 static const uint8_t kStackOsz[2][3] = {
     [0][XED_MODE_REAL] = 2, [0][XED_MODE_LEGACY] = 4, [0][XED_MODE_LONG] = 8,

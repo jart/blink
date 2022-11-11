@@ -60,7 +60,7 @@ static int IsRepOpcode(struct Dis *d) {
 }
 
 static char *DisRepPrefix(struct Dis *d, char *p) {
-  if (Rep(d->xedd->op.rde) && d->xedd->op.map == XED_ILD_MAP0) {
+  if (d->xedd->op.rep && d->xedd->op.map == XED_ILD_MAP0) {
     switch (IsRepOpcode(d)) {
       case 0:
         break;
@@ -68,7 +68,7 @@ static char *DisRepPrefix(struct Dis *d, char *p) {
         p = stpcpy(p, "rep ");
         break;
       case 2:
-        p = stpcpy(p, Rep(d->xedd->op.rde) == 2 ? "repnz " : "repz ");
+        p = stpcpy(p, d->xedd->op.rep == 2 ? "repnz " : "repz ");
         break;
       default:
         break;
@@ -85,11 +85,11 @@ static char *DisName(struct Dis *d, char *bp, const char *name,
   bool notbyte, notlong, wantsuffix, wantsuffixsd;
   p = bp;
   rde = d->xedd->op.rde;
-  if (d->xedd->op.lock) p = stpcpy(p, "lock ");
+  if (Lock(d->xedd->op.rde)) p = stpcpy(p, "lock ");
   p = DisRepPrefix(d, p);
   if (strcmp(name, "BIT") == 0) {
     p = stpcpy(p, kBitOp[ModrmReg(rde)]);
-  } else if (strcmp(name, "nop") == 0 && Rep(rde)) {
+  } else if (strcmp(name, "nop") == 0 && d->xedd->op.rep) {
     p = stpcpy(p, "pause");
   } else if (strcmp(name, "CALL") == 0) {
     p = stpcpy(p, "call");

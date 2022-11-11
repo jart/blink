@@ -27,10 +27,10 @@
 #include "blink/case.h"
 #include "blink/endian.h"
 #include "blink/loader.h"
+#include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/signal.h"
-#include "blink/syscall.h"
 #include "blink/xlat.h"
 
 struct Machine *m;
@@ -66,7 +66,7 @@ static int Exec(char *prog, char **argv, char **envp) {
     m->system->fds = o->system->fds;
     FreeMachine(o);
   }
-  if (!(rc = setjmp(m->system->onhalt))) {
+  if (!(rc = setjmp(m->onhalt))) {
     for (;;) {
       LoadInstruction(m);
       ExecuteInstruction(m);

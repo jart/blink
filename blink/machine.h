@@ -1,8 +1,10 @@
 #ifndef BLINK_MACHINE_H_
 #define BLINK_MACHINE_H_
+#include <pthread.h>
 #include <setjmp.h>
 #include <stdbool.h>
 
+#include "blink/dll.h"
 #include "blink/fds.h"
 #include "blink/linux.h"
 #include "blink/x86.h"
@@ -85,13 +87,13 @@ struct System {
   uint64_t cr3;
   bool dlab;
   bool isfork;
+  pthread_mutex_t lock;
   struct MachineReal real;
   struct MachineRealFree *realfree;
   struct MachineMemstat memstat;
   struct MachineFds fds;
   struct sigaction_linux hands[32];
   int64_t brk;
-  jmp_buf onhalt;
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
   int (*exec)(char *, char **, char **);
@@ -158,6 +160,10 @@ struct Machine {
   uint64_t siguc;
   uint64_t sigfp;
   struct System *system;
+  jmp_buf onhalt;
+  pthread_mutex_t lock;
+  int64_t ctid;
+  int32_t tid;
 };
 
 struct Machine *NewMachine(void);
@@ -175,5 +181,60 @@ int ReserveVirtual(struct Machine *, int64_t, size_t, uint64_t);
 char *FormatPml4t(struct Machine *);
 int64_t FindVirtual(struct Machine *, int64_t, size_t);
 int FreeVirtual(struct Machine *, int64_t, size_t);
+void LoadArgv(struct Machine *, char *, char **, char **);
+_Noreturn void HaltMachine(struct Machine *, int);
+_Noreturn void ThrowDivideError(struct Machine *);
+_Noreturn void ThrowSegmentationFault(struct Machine *, int64_t);
+_Noreturn void ThrowProtectionFault(struct Machine *);
+_Noreturn void OpUd(struct Machine *, uint32_t);
+_Noreturn void OpHlt(struct Machine *, uint32_t);
+void OpSyscall(struct Machine *, uint32_t);
+void OpSsePclmulqdq(struct Machine *, uint32_t);
+void OpCvt0f2a(struct Machine *, uint32_t);
+void OpCvtt0f2c(struct Machine *, uint32_t);
+void OpCvt0f2d(struct Machine *, uint32_t);
+void OpCvt0f5a(struct Machine *, uint32_t);
+void OpCvt0f5b(struct Machine *, uint32_t);
+void OpCvt0fE6(struct Machine *, uint32_t);
+void OpCpuid(struct Machine *, uint32_t);
+void OpDivAlAhAxEbSigned(struct Machine *, uint32_t);
+void OpDivAlAhAxEbUnsigned(struct Machine *, uint32_t);
+void OpDivRdxRaxEvqpSigned(struct Machine *, uint32_t);
+void OpDivRdxRaxEvqpUnsigned(struct Machine *, uint32_t);
+void OpImulGvqpEvqp(struct Machine *, uint32_t);
+void OpImulGvqpEvqpImm(struct Machine *, uint32_t);
+void OpMulAxAlEbSigned(struct Machine *, uint32_t);
+void OpMulAxAlEbUnsigned(struct Machine *, uint32_t);
+void OpMulRdxRaxEvqpSigned(struct Machine *, uint32_t);
+void OpMulRdxRaxEvqpUnsigned(struct Machine *, uint32_t);
+uint64_t OpIn(struct Machine *, uint16_t);
+void OpOut(struct Machine *, uint16_t, uint32_t);
+void Op101(struct Machine *, uint32_t);
+void OpRdrand(struct Machine *, uint32_t);
+void OpRdseed(struct Machine *, uint32_t);
+void Op171(struct Machine *, uint32_t);
+void Op172(struct Machine *, uint32_t);
+void Op173(struct Machine *, uint32_t);
+void Push(struct Machine *, uint32_t, uint64_t);
+uint64_t Pop(struct Machine *, uint32_t, uint16_t);
+void OpCallJvds(struct Machine *, uint32_t);
+void OpRet(struct Machine *, uint32_t);
+void OpRetf(struct Machine *, uint32_t);
+void OpLeave(struct Machine *, uint32_t);
+void OpCallEq(struct Machine *, uint32_t);
+void OpPopEvq(struct Machine *, uint32_t);
+void OpPopZvq(struct Machine *, uint32_t);
+void OpPushZvq(struct Machine *, uint32_t);
+void OpPushEvq(struct Machine *, uint32_t);
+void PopVq(struct Machine *, uint32_t);
+void PushVq(struct Machine *, uint32_t);
+void OpJmpEq(struct Machine *, uint32_t);
+void OpPusha(struct Machine *, uint32_t);
+void OpPopa(struct Machine *, uint32_t);
+void OpCallf(struct Machine *, uint32_t);
+void OpXchgGbEb(struct Machine *, uint32_t);
+void OpXchgGvqpEvqp(struct Machine *, uint32_t);
+void OpCmpxchgEbAlGb(struct Machine *, uint32_t);
+void OpCmpxchgEvqpRaxGvqp(struct Machine *, uint32_t);
 
 #endif /* BLINK_MACHINE_H_ */

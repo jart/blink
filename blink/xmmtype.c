@@ -39,9 +39,9 @@ void UpdateXmmType(struct Machine *m, struct XmmType *xt) {
   switch (m->xedd->op.map << 8 | m->xedd->op.opcode) {
     case 0x110:
     case 0x111: /* MOVSS,MOVSD */
-      if (Rep(m->xedd->op.rde) == 3) {
+      if (m->xedd->op.rep == 3) {
         UpdateXmmTypes(m, xt, kXmmFloat, kXmmFloat);
-      } else if (Rep(m->xedd->op.rde) == 2) {
+      } else if (m->xedd->op.rep == 2) {
         UpdateXmmTypes(m, xt, kXmmDouble, kXmmDouble);
       }
       break;
@@ -57,14 +57,14 @@ void UpdateXmmType(struct Machine *m, struct XmmType *xt) {
     case 0x15E: /* DIV */
     case 0x15F: /* MAX */
     case 0x1C2: /* CMP */
-      if (Osz(m->xedd->op.rde) || Rep(m->xedd->op.rde) == 2) {
+      if (Osz(m->xedd->op.rde) || m->xedd->op.rep == 2) {
         UpdateXmmTypes(m, xt, kXmmDouble, kXmmDouble);
       } else {
         UpdateXmmTypes(m, xt, kXmmFloat, kXmmFloat);
       }
       break;
     case 0x12A: /* CVTPI2PS,CVTSI2SS,CVTPI2PD,CVTSI2SD */
-      if (Osz(m->xedd->op.rde) || Rep(m->xedd->op.rde) == 2) {
+      if (Osz(m->xedd->op.rde) || m->xedd->op.rep == 2) {
         UpdateXmmSizes(m, xt, 8, 4);
         UpdateXmmTypes(m, xt, kXmmDouble, kXmmIntegral);
       } else {
@@ -73,7 +73,7 @@ void UpdateXmmType(struct Machine *m, struct XmmType *xt) {
       }
       break;
     case 0x15A: /* CVT{P,S}{S,D}2{P,S}{S,D} */
-      if (Osz(m->xedd->op.rde) || Rep(m->xedd->op.rde) == 2) {
+      if (Osz(m->xedd->op.rde) || m->xedd->op.rep == 2) {
         UpdateXmmTypes(m, xt, kXmmFloat, kXmmDouble);
       } else {
         UpdateXmmTypes(m, xt, kXmmDouble, kXmmFloat);
@@ -81,7 +81,7 @@ void UpdateXmmType(struct Machine *m, struct XmmType *xt) {
       break;
     case 0x15B: /* CVT{,T}{DQ,PS}2{PS,DQ} */
       UpdateXmmSizes(m, xt, 4, 4);
-      if (Osz(m->xedd->op.rde) || Rep(m->xedd->op.rde) == 3) {
+      if (Osz(m->xedd->op.rde) || m->xedd->op.rep == 3) {
         UpdateXmmTypes(m, xt, kXmmIntegral, kXmmFloat);
       } else {
         UpdateXmmTypes(m, xt, kXmmFloat, kXmmIntegral);

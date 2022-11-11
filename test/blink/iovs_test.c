@@ -46,7 +46,7 @@ TEST(iovs, testAppendContiguousVectors_coalescesAdjacentEntries) {
   EXPECT_EQ(1, iv.i);
   EXPECT_GE(iv.n, iv.i);
   EXPECT_EQ(8, iv.p[0].iov_len);
-  EXPECT_EQ(b, iv.p[0].iov_base);
+  EXPECT_EQ((intptr_t)b, (intptr_t)iv.p[0].iov_base);
   FreeIovs(&iv);
 }
 
@@ -64,21 +64,21 @@ TEST(iovs, testAppendNoncontiguousVectors_growsMemoryAndPreservesOrdering) {
   EXPECT_NE(-1, AppendIovs(&iv, b + 7, 1));
   EXPECT_EQ(8, iv.i);
   EXPECT_GE(iv.n, iv.i);
-  EXPECT_EQ(b + 0, iv.p[0].iov_base);
+  EXPECT_EQ((intptr_t)(b + 0), (intptr_t)iv.p[0].iov_base);
   EXPECT_EQ(1, iv.p[0].iov_len);
-  EXPECT_EQ(b + 2, iv.p[1].iov_base);
+  EXPECT_EQ((intptr_t)(b + 2), (intptr_t)iv.p[1].iov_base);
   EXPECT_EQ(1, iv.p[1].iov_len);
-  EXPECT_EQ(b + 4, iv.p[2].iov_base);
+  EXPECT_EQ((intptr_t)(b + 4), (intptr_t)iv.p[2].iov_base);
   EXPECT_EQ(1, iv.p[2].iov_len);
-  EXPECT_EQ(b + 6, iv.p[3].iov_base);
+  EXPECT_EQ((intptr_t)(b + 6), (intptr_t)iv.p[3].iov_base);
   EXPECT_EQ(1, iv.p[3].iov_len);
-  EXPECT_EQ(b + 1, iv.p[4].iov_base);
+  EXPECT_EQ((intptr_t)(b + 1), (intptr_t)iv.p[4].iov_base);
   EXPECT_EQ(1, iv.p[4].iov_len);
-  EXPECT_EQ(b + 3, iv.p[5].iov_base);
+  EXPECT_EQ((intptr_t)(b + 3), (intptr_t)iv.p[5].iov_base);
   EXPECT_EQ(1, iv.p[5].iov_len);
-  EXPECT_EQ(b + 5, iv.p[6].iov_base);
+  EXPECT_EQ((intptr_t)(b + 5), (intptr_t)iv.p[6].iov_base);
   EXPECT_EQ(1, iv.p[6].iov_len);
-  EXPECT_EQ(b + 7, iv.p[7].iov_base);
+  EXPECT_EQ((intptr_t)(b + 7), (intptr_t)iv.p[7].iov_base);
   EXPECT_EQ(1, iv.p[7].iov_len);
   FreeIovs(&iv);
 }

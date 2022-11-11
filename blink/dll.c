@@ -16,55 +16,80 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
-#include <inttypes.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include "blink/dll.h"
 
-#include "blink/address.h"
-#include "blink/endian.h"
-#include "blink/log.h"
-
-static bool IsHaltingInitialized(struct Machine *m) {
-  jmp_buf zb;
-  memset(zb, 0, sizeof(zb));
-  return memcmp(m->onhalt, zb, sizeof(m->onhalt)) != 0;
+void dll_init(dll_element *e) {
+  e->next = e;
+  e->prev = e;
 }
 
-void HaltMachine(struct Machine *m, int code) {
-  if (!IsHaltingInitialized(m)) abort();
-  longjmp(m->onhalt, code);
+int dll_is_empty(dll_list list) {
+  return !list;
 }
 
-void ThrowDivideError(struct Machine *m) {
-  HaltMachine(m, kMachineDivideError);
+dll_list dll_remove(dll_list list, dll_element *e) {
+  if (list == e) {
+    if (list->prev == list) {
+      list = 0;
+    } else {
+      list = list->prev;
+    }
+  }
+  e->next->prev = e->prev;
+  e->prev->next = e->next;
+  e->next = e;
+  e->prev = e;
+  return list;
 }
 
-void ThrowSegmentationFault(struct Machine *m, int64_t va) {
-  m->faultaddr = va;
-  if (m->xedd) m->ip -= m->xedd->length;
-  LOGF("SEGMENTATION FAULT ADDR %012" PRIx64 " IP %" PRIx64 " AX %" PRIx64
-       " CX %" PRIx64 " DX %" PRIx64 " BX %" PRIx64 " SP %" PRIx64 " "
-       "BP %" PRIx64 " SI %" PRIx64 " DI %" PRIx64 " R8 %" PRIx64 " R9 %" PRIx64
-       " R10 %" PRIx64 " R11 %" PRIx64 " R12 %" PRIx64 " "
-       "R13 %" PRIx64 " R14 %" PRIx64 " R15 %" PRIx64,
-       va, m->ip, Read64(m->ax), Read64(m->cx), Read64(m->dx), Read64(m->bx),
-       Read64(m->sp), Read64(m->bp), Read64(m->si), Read64(m->di),
-       Read64(m->r8), Read64(m->r9), Read64(m->r10), Read64(m->r11),
-       Read64(m->r12), Read64(m->r13), Read64(m->r14), Read64(m->r15));
-  HaltMachine(m, kMachineSegmentationFault);
+void dll_splice_after(dll_element *p, dll_element *n) {
+  dll_element *p2;
+  dll_element *nl;
+  p2 = p->next;
+  nl = n->prev;
+  p->next = n;
+  n->prev = p;
+  nl->next = p2;
+  p2->prev = nl;
 }
 
-void ThrowProtectionFault(struct Machine *m) {
-  HaltMachine(m, kMachineProtectionFault);
+dll_list dll_make_first(dll_list list, dll_element *e) {
+  if (e) {
+    if (list == 0) {
+      list = e->prev;
+    } else {
+      dll_splice_after(list, e);
+    }
+  }
+  return list;
 }
 
-void OpUd(struct Machine *m, uint32_t rde) {
-  if (m->xedd) m->ip -= m->xedd->length;
-  HaltMachine(m, kMachineUndefinedInstruction);
+dll_list dll_make_last(dll_list list, dll_element *e) {
+  if (e) {
+    dll_make_first(list, e->next);
+    list = e;
+  }
+  return list;
 }
 
-void OpHlt(struct Machine *m, uint32_t rde) {
-  HaltMachine(m, kMachineHalt);
+dll_element *dll_first(dll_list list) {
+  dll_element *first = 0;
+  if (list) first = list->next;
+  return first;
+}
+
+dll_element *dll_last(dll_list list) {
+  return list;
+}
+
+dll_element *dll_next(dll_list list, dll_element *e) {
+  dll_element *next = 0;
+  if (e != list) next = e->next;
+  return next;
+}
+
+dll_element *dll_prev(dll_list list, dll_element *e) {
+  dll_element *prev = 0;
+  if (e != list->next) prev = e->prev;
+  return prev;
 }

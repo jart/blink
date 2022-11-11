@@ -18,11 +18,10 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <limits.h>
 
-#include "blink/divmul.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
+#include "blink/machine.h"
 #include "blink/modrm.h"
-#include "blink/throw.h"
 
 struct Dubble {
   uint64_t lo;
