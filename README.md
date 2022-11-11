@@ -1,6 +1,6 @@
 # blink
 
-blink is an emulator for running x86-64-linux programs on different
+blink is a virtual machine for running x86-64-linux programs on different
 operating systems and hardware architectures. It's designed to do the
 same thing as the `qemu-x86_64` command, except rather than being a 10mb
 binary, blink only has a ~142kb footprint. For further details on the
@@ -40,7 +40,7 @@ hello world
 
 blink is an x86-64 interpreter written in straightforward POSIX ANSI C.
 Similar to Bochs, there's no JIT or code generation currently in blink.
-Therefore you're trading away performance for a tinier emulator that'll
-just work, is ISC (rather than GPL) licensed and it won't let untrusted
-code get too close to your hardware. Instruction decoding is done using
-our trimmed-down version of Intel's disassembler Xed.
+Therefore you're trading away performance for a tinier virtual machine
+that'll just work, is ISC (rather than GPL) licensed and it won't let
+untrusted code get too close to your hardware. Instruction decoding is
+done using our trimmed-down version of Intel's disassembler Xed.
