@@ -18,15 +18,15 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/flags.h"
 
-bool GetParity(uint8_t b) {
+bool GetParity(u8 b) {
   b ^= b >> 4;
   b ^= b >> 2;
   b ^= b >> 1;
   return ~b & 1;
 }
 
-void ImportFlags(struct Machine *m, uint64_t flags) {
-  uint64_t mask = 0;
+void ImportFlags(struct Machine *m, u64 flags) {
+  u64 mask = 0;
   mask |= 1 << FLAGS_CF;
   mask |= 1 << FLAGS_PF;
   mask |= 1 << FLAGS_AF;
@@ -44,7 +44,7 @@ void ImportFlags(struct Machine *m, uint64_t flags) {
   m->flags = SetLazyParityByte(m->flags, !((m->flags >> FLAGS_PF) & 1));
 }
 
-uint64_t ExportFlags(uint64_t flags) {
+u64 ExportFlags(u64 flags) {
   flags = SetFlag(flags, FLAGS_IOPL, 3);
   flags = SetFlag(flags, FLAGS_F1, true);
   flags = SetFlag(flags, FLAGS_F0, false);

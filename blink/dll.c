@@ -55,7 +55,7 @@ void dll_splice_after(dll_element *p, dll_element *n) {
 
 dll_list dll_make_first(dll_list list, dll_element *e) {
   if (e) {
-    if (list == 0) {
+    if (!list) {
       list = e->prev;
     } else {
       dll_splice_after(list, e);

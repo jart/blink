@@ -27,11 +27,11 @@
 #define GetLazyParityBool(f)    GetParity((0xff000000 & (f)) >> 24)
 #define SetLazyParityByte(f, x) ((0x00ffffff & (f)) | (255 & (x)) << 24)
 
-bool GetParity(uint8_t);
-uint64_t ExportFlags(uint64_t);
-void ImportFlags(struct Machine *, uint64_t);
+bool GetParity(u8);
+u64 ExportFlags(u64);
+void ImportFlags(struct Machine *, u64);
 
-static inline bool GetFlag(uint32_t f, int b) {
+static inline bool GetFlag(u32 f, int b) {
   switch (b) {
     case FLAGS_PF:
       return GetLazyParityBool(f);
@@ -40,7 +40,7 @@ static inline bool GetFlag(uint32_t f, int b) {
   }
 }
 
-static inline uint32_t SetFlag(uint32_t f, int b, bool v) {
+static inline u32 SetFlag(u32 f, int b, bool v) {
   switch (b) {
     case FLAGS_PF:
       return SetLazyParityByte(f, !v);

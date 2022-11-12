@@ -31,8 +31,8 @@
  * Decodes Monochrome Display Adapter attributes.
  * @see https://www.seasip.info/VintagePC/mda.html
  */
-static uint8_t DecodeMdaAttributes(int8_t a) {
-  uint8_t r = 0;
+static u8 DecodeMdaAttributes(i8 a) {
+  u8 r = 0;
   if (a & 0x77) {
     if ((a & 0x77) == 0x70) r |= kReverse;
     if ((a & 0x07) == 0x01) r |= kUnderline;
@@ -43,7 +43,7 @@ static uint8_t DecodeMdaAttributes(int8_t a) {
   return r;
 }
 
-void DrawMda(struct Panel *p, uint8_t v[25][80][2]) {
+void DrawMda(struct Panel *p, u8 v[25][80][2]) {
   unsigned y, x, n, a, b;
   n = MIN(25, p->bottom - p->top);
   for (y = 0; y < n; ++y) {

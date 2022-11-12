@@ -16,45 +16,32 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <float.h>
-#include <limits.h>
-#include <math.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
+#include "blink/timespec.h"
 
-#include "blink/ldbl.h"
-#include "test/test.h"
-
-char *fmt(const char *fmt, ...) {
-  char *s;
-  va_list va;
-  s = (char *)malloc(64);
-  va_start(va, fmt);
-  vsnprintf(s, 64, fmt, va);
-  va_end(va);
-  return s;
+int timespec_cmp(struct timespec a, struct timespec b) {
+  int cmp;
+  if (!(cmp = (a.tv_sec > b.tv_sec) - (a.tv_sec < b.tv_sec))) {
+    cmp = (a.tv_nsec > b.tv_nsec) - (a.tv_nsec < b.tv_nsec);
+  }
+  return cmp;
 }
 
-double RoundTrip(double x) {
-  uint8_t b[10];
-  return DeserializeLdbl(SerializeLdbl(b, x));
+struct timespec timespec_add(struct timespec x, struct timespec y) {
+  x.tv_sec += y.tv_sec;
+  x.tv_nsec += y.tv_nsec;
+  if (x.tv_nsec >= 1000000000) {
+    x.tv_nsec -= 1000000000;
+    x.tv_sec += 1;
+  }
+  return x;
 }
 
-void SetUp(void) {
-}
-
-void TearDown(void) {
-}
-
-TEST(SerializeLdbl, testRoundTrip) {
-  EXPECT_STREQ("0", fmt("%g", RoundTrip(0)));
-  EXPECT_STREQ("-0", fmt("%g", RoundTrip(-0.)));
-  EXPECT_STREQ("nan", fmt("%g", RoundTrip(NAN)));
-  EXPECT_STREQ("inf", fmt("%g", RoundTrip(INFINITY)));
-  EXPECT_STREQ("-inf", fmt("%g", RoundTrip(-INFINITY)));
-  EXPECT_STREQ(fmt("%.17g", DBL_MIN), fmt("%.17g", RoundTrip(DBL_MIN)));
-  EXPECT_STREQ(fmt("%.17g", DBL_MAX), fmt("%.17g", RoundTrip(DBL_MAX)));
-  // TODO(jart): What's up with Apple Silicon here?
-  // EXPECT_STREQ("-nan", fmt("%g", RoundTrip(-NAN)));
+struct timespec timespec_sub(struct timespec a, struct timespec b) {
+  a.tv_sec -= b.tv_sec;
+  if (a.tv_nsec < b.tv_nsec) {
+    a.tv_nsec += 1000000000;
+    a.tv_sec--;
+  }
+  a.tv_nsec -= b.tv_nsec;
+  return a;
 }

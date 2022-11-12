@@ -16,11 +16,11 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "blink/assert.h"
 #include "blink/dis.h"
 #include "blink/high.h"
 #include "blink/modrm.h"
@@ -80,7 +80,7 @@ static char *DisRepPrefix(struct Dis *d, char *p) {
 static char *DisName(struct Dis *d, char *bp, const char *name,
                      bool ambiguous) {
   char *p;
-  uint32_t rde;
+  u32 rde;
   const char *np;
   bool notbyte, notlong, wantsuffix, wantsuffixsd;
   p = bp;
@@ -174,13 +174,14 @@ static char *DisName(struct Dis *d, char *bp, const char *name,
  * @see DisSpec()
  */
 char *DisInst(struct Dis *d, char *p, const char *spec) {
-  long i, n, m;
+  size_t m;
+  long i, n;
   char sbuf[64];
   char args[4][256];
   char *s, *name, *state;
   bool hasarg, hasmodrm, hasregister, hasmemory;
-  assert(0 == (int)d->xedd->op.error);
-  assert(strlen(spec) < 128);
+  unassert(0 == (int)d->xedd->op.error);
+  unassert(strlen(spec) < 128);
   hasarg = false;
   hasmodrm = d->xedd->op.has_modrm;
   hasmemory = hasmodrm && !IsModrmRegister(d->xedd->op.rde);

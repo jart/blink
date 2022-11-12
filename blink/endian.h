@@ -1,45 +1,45 @@
 #ifndef BLINK_ENDIAN_H_
 #define BLINK_ENDIAN_H_
-#include <stdint.h>
+#include "blink/types.h"
 #if !defined(__GNUC__) || __SIZEOF_LONG__ < 8
 
-static inline uint8_t Read8(const uint8_t *p) {
+static inline u8 Read8(const u8 *p) {
   return p[0];
 }
 
-static inline uint16_t Read16(const uint8_t *p) {
+static inline u16 Read16(const u8 *p) {
   return p[1] << 8 | p[0];
 }
 
-static inline void Write8(uint8_t *p, uint8_t v) {
+static inline void Write8(u8 *p, u8 v) {
   *p = v;
 }
 
-static inline void Write16(uint8_t *p, uint16_t v) {
+static inline void Write16(u8 *p, u16 v) {
   p[0] = (0x00FF & v) >> 000;
   p[1] = (0xFF00 & v) >> 010;
 }
 
-static inline uint32_t Read32(const uint8_t *p) {
-  return ((uint32_t)p[0] << 000 | (uint32_t)p[1] << 010 |
-          (uint32_t)p[2] << 020 | (uint32_t)p[3] << 030);
+static inline u32 Read32(const u8 *p) {
+  return ((u32)p[0] << 000 | (u32)p[1] << 010 |
+          (u32)p[2] << 020 | (u32)p[3] << 030);
 }
 
-static inline uint64_t Read64(const uint8_t *p) {
-  return ((uint64_t)p[0] << 000 | (uint64_t)p[1] << 010 |
-          (uint64_t)p[2] << 020 | (uint64_t)p[3] << 030 |
-          (uint64_t)p[4] << 040 | (uint64_t)p[5] << 050 |
-          (uint64_t)p[6] << 060 | (uint64_t)p[7] << 070);
+static inline u64 Read64(const u8 *p) {
+  return ((u64)p[0] << 000 | (u64)p[1] << 010 |
+          (u64)p[2] << 020 | (u64)p[3] << 030 |
+          (u64)p[4] << 040 | (u64)p[5] << 050 |
+          (u64)p[6] << 060 | (u64)p[7] << 070);
 }
 
-static inline void Write32(uint8_t *p, uint32_t v) {
+static inline void Write32(u8 *p, u32 v) {
   p[0] = (0x000000FF & v) >> 000;
   p[1] = (0x0000FF00 & v) >> 010;
   p[2] = (0x00FF0000 & v) >> 020;
   p[3] = (0xFF000000 & v) >> 030;
 }
 
-static inline void Write64(uint8_t *p, uint64_t v) {
+static inline void Write64(u8 *p, u64 v) {
   p[0] = (0x00000000000000FF & v) >> 000;
   p[1] = (0x000000000000FF00 & v) >> 010;
   p[2] = (0x0000000000FF0000 & v) >> 020;
@@ -52,49 +52,49 @@ static inline void Write64(uint8_t *p, uint64_t v) {
 
 #else
 
-#define Read8(P) (*((const uint8_t *)(P)))
+#define Read8(P) (*((const u8 *)(P)))
 
 #define Read16(P)             \
   ({                          \
-    const uint8_t *Ptr = (P); \
+    const u8 *Ptr = (P); \
     Ptr[1] << 8 | Ptr[0];     \
   })
 
 #define Read32(P)                                        \
   ({                                                     \
-    const uint8_t *Ptr = (P);                            \
-    ((uint32_t)Ptr[0] << 000 | (uint32_t)Ptr[1] << 010 | \
-     (uint32_t)Ptr[2] << 020 | (uint32_t)Ptr[3] << 030); \
+    const u8 *Ptr = (P);                            \
+    ((u32)Ptr[0] << 000 | (u32)Ptr[1] << 010 | \
+     (u32)Ptr[2] << 020 | (u32)Ptr[3] << 030); \
   })
 
 #define Read64(P)                                        \
   ({                                                     \
-    const uint8_t *Ptr = (P);                            \
-    ((uint64_t)Ptr[0] << 000 | (uint64_t)Ptr[1] << 010 | \
-     (uint64_t)Ptr[2] << 020 | (uint64_t)Ptr[3] << 030 | \
-     (uint64_t)Ptr[4] << 040 | (uint64_t)Ptr[5] << 050 | \
-     (uint64_t)Ptr[6] << 060 | (uint64_t)Ptr[7] << 070); \
+    const u8 *Ptr = (P);                            \
+    ((u64)Ptr[0] << 000 | (u64)Ptr[1] << 010 | \
+     (u64)Ptr[2] << 020 | (u64)Ptr[3] << 030 | \
+     (u64)Ptr[4] << 040 | (u64)Ptr[5] << 050 | \
+     (u64)Ptr[6] << 060 | (u64)Ptr[7] << 070); \
   })
 
 #define Write8(P, V)    \
   do {                  \
-    uint8_t Val = (V);  \
-    uint8_t *Ptr = (P); \
+    u8 Val = (V);  \
+    u8 *Ptr = (P); \
     *Ptr = Val;         \
   } while (0)
 
 #define Write16(P, V)                           \
   do {                                          \
     int Val = (V);                              \
-    uint8_t *Ptr = (P);                         \
+    u8 *Ptr = (P);                         \
     Ptr[0] = (0x00000000000000FF & Val) >> 000; \
     Ptr[1] = (0x000000000000FF00 & Val) >> 010; \
   } while (0)
 
 #define Write32(P, V)                           \
   do {                                          \
-    uint32_t Val = (V);                         \
-    uint8_t *Ptr = (P);                         \
+    u32 Val = (V);                         \
+    u8 *Ptr = (P);                         \
     Ptr[0] = (0x00000000000000FF & Val) >> 000; \
     Ptr[1] = (0x000000000000FF00 & Val) >> 010; \
     Ptr[2] = (0x0000000000FF0000 & Val) >> 020; \
@@ -103,8 +103,8 @@ static inline void Write64(uint8_t *p, uint64_t v) {
 
 #define Write64(P, V)                           \
   do {                                          \
-    uint64_t Val = (V);                         \
-    uint8_t *Ptr = (P);                         \
+    u64 Val = (V);                         \
+    u8 *Ptr = (P);                         \
     Ptr[0] = (0x00000000000000FF & Val) >> 000; \
     Ptr[1] = (0x000000000000FF00 & Val) >> 010; \
     Ptr[2] = (0x0000000000FF0000 & Val) >> 020; \

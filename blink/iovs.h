@@ -1,7 +1,7 @@
 #ifndef BLINK_IOVS_H_
 #define BLINK_IOVS_H_
 #include <stddef.h>
-#include <stdint.h>
+#include "blink/types.h"
 #include <sys/uio.h>
 
 struct Iovs {

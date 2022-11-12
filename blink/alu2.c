@@ -26,15 +26,15 @@
 #include "blink/modrm.h"
 #include "blink/swap.h"
 
-static void Alub(struct Machine *m, uint32_t rde, aluop_f op) {
-  uint8_t *p, *q;
+static void Alub(struct Machine *m, u32 rde, aluop_f op) {
+  u8 *p, *q;
   p = GetModrmRegisterBytePointerWrite(m, rde);
   q = ByteRexrReg(m, rde);
   if (!Lock(rde)) {
     Write8(p, op(Read8(p), Read8(q), &m->flags));
   } else {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
-    uint8_t x, y, z;
+    u8 x, y, z;
     x = Read8(p);
     y = Read8(q);
     do {
@@ -47,39 +47,39 @@ static void Alub(struct Machine *m, uint32_t rde, aluop_f op) {
   }
 }
 
-void OpAlubAdd(struct Machine *m, uint32_t rde) {
+void OpAlubAdd(struct Machine *m, u32 rde) {
   Alub(m, rde, Add8);
 }
 
-void OpAlubOr(struct Machine *m, uint32_t rde) {
+void OpAlubOr(struct Machine *m, u32 rde) {
   Alub(m, rde, Or8);
 }
 
-void OpAlubAdc(struct Machine *m, uint32_t rde) {
+void OpAlubAdc(struct Machine *m, u32 rde) {
   Alub(m, rde, Adc8);
 }
 
-void OpAlubSbb(struct Machine *m, uint32_t rde) {
+void OpAlubSbb(struct Machine *m, u32 rde) {
   Alub(m, rde, Sbb8);
 }
 
-void OpAlubAnd(struct Machine *m, uint32_t rde) {
+void OpAlubAnd(struct Machine *m, u32 rde) {
   Alub(m, rde, And8);
 }
 
-void OpAlubSub(struct Machine *m, uint32_t rde) {
+void OpAlubSub(struct Machine *m, u32 rde) {
   Alub(m, rde, Sub8);
 }
 
-void OpAlubXor(struct Machine *m, uint32_t rde) {
+void OpAlubXor(struct Machine *m, u32 rde) {
   Alub(m, rde, Xor8);
 }
 
-void OpAluw(struct Machine *m, uint32_t rde) {
-  uint8_t *p, *q;
+void OpAluw(struct Machine *m, u32 rde) {
+  u8 *p, *q;
   q = RegRexrReg(m, rde);
   if (Rexw(rde)) {
-    uint64_t x, y, z;
+    u64 x, y, z;
     p = GetModrmRegisterWordPointerWrite(m, rde, 8);
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64
@@ -103,7 +103,7 @@ void OpAluw(struct Machine *m, uint32_t rde) {
       Write64(p, z);
     }
   } else if (!Osz(rde)) {
-    uint32_t x, y, z;
+    u32 x, y, z;
     p = GetModrmRegisterWordPointerWrite(m, rde, 4);
     if (Lock(rde) && !((intptr_t)p & 3)) {
       x = atomic_load((atomic_uint *)p);
@@ -126,7 +126,7 @@ void OpAluw(struct Machine *m, uint32_t rde) {
       Write32(p + 4, 0);
     }
   } else {
-    uint16_t x, y, z;
+    u16 x, y, z;
     unassert(!Lock(rde));
     p = GetModrmRegisterWordPointerWrite(m, rde, 2);
     x = Read16(p);

@@ -705,9 +705,9 @@ void XlatWinsizeToLinux(struct winsize_linux *dst, const struct winsize *src) {
   Write16(dst->ws_col, src->ws_col);
 }
 
-void XlatSigsetToLinux(uint8_t dst[8], const sigset_t *src) {
+void XlatSigsetToLinux(u8 dst[8], const sigset_t *src) {
   int i;
-  uint64_t x;
+  u64 x;
   for (x = i = 0; i < 64; ++i) {
     if (sigismember(src, i + 1)) {
       x |= 1ull << i;
@@ -716,9 +716,9 @@ void XlatSigsetToLinux(uint8_t dst[8], const sigset_t *src) {
   Write64(dst, x);
 }
 
-void XlatLinuxToSigset(sigset_t *dst, const uint8_t src[8]) {
+void XlatLinuxToSigset(sigset_t *dst, const u8 src[8]) {
   int i;
-  uint64_t x;
+  u64 x;
   x = Read64(src);
   sigemptyset(dst);
   for (i = 0; i < 64; ++i) {

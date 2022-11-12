@@ -23,6 +23,12 @@
 enum XedError error;
 struct XedDecodedInst xedd;
 
+void SetUp(void) {
+}
+
+void TearDown(void) {
+}
+
 TEST(x86, testPopR10) {
   InitializeInstruction(&xedd, XED_MACHINE_MODE_LONG_64);
   DecodeInstruction(&xedd, "\115\132\0\0", 4);

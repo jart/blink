@@ -1,16 +1,16 @@
 #ifndef BLINK_HIGH_H_
 #define BLINK_HIGH_H_
 #include <stdbool.h>
-#include <stdint.h>
+#include "blink/types.h"
 
 struct High {
   bool active;
-  uint8_t keyword;
-  uint8_t reg;
-  uint8_t literal;
-  uint8_t label;
-  uint8_t comment;
-  uint8_t quote;
+  u8 keyword;
+  u8 reg;
+  u8 literal;
+  u8 label;
+  u8 comment;
+  u8 quote;
 };
 
 extern struct High g_high;

@@ -16,7 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdint.h>
+#include "blink/types.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -45,16 +45,17 @@ int AppendIovs(struct Iovs *ib, void *base, size_t len) {
     p = ib->p;
     i = ib->i;
     n = ib->n;
-    if (i && (intptr_t)base == (intptr_t)p[i - 1].iov_base + p[i - 1].iov_len) {
+    if (i &&
+        (uintptr_t)base == (uintptr_t)p[i - 1].iov_base + p[i - 1].iov_len) {
       p[i - 1].iov_len += len;
     } else {
       if (i == n) {
         n += n >> 1;
         if (p == ib->init) {
-          if (!(p = malloc(sizeof(struct iovec) * n))) return -1;
+          if (!(p = (struct iovec *)malloc(sizeof(*p) * n))) return -1;
           memcpy(p, ib->init, sizeof(ib->init));
         } else {
-          if (!(p = realloc(p, sizeof(struct iovec) * n))) return -1;
+          if (!(p = (struct iovec *)realloc(p, sizeof(*p) * n))) return -1;
         }
         ib->p = p;
         ib->n = n;

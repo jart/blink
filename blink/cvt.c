@@ -50,8 +50,8 @@ static double SseRoundDouble(struct Machine *m, double x) {
   }
 }
 
-static void OpGdqpWssCvttss2si(struct Machine *m, uint32_t rde) {
-  int64_t n;
+static void OpGdqpWssCvttss2si(struct Machine *m, u32 rde) {
+  i64 n;
   union FloatPun f;
   f.i = Read32(GetModrmRegisterXmmPointerRead4(m, rde));
   n = f.f;
@@ -59,8 +59,8 @@ static void OpGdqpWssCvttss2si(struct Machine *m, uint32_t rde) {
   Write64(RegRexrReg(m, rde), n);
 }
 
-static void OpGdqpWsdCvttsd2si(struct Machine *m, uint32_t rde) {
-  int64_t n;
+static void OpGdqpWsdCvttsd2si(struct Machine *m, u32 rde) {
+  i64 n;
   union DoublePun d;
   d.i = Read64(GetModrmRegisterXmmPointerRead8(m, rde));
   n = d.f;
@@ -68,8 +68,8 @@ static void OpGdqpWsdCvttsd2si(struct Machine *m, uint32_t rde) {
   Write64(RegRexrReg(m, rde), n);
 }
 
-static void OpGdqpWssCvtss2si(struct Machine *m, uint32_t rde) {
-  int64_t n;
+static void OpGdqpWssCvtss2si(struct Machine *m, u32 rde) {
+  i64 n;
   union FloatPun f;
   f.i = Read32(GetModrmRegisterXmmPointerRead4(m, rde));
   n = rintf(f.f);
@@ -77,8 +77,8 @@ static void OpGdqpWssCvtss2si(struct Machine *m, uint32_t rde) {
   Write64(RegRexrReg(m, rde), n);
 }
 
-static void OpGdqpWsdCvtsd2si(struct Machine *m, uint32_t rde) {
-  int64_t n;
+static void OpGdqpWsdCvtsd2si(struct Machine *m, u32 rde) {
+  i64 n;
   union DoublePun d;
   d.i = Read64(GetModrmRegisterXmmPointerRead8(m, rde));
   n = SseRoundDouble(m, d.f);
@@ -86,39 +86,39 @@ static void OpGdqpWsdCvtsd2si(struct Machine *m, uint32_t rde) {
   Write64(RegRexrReg(m, rde), n);
 }
 
-static void OpVssEdqpCvtsi2ss(struct Machine *m, uint32_t rde) {
+static void OpVssEdqpCvtsi2ss(struct Machine *m, u32 rde) {
   union FloatPun f;
   if (Rexw(rde)) {
-    int64_t n;
+    i64 n;
     n = Read64(GetModrmRegisterWordPointerRead8(m, rde));
     f.f = n;
     Write32(XmmRexrReg(m, rde), f.i);
   } else {
-    int32_t n;
+    i32 n;
     n = Read32(GetModrmRegisterWordPointerRead4(m, rde));
     f.f = n;
     Write32(XmmRexrReg(m, rde), f.i);
   }
 }
 
-static void OpVsdEdqpCvtsi2sd(struct Machine *m, uint32_t rde) {
+static void OpVsdEdqpCvtsi2sd(struct Machine *m, u32 rde) {
   union DoublePun d;
   if (Rexw(rde)) {
-    int64_t n;
+    i64 n;
     n = Read64(GetModrmRegisterWordPointerRead8(m, rde));
     d.f = n;
     Write64(XmmRexrReg(m, rde), d.i);
   } else {
-    int32_t n;
+    i32 n;
     n = Read32(GetModrmRegisterWordPointerRead4(m, rde));
     d.f = n;
     Write64(XmmRexrReg(m, rde), d.i);
   }
 }
 
-static void OpVpsQpiCvtpi2ps(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  int32_t i[2];
+static void OpVpsQpiCvtpi2ps(struct Machine *m, u32 rde) {
+  u8 *p;
+  i32 i[2];
   union FloatPun f[2];
   p = GetModrmRegisterMmPointerRead8(m, rde);
   i[0] = Read32(p + 0);
@@ -129,9 +129,9 @@ static void OpVpsQpiCvtpi2ps(struct Machine *m, uint32_t rde) {
   Write32(XmmRexrReg(m, rde) + 4, f[1].i);
 }
 
-static void OpVpdQpiCvtpi2pd(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  int32_t n[2];
+static void OpVpdQpiCvtpi2pd(struct Machine *m, u32 rde) {
+  u8 *p;
+  i32 n[2];
   union DoublePun f[2];
   p = GetModrmRegisterMmPointerRead8(m, rde);
   n[0] = Read32(p + 0);
@@ -142,10 +142,10 @@ static void OpVpdQpiCvtpi2pd(struct Machine *m, uint32_t rde) {
   Write64(XmmRexrReg(m, rde) + 8, f[1].i);
 }
 
-static void OpPpiWpsqCvtps2pi(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
+static void OpPpiWpsqCvtps2pi(struct Machine *m, u32 rde) {
+  u8 *p;
   unsigned i;
-  int32_t n[2];
+  i32 n[2];
   union FloatPun f[2];
   p = GetModrmRegisterXmmPointerRead8(m, rde);
   f[0].i = Read32(p + 0 * 4);
@@ -170,9 +170,9 @@ static void OpPpiWpsqCvtps2pi(struct Machine *m, uint32_t rde) {
   Write32(MmReg(m, rde) + 4, n[1]);
 }
 
-static void OpPpiWpsqCvttps2pi(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  int32_t n[2];
+static void OpPpiWpsqCvttps2pi(struct Machine *m, u32 rde) {
+  u8 *p;
+  i32 n[2];
   union FloatPun f[2];
   p = GetModrmRegisterXmmPointerRead8(m, rde);
   f[0].i = Read32(p + 0);
@@ -183,10 +183,10 @@ static void OpPpiWpsqCvttps2pi(struct Machine *m, uint32_t rde) {
   Write32(MmReg(m, rde) + 4, n[1]);
 }
 
-static void OpPpiWpdCvtpd2pi(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
+static void OpPpiWpdCvtpd2pi(struct Machine *m, u32 rde) {
+  u8 *p;
   unsigned i;
-  int32_t n[2];
+  i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
   d[0].i = Read64(p + 0);
@@ -196,9 +196,9 @@ static void OpPpiWpdCvtpd2pi(struct Machine *m, uint32_t rde) {
   Write32(MmReg(m, rde) + 4, n[1]);
 }
 
-static void OpPpiWpdCvttpd2pi(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  int32_t n[2];
+static void OpPpiWpdCvttpd2pi(struct Machine *m, u32 rde) {
+  u8 *p;
+  i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
   d[0].i = Read64(p + 0);
@@ -209,8 +209,8 @@ static void OpPpiWpdCvttpd2pi(struct Machine *m, uint32_t rde) {
   Write32(MmReg(m, rde) + 4, n[1]);
 }
 
-static void OpVpdWpsCvtps2pd(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
+static void OpVpdWpsCvtps2pd(struct Machine *m, u32 rde) {
+  u8 *p;
   union FloatPun f[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead8(m, rde);
@@ -222,8 +222,8 @@ static void OpVpdWpsCvtps2pd(struct Machine *m, uint32_t rde) {
   Write64(XmmRexrReg(m, rde) + 8, d[1].i);
 }
 
-static void OpVpsWpdCvtpd2ps(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
+static void OpVpsWpdCvtpd2ps(struct Machine *m, u32 rde) {
+  u8 *p;
   union FloatPun f[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
@@ -235,7 +235,7 @@ static void OpVpsWpdCvtpd2ps(struct Machine *m, uint32_t rde) {
   Write32(XmmRexrReg(m, rde) + 4, f[1].i);
 }
 
-static void OpVssWsdCvtsd2ss(struct Machine *m, uint32_t rde) {
+static void OpVssWsdCvtsd2ss(struct Machine *m, u32 rde) {
   union FloatPun f;
   union DoublePun d;
   d.i = Read64(GetModrmRegisterXmmPointerRead8(m, rde));
@@ -243,7 +243,7 @@ static void OpVssWsdCvtsd2ss(struct Machine *m, uint32_t rde) {
   Write32(XmmRexrReg(m, rde), f.i);
 }
 
-static void OpVsdWssCvtss2sd(struct Machine *m, uint32_t rde) {
+static void OpVsdWssCvtss2sd(struct Machine *m, u32 rde) {
   union FloatPun f;
   union DoublePun d;
   f.i = Read32(GetModrmRegisterXmmPointerRead4(m, rde));
@@ -251,9 +251,9 @@ static void OpVsdWssCvtss2sd(struct Machine *m, uint32_t rde) {
   Write64(XmmRexrReg(m, rde), d.i);
 }
 
-static void OpVpsWdqCvtdq2ps(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  int32_t n[4];
+static void OpVpsWdqCvtdq2ps(struct Machine *m, u32 rde) {
+  u8 *p;
+  i32 n[4];
   union FloatPun f[4];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
   n[0] = Read32(p + 0 * 4);
@@ -270,9 +270,9 @@ static void OpVpsWdqCvtdq2ps(struct Machine *m, uint32_t rde) {
   Write32(XmmRexrReg(m, rde) + 3 * 4, f[3].i);
 }
 
-static void OpVpdWdqCvtdq2pd(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  int32_t n[2];
+static void OpVpdWdqCvtdq2pd(struct Machine *m, u32 rde) {
+  u8 *p;
+  i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead8(m, rde);
   n[0] = Read32(p + 0 * 4);
@@ -283,9 +283,9 @@ static void OpVpdWdqCvtdq2pd(struct Machine *m, uint32_t rde) {
   Write64(XmmRexrReg(m, rde) + 8, d[1].i);
 }
 
-static void OpVdqWpsCvttps2dq(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  int32_t n[4];
+static void OpVdqWpsCvttps2dq(struct Machine *m, u32 rde) {
+  u8 *p;
+  i32 n[4];
   union FloatPun f[4];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
   f[0].i = Read32(p + 0 * 4);
@@ -302,10 +302,10 @@ static void OpVdqWpsCvttps2dq(struct Machine *m, uint32_t rde) {
   Write32(XmmRexrReg(m, rde) + 3 * 4, n[3]);
 }
 
-static void OpVdqWpsCvtps2dq(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
+static void OpVdqWpsCvtps2dq(struct Machine *m, u32 rde) {
+  u8 *p;
   unsigned i;
-  int32_t n[4];
+  i32 n[4];
   union FloatPun f[4];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
   f[0].i = Read32(p + 0 * 4);
@@ -334,9 +334,9 @@ static void OpVdqWpsCvtps2dq(struct Machine *m, uint32_t rde) {
   Write32(XmmRexrReg(m, rde) + 3 * 4, n[3]);
 }
 
-static void OpVdqWpdCvttpd2dq(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
-  int32_t n[2];
+static void OpVdqWpdCvttpd2dq(struct Machine *m, u32 rde) {
+  u8 *p;
+  i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
   d[0].i = Read64(p + 0);
@@ -347,10 +347,10 @@ static void OpVdqWpdCvttpd2dq(struct Machine *m, uint32_t rde) {
   Write32(XmmRexrReg(m, rde) + 4, n[1]);
 }
 
-static void OpVdqWpdCvtpd2dq(struct Machine *m, uint32_t rde) {
-  uint8_t *p;
+static void OpVdqWpdCvtpd2dq(struct Machine *m, u32 rde) {
+  u8 *p;
   unsigned i;
-  int32_t n[2];
+  i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
   d[0].i = Read64(p + 0);
@@ -360,7 +360,7 @@ static void OpVdqWpdCvtpd2dq(struct Machine *m, uint32_t rde) {
   Write32(XmmRexrReg(m, rde) + 4, n[1]);
 }
 
-static void OpCvt(struct Machine *m, uint32_t rde, unsigned long op) {
+static void OpCvt(struct Machine *m, u32 rde, unsigned long op) {
   switch (op | m->xedd->op.rep | Osz(rde)) {
     case kOpCvt0f2a + 0:
       OpVpsQpiCvtpi2ps(m, rde);
@@ -433,26 +433,26 @@ static void OpCvt(struct Machine *m, uint32_t rde, unsigned long op) {
   }
 }
 
-void OpCvt0f2a(struct Machine *m, uint32_t rde) {
+void OpCvt0f2a(struct Machine *m, u32 rde) {
   OpCvt(m, rde, kOpCvt0f2a);
 }
 
-void OpCvtt0f2c(struct Machine *m, uint32_t rde) {
+void OpCvtt0f2c(struct Machine *m, u32 rde) {
   OpCvt(m, rde, kOpCvtt0f2c);
 }
 
-void OpCvt0f2d(struct Machine *m, uint32_t rde) {
+void OpCvt0f2d(struct Machine *m, u32 rde) {
   OpCvt(m, rde, kOpCvt0f2d);
 }
 
-void OpCvt0f5a(struct Machine *m, uint32_t rde) {
+void OpCvt0f5a(struct Machine *m, u32 rde) {
   OpCvt(m, rde, kOpCvt0f5a);
 }
 
-void OpCvt0f5b(struct Machine *m, uint32_t rde) {
+void OpCvt0f5b(struct Machine *m, u32 rde) {
   OpCvt(m, rde, kOpCvt0f5b);
 }
 
-void OpCvt0fE6(struct Machine *m, uint32_t rde) {
+void OpCvt0fE6(struct Machine *m, u32 rde) {
   OpCvt(m, rde, kOpCvt0fE6);
 }

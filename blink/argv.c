@@ -32,9 +32,9 @@ static size_t GetArgListLen(char **p) {
   return n;
 }
 
-static int64_t PushString(struct Machine *m, char *s) {
+static i64 PushString(struct Machine *m, char *s) {
   size_t n;
-  int64_t sp;
+  i64 sp;
   n = strlen(s) + 1;
   sp = Read64(m->sp);
   sp -= n;
@@ -44,14 +44,14 @@ static int64_t PushString(struct Machine *m, char *s) {
 }
 
 void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
-  uint8_t *bytes;
-  int64_t i, sp, *p, *bloc;
-  size_t narg, nenv, naux, nall;
+  u8 *bytes;
+  i64 sp, *p, *bloc;
+  size_t i, narg, nenv, naux, nall;
   naux = 1;
   nenv = GetArgListLen(vars);
   narg = GetArgListLen(args);
   nall = 1 + narg + 1 + nenv + 1 + (naux + 1) * 2;
-  bloc = malloc(sizeof(int64_t) * nall);
+  bloc = (i64 *)malloc(sizeof(i64) * nall);
   p = bloc + nall;
   *--p = 0;
   *--p = 0;
@@ -61,11 +61,11 @@ void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
   for (*--p = 0, i = narg; i--;) *--p = PushString(m, args[i]);
   *--p = narg;
   sp = Read64(m->sp);
-  while ((sp - nall * sizeof(int64_t)) & (STACKALIGN - 1)) --sp;
-  sp -= nall * sizeof(int64_t);
+  while ((sp - nall * sizeof(i64)) & (STACKALIGN - 1)) --sp;
+  sp -= nall * sizeof(i64);
   Write64(m->sp, sp);
   Write64(m->di, 0); /* or ape detects freebsd */
-  bytes = malloc(nall * 8);
+  bytes = (u8 *)malloc(nall * 8);
   for (i = 0; i < nall; ++i) {
     Write64(bytes + i * 8, bloc[i]);
   }

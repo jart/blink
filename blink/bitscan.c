@@ -25,7 +25,7 @@ static const char kDebruijn[64] = {
     25, 39, 14, 33, 19, 30, 9,  24, 13, 18, 8,  12, 7,  6,  5,  63,
 };
 
-int(bsr)(uint64_t x) {
+int(bsr)(u64 x) {
   x |= x >> 1;
   x |= x >> 2;
   x |= x >> 4;
@@ -35,8 +35,8 @@ int(bsr)(uint64_t x) {
   return kDebruijn[(x * 0x03f79d71b4cb0a89) >> 58];
 }
 
-int(bsf)(uint64_t x) {
-  uint32_t l, r;
+int(bsf)(u64 x) {
+  u32 l, r;
   x &= -x;
   l = x | x >> 32;
   r = !!(x >> 32), r <<= 1;

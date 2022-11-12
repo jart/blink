@@ -71,7 +71,7 @@ void OpRestore(struct Machine *m) {
 }
 
 void DeliverSignal(struct Machine *m, int sig, int code) {
-  uint64_t sp, siaddr;
+  u64 sp, siaddr;
   static struct siginfo_linux si;
   static struct fpstate_linux fp;
   static struct ucontext_linux uc;
@@ -134,7 +134,7 @@ void EnqueueSignal(struct Machine *m, struct Signals *ss, int sig, int code) {
 
 int ConsumeSignal(struct Machine *m, struct Signals *ss) {
   int sig, code;
-  int64_t handler;
+  i64 handler;
   sig = ss->p[ss->i].sig;
   code = ss->p[ss->i].code;
   if (!m->sig ||

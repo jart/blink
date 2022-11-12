@@ -9,12 +9,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TEST(GROUP, NAME)                                             \
-  void GROUP##_##NAME(void);                                          \
-  __attribute__((__constructor__)) void GROUP##_##NAME##_init(void) { \
-    g_tests.p = realloc(g_tests.p, ++g_tests.n * sizeof(*g_tests.p)); \
-    g_tests.p[g_tests.n - 1].f = GROUP##_##NAME;                      \
-  }                                                                   \
+#define TEST(GROUP, NAME)                                                    \
+  void GROUP##_##NAME(void);                                                 \
+  __attribute__((__constructor__)) void GROUP##_##NAME##_init(void) {        \
+    g_tests.p =                                                              \
+        (struct Test *)realloc(g_tests.p, ++g_tests.n * sizeof(*g_tests.p)); \
+    g_tests.p[g_tests.n - 1].f = GROUP##_##NAME;                             \
+  }                                                                          \
   void GROUP##_##NAME(void)
 
 #define ASSERT_EQ(WANT, GOT, ...)                                 \
@@ -89,15 +90,17 @@
     }                                                                       \
   } while (0)
 
+struct Test {
+  void (*f)(void);
+};
+
 struct Tests {
   int n, f;
-  struct Test {
-    void (*f)(void);
-  } * p;
+  struct Test *p;
 } g_tests;
 
-void SetUp(void) __attribute__((__weak__));
-void TearDown(void) __attribute__((__weak__));
+void SetUp(void);
+void TearDown(void);
 
 static void AssertionInt64(bool pred(int64_t, int64_t), bool isfatal,
                            const char *test, const char *file, int line,
@@ -195,9 +198,9 @@ static bool AssertGt(int64_t want, int64_t got) {
 int main(int argc, char *argv[]) {
   size_t i;
   for (i = 0; i < g_tests.n; ++i) {
-    if (SetUp) SetUp();
+    SetUp();
     g_tests.p[i].f();
-    if (TearDown) TearDown();
+    TearDown();
   }
   return g_tests.f;
 }

@@ -37,14 +37,14 @@ ssize_t PushBreakpoint(struct Breakpoints *bps, struct Breakpoint *b) {
   }
   if (bps->i++ == bps->n) {
     bps->n = bps->i + (bps->i >> 1);
-    bps->p = realloc(bps->p, bps->n * sizeof(*bps->p));
+    bps->p = (struct Breakpoint *)realloc(bps->p, bps->n * sizeof(*bps->p));
   }
   bps->p[bps->i - 1] = *b;
   return bps->i - 1;
 }
 
-ssize_t IsAtBreakpoint(struct Breakpoints *bps, int64_t addr) {
-  size_t i;
+ssize_t IsAtBreakpoint(struct Breakpoints *bps, i64 addr) {
+  int i;
   for (i = bps->i; i--;) {
     if (bps->p[i].disable) continue;
     if (bps->p[i].addr == addr) {

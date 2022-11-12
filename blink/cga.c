@@ -24,15 +24,15 @@
 #include "blink/macros.h"
 
 /*                                     blk blu grn cyn red mag yel wht */
-static const uint8_t kCgaToAnsi[16] = {30, 34, 32, 36, 31, 35, 33, 37,
+static const u8 kCgaToAnsi[16] = {30, 34, 32, 36, 31, 35, 33, 37,
                                        90, 94, 92, 96, 91, 95, 93, 97};
 
-size_t FormatCga(uint8_t bgfg, char buf[static 11]) {
+size_t FormatCga(u8 bgfg, char buf[11]) {
   return sprintf(buf, "\033[%d;%dm", kCgaToAnsi[(bgfg & 0xF0) >> 4] + 10,
                  kCgaToAnsi[bgfg & 0x0F]);
 }
 
-void DrawCga(struct Panel *p, uint8_t v[25][80][2]) {
+void DrawCga(struct Panel *p, u8 v[25][80][2]) {
   char buf[11];
   unsigned y, x, n, a;
   n = MIN(25, p->bottom - p->top);

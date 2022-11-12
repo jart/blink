@@ -21,18 +21,21 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/pml4t.h"
+#include "blink/real.h"
 
 static void AppendContiguousMemoryRange(struct ContiguousMemoryRanges *ranges,
-                                        int64_t a, int64_t b) {
-  ranges->p = realloc(ranges->p, ++ranges->i * sizeof(*ranges->p));
+                                        i64 a, i64 b) {
+  ranges->p = (struct ContiguousMemoryRange *)realloc(
+      ranges->p, ++ranges->i * sizeof(*ranges->p));
   ranges->p[ranges->i - 1].a = a;
   ranges->p[ranges->i - 1].b = b;
 }
 
 static void FindContiguousMemoryRangesImpl(
-    struct Machine *m, struct ContiguousMemoryRanges *ranges, int64_t addr,
-    unsigned level, int64_t pt, int64_t a, int64_t b) {
-  int64_t i, page, entry;
+    struct Machine *m, struct ContiguousMemoryRanges *ranges, i64 addr,
+    unsigned level, i64 pt, i64 a, i64 b) {
+  u64 entry;
+  i64 i, page;
   for (i = a; i < b; ++i) {
     entry = Read64(m->system->real.p + pt + i * 8);
     if (!(entry & 1)) continue;
@@ -44,7 +47,7 @@ static void FindContiguousMemoryRangesImpl(
       } else {
         AppendContiguousMemoryRange(ranges, page, page + 0x1000);
       }
-    } else if (entry + 512 * 8 <= m->system->real.n) {
+    } else if (entry + 512 * 8 <= GetRealMemorySize(m->system)) {
       FindContiguousMemoryRangesImpl(m, ranges, page, level - 9, entry, 0, 512);
     }
   }
@@ -52,13 +55,13 @@ static void FindContiguousMemoryRangesImpl(
 
 void FindContiguousMemoryRanges(struct Machine *m,
                                 struct ContiguousMemoryRanges *ranges) {
-  uint64_t cr3;
+  u64 cr3;
   ranges->i = 0;
   if ((m->mode & 3) == XED_MODE_LONG) {
     cr3 = m->system->cr3 & 0x7ffffffff000;
     FindContiguousMemoryRangesImpl(m, ranges, 0, 39, cr3, 256, 512);
     FindContiguousMemoryRangesImpl(m, ranges, 0, 39, cr3, 0, 256);
   } else {
-    AppendContiguousMemoryRange(ranges, 0, m->system->real.n);
+    AppendContiguousMemoryRange(ranges, 0, GetRealMemorySize(m->system));
   }
 }

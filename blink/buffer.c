@@ -29,12 +29,12 @@
 #include "blink/tpenc.h"
 #include "blink/util.h"
 
-void AppendData(struct Buffer *b, const char *data, unsigned len) {
+void AppendData(struct Buffer *b, const char *data, int len) {
   char *p;
   unsigned n;
   if (b->i + len + 1 > b->n) {
     n = MAX(b->i + len + 1, MAX(16, b->n + (b->n >> 1)));
-    if (!(p = realloc(b->p, n))) return;
+    if (!(p = (char *)realloc(b->p, n))) return;
     b->p = p;
     b->n = n;
   }
@@ -52,7 +52,7 @@ void AppendStr(struct Buffer *b, const char *s) {
 
 void AppendWide(struct Buffer *b, wint_t wc) {
   unsigned i;
-  uint64_t wb;
+  u64 wb;
   char buf[8];
   i = 0;
   wb = tpenc(wc);

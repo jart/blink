@@ -19,8 +19,8 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <pthread.h>
 #include <stdarg.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
@@ -28,6 +28,7 @@
 #include "blink/assert.h"
 #include "blink/log.h"
 #include "blink/macros.h"
+#include "blink/types.h"
 
 #define APPEND(F, ...) n += F(b + n, PIPE_BUF - n, __VA_ARGS__)
 
@@ -37,7 +38,7 @@ static char *GetTimestamp(void) {
   int x;
   struct timespec ts;
   static _Thread_local char s[27];
-  static _Thread_local int64_t last;
+  static _Thread_local i64 last;
   static _Thread_local struct tm tm;
   clock_gettime(CLOCK_REALTIME, &ts);
   if (ts.tv_sec != last) {
@@ -83,8 +84,8 @@ static char *GetTimestamp(void) {
 
 void Log(const char *file, int line, const char *fmt, ...) {
   va_list va;
-  int rc, n = 0;
   char b[PIPE_BUF];
+  int rc, cs, n = 0;
   va_start(va, fmt);
   APPEND(snprintf, "I%s:%s:%d: ", GetTimestamp(), file, line);
   APPEND(vsnprintf, fmt, va);
@@ -97,8 +98,10 @@ void Log(const char *file, int line, const char *fmt, ...) {
     b[--n] = '.';
     b[--n] = '.';
   }
+  unassert(!pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs));
   do rc = write(g_log > 0 ? g_log : 2, b, n);
   while (rc == -1 && errno == EINTR);
+  unassert(!pthread_setcancelstate(cs, 0));
 }
 
 void OpenLog(const char *path) {

@@ -16,45 +16,12 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <float.h>
-#include <limits.h>
-#include <math.h>
-#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "blink/ldbl.h"
-#include "test/test.h"
+#include "blink/assert.h"
 
-char *fmt(const char *fmt, ...) {
-  char *s;
-  va_list va;
-  s = (char *)malloc(64);
-  va_start(va, fmt);
-  vsnprintf(s, 64, fmt, va);
-  va_end(va);
-  return s;
-}
-
-double RoundTrip(double x) {
-  uint8_t b[10];
-  return DeserializeLdbl(SerializeLdbl(b, x));
-}
-
-void SetUp(void) {
-}
-
-void TearDown(void) {
-}
-
-TEST(SerializeLdbl, testRoundTrip) {
-  EXPECT_STREQ("0", fmt("%g", RoundTrip(0)));
-  EXPECT_STREQ("-0", fmt("%g", RoundTrip(-0.)));
-  EXPECT_STREQ("nan", fmt("%g", RoundTrip(NAN)));
-  EXPECT_STREQ("inf", fmt("%g", RoundTrip(INFINITY)));
-  EXPECT_STREQ("-inf", fmt("%g", RoundTrip(-INFINITY)));
-  EXPECT_STREQ(fmt("%.17g", DBL_MIN), fmt("%.17g", RoundTrip(DBL_MIN)));
-  EXPECT_STREQ(fmt("%.17g", DBL_MAX), fmt("%.17g", RoundTrip(DBL_MAX)));
-  // TODO(jart): What's up with Apple Silicon here?
-  // EXPECT_STREQ("-nan", fmt("%g", RoundTrip(-NAN)));
+void AssertFailed(const char *file, int line, const char *msg) {
+  fprintf(stderr, "%s:%d: assertion failed: %s\n", file, line, msg);
+  abort();
 }

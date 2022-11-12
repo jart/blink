@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,10 +40,10 @@ void ThrowDivideError(struct Machine *m) {
   HaltMachine(m, kMachineDivideError);
 }
 
-void ThrowSegmentationFault(struct Machine *m, int64_t va) {
+void ThrowSegmentationFault(struct Machine *m, i64 va) {
   m->faultaddr = va;
   if (m->xedd) m->ip -= m->xedd->length;
-  LOGF("SEGMENTATION FAULT ADDR %012" PRIx64 " IP %" PRIx64 " AX %" PRIx64
+  LOGF("SEGMENTATION FAULT ADDR %" PRIx64 " IP %" PRIx64 " AX %" PRIx64
        " CX %" PRIx64 " DX %" PRIx64 " BX %" PRIx64 " SP %" PRIx64 " "
        "BP %" PRIx64 " SI %" PRIx64 " DI %" PRIx64 " R8 %" PRIx64 " R9 %" PRIx64
        " R10 %" PRIx64 " R11 %" PRIx64 " R12 %" PRIx64 " "
@@ -60,11 +59,11 @@ void ThrowProtectionFault(struct Machine *m) {
   HaltMachine(m, kMachineProtectionFault);
 }
 
-void OpUd(struct Machine *m, uint32_t rde) {
+void OpUd(struct Machine *m, u32 rde) {
   if (m->xedd) m->ip -= m->xedd->length;
   HaltMachine(m, kMachineUndefinedInstruction);
 }
 
-void OpHlt(struct Machine *m, uint32_t rde) {
+void OpHlt(struct Machine *m, u32 rde) {
   HaltMachine(m, kMachineHalt);
 }

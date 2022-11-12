@@ -36,16 +36,16 @@
 #include "blink/memory.h"
 #include "blink/util.h"
 
-#define READ64(p) Read64((const uint8_t *)(p))
-#define READ32(p) Read32((const uint8_t *)(p))
+#define READ64(p) Read64((const u8 *)(p))
+#define READ32(p) Read32((const u8 *)(p))
 
 static void LoadElfLoadSegment(struct Machine *m, void *code, size_t codesize,
                                Elf64_Phdr *phdr) {
-  int64_t align, bsssize;
-  int64_t felf, fstart, fend, vstart, vbss, vend;
+  i64 align, bsssize;
+  i64 felf, fstart, fend, vstart, vbss, vend;
   align = MAX(Read64(phdr->p_align), 4096);
   unassert(0 == (Read64(phdr->p_vaddr) - Read64(phdr->p_offset)) % align);
-  felf = (int64_t)(intptr_t)code;
+  felf = (i64)(intptr_t)code;
   vstart = ROUNDDOWN(Read64(phdr->p_vaddr), align);
   vbss = ROUNDUP(Read64(phdr->p_vaddr) + Read64(phdr->p_filesz), align);
   vend = ROUNDUP(Read64(phdr->p_vaddr) + Read64(phdr->p_memsz), align);
@@ -62,32 +62,32 @@ static void LoadElfLoadSegment(struct Machine *m, void *code, size_t codesize,
   unassert(Read64(phdr->p_filesz) <= Read64(phdr->p_memsz));
   unassert(felf + Read64(phdr->p_offset) - fstart ==
            Read64(phdr->p_vaddr) - vstart);
-  if (ReserveVirtual(m, vstart, fend - fstart, 0x0207) == -1) {
+  if (ReserveVirtual(m->system, vstart, fend - fstart, 0x0207) == -1) {
     LOGF("ReserveVirtual failed");
     exit(200);
   }
   VirtualRecv(m, vstart, (void *)(uintptr_t)fstart, fend - fstart);
   if (bsssize) {
-    if (ReserveVirtual(m, vbss, bsssize, 0x0207) == -1) {
+    if (ReserveVirtual(m->system, vbss, bsssize, 0x0207) == -1) {
       LOGF("ReserveVirtual failed");
       exit(200);
     }
   }
-  if (Read64(phdr->p_memsz) - Read64(phdr->p_filesz) > bsssize) {
+  if ((i64)(Read64(phdr->p_memsz) - Read64(phdr->p_filesz)) > bsssize) {
     VirtualSet(m, Read64(phdr->p_vaddr) + Read64(phdr->p_filesz), 0,
                Read64(phdr->p_memsz) - Read64(phdr->p_filesz) - bsssize);
   }
 }
 
 static void LoadElf(struct Machine *m, struct Elf *elf) {
-  unsigned i;
+  int i;
   Elf64_Phdr *phdr;
   m->ip = elf->base = Read64(elf->ehdr->e_entry);
   for (i = 0; i < Read16(elf->ehdr->e_phnum); ++i) {
     phdr = GetElfSegmentHeaderAddress(elf->ehdr, elf->size, i);
     switch (Read32(phdr->p_type)) {
       case PT_LOAD:
-        elf->base = MIN(elf->base, Read64(phdr->p_vaddr));
+        elf->base = MIN(elf->base, (i64)Read64(phdr->p_vaddr));
         LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr);
         break;
       default:
@@ -114,7 +114,7 @@ static void LoadBin(struct Machine *m, intptr_t base, const char *prog,
 static void BootProgram(struct Machine *m, struct Elf *elf, size_t codesize) {
   m->ip = 0x7c00;
   elf->base = 0x7c00;
-  if (ReserveReal(m, 0x00f00000) == -1) {
+  if (ReserveReal(m->system, 0x00f00000) == -1) {
     exit(201);
   }
   memset(m->system->real.p, 0, 0x00f00000);
@@ -126,7 +126,7 @@ static void BootProgram(struct Machine *m, struct Elf *elf, size_t codesize) {
   Write64(m->dx, 0);
   memcpy(m->system->real.p + 0x7c00, elf->map, 512);
   if (memcmp(elf->map, "\177ELF", 4) == 0) {
-    elf->ehdr = (void *)elf->map;
+    elf->ehdr = (Elf64_Ehdr *)elf->map;
     elf->size = codesize;
     elf->base = Read64(elf->ehdr->e_entry);
   } else {
@@ -181,7 +181,7 @@ static int GetElfHeader(char ehdr[64], const char *prog, const char *image) {
 void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
                  struct Elf *elf) {
   int fd;
-  int64_t sp;
+  i64 sp;
   char ehdr[64];
   struct stat st;
   unassert(prog);
@@ -192,7 +192,8 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
     exit(201);
   }
   elf->mapsize = st.st_size;
-  elf->map = mmap(0, elf->mapsize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+  elf->map =
+      (char *)mmap(0, elf->mapsize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
   if (elf->map == MAP_FAILED) {
     LOGF("mmap failed: %s", strerror(errno));
     exit(200);
@@ -204,21 +205,21 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
   } else {
     sp = 0x800000000000;
     Write64(m->sp, sp);
-    m->system->cr3 = AllocateLinearPage(m);
-    if (ReserveVirtual(m, sp - 0x100000, 0x100000, 0x0207) == -1) {
+    m->system->cr3 = AllocateLinearPage(m->system);
+    if (ReserveVirtual(m->system, sp - 0x100000, 0x100000, 0x0207) == -1) {
       LOGF("ReserveVirtual failed");
       exit(200);
     }
     LoadArgv(m, prog, args, vars);
     if (memcmp(elf->map, "\177ELF", 4) == 0) {
-      elf->ehdr = (void *)elf->map;
+      elf->ehdr = (Elf64_Ehdr *)elf->map;
       elf->size = elf->mapsize;
       LoadElf(m, elf);
     } else if ((READ64(elf->map) == READ64("MZqFpD='") ||
                 READ64(elf->map) == READ64("jartsr='")) &&
                !GetElfHeader(ehdr, prog, elf->map)) {
       memcpy(elf->map, ehdr, 64);
-      elf->ehdr = (void *)elf->map;
+      elf->ehdr = (Elf64_Ehdr *)elf->map;
       elf->size = elf->mapsize;
       LoadElf(m, elf);
     } else {

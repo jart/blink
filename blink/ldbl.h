@@ -1,8 +1,8 @@
 #ifndef BLINK_LDBL_H_
 #define BLINK_LDBL_H_
-#include <stdint.h>
+#include "blink/types.h"
 
-double DeserializeLdbl(const uint8_t[10]);
-uint8_t *SerializeLdbl(uint8_t[10], double);
+double DeserializeLdbl(const u8[10]);
+u8 *SerializeLdbl(u8[10], double);
 
 #endif /* BLINK_LDBL_H_ */

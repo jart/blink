@@ -11,7 +11,7 @@ struct Panel {
   int left;
   int right;
   struct Buffer *lines;
-  size_t n;
+  int n;
 };
 
 ssize_t PrintPanels(int, long, struct Panel *, long, long);

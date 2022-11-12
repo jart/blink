@@ -26,14 +26,14 @@
 #include "blink/modrm.h"
 #include "blink/swap.h"
 
-static void AluEb(struct Machine *m, uint32_t rde, aluop_f op) {
-  uint8_t *p;
+static void AluEb(struct Machine *m, u32 rde, aluop_f op) {
+  u8 *p;
   p = GetModrmRegisterBytePointerWrite(m, rde);
   if (!Lock(rde)) {
     Write8(p, op(Read8(p), 0, &m->flags));
   } else {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
-    uint8_t x, z;
+    u8 x, z;
     x = Read8(p);
     do {
       z = op(x, 0, &m->flags);
@@ -45,15 +45,15 @@ static void AluEb(struct Machine *m, uint32_t rde, aluop_f op) {
   }
 }
 
-void OpNotEb(struct Machine *m, uint32_t rde) {
+void OpNotEb(struct Machine *m, u32 rde) {
   AluEb(m, rde, Not8);
 }
 
-void OpNegEb(struct Machine *m, uint32_t rde) {
+void OpNegEb(struct Machine *m, u32 rde) {
   AluEb(m, rde, Neg8);
 }
 
-void Op0fe(struct Machine *m, uint32_t rde) {
+void Op0fe(struct Machine *m, u32 rde) {
   switch (ModrmReg(rde)) {
     case 0:
       AluEb(m, rde, Inc8);
@@ -66,13 +66,13 @@ void Op0fe(struct Machine *m, uint32_t rde) {
   }
 }
 
-static void AluEvqp(struct Machine *m, uint32_t rde, const aluop_f ops[4]) {
-  uint8_t *p;
+static void AluEvqp(struct Machine *m, u32 rde, const aluop_f ops[4]) {
+  u8 *p;
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite(m, rde, 8);
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64
-      uint64_t x, z;
+      unsigned long x, z;
       x = atomic_load((atomic_ulong *)p);
       do {
         z = ops[ALU_INT64](SWAP64LE(x), 0, &m->flags);
@@ -87,7 +87,7 @@ static void AluEvqp(struct Machine *m, uint32_t rde, const aluop_f ops[4]) {
       Write64(p, ops[ALU_INT64](Read64(p), 0, &m->flags));
     }
   } else if (!Osz(rde)) {
-    uint32_t x, z;
+    unsigned int x, z;
     p = GetModrmRegisterWordPointerWrite(m, rde, 4);
     if (Lock(rde) && !((intptr_t)p & 3)) {
       x = atomic_load((atomic_uint *)p);
@@ -109,18 +109,18 @@ static void AluEvqp(struct Machine *m, uint32_t rde, const aluop_f ops[4]) {
   }
 }
 
-void OpNotEvqp(struct Machine *m, uint32_t rde) {
+void OpNotEvqp(struct Machine *m, u32 rde) {
   AluEvqp(m, rde, kAlu[ALU_NOT]);
 }
 
-void OpNegEvqp(struct Machine *m, uint32_t rde) {
+void OpNegEvqp(struct Machine *m, u32 rde) {
   AluEvqp(m, rde, kAlu[ALU_NEG]);
 }
 
-void OpIncEvqp(struct Machine *m, uint32_t rde) {
+void OpIncEvqp(struct Machine *m, u32 rde) {
   AluEvqp(m, rde, kAlu[ALU_INC]);
 }
 
-void OpDecEvqp(struct Machine *m, uint32_t rde) {
+void OpDecEvqp(struct Machine *m, u32 rde) {
   AluEvqp(m, rde, kAlu[ALU_DEC]);
 }

@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
@@ -28,16 +29,19 @@
     ASSERT_EQ(0, DecodeInstruction(XEDD, OP, sizeof(OP))); \
   } while (0)
 
+struct System *s;
 struct Machine *m;
 
 void SetUp(void) {
-  m = NewMachine();
-  m->xedd = calloc(1, sizeof(struct XedDecodedInst));
+  unassert((s = NewSystem()));
+  unassert((m = NewMachine(s, 0)));
+  m->xedd = (struct XedDecodedInst *)calloc(1, sizeof(*m->xedd));
 }
 
 void TearDown(void) {
   free(m->xedd);
   FreeMachine(m);
+  FreeSystem(s);
 }
 
 TEST(modrm, testAddressSizeOverride_isNotPresent_keepsWholeExpression) {

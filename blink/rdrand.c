@@ -27,32 +27,32 @@
 
 static struct Rdrand {
   pthread_mutex_t lock;
-  uint64_t state;
+  u64 state;
   unsigned count;
 } g_rdrand = {
     .lock = PTHREAD_MUTEX_INITIALIZER,
 };
 
-static uint64_t Vigna(uint64_t s[1]) {
-  uint64_t z = (s[0] += 0x9e3779b97f4a7c15);
+static u64 Vigna(u64 s[1]) {
+  u64 z = (s[0] += 0x9e3779b97f4a7c15);
   z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
   z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
   return z ^ (z >> 31);
 }
 
-static void OpRand(struct Machine *m, uint32_t rde, uint64_t x) {
-  uint8_t *q = RegRexbRm(m, rde);
+static void OpRand(struct Machine *m, u32 rde, u64 x) {
+  u8 *q = RegRexbRm(m, rde);
   if (Rexw(rde)) {
     Write64(q, x);
   } else if (!Osz(rde)) {
-    Write64(q, (uint32_t)x);
+    Write64(q, (u32)x);
   } else {
     Write16(q, x);
   }
   m->flags = SetFlag(m->flags, FLAGS_CF, true);
 }
 
-void OpRdrand(struct Machine *m, uint32_t rde) {
+void OpRdrand(struct Machine *m, u32 rde) {
   pthread_mutex_lock(&g_rdrand.lock);
   if (!(g_rdrand.count++ % RESEED_INTERVAL)) {
     unassert(GetRandom(&g_rdrand.state, 8) == 8);
@@ -61,8 +61,8 @@ void OpRdrand(struct Machine *m, uint32_t rde) {
   pthread_mutex_unlock(&g_rdrand.lock);
 }
 
-void OpRdseed(struct Machine *m, uint32_t rde) {
-  uint64_t x;
+void OpRdseed(struct Machine *m, u32 rde) {
+  u64 x;
   unassert(GetRandom(&x, 8) == 8);
   OpRand(m, rde, x);
 }

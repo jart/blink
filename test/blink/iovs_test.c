@@ -19,6 +19,12 @@
 #include "blink/iovs.h"
 #include "test/test.h"
 
+void SetUp(void) {
+}
+
+void TearDown(void) {
+}
+
 TEST(iovs, testEmpty) {
   struct Iovs iv;
   InitIovs(&iv);
@@ -30,7 +36,7 @@ TEST(iovs, testEmpty) {
 TEST(iovs, testAppendEmptyString_wontCreateEmptyEntries) {
   struct Iovs iv;
   InitIovs(&iv);
-  EXPECT_NE(-1, AppendIovs(&iv, "", 0));
+  EXPECT_NE(-1, AppendIovs(&iv, (void *)"", 0));
   EXPECT_NE(-1, AppendIovs(&iv, NULL, 0));
   EXPECT_EQ(0, iv.i);
   EXPECT_GE(iv.n, iv.i);

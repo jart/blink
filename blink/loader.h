@@ -6,10 +6,10 @@
 struct Elf {
   const char *prog;
   Elf64_Ehdr *ehdr;
-  size_t size;
-  int64_t base;
+  long size;
+  i64 base;
   char *map;
-  size_t mapsize;
+  long mapsize;
 };
 
 void LoadProgram(struct Machine *, char *, char **, char **, struct Elf *);

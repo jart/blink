@@ -18,7 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/util.h"
 
-bool mulo(uint64_t x, uint64_t y, uint64_t *z) {
+bool mulo(u64 x, u64 y, u64 *z) {
   *z = x * y;
   return (x | y) & ~0xffff && *z / x != y;
 }

@@ -1,7 +1,8 @@
 #ifndef BLINK_X86_H_
 #define BLINK_X86_H_
 #include <stddef.h>
-#include <stdint.h>
+
+#include "blink/types.h"
 
 #define XED_MAX_INSTRUCTION_BYTES 15
 
@@ -13,16 +14,13 @@
 #define xed_sib_index(M) ((0070 & (M)) >> 3)
 #define xed_sib_scale(M) ((0300 & (M)) >> 6)
 
-enum XedMachineMode {
-  XED_MACHINE_MODE_REAL = XED_MODE_REAL,
-  XED_MACHINE_MODE_LEGACY_32 = XED_MODE_LEGACY,
-  XED_MACHINE_MODE_LONG_64 = XED_MODE_LONG,
-  XED_MACHINE_MODE_UNREAL = 1 << 2 | XED_MODE_REAL,
-  XED_MACHINE_MODE_LEGACY_16 = 2 << 2 | XED_MODE_REAL,
-  XED_MACHINE_MODE_LONG_COMPAT_16 = 3 << 2 | XED_MODE_REAL,
-  XED_MACHINE_MODE_LONG_COMPAT_32 = 4 << 2 | XED_MODE_LEGACY,
-  XED_MACHINE_MODE_LAST,
-};
+#define XED_MACHINE_MODE_REAL           XED_MODE_REAL
+#define XED_MACHINE_MODE_LEGACY_32      XED_MODE_LEGACY
+#define XED_MACHINE_MODE_LONG_64        XED_MODE_LONG
+#define XED_MACHINE_MODE_UNREAL         (1 << 2 | XED_MODE_REAL)
+#define XED_MACHINE_MODE_LEGACY_16      (2 << 2 | XED_MODE_REAL)
+#define XED_MACHINE_MODE_LONG_COMPAT_16 (3 << 2 | XED_MODE_REAL)
+#define XED_MACHINE_MODE_LONG_COMPAT_32 (4 << 2 | XED_MODE_LEGACY)
 
 enum XedError {
   XED_ERROR_NONE,
@@ -94,13 +92,13 @@ struct XedOperands { /*
   │ │8│6│4│2││18││││12│││ 7│││││ 0
   │ ├┐├┐├┐├┐│├─┐│││├─┐││├─┐││││├─┐
   00000000000000000000000000000000*/
-  uint32_t rde;
-  uint8_t sib;
-  uint8_t opcode;
-  uint8_t map; /* enum XedIldMap */
-  uint8_t rep;
-  uint64_t uimm0; /* $immediate mostly sign-extended */
-  int64_t disp;   /* displacement(%xxx) mostly sign-extended */
+  u32 rde;
+  u8 sib;
+  u8 opcode;
+  u8 map; /* enum XedIldMap */
+  u8 rep;
+  u64 uimm0; /* $immediate mostly sign-extended */
+  i64 disp;  /* displacement(%xxx) mostly sign-extended */
   unsigned out_of_bytes : 1;
   unsigned is_intel_specific : 1;
   unsigned has_sib : 1;
@@ -108,24 +106,23 @@ struct XedOperands { /*
   unsigned has_modrm : 2;
   unsigned imm_signed : 1;    /* internal */
   unsigned disp_unsigned : 1; /* internal */
-  uint8_t error : 5;          /* enum XedError */
-  uint8_t max_bytes;
-  uint8_t uimm1;      /* enter $x,$y */
-  uint8_t disp_width; /* in bits */
-  uint8_t imm_width;  /* in bits */
-  uint8_t pos_opcode;
+  u8 error : 5;               /* enum XedError */
+  u8 max_bytes;
+  u8 uimm1;      /* enter $x,$y */
+  u8 disp_width; /* in bits */
+  u8 imm_width;  /* in bits */
+  u8 pos_opcode;
 };
 
 struct XedDecodedInst {
   unsigned char length;
-  uint8_t bytes[15];
+  u8 bytes[15];
   struct XedOperands op;
 };
 
 extern const char kXedErrorNames[];
 
-struct XedDecodedInst *InitializeInstruction(struct XedDecodedInst *,
-                                             enum XedMachineMode);
+struct XedDecodedInst *InitializeInstruction(struct XedDecodedInst *, int);
 enum XedError DecodeInstruction(struct XedDecodedInst *, const void *, size_t);
 
 #endif /* BLINK_X86_H_ */

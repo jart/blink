@@ -1,15 +1,15 @@
 #ifndef BLINK_PUN_H_
 #define BLINK_PUN_H_
-#include <stdint.h>
+#include "blink/types.h"
 
 union FloatPun {
   float f;
-  uint32_t i;
+  u32 i;
 };
 
 union DoublePun {
   double f;
-  uint64_t i;
+  u64 i;
 };
 
 union FloatVectorPun {

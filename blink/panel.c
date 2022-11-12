@@ -16,7 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdint.h>
+#include "blink/types.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -27,7 +27,7 @@
 #include "blink/panel.h"
 
 static int tpdecode(const char *s, wint_t *out) {
-  uint32_t wc, cb, need, msb, j, i = 0;
+  u32 wc, cb, need, msb, j, i = 0;
   if ((wc = s[i++] & 255) == -1) return -1;
   while ((wc & 0300) == 0200) {
     if ((wc = s[i++] & 255) == -1) return -1;
@@ -68,14 +68,15 @@ ssize_t PrintPanels(int fd, long pn, struct Panel *p, long tyn, long txn) {
   ssize_t rc;
   struct Buffer b, *l;
   int x, y, i, j, width;
-  enum { kUtf8, kAnsi, kAnsiCsi } state;
+  enum { kUtf8, kAnsi, kAnsiCsi } s;
   memset(&b, 0, sizeof(b));
   AppendStr(&b, "\033[H");
   for (y = 0; y < tyn; ++y) {
     if (y) AppendFmt(&b, "\033[%dH", y + 1);
     for (x = i = 0; i < pn; ++i) {
       if (p[i].top <= y && y < p[i].bottom) {
-        j = state = 0;
+        j = 0;
+        s = kUtf8;
         l = &p[i].lines[y - p[i].top];
         while (x < p[i].left) {
           AppendChar(&b, ' ');
@@ -86,11 +87,11 @@ ssize_t PrintPanels(int fd, long pn, struct Panel *p, long tyn, long txn) {
           width = 0;
           if (j < l->i) {
             wc = l->p[j];
-            switch (state) {
+            switch (s) {
               case kUtf8:
                 switch (wc & 255) {
                   case 033:
-                    state = kAnsi;
+                    s = kAnsi;
                     ++j;
                     break;
                   default:
@@ -107,7 +108,7 @@ ssize_t PrintPanels(int fd, long pn, struct Panel *p, long tyn, long txn) {
               case kAnsi:
                 switch (wc & 255) {
                   case '[':
-                    state = kAnsiCsi;
+                    s = kAnsiCsi;
                     ++j;
                     break;
                   case '@':
@@ -141,11 +142,11 @@ ssize_t PrintPanels(int fd, long pn, struct Panel *p, long tyn, long txn) {
                   case 'X':
                   case 'Y':
                   case 'Z':
-                    state = kUtf8;
+                    s = kUtf8;
                     ++j;
                     break;
                   default:
-                    state = kUtf8;
+                    s = kUtf8;
                     continue;
                 }
                 break;
@@ -232,11 +233,11 @@ ssize_t PrintPanels(int fd, long pn, struct Panel *p, long tyn, long txn) {
                   case 'x':
                   case 'y':
                   case 'z':
-                    state = kUtf8;
+                    s = kUtf8;
                     ++j;
                     break;
                   default:
-                    state = kUtf8;
+                    s = kUtf8;
                     continue;
                 }
                 break;

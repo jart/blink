@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
@@ -25,6 +24,7 @@
 #include <string.h>
 #include <wchar.h>
 
+#include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/macros.h"
@@ -164,10 +164,11 @@
 
 struct Pty *NewPty(void) {
   struct Pty *pty;
-  pty = calloc(1, sizeof(struct Pty));
-  PtyResize(pty, 25, 80);
-  PtyFullReset(pty);
-  PtyErase(pty, 0, pty->yn * pty->xn);
+  if ((pty = (struct Pty *)calloc(1, sizeof(*pty)))) {
+    PtyResize(pty, 25, 80);
+    PtyFullReset(pty);
+    PtyErase(pty, 0, pty->yn * pty->xn);
+  }
   return pty;
 }
 
@@ -330,14 +331,14 @@ static void PtySetCodepage(struct Pty *pty, char id) {
 }
 
 void PtyErase(struct Pty *pty, long dst, long n) {
-  assert(dst + n <= pty->yn * pty->xn);
-  wmemset((void *)(pty->wcs + dst), ' ', n);
-  wmemset((void *)(pty->prs + dst), 0, n);
+  unassert(dst + n <= pty->yn * pty->xn);
+  wmemset((wchar_t *)(pty->wcs + dst), ' ', n);
+  wmemset((wchar_t *)(pty->prs + dst), 0, n);
 }
 
 void PtyMemmove(struct Pty *pty, long dst, long src, long n) {
-  assert(src + n <= pty->yn * pty->xn);
-  assert(dst + n <= pty->yn * pty->xn);
+  unassert(src + n <= pty->yn * pty->xn);
+  unassert(dst + n <= pty->yn * pty->xn);
   memmove(pty->wcs + dst, pty->wcs + src, n * 4);
   memmove(pty->fgs + dst, pty->fgs + src, n * 4);
   memmove(pty->bgs + dst, pty->bgs + src, n * 4);
@@ -352,9 +353,9 @@ void PtyFullReset(struct Pty *pty) {
   pty->n8 = 0;
   pty->conf = 0;
   pty->save = 0;
-  pty->state = 0;
   pty->esc.i = 0;
   pty->input.i = 0;
+  pty->state = kPtyAscii;
   pty->xlat = GetXlatAscii();
   PtyErase(pty, 0, pty->yn * pty->xn);
 }
@@ -371,14 +372,14 @@ void PtySetX(struct Pty *pty, int x) {
 
 void PtyResize(struct Pty *pty, int yn, int xn) {
   unsigned y, ym, xm, y0;
-  uint32_t *wcs, *fgs, *bgs, *prs;
+  u32 *wcs, *fgs, *bgs, *prs;
   if (xn < 80) xn = 80;
   if (yn < 25) yn = 25;
   if (xn == pty->xn && yn == pty->yn) return;
-  wcs = calloc(yn * xn, 4);
-  fgs = calloc(yn * xn, 4);
-  bgs = calloc(yn * xn, 4);
-  prs = calloc(yn * xn, 4);
+  wcs = (u32 *)calloc(yn * xn, 4);
+  fgs = (u32 *)calloc(yn * xn, 4);
+  bgs = (u32 *)calloc(yn * xn, 4);
+  prs = (u32 *)calloc(yn * xn, 4);
   y0 = yn > pty->y + 1 ? 0 : pty->y + 1 - yn;
   ym = MIN(yn, pty->yn) + y0;
   xm = MIN(xn, pty->xn);
@@ -441,8 +442,8 @@ static void PtyNewline(struct Pty *pty) {
 }
 
 static void PtyAdvance(struct Pty *pty) {
-  assert(pty->xn - 1 == pty->x);
-  assert(pty->conf & kPtyRedzone);
+  unassert(pty->xn - 1 == pty->x);
+  unassert(pty->conf & kPtyRedzone);
   pty->conf &= ~kPtyRedzone;
   pty->x = 0;
   if (pty->y < pty->yn - 1) {
@@ -453,7 +454,7 @@ static void PtyAdvance(struct Pty *pty) {
 }
 
 static void PtyWriteGlyph(struct Pty *pty, wint_t wc, int w) {
-  uint32_t i;
+  u32 i;
   if (w < 1) wc = ' ', w = 1;
   if ((pty->conf & kPtyRedzone) || pty->x + w > pty->xn) {
     PtyAdvance(pty);
@@ -719,8 +720,8 @@ static void PtyCsiN(struct Pty *pty) {
 static void PtySelectGraphicsRendition(struct Pty *pty) {
   char *p, c;
   unsigned x;
-  uint8_t code[4];
-  enum {
+  u8 code[4];
+  enum Sgr {
     kSgr,
     kSgrFg = 010,
     kSgrFgTrue = 012,
@@ -885,7 +886,7 @@ static void PtySelectGraphicsRendition(struct Pty *pty) {
             switch (code[0]) {
               case 2:
               case 5:
-                t += code[0];
+                t = (enum Sgr)((int)t + code[0]);
                 break;
               default:
                 t = kSgr;
@@ -1019,7 +1020,7 @@ static void PtyCsi(struct Pty *pty) {
 }
 
 static void PtyScreenAlignmentDisplay(struct Pty *pty) {
-  wmemset((void *)pty->wcs, 'E', pty->yn * pty->xn);
+  wmemset((wchar_t *)pty->wcs, 'E', pty->yn * pty->xn);
 }
 
 static void PtyEscHash(struct Pty *pty) {
@@ -1119,8 +1120,8 @@ static void PtyEscAppend(struct Pty *pty, char c) {
 ssize_t PtyWrite(struct Pty *pty, const void *data, size_t n) {
   int i;
   wchar_t wc;
-  const uint8_t *p;
-  for (p = data, i = 0; i < n; ++i) {
+  const u8 *p;
+  for (p = (const u8 *)data, i = 0; i < n; ++i) {
     switch (pty->state) {
       case kPtyAscii:
         if (0x00 <= p[i] && p[i] <= 0x7F) {
@@ -1266,7 +1267,7 @@ ssize_t PtyWrite(struct Pty *pty, const void *data, size_t n) {
 }
 
 ssize_t PtyWriteInput(struct Pty *pty, const void *data, size_t n) {
-  PtyConcatInput(pty, data, n);
+  PtyConcatInput(pty, (const char *)data, n);
   if (!(pty->conf & kPtyNoecho)) {
     PtyWrite(pty, data, n);
   }
@@ -1278,7 +1279,7 @@ ssize_t PtyRead(struct Pty *pty, void *buf, size_t size) {
   size_t n;
   n = MIN(size, pty->input.i);
   if (!(pty->conf & kPtyNocanon)) {
-    if ((p = memchr(pty->input.p, '\n', n))) {
+    if ((p = (char *)memchr(pty->input.p, '\n', n))) {
       n = MIN(n, pty->input.p - p + 1);
     } else {
       n = 0;
@@ -1299,8 +1300,8 @@ static char *PtyEncodeXterm256(char *p, int xt) {
   return p + sprintf(p, "5;%u", xt);
 }
 
-char *PtyEncodeStyle(char *p, uint32_t xr, uint32_t pr, uint32_t fg,
-                     uint32_t bg) {
+char *PtyEncodeStyle(char *p, u32 xr, u32 pr, u32 fg,
+                     u32 bg) {
   *p++ = 033;
   *p++ = '[';
   if (pr & (kPtyBold | kPtyFaint | kPtyFlip | kPtyUnder | kPtyDunder |
@@ -1383,7 +1384,7 @@ char *PtyEncodeStyle(char *p, uint32_t xr, uint32_t pr, uint32_t fg,
       }
       *p++ = ';';
     }
-    assert(';' == p[-1]);
+    unassert(';' == p[-1]);
     p[-1] = 'm';
   } else {
     *p++ = '0';
@@ -1393,16 +1394,16 @@ char *PtyEncodeStyle(char *p, uint32_t xr, uint32_t pr, uint32_t fg,
 }
 
 int PtyAppendLine(struct Pty *pty, struct Buffer *buf, unsigned y) {
-  uint64_t u;
+  u64 u;
   char *p, *pb;
-  uint32_t i, j, n, w, wc, np, xp, pr, fg, bg, ci;
+  u32 i, j, n, w, wc, np, xp, pr, fg, bg, ci;
   if (y >= pty->yn) {
     errno = EINVAL;
     return -1;
   }
   n = buf->i + pty->xn * 60; /* torture character length */
   if (n > buf->n) {
-    if (!(p = realloc(buf->p, n))) return -1;
+    if (!(p = (char *)realloc(buf->p, n))) return -1;
     buf->p = p;
     buf->n = n;
   }
@@ -1414,8 +1415,8 @@ int PtyAppendLine(struct Pty *pty, struct Buffer *buf, unsigned y) {
     np = pty->prs[i];
     if (!(np & kPtyConceal)) {
       wc = pty->wcs[i];
-      assert(!(0x00 <= wc && wc <= 0x1F));
-      assert(!(0x7F <= wc && wc <= 0x9F));
+      unassert(!(0x00 <= wc && wc <= 0x1F));
+      unassert(!(0x7F <= wc && wc <= 0x9F));
       if (0x20 <= wc && wc <= 0x7E) {
         u = wc;
         w = 1;
@@ -1459,10 +1460,10 @@ int PtyAppendLine(struct Pty *pty, struct Buffer *buf, unsigned y) {
       *p++ = u & 0xFF;
       u >>= 8;
     } while (u);
-    assert(p - pb <= 60);
+    unassert(p - pb <= 60);
     pb = p;
   }
-  assert(pb - buf->p <= buf->n);
+  unassert(pb - buf->p <= buf->n);
   buf->i = pb - buf->p;
   return 0;
 }

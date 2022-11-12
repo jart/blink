@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/mman.h>
@@ -24,22 +23,22 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
 #include "blink/loader.h"
 
 void LoadDebugSymbols(struct Elf *elf) {
-  int fd;
-  uint64_t n;
+  int fd, n;
   void *elfmap;
   char buf[1024];
   struct stat st;
   if (elf->ehdr && GetElfSymbolTable(elf->ehdr, elf->size, &n) && n) return;
-  assert(elf->prog);
+  unassert(elf->prog);
   snprintf(buf, sizeof(buf), "%s.dbg", elf->prog);
   if ((fd = open(buf, O_RDONLY)) != -1) {
     if (fstat(fd, &st) != -1 &&
         (elfmap = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0)) !=
             MAP_FAILED) {
-      elf->ehdr = elfmap;
+      elf->ehdr = (Elf64_Ehdr *)elfmap;
       elf->size = st.st_size;
     }
     close(fd);

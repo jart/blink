@@ -10,7 +10,7 @@ o/$(MODE)/%.h.ok: %.h
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -x c -g0 -o $@ $<
 
 o/$(MODE)/%.a:
-	ar rcs $@ $^
+	$(AR) rcs $@ $^
 o/$(MODE)/i486/%.a:
 	o/third_party/gcc/i486/bin/i486-linux-musl-ar rcsD $@ $^
 o/$(MODE)/m68k/%.a:

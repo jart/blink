@@ -4,13 +4,13 @@
 #include "blink/machine.h"
 #include "blink/modrm.h"
 
-uint64_t AddressOb(struct Machine *, uint32_t);
-uint64_t AddressDi(struct Machine *, uint32_t);
-uint64_t AddressSi(struct Machine *, uint32_t);
-uint8_t *GetSegment(struct Machine *, uint32_t, int);
-uint64_t DataSegment(struct Machine *, uint32_t, uint64_t);
+u64 AddressOb(struct Machine *, u32);
+u64 AddressDi(struct Machine *, u32);
+u64 AddressSi(struct Machine *, u32);
+u8 *GetSegment(struct Machine *, u32, int);
+u64 DataSegment(struct Machine *, u32, u64);
 
-static inline uint64_t MaskAddress(uint32_t mode, uint64_t x) {
+static inline u64 MaskAddress(u32 mode, u64 x) {
   if (mode != XED_MODE_LONG) {
     if (mode == XED_MODE_REAL) {
       x &= 0xffff;
@@ -21,8 +21,8 @@ static inline uint64_t MaskAddress(uint32_t mode, uint64_t x) {
   return x;
 }
 
-static inline uint64_t AddSegment(struct Machine *m, uint32_t rde, uint64_t i,
-                                  const uint8_t s[8]) {
+static inline u64 AddSegment(struct Machine *m, u32 rde, u64 i,
+                             const u8 s[8]) {
   if (!Sego(rde)) {
     return i + Read64(s);
   } else {

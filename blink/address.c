@@ -22,11 +22,11 @@
 #include "blink/modrm.h"
 #include "blink/x86.h"
 
-uint64_t AddressOb(struct Machine *m, uint32_t rde) {
+u64 AddressOb(struct Machine *m, u32 rde) {
   return AddSegment(m, rde, m->xedd->op.disp, m->ds);
 }
 
-uint8_t *GetSegment(struct Machine *m, uint32_t rde, int s) {
+u8 *(GetSegment)(struct Machine *m, u32 rde, int s) {
   switch (s & 7) {
     case 0:
       return m->es;
@@ -48,11 +48,11 @@ uint8_t *GetSegment(struct Machine *m, uint32_t rde, int s) {
   }
 }
 
-uint64_t DataSegment(struct Machine *m, uint32_t rde, uint64_t i) {
+u64 DataSegment(struct Machine *m, u32 rde, u64 i) {
   return AddSegment(m, rde, i, m->ds);
 }
 
-uint64_t AddressSi(struct Machine *m, uint32_t rde) {
+u64 AddressSi(struct Machine *m, u32 rde) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       return DataSegment(m, rde, Read64(m->si));
@@ -65,8 +65,8 @@ uint64_t AddressSi(struct Machine *m, uint32_t rde) {
   }
 }
 
-uint64_t AddressDi(struct Machine *m, uint32_t rde) {
-  uint64_t i = Read64(m->es);
+u64 AddressDi(struct Machine *m, u32 rde) {
+  u64 i = Read64(m->es);
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       return i + Read64(m->di);

@@ -22,7 +22,7 @@
 #include "blink/lines.h"
 
 struct Lines *NewLines(void) {
-  return calloc(1, sizeof(struct Lines));
+  return (struct Lines *)calloc(1, sizeof(struct Lines));
 }
 
 void FreeLines(struct Lines *lines) {
@@ -34,7 +34,7 @@ void FreeLines(struct Lines *lines) {
 }
 
 void AppendLine(struct Lines *lines, const char *s, unsigned n) {
-  lines->p = realloc(lines->p, ++lines->n * sizeof(*lines->p));
+  lines->p = (char **)realloc(lines->p, ++lines->n * sizeof(*lines->p));
   lines->p[lines->n - 1] = strndup(s, n);
 }
 

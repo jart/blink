@@ -31,7 +31,7 @@ int MachineFdAdd(struct MachineFds *mf) {
     fd = mf->i;
     if (mf->i++ == mf->n) {
       mf->n = mf->i + (mf->i >> 1);
-      mf->p = realloc(mf->p, mf->n * sizeof(*mf->p));
+      mf->p = (struct MachineFd *)realloc(mf->p, mf->n * sizeof(*mf->p));
     }
   }
   return fd;
@@ -40,7 +40,7 @@ int MachineFdAdd(struct MachineFds *mf) {
 void MachineFdRemove(struct MachineFds *mf, int fd) {
   struct MachineFdClosed *closed;
   mf->p[fd].cb = NULL;
-  if ((closed = malloc(sizeof(struct MachineFdClosed)))) {
+  if ((closed = (struct MachineFdClosed *)malloc(sizeof(*closed)))) {
     closed->fd = fd;
     closed->next = mf->closed;
     mf->closed = closed;

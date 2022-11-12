@@ -16,12 +16,12 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <limits.h>
-#include <stdint.h>
+#include "blink/types.h"
 #include <stdlib.h>
 #include <string.h>
 
+#include "blink/assert.h"
 #include "blink/cp437.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
@@ -43,8 +43,8 @@
 
 char *DisColumn(char *p2, char *p1, long need) {
   char *p;
-  unsigned long have;
-  assert(p2 >= p1);
+  long have;
+  unassert(p2 >= p1);
   have = p2 - p1;
   p = p2;
   do {
@@ -54,7 +54,7 @@ char *DisColumn(char *p2, char *p1, long need) {
   return p;
 }
 
-static char *DisOctets(char *p, const uint8_t *d, size_t n) {
+static char *DisOctets(char *p, const u8 *d, size_t n) {
   size_t i;
   for (i = 0; i < n; ++i) {
     if (i) *p++ = ',';
@@ -67,7 +67,7 @@ static char *DisOctets(char *p, const uint8_t *d, size_t n) {
   return p;
 }
 
-static char *DisByte(char *p, const uint8_t *d, size_t n) {
+static char *DisByte(char *p, const u8 *d, size_t n) {
   p = HighStart(p, g_high.keyword);
   p = DisColumn(stpcpy(p, ".byte"), p, NAMELEN);
   p = HighEnd(p);
@@ -87,16 +87,16 @@ static char *DisError(struct Dis *d, char *p) {
   return p;
 }
 
-static size_t uint64toarray_fixed16(uint64_t x, char b[static 17], uint8_t k) {
+static size_t uint64toarray_fixed16(u64 x, char b[17], u8 k) {
   char *p;
-  assert(k <= 64 && !(k & 3));
+  unassert(k <= 64 && !(k & 3));
   for (p = b; k > 0;) *p++ = "0123456789abcdef"[(x >> (k -= 4)) & 15];
   *p = '\0';
   return p - b;
 }
 
 static char *DisAddr(struct Dis *d, char *p) {
-  int64_t x = d->addr;
+  i64 x = d->addr;
   if (INT_MIN <= x && x <= INT_MAX) {
     return p + uint64toarray_fixed16(x, p, 32);
   } else {
@@ -145,7 +145,7 @@ static char *DisLabel(struct Dis *d, char *p, const char *name) {
   return p;
 }
 
-long DisFind(struct Dis *d, int64_t addr) {
+long DisFind(struct Dis *d, i64 addr) {
   int l, r, m;
   l = 0;
   r = d->ops.i - 1;
@@ -162,13 +162,13 @@ long DisFind(struct Dis *d, int64_t addr) {
   return -1;
 }
 
-static long DisAppendOpLines(struct Dis *d, struct Machine *m, int64_t addr) {
+static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
   void *r;
-  int64_t ip;
+  i64 ip;
   unsigned k;
   struct DisOp op;
   long n, symbol;
-  uint8_t *p, b[15];
+  u8 *p, b[15];
   n = 15;
   ip = addr - Read64(m->cs);
   if ((symbol = DisFindSym(d, ip)) != -1) {
@@ -185,7 +185,8 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, int64_t addr) {
       if (!(op.s = strdup(d->buf))) return -1;
       if (d->ops.i++ == d->ops.n) {
         d->ops.n = d->ops.i + (d->ops.i >> 1);
-        d->ops.p = realloc(d->ops.p, d->ops.n * sizeof(*d->ops.p));
+        d->ops.p =
+            (struct DisOp *)realloc(d->ops.p, d->ops.n * sizeof(*d->ops.p));
       }
       d->ops.p[d->ops.i - 1] = op;
     }
@@ -194,7 +195,7 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, int64_t addr) {
   if (!(r = FindReal(m, addr))) return -1;
   k = 0x1000 - (addr & 0xfff);
   if (n <= k) {
-    p = r;
+    p = (u8 *)r;
   } else {
     p = b;
     memcpy(b, r, k);
@@ -213,15 +214,15 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, int64_t addr) {
   op.s = NULL;
   if (d->ops.i++ == d->ops.n) {
     d->ops.n = d->ops.i + (d->ops.i >> 1);
-    d->ops.p = realloc(d->ops.p, d->ops.n * sizeof(*d->ops.p));
+    d->ops.p = (struct DisOp *)realloc(d->ops.p, d->ops.n * sizeof(*d->ops.p));
   }
   d->ops.p[d->ops.i - 1] = op;
   return n;
 }
 
-long Dis(struct Dis *d, struct Machine *m, uint64_t addr, uint64_t ip,
+long Dis(struct Dis *d, struct Machine *m, i64 addr, i64 ip,
          int lines) {
-  int64_t i, j, symbol;
+  i64 i, j, symbol;
   DisFreeOps(&d->ops);
   if ((symbol = DisFindSym(d, addr)) != -1 &&
       (d->syms.p[symbol].addr < addr &&
@@ -236,19 +237,19 @@ long Dis(struct Dis *d, struct Machine *m, uint64_t addr, uint64_t ip,
   return 0;
 }
 
-const char *DisGetLine(struct Dis *d, struct Machine *m, size_t i) {
+const char *DisGetLine(struct Dis *d, struct Machine *m, int i) {
   void *r[2];
-  uint8_t b[15];
+  u8 b[15];
   if (i >= d->ops.i) return "";
   if (d->ops.p[i].s) return d->ops.p[i].s;
-  assert(d->ops.p[i].size <= 15);
+  unassert(d->ops.p[i].size <= 15);
   InitializeInstruction(d->xedd, m->mode);
   DecodeInstruction(
       d->xedd, AccessRam(m, d->ops.p[i].addr, d->ops.p[i].size, r, b, true),
       d->ops.p[i].size);
   d->m = m;
   d->addr = d->ops.p[i].addr;
-  if (DisLineCode(d, d->buf) - d->buf >= sizeof(d->buf)) abort();
+  if (DisLineCode(d, d->buf) - d->buf >= (int)sizeof(d->buf)) abort();
   return d->buf;
 }
 

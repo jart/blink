@@ -196,37 +196,44 @@ o/$(MODE)/powerpc64le/test/blink/ldbl_test.com: o/$(MODE)/powerpc64le/test/blink
 #		o/$(MODE)/microblaze/test/blink/machine_test.com.runs
 
 o/$(MODE)/test/blink:							\
-		o/$(MODE)/blink/blink					\
-		o/$(MODE)/i486/blink/blink				\
-		o/$(MODE)/m68k/blink/blink				\
-		o/$(MODE)/x86_64/blink/blink				\
-		o/$(MODE)/arm/blink/blink				\
-		o/$(MODE)/aarch64/blink/blink				\
-		o/$(MODE)/riscv64/blink/blink				\
-		o/$(MODE)/mips/blink/blink				\
-		o/$(MODE)/mipsel/blink/blink				\
-		o/$(MODE)/mips64/blink/blink				\
-		o/$(MODE)/mips64el/blink/blink				\
-		o/$(MODE)/s390x/blink/blink				\
-		o/$(MODE)/microblaze/blink/blink			\
-		o/$(MODE)/powerpc/blink/blink				\
-		o/$(MODE)/powerpc64le/blink/blink			\
-		o/$(MODE)/blink/blink					\
-		o/$(MODE)/i486/blink/blink				\
-		o/$(MODE)/m68k/blink/blink				\
-		o/$(MODE)/x86_64/blink/blink				\
-		o/$(MODE)/arm/blink/blink				\
-		o/$(MODE)/aarch64/blink/blink				\
-		o/$(MODE)/riscv64/blink/blink				\
-		o/$(MODE)/mips/blink/blink				\
-		o/$(MODE)/mipsel/blink/blink				\
-		o/$(MODE)/mips64/blink/blink				\
-		o/$(MODE)/mips64el/blink/blink				\
-		o/$(MODE)/s390x/blink/blink				\
-		o/$(MODE)/microblaze/blink/blink			\
-		o/$(MODE)/powerpc/blink/blink				\
-		o/$(MODE)/powerpc64le/blink/blink			\
 		o/$(MODE)/test/blink/machine_test.com.runs		\
+		o/$(MODE)/test/blink/divmul_test.com.runs		\
+		o/$(MODE)/test/blink/modrm_test.com.runs		\
+		o/$(MODE)/test/blink/iovs_test.com.runs			\
+		o/$(MODE)/test/blink/x86_test.com.runs			\
+		o/$(MODE)/test/blink/ldbl_test.com.runs			\
+
+o/$(MODE)/test/blink/emulates:						\
+		o/$(MODE)/blink/blink					\
+		o/$(MODE)/i486/blink/blink				\
+		o/$(MODE)/m68k/blink/blink				\
+		o/$(MODE)/x86_64/blink/blink				\
+		o/$(MODE)/arm/blink/blink				\
+		o/$(MODE)/aarch64/blink/blink				\
+		o/$(MODE)/riscv64/blink/blink				\
+		o/$(MODE)/mips/blink/blink				\
+		o/$(MODE)/mipsel/blink/blink				\
+		o/$(MODE)/mips64/blink/blink				\
+		o/$(MODE)/mips64el/blink/blink				\
+		o/$(MODE)/s390x/blink/blink				\
+		o/$(MODE)/microblaze/blink/blink			\
+		o/$(MODE)/powerpc/blink/blink				\
+		o/$(MODE)/powerpc64le/blink/blink			\
+		o/$(MODE)/blink/blink					\
+		o/$(MODE)/i486/blink/blink				\
+		o/$(MODE)/m68k/blink/blink				\
+		o/$(MODE)/x86_64/blink/blink				\
+		o/$(MODE)/arm/blink/blink				\
+		o/$(MODE)/aarch64/blink/blink				\
+		o/$(MODE)/riscv64/blink/blink				\
+		o/$(MODE)/mips/blink/blink				\
+		o/$(MODE)/mipsel/blink/blink				\
+		o/$(MODE)/mips64/blink/blink				\
+		o/$(MODE)/mips64el/blink/blink				\
+		o/$(MODE)/s390x/blink/blink				\
+		o/$(MODE)/microblaze/blink/blink			\
+		o/$(MODE)/powerpc/blink/blink				\
+		o/$(MODE)/powerpc64le/blink/blink			\
 		o/$(MODE)/i486/test/blink/machine_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/machine_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/machine_test.com.runs	\
@@ -240,7 +247,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/s390x/test/blink/machine_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/machine_test.com.runs	\
 		o/$(MODE)/powerpc64le/test/blink/machine_test.com.runs	\
-		o/$(MODE)/test/blink/divmul_test.com.runs		\
 		o/$(MODE)/i486/test/blink/divmul_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/divmul_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/divmul_test.com.runs	\
@@ -255,7 +261,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/microblaze/test/blink/divmul_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/divmul_test.com.runs	\
 		o/$(MODE)/powerpc64le/test/blink/divmul_test.com.runs	\
-		o/$(MODE)/test/blink/modrm_test.com.runs		\
 		o/$(MODE)/i486/test/blink/modrm_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/modrm_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/modrm_test.com.runs		\
@@ -270,7 +275,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/microblaze/test/blink/modrm_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/modrm_test.com.runs	\
 		o/$(MODE)/powerpc64le/test/blink/modrm_test.com.runs	\
-		o/$(MODE)/test/blink/iovs_test.com.runs			\
 		o/$(MODE)/i486/test/blink/iovs_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/iovs_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/iovs_test.com.runs		\
@@ -285,7 +289,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/microblaze/test/blink/iovs_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/iovs_test.com.runs		\
 		o/$(MODE)/powerpc64le/test/blink/iovs_test.com.runs	\
-		o/$(MODE)/test/blink/x86_test.com.runs			\
 		o/$(MODE)/i486/test/blink/x86_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/x86_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/x86_test.com.runs		\
@@ -300,7 +303,6 @@ o/$(MODE)/test/blink:							\
 		o/$(MODE)/microblaze/test/blink/x86_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/x86_test.com.runs		\
 		o/$(MODE)/powerpc64le/test/blink/x86_test.com.runs	\
-		o/$(MODE)/test/blink/ldbl_test.com.runs			\
 		o/$(MODE)/i486/test/blink/ldbl_test.com.runs		\
 		o/$(MODE)/m68k/test/blink/ldbl_test.com.runs		\
 		o/$(MODE)/x86_64/test/blink/ldbl_test.com.runs		\

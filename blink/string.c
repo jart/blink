@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -31,7 +30,7 @@
 #include "blink/modrm.h"
 #include "blink/string.h"
 
-static uint64_t ReadInt(uint8_t p[8], unsigned long w) {
+static u64 ReadInt(u8 p[8], unsigned long w) {
   switch (w) {
     case 0:
       return Read8(p);
@@ -46,7 +45,7 @@ static uint64_t ReadInt(uint8_t p[8], unsigned long w) {
   }
 }
 
-static void WriteInt(uint8_t p[8], uint64_t x, unsigned long w) {
+static void WriteInt(u8 p[8], u64 x, unsigned long w) {
   switch (w) {
     case 0:
       Write8(p, x);
@@ -65,7 +64,7 @@ static void WriteInt(uint8_t p[8], uint64_t x, unsigned long w) {
   }
 }
 
-static void AddDi(struct Machine *m, uint32_t rde, uint64_t x) {
+static void AddDi(struct Machine *m, u32 rde, u64 x) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       Write64(m->di, Read64(m->di) + x);
@@ -81,7 +80,7 @@ static void AddDi(struct Machine *m, uint32_t rde, uint64_t x) {
   }
 }
 
-static void AddSi(struct Machine *m, uint32_t rde, uint64_t x) {
+static void AddSi(struct Machine *m, u32 rde, u64 x) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       Write64(m->si, Read64(m->si) + x);
@@ -97,7 +96,7 @@ static void AddSi(struct Machine *m, uint32_t rde, uint64_t x) {
   }
 }
 
-static uint64_t ReadCx(struct Machine *m, uint32_t rde) {
+static u64 ReadCx(struct Machine *m, u32 rde) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       return Read64(m->cx);
@@ -110,8 +109,8 @@ static uint64_t ReadCx(struct Machine *m, uint32_t rde) {
   }
 }
 
-static uint64_t SubtractCx(struct Machine *m, uint32_t rde, uint64_t x) {
-  uint64_t cx;
+static u64 SubtractCx(struct Machine *m, u32 rde, u64 x) {
+  u64 cx;
   cx = Read64(m->cx) - x;
   if (Eamode(rde) != XED_MODE_REAL) {
     if (Eamode(rde) == XED_MODE_LEGACY) {
@@ -125,12 +124,12 @@ static uint64_t SubtractCx(struct Machine *m, uint32_t rde, uint64_t x) {
   return cx;
 }
 
-static void StringOp(struct Machine *m, uint32_t rde, int op) {
+static void StringOp(struct Machine *m, u32 rde, int op) {
   bool stop;
   void *p[2];
   unsigned n;
-  int64_t sgn, v;
-  uint8_t s[3][8];
+  i64 sgn, v;
+  u8 s[3][8];
   stop = false;
   n = 1 << RegLog2(rde);
   sgn = GetFlag(m->flags, FLAGS_DF) ? -1 : 1;
@@ -177,7 +176,7 @@ static void StringOp(struct Machine *m, uint32_t rde, int op) {
         AddSi(m, rde, sgn * n);
         break;
       case STRING_INS:
-        WriteInt(BeginStore(m, (v = AddressDi(m, rde)), n, p, s[0]),
+        WriteInt((u8 *)BeginStore(m, (v = AddressDi(m, rde)), n, p, s[0]),
                  OpIn(m, Read16(m->dx)), RegLog2(rde));
         AddDi(m, rde, sgn * n);
         EndStore(m, v, n, p, s[0]);
@@ -193,9 +192,9 @@ static void StringOp(struct Machine *m, uint32_t rde, int op) {
   } while (!stop);
 }
 
-static void RepMovsbEnhanced(struct Machine *m, uint32_t rde) {
-  uint8_t *direal, *sireal;
-  uint64_t diactual, siactual, cx;
+static void RepMovsbEnhanced(struct Machine *m, u32 rde) {
+  u8 *direal, *sireal;
+  u64 diactual, siactual, cx;
   unsigned diremain, siremain, i, n;
   if ((cx = ReadCx(m, rde))) {
     do {
@@ -203,8 +202,8 @@ static void RepMovsbEnhanced(struct Machine *m, uint32_t rde) {
       siactual = AddressSi(m, rde);
       SetWriteAddr(m, diactual, cx);
       SetReadAddr(m, siactual, cx);
-      direal = ResolveAddress(m, diactual);
-      sireal = ResolveAddress(m, siactual);
+      direal = (u8 *)ResolveAddress(m, diactual);
+      sireal = (u8 *)ResolveAddress(m, siactual);
       diremain = 0x1000 - (diactual & 0xfff);
       siremain = 0x1000 - (siactual & 0xfff);
       n = MIN(cx, MIN(diremain, siremain));
@@ -215,15 +214,15 @@ static void RepMovsbEnhanced(struct Machine *m, uint32_t rde) {
   }
 }
 
-static void RepStosbEnhanced(struct Machine *m, uint32_t rde) {
-  uint8_t *direal;
+static void RepStosbEnhanced(struct Machine *m, u32 rde) {
+  u8 *direal;
   unsigned diremain, n;
-  uint64_t diactual, cx;
+  u64 diactual, cx;
   if ((cx = ReadCx(m, rde))) {
     do {
       diactual = AddressDi(m, rde);
       SetWriteAddr(m, diactual, cx);
-      direal = ResolveAddress(m, diactual);
+      direal = (u8 *)ResolveAddress(m, diactual);
       diremain = 0x1000 - (diactual & 0xfff);
       n = MIN(cx, diremain);
       memset(direal, Read8(m->ax), n);
@@ -232,35 +231,35 @@ static void RepStosbEnhanced(struct Machine *m, uint32_t rde) {
   }
 }
 
-void OpMovs(struct Machine *m, uint32_t rde) {
+void OpMovs(struct Machine *m, u32 rde) {
   StringOp(m, rde, STRING_MOVS);
 }
 
-void OpCmps(struct Machine *m, uint32_t rde) {
+void OpCmps(struct Machine *m, u32 rde) {
   StringOp(m, rde, STRING_CMPS);
 }
 
-void OpStos(struct Machine *m, uint32_t rde) {
+void OpStos(struct Machine *m, u32 rde) {
   StringOp(m, rde, STRING_STOS);
 }
 
-void OpLods(struct Machine *m, uint32_t rde) {
+void OpLods(struct Machine *m, u32 rde) {
   StringOp(m, rde, STRING_LODS);
 }
 
-void OpScas(struct Machine *m, uint32_t rde) {
+void OpScas(struct Machine *m, u32 rde) {
   StringOp(m, rde, STRING_SCAS);
 }
 
-void OpIns(struct Machine *m, uint32_t rde) {
+void OpIns(struct Machine *m, u32 rde) {
   StringOp(m, rde, STRING_INS);
 }
 
-void OpOuts(struct Machine *m, uint32_t rde) {
+void OpOuts(struct Machine *m, u32 rde) {
   StringOp(m, rde, STRING_OUTS);
 }
 
-void OpMovsb(struct Machine *m, uint32_t rde) {
+void OpMovsb(struct Machine *m, u32 rde) {
   if (m->xedd->op.rep && !GetFlag(m->flags, FLAGS_DF)) {
     RepMovsbEnhanced(m, rde);
   } else {
@@ -268,7 +267,7 @@ void OpMovsb(struct Machine *m, uint32_t rde) {
   }
 }
 
-void OpStosb(struct Machine *m, uint32_t rde) {
+void OpStosb(struct Machine *m, u32 rde) {
   if (m->xedd->op.rep && !GetFlag(m->flags, FLAGS_DF)) {
     RepStosbEnhanced(m, rde);
   } else {

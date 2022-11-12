@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <stdio.h>
@@ -24,6 +23,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
 #include "blink/case.h"
 #include "blink/endian.h"
 #include "blink/loader.h"
@@ -40,31 +40,35 @@ static void OnSignal(int sig, siginfo_t *si, void *uc) {
   EnqueueSignal(m, &signals, sig, si->si_code);
 }
 
-static void AddHostFd(struct Machine *m, int fd) {
-  int i = m->system->fds.i++;
-  m->system->fds.p[i].fd = dup(fd);
-  assert(m->system->fds.p[i].fd != -1);
-  m->system->fds.p[i].cb = &kMachineFdCbHost;
+static void AddHostFd(struct System *s, int fd) {
+  int i = s->fds.i++;
+  s->fds.p[i].fd = dup(fd);
+  unassert(s->fds.p[i].fd != -1);
+  s->fds.p[i].cb = &kMachineFdCbHost;
 }
 
 static int Exec(char *prog, char **argv, char **envp) {
   int rc;
   struct Elf elf;
-  struct Machine *o;
-  o = m;
-  m = NewMachine();
+  struct System *s;
+  struct Machine *o = m;
+  unassert((s = NewSystem()));
+  unassert((m = NewMachine(s, 0)));
   m->system->exec = Exec;
   m->mode = XED_MACHINE_MODE_LONG_64;
   LoadProgram(m, prog, argv, envp, &elf);
   if (!o) {
     m->system->fds.n = 8;
-    m->system->fds.p = calloc(m->system->fds.n, sizeof(struct MachineFd));
-    AddHostFd(m, 0);
-    AddHostFd(m, 1);
-    AddHostFd(m, 2);
+    m->system->fds.p =
+        (struct MachineFd *)calloc(m->system->fds.n, sizeof(struct MachineFd));
+    AddHostFd(m->system, 0);
+    AddHostFd(m->system, 1);
+    AddHostFd(m->system, 2);
   } else {
     m->system->fds = o->system->fds;
+    o->system->fds.p = 0;
     FreeMachine(o);
+    FreeSystem(s);
   }
   if (!(rc = setjmp(m->onhalt))) {
     for (;;) {
@@ -91,16 +95,16 @@ int main(int argc, char *argv[], char **envp) {
   sigfillset(&sa.sa_mask);
   sa.sa_flags |= SA_SIGINFO;
   sa.sa_sigaction = OnSignal;
-  sigaction(SIGHUP, &sa, 0);
-  sigaction(SIGINT, &sa, 0);
-  sigaction(SIGQUIT, &sa, 0);
-  sigaction(SIGABRT, &sa, 0);
-  sigaction(SIGUSR1, &sa, 0);
-  sigaction(SIGUSR2, &sa, 0);
-  sigaction(SIGPIPE, &sa, 0);
-  sigaction(SIGALRM, &sa, 0);
-  sigaction(SIGTERM, &sa, 0);
-  sigaction(SIGCHLD, &sa, 0);
-  sigaction(SIGWINCH, &sa, 0);
+  unassert(!sigaction(SIGHUP, &sa, 0));
+  unassert(!sigaction(SIGINT, &sa, 0));
+  unassert(!sigaction(SIGQUIT, &sa, 0));
+  unassert(!sigaction(SIGABRT, &sa, 0));
+  unassert(!sigaction(SIGUSR1, &sa, 0));
+  unassert(!sigaction(SIGUSR2, &sa, 0));
+  unassert(!sigaction(SIGPIPE, &sa, 0));
+  unassert(!sigaction(SIGALRM, &sa, 0));
+  unassert(!sigaction(SIGTERM, &sa, 0));
+  unassert(!sigaction(SIGCHLD, &sa, 0));
+  unassert(!sigaction(SIGWINCH, &sa, 0));
   return Exec(argv[1], argv + 1, envp);
 }

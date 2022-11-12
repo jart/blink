@@ -90,18 +90,18 @@ static void FpuSetStRmPop(struct Machine *m, double x) {
   FpuSetStPop(m, ModrmRm(m->xedd->op.rde), x);
 }
 
-static int16_t FpuGetMemoryShort(struct Machine *m) {
-  uint8_t b[2];
+static i16 FpuGetMemoryShort(struct Machine *m) {
+  u8 b[2];
   return Read16(Load(m, m->fpu.dp, 2, b));
 }
 
-static int32_t FpuGetMemoryInt(struct Machine *m) {
-  uint8_t b[4];
+static i32 FpuGetMemoryInt(struct Machine *m) {
+  u8 b[4];
   return Read32(Load(m, m->fpu.dp, 4, b));
 }
 
-static int64_t FpuGetMemoryLong(struct Machine *m) {
-  uint8_t b[8];
+static i64 FpuGetMemoryLong(struct Machine *m) {
+  u8 b[8];
   return Read64(Load(m, m->fpu.dp, 8, b));
 }
 
@@ -117,23 +117,23 @@ static double FpuGetMemoryDouble(struct Machine *m) {
   return u.f;
 }
 
-static void FpuSetMemoryShort(struct Machine *m, int16_t i) {
+static void FpuSetMemoryShort(struct Machine *m, i16 i) {
   void *p[2];
-  uint8_t b[2];
+  u8 b[2];
   Write16(BeginStore(m, m->fpu.dp, 2, p, b), i);
   EndStore(m, m->fpu.dp, 2, p, b);
 }
 
-static void FpuSetMemoryInt(struct Machine *m, int32_t i) {
+static void FpuSetMemoryInt(struct Machine *m, i32 i) {
   void *p[2];
-  uint8_t b[4];
+  u8 b[4];
   Write32(BeginStore(m, m->fpu.dp, 4, p, b), i);
   EndStore(m, m->fpu.dp, 4, p, b);
 }
 
-static void FpuSetMemoryLong(struct Machine *m, int64_t i) {
+static void FpuSetMemoryLong(struct Machine *m, i64 i) {
   void *p[2];
-  uint8_t b[8];
+  u8 b[8];
   Write64(BeginStore(m, m->fpu.dp, 8, p, b), i);
   EndStore(m, m->fpu.dp, 8, p, b);
 }
@@ -149,13 +149,13 @@ static void FpuSetMemoryDouble(struct Machine *m, double f) {
 }
 
 static double FpuGetMemoryLdbl(struct Machine *m) {
-  uint8_t b[10];
+  u8 b[10];
   return DeserializeLdbl(Load(m, m->fpu.dp, 10, b));
 }
 
 static void FpuSetMemoryLdbl(struct Machine *m, double f) {
   void *p[2];
-  uint8_t b[10], t[10];
+  u8 b[10], t[10];
   SerializeLdbl(b, f);
   memcpy(BeginStore(m, m->fpu.dp, 10, p, t), b, 10);
   EndStore(m, m->fpu.dp, 10, p, t);
@@ -178,7 +178,7 @@ static double fscale(double significand, double exponent) {
   return ldexp(significand, exponent);
 }
 
-static double x87remainder(double x, double y, uint32_t *sw,
+static double x87remainder(double x, double y, u32 *sw,
                            double rem(double, double), double rnd(double)) {
   int s;
   long q;
@@ -194,11 +194,11 @@ static double x87remainder(double x, double y, uint32_t *sw,
   return r;
 }
 
-static double fprem(double dividend, double modulus, uint32_t *sw) {
+static double fprem(double dividend, double modulus, u32 *sw) {
   return x87remainder(dividend, modulus, sw, fmod, trunc);
 }
 
-static double fprem1(double dividend, double modulus, uint32_t *sw) {
+static double fprem1(double dividend, double modulus, u32 *sw) {
   return x87remainder(dividend, modulus, sw, remainder, rint);
 }
 
@@ -903,7 +903,7 @@ static void OpFstswAx(struct Machine *m) {
   Write16(m->ax, m->fpu.sw);
 }
 
-static void SetFpuEnv(struct Machine *m, uint8_t p[28]) {
+static void SetFpuEnv(struct Machine *m, u8 p[28]) {
   Write16(p + 0, m->fpu.cw);
   Write16(p + 4, m->fpu.sw);
   Write16(p + 8, m->fpu.tw);
@@ -912,7 +912,7 @@ static void SetFpuEnv(struct Machine *m, uint8_t p[28]) {
   Write64(p + 20, m->fpu.dp);
 }
 
-static void GetFpuEnv(struct Machine *m, uint8_t p[28]) {
+static void GetFpuEnv(struct Machine *m, u8 p[28]) {
   m->fpu.cw = Read16(p + 0);
   m->fpu.sw = Read16(p + 4);
   m->fpu.tw = Read16(p + 8);
@@ -920,20 +920,20 @@ static void GetFpuEnv(struct Machine *m, uint8_t p[28]) {
 
 static void OpFstenv(struct Machine *m) {
   void *p[2];
-  uint8_t b[28];
+  u8 b[28];
   SetFpuEnv(m, BeginStore(m, m->fpu.dp, sizeof(b), p, b));
   EndStore(m, m->fpu.dp, sizeof(b), p, b);
 }
 
 static void OpFldenv(struct Machine *m) {
-  uint8_t b[28];
+  u8 b[28];
   GetFpuEnv(m, Load(m, m->fpu.dp, sizeof(b), b));
 }
 
 static void OpFsave(struct Machine *m) {
   int i;
   void *p[2];
-  uint8_t *a, b[108], t[16];
+  u8 *a, b[108], t[16];
   a = BeginStore(m, m->fpu.dp, sizeof(b), p, b);
   SetFpuEnv(m, a);
   memset(t, 0, sizeof(t));
@@ -946,7 +946,7 @@ static void OpFsave(struct Machine *m) {
 
 static void OpFrstor(struct Machine *m) {
   int i;
-  uint8_t *a, b[108];
+  u8 *a, b[108];
   a = Load(m, m->fpu.dp, sizeof(b), b);
   GetFpuEnv(m, a);
   for (i = 0; i < 8; ++i) {
@@ -969,7 +969,7 @@ void OpFinit(struct Machine *m) {
   m->fpu.tw = -1;
 }
 
-void OpFwait(struct Machine *m, uint32_t rde) {
+void OpFwait(struct Machine *m, u32 rde) {
   int sw, cw;
   sw = m->fpu.sw;
   cw = m->fpu.cw;
@@ -1023,7 +1023,7 @@ double FpuPop(struct Machine *m) {
   return x;
 }
 
-void OpFpu(struct Machine *m, uint32_t rde) {
+void OpFpu(struct Machine *m, u32 rde) {
   unsigned op;
   bool ismemory;
   op = m->xedd->op.opcode & 7;

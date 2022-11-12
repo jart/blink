@@ -27,9 +27,9 @@
 #include "blink/modrm.h"
 #include "blink/x86.h"
 
-static bool IsOpcodeEqual(struct XedDecodedInst *xedd, uint8_t *a) {
-  uint64_t w;
-  unsigned n;
+static bool IsOpcodeEqual(struct XedDecodedInst *xedd, u8 *a) {
+  int n;
+  u64 w;
   if ((n = xedd->length)) {
     if (n <= 7) {
       w = Read64(a) ^ Read64(xedd->bytes);
@@ -42,7 +42,7 @@ static bool IsOpcodeEqual(struct XedDecodedInst *xedd, uint8_t *a) {
   }
 }
 
-static void ReadInstruction(struct Machine *m, uint8_t *p, unsigned n) {
+static void ReadInstruction(struct Machine *m, u8 *p, unsigned n) {
   struct XedDecodedInst xedd[1];
   InitializeInstruction(xedd, m->mode);
   if (!DecodeInstruction(xedd, p, n)) {
@@ -52,13 +52,13 @@ static void ReadInstruction(struct Machine *m, uint8_t *p, unsigned n) {
   }
 }
 
-static void LoadInstructionSlow(struct Machine *m, uint64_t ip) {
+static void LoadInstructionSlow(struct Machine *m, u64 ip) {
   unsigned i;
-  uint8_t *addr;
-  uint8_t copy[15], *toil;
+  u8 *addr;
+  u8 copy[15], *toil;
   i = 0x1000 - (ip & 0xfff);
-  addr = ResolveAddress(m, ip);
-  if ((toil = FindReal(m, ip + i))) {
+  addr = (u8 *)ResolveAddress(m, ip);
+  if ((toil = (u8 *)FindReal(m, ip + i))) {
     memcpy(copy, addr, i);
     memcpy(copy + i, toil, 15 - i);
     ReadInstruction(m, copy, 15);
@@ -68,9 +68,9 @@ static void LoadInstructionSlow(struct Machine *m, uint64_t ip) {
 }
 
 void LoadInstruction(struct Machine *m) {
-  uint64_t ip;
+  u64 ip;
   unsigned key;
-  uint8_t *addr;
+  u8 *addr;
   ip = Read64(m->cs) + MaskAddress(m->mode & 3, m->ip);
   key = ip & (ARRAYLEN(m->opcache->icache) - 1);
   m->xedd = (struct XedDecodedInst *)m->opcache->icache[key];
@@ -79,7 +79,7 @@ void LoadInstruction(struct Machine *m) {
       addr = m->opcache->codehost + (ip & 0xfff);
     } else {
       m->opcache->codevirt = ip - (ip & 0xfff);
-      m->opcache->codehost = ResolveAddress(m, m->opcache->codevirt);
+      m->opcache->codehost = (u8 *)ResolveAddress(m, m->opcache->codevirt);
       addr = m->opcache->codehost + (ip & 0xfff);
     }
     if (!IsOpcodeEqual(m->xedd, addr)) {

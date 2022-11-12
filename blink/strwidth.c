@@ -55,7 +55,7 @@ int strnwidth(const char *s, size_t n, size_t o) {
   wint_t c, w;
   unsigned l, r, k;
   enum { kAscii, kUtf8, kEsc, kCsi } t;
-  for (w = r = t = l = i = 0; i < n;) {
+  for (t = kAscii, w = r = l = i = 0; i < n;) {
     if ((c = s[i++] & 0xff)) {
       switch (t) {
         case kAscii:

@@ -5,14 +5,16 @@
 #define IsValidPage(x)    ((x)&1)
 #define MaskPageAddr(x)   ((x)&0x00007ffffffff000)
 #define UnmaskPageAddr(x) SignExtendAddr(MaskPageAddr(x))
-#define SignExtendAddr(x) ((int64_t)((uint64_t)(x) << 16) >> 16)
+#define SignExtendAddr(x) ((i64)((u64)(x) << 16) >> 16)
+
+struct ContiguousMemoryRange {
+  i64 a;
+  i64 b;
+};
 
 struct ContiguousMemoryRanges {
   size_t i;
-  struct ContiguousMemoryRange {
-    int64_t a;
-    int64_t b;
-  } * p;
+  struct ContiguousMemoryRange *p;
 };
 
 void FindContiguousMemoryRanges(struct Machine *,

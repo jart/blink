@@ -14,30 +14,32 @@
 #define PAGE_PA2  0x00007fffffe00000
 #define PAGE_XD   0x8000000000000000
 
-char **LoadStrList(struct Machine *, int64_t);
-int RegisterMemory(struct Machine *, int64_t, void *, size_t);
-uint64_t FindPage(struct Machine *, int64_t);
-void *AccessRam(struct Machine *, int64_t, size_t, void *[2], uint8_t *, bool);
-void *BeginLoadStore(struct Machine *, int64_t, size_t, void *[2], uint8_t *);
-void *BeginStore(struct Machine *, int64_t, size_t, void *[2], uint8_t *);
-void *BeginStoreNp(struct Machine *, int64_t, size_t, void *[2], uint8_t *);
-void *FindReal(struct Machine *, int64_t);
-void *Load(struct Machine *, int64_t, size_t, uint8_t *);
-void *LoadBuf(struct Machine *, int64_t, size_t);
-void *LoadStr(struct Machine *, int64_t);
+char **LoadStrList(struct Machine *, i64);
+int RegisterMemory(struct Machine *, i64, void *, size_t);
+u64 FindPage(struct Machine *, i64);
+u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *,
+                   bool);
+u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2],
+                        u8 *);
+u8 *BeginStore(struct Machine *, i64, size_t, void *[2], u8 *);
+u8 *BeginStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
+u8 *FindReal(struct Machine *, i64);
+u8 *Load(struct Machine *, i64, size_t, u8 *);
+void *LoadBuf(struct Machine *, i64, size_t);
+char *LoadStr(struct Machine *, i64);
 void *MallocPage(void);
-void *RealAddress(struct Machine *, int64_t);
-void *ReserveAddress(struct Machine *, int64_t, size_t);
-void *ResolveAddress(struct Machine *, int64_t);
-void *VirtualSend(struct Machine *, void *, int64_t, uint64_t);
-void EndStore(struct Machine *, int64_t, size_t, void *[2], uint8_t *);
-void EndStoreNp(struct Machine *, int64_t, size_t, void *[2], uint8_t *);
+void *RealAddress(struct Machine *, i64);
+void *ReserveAddress(struct Machine *, i64, size_t);
+u8 *ResolveAddress(struct Machine *, i64);
+void *VirtualSend(struct Machine *, void *, i64, u64);
+void EndStore(struct Machine *, i64, size_t, void *[2], u8 *);
+void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 void ResetRam(struct Machine *);
-void SetReadAddr(struct Machine *, int64_t, uint32_t);
-void SetWriteAddr(struct Machine *, int64_t, uint32_t);
-void VirtualRecv(struct Machine *, int64_t, void *, uint64_t);
-void VirtualRecvWrite(struct Machine *, int64_t, void *, uint64_t);
-void VirtualSendRead(struct Machine *, void *, int64_t, uint64_t);
-void VirtualSet(struct Machine *, int64_t, char, uint64_t);
+void SetReadAddr(struct Machine *, i64, u32);
+void SetWriteAddr(struct Machine *, i64, u32);
+void VirtualRecv(struct Machine *, i64, void *, u64);
+void VirtualRecvWrite(struct Machine *, i64, void *, u64);
+void VirtualSendRead(struct Machine *, void *, i64, u64);
+void VirtualSet(struct Machine *, i64, char, u64);
 
 #endif /* BLINK_MEMORY_H_ */

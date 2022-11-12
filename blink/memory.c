@@ -16,36 +16,36 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/pml4t.h"
+#include "blink/real.h"
 
-void SetReadAddr(struct Machine *m, int64_t addr, uint32_t size) {
+void SetReadAddr(struct Machine *m, i64 addr, u32 size) {
   if (size) {
     m->readaddr = addr;
     m->readsize = size;
   }
 }
 
-void SetWriteAddr(struct Machine *m, int64_t addr, uint32_t size) {
+void SetWriteAddr(struct Machine *m, i64 addr, u32 size) {
   if (size) {
     m->writeaddr = addr;
     m->writesize = size;
   }
 }
 
-uint64_t HandlePageFault(struct Machine *m, uint64_t entry, uint64_t table,
-                         unsigned index) {
+u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
   long page;
-  uint64_t x;
-  if ((page = AllocateLinearPage(m)) != -1) {
+  u64 x;
+  if ((page = AllocateLinearPage(m->system)) != -1) {
     --m->system->memstat.reserved;
     x = page | (entry & ~(PAGE_TA | PAGE_IGN1));
     Write64(m->system->real.p + table + index * 8, x);
@@ -55,9 +55,11 @@ uint64_t HandlePageFault(struct Machine *m, uint64_t entry, uint64_t table,
   }
 }
 
-uint64_t FindPage(struct Machine *m, int64_t virt) {
-  uint64_t table, entry;
-  unsigned level, index, i;
+u64 FindPage(struct Machine *m, i64 virt) {
+  long i;
+  i64 table;
+  u64 entry;
+  unsigned level, index;
   virt &= -4096;
   for (i = 0; i < ARRAYLEN(m->tlb); ++i) {
     if (m->tlb[i].virt == virt && (m->tlb[i].entry & 1)) {
@@ -68,13 +70,13 @@ uint64_t FindPage(struct Machine *m, int64_t virt) {
   entry = m->system->cr3;
   do {
     table = entry & PAGE_TA;
-    assert(table < m->system->real.n);
+    unassert(table < GetRealMemorySize(m->system));
     index = (virt >> level) & 511;
     entry = Read64(m->system->real.p + table + index * 8);
     if (!(entry & 1)) return 0;
   } while ((level -= 9) >= 12);
   if ((entry & PAGE_RSRV) &&
-      (entry = HandlePageFault(m, entry, table, index)) == -1) {
+      !(entry = HandlePageFault(m, entry, table, index))) {
     return 0;
   }
   m->tlbindex = (m->tlbindex + 1) & (ARRAYLEN(m->tlb) - 1);
@@ -84,8 +86,8 @@ uint64_t FindPage(struct Machine *m, int64_t virt) {
   return entry;
 }
 
-void *FindReal(struct Machine *m, int64_t virt) {
-  uint64_t entry;
+u8 *FindReal(struct Machine *m, i64 virt) {
+  u64 entry;
   if ((m->mode & 3) != XED_MODE_REAL) {
     if (-0x800000000000 <= virt && virt < 0x800000000000) {
       if (!(entry = FindPage(m, virt))) return NULL;
@@ -93,26 +95,27 @@ void *FindReal(struct Machine *m, int64_t virt) {
     } else {
       return NULL;
     }
-  } else if (0 <= virt && virt + 4095 < m->system->real.n) {
+  } else if (virt >= 0 && virt <= 0xffffffff &&
+             (virt & 0xffffffff) + 4095 < GetRealMemorySize(m->system)) {
     return m->system->real.p + virt;
   } else {
     return NULL;
   }
 }
 
-void *ResolveAddress(struct Machine *m, int64_t v) {
-  void *r;
+u8 *ResolveAddress(struct Machine *m, i64 v) {
+  u8 *r;
   if ((r = FindReal(m, v))) return r;
   ThrowSegmentationFault(m, v);
 }
 
-void VirtualSet(struct Machine *m, int64_t v, char c, uint64_t n) {
+void VirtualSet(struct Machine *m, i64 v, char c, u64 n) {
   char *p;
-  uint64_t k;
+  u64 k;
   k = 4096 - (v & 4095);
   while (n) {
     k = MIN(k, n);
-    p = ResolveAddress(m, v);
+    p = (char *)ResolveAddress(m, v);
     memset(p, c, k);
     n -= k;
     v += k;
@@ -120,13 +123,13 @@ void VirtualSet(struct Machine *m, int64_t v, char c, uint64_t n) {
   }
 }
 
-void VirtualCopy(struct Machine *m, int64_t v, char *r, uint64_t n, bool d) {
+void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
   char *p;
-  uint64_t k;
+  u64 k;
   k = 4096 - (v & 4095);
   while (n) {
     k = MIN(k, n);
-    p = ResolveAddress(m, v);
+    p = (char *)ResolveAddress(m, v);
     if (d) {
       memcpy(r, p, k);
     } else {
@@ -139,28 +142,28 @@ void VirtualCopy(struct Machine *m, int64_t v, char *r, uint64_t n, bool d) {
   }
 }
 
-void *VirtualSend(struct Machine *m, void *dst, int64_t src, uint64_t n) {
-  VirtualCopy(m, src, dst, n, true);
+void *VirtualSend(struct Machine *m, void *dst, i64 src, u64 n) {
+  VirtualCopy(m, src, (char *)dst, n, true);
   return dst;
 }
 
-void VirtualSendRead(struct Machine *m, void *dst, int64_t addr, uint64_t n) {
+void VirtualSendRead(struct Machine *m, void *dst, i64 addr, u64 n) {
   VirtualSend(m, dst, addr, n);
   SetReadAddr(m, addr, n);
 }
 
-void VirtualRecv(struct Machine *m, int64_t dst, void *src, uint64_t n) {
-  VirtualCopy(m, dst, src, n, false);
+void VirtualRecv(struct Machine *m, i64 dst, void *src, u64 n) {
+  VirtualCopy(m, dst, (char *)src, n, false);
 }
 
-void VirtualRecvWrite(struct Machine *m, int64_t addr, void *src, uint64_t n) {
+void VirtualRecvWrite(struct Machine *m, i64 addr, void *src, u64 n) {
   VirtualRecv(m, addr, src, n);
   SetWriteAddr(m, addr, n);
 }
 
-void *ReserveAddress(struct Machine *m, int64_t v, size_t n) {
+void *ReserveAddress(struct Machine *m, i64 v, size_t n) {
   void *r;
-  assert(n <= sizeof(m->opcache->stash));
+  unassert(n <= sizeof(m->opcache->stash));
   if ((v & 4095) + n <= 4096) return ResolveAddress(m, v);
   m->opcache->stashaddr = v;
   m->opcache->stashsize = n;
@@ -169,17 +172,17 @@ void *ReserveAddress(struct Machine *m, int64_t v, size_t n) {
   return r;
 }
 
-void *AccessRam(struct Machine *m, int64_t v, size_t n, void *p[2],
-                uint8_t *tmp, bool copy) {
+u8 *AccessRam(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
+              bool copy) {
   unsigned k;
-  uint8_t *a, *b;
-  assert(n <= 4096);
+  u8 *a, *b;
+  unassert(n <= 4096);
   if ((v & 4095) + n <= 4096) return ResolveAddress(m, v);
   k = 4096;
   k -= v & 4095;
-  assert(k <= 4096);
-  a = ResolveAddress(m, v);
-  b = ResolveAddress(m, v + k);
+  unassert(k <= 4096);
+  a = (u8 *)ResolveAddress(m, v);
+  b = (u8 *)ResolveAddress(m, v + k);
   if (copy) {
     memcpy(tmp, a, k);
     memcpy(tmp + k, b, n - k);
@@ -189,60 +192,56 @@ void *AccessRam(struct Machine *m, int64_t v, size_t n, void *p[2],
   return tmp;
 }
 
-void *Load(struct Machine *m, int64_t v, size_t n, uint8_t *b) {
+u8 *Load(struct Machine *m, i64 v, size_t n, u8 *b) {
   void *p[2];
   SetReadAddr(m, v, n);
   return AccessRam(m, v, n, p, b, true);
 }
 
-void *BeginStore(struct Machine *m, int64_t v, size_t n, void *p[2],
-                 uint8_t *b) {
+u8 *BeginStore(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   SetWriteAddr(m, v, n);
   return AccessRam(m, v, n, p, b, false);
 }
 
-void *BeginStoreNp(struct Machine *m, int64_t v, size_t n, void *p[2],
-                   uint8_t *b) {
+u8 *BeginStoreNp(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   if (!v) return NULL;
   return BeginStore(m, v, n, p, b);
 }
 
-void *BeginLoadStore(struct Machine *m, int64_t v, size_t n, void *p[2],
-                     uint8_t *b) {
+u8 *BeginLoadStore(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   SetWriteAddr(m, v, n);
   return AccessRam(m, v, n, p, b, true);
 }
 
-void EndStore(struct Machine *m, int64_t v, size_t n, void *p[2], uint8_t *b) {
+void EndStore(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   unsigned k;
-  assert(n <= 4096);
+  unassert(n <= 4096);
   if ((v & 4095) + n <= 4096) return;
   k = 4096;
   k -= v & 4095;
-  assert(k > n);
-  assert(p[0]);
-  assert(p[1]);
+  unassert(k > n);
+  unassert(p[0]);
+  unassert(p[1]);
   memcpy(p[0], b, k);
   memcpy(p[1], b + k, n - k);
 }
 
-void EndStoreNp(struct Machine *m, int64_t v, size_t n, void *p[2],
-                uint8_t *b) {
+void EndStoreNp(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   if (v) EndStore(m, v, n, p, b);
 }
 
-void *LoadBuf(struct Machine *m, int64_t addr, size_t size) {
+void *LoadBuf(struct Machine *m, i64 addr, size_t size) {
   size_t have, need;
   char *buf, *copy, *page;
   have = 4096 - (addr & 4095);
   if (!addr) return NULL;
-  if (!(buf = FindReal(m, addr))) return NULL;
+  if (!(buf = (char *)FindReal(m, addr))) return NULL;
   if (size > have) {
-    if (!(copy = malloc(size))) return NULL;
-    buf = memcpy(copy, buf, have);
+    if (!(copy = (char *)malloc(size))) return NULL;
+    buf = (char *)memcpy(copy, buf, have);
     do {
       need = MIN(4096, size - have);
-      if ((page = FindReal(m, addr + have))) {
+      if ((page = (char *)FindReal(m, addr + have))) {
         memcpy(copy + have, page, need);
         have += need;
       } else {
@@ -255,43 +254,43 @@ void *LoadBuf(struct Machine *m, int64_t addr, size_t size) {
   return buf;
 }
 
-void *LoadStr(struct Machine *m, int64_t addr) {
+char *LoadStr(struct Machine *m, i64 addr) {
   size_t have;
   char *copy, *page, *p;
   have = 4096 - (addr & 4095);
   if (!addr) return NULL;
-  if (!(page = FindReal(m, addr))) return NULL;
-  if ((p = memchr(page, '\0', have))) {
+  if (!(page = (char *)FindReal(m, addr))) return NULL;
+  if ((p = (char *)memchr(page, '\0', have))) {
     SetReadAddr(m, addr, p - page + 1);
     return page;
   }
-  if (!(copy = malloc(have + 4096))) return NULL;
+  if (!(copy = (char *)malloc(have + 4096))) return NULL;
   memcpy(copy, page, have);
   for (;;) {
-    if (!(page = FindReal(m, addr + have))) break;
-    if ((p = memccpy(copy + have, page, '\0', 4096))) {
+    if (!(page = (char *)FindReal(m, addr + have))) break;
+    if ((p = (char *)memccpy(copy + have, page, '\0', 4096))) {
       SetReadAddr(m, addr, have + (p - (copy + have)) + 1);
-      m->freelist.p =
-          realloc(m->freelist.p, ++m->freelist.n * sizeof(*m->freelist.p));
-      return (m->freelist.p[m->freelist.n - 1] = copy);
+      m->freelist.p = (void **)realloc(
+          m->freelist.p, ++m->freelist.n * sizeof(*m->freelist.p));
+      return (char *)(m->freelist.p[m->freelist.n - 1] = copy);
     }
     have += 4096;
-    if (!(p = realloc(copy, have + 4096))) break;
+    if (!(p = (char *)realloc(copy, have + 4096))) break;
     copy = p;
   }
   free(copy);
   return NULL;
 }
 
-char **LoadStrList(struct Machine *m, int64_t addr) {
+char **LoadStrList(struct Machine *m, i64 addr) {
   int n;
   char **list;
-  uint8_t b[8];
+  u8 b[8];
   for (list = 0, n = 0;;) {
-    list = realloc(list, ++n * sizeof(*list));
+    list = (char **)realloc(list, ++n * sizeof(*list));
     VirtualSendRead(m, b, addr + n * 8 - 8, 8);
     if (Read64(b)) {
-      list[n - 1] = LoadStr(m, Read64(b));
+      list[n - 1] = (char *)LoadStr(m, Read64(b));
     } else {
       list[n - 1] = 0;
       break;

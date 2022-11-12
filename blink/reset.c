@@ -29,7 +29,23 @@ static void ResetFpu(struct Machine *m) {
   long i;
   m->fpu.sw = 0;
   m->fpu.tw = -1;
-  m->fpu.cw = 0x037f;
+  // We diverge from System V ABI here since we don't have long double
+  // support yet. We only support double precision when using x87 fpu.
+  //
+  //	8087 FPU Control Word
+  //	 IM: Invalid Operation ───────────────┐
+  //	 DM: Denormal Operand ───────────────┐│
+  //	 ZM: Zero Divide ───────────────────┐││
+  //	 OM: Overflow ─────────────────────┐│││
+  //	 UM: Underflow ───────────────────┐││││
+  //	 PM: Precision ──────────────────┐│││││
+  //	 PC: Precision Control ───────┐  ││││││
+  //	  {float,∅,double,long double}│  ││││││
+  //	 RC: Rounding Control ──────┐ │  ││││││
+  //	  {even, →-∞, →+∞, →0}      │┌┤  ││││││
+  //	                           ┌┤││  ││││││
+  //	                          d││││rr││││││
+  m->fpu.cw = 0b0000000000000000000001001111111;
   for (i = 0; i < 8; ++i) {
     m->fpu.st[i] = -NAN;
   }

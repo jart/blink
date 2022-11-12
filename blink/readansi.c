@@ -25,7 +25,7 @@
 
 ssize_t readansi(int fd, char *buf, size_t size) {
   int i, j;
-  uint8_t c;
+  u8 c;
   enum { kAscii, kUtf8, kEsc, kCsi, kSs } t;
   if (size) buf[0] = 0;
   for (j = i = 0, t = kAscii;;) {

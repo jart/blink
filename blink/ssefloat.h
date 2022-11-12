@@ -2,29 +2,29 @@
 #define BLINK_SSEFLOAT_H_
 #include "blink/machine.h"
 
-void OpUnpcklpsd(struct Machine *, uint32_t);
-void OpUnpckhpsd(struct Machine *, uint32_t);
-void OpPextrwGdqpUdqIb(struct Machine *, uint32_t);
-void OpPinsrwVdqEwIb(struct Machine *, uint32_t);
-void OpShuffle(struct Machine *, uint32_t);
-void OpShufpsd(struct Machine *, uint32_t);
-void OpSqrtpsd(struct Machine *, uint32_t);
-void OpRsqrtps(struct Machine *, uint32_t);
-void OpRcpps(struct Machine *, uint32_t);
-void OpComissVsWs(struct Machine *, uint32_t);
-void OpAddpsd(struct Machine *, uint32_t);
-void OpMulpsd(struct Machine *, uint32_t);
-void OpSubpsd(struct Machine *, uint32_t);
-void OpDivpsd(struct Machine *, uint32_t);
-void OpMinpsd(struct Machine *, uint32_t);
-void OpMaxpsd(struct Machine *, uint32_t);
-void OpCmppsd(struct Machine *, uint32_t);
-void OpAndpsd(struct Machine *, uint32_t);
-void OpAndnpsd(struct Machine *, uint32_t);
-void OpOrpsd(struct Machine *, uint32_t);
-void OpXorpsd(struct Machine *, uint32_t);
-void OpHaddpsd(struct Machine *, uint32_t);
-void OpHsubpsd(struct Machine *, uint32_t);
-void OpAddsubpsd(struct Machine *, uint32_t);
+void OpUnpcklpsd(struct Machine *, u32);
+void OpUnpckhpsd(struct Machine *, u32);
+void OpPextrwGdqpUdqIb(struct Machine *, u32);
+void OpPinsrwVdqEwIb(struct Machine *, u32);
+void OpShuffle(struct Machine *, u32);
+void OpShufpsd(struct Machine *, u32);
+void OpSqrtpsd(struct Machine *, u32);
+void OpRsqrtps(struct Machine *, u32);
+void OpRcpps(struct Machine *, u32);
+void OpComissVsWs(struct Machine *, u32);
+void OpAddpsd(struct Machine *, u32);
+void OpMulpsd(struct Machine *, u32);
+void OpSubpsd(struct Machine *, u32);
+void OpDivpsd(struct Machine *, u32);
+void OpMinpsd(struct Machine *, u32);
+void OpMaxpsd(struct Machine *, u32);
+void OpCmppsd(struct Machine *, u32);
+void OpAndpsd(struct Machine *, u32);
+void OpAndnpsd(struct Machine *, u32);
+void OpOrpsd(struct Machine *, u32);
+void OpXorpsd(struct Machine *, u32);
+void OpHaddpsd(struct Machine *, u32);
+void OpHsubpsd(struct Machine *, u32);
+void OpAddsubpsd(struct Machine *, u32);
 
 #endif /* BLINK_SSEFLOAT_H_ */

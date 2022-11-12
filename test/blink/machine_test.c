@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <math.h>
 
+#include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/fpu.h"
 #include "blink/machine.h"
@@ -91,13 +92,15 @@ uint8_t kTenthprime2[] = {
     0xC3,                          //
 };
 
+struct System *s;
 struct Machine *m;
 
 void SetUp(void) {
-  m = NewMachine();
+  unassert((s = NewSystem()));
+  unassert((m = NewMachine(s, 0)));
   m->mode = XED_MACHINE_MODE_LONG_64;
-  m->system->cr3 = AllocateLinearPage(m);
-  ReserveVirtual(m, 0, 4096, 0x0207);
+  m->system->cr3 = AllocateLinearPage(s);
+  ReserveVirtual(s, 0, 4096, 0x0207);
   ASSERT_EQ(0x1007, Read64(m->system->real.p + 0x0000));  // PML4T
   ASSERT_EQ(0x2007, Read64(m->system->real.p + 0x1000));  // PDPT
   ASSERT_EQ(0x3007, Read64(m->system->real.p + 0x2000));  // PDE
@@ -111,12 +114,13 @@ void SetUp(void) {
 }
 
 void TearDown(void) {
-  FreeVirtual(m, 0, 4096);
+  FreeVirtual(s, 0, 4096);
   ASSERT_EQ(0x1007, Read64(m->system->real.p + 0x0000));  // PML4T
   ASSERT_EQ(0x2007, Read64(m->system->real.p + 0x1000));  // PDPT
   ASSERT_EQ(0x3007, Read64(m->system->real.p + 0x2000));  // PDE
   ASSERT_EQ(0x0000, Read64(m->system->real.p + 0x3000));  // PT
   FreeMachine(m);
+  FreeSystem(s);
 }
 
 int ExecuteUntilHalt(struct Machine *m) {

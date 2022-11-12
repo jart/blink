@@ -19,7 +19,7 @@
 #include "blink/bitscan.h"
 #include "blink/tpenc.h"
 
-static const uint16_t kTpEnc[32 - 7] = {
+static const u16 kTpEnc[32 - 7] = {
     1 | 0300 << 8, 1 | 0300 << 8, 1 | 0300 << 8, 1 | 0300 << 8, 2 | 0340 << 8,
     2 | 0340 << 8, 2 | 0340 << 8, 2 | 0340 << 8, 2 | 0340 << 8, 3 | 0360 << 8,
     3 | 0360 << 8, 3 | 0360 << 8, 3 | 0360 << 8, 3 | 0360 << 8, 4 | 0370 << 8,
@@ -27,9 +27,9 @@ static const uint16_t kTpEnc[32 - 7] = {
     5 | 0374 << 8, 5 | 0374 << 8, 5 | 0374 << 8, 5 | 0374 << 8, 5 | 0374 << 8,
 };
 
-uint64_t tpenc(wint_t c) {
+u64 tpenc(wint_t c) {
   int e, n;
-  uint64_t w;
+  u64 w;
   if (0 <= c && c <= 127) return c;
   e = kTpEnc[bsr(c) - 7];
   n = e & 0xff;

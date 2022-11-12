@@ -1,7 +1,7 @@
 #-*-mode:makefile-gmake;indent-tabs-mode:t;tab-width:8;coding:utf-8-*-┐
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
-o/$(MODE)/third_party/cosmo/ok:									\
+o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/intrin_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/lockscale_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/lock_test.com.ok					\

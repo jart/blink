@@ -1,10 +1,10 @@
 #ifndef BLINK_BITSCAN_H_
 #define BLINK_BITSCAN_H_
-#include <stdint.h>
+#include "blink/types.h"
 #ifndef __GNUC__
 
-int bsr(uint64_t);
-int bsf(uint64_t);
+int bsr(u64);
+int bsf(u64);
 
 #else
 #define bsf(x) __builtin_ctzll(x)

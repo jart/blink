@@ -1,76 +1,76 @@
 #ifndef BLINK_LINUX_H_
 #define BLINK_LINUX_H_
-#include <stdint.h>
+#include "blink/types.h"
 
 struct iovec_linux {
-  uint8_t iov_base[8];
-  uint8_t iov_len[8];
+  u8 iov_base[8];
+  u8 iov_len[8];
 };
 
 struct pollfd_linux {
-  uint8_t fd[4];
-  uint8_t events[2];
-  uint8_t revents[2];
+  u8 fd[4];
+  u8 events[2];
+  u8 revents[2];
 };
 
 struct timeval_linux {
-  uint8_t tv_sec[8];
-  uint8_t tv_usec[8];
+  u8 tv_sec[8];
+  u8 tv_usec[8];
 };
 
 struct timespec_linux {
-  uint8_t tv_sec[8];
-  uint8_t tv_nsec[8];
+  u8 tv_sec[8];
+  u8 tv_nsec[8];
 };
 
 struct timezone_linux {
-  uint8_t tz_minuteswest[4];
-  uint8_t tz_dsttime[4];
+  u8 tz_minuteswest[4];
+  u8 tz_dsttime[4];
 };
 
 struct sigaction_linux {
-  uint8_t handler[8];
-  uint8_t flags[8];
-  uint8_t restorer[8];
-  uint8_t mask[8];
+  u8 handler[8];
+  u8 flags[8];
+  u8 restorer[8];
+  u8 mask[8];
 };
 
 struct winsize_linux {
-  uint8_t ws_row[2];
-  uint8_t ws_col[2];
-  uint8_t ws_xpixel[2];
-  uint8_t ws_ypixel[2];
+  u8 ws_row[2];
+  u8 ws_col[2];
+  u8 ws_xpixel[2];
+  u8 ws_ypixel[2];
 };
 
 struct termios_linux {
-  uint8_t c_iflag[4];
-  uint8_t c_oflag[4];
-  uint8_t c_cflag[4];
-  uint8_t c_lflag[4];
-  uint8_t c_cc[32];
-  uint8_t c_ispeed[4];
-  uint8_t c_ospeed[4];
+  u8 c_iflag[4];
+  u8 c_oflag[4];
+  u8 c_cflag[4];
+  u8 c_lflag[4];
+  u8 c_cc[32];
+  u8 c_ispeed[4];
+  u8 c_ospeed[4];
 };
 
 struct sockaddr_in_linux {
-  uint8_t sin_family[2];
-  uint16_t sin_port;
-  uint32_t sin_addr;
-  uint8_t sin_zero[8];
+  u8 sin_family[2];
+  u16 sin_port;
+  u32 sin_addr;
+  u8 sin_zero[8];
 };
 
 struct stat_linux {
-  uint8_t st_dev[8];
-  uint8_t st_ino[8];
-  uint8_t st_nlink[8];
-  uint8_t st_mode[4];
-  uint8_t st_uid[4];
-  uint8_t st_gid[4];
-  uint8_t __pad[4];
-  uint8_t st_rdev[8];
-  uint8_t st_size[8];
-  uint8_t st_blksize[8];
-  uint8_t st_blocks[8];
+  u8 st_dev[8];
+  u8 st_ino[8];
+  u8 st_nlink[8];
+  u8 st_mode[4];
+  u8 st_uid[4];
+  u8 st_gid[4];
+  u8 __pad[4];
+  u8 st_rdev[8];
+  u8 st_size[8];
+  u8 st_blksize[8];
+  u8 st_blocks[8];
   struct timespec_linux st_atim;
   struct timespec_linux st_mtim;
   struct timespec_linux st_ctim;
@@ -84,80 +84,80 @@ struct itimerval_linux {
 struct rusage_linux {
   struct timeval_linux ru_utime;
   struct timeval_linux ru_stime;
-  uint8_t ru_maxrss[8];
-  uint8_t ru_ixrss[8];
-  uint8_t ru_idrss[8];
-  uint8_t ru_isrss[8];
-  uint8_t ru_minflt[8];
-  uint8_t ru_majflt[8];
-  uint8_t ru_nswap[8];
-  uint8_t ru_inblock[8];
-  uint8_t ru_oublock[8];
-  uint8_t ru_msgsnd[8];
-  uint8_t ru_msgrcv[8];
-  uint8_t ru_nsignals[8];
-  uint8_t ru_nvcsw[8];
-  uint8_t ru_nivcsw[8];
+  u8 ru_maxrss[8];
+  u8 ru_ixrss[8];
+  u8 ru_idrss[8];
+  u8 ru_isrss[8];
+  u8 ru_minflt[8];
+  u8 ru_majflt[8];
+  u8 ru_nswap[8];
+  u8 ru_inblock[8];
+  u8 ru_oublock[8];
+  u8 ru_msgsnd[8];
+  u8 ru_msgrcv[8];
+  u8 ru_nsignals[8];
+  u8 ru_nvcsw[8];
+  u8 ru_nivcsw[8];
 };
 
 struct siginfo_linux {
-  uint8_t si_signo[4];
-  uint8_t si_errno[4];
-  uint8_t si_code[4];
-  uint8_t __pad[4];
-  uint8_t payload[112];
+  u8 si_signo[4];
+  u8 si_errno[4];
+  u8 si_code[4];
+  u8 __pad[4];
+  u8 payload[112];
 };
 
 struct fpstate_linux {
-  uint8_t cwd[2];
-  uint8_t swd[2];
-  uint8_t ftw[2];
-  uint8_t fop[2];
-  uint8_t rip[8];
-  uint8_t rdp[8];
-  uint8_t mxcsr[4];
-  uint8_t mxcr_mask[4];
-  uint8_t st[8][16];
-  uint8_t xmm[16][16];
-  uint8_t __padding[96];
+  u8 cwd[2];
+  u8 swd[2];
+  u8 ftw[2];
+  u8 fop[2];
+  u8 rip[8];
+  u8 rdp[8];
+  u8 mxcsr[4];
+  u8 mxcr_mask[4];
+  u8 st[8][16];
+  u8 xmm[16][16];
+  u8 __padding[96];
 };
 
 struct ucontext_linux {
-  uint8_t uc_flags[8];
-  uint8_t uc_link[8];
-  uint8_t ss_sp[8];
-  uint8_t ss_flags[4];
-  uint8_t __pad0[4];
-  uint8_t ss_size[8];
-  uint8_t r8[8];
-  uint8_t r9[8];
-  uint8_t r10[8];
-  uint8_t r11[8];
-  uint8_t r12[8];
-  uint8_t r13[8];
-  uint8_t r14[8];
-  uint8_t r15[8];
-  uint8_t rdi[8];
-  uint8_t rsi[8];
-  uint8_t rbp[8];
-  uint8_t rbx[8];
-  uint8_t rdx[8];
-  uint8_t rax[8];
-  uint8_t rcx[8];
-  uint8_t rsp[8];
-  uint8_t rip[8];
-  uint8_t eflags[8];
-  uint8_t cs[2];
-  uint8_t gs[2];
-  uint8_t fs[2];
-  uint8_t ss[2];
-  uint8_t err[8];
-  uint8_t trapno[8];
-  uint8_t oldmask[8];
-  uint8_t cr2[8];
-  uint8_t fpstate[8];
-  uint8_t __pad1[64];
-  uint8_t uc_sigmask[8];
+  u8 uc_flags[8];
+  u8 uc_link[8];
+  u8 ss_sp[8];
+  u8 ss_flags[4];
+  u8 __pad0[4];
+  u8 ss_size[8];
+  u8 r8[8];
+  u8 r9[8];
+  u8 r10[8];
+  u8 r11[8];
+  u8 r12[8];
+  u8 r13[8];
+  u8 r14[8];
+  u8 r15[8];
+  u8 rdi[8];
+  u8 rsi[8];
+  u8 rbp[8];
+  u8 rbx[8];
+  u8 rdx[8];
+  u8 rax[8];
+  u8 rcx[8];
+  u8 rsp[8];
+  u8 rip[8];
+  u8 eflags[8];
+  u8 cs[2];
+  u8 gs[2];
+  u8 fs[2];
+  u8 ss[2];
+  u8 err[8];
+  u8 trapno[8];
+  u8 oldmask[8];
+  u8 cr2[8];
+  u8 fpstate[8];
+  u8 __pad1[64];
+  u8 uc_sigmask[8];
 };
 
 struct utsname_linux {
@@ -170,8 +170,8 @@ struct utsname_linux {
 };
 
 struct rlimit_linux {
-  uint8_t rlim_cur[8];
-  uint8_t rlim_max[8];
+  u8 rlim_cur[8];
+  u8 rlim_max[8];
 };
 
 #endif /* BLINK_LINUX_H_ */

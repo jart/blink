@@ -71,16 +71,16 @@ ssize_t GetRandom(void *p, size_t n) {
 #if defined(__linux) && defined(SYS_getrandom)
   rc = syscall(SYS_getrandom, p, n, 0);
 #elif defined(__OpenBSD__) || defined(__APPLE__)
-  rc = !getentropy(p, n) ? n : -1;
+  rc = !getentropy((char *)p, n) ? n : -1;
 #elif defined(KERN_ARND) &&  \
     (defined(__FreeBSD__) || \
      (defined(__NetBSD__) && __NetBSD_Version__ >= 400000000))
-  rc = GetKernArnd(p, n);
+  rc = GetKernArnd((char *)p, n);
 #else
   rc = -1;
 #endif
   if (rc == -1 && errno == ENOSYS) {
-    rc = GetDevRandom(p, n);
+    rc = GetDevRandom((char *)p, n);
   }
   return rc;
 }

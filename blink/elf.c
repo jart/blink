@@ -36,7 +36,7 @@ void CheckElfAddress(const Elf64_Ehdr *elf, size_t mapsize, intptr_t addr,
 }
 
 char *GetElfString(const Elf64_Ehdr *elf, size_t mapsize, const char *strtab,
-                   uint32_t rva) {
+                   u32 rva) {
   intptr_t addr = (intptr_t)strtab + rva;
   CheckElfAddress(elf, mapsize, addr, 0);
   CheckElfAddress(elf, mapsize, addr,
@@ -45,7 +45,7 @@ char *GetElfString(const Elf64_Ehdr *elf, size_t mapsize, const char *strtab,
 }
 
 Elf64_Phdr *GetElfSegmentHeaderAddress(const Elf64_Ehdr *elf, size_t mapsize,
-                                       uint64_t i) {
+                                       u64 i) {
   intptr_t addr = ((intptr_t)elf + (intptr_t)Read64(elf->e_phoff) +
                    (intptr_t)Read16(elf->e_phentsize) * i);
   CheckElfAddress(elf, mapsize, addr, Read16(elf->e_phentsize));
@@ -63,7 +63,7 @@ void *GetElfSectionAddress(const Elf64_Ehdr *elf, size_t mapsize,
 
 char *GetElfSectionNameStringTable(const Elf64_Ehdr *elf, size_t mapsize) {
   if (!Read64(elf->e_shoff) || !Read16(elf->e_shentsize)) return NULL;
-  return GetElfSectionAddress(
+  return (char *)GetElfSectionAddress(
       elf, mapsize,
       GetElfSectionHeaderAddress(elf, mapsize, Read16(elf->e_shstrndx)));
 }
@@ -76,7 +76,7 @@ const char *GetElfSectionName(const Elf64_Ehdr *elf, size_t mapsize,
 }
 
 Elf64_Shdr *GetElfSectionHeaderAddress(const Elf64_Ehdr *elf, size_t mapsize,
-                                       uint16_t i) {
+                                       u16 i) {
   intptr_t addr;
   addr = ((intptr_t)elf + (intptr_t)Read64(elf->e_shoff) +
           (intptr_t)Read16(elf->e_shentsize) * i);
@@ -94,7 +94,7 @@ char *GetElfStringTable(const Elf64_Ehdr *elf, size_t mapsize) {
       name = GetElfSectionName(elf, mapsize,
                                GetElfSectionHeaderAddress(elf, mapsize, i));
       if (name && !strcmp(name, ".strtab")) {
-        return GetElfSectionAddress(elf, mapsize, shdr);
+        return (char *)GetElfSectionAddress(elf, mapsize, shdr);
       }
     }
   }
@@ -102,7 +102,7 @@ char *GetElfStringTable(const Elf64_Ehdr *elf, size_t mapsize) {
 }
 
 Elf64_Sym *GetElfSymbolTable(const Elf64_Ehdr *elf, size_t mapsize,
-                             uint64_t *out_count) {
+                             int *out_count) {
   int i;
   Elf64_Shdr *shdr;
   for (i = Read16(elf->e_shnum); i > 0; --i) {
@@ -112,7 +112,7 @@ Elf64_Sym *GetElfSymbolTable(const Elf64_Ehdr *elf, size_t mapsize,
       if (out_count) {
         *out_count = Read64(shdr->sh_size) / Read64(shdr->sh_entsize);
       }
-      return GetElfSectionAddress(elf, mapsize, shdr);
+      return (Elf64_Sym *)GetElfSectionAddress(elf, mapsize, shdr);
     }
   }
   return NULL;

@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -24,7 +23,6 @@
 #include <poll.h>
 #include <signal.h>
 #include <stdarg.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,10 +34,10 @@
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
-#include "blink/assert.h"
 #include <wctype.h>
 
 #include "blink/address.h"
+#include "blink/assert.h"
 #include "blink/breakpoint.h"
 #include "blink/builtin.h"
 #include "blink/case.h"
@@ -59,11 +57,13 @@
 #include "blink/panel.h"
 #include "blink/pml4t.h"
 #include "blink/pty.h"
+#include "blink/real.h"
 #include "blink/signal.h"
 #include "blink/strwidth.h"
 #include "blink/termios.h"
 #include "blink/thompike.h"
 #include "blink/tpenc.h"
+#include "blink/types.h"
 #include "blink/util.h"
 #include "blink/xlat.h"
 #include "blink/xmmtype.h"
@@ -73,8 +73,8 @@
 \r\n\
 DESCRIPTION\r\n\
 \r\n\
-  Emulates x86 Linux Programs w/ Dense Machine State Visualization\r\n\
-  Please keep still and only watchen astaunished das blinkenlights\r\n\
+  blink is an x86-64-linux virtual machine w/ memory visualization\r\n\
+  please keep still and only watchen astaunished das blinkenlights\r\n\
 \r\n\
 FLAGS\r\n\
 \r\n\
@@ -102,7 +102,7 @@ FEATURES\r\n\
 \r\n"
 
 #define HELP \
-  "\033[1mBLINKENLIGHTS v1.o\033[22m\
+  "\033[1mBLINK v1.o\033[22m\
                  https://justine.lol/blinkenlights/\n\
 \n\
 KEYBOARD SHORTCUTS                 CLI FLAGS\n\
@@ -183,7 +183,7 @@ alt-t   slowmo"
 #endif
 
 struct MemoryView {
-  int64_t start;
+  i64 start;
   int zoom;
 };
 
@@ -245,23 +245,23 @@ static int verbose;
 static int exitcode;
 
 static long ips;
-static char *dialog;
+static i64 oldlen;
+static i64 opstart;
+static i64 mapsstart;
+static u64 readaddr;
+static u64 readsize;
+static u64 writeaddr;
+static u64 writesize;
 static char *codepath;
-static void *onbusted;
-static int64_t oldlen;
+static i64 framesstart;
 static struct Pty *pty;
-static int64_t opstart;
+static u64 last_opcount;
+static jmp_buf *onbusted;
 static struct Machine *m;
-static int64_t mapsstart;
-static uint64_t readaddr;
-static uint64_t readsize;
-static uint64_t writeaddr;
-static uint64_t writesize;
+static const char *dialog;
 static char *statusmessage;
-static int64_t framesstart;
-static uint64_t last_opcount;
 static unsigned long opcount;
-static int64_t breakpointsstart;
+static i64 breakpointsstart;
 
 static struct Panels pan;
 static struct Signals signals;
@@ -315,11 +315,11 @@ static char *FormatDouble(char buf[32], long double x) {
   return buf;
 }
 
-static int64_t SignExtend(uint64_t x, char b) {
+static i64 SignExtend(u64 x, char b) {
   char k;
-  assert(1 <= b && b <= 64);
+  unassert(1 <= b && b <= 64);
   k = 64 - b;
-  return (int64_t)(x << k) >> k;
+  return (i64)(x << k) >> k;
 }
 
 static void SetCarry(bool cf) {
@@ -362,7 +362,7 @@ static int GetXmmTypeCellCount(int r) {
   }
 }
 
-static uint8_t CycleXmmType(uint8_t t) {
+static u8 CycleXmmType(u8 t) {
   switch (t) {
     default:
     case kXmmIntegral:
@@ -374,7 +374,7 @@ static uint8_t CycleXmmType(uint8_t t) {
   }
 }
 
-static uint8_t CycleXmmDisp(uint8_t t) {
+static u8 CycleXmmDisp(u8 t) {
   switch (t) {
     default:
     case kXmmDecimal:
@@ -386,7 +386,7 @@ static uint8_t CycleXmmDisp(uint8_t t) {
   }
 }
 
-static uint8_t CycleXmmSize(uint8_t w) {
+static u8 CycleXmmSize(u8 w) {
   switch (w) {
     default:
     case 1:
@@ -404,7 +404,7 @@ static int GetPointerWidth(void) {
   return 2 << (m->mode & 3);
 }
 
-static int64_t GetIp(void) {
+static i64 GetIp(void) {
   switch (GetPointerWidth()) {
     default:
     case 8:
@@ -416,7 +416,7 @@ static int64_t GetIp(void) {
   }
 }
 
-static int64_t GetSp(void) {
+static i64 GetSp(void) {
   switch (GetPointerWidth()) {
     default:
     case 8:
@@ -428,7 +428,7 @@ static int64_t GetSp(void) {
   }
 }
 
-static int64_t ReadWord(uint8_t *p) {
+static i64 ReadWord(u8 *p) {
   switch (GetPointerWidth()) {
     default:
     case 8:
@@ -458,25 +458,25 @@ static void CopyMachineState(struct MachineState *ms) {
  * Handles file mapped page faults in valid page but past eof.
  */
 static void OnSigBusted(int sig) {
-  longjmp(onbusted, 1);
+  longjmp(*onbusted, 1);
 }
 
 /**
  * Returns true if 𝑣 is a shadow memory virtual address.
  */
-static bool IsShadow(int64_t v) {
+static bool IsShadow(i64 v) {
   return 0x7fff8000 <= v && v < 0x100080000000;
 }
 
 /**
  * Returns glyph representing byte at virtual address 𝑣.
  */
-static int VirtualBing(int64_t v) {
+static int VirtualBing(i64 v) {
   int rc;
-  uint8_t *p;
+  u8 *p;
   jmp_buf busted;
-  onbusted = busted;
-  if ((p = FindReal(m, v))) {
+  onbusted = &busted;
+  if ((p = (u8 *)FindReal(m, v))) {
     if (!setjmp(busted)) {
       rc = kCp437[p[0] & 255];
     } else {
@@ -492,13 +492,13 @@ static int VirtualBing(int64_t v) {
 /**
  * Returns ASAN shadow uint8 concomitant to address 𝑣 or -1.
  */
-static int VirtualShadow(int64_t v) {
+static int VirtualShadow(i64 v) {
   int rc;
   char *p;
   jmp_buf busted;
   if (IsShadow(v)) return -2;
-  onbusted = busted;
-  if ((p = FindReal(m, (v >> 3) + 0x7fff8000))) {
+  onbusted = &busted;
+  if ((p = (char *)FindReal(m, (v >> 3) + 0x7fff8000))) {
     if (!setjmp(busted)) {
       rc = p[0] & 0xff;
     } else {
@@ -511,8 +511,8 @@ static int VirtualShadow(int64_t v) {
   return rc;
 }
 
-static void ScrollOp(struct Panel *p, int64_t op) {
-  int64_t n;
+static void ScrollOp(struct Panel *p, i64 op) {
+  i64 n;
   opline = op;
   if ((n = p->bottom - p->top) > 1) {
     if (!(opstart + 1 <= op && op < opstart + n)) {
@@ -667,7 +667,7 @@ static void ResolveBreakpoints(void) {
       } else {
         fprintf(
             stderr,
-            "error: breakpoint not found: %s (out of %zu loaded symbols)\r\n",
+            "error: breakpoint not found: %s (out of %d loaded symbols)\r\n",
             breakpoints.p[i].symbol, dis->syms.i);
         exit(1);
       }
@@ -780,25 +780,25 @@ static void ExecSetup(void) {
   setitimer(ITIMER_REAL, &it, NULL);
 }
 
-static void AppendPanel(struct Panel *p, int64_t line, const char *s) {
+static void AppendPanel(struct Panel *p, i64 line, const char *s) {
   if (0 <= line && line < p->bottom - p->top) {
     AppendStr(&p->lines[line], s);
   }
 }
 
-static void pcmpeqb(uint8_t x[16], const uint8_t y[16]) {
+static void pcmpeqb(u8 x[16], const u8 y[16]) {
   for (int i = 0; i < 16; ++i) x[i] = -(x[i] == y[i]);
 }
 
-static unsigned pmovmskb(const uint8_t p[16]) {
+static unsigned pmovmskb(const u8 p[16]) {
   unsigned i, m;
   for (m = i = 0; i < 16; ++i) m |= !!(p[i] & 0x80) << i;
   return m;
 }
 
-static bool IsXmmNonZero(int64_t start, int64_t end) {
-  int64_t i;
-  uint8_t v1[16], vz[16];
+static bool IsXmmNonZero(i64 start, i64 end) {
+  i64 i;
+  u8 v1[16], vz[16];
   for (i = start; i < end; ++i) {
     memset(vz, 0, 16);
     memcpy(v1, m->xmm[i], 16);
@@ -1002,7 +1002,7 @@ void SetupDraw(void) {
         free(pan.p[i].lines[j].p);
       }
       free(pan.p[i].lines);
-      pan.p[i].lines = calloc(n, sizeof(struct Buffer));
+      pan.p[i].lines = (struct Buffer *)calloc(n, sizeof(struct Buffer));
       pan.p[i].n = n;
     }
   }
@@ -1011,8 +1011,8 @@ void SetupDraw(void) {
             pan.display.right - pan.display.left);
 }
 
-static int64_t Disassemble(void) {
-  int64_t lines;
+static i64 Disassemble(void) {
+  i64 lines;
   lines = pan.disassembly.bottom - pan.disassembly.top * 2;
   if (Dis(dis, m, GetIp(), m->ip, lines) != -1) {
     return DisFind(dis, GetIp());
@@ -1021,8 +1021,8 @@ static int64_t Disassemble(void) {
   }
 }
 
-static int64_t GetDisIndex(void) {
-  int64_t i;
+static i64 GetDisIndex(void) {
+  i64 i;
   if ((i = DisFind(dis, GetIp())) == -1) {
     i = Disassemble();
   }
@@ -1031,7 +1031,7 @@ static int64_t GetDisIndex(void) {
 }
 
 static void DrawDisassembly(struct Panel *p) {
-  int64_t i, j;
+  i64 i, j;
   for (i = 0; i < p->bottom - p->top; ++i) {
     j = opstart + i;
     if (0 <= j && j < dis->ops.i) {
@@ -1043,7 +1043,7 @@ static void DrawDisassembly(struct Panel *p) {
 }
 
 static void DrawHr(struct Panel *p, const char *s) {
-  int64_t i, wp, ws, wl, wr;
+  i64 i, wp, ws, wl, wr;
   if (p->bottom - p->top < 1) return;
   wp = p->right - p->left;
   ws = 8;
@@ -1056,7 +1056,7 @@ static void DrawHr(struct Panel *p, const char *s) {
 }
 
 static void DrawTerminalHr(struct Panel *p) {
-  int64_t i, wp, ws, wl;
+  i64 i, wp, ws, wl;
   struct itimerval it;
   if (p->bottom == p->top) return;
   if (pty->conf & kPtyBell) {
@@ -1093,7 +1093,7 @@ static void DrawTerminalHr(struct Panel *p) {
 }
 
 static void DrawTerminal(struct Panel *p) {
-  int64_t y, yn;
+  i64 y, yn;
   if (p->top == p->bottom) return;
   for (yn = MIN(pty->yn, p->bottom - p->top), y = 0; y < yn; ++y) {
     PtyAppendLine(pty, p->lines + y, y);
@@ -1105,13 +1105,13 @@ static void DrawDisplay(struct Panel *p) {
   switch (vidya) {
     case 7:
       DrawHr(&pan.displayhr, "MONOCHROME DISPLAY ADAPTER");
-      if (0xb0000 + 25 * 80 * 2 > m->system->real.n) return;
-      DrawMda(p, (void *)(m->system->real.p + 0xb0000));
+      if (0xb0000 + 25 * 80 * 2 > GetRealMemorySize(m->system)) return;
+      DrawMda(p, (u8(*)[80][2])(m->system->real.p + 0xb0000));
       break;
     case 3:
       DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
-      if (0xb8000 + 25 * 80 * 2 > m->system->real.n) return;
-      DrawCga(p, (void *)(m->system->real.p + 0xb8000));
+      if (0xb8000 + 25 * 80 * 2 > GetRealMemorySize(m->system)) return;
+      DrawCga(p, (u8(*)[80][2])(m->system->real.p + 0xb8000));
       break;
     default:
       DrawTerminalHr(&pan.displayhr);
@@ -1120,15 +1120,15 @@ static void DrawDisplay(struct Panel *p) {
   }
 }
 
-static void DrawFlag(struct Panel *p, int64_t i, char name, bool value) {
+static void DrawFlag(struct Panel *p, i64 i, char name, bool value) {
   char str[3] = "  ";
   if (value) str[1] = name;
   AppendPanel(p, i, str);
 }
 
-static void DrawRegister(struct Panel *p, int64_t i, int64_t r) {
+static void DrawRegister(struct Panel *p, i64 i, i64 r) {
   char buf[32];
-  uint64_t value, previous;
+  u64 value, previous;
   value = Read64(m->reg[r]);
   previous = Read64(laststate.reg[r]);
   if (value != previous) AppendPanel(p, i, "\033[7m");
@@ -1141,10 +1141,10 @@ static void DrawRegister(struct Panel *p, int64_t i, int64_t r) {
   AppendPanel(p, i, "  ");
 }
 
-static void DrawSegment(struct Panel *p, int64_t i, const uint8_t seg[8],
-                        const uint8_t last[8], const char *name) {
+static void DrawSegment(struct Panel *p, i64 i, const u8 seg[8],
+                        const u8 last[8], const char *name) {
   char buf[32];
-  uint64_t value, previous;
+  u64 value, previous;
   value = Read64(seg);
   previous = Read64(last);
   if (value != previous) AppendPanel(p, i, "\033[7m");
@@ -1157,7 +1157,7 @@ static void DrawSegment(struct Panel *p, int64_t i, const uint8_t seg[8],
   AppendPanel(p, i, "  ");
 }
 
-static void DrawSt(struct Panel *p, int64_t i, int64_t r) {
+static void DrawSt(struct Panel *p, i64 i, i64 r) {
   char buf[32];
   bool isempty, chg;
   long double value;
@@ -1216,15 +1216,15 @@ static void DrawCpu(struct Panel *p) {
   DrawSegment(p, 10, m->ss, laststate.ss, "SS");
 }
 
-static void DrawXmm(struct Panel *p, int64_t i, int64_t r) {
+static void DrawXmm(struct Panel *p, i64 i, i64 r) {
   float f;
   double d;
   wint_t ival;
   char buf[32];
   bool changed;
-  uint64_t itmp;
-  uint8_t xmm[16];
-  int64_t j, k, n;
+  u64 itmp;
+  u8 xmm[16];
+  i64 j, k, n;
   int cells, left, cellwidth, panwidth;
   memcpy(xmm, m->xmm[r], sizeof(xmm));
   changed = memcmp(xmm, laststate.xmm[r], sizeof(xmm)) != 0;
@@ -1233,7 +1233,7 @@ static void DrawXmm(struct Panel *p, int64_t i, int64_t r) {
   AppendPanel(p, i, buf);
   cells = GetXmmTypeCellCount(r);
   panwidth = p->right - p->left;
-  cellwidth = MIN(MAX(0, (panwidth - left) / cells - 1), sizeof(buf) - 1);
+  cellwidth = MIN(MAX(0, (panwidth - left) / cells - 1), (int)sizeof(buf) - 1);
   for (j = 0; j < cells; ++j) {
     AppendPanel(p, i, " ");
     switch (xmmtype.type[r]) {
@@ -1276,7 +1276,7 @@ static void DrawXmm(struct Panel *p, int64_t i, int64_t r) {
 }
 
 static void DrawSse(struct Panel *p) {
-  int64_t i, n;
+  i64 i, n;
   n = p->bottom - p->top;
   if (n > 0) {
     for (i = 0; i < MIN(16, n); ++i) {
@@ -1285,8 +1285,8 @@ static void DrawSse(struct Panel *p) {
   }
 }
 
-static void ScrollMemoryView(struct Panel *p, struct MemoryView *v, int64_t a) {
-  int64_t i, n, w;
+static void ScrollMemoryView(struct Panel *p, struct MemoryView *v, i64 a) {
+  i64 i, n, w;
   w = DUMPWIDTH * (1ull << v->zoom);
   n = p->bottom - p->top;
   i = a / w;
@@ -1295,8 +1295,8 @@ static void ScrollMemoryView(struct Panel *p, struct MemoryView *v, int64_t a) {
   }
 }
 
-static void ZoomMemoryView(struct MemoryView *v, int64_t y, int64_t x, int dy) {
-  int64_t a, b, i, s;
+static void ZoomMemoryView(struct MemoryView *v, i64 y, i64 x, int dy) {
+  i64 a, b, i, s;
   s = v->start;
   a = v->zoom;
   b = MIN(MAXZOOM, MAX(0, a + dy));
@@ -1328,9 +1328,9 @@ static void ZoomMemoryViews(struct Panel *p, int y, int x, int dy) {
 }
 
 static void DrawMemoryUnzoomed(struct Panel *p, struct MemoryView *view,
-                               int64_t histart, int64_t hiend) {
+                               i64 histart, i64 hiend) {
   int c, s, x, sc;
-  int64_t i, j, k;
+  i64 i, j, k;
   bool high, changed;
   high = false;
   for (i = 0; i < p->bottom - p->top; ++i) {
@@ -1388,8 +1388,8 @@ static void DrawMemoryUnzoomed(struct Panel *p, struct MemoryView *view,
   }
 }
 
-static void DrawMemory(struct Panel *p, struct MemoryView *view,
-                       int64_t histart, int64_t hiend) {
+static void DrawMemory(struct Panel *p, struct MemoryView *view, i64 histart,
+                       i64 hiend) {
   if (p->top == p->bottom) return;
   DrawMemoryUnzoomed(p, view, histart, hiend);
 }
@@ -1409,10 +1409,10 @@ static void DrawMaps(struct Panel *p) {
 }
 
 static void DrawBreakpoints(struct Panel *p) {
-  int64_t addr;
+  i64 addr;
   const char *name;
   char *s, buf[256];
-  int64_t i, line, sym;
+  i64 i, line, sym;
   if (p->top == p->bottom) return;
   for (line = 0, i = breakpoints.i; i--;) {
     if (breakpoints.p[i].disable) continue;
@@ -1448,11 +1448,11 @@ static int GetPreferredStackAlignmentMask(void) {
 
 static void DrawFrames(struct Panel *p) {
   int i;
-  int64_t sym;
-  uint8_t *r;
+  i64 sym;
+  u8 *r;
   const char *name;
   char *s, line[256];
-  int64_t sp, bp, rp;
+  i64 sp, bp, rp;
   if (p->top == p->bottom) return;
   rp = m->ip;
   bp = Read64(m->bp);
@@ -1491,9 +1491,9 @@ static void DrawFrames(struct Panel *p) {
 }
 
 static void CheckFramePointerImpl(void) {
-  uint8_t *r;
-  int64_t bp, rp;
-  static int64_t lastbp;
+  u8 *r;
+  i64 bp, rp;
+  static i64 lastbp;
   bp = Read64(m->bp);
   if (bp && bp == lastbp) return;
   lastbp = bp;
@@ -1523,7 +1523,7 @@ static bool IsExecuting(void) {
   return (action & (CONTINUE | STEP | NEXT | FINISH)) && !(action & FAILURE);
 }
 
-static int AppendStat(struct Buffer *b, const char *name, int64_t value,
+static int AppendStat(struct Buffer *b, const char *name, i64 value,
                       bool changed) {
   int width;
   AppendChar(b, ' ');
@@ -1569,10 +1569,10 @@ static void DrawStatus(struct Panel *p) {
   rw = 0;
   a = &m->system->memstat;
   b = &lastmemstat;
-  s = malloc(sizeof(struct Buffer));
+  s = (struct Buffer *)malloc(sizeof(*s));
   memset(s, 0, sizeof(*s));
   if (ips > 0) rw += AppendStat(s, "ips", ips, false);
-  rw += AppendStat(s, "kb", m->system->real.n / 1024, false);
+  rw += AppendStat(s, "kb", GetRealMemorySize(m->system) / 1024, false);
   rw += AppendStat(s, "reserve", a->reserved, a->reserved != b->reserved);
   rw += AppendStat(s, "commit", a->committed, a->committed != b->committed);
   rw += AppendStat(s, "freed", a->freed, a->freed != b->freed);
@@ -1698,7 +1698,7 @@ static bool HasPendingInput(int fd) {
 static ssize_t ReadPtyFdDirect(int fd, void *data, size_t size) {
   char *buf;
   ssize_t rc;
-  buf = malloc(4096);
+  buf = (char *)malloc(4096);
   pty->conf |= kPtyBlinkcursor;
   if (tuimode) DisableMouseTracking();
   for (;;) {
@@ -1764,7 +1764,7 @@ static int OnPtyFdTcgets(int fd, struct termios *c) {
   return 0;
 }
 
-static int OnPtyFdTcsets(int fd, uint64_t request, struct termios *c) {
+static int OnPtyFdTcsets(int fd, u64 request, struct termios *c) {
   if (c->c_iflag & ICANON) {
     pty->conf &= ~kPtyNocanon;
   } else {
@@ -1783,24 +1783,27 @@ static int OnPtyFdTcsets(int fd, uint64_t request, struct termios *c) {
   return 0;
 }
 
-static int OnPtyFdIoctl(int fd, uint64_t request, void *memory) {
+static int OnPtyFdIoctl(int fd, unsigned long request, ...) {
+  va_list va;
+  va_start(va, request);
   if (request == TIOCGWINSZ) {
-    return OnPtyFdTiocgwinsz(fd, memory);
+    return OnPtyFdTiocgwinsz(fd, va_arg(va, struct winsize *));
   } else if (request == TCGETS) {
-    return OnPtyFdTcgets(fd, memory);
+    return OnPtyFdTcgets(fd, va_arg(va, struct termios *));
   } else if (request == TCSETS || request == TCSETSW || request == TCSETSF) {
-    return OnPtyFdTcsets(fd, request, memory);
+    return OnPtyFdTcsets(fd, request, va_arg(va, struct termios *));
   } else {
     errno = EINVAL;
     return -1;
   }
+  va_end(va);
 }
 
 static const struct MachineFdCb kMachineFdCbPty = {
     .close = OnPtyFdClose,
     .readv = OnPtyFdReadv,
     .writev = OnPtyFdWritev,
-    .ioctl = (void *)OnPtyFdIoctl,
+    .ioctl = OnPtyFdIoctl,
 };
 
 static void LaunchDebuggerReactively(void) {
@@ -1902,8 +1905,8 @@ static void OnDiskServiceGetParams(void) {
 }
 
 static void OnDiskServiceReadSectors(void) {
-  uint64_t addr, size;
-  int64_t sectors, drive, head, cylinder, sector, offset;
+  i64 addr, size;
+  i64 sectors, drive, head, cylinder, sector, offset;
   sectors = m->ax[0];
   drive = m->dx[0];
   head = m->dx[1];
@@ -1918,7 +1921,7 @@ static void OnDiskServiceReadSectors(void) {
        sectors, sector, cylinder, head, drive, offset);
   if (0 <= sector && offset + size <= elf->mapsize) {
     addr = Read64(m->es) + Read16(m->bx);
-    if (addr + size <= m->system->real.n) {
+    if (addr + size <= GetRealMemorySize(m->system)) {
       SetWriteAddr(m, addr, size);
       memcpy(m->system->real.p + addr, elf->map + offset, size);
       m->ax[1] = 0x00;
@@ -1989,7 +1992,7 @@ static int GetVidyaByte(unsigned char b) {
 
 static void OnVidyaServiceWriteCharacter(void) {
   int i;
-  uint64_t w;
+  u64 w;
   char *p, buf[32];
   p = buf;
   p += FormatCga(m->bx[0], p);
@@ -2004,7 +2007,7 @@ static void OnVidyaServiceWriteCharacter(void) {
   }
 }
 
-static wint_t VidyaServiceXlatTeletype(uint8_t c) {
+static wint_t VidyaServiceXlatTeletype(u8 c) {
   switch (c) {
     case '\a':
     case '\b':
@@ -2019,7 +2022,7 @@ static wint_t VidyaServiceXlatTeletype(uint8_t c) {
 
 static void OnVidyaServiceTeletypeOutput(void) {
   int n;
-  uint64_t w;
+  u64 w;
   char buf[12];
   n = FormatCga(m->bx[0], buf);
   w = tpenc(VidyaServiceXlatTeletype(m->ax[0]));
@@ -2055,7 +2058,7 @@ static void OnVidyaService(void) {
 }
 
 static void OnKeyboardServiceReadKeyPress(void) {
-  uint8_t b;
+  u8 b;
   ssize_t rc;
   pty->conf |= kPtyBlinkcursor;
   if (tuimode) DisableMouseTracking();
@@ -2098,14 +2101,14 @@ static void OnApmService(void) {
 }
 
 static void OnE820(void) {
-  uint8_t p[20];
-  uint64_t addr;
+  i64 addr;
+  u8 p[20];
   addr = Read64(m->es) + Read16(m->di);
   if (Read32(m->dx) == 0x534D4150 && Read32(m->cx) == 24 &&
-      addr + sizeof(p) <= m->system->real.n) {
+      addr + (int)sizeof(p) <= GetRealMemorySize(m->system)) {
     if (!Read32(m->bx)) {
       Write64(p + 0, 0);
-      Write64(p + 8, m->system->real.n);
+      Write64(p + 8, GetRealMemorySize(m->system));
       Write32(p + 16, 1);
       memcpy(m->system->real.p + addr, p, sizeof(p));
       SetWriteAddr(m, addr, sizeof(p));
@@ -2181,8 +2184,8 @@ static bool OnHalt(int interrupt) {
 }
 
 static void OnBinbase(struct Machine *m) {
-  unsigned i;
-  int64_t skew;
+  int i;
+  i64 skew;
   skew = m->xedd->op.disp * 512;
   LOGF("skew binbase %" PRId64 " @ %012" PRIx64 "", skew, GetIp());
   for (i = 0; i < dis->syms.i; ++i) dis->syms.p[i].addr += skew;
@@ -2323,7 +2326,7 @@ static void OnRestart(void) {
 }
 
 static void OnXmmType(void) {
-  uint8_t t;
+  u8 t;
   unsigned i;
   t = CycleXmmType(xmmtype.type[0]);
   for (i = 0; i < 16; ++i) {
@@ -2521,9 +2524,9 @@ static void ReadKeyboard(void) {
   }
 }
 
-static int64_t ParseHexValue(const char *s) {
+static i64 ParseHexValue(const char *s) {
   char *ep;
-  int64_t x;
+  i64 x;
   x = strtoll(s, &ep, 16);
   if (*ep) {
     fputs("ERROR: bad hexadecimal: ", stderr);
@@ -2829,9 +2832,10 @@ static void AddHostFd(int fd) {
   m->system->fds.p[i].cb = &kMachineFdCbHost;
 }
 
-int Emulator(int argc, char *argv[]) {
+int VirtualMachine(int argc, char *argv[]) {
   codepath = argv[optind++];
-  m->system->fds.p = calloc((m->system->fds.n = 8), sizeof(struct MachineFd));
+  m->system->fds.p = (struct MachineFd *)calloc((m->system->fds.n = 8),
+                                                sizeof(struct MachineFd));
   do {
     action = 0;
     LoadProgram(m, codepath, argv + optind, environ, elf);
@@ -2863,17 +2867,20 @@ int Emulator(int argc, char *argv[]) {
       }
     } while (!(action & (RESTART | EXIT)));
   } while (action & RESTART);
-  munmap(elf->ehdr, elf->size);
+  unassert(!munmap(elf->ehdr, elf->size));
   DisFree(dis);
   return exitcode;
 }
 
 int main(int argc, char *argv[]) {
+  int rc;
+  struct System *s;
   static struct sigaction sa;
   react = true;
   tuimode = true;
-  pty = NewPty();
-  m = NewMachine();
+  unassert((pty = NewPty()));
+  unassert((s = NewSystem()));
+  unassert((m = NewMachine(s, 0)));
   m->mode = XED_MACHINE_MODE_LONG_64;
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;
@@ -2891,21 +2898,24 @@ int main(int argc, char *argv[]) {
   sigfillset(&sa.sa_mask);
   sa.sa_sigaction = OnSignal;
   sa.sa_flags = SA_SIGINFO;
-  sigaction(SIGHUP, &sa, 0);
-  sigaction(SIGQUIT, &sa, 0);
-  sigaction(SIGABRT, &sa, 0);
-  sigaction(SIGUSR1, &sa, 0);
-  sigaction(SIGUSR2, &sa, 0);
-  sigaction(SIGPIPE, &sa, 0);
-  sigaction(SIGTERM, &sa, 0);
-  sigaction(SIGCHLD, &sa, 0);
-  sigaction(SIGCONT, &sa, 0);
+  unassert(!sigaction(SIGHUP, &sa, 0));
+  unassert(!sigaction(SIGQUIT, &sa, 0));
+  unassert(!sigaction(SIGABRT, &sa, 0));
+  unassert(!sigaction(SIGUSR1, &sa, 0));
+  unassert(!sigaction(SIGUSR2, &sa, 0));
+  unassert(!sigaction(SIGPIPE, &sa, 0));
+  unassert(!sigaction(SIGTERM, &sa, 0));
+  unassert(!sigaction(SIGCHLD, &sa, 0));
+  unassert(!sigaction(SIGCONT, &sa, 0));
   sa.sa_sigaction = OnSigInt;
-  sigaction(SIGINT, &sa, 0);
+  unassert(!sigaction(SIGINT, &sa, 0));
   sa.sa_sigaction = OnSigWinch;
-  sigaction(SIGWINCH, &sa, 0);
+  unassert(!sigaction(SIGWINCH, &sa, 0));
   sa.sa_sigaction = OnSigAlrm;
-  sigaction(SIGALRM, &sa, 0);
+  unassert(!sigaction(SIGALRM, &sa, 0));
   if (optind == argc) PrintUsage(48, stderr);
-  return Emulator(argc, argv);
+  rc = VirtualMachine(argc, argv);
+  FreeMachine(m);
+  FreeSystem(s);
+  return rc;
 }

@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,8 +27,8 @@
 bool g_disisprog_disable;
 
 static int DisSymCompare(const void *p1, const void *p2) {
-  const struct DisSym *a = p1;
-  const struct DisSym *b = p2;
+  const struct DisSym *a = (const struct DisSym *)p1;
+  const struct DisSym *b = (const struct DisSym *)p2;
   if (a->addr != b->addr) {
     if (a->addr < b->addr) return -1;
     if (a->addr > b->addr) return +1;
@@ -52,7 +51,8 @@ static void DisLoadElfLoads(struct Dis *d, struct Elf *elf) {
   n = Read16(elf->ehdr->e_phnum);
   if (d->loads.n < n) {
     d->loads.n = n;
-    d->loads.p = realloc(d->loads.p, d->loads.n * sizeof(*d->loads.p));
+    d->loads.p =
+        (struct DisLoad *)realloc(d->loads.p, d->loads.n * sizeof(*d->loads.p));
   }
   for (i = 0; i < n; ++i) {
     phdr = GetElfSegmentHeaderAddress(elf->ehdr, elf->size, i);
@@ -66,8 +66,9 @@ static void DisLoadElfLoads(struct Dis *d, struct Elf *elf) {
 }
 
 static void DisLoadElfSyms(struct Dis *d, struct Elf *elf) {
-  int64_t stablen;
-  uint64_t i, j, n;
+  int n;
+  long i, j;
+  i64 stablen;
   const Elf64_Sym *st;
   bool isabs, isweak, islocal, isprotected, isfunc, isobject;
   j = 0;
@@ -76,7 +77,8 @@ static void DisLoadElfSyms(struct Dis *d, struct Elf *elf) {
     stablen = (intptr_t)elf->ehdr + elf->size - (intptr_t)d->syms.stab;
     if (d->syms.n < n) {
       d->syms.n = n;
-      d->syms.p = realloc(d->syms.p, d->syms.n * sizeof(*d->syms.p));
+      d->syms.p =
+          (struct DisSym *)realloc(d->syms.p, d->syms.n * sizeof(*d->syms.p));
     }
     for (i = 0; i < n; ++i) {
       if (ELF64_ST_TYPE(st[i].st_info) == STT_SECTION ||
@@ -84,8 +86,8 @@ static void DisLoadElfSyms(struct Dis *d, struct Elf *elf) {
           startswith(d->syms.stab + Read32(st[i].st_name), "v_") ||
           !(0 <= Read32(st[i].st_name) && Read32(st[i].st_name) < stablen) ||
           !Read64(st[i].st_value) ||
-          !(-0x800000000000 <= (int64_t)Read64(st[i].st_value) &&
-            (int64_t)Read64(st[i].st_value) < 0x800000000000)) {
+          !(-0x800000000000 <= (i64)Read64(st[i].st_value) &&
+            (i64)Read64(st[i].st_value) < 0x800000000000)) {
         continue;
       }
       isabs = Read16(st[i].st_shndx) == SHN_ABS;
@@ -110,7 +112,7 @@ static void DisLoadElfSyms(struct Dis *d, struct Elf *elf) {
 }
 
 static void DisSortSyms(struct Dis *d) {
-  size_t i;
+  long i;
   qsort(d->syms.p, d->syms.i, sizeof(struct DisSym), DisSymCompare);
   for (i = 0; i < d->syms.i; ++i) {
     if (!strcmp("_end", d->syms.stab + d->syms.p[i].name)) {
@@ -120,7 +122,7 @@ static void DisSortSyms(struct Dis *d) {
   }
 }
 
-bool DisIsProg(struct Dis *d, int64_t addr) {
+bool DisIsProg(struct Dis *d, i64 addr) {
   long i;
   if (g_disisprog_disable) return true;
   for (i = 0; i < d->loads.i; ++i) {
@@ -132,7 +134,7 @@ bool DisIsProg(struct Dis *d, int64_t addr) {
   return false;
 }
 
-bool DisIsText(struct Dis *d, int64_t addr) {
+bool DisIsText(struct Dis *d, i64 addr) {
   long i;
   for (i = 0; i < d->loads.i; ++i) {
     if (addr >= d->loads.p[i].addr &&
@@ -143,7 +145,7 @@ bool DisIsText(struct Dis *d, int64_t addr) {
   return false;
 }
 
-long DisFindSym(struct Dis *d, int64_t addr) {
+long DisFindSym(struct Dis *d, i64 addr) {
   long l, r, m;
   if (DisIsProg(d, addr)) {
     l = 0;

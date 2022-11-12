@@ -1,7 +1,7 @@
 #ifndef BLINK_ELF_H_
 #define BLINK_ELF_H_
 #include <stddef.h>
-#include <stdint.h>
+#include "blink/types.h"
 
 /**
  * @fileoverview Executable and Linkable Format Definitions.
@@ -519,116 +519,116 @@
 #define R_BPF_MAP_FD 1
 
 typedef struct Elf64_Ehdr {
-  uint8_t e_ident[EI_NIDENT];
-  uint8_t e_type[2];      /* uint16_t */
-  uint8_t e_machine[2];   /* uint16_t */
-  uint8_t e_version[4];   /* uint32_t */
-  uint8_t e_entry[8];     /* uint64_t */
-  uint8_t e_phoff[8];     /* uint64_t */
-  uint8_t e_shoff[8];     /* uint64_t */
-  uint8_t e_flags[4];     /* uint32_t */
-  uint8_t e_ehsize[2];    /* uint16_t */
-  uint8_t e_phentsize[2]; /* uint16_t */
-  uint8_t e_phnum[2];     /* uint16_t */
-  uint8_t e_shentsize[2]; /* uint16_t */
-  uint8_t e_shnum[2];     /* uint16_t */
-  uint8_t e_shstrndx[2];  /* uint16_t */
+  u8 e_ident[EI_NIDENT];
+  u8 e_type[2];      /* u16 */
+  u8 e_machine[2];   /* u16 */
+  u8 e_version[4];   /* u32 */
+  u8 e_entry[8];     /* u64 */
+  u8 e_phoff[8];     /* u64 */
+  u8 e_shoff[8];     /* u64 */
+  u8 e_flags[4];     /* u32 */
+  u8 e_ehsize[2];    /* u16 */
+  u8 e_phentsize[2]; /* u16 */
+  u8 e_phnum[2];     /* u16 */
+  u8 e_shentsize[2]; /* u16 */
+  u8 e_shnum[2];     /* u16 */
+  u8 e_shstrndx[2];  /* u16 */
 } Elf64_Ehdr;
 
 typedef struct Elf64_Phdr {
-  uint8_t p_type[4];   /* uint32_t */
-  uint8_t p_flags[4];  /* uint32_t */
-  uint8_t p_offset[8]; /* uint64_t */
-  uint8_t p_vaddr[8];  /* uint64_t */
-  uint8_t p_paddr[8];  /* uint64_t */
-  uint8_t p_filesz[8]; /* uint64_t */
-  uint8_t p_memsz[8];  /* uint64_t */
-  uint8_t p_align[8];  /* uint64_t */
+  u8 p_type[4];   /* u32 */
+  u8 p_flags[4];  /* u32 */
+  u8 p_offset[8]; /* u64 */
+  u8 p_vaddr[8];  /* u64 */
+  u8 p_paddr[8];  /* u64 */
+  u8 p_filesz[8]; /* u64 */
+  u8 p_memsz[8];  /* u64 */
+  u8 p_align[8];  /* u64 */
 } Elf64_Phdr;
 
 typedef struct Elf64_Shdr {
-  uint8_t sh_name[4];      /* uint32_t */
-  uint8_t sh_type[4];      /* uint32_t */
-  uint8_t sh_flags[8];     /* uint64_t */
-  uint8_t sh_addr[8];      /* uint64_t */
-  uint8_t sh_offset[8];    /* uint64_t */
-  uint8_t sh_size[8];      /* uint64_t */
-  uint8_t sh_link[4];      /* uint32_t */
-  uint8_t sh_info[4];      /* uint32_t */
-  uint8_t sh_addralign[8]; /* uint64_t */
-  uint8_t sh_entsize[8];   /* uint64_t */
+  u8 sh_name[4];      /* u32 */
+  u8 sh_type[4];      /* u32 */
+  u8 sh_flags[8];     /* u64 */
+  u8 sh_addr[8];      /* u64 */
+  u8 sh_offset[8];    /* u64 */
+  u8 sh_size[8];      /* u64 */
+  u8 sh_link[4];      /* u32 */
+  u8 sh_info[4];      /* u32 */
+  u8 sh_addralign[8]; /* u64 */
+  u8 sh_entsize[8];   /* u64 */
 } Elf64_Shdr;
 
 typedef struct Elf64_Rel {
-  uint8_t r_offset[8]; /* uint64_t */
-  uint8_t r_info[8];   /* uint64_t */
+  u8 r_offset[8]; /* u64 */
+  u8 r_info[8];   /* u64 */
 } Elf64_Rel;
 
 typedef struct Elf64_Rela {
-  uint8_t r_offset[8]; /* uint64_t */
-  uint8_t r_info[8];   /* uint64_t */
-  uint8_t r_addend[8]; /* int64_t */
+  u8 r_offset[8]; /* u64 */
+  u8 r_info[8];   /* u64 */
+  u8 r_addend[8]; /* i64 */
 } Elf64_Rela;
 
 typedef struct Elf64_Sym {
-  uint8_t st_name[4]; /* uint32_t */
-  uint8_t st_info;
-  uint8_t st_other;
-  uint8_t st_shndx[2]; /* uint16_t */
-  uint8_t st_value[8]; /* uint64_t */
-  uint8_t st_size[8];  /* uint64_t */
+  u8 st_name[4]; /* u32 */
+  u8 st_info;
+  u8 st_other;
+  u8 st_shndx[2]; /* u16 */
+  u8 st_value[8]; /* u64 */
+  u8 st_size[8];  /* u64 */
 } Elf64_Sym;
 
 typedef struct Elf64_Syminfo {
-  uint8_t si_boundto[2]; /* uint16_t */
-  uint8_t si_flags[2];   /* uint16_t */
+  u8 si_boundto[2]; /* u16 */
+  u8 si_flags[2];   /* u16 */
 } Elf64_Syminfo;
 
 typedef struct Elf64_Chdr {
-  uint8_t ch_type[4];      /* uint32_t */
-  uint8_t ch_reserved[4];  /* uint32_t */
-  uint8_t ch_size[8];      /* uint64_t */
-  uint8_t ch_addralign[8]; /* uint64_t */
+  u8 ch_type[4];      /* u32 */
+  u8 ch_reserved[4];  /* u32 */
+  u8 ch_size[8];      /* u64 */
+  u8 ch_addralign[8]; /* u64 */
 } Elf64_Chdr;
 
 typedef struct Elf64_Dyn {
-  uint8_t d_tag[8]; /* int64_t */
+  u8 d_tag[8]; /* i64 */
   union {
-    uint8_t d_val[8]; /* uint64_t */
-    uint8_t d_ptr[8]; /* uint64_t */
+    u8 d_val[8]; /* u64 */
+    u8 d_ptr[8]; /* u64 */
   } d_un;
 } Elf64_Dyn;
 
 typedef struct Elf64_Lib {
-  uint8_t l_name[4];       /* uint32_t */
-  uint8_t l_time_stamp[4]; /* uint32_t */
-  uint8_t l_checksum[4];   /* uint32_t */
-  uint8_t l_version[4];    /* uint32_t */
-  uint8_t l_flags[4];      /* uint32_t */
+  u8 l_name[4];       /* u32 */
+  u8 l_time_stamp[4]; /* u32 */
+  u8 l_checksum[4];   /* u32 */
+  u8 l_version[4];    /* u32 */
+  u8 l_flags[4];      /* u32 */
 } Elf64_Lib;
 
 typedef struct Elf64_Move {
-  uint8_t m_value[8];   /* uint64_t */
-  uint8_t m_info[8];    /* uint64_t */
-  uint8_t m_poffset[8]; /* uint64_t */
-  uint8_t m_repeat[2];  /* uint16_t */
-  uint8_t m_stride[2];  /* uint16_t */
+  u8 m_value[8];   /* u64 */
+  u8 m_info[8];    /* u64 */
+  u8 m_poffset[8]; /* u64 */
+  u8 m_repeat[2];  /* u16 */
+  u8 m_stride[2];  /* u16 */
 } Elf64_Move;
 
 typedef struct Elf64_Nhdr {
-  uint8_t n_namesz[4]; /* uint32_t */
-  uint8_t n_descsz[4]; /* uint32_t */
-  uint8_t n_type[4];   /* uint32_t */
+  u8 n_namesz[4]; /* u32 */
+  u8 n_descsz[4]; /* u32 */
+  u8 n_type[4];   /* u32 */
 } Elf64_Nhdr;
 
 void CheckElfAddress(const Elf64_Ehdr *, size_t, intptr_t, size_t);
-Elf64_Phdr *GetElfSegmentHeaderAddress(const Elf64_Ehdr *, size_t, uint64_t);
+Elf64_Phdr *GetElfSegmentHeaderAddress(const Elf64_Ehdr *, size_t, u64);
 char *GetElfStringTable(const Elf64_Ehdr *, size_t);
-Elf64_Shdr *GetElfSectionHeaderAddress(const Elf64_Ehdr *, size_t, uint16_t);
+Elf64_Shdr *GetElfSectionHeaderAddress(const Elf64_Ehdr *, size_t, u16);
 const char *GetElfSectionName(const Elf64_Ehdr *, size_t, Elf64_Shdr *);
-char *GetElfString(const Elf64_Ehdr *, size_t, const char *, uint32_t);
+char *GetElfString(const Elf64_Ehdr *, size_t, const char *, u32);
 char *GetElfSectionNameStringTable(const Elf64_Ehdr *, size_t);
 void *GetElfSectionAddress(const Elf64_Ehdr *, size_t, const Elf64_Shdr *);
-Elf64_Sym *GetElfSymbolTable(const Elf64_Ehdr *, size_t, uint64_t *);
+Elf64_Sym *GetElfSymbolTable(const Elf64_Ehdr *, size_t, int *);
 
 #endif /* BLINK_ELF_H_ */

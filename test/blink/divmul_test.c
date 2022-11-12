@@ -47,6 +47,12 @@ struct {
 #include "test/blink/divmul_mul8_test.inc"
 };
 
+void SetUp(void) {
+}
+
+void TearDown(void) {
+}
+
 TEST(divmul, test) {
   int i;
   for (i = 0; i < ARRAYLEN(kVector); ++i) {

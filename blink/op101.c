@@ -22,13 +22,14 @@
 #include "blink/machine.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
+#include "blink/real.h"
 #include "blink/time.h"
 
-static void StoreDescriptorTable(struct Machine *m, uint32_t rde,
-                                 uint16_t limit, uint64_t base) {
-  uint64_t l;
+static void StoreDescriptorTable(struct Machine *m, u32 rde,
+                                 u16 limit, u64 base) {
+  u64 l;
   l = ComputeAddress(m, rde);
-  if (l + 10 <= m->system->real.n) {
+  if (l + 10 <= GetRealMemorySize(m->system)) {
     Write16(m->system->real.p + l, limit);
     if (Rexw(rde)) {
       Write64(m->system->real.p + l + 2, base);
@@ -45,12 +46,12 @@ static void StoreDescriptorTable(struct Machine *m, uint32_t rde,
   }
 }
 
-static void LoadDescriptorTable(struct Machine *m, uint32_t rde,
-                                uint16_t *out_limit, uint64_t *out_base) {
-  uint16_t limit;
-  uint64_t l, base;
+static void LoadDescriptorTable(struct Machine *m, u32 rde,
+                                u16 *out_limit, u64 *out_base) {
+  u16 limit;
+  u64 l, base;
   l = ComputeAddress(m, rde);
-  if (l + 10 <= m->system->real.n) {
+  if (l + 10 <= GetRealMemorySize(m->system)) {
     limit = Read16(m->system->real.p + l);
     if (Rexw(rde)) {
       base = Read64(m->system->real.p + l + 2) & 0x00ffffff;
@@ -62,7 +63,7 @@ static void LoadDescriptorTable(struct Machine *m, uint32_t rde,
       base = Read16(m->system->real.p + l + 2);
       SetReadAddr(m, l, 4);
     }
-    if (base + limit <= m->system->real.n) {
+    if (base + limit <= GetRealMemorySize(m->system)) {
       *out_limit = limit;
       *out_base = base;
     } else {
@@ -73,48 +74,48 @@ static void LoadDescriptorTable(struct Machine *m, uint32_t rde,
   }
 }
 
-static void SgdtMs(struct Machine *m, uint32_t rde) {
+static void SgdtMs(struct Machine *m, u32 rde) {
   StoreDescriptorTable(m, rde, m->system->gdt_limit, m->system->gdt_base);
 }
 
-static void LgdtMs(struct Machine *m, uint32_t rde) {
+static void LgdtMs(struct Machine *m, u32 rde) {
   LoadDescriptorTable(m, rde, &m->system->gdt_limit, &m->system->gdt_base);
 }
 
-static void SidtMs(struct Machine *m, uint32_t rde) {
+static void SidtMs(struct Machine *m, u32 rde) {
   StoreDescriptorTable(m, rde, m->system->idt_limit, m->system->idt_base);
 }
 
-static void LidtMs(struct Machine *m, uint32_t rde) {
+static void LidtMs(struct Machine *m, u32 rde) {
   LoadDescriptorTable(m, rde, &m->system->idt_limit, &m->system->idt_base);
 }
 
-static void Monitor(struct Machine *m, uint32_t rde) {
+static void Monitor(struct Machine *m, u32 rde) {
 }
 
-static void Mwait(struct Machine *m, uint32_t rde) {
+static void Mwait(struct Machine *m, u32 rde) {
 }
 
-static void Swapgs(struct Machine *m, uint32_t rde) {
+static void Swapgs(struct Machine *m, u32 rde) {
 }
 
-static void Vmcall(struct Machine *m, uint32_t rde) {
+static void Vmcall(struct Machine *m, u32 rde) {
 }
 
-static void Vmlaunch(struct Machine *m, uint32_t rde) {
+static void Vmlaunch(struct Machine *m, u32 rde) {
 }
 
-static void Vmresume(struct Machine *m, uint32_t rde) {
+static void Vmresume(struct Machine *m, u32 rde) {
 }
 
-static void Vmxoff(struct Machine *m, uint32_t rde) {
+static void Vmxoff(struct Machine *m, u32 rde) {
 }
 
-static void InvlpgM(struct Machine *m, uint32_t rde) {
+static void InvlpgM(struct Machine *m, u32 rde) {
   ResetTlb(m);
 }
 
-static void Smsw(struct Machine *m, uint32_t rde, bool ismem) {
+static void Smsw(struct Machine *m, u32 rde, bool ismem) {
   if (ismem) {
     Write16(GetModrmRegisterWordPointerWrite2(m, rde), m->system->cr0);
   } else if (Rexw(rde)) {
@@ -126,11 +127,11 @@ static void Smsw(struct Machine *m, uint32_t rde, bool ismem) {
   }
 }
 
-static void Lmsw(struct Machine *m, uint32_t rde) {
+static void Lmsw(struct Machine *m, u32 rde) {
   m->system->cr0 = Read16(GetModrmRegisterWordPointerRead2(m, rde));
 }
 
-void Op101(struct Machine *m, uint32_t rde) {
+void Op101(struct Machine *m, u32 rde) {
   bool ismem;
   ismem = !IsModrmRegister(rde);
   switch (ModrmReg(rde)) {

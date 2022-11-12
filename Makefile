@@ -7,7 +7,7 @@ MAKEFLAGS += --no-builtin-rules
 .SUFFIXES:
 .DELETE_ON_ERROR:
 .FEATURES: output-sync
-.PHONY: o clean
+.PHONY: o all clean check test tags
 
 ifneq ($(m),)
 ifeq ($(MODE),)
@@ -15,13 +15,21 @@ MODE := $(m)
 endif
 endif
 
-o: o/$(MODE)/blink
-clean:; rm -rf o
+o:	o/$(MODE)/blink			\
+	o/$(MODE)/test
+
+check:	o/$(MODE)/third_party/cosmo
+
+emulates:				\
+	o/$(MODE)/test/emulates		\
+	o/$(MODE)/third_party/cosmo/emulates
+
+test: check
+
 tags: TAGS HTAGS
 
-test:	o/$(MODE)/test			\
-	o/$(MODE)/third_party/cosmo/ok	\
-	o/$(MODE)/third_party/cosmo/emulates
+clean:
+	rm -rf o
 
 include build/config.mk
 include build/rules.mk
@@ -41,8 +49,9 @@ TESTS	 = $(foreach x,$(PKGS),$($(x)_TESTS))
 CHECKS	 = $(foreach x,$(PKGS),$($(x)_CHECKS))
 
 o/$(MODE)/.x:
-	mkdir -p $(@D)
-	touch $@
+	@mkdir -p $(@D)
+	@touch $@
+
 o/$(MODE)/srcs.txt: o/$(MODE)/.x $(MAKEFILES) $(call uniq,$(foreach x,$(SRCS),$(dir $(x))))
 	$(file >$@) $(foreach x,$(SRCS),$(file >>$@,$(x)))
 o/$(MODE)/hdrs.txt: o/$(MODE)/.x $(MAKEFILES) $(call uniq,$(foreach x,$(HDRS) $(INCS),$(dir $(x))))

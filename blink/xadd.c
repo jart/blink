@@ -26,8 +26,8 @@
 #include "blink/modrm.h"
 #include "blink/swap.h"
 
-void OpXaddEbGb(struct Machine *m, uint32_t rde) {
-  uint8_t x, y, z, *p, *q;
+void OpXaddEbGb(struct Machine *m, u32 rde) {
+  u8 x, y, z, *p, *q;
   p = GetModrmRegisterBytePointerWrite(m, rde);
   q = ByteRexrReg(m, rde);
   x = Read8(p);
@@ -53,12 +53,12 @@ void OpXaddEbGb(struct Machine *m, uint32_t rde) {
 #endif
 }
 
-void OpXaddEvqpGvqp(struct Machine *m, uint32_t rde) {
-  uint8_t *p, *q;
+void OpXaddEvqpGvqp(struct Machine *m, u32 rde) {
+  u8 *p, *q;
   q = RegRexrReg(m, rde);
   p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
   if (Rexw(rde)) {
-    uint64_t x, y, z;
+    u64 x, y, z;
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64
       x = atomic_load((atomic_ulong *)p);
@@ -82,7 +82,7 @@ void OpXaddEvqpGvqp(struct Machine *m, uint32_t rde) {
       Write64(p, z);
     }
   } else if (!Osz(rde)) {
-    uint32_t x, y, z;
+    u32 x, y, z;
     if (Lock(rde) && !((intptr_t)p & 3)) {
       x = atomic_load((atomic_uint *)p);
       y = atomic_load_explicit((atomic_uint *)q, memory_order_relaxed);
@@ -105,7 +105,7 @@ void OpXaddEvqpGvqp(struct Machine *m, uint32_t rde) {
       Write32(p + 4, 0);
     }
   } else {
-    uint16_t x, y, z;
+    u16 x, y, z;
     unassert(!Lock(rde));
     x = Read16(p);
     y = Read16(q);

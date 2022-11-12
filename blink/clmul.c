@@ -21,11 +21,11 @@
 #include "blink/modrm.h"
 
 struct clmul {
-  uint64_t x, y;
+  u64 x, y;
 };
 
-static struct clmul clmul(uint64_t a, uint64_t b) {
-  uint64_t t, x = 0, y = 0;
+static struct clmul clmul(u64 a, u64 b) {
+  u64 t, x = 0, y = 0;
   if (a && b) {
     if (bsr(a) < bsr(b)) t = a, a = b, b = t;
     for (t = 0; b; a <<= 1, b >>= 1) {
@@ -36,7 +36,7 @@ static struct clmul clmul(uint64_t a, uint64_t b) {
   return (struct clmul){x, y};
 }
 
-void OpSsePclmulqdq(struct Machine *m, uint32_t rde) {
+void OpSsePclmulqdq(struct Machine *m, u32 rde) {
   struct clmul res;
   res = clmul(Read64(XmmRexrReg(m, rde) + ((m->xedd->op.uimm0 & 0x01) << 3)),
               Read64(GetModrmRegisterXmmPointerRead16(m, rde) +

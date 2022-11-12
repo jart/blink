@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <string.h>
 
 #include "blink/bitscan.h"
@@ -100,21 +99,25 @@ typedef unsigned char xed_bits_t;
 typedef intptr_t xed_addr_t;
 typedef unsigned char xed_bool_t;
 
-static const uint8_t kXedEamode[2][3] = {
-    [0][XED_MODE_REAL] = XED_MODE_REAL,
-    [0][XED_MODE_LEGACY] = XED_MODE_LEGACY,
-    [0][XED_MODE_LONG] = XED_MODE_LONG,
-    [1][XED_MODE_REAL] = XED_MODE_LEGACY,
-    [1][XED_MODE_LEGACY] = XED_MODE_REAL,
-    [1][XED_MODE_LONG] = XED_MODE_LEGACY,
+static const u8 kXedEamode[2][3] = {
+    {
+        XED_MODE_REAL,    // kXedEamode[0][XED_MODE_REAL]
+        XED_MODE_LEGACY,  // kXedEamode[0][XED_MODE_LEGACY]
+        XED_MODE_LONG,    // kXedEamode[0][XED_MODE_LONG]
+    },
+    {
+        XED_MODE_LEGACY,  // kXedEamode[asz][XED_MODE_REAL]
+        XED_MODE_REAL,    // kXedEamode[asz][XED_MODE_LEGACY]
+        XED_MODE_LEGACY,  // kXedEamode[asz][XED_MODE_LONG]
+    },
 };
 
-static const uint32_t xed_prefix_table_bit[8] = {
+static const u32 xed_prefix_table_bit[8] = {
     0x00000000, 0x40404040, 0x0000ffff, 0x000000f0,
     0x00000000, 0x00000000, 0x00000000, 0x000d0000,
 };
 
-static const uint8_t xed_has_sib_table[3][4][8] = {
+static const u8 xed_has_sib_table[3][4][8] = {
     {{0, 0, 0, 0, 0, 0, 0, 0},
      {0, 0, 0, 0, 0, 0, 0, 0},
      {0, 0, 0, 0, 0, 0, 0, 0},
@@ -129,7 +132,7 @@ static const uint8_t xed_has_sib_table[3][4][8] = {
      {0, 0, 0, 0, 0, 0, 0, 0}},
 };
 
-static const uint8_t xed_has_disp_regular[3][4][8] = {
+static const u8 xed_has_disp_regular[3][4][8] = {
     {{0, 0, 0, 0, 0, 0, 2, 0},
      {1, 1, 1, 1, 1, 1, 1, 1},
      {2, 2, 2, 2, 2, 2, 2, 2},
@@ -144,7 +147,7 @@ static const uint8_t xed_has_disp_regular[3][4][8] = {
      {0, 0, 0, 0, 0, 0, 0, 0}},
 };
 
-static const uint8_t xed_imm_bits_2d[2][256] = {
+static const u8 xed_imm_bits_2d[2][256] = {
     {1, 1, 1,  1, 5, 7, 1, 1, 1,  1,  1,  1,  9,  7,  1,  0,  1, 1, 1, 1, 5, 7,
      1, 1, 1,  1, 1, 1, 5, 7, 1,  1,  1,  1,  1,  1,  5,  7,  0, 1, 1, 1, 1, 1,
      5, 7, 0,  1, 1, 1, 1, 1, 9,  7,  0,  1,  1,  1,  1,  1,  5, 7, 0, 1, 1, 1,
@@ -170,7 +173,7 @@ static const uint8_t xed_imm_bits_2d[2][256] = {
      1,  1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 };
 
-static const uint8_t xed_has_modrm_2d[XED_ILD_MAP2][256] = {
+static const u8 xed_has_modrm_2d[XED_ILD_MAP2][256] = {
     {1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 3, 1, 1, 1, 1, 0, 0, 0, 0,
      1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 3, 0, 1, 1, 1, 1, 0, 0, 3, 0,
      1, 1, 1, 1, 0, 0, 3, 0, 1, 1, 1, 1, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -195,7 +198,7 @@ static const uint8_t xed_has_modrm_2d[XED_ILD_MAP2][256] = {
      1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
 };
 
-static const uint8_t xed_disp_bits_2d[XED_ILD_MAP2][256] = {
+static const u8 xed_disp_bits_2d[XED_ILD_MAP2][256] = {
     {4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4,
      4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 4, 0, 4,
      4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 4, 0, 4, 4, 4, 4, 4, 4, 4, 4, 4,
@@ -244,180 +247,27 @@ static const struct XedDenseMagnums {
     .MEMDISPv_DISP_WIDTH = {0, 16, 32, 64},
     .SIMMz_IMM_WIDTH = {0x00, 0x10, 0x20, 0x20},
     .UIMMv_IMM_WIDTH = {0x00, 0x10, 0x20, 0x40},
-    .ASZ_NONTERM_EASZ =
-        {
-            [0][0] = 1,
-            [1][0] = 2,
-            [0][1] = 2,
-            [1][1] = 1,
-            [0][2] = 3,
-            [1][2] = 2,
-        },
-    .OSZ_NONTERM_CR_WIDTH_EOSZ =
-        {
-            [0][0][0] = 2,
-            [1][0][0] = 2,
-            [0][1][0] = 2,
-            [1][1][0] = 2,
-            [0][1][1] = 2,
-            [1][1][1] = 2,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 3,
-            [0][0][2] = 3,
-            [1][1][2] = 3,
-            [1][0][2] = 3,
-        },
-    .OSZ_NONTERM_DF64_EOSZ =
-        {
-            [0][0][0] = 1,
-            [1][0][0] = 1,
-            [0][1][0] = 2,
-            [1][1][0] = 2,
-            [0][1][1] = 1,
-            [1][1][1] = 1,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 1,
-            [0][0][2] = 3,
-            [1][1][2] = 3,
-            [1][0][2] = 3,
-        },
-    .OSZ_NONTERM_DF64_FORCE64_EOSZ =
-        {
-            [0][0][0] = 1,
-            [1][0][0] = 1,
-            [0][1][0] = 2,
-            [1][1][0] = 2,
-            [0][1][1] = 1,
-            [1][1][1] = 1,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 3,
-            [0][0][2] = 3,
-            [1][1][2] = 3,
-            [1][0][2] = 3,
-        },
-    .OSZ_NONTERM_DF64_IMMUNE66_LOOP64_EOSZ =
-        {
-            [0][0][0] = 1,
-            [1][0][0] = 1,
-            [0][1][0] = 2,
-            [1][1][0] = 2,
-            [0][1][1] = 1,
-            [1][1][1] = 1,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 3,
-            [0][0][2] = 3,
-            [1][1][2] = 3,
-            [1][0][2] = 3,
-        },
-    .OSZ_NONTERM_EOSZ =
-        {
-            [0][0][0] = 1,
-            [1][0][0] = 1,
-            [0][1][0] = 2,
-            [1][1][0] = 2,
-            [0][1][1] = 1,
-            [1][1][1] = 1,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 1,
-            [0][0][2] = 2,
-            [1][1][2] = 3,
-            [1][0][2] = 3,
-        },
-    .OSZ_NONTERM_FORCE64_EOSZ =
-        {
-            [0][0][0] = 1,
-            [1][0][0] = 1,
-            [0][1][0] = 2,
-            [1][1][0] = 2,
-            [0][1][1] = 1,
-            [1][1][1] = 1,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 3,
-            [0][0][2] = 3,
-            [1][1][2] = 3,
-            [1][0][2] = 3,
-        },
-    .OSZ_NONTERM_IGNORE66_EOSZ =
-        {
-            [0][0][0] = 1,
-            [1][0][0] = 1,
-            [0][1][0] = 1,
-            [1][1][0] = 1,
-            [0][1][1] = 2,
-            [1][1][1] = 2,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 2,
-            [0][0][2] = 2,
-            [1][1][2] = 3,
-            [1][0][2] = 3,
-        },
-    .OSZ_NONTERM_IMMUNE66_EOSZ =
-        {
-            [0][0][0] = 2,
-            [1][0][0] = 2,
-            [0][1][0] = 2,
-            [1][1][0] = 2,
-            [0][1][1] = 2,
-            [1][1][1] = 2,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 2,
-            [0][0][2] = 2,
-            [1][1][2] = 3,
-            [1][0][2] = 3,
-        },
-    .OSZ_NONTERM_IMMUNE_REXW_EOSZ =
-        {
-            [0][0][0] = 1,
-            [1][0][0] = 1,
-            [0][1][0] = 2,
-            [1][1][0] = 2,
-            [0][1][1] = 1,
-            [1][1][1] = 1,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 1,
-            [0][0][2] = 2,
-            [1][1][2] = 2,
-            [1][0][2] = 2,
-        },
-    .OSZ_NONTERM_REFINING66_CR_WIDTH_EOSZ =
-        {
-            [0][0][0] = 2,
-            [1][0][0] = 2,
-            [0][1][0] = 2,
-            [1][1][0] = 2,
-            [0][1][1] = 2,
-            [1][1][1] = 2,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 3,
-            [0][0][2] = 3,
-            [1][1][2] = 3,
-            [1][0][2] = 3,
-        },
-    .OSZ_NONTERM_REFINING66_EOSZ =
-        {
-            [0][0][0] = 1,
-            [1][0][0] = 1,
-            [0][1][0] = 1,
-            [1][1][0] = 1,
-            [0][1][1] = 2,
-            [1][1][1] = 2,
-            [0][0][1] = 2,
-            [1][0][1] = 2,
-            [0][1][2] = 2,
-            [0][0][2] = 2,
-            [1][1][2] = 3,
-            [1][0][2] = 3,
-        },
+    .ASZ_NONTERM_EASZ = {{1, 2, 3}, {2, 1, 2}},
+    .OSZ_NONTERM_CR_WIDTH_EOSZ = {{{2, 2, 3}, {2, 2, 3}},
+                                  {{2, 2, 3}, {2, 2, 3}}},
+    .OSZ_NONTERM_DF64_EOSZ = {{{1, 2, 3}, {2, 1, 1}}, {{1, 2, 3}, {2, 1, 3}}},
+    .OSZ_NONTERM_DF64_FORCE64_EOSZ = {{{1, 2, 3}, {2, 1, 3}},
+                                      {{1, 2, 3}, {2, 1, 3}}},
+    .OSZ_NONTERM_DF64_IMMUNE66_LOOP64_EOSZ = {{{1, 2, 3}, {2, 1, 3}},
+                                              {{1, 2, 3}, {2, 1, 3}}},
+    .OSZ_NONTERM_EOSZ = {{{1, 2, 2}, {2, 1, 1}}, {{1, 2, 3}, {2, 1, 3}}},
+    .OSZ_NONTERM_FORCE64_EOSZ = {{{1, 2, 3}, {2, 1, 3}},
+                                 {{1, 2, 3}, {2, 1, 3}}},
+    .OSZ_NONTERM_IGNORE66_EOSZ = {{{1, 2, 2}, {1, 2, 2}},
+                                  {{1, 2, 3}, {1, 2, 3}}},
+    .OSZ_NONTERM_IMMUNE66_EOSZ = {{{2, 2, 2}, {2, 2, 2}},
+                                  {{2, 2, 3}, {2, 2, 3}}},
+    .OSZ_NONTERM_IMMUNE_REXW_EOSZ = {{{1, 2, 2}, {2, 1, 1}},
+                                     {{1, 2, 2}, {2, 1, 2}}},
+    .OSZ_NONTERM_REFINING66_CR_WIDTH_EOSZ = {{{2, 2, 3}, {2, 2, 3}},
+                                             {{2, 2, 3}, {2, 2, 3}}},
+    .OSZ_NONTERM_REFINING66_EOSZ = {{{1, 2, 2}, {1, 2, 2}},
+                                    {{1, 2, 3}, {1, 2, 3}}},
 };
 
 static void xed_too_short(struct XedDecodedInst *d) {
@@ -565,7 +415,7 @@ static void xed_set_imm_bytes(struct XedDecodedInst *d) {
 }
 
 static void xed_prefix_scanner(struct XedDecodedInst *d) {
-  uint32_t rde;
+  u32 rde;
   xed_bits_t b, max_bytes, length, islong;
   xed_bits_t asz, osz, rex, rexw, rexr, rexx, rexb;
   rex = 0;
@@ -728,7 +578,7 @@ static void xed_opcode_scanner(struct XedDecodedInst *d) {
   }
 }
 
-static uint64_t xed_read_number(uint8_t *p, size_t n, unsigned s) {
+static u64 xed_read_number(u8 *p, size_t n, unsigned s) {
   switch (s << 2 | bsr(n)) {
     case 0:
       return Read8(p);
@@ -739,13 +589,13 @@ static uint64_t xed_read_number(uint8_t *p, size_t n, unsigned s) {
     case 3:
       return Read64(p);
     case 4:
-      return (int8_t)Read8(p);
+      return (i8)Read8(p);
     case 5:
-      return (int16_t)Read16(p);
+      return (i16)Read16(p);
     case 6:
-      return (int32_t)Read32(p);
+      return (i32)Read32(p);
     case 7:
-      return (int64_t)Read64(p);
+      return (i64)Read64(p);
     default:
       __builtin_unreachable();
   }
@@ -760,7 +610,7 @@ static void xed_set_has_modrm(struct XedDecodedInst *d) {
 }
 
 static void xed_modrm_scanner(struct XedDecodedInst *d) {
-  uint8_t b;
+  u8 b;
   xed_bits_t rm, reg, mod, eamode, length, has_modrm;
   xed_set_has_modrm(d);
   has_modrm = d->op.has_modrm;
@@ -787,7 +637,7 @@ static void xed_modrm_scanner(struct XedDecodedInst *d) {
 }
 
 static void xed_sib_scanner(struct XedDecodedInst *d) {
-  uint8_t b;
+  u8 b;
   xed_bits_t length;
   if (d->op.has_sib) {
     length = d->length;
@@ -900,7 +750,7 @@ static void xed_disp_scanner(struct XedDecodedInst *d) {
 }
 
 static void xed_imm_scanner(struct XedDecodedInst *d) {
-  uint8_t *p;
+  u8 *p;
   xed_bits_t i, length, imm_bytes;
   p = d->bytes;
   xed_set_imm_bytes(d);
@@ -934,7 +784,7 @@ static void xed_decode_instruction_length(struct XedDecodedInst *ild) {
  * Clears instruction decoder state.
  */
 struct XedDecodedInst *InitializeInstruction(struct XedDecodedInst *x,
-                                             enum XedMachineMode mmode) {
+                                             int mmode) {
   int mode, real = 0;
   memset(x, 0, sizeof(*x));
   switch (mmode) {
@@ -976,7 +826,7 @@ struct XedDecodedInst *InitializeInstruction(struct XedDecodedInst *x,
  */
 enum XedError DecodeInstruction(struct XedDecodedInst *x, const void *itext,
                                 size_t bytes) {
-  uint8_t kWordLog2[2][2][2] = {{{2, 3}, {1, 3}}};
+  u8 kWordLog2[2][2][2] = {{{2, 3}, {1, 3}}};
   memcpy(x->bytes, itext, MIN(15, bytes));
   x->op.max_bytes = MIN(15, bytes);
   xed_decode_instruction_length(x);
@@ -987,7 +837,7 @@ enum XedError DecodeInstruction(struct XedDecodedInst *x, const void *itext,
   x->op.rde |= kXedEamode[Asz(x->op.rde)][Mode(x->op.rde)] << 24;
   if (!x->op.out_of_bytes) {
     if (x->op.map != XED_ILD_MAP_INVALID) {
-      return x->op.error;
+      return (enum XedError)x->op.error;
     } else {
       return XED_ERROR_GENERAL_ERROR;
     }

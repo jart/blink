@@ -110,4 +110,8 @@ o/$(MODE)/powerpc64le/%.emulates: % o/powerpc64le/blink/blink o/third_party/qemu
 	o/third_party/qemu/qemu-powerpc64le o/powerpc64le/blink/blink $<
 	@touch $@
 
-o/$(MODE)/test: o/$(MODE)/test/blink
+o/$(MODE)/test:				\
+	o/$(MODE)/test/blink
+
+o/$(MODE)/test/emulates:		\
+	o/$(MODE)/test/blink/emulates

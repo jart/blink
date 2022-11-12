@@ -7,13 +7,11 @@ CFLAGS +=				\
 	-g				\
 	-O2				\
 	-Wall				\
-	-std=c11			\
 	-pthread			\
 	-fno-ident			\
 	-fno-common			\
 	-fstrict-aliasing		\
 	-fstrict-overflow		\
-	-fno-omit-frame-pointer		\
 	-Wno-unused-function
 
 CPPFLAGS +=				\
@@ -24,7 +22,9 @@ CPPFLAGS +=				\
 	-D_DEFAULT_SOURCE		\
 	-D_GNU_SOURCE
 
-LDLIBS += -lm -lrt -pthread
+LDLIBS +=				\
+	-lm				\
+	-pthread
 
 TAGSFLAGS =								\
 	-e								\
@@ -46,22 +46,31 @@ endif
 ifeq ($(MODE), opt)
 CPPFLAGS += -DNDEBUG
 CFLAGS += -O3
-TARGET_ARCH ?= -march=native
+TARGET_ARCH = -march=native
 endif
 
-ifeq ($(MODE), aarch64)
-CPPFLAGS += -DNDEBUG
-CFLAGS += -Os
-CC = o/third_party/gcc/aarch64/bin/aarch64-linux-musl-gcc
-endif
-
-ifeq ($(MODE), llvm)
-CPPFLAGS += -DNDEBUG
-CFLAGS += -Os
-CC = clang
-LD = clang
+ifeq ($(MODE), asan)
+CPPFLAGS += -fsanitize=address
+LDLIBS += -fsanitize=address
 endif
 
 ifeq ($(MODE), ubsan)
 CPPFLAGS += -fsanitize=undefined
+LDLIBS += -fsanitize=undefined
+endif
+
+ifeq ($(MODE), tsan)
+CC = clang++
+AR = llvm-ar
+CFLAGS += -xc++ -Werror -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS += -fuse-ld=lld
+CFLAGS += -fsanitize=thread
+LDLIBS += -fsanitize=thread
+endif
+
+# TODO(jart): is this obsolete?
+ifeq ($(MODE), aarch64)
+CPPFLAGS += -DNDEBUG
+CFLAGS += -Os
+CC = o/third_party/gcc/aarch64/bin/aarch64-linux-musl-gcc
 endif

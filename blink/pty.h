@@ -1,8 +1,7 @@
 #ifndef BLINK_PTY_H_
 #define BLINK_PTY_H_
-#include <stdint.h>
-
 #include "blink/buffer.h"
+#include "blink/types.h"
 
 #define kPtyFg      0x0001
 #define kPtyBg      0x0002
@@ -30,33 +29,37 @@
 #define kPtyLed3        0x200
 #define kPtyLed4        0x400
 
+enum PtyState {
+  kPtyAscii,
+  kPtyUtf8,
+  kPtyEsc,
+  kPtyCsi,
+};
+
+struct PtyEsc {
+  unsigned i;
+  char s[64];
+};
+
 struct Pty {
   int y;
   int x;
   int yn;
   int xn;
-  uint32_t u8;
-  uint32_t n8;
-  uint32_t pr;
-  uint32_t fg;
-  uint32_t bg;
-  uint32_t conf;
-  uint32_t save;
-  uint32_t *wcs;
-  uint32_t *prs;
-  uint32_t *fgs;
-  uint32_t *bgs;
+  u32 u8;
+  u32 n8;
+  u32 pr;
+  u32 fg;
+  u32 bg;
+  u32 conf;
+  u32 save;
+  u32 *wcs;
+  u32 *prs;
+  u32 *fgs;
+  u32 *bgs;
   wchar_t *xlat;
-  enum PtyState {
-    kPtyAscii,
-    kPtyUtf8,
-    kPtyEsc,
-    kPtyCsi,
-  } state;
-  struct PtyEsc {
-    unsigned i;
-    char s[64];
-  } esc;
+  enum PtyState state;
+  struct PtyEsc esc;
   struct Buffer input;
 };
 

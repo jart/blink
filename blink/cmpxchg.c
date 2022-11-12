@@ -26,7 +26,7 @@
 #include "blink/machine.h"
 #include "blink/modrm.h"
 
-void OpCmpxchgEbAlGb(struct Machine *m, uint32_t rde) {
+void OpCmpxchgEbAlGb(struct Machine *m, u32 rde) {
   bool didit;
   if (!IsModrmRegister(rde)) {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
@@ -37,8 +37,8 @@ void OpCmpxchgEbAlGb(struct Machine *m, uint32_t rde) {
     OpUd(m, rde);
 #endif
   } else {
-    uint8_t *p, *q;
-    uint64_t x, y, z;
+    u8 *p, *q;
+    u64 x, y, z;
     p = ByteRexbRm(m, rde);
     q = ByteRexrReg(m, rde);
     x = Read64(p);
@@ -53,9 +53,9 @@ void OpCmpxchgEbAlGb(struct Machine *m, uint32_t rde) {
   m->flags = SetFlag(m->flags, FLAGS_ZF, didit);
 }
 
-void OpCmpxchgEvqpRaxGvqp(struct Machine *m, uint32_t rde) {
+void OpCmpxchgEvqpRaxGvqp(struct Machine *m, u32 rde) {
   bool didit;
-  uint8_t *p, *q;
+  u8 *p, *q;
   q = RegRexrReg(m, rde);
   p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
   if (Rexw(rde)) {
@@ -69,7 +69,7 @@ void OpCmpxchgEvqpRaxGvqp(struct Machine *m, uint32_t rde) {
       OpUd(m, rde);
 #endif
     } else {
-      uint64_t x, y, z;
+      u64 x, y, z;
       x = Read64(p);
       y = Read64(m->ax);
       z = Read64(q);
@@ -86,7 +86,7 @@ void OpCmpxchgEvqpRaxGvqp(struct Machine *m, uint32_t rde) {
           atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
           memory_order_acq_rel, memory_order_relaxed);
     } else {
-      uint32_t x, y, z;
+      u32 x, y, z;
       x = Read32(p);
       y = Read32(m->ax);
       z = Read32(q);
@@ -102,7 +102,7 @@ void OpCmpxchgEvqpRaxGvqp(struct Machine *m, uint32_t rde) {
       Write32(p + 4, 0);
     }
   } else {
-    uint16_t x, y, z;
+    u16 x, y, z;
     unassert(!Lock(rde));
     x = Read16(p);
     y = Read16(m->ax);

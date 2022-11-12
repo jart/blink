@@ -24,25 +24,25 @@
 
 static int OpE9Read(struct Machine *m) {
   int fd;
-  uint8_t b;
+  u8 b;
+  struct iovec t = {&b, 1};
   fd = 0;
   if (fd >= m->system->fds.i) return -1;
   if (!m->system->fds.p[fd].cb) return -1;
-  if (m->system->fds.p[fd].cb->readv(m->system->fds.p[fd].fd,
-                                     &(struct iovec){&b, 1}, 1) == 1) {
+  if (m->system->fds.p[fd].cb->readv(m->system->fds.p[fd].fd, &t, 1) == 1) {
     return b;
   } else {
     return -1;
   }
 }
 
-static void OpE9Write(struct Machine *m, uint8_t b) {
+static void OpE9Write(struct Machine *m, u8 b) {
   int fd;
+  struct iovec t = {&b, 1};
   fd = 1;
   if (fd >= m->system->fds.i) return;
   if (!m->system->fds.p[fd].cb) return;
-  m->system->fds.p[fd].cb->writev(m->system->fds.p[fd].fd,
-                                  &(struct iovec){&b, 1}, 1);
+  m->system->fds.p[fd].cb->writev(m->system->fds.p[fd].fd, &t, 1);
 }
 
 static int OpE9Poll(struct Machine *m) {
@@ -77,7 +77,7 @@ static int OpSerialIn(struct Machine *m, int r) {
   }
 }
 
-static void OpSerialOut(struct Machine *m, int r, uint32_t x) {
+static void OpSerialOut(struct Machine *m, int r, u32 x) {
   switch (r) {
     case UART_DLL:
       if (!m->system->dlab) {
@@ -92,7 +92,7 @@ static void OpSerialOut(struct Machine *m, int r, uint32_t x) {
   }
 }
 
-uint64_t OpIn(struct Machine *m, uint16_t p) {
+u64 OpIn(struct Machine *m, u16 p) {
   switch (p) {
     case 0xE9:
       return OpE9Read(m);
@@ -103,7 +103,7 @@ uint64_t OpIn(struct Machine *m, uint16_t p) {
   }
 }
 
-void OpOut(struct Machine *m, uint16_t p, uint32_t x) {
+void OpOut(struct Machine *m, u16 p, u32 x) {
   switch (p) {
     case 0xE9:
       OpE9Write(m, x);
