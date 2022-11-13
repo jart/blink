@@ -16,52 +16,40 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-#include "blink/builtin.h"
-#include "blink/errno.h"
+#include "blink/assert.h"
+#include "blink/util.h"
 
-static dontinline long ReturnErrno(int e) {
-  errno = e;
-  return -1;
-}
-
-long ebadf(void) {
-  return ReturnErrno(EBADF);
-}
-
-long einval(void) {
-  return ReturnErrno(EINVAL);
-}
-
-long eagain(void) {
-  return ReturnErrno(EAGAIN);
-}
-
-long enomem(void) {
-  return ReturnErrno(ENOMEM);
-}
-
-long enosys(void) {
-  return ReturnErrno(ENOSYS);
-}
-
-long efault(void) {
-  return ReturnErrno(EFAULT);
-}
-
-long eintr(void) {
-  return ReturnErrno(EINTR);
-}
-
-long eoverflow(void) {
-  return ReturnErrno(EOVERFLOW);
-}
-
-long enfile(void) {
-  return ReturnErrno(ENFILE);
-}
-
-long esrch(void) {
-  return ReturnErrno(ESRCH);
+int vasprintf_(char **strp, const char *fmt, va_list va) {
+  va_list vb;
+  size_t size;
+  char *p, *p2;
+  int wrote, rc = -1;
+  if ((p = (char *)malloc((size = 512)))) {
+    va_copy(vb, va);
+    wrote = vsnprintf(p, size, fmt, va);
+    if (wrote < size) {
+      if ((p2 = (char *)realloc(p, wrote + 1))) {
+        p = p2;
+        rc = wrote;
+      }
+    } else {
+      size = wrote + 1;
+      if ((p2 = (char *)realloc(p, size))) {
+        p = p2;
+        wrote = vsnprintf(p, size, fmt, vb);
+        unassert(wrote == size - 1);
+        rc = wrote;
+      }
+    }
+    va_end(vb);
+  }
+  if (rc != -1) {
+    *strp = p;
+    return rc;
+  } else {
+    return -1;
+  }
 }

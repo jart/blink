@@ -26,6 +26,7 @@
 
 #include "blink/assert.h"
 #include "blink/builtin.h"
+#include "blink/dll.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/log.h"
@@ -86,10 +87,10 @@ struct System *NewSystem(void) {
   }
   if ((s = (struct System *)calloc(1, sizeof(*s)))) {
     s->real.p = (u8 *)p;
-    unassert(!pthread_mutex_init(&s->fds_lock, 0));
+    InitFds(&s->fds);
     unassert(!pthread_mutex_init(&s->sig_lock, 0));
     unassert(!pthread_mutex_init(&s->real_lock, 0));
-    unassert(!pthread_mutex_init(&s->threads_lock, 0));
+    unassert(!pthread_mutex_init(&s->machines_lock, 0));
     unassert(!pthread_mutex_init(&s->realfree_lock, 0));
   }
   return s;
@@ -97,31 +98,32 @@ struct System *NewSystem(void) {
 
 static void FreeSystemRealFree(struct System *s) {
   struct SystemRealFree *rf;
+  unassert(!pthread_mutex_lock(&s->realfree_lock));
   while ((rf = s->realfree)) {
     s->realfree = rf->next;
     free(rf);
   }
+  unassert(!pthread_mutex_unlock(&s->realfree_lock));
 }
 
 static void AssignTid(struct Machine *m) {
   _Static_assert(IS2POW(MAX_THREAD_IDS), "");
-  unassert(!pthread_mutex_lock(&m->system->threads_lock));
-  if (dll_is_empty(m->system->threads)) {
+  unassert(!pthread_mutex_lock(&m->system->machines_lock));
+  if (dll_is_empty(m->system->machines)) {
     m->tid = getpid();
   } else {
+    m->isthread = true;
     m->tid = (m->system->next_tid++ & (MAX_THREAD_IDS - 1)) + MINIMUM_THREAD_ID;
   }
-  m->system->threads = dll_make_first(m->system->threads, &m->list);
-  unassert(!pthread_mutex_unlock(&m->system->threads_lock));
+  m->system->machines = dll_make_first(m->system->machines, &m->list);
+  unassert(!pthread_mutex_unlock(&m->system->machines_lock));
 }
 
 struct Machine *NewMachine(struct System *s, struct Machine *p) {
-  struct OpCache *o;
   struct Machine *m;
   unassert(s);
   unassert(!p || s == p->system);
-  if (!(m = (struct Machine *)malloc(sizeof(*m))) ||
-      !(o = (struct OpCache *)malloc(sizeof(*o)))) {
+  if (!(m = (struct Machine *)malloc(sizeof(*m)))) {
     free(m);
     return 0;
   }
@@ -131,10 +133,8 @@ struct Machine *NewMachine(struct System *s, struct Machine *p) {
     memcpy(m, p, sizeof(*m));
     IGNORE_RACES_END();
     memset(&m->freelist, 0, sizeof(m->freelist));
-    memcpy((m->opcache = o), p->opcache, sizeof(*m->opcache));
   } else {
     memset(m, 0, sizeof(*m));
-    memset((m->opcache = o), 0, sizeof(*m->opcache));
     ResetCpu(m);
   }
   dll_init(&m->list);
@@ -145,13 +145,14 @@ struct Machine *NewMachine(struct System *s, struct Machine *p) {
 
 void FreeSystem(struct System *s) {
   FreeSystemRealFree(s);
+  unassert(!pthread_mutex_lock(&s->real_lock));
+  unassert(!munmap(s->real.p, MAX_MEMORY));
+  unassert(!pthread_mutex_unlock(&s->real_lock));
   unassert(!pthread_mutex_destroy(&s->realfree_lock));
-  unassert(!pthread_mutex_destroy(&s->threads_lock));
+  unassert(!pthread_mutex_destroy(&s->machines_lock));
   unassert(!pthread_mutex_destroy(&s->real_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));
-  unassert(!pthread_mutex_destroy(&s->fds_lock));
-  unassert(!munmap(s->real.p, MAX_MEMORY));
-  free(s->fds.p);
+  DestroyFds(&s->fds);
   free(s);
 }
 
@@ -165,12 +166,11 @@ void CollectGarbage(struct Machine *m) {
 
 void FreeMachine(struct Machine *m) {
   if (m) {
-    pthread_mutex_lock(&m->system->threads_lock);
-    m->system->threads = dll_remove(m->system->threads, &m->list);
-    pthread_mutex_unlock(&m->system->threads_lock);
+    pthread_mutex_lock(&m->system->machines_lock);
+    m->system->machines = dll_remove(m->system->machines, &m->list);
+    pthread_mutex_unlock(&m->system->machines_lock);
     CollectGarbage(m);
     free(m->freelist.p);
-    free(m->opcache);
     free(m);
   }
 }

@@ -16,10 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <pthread.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <time.h>
@@ -83,9 +81,9 @@ static char *GetTimestamp(void) {
 }
 
 void Log(const char *file, int line, const char *fmt, ...) {
+  int n = 0;
   va_list va;
   char b[PIPE_BUF];
-  int rc, cs, n = 0;
   va_start(va, fmt);
   APPEND(snprintf, "I%s:%s:%d: ", GetTimestamp(), file, line);
   APPEND(vsnprintf, fmt, va);
@@ -98,14 +96,12 @@ void Log(const char *file, int line, const char *fmt, ...) {
     b[--n] = '.';
     b[--n] = '.';
   }
-  unassert(!pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs));
-  do rc = write(g_log > 0 ? g_log : 2, b, n);
-  while (rc == -1 && errno == EINTR);
-  unassert(!pthread_setcancelstate(cs, 0));
+  WriteError(g_log, b, n);
 }
 
-void OpenLog(const char *path) {
+void LogInit(const char *path) {
   int fd;
+  WriteErrorInit();
   if (!path) {
     path = "/tmp/blink.log";
   }

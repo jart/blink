@@ -16,52 +16,74 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
+#include <fcntl.h>
+#include <stdatomic.h>
+#include <unistd.h>
 
-#include "blink/builtin.h"
+#include "blink/assert.h"
+#include "blink/debug.h"
 #include "blink/errno.h"
+#include "blink/fds.h"
+#include "blink/linux.h"
+#include "blink/log.h"
+#include "blink/syscall.h"
 
-static dontinline long ReturnErrno(int e) {
-  errno = e;
-  return -1;
-}
-
-long ebadf(void) {
-  return ReturnErrno(EBADF);
-}
-
-long einval(void) {
-  return ReturnErrno(EINVAL);
-}
-
-long eagain(void) {
-  return ReturnErrno(EAGAIN);
-}
-
-long enomem(void) {
-  return ReturnErrno(ENOMEM);
-}
-
-long enosys(void) {
-  return ReturnErrno(ENOSYS);
-}
-
-long efault(void) {
-  return ReturnErrno(EFAULT);
-}
-
-long eintr(void) {
-  return ReturnErrno(EINTR);
-}
-
-long eoverflow(void) {
-  return ReturnErrno(EOVERFLOW);
-}
-
-long enfile(void) {
-  return ReturnErrno(ENFILE);
-}
-
-long esrch(void) {
-  return ReturnErrno(ESRCH);
+int OpDup(struct Machine *m, i32 fildes, i32 newfildes, i32 flags, i32 minfd) {
+  int systemfd;
+  struct Fd *fd1, *fd2, *freeme;
+  unassert(newfildes >= -1);
+  if (minfd < 0) {
+    LOGF("dup minfd is negative");
+    return einval();
+  }
+  if (flags & ~O_CLOEXEC_LINUX) {
+    LOGF("dup bad flags");
+    return einval();
+  }
+  LockFds(&m->system->fds);
+  if ((fd1 = GetFd(&m->system->fds, fildes))) {
+    LockFd(fd1);
+    fd2 = GetFd(&m->system->fds, newfildes);
+    if (newfildes >= 0) {
+      fd2 = GetFd(&m->system->fds, newfildes);
+      if (!fd2) minfd = newfildes;
+    } else {
+      fd2 = 0;
+    }
+    if (!fd2) {
+      fd2 = freeme = AllocateFd(&m->system->fds, minfd, 0);
+    } else {
+      freeme = 0;
+    }
+    if (fd2) {
+      LockFd(fd2);
+    }
+  } else {
+    freeme = 0;
+    fd2 = 0;
+  }
+  if (fd1 && fd2) {
+    if (fd1 != fd2) {
+      systemfd = atomic_load_explicit(&fd1->systemfd, memory_order_relaxed);
+      systemfd = fcntl(systemfd, flags ? F_DUPFD_CLOEXEC : F_DUPFD, 3);
+      if (systemfd != -1) {
+        fildes = fd2->fildes;
+        fd2->cb = fd1->cb;
+        fd2->cloexec = !!flags;
+        fd2->oflags = fd1->oflags;
+        atomic_store_explicit(&fd2->systemfd, systemfd, memory_order_release);
+      } else {
+        fildes = -1;
+      }
+    } else {
+      fildes = fd2->fildes;
+    }
+  } else {
+    fildes = -1;
+  }
+  UnlockFds(&m->system->fds);
+  if (fd1) UnlockFd(fd1);
+  if (fd2) UnlockFd(fd2);
+  if (freeme && fildes == -1) DropFd(m, freeme);
+  return fildes;
 }

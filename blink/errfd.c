@@ -17,51 +17,31 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
+#include <fcntl.h>
+#include <pthread.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
 
-#include "blink/builtin.h"
-#include "blink/errno.h"
+#include "blink/log.h"
 
-static dontinline long ReturnErrno(int e) {
-  errno = e;
-  return -1;
+static int g_errfd;
+
+int WriteErrorString(const char *buf) {
+  return WriteError(0, buf, strlen(buf));
 }
 
-long ebadf(void) {
-  return ReturnErrno(EBADF);
+int WriteError(int fd, const char *buf, int len) {
+  int rc, cs;
+  pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs);
+  do rc = write(fd > 0 ? fd : g_errfd, buf, len);
+  while (rc == -1 && errno == EINTR);
+  pthread_setcancelstate(cs, 0);
+  return rc;
 }
 
-long einval(void) {
-  return ReturnErrno(EINVAL);
-}
-
-long eagain(void) {
-  return ReturnErrno(EAGAIN);
-}
-
-long enomem(void) {
-  return ReturnErrno(ENOMEM);
-}
-
-long enosys(void) {
-  return ReturnErrno(ENOSYS);
-}
-
-long efault(void) {
-  return ReturnErrno(EFAULT);
-}
-
-long eintr(void) {
-  return ReturnErrno(EINTR);
-}
-
-long eoverflow(void) {
-  return ReturnErrno(EOVERFLOW);
-}
-
-long enfile(void) {
-  return ReturnErrno(ENFILE);
-}
-
-long esrch(void) {
-  return ReturnErrno(ESRCH);
+void WriteErrorInit(void) {
+  if (g_errfd) return;
+  g_errfd = fcntl(2, F_DUPFD_CLOEXEC, 100);
+  if (g_errfd == -1) exit(200);
 }

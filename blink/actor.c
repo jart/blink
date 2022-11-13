@@ -16,52 +16,22 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
+#include <alloca.h>
 
-#include "blink/builtin.h"
-#include "blink/errno.h"
+#include "blink/machine.h"
+#include "blink/signal.h"
 
-static dontinline long ReturnErrno(int e) {
-  errno = e;
-  return -1;
-}
+_Thread_local struct Machine *g_machine;
 
-long ebadf(void) {
-  return ReturnErrno(EBADF);
-}
-
-long einval(void) {
-  return ReturnErrno(EINVAL);
-}
-
-long eagain(void) {
-  return ReturnErrno(EAGAIN);
-}
-
-long enomem(void) {
-  return ReturnErrno(ENOMEM);
-}
-
-long enosys(void) {
-  return ReturnErrno(ENOSYS);
-}
-
-long efault(void) {
-  return ReturnErrno(EFAULT);
-}
-
-long eintr(void) {
-  return ReturnErrno(EINTR);
-}
-
-long eoverflow(void) {
-  return ReturnErrno(EOVERFLOW);
-}
-
-long enfile(void) {
-  return ReturnErrno(ENFILE);
-}
-
-long esrch(void) {
-  return ReturnErrno(ESRCH);
+void Actor(struct Machine *m) {
+  int sig;
+  void *volatile lol = alloca(256);
+  (void)lol;
+  for (g_machine = m;;) {
+    LoadInstruction(m);
+    ExecuteInstruction(m);
+    if (__builtin_expect(m->signals, 0) && (sig = ConsumeSignal(m))) {
+      TerminateSignal(m, sig);
+    }
+  }
 }

@@ -42,6 +42,7 @@
 #include "blink/ssemov.h"
 #include "blink/string.h"
 #include "blink/swap.h"
+#include "blink/syscall.h"
 #include "blink/time.h"
 #include "blink/util.h"
 
@@ -270,8 +271,7 @@ static void OpMovEvqpSw(struct Machine *m, u32 rde) {
                         Read64(GetSegment(m, rde, ModrmReg(rde))) >> 4);
 }
 
-static int GetDescriptor(struct Machine *m, int selector,
-                         u64 *out_descriptor) {
+static int GetDescriptor(struct Machine *m, int selector, u64 *out_descriptor) {
   unassert(m->system->gdt_base + m->system->gdt_limit <=
            GetRealMemorySize(m->system));
   selector &= -8;
@@ -1581,531 +1581,533 @@ static void OpEmms(struct Machine *m, u32 rde) {
   m->fpu.tw = -1;
 }
 
+_Atomic(long) kDispatchCount[0x500];
+
 const nexgen32e_f kNexgen32e[] = {
-    /*000*/ OpAlubAdd,
-    /*001*/ OpAluw,
-    /*002*/ OpAlubFlipAdd,
-    /*003*/ OpAluwFlip,
-    /*004*/ OpAluAlIbAdd,
-    /*005*/ OpAluRaxIvds,
-    /*006*/ OpPushSeg,
-    /*007*/ OpPopSeg,
-    /*008*/ OpAlubOr,
-    /*009*/ OpAluw,
-    /*00A*/ OpAlubFlipOr,
-    /*00B*/ OpAluwFlip,
-    /*00C*/ OpAluAlIbOr,
-    /*00D*/ OpAluRaxIvds,
-    /*00E*/ OpPushSeg,
-    /*00F*/ OpPopSeg,
-    /*010*/ OpAlubAdc,
-    /*011*/ OpAluw,
-    /*012*/ OpAlubFlipAdc,
-    /*013*/ OpAluwFlip,
-    /*014*/ OpAluAlIbAdc,
-    /*015*/ OpAluRaxIvds,
-    /*016*/ OpPushSeg,
-    /*017*/ OpPopSeg,
-    /*018*/ OpAlubSbb,
-    /*019*/ OpAluw,
-    /*01A*/ OpAlubFlipSbb,
-    /*01B*/ OpAluwFlip,
-    /*01C*/ OpAluAlIbSbb,
-    /*01D*/ OpAluRaxIvds,
-    /*01E*/ OpPushSeg,
-    /*01F*/ OpPopSeg,
-    /*020*/ OpAlubAnd,
-    /*021*/ OpAluw,
-    /*022*/ OpAlubFlipAnd,
-    /*023*/ OpAluwFlip,
-    /*024*/ OpAluAlIbAnd,
-    /*025*/ OpAluRaxIvds,
-    /*026*/ OpPushSeg,
-    /*027*/ OpPopSeg,
-    /*028*/ OpAlubSub,
-    /*029*/ OpAluw,
-    /*02A*/ OpAlubFlipSub,
-    /*02B*/ OpAluwFlip,
-    /*02C*/ OpAluAlIbSub,
-    /*02D*/ OpAluRaxIvds,
-    /*02E*/ OpUd,
-    /*02F*/ OpDas,
-    /*030*/ OpAlubXor,
-    /*031*/ OpAluw,
-    /*032*/ OpAlubFlipXor,
-    /*033*/ OpAluwFlip,
-    /*034*/ OpAluAlIbXor,
-    /*035*/ OpAluRaxIvds,
-    /*036*/ OpUd,
-    /*037*/ OpAaa,
-    /*038*/ OpAlubCmp,
-    /*039*/ OpAluwCmp,
-    /*03A*/ OpAlubFlipCmp,
-    /*03B*/ OpAluwFlipCmp,
-    /*03C*/ OpCmpAlIb,
-    /*03D*/ OpCmpRaxIvds,
-    /*03E*/ OpUd,
-    /*03F*/ OpAas,
-    /*040*/ OpIncZv,
-    /*041*/ OpIncZv,
-    /*042*/ OpIncZv,
-    /*043*/ OpIncZv,
-    /*044*/ OpIncZv,
-    /*045*/ OpIncZv,
-    /*046*/ OpIncZv,
-    /*047*/ OpIncZv,
-    /*048*/ OpDecZv,
-    /*049*/ OpDecZv,
-    /*04A*/ OpDecZv,
-    /*04B*/ OpDecZv,
-    /*04C*/ OpDecZv,
-    /*04D*/ OpDecZv,
-    /*04E*/ OpDecZv,
-    /*04F*/ OpDecZv,
-    /*050*/ OpPushZvq,
-    /*051*/ OpPushZvq,
-    /*052*/ OpPushZvq,
-    /*053*/ OpPushZvq,
-    /*054*/ OpPushZvq,
-    /*055*/ OpPushZvq,
-    /*056*/ OpPushZvq,
-    /*057*/ OpPushZvq,
-    /*058*/ OpPopZvq,
-    /*059*/ OpPopZvq,
-    /*05A*/ OpPopZvq,
-    /*05B*/ OpPopZvq,
-    /*05C*/ OpPopZvq,
-    /*05D*/ OpPopZvq,
-    /*05E*/ OpPopZvq,
-    /*05F*/ OpPopZvq,
-    /*060*/ OpPusha,
-    /*061*/ OpPopa,
-    /*062*/ OpUd,
-    /*063*/ OpMovsxdGdqpEd,
-    /*064*/ OpUd,
-    /*065*/ OpUd,
-    /*066*/ OpUd,
-    /*067*/ OpUd,
-    /*068*/ OpPushImm,
-    /*069*/ OpImulGvqpEvqpImm,
-    /*06A*/ OpPushImm,
-    /*06B*/ OpImulGvqpEvqpImm,
-    /*06C*/ OpIns,
-    /*06D*/ OpIns,
-    /*06E*/ OpOuts,
-    /*06F*/ OpOuts,
-    /*070*/ OpJo,
-    /*071*/ OpJno,
-    /*072*/ OpJb,
-    /*073*/ OpJae,
-    /*074*/ OpJe,
-    /*075*/ OpJne,
-    /*076*/ OpJbe,
-    /*077*/ OpJa,
-    /*078*/ OpJs,
-    /*079*/ OpJns,
-    /*07A*/ OpJp,
-    /*07B*/ OpJnp,
-    /*07C*/ OpJl,
-    /*07D*/ OpJge,
-    /*07E*/ OpJle,
-    /*07F*/ OpJg,
-    /*080*/ OpAlubiReg,
-    /*081*/ OpAluwiReg,
-    /*082*/ OpAlubiReg,
-    /*083*/ OpAluwiReg,
-    /*084*/ OpAlubTest,
-    /*085*/ OpAluwTest,
-    /*086*/ OpXchgGbEb,
-    /*087*/ OpXchgGvqpEvqp,
-    /*088*/ OpMovEbGb,
-    /*089*/ OpMovEvqpGvqp,
-    /*08A*/ OpMovGbEb,
-    /*08B*/ OpMovGvqpEvqp,
-    /*08C*/ OpMovEvqpSw,
-    /*08D*/ OpLeaGvqpM,
-    /*08E*/ OpMovSwEvqp,
-    /*08F*/ OpPopEvq,
-    /*090*/ OpNop,
-    /*091*/ OpXchgZvqp,
-    /*092*/ OpXchgZvqp,
-    /*093*/ OpXchgZvqp,
-    /*094*/ OpXchgZvqp,
-    /*095*/ OpXchgZvqp,
-    /*096*/ OpXchgZvqp,
-    /*097*/ OpXchgZvqp,
-    /*098*/ OpSax,
-    /*099*/ OpConvert,
-    /*09A*/ OpCallf,
-    /*09B*/ OpFwait,
-    /*09C*/ OpPushf,
-    /*09D*/ OpPopf,
-    /*09E*/ OpSahf,
-    /*09F*/ OpLahf,
-    /*0A0*/ OpMovAlOb,
-    /*0A1*/ OpMovRaxOvqp,
-    /*0A2*/ OpMovObAl,
-    /*0A3*/ OpMovOvqpRax,
-    /*0A4*/ OpMovsb,
-    /*0A5*/ OpMovs,
-    /*0A6*/ OpCmps,
-    /*0A7*/ OpCmps,
-    /*0A8*/ OpTestAlIb,
-    /*0A9*/ OpTestRaxIvds,
-    /*0AA*/ OpStosb,
-    /*0AB*/ OpStos,
-    /*0AC*/ OpLods,
-    /*0AD*/ OpLods,
-    /*0AE*/ OpScas,
-    /*0AF*/ OpScas,
-    /*0B0*/ OpMovZbIb,
-    /*0B1*/ OpMovZbIb,
-    /*0B2*/ OpMovZbIb,
-    /*0B3*/ OpMovZbIb,
-    /*0B4*/ OpMovZbIb,
-    /*0B5*/ OpMovZbIb,
-    /*0B6*/ OpMovZbIb,
-    /*0B7*/ OpMovZbIb,
-    /*0B8*/ OpMovZvqpIvqp,
-    /*0B9*/ OpMovZvqpIvqp,
-    /*0BA*/ OpMovZvqpIvqp,
-    /*0BB*/ OpMovZvqpIvqp,
-    /*0BC*/ OpMovZvqpIvqp,
-    /*0BD*/ OpMovZvqpIvqp,
-    /*0BE*/ OpMovZvqpIvqp,
-    /*0BF*/ OpMovZvqpIvqp,
-    /*0C0*/ OpBsubiImm,
-    /*0C1*/ OpBsuwiImm,
-    /*0C2*/ OpRet,
-    /*0C3*/ OpRet,
-    /*0C4*/ OpLes,
-    /*0C5*/ OpLds,
-    /*0C6*/ OpMovEbIb,
-    /*0C7*/ OpMovEvqpIvds,
-    /*0C8*/ OpUd,
-    /*0C9*/ OpLeave,
-    /*0CA*/ OpRetf,
-    /*0CB*/ OpRetf,
-    /*0CC*/ OpInterrupt3,
-    /*0CD*/ OpInterruptImm,
-    /*0CE*/ OpUd,
-    /*0CF*/ OpUd,
-    /*0D0*/ OpBsubi1,
-    /*0D1*/ OpBsuwi1,
-    /*0D2*/ OpBsubiCl,
-    /*0D3*/ OpBsuwiCl,
-    /*0D4*/ OpAam,
-    /*0D5*/ OpAad,
-    /*0D6*/ OpSalc,
-    /*0D7*/ OpXlatAlBbb,
-    /*0D8*/ OpFpu,
-    /*0D9*/ OpFpu,
-    /*0DA*/ OpFpu,
-    /*0DB*/ OpFpu,
-    /*0DC*/ OpFpu,
-    /*0DD*/ OpFpu,
-    /*0DE*/ OpFpu,
-    /*0DF*/ OpFpu,
-    /*0E0*/ OpLoopne,
-    /*0E1*/ OpLoope,
-    /*0E2*/ OpLoop1,
-    /*0E3*/ OpJcxz,
-    /*0E4*/ OpInAlImm,
-    /*0E5*/ OpInAxImm,
-    /*0E6*/ OpOutImmAl,
-    /*0E7*/ OpOutImmAx,
-    /*0E8*/ OpCallJvds,
-    /*0E9*/ OpJmp,
-    /*0EA*/ OpJmpf,
-    /*0EB*/ OpJmp,
-    /*0EC*/ OpInAlDx,
-    /*0ED*/ OpInAxDx,
-    /*0EE*/ OpOutDxAl,
-    /*0EF*/ OpOutDxAx,
-    /*0F0*/ OpUd,
-    /*0F1*/ OpInterrupt1,
-    /*0F2*/ OpUd,
-    /*0F3*/ OpUd,
-    /*0F4*/ OpHlt,
-    /*0F5*/ OpCmc,
-    /*0F6*/ Op0f6,
-    /*0F7*/ Op0f7,
-    /*0F8*/ OpClc,
-    /*0F9*/ OpStc,
-    /*0FA*/ OpCli,
-    /*0FB*/ OpSti,
-    /*0FC*/ OpCld,
-    /*0FD*/ OpStd,
-    /*0FE*/ Op0fe,
-    /*0FF*/ Op0ff,
-    /*100*/ OpUd,
-    /*101*/ Op101,
-    /*102*/ OpUd,
-    /*103*/ OpLsl,
-    /*104*/ OpUd,
-    /*105*/ OpSyscall,
-    /*106*/ OpUd,
-    /*107*/ OpUd,
-    /*108*/ OpUd,
-    /*109*/ OpUd,
-    /*10A*/ OpUd,
-    /*10B*/ OpUd,
-    /*10C*/ OpUd,
-    /*10D*/ OpHintNopEv,
-    /*10E*/ OpUd,
-    /*10F*/ OpUd,
-    /*110*/ OpMov0f10,
-    /*111*/ OpMovWpsVps,
-    /*112*/ OpMov0f12,
-    /*113*/ OpMov0f13,
-    /*114*/ OpUnpcklpsd,
-    /*115*/ OpUnpckhpsd,
-    /*116*/ OpMov0f16,
-    /*117*/ OpMov0f17,
-    /*118*/ OpHintNopEv,
-    /*119*/ OpHintNopEv,
-    /*11A*/ OpHintNopEv,
-    /*11B*/ OpHintNopEv,
-    /*11C*/ OpHintNopEv,
-    /*11D*/ OpHintNopEv,
-    /*11E*/ OpHintNopEv,
-    /*11F*/ OpNopEv,
-    /*120*/ OpMovRqCq,
-    /*121*/ OpUd,
-    /*122*/ OpMovCqRq,
-    /*123*/ OpUd,
-    /*124*/ OpUd,
-    /*125*/ OpUd,
-    /*126*/ OpUd,
-    /*127*/ OpUd,
-    /*128*/ OpMov0f28,
-    /*129*/ OpMovWpsVps,
-    /*12A*/ OpCvt0f2a,
-    /*12B*/ OpMov0f2b,
-    /*12C*/ OpCvtt0f2c,
-    /*12D*/ OpCvt0f2d,
-    /*12E*/ OpComissVsWs,
-    /*12F*/ OpComissVsWs,
-    /*130*/ OpWrmsr,
-    /*131*/ OpRdtsc,
-    /*132*/ OpRdmsr,
-    /*133*/ OpUd,
-    /*134*/ OpUd,
-    /*135*/ OpUd,
-    /*136*/ OpUd,
-    /*137*/ OpUd,
-    /*138*/ OpUd,
-    /*139*/ OpUd,
-    /*13A*/ OpUd,
-    /*13B*/ OpUd,
-    /*13C*/ OpUd,
-    /*13D*/ OpUd,
-    /*13E*/ OpUd,
-    /*13F*/ OpUd,
-    /*140*/ OpCmovo,
-    /*141*/ OpCmovno,
-    /*142*/ OpCmovb,
-    /*143*/ OpCmovae,
-    /*144*/ OpCmove,
-    /*145*/ OpCmovne,
-    /*146*/ OpCmovbe,
-    /*147*/ OpCmova,
-    /*148*/ OpCmovs,
-    /*149*/ OpCmovns,
-    /*14A*/ OpCmovp,
-    /*14B*/ OpCmovnp,
-    /*14C*/ OpCmovl,
-    /*14D*/ OpCmovge,
-    /*14E*/ OpCmovle,
-    /*14F*/ OpCmovg,
-    /*150*/ OpUd,
-    /*151*/ OpSqrtpsd,
-    /*152*/ OpRsqrtps,
-    /*153*/ OpRcpps,
-    /*154*/ OpAndpsd,
-    /*155*/ OpAndnpsd,
-    /*156*/ OpOrpsd,
-    /*157*/ OpXorpsd,
-    /*158*/ OpAddpsd,
-    /*159*/ OpMulpsd,
-    /*15A*/ OpCvt0f5a,
-    /*15B*/ OpCvt0f5b,
-    /*15C*/ OpSubpsd,
-    /*15D*/ OpMinpsd,
-    /*15E*/ OpDivpsd,
-    /*15F*/ OpMaxpsd,
-    /*160*/ OpSsePunpcklbw,
-    /*161*/ OpSsePunpcklwd,
-    /*162*/ OpSsePunpckldq,
-    /*163*/ OpSsePacksswb,
-    /*164*/ OpSsePcmpgtb,
-    /*165*/ OpSsePcmpgtw,
-    /*166*/ OpSsePcmpgtd,
-    /*167*/ OpSsePackuswb,
-    /*168*/ OpSsePunpckhbw,
-    /*169*/ OpSsePunpckhwd,
-    /*16A*/ OpSsePunpckhdq,
-    /*16B*/ OpSsePackssdw,
-    /*16C*/ OpSsePunpcklqdq,
-    /*16D*/ OpSsePunpckhqdq,
-    /*16E*/ OpMov0f6e,
-    /*16F*/ OpMov0f6f,
-    /*170*/ OpShuffle,
-    /*171*/ Op171,
-    /*172*/ Op172,
-    /*173*/ Op173,
-    /*174*/ OpSsePcmpeqb,
-    /*175*/ OpSsePcmpeqw,
-    /*176*/ OpSsePcmpeqd,
-    /*177*/ OpEmms,
-    /*178*/ OpUd,
-    /*179*/ OpUd,
-    /*17A*/ OpUd,
-    /*17B*/ OpUd,
-    /*17C*/ OpHaddpsd,
-    /*17D*/ OpHsubpsd,
-    /*17E*/ OpMov0f7e,
-    /*17F*/ OpMov0f7f,
-    /*180*/ OpJo,
-    /*181*/ OpJno,
-    /*182*/ OpJb,
-    /*183*/ OpJae,
-    /*184*/ OpJe,
-    /*185*/ OpJne,
-    /*186*/ OpJbe,
-    /*187*/ OpJa,
-    /*188*/ OpJs,
-    /*189*/ OpJns,
-    /*18A*/ OpJp,
-    /*18B*/ OpJnp,
-    /*18C*/ OpJl,
-    /*18D*/ OpJge,
-    /*18E*/ OpJle,
-    /*18F*/ OpJg,
-    /*190*/ OpSeto,
-    /*191*/ OpSetno,
-    /*192*/ OpSetb,
-    /*193*/ OpSetae,
-    /*194*/ OpSete,
-    /*195*/ OpSetne,
-    /*196*/ OpSetbe,
-    /*197*/ OpSeta,
-    /*198*/ OpSets,
-    /*199*/ OpSetns,
-    /*19A*/ OpSetp,
-    /*19B*/ OpSetnp,
-    /*19C*/ OpSetl,
-    /*19D*/ OpSetge,
-    /*19E*/ OpSetle,
-    /*19F*/ OpSetg,
-    /*1A0*/ OpPushSeg,
-    /*1A1*/ OpPopSeg,
-    /*1A2*/ OpCpuid,
-    /*1A3*/ OpBit,
-    /*1A4*/ OpDoubleShift,
-    /*1A5*/ OpDoubleShift,
-    /*1A6*/ OpUd,
-    /*1A7*/ OpUd,
-    /*1A8*/ OpPushSeg,
-    /*1A9*/ OpPopSeg,
-    /*1AA*/ OpUd,
-    /*1AB*/ OpBit,
-    /*1AC*/ OpDoubleShift,
-    /*1AD*/ OpDoubleShift,
-    /*1AE*/ Op1ae,
-    /*1AF*/ OpImulGvqpEvqp,
-    /*1B0*/ OpCmpxchgEbAlGb,
-    /*1B1*/ OpCmpxchgEvqpRaxGvqp,
-    /*1B2*/ OpUd,
-    /*1B3*/ OpBit,
-    /*1B4*/ OpUd,
-    /*1B5*/ OpUd,
-    /*1B6*/ OpMovzbGvqpEb,
-    /*1B7*/ OpMovzwGvqpEw,
-    /*1B8*/ Op1b8,
-    /*1B9*/ OpUd,
-    /*1BA*/ OpBit,
-    /*1BB*/ OpBit,
-    /*1BC*/ OpBsf,
-    /*1BD*/ OpBsr,
-    /*1BE*/ OpMovsbGvqpEb,
-    /*1BF*/ OpMovswGvqpEw,
-    /*1C0*/ OpXaddEbGb,
-    /*1C1*/ OpXaddEvqpGvqp,
-    /*1C2*/ OpCmppsd,
-    /*1C3*/ OpMovntiMdqpGdqp,
-    /*1C4*/ OpPinsrwVdqEwIb,
-    /*1C5*/ OpPextrwGdqpUdqIb,
-    /*1C6*/ OpShufpsd,
-    /*1C7*/ Op1c7,
-    /*1C8*/ OpBswapZvqp,
-    /*1C9*/ OpBswapZvqp,
-    /*1CA*/ OpBswapZvqp,
-    /*1CB*/ OpBswapZvqp,
-    /*1CC*/ OpBswapZvqp,
-    /*1CD*/ OpBswapZvqp,
-    /*1CE*/ OpBswapZvqp,
-    /*1CF*/ OpBswapZvqp,
-    /*1D0*/ OpAddsubpsd,
-    /*1D1*/ OpSsePsrlwv,
-    /*1D2*/ OpSsePsrldv,
-    /*1D3*/ OpSsePsrlqv,
-    /*1D4*/ OpSsePaddq,
-    /*1D5*/ OpSsePmullw,
-    /*1D6*/ OpMov0fD6,
-    /*1D7*/ OpPmovmskbGdqpNqUdq,
-    /*1D8*/ OpSsePsubusb,
-    /*1D9*/ OpSsePsubusw,
-    /*1DA*/ OpSsePminub,
-    /*1DB*/ OpSsePand,
-    /*1DC*/ OpSsePaddusb,
-    /*1DD*/ OpSsePaddusw,
-    /*1DE*/ OpSsePmaxub,
-    /*1DF*/ OpSsePandn,
-    /*1E0*/ OpSsePavgb,
-    /*1E1*/ OpSsePsrawv,
-    /*1E2*/ OpSsePsradv,
-    /*1E3*/ OpSsePavgw,
-    /*1E4*/ OpSsePmulhuw,
-    /*1E5*/ OpSsePmulhw,
-    /*1E6*/ OpCvt0fE6,
-    /*1E7*/ OpMov0fE7,
-    /*1E8*/ OpSsePsubsb,
-    /*1E9*/ OpSsePsubsw,
-    /*1EA*/ OpSsePminsw,
-    /*1EB*/ OpSsePor,
-    /*1EC*/ OpSsePaddsb,
-    /*1ED*/ OpSsePaddsw,
-    /*1EE*/ OpSsePmaxsw,
-    /*1EF*/ OpSsePxor,
-    /*1F0*/ OpLddquVdqMdq,
-    /*1F1*/ OpSsePsllwv,
-    /*1F2*/ OpSsePslldv,
-    /*1F3*/ OpSsePsllqv,
-    /*1F4*/ OpSsePmuludq,
-    /*1F5*/ OpSsePmaddwd,
-    /*1F6*/ OpSsePsadbw,
-    /*1F7*/ OpMaskMovDiXmmRegXmmRm,
-    /*1F8*/ OpSsePsubb,
-    /*1F9*/ OpSsePsubw,
-    /*1FA*/ OpSsePsubd,
-    /*1FB*/ OpSsePsubq,
-    /*1FC*/ OpSsePaddb,
-    /*1FD*/ OpSsePaddw,
-    /*1FE*/ OpSsePaddd,
-    /*1FF*/ OpUd,
-    /*200*/ OpSsePshufb,
-    /*201*/ OpSsePhaddw,
-    /*202*/ OpSsePhaddd,
-    /*203*/ OpSsePhaddsw,
-    /*204*/ OpSsePmaddubsw,
-    /*205*/ OpSsePhsubw,
-    /*206*/ OpSsePhsubd,
-    /*207*/ OpSsePhsubsw,
-    /*208*/ OpSsePsignb,
-    /*209*/ OpSsePsignw,
-    /*20A*/ OpSsePsignd,
-    /*20B*/ OpSsePmulhrsw,
+    /*000*/ OpAlubAdd,               //
+    /*001*/ OpAluw,                  // #8    (5.653689%)
+    /*002*/ OpAlubFlipAdd,           // #180  (0.000087%)
+    /*003*/ OpAluwFlip,              // #7    (5.840835%)
+    /*004*/ OpAluAlIbAdd,            //
+    /*005*/ OpAluRaxIvds,            // #166  (0.000114%)
+    /*006*/ OpPushSeg,               //
+    /*007*/ OpPopSeg,                //
+    /*008*/ OpAlubOr,                // #154  (0.000207%)
+    /*009*/ OpAluw,                  // #21   (0.520082%)
+    /*00A*/ OpAlubFlipOr,            // #120  (0.001072%)
+    /*00B*/ OpAluwFlip,              // #114  (0.001252%)
+    /*00C*/ OpAluAlIbOr,             //
+    /*00D*/ OpAluRaxIvds,            // #282  (0.000001%)
+    /*00E*/ OpPushSeg,               //
+    /*00F*/ OpPopSeg,                //
+    /*010*/ OpAlubAdc,               //
+    /*011*/ OpAluw,                  // #11   (5.307809%)
+    /*012*/ OpAlubFlipAdc,           //
+    /*013*/ OpAluwFlip,              // #108  (0.001526%)
+    /*014*/ OpAluAlIbAdc,            // #97   (0.002566%)
+    /*015*/ OpAluRaxIvds,            //
+    /*016*/ OpPushSeg,               //
+    /*017*/ OpPopSeg,                //
+    /*018*/ OpAlubSbb,               //
+    /*019*/ OpAluw,                  // #65   (0.015300%)
+    /*01A*/ OpAlubFlipSbb,           //
+    /*01B*/ OpAluwFlip,              // #44   (0.241806%)
+    /*01C*/ OpAluAlIbSbb,            // #96   (0.002566%)
+    /*01D*/ OpAluRaxIvds,            //
+    /*01E*/ OpPushSeg,               //
+    /*01F*/ OpPopSeg,                //
+    /*020*/ OpAlubAnd,               // #165  (0.000130%)
+    /*021*/ OpAluw,                  // #59   (0.019691%)
+    /*022*/ OpAlubFlipAnd,           //
+    /*023*/ OpAluwFlip,              // #41   (0.279852%)
+    /*024*/ OpAluAlIbAnd,            // #279  (0.000001%)
+    /*025*/ OpAluRaxIvds,            // #43   (0.275823%)
+    /*026*/ OpPushSeg,               //
+    /*027*/ OpPopSeg,                //
+    /*028*/ OpAlubSub,               //
+    /*029*/ OpAluw,                  // #29   (0.334693%)
+    /*02A*/ OpAlubFlipSub,           // #179  (0.000087%)
+    /*02B*/ OpAluwFlip,              // #71   (0.012465%)
+    /*02C*/ OpAluAlIbSub,            //
+    /*02D*/ OpAluRaxIvds,            // #112  (0.001317%)
+    /*02E*/ OpUd,                    //
+    /*02F*/ OpDas,                   //
+    /*030*/ OpAlubXor,               // #140  (0.000397%)
+    /*031*/ OpAluw,                  // #3    (6.612252%)
+    /*032*/ OpAlubFlipXor,           // #81   (0.007453%)
+    /*033*/ OpAluwFlip,              // #47   (0.138021%)
+    /*034*/ OpAluAlIbXor,            //
+    /*035*/ OpAluRaxIvds,            // #295  (0.000000%)
+    /*036*/ OpUd,                    //
+    /*037*/ OpAaa,                   //
+    /*038*/ OpAlubCmp,               // #98   (0.002454%)
+    /*039*/ OpAluwCmp,               // #2    (6.687374%)
+    /*03A*/ OpAlubFlipCmp,           // #103  (0.001846%)
+    /*03B*/ OpAluwFlipCmp,           // #75   (0.010320%)
+    /*03C*/ OpCmpAlIb,               // #85   (0.006267%)
+    /*03D*/ OpCmpRaxIvds,            // #42   (0.279462%)
+    /*03E*/ OpUd,                    //
+    /*03F*/ OpAas,                   //
+    /*040*/ OpIncZv,                 //
+    /*041*/ OpIncZv,                 //
+    /*042*/ OpIncZv,                 //
+    /*043*/ OpIncZv,                 //
+    /*044*/ OpIncZv,                 //
+    /*045*/ OpIncZv,                 //
+    /*046*/ OpIncZv,                 //
+    /*047*/ OpIncZv,                 //
+    /*048*/ OpDecZv,                 //
+    /*049*/ OpDecZv,                 //
+    /*04A*/ OpDecZv,                 //
+    /*04B*/ OpDecZv,                 //
+    /*04C*/ OpDecZv,                 //
+    /*04D*/ OpDecZv,                 //
+    /*04E*/ OpDecZv,                 //
+    /*04F*/ OpDecZv,                 //
+    /*050*/ OpPushZvq,               // #82   (0.007191%)
+    /*051*/ OpPushZvq,               // #91   (0.003740%)
+    /*052*/ OpPushZvq,               // #138  (0.000405%)
+    /*053*/ OpPushZvq,               // #27   (0.343891%)
+    /*054*/ OpPushZvq,               // #30   (0.332411%)
+    /*055*/ OpPushZvq,               // #16   (0.661109%)
+    /*056*/ OpPushZvq,               // #35   (0.297138%)
+    /*057*/ OpPushZvq,               // #38   (0.289927%)
+    /*058*/ OpPopZvq,                // #155  (0.000199%)
+    /*059*/ OpPopZvq,                // #190  (0.000054%)
+    /*05A*/ OpPopZvq,                // #74   (0.011075%)
+    /*05B*/ OpPopZvq,                // #28   (0.343770%)
+    /*05C*/ OpPopZvq,                // #31   (0.332403%)
+    /*05D*/ OpPopZvq,                // #17   (0.659868%)
+    /*05E*/ OpPopZvq,                // #36   (0.296997%)
+    /*05F*/ OpPopZvq,                // #39   (0.289680%)
+    /*060*/ OpPusha,                 //
+    /*061*/ OpPopa,                  //
+    /*062*/ OpUd,                    //
+    /*063*/ OpMovsxdGdqpEd,          // #58   (0.026117%)
+    /*064*/ OpUd,                    //
+    /*065*/ OpUd,                    //
+    /*066*/ OpUd,                    //
+    /*067*/ OpUd,                    //
+    /*068*/ OpPushImm,               // #168  (0.000112%)
+    /*069*/ OpImulGvqpEvqpImm,       // #147  (0.000253%)
+    /*06A*/ OpPushImm,               // #143  (0.000370%)
+    /*06B*/ OpImulGvqpEvqpImm,       // #131  (0.000720%)
+    /*06C*/ OpIns,                   //
+    /*06D*/ OpIns,                   //
+    /*06E*/ OpOuts,                  //
+    /*06F*/ OpOuts,                  //
+    /*070*/ OpJo,                    // #177  (0.000094%)
+    /*071*/ OpJno,                   // #200  (0.000034%)
+    /*072*/ OpJb,                    // #64   (0.015441%)
+    /*073*/ OpJae,                   // #9    (5.615257%)
+    /*074*/ OpJe,                    // #15   (0.713108%)
+    /*075*/ OpJne,                   // #13   (0.825247%)
+    /*076*/ OpJbe,                   // #23   (0.475584%)
+    /*077*/ OpJa,                    // #48   (0.054677%)
+    /*078*/ OpJs,                    // #66   (0.014096%)
+    /*079*/ OpJns,                   // #84   (0.006506%)
+    /*07A*/ OpJp,                    // #175  (0.000112%)
+    /*07B*/ OpJnp,                   // #174  (0.000112%)
+    /*07C*/ OpJl,                    // #223  (0.000008%)
+    /*07D*/ OpJge,                   // #80   (0.007801%)
+    /*07E*/ OpJle,                   // #70   (0.012536%)
+    /*07F*/ OpJg,                    // #76   (0.010144%)
+    /*080*/ OpAlubiReg,              // #53   (0.033021%)
+    /*081*/ OpAluwiReg,              // #60   (0.018910%)
+    /*082*/ OpAlubiReg,              //
+    /*083*/ OpAluwiReg,              // #4    (6.518845%)
+    /*084*/ OpAlubTest,              // #54   (0.030642%)
+    /*085*/ OpAluwTest,              // #18   (0.628547%)
+    /*086*/ OpXchgGbEb,              // #219  (0.000011%)
+    /*087*/ OpXchgGvqpEvqp,          // #161  (0.000141%)
+    /*088*/ OpMovEbGb,               // #49   (0.042510%)
+    /*089*/ OpMovEvqpGvqp,           // #1    (22.226650%)
+    /*08A*/ OpMovGbEb,               // #51   (0.038177%)
+    /*08B*/ OpMovGvqpEvqp,           // #12   (2.903141%)
+    /*08C*/ OpMovEvqpSw,             //
+    /*08D*/ OpLeaGvqpM,              // #14   (0.800508%)
+    /*08E*/ OpMovSwEvqp,             //
+    /*08F*/ OpPopEvq,                // #288  (0.000000%)
+    /*090*/ OpNop,                   // #218  (0.000011%)
+    /*091*/ OpXchgZvqp,              // #278  (0.000001%)
+    /*092*/ OpXchgZvqp,              // #284  (0.000001%)
+    /*093*/ OpXchgZvqp,              // #213  (0.000018%)
+    /*094*/ OpXchgZvqp,              //
+    /*095*/ OpXchgZvqp,              //
+    /*096*/ OpXchgZvqp,              //
+    /*097*/ OpXchgZvqp,              // #286  (0.000001%)
+    /*098*/ OpSax,                   // #83   (0.006728%)
+    /*099*/ OpConvert,               // #163  (0.000137%)
+    /*09A*/ OpCallf,                 //
+    /*09B*/ OpFwait,                 //
+    /*09C*/ OpPushf,                 //
+    /*09D*/ OpPopf,                  //
+    /*09E*/ OpSahf,                  //
+    /*09F*/ OpLahf,                  //
+    /*0A0*/ OpMovAlOb,               //
+    /*0A1*/ OpMovRaxOvqp,            //
+    /*0A2*/ OpMovObAl,               //
+    /*0A3*/ OpMovOvqpRax,            //
+    /*0A4*/ OpMovsb,                 // #73   (0.011594%)
+    /*0A5*/ OpMovs,                  // #158  (0.000147%)
+    /*0A6*/ OpCmps,                  //
+    /*0A7*/ OpCmps,                  //
+    /*0A8*/ OpTestAlIb,              // #115  (0.001247%)
+    /*0A9*/ OpTestRaxIvds,           // #113  (0.001300%)
+    /*0AA*/ OpStosb,                 // #67   (0.013327%)
+    /*0AB*/ OpStos,                  // #194  (0.000044%)
+    /*0AC*/ OpLods,                  // #198  (0.000035%)
+    /*0AD*/ OpLods,                  // #296  (0.000000%)
+    /*0AE*/ OpScas,                  // #157  (0.000152%)
+    /*0AF*/ OpScas,                  // #292  (0.000000%)
+    /*0B0*/ OpMovZbIb,               // #135  (0.000500%)
+    /*0B1*/ OpMovZbIb,               // #178  (0.000093%)
+    /*0B2*/ OpMovZbIb,               // #176  (0.000099%)
+    /*0B3*/ OpMovZbIb,               // #202  (0.000028%)
+    /*0B4*/ OpMovZbIb,               //
+    /*0B5*/ OpMovZbIb,               // #220  (0.000010%)
+    /*0B6*/ OpMovZbIb,               // #136  (0.000488%)
+    /*0B7*/ OpMovZbIb,               // #216  (0.000014%)
+    /*0B8*/ OpMovZvqpIvqp,           // #33   (0.315404%)
+    /*0B9*/ OpMovZvqpIvqp,           // #50   (0.039176%)
+    /*0BA*/ OpMovZvqpIvqp,           // #32   (0.315927%)
+    /*0BB*/ OpMovZvqpIvqp,           // #93   (0.003549%)
+    /*0BC*/ OpMovZvqpIvqp,           // #109  (0.001380%)
+    /*0BD*/ OpMovZvqpIvqp,           // #101  (0.002061%)
+    /*0BE*/ OpMovZvqpIvqp,           // #68   (0.013223%)
+    /*0BF*/ OpMovZvqpIvqp,           // #79   (0.008900%)
+    /*0C0*/ OpBsubiImm,              // #111  (0.001368%)
+    /*0C1*/ OpBsuwiImm,              // #20   (0.536537%)
+    /*0C2*/ OpRet,                   //
+    /*0C3*/ OpRet,                   // #24   (0.422698%)
+    /*0C4*/ OpLes,                   //
+    /*0C5*/ OpLds,                   //
+    /*0C6*/ OpMovEbIb,               // #90   (0.004525%)
+    /*0C7*/ OpMovEvqpIvds,           // #45   (0.161349%)
+    /*0C8*/ OpUd,                    //
+    /*0C9*/ OpLeave,                 // #116  (0.001237%)
+    /*0CA*/ OpRetf,                  //
+    /*0CB*/ OpRetf,                  //
+    /*0CC*/ OpInterrupt3,            //
+    /*0CD*/ OpInterruptImm,          //
+    /*0CE*/ OpUd,                    //
+    /*0CF*/ OpUd,                    //
+    /*0D0*/ OpBsubi1,                // #212  (0.000021%)
+    /*0D1*/ OpBsuwi1,                // #61   (0.016958%)
+    /*0D2*/ OpBsubiCl,               //
+    /*0D3*/ OpBsuwiCl,               // #19   (0.621270%)
+    /*0D4*/ OpAam,                   //
+    /*0D5*/ OpAad,                   //
+    /*0D6*/ OpSalc,                  //
+    /*0D7*/ OpXlatAlBbb,             //
+    /*0D8*/ OpFpu,                   // #258  (0.000005%)
+    /*0D9*/ OpFpu,                   // #145  (0.000335%)
+    /*0DA*/ OpFpu,                   // #290  (0.000000%)
+    /*0DB*/ OpFpu,                   // #139  (0.000399%)
+    /*0DC*/ OpFpu,                   // #283  (0.000001%)
+    /*0DD*/ OpFpu,                   // #144  (0.000340%)
+    /*0DE*/ OpFpu,                   // #193  (0.000046%)
+    /*0DF*/ OpFpu,                   // #215  (0.000014%)
+    /*0E0*/ OpLoopne,                //
+    /*0E1*/ OpLoope,                 //
+    /*0E2*/ OpLoop1,                 //
+    /*0E3*/ OpJcxz,                  //
+    /*0E4*/ OpInAlImm,               //
+    /*0E5*/ OpInAxImm,               //
+    /*0E6*/ OpOutImmAl,              //
+    /*0E7*/ OpOutImmAx,              //
+    /*0E8*/ OpCallJvds,              // #25   (0.403872%)
+    /*0E9*/ OpJmp,                   // #22   (0.476546%)
+    /*0EA*/ OpJmpf,                  //
+    /*0EB*/ OpJmp,                   // #6    (6.012044%)
+    /*0EC*/ OpInAlDx,                //
+    /*0ED*/ OpInAxDx,                //
+    /*0EE*/ OpOutDxAl,               //
+    /*0EF*/ OpOutDxAx,               //
+    /*0F0*/ OpUd,                    //
+    /*0F1*/ OpInterrupt1,            //
+    /*0F2*/ OpUd,                    //
+    /*0F3*/ OpUd,                    //
+    /*0F4*/ OpHlt,                   //
+    /*0F5*/ OpCmc,                   //
+    /*0F6*/ Op0f6,                   // #56   (0.028122%)
+    /*0F7*/ Op0f7,                   // #10   (5.484639%)
+    /*0F8*/ OpClc,                   // #156  (0.000187%)
+    /*0F9*/ OpStc,                   //
+    /*0FA*/ OpCli,                   //
+    /*0FB*/ OpSti,                   //
+    /*0FC*/ OpCld,                   // #142  (0.000379%)
+    /*0FD*/ OpStd,                   // #141  (0.000379%)
+    /*0FE*/ Op0fe,                   // #181  (0.000083%)
+    /*0FF*/ Op0ff,                   // #5    (6.314024%)
+    /*100*/ OpUd,                    //
+    /*101*/ Op101,                   //
+    /*102*/ OpUd,                    //
+    /*103*/ OpLsl,                   //
+    /*104*/ OpUd,                    //
+    /*105*/ OpSyscall,               // #133  (0.000663%)
+    /*106*/ OpUd,                    //
+    /*107*/ OpUd,                    //
+    /*108*/ OpUd,                    //
+    /*109*/ OpUd,                    //
+    /*10A*/ OpUd,                    //
+    /*10B*/ OpUd,                    //
+    /*10C*/ OpUd,                    //
+    /*10D*/ OpHintNopEv,             //
+    /*10E*/ OpUd,                    //
+    /*10F*/ OpUd,                    //
+    /*110*/ OpMov0f10,               // #89   (0.004629%)
+    /*111*/ OpMovWpsVps,             // #104  (0.001831%)
+    /*112*/ OpMov0f12,               //
+    /*113*/ OpMov0f13,               //
+    /*114*/ OpUnpcklpsd,             //
+    /*115*/ OpUnpckhpsd,             //
+    /*116*/ OpMov0f16,               //
+    /*117*/ OpMov0f17,               //
+    /*118*/ OpHintNopEv,             //
+    /*119*/ OpHintNopEv,             //
+    /*11A*/ OpHintNopEv,             //
+    /*11B*/ OpHintNopEv,             //
+    /*11C*/ OpHintNopEv,             //
+    /*11D*/ OpHintNopEv,             //
+    /*11E*/ OpHintNopEv,             //
+    /*11F*/ OpNopEv,                 // #62   (0.016260%)
+    /*120*/ OpMovRqCq,               //
+    /*121*/ OpUd,                    //
+    /*122*/ OpMovCqRq,               //
+    /*123*/ OpUd,                    //
+    /*124*/ OpUd,                    //
+    /*125*/ OpUd,                    //
+    /*126*/ OpUd,                    //
+    /*127*/ OpUd,                    //
+    /*128*/ OpMov0f28,               // #100  (0.002220%)
+    /*129*/ OpMovWpsVps,             // #99   (0.002294%)
+    /*12A*/ OpCvt0f2a,               // #173  (0.000112%)
+    /*12B*/ OpMov0f2b,               //
+    /*12C*/ OpCvtt0f2c,              // #172  (0.000112%)
+    /*12D*/ OpCvt0f2d,               //
+    /*12E*/ OpComissVsWs,            // #153  (0.000223%)
+    /*12F*/ OpComissVsWs,            // #152  (0.000223%)
+    /*130*/ OpWrmsr,                 //
+    /*131*/ OpRdtsc,                 // #214  (0.000016%)
+    /*132*/ OpRdmsr,                 //
+    /*133*/ OpUd,                    //
+    /*134*/ OpUd,                    //
+    /*135*/ OpUd,                    //
+    /*136*/ OpUd,                    //
+    /*137*/ OpUd,                    //
+    /*138*/ OpUd,                    //
+    /*139*/ OpUd,                    //
+    /*13A*/ OpUd,                    //
+    /*13B*/ OpUd,                    //
+    /*13C*/ OpUd,                    //
+    /*13D*/ OpUd,                    //
+    /*13E*/ OpUd,                    //
+    /*13F*/ OpUd,                    //
+    /*140*/ OpCmovo,                 //
+    /*141*/ OpCmovno,                //
+    /*142*/ OpCmovb,                 // #69   (0.012667%)
+    /*143*/ OpCmovae,                // #276  (0.000002%)
+    /*144*/ OpCmove,                 // #134  (0.000584%)
+    /*145*/ OpCmovne,                // #132  (0.000700%)
+    /*146*/ OpCmovbe,                // #125  (0.000945%)
+    /*147*/ OpCmova,                 // #40   (0.289378%)
+    /*148*/ OpCmovs,                 // #130  (0.000774%)
+    /*149*/ OpCmovns,                // #149  (0.000228%)
+    /*14A*/ OpCmovp,                 //
+    /*14B*/ OpCmovnp,                //
+    /*14C*/ OpCmovl,                 // #102  (0.002008%)
+    /*14D*/ OpCmovge,                // #196  (0.000044%)
+    /*14E*/ OpCmovle,                // #110  (0.001379%)
+    /*14F*/ OpCmovg,                 // #121  (0.001029%)
+    /*150*/ OpUd,                    //
+    /*151*/ OpSqrtpsd,               //
+    /*152*/ OpRsqrtps,               //
+    /*153*/ OpRcpps,                 //
+    /*154*/ OpAndpsd,                // #171  (0.000112%)
+    /*155*/ OpAndnpsd,               //
+    /*156*/ OpOrpsd,                 //
+    /*157*/ OpXorpsd,                // #148  (0.000245%)
+    /*158*/ OpAddpsd,                // #151  (0.000223%)
+    /*159*/ OpMulpsd,                // #150  (0.000223%)
+    /*15A*/ OpCvt0f5a,               //
+    /*15B*/ OpCvt0f5b,               //
+    /*15C*/ OpSubpsd,                // #146  (0.000335%)
+    /*15D*/ OpMinpsd,                //
+    /*15E*/ OpDivpsd,                // #170  (0.000112%)
+    /*15F*/ OpMaxpsd,                //
+    /*160*/ OpSsePunpcklbw,          // #259  (0.000003%)
+    /*161*/ OpSsePunpcklwd,          // #221  (0.000009%)
+    /*162*/ OpSsePunpckldq,          // #262  (0.000003%)
+    /*163*/ OpSsePacksswb,           // #297  (0.000000%)
+    /*164*/ OpSsePcmpgtb,            // #274  (0.000003%)
+    /*165*/ OpSsePcmpgtw,            // #273  (0.000003%)
+    /*166*/ OpSsePcmpgtd,            // #272  (0.000003%)
+    /*167*/ OpSsePackuswb,           // #231  (0.000005%)
+    /*168*/ OpSsePunpckhbw,          // #271  (0.000003%)
+    /*169*/ OpSsePunpckhwd,          // #261  (0.000003%)
+    /*16A*/ OpSsePunpckhdq,          // #260  (0.000003%)
+    /*16B*/ OpSsePackssdw,           // #257  (0.000005%)
+    /*16C*/ OpSsePunpcklqdq,         // #264  (0.000003%)
+    /*16D*/ OpSsePunpckhqdq,         // #263  (0.000003%)
+    /*16E*/ OpMov0f6e,               // #289  (0.000000%)
+    /*16F*/ OpMov0f6f,               // #191  (0.000051%)
+    /*170*/ OpShuffle,               // #164  (0.000131%)
+    /*171*/ Op171,                   // #294  (0.000000%)
+    /*172*/ Op172,                   // #293  (0.000000%)
+    /*173*/ Op173,                   // #211  (0.000022%)
+    /*174*/ OpSsePcmpeqb,            // #118  (0.001215%)
+    /*175*/ OpSsePcmpeqw,            // #201  (0.000028%)
+    /*176*/ OpSsePcmpeqd,            // #222  (0.000008%)
+    /*177*/ OpEmms,                  //
+    /*178*/ OpUd,                    //
+    /*179*/ OpUd,                    //
+    /*17A*/ OpUd,                    //
+    /*17B*/ OpUd,                    //
+    /*17C*/ OpHaddpsd,               //
+    /*17D*/ OpHsubpsd,               //
+    /*17E*/ OpMov0f7e,               // #122  (0.001005%)
+    /*17F*/ OpMov0f7f,               // #192  (0.000048%)
+    /*180*/ OpJo,                    //
+    /*181*/ OpJno,                   //
+    /*182*/ OpJb,                    // #107  (0.001532%)
+    /*183*/ OpJae,                   // #72   (0.011761%)
+    /*184*/ OpJe,                    // #55   (0.029121%)
+    /*185*/ OpJne,                   // #57   (0.027593%)
+    /*186*/ OpJbe,                   // #46   (0.147358%)
+    /*187*/ OpJa,                    // #86   (0.005907%)
+    /*188*/ OpJs,                    // #106  (0.001569%)
+    /*189*/ OpJns,                   // #160  (0.000142%)
+    /*18A*/ OpJp,                    //
+    /*18B*/ OpJnp,                   //
+    /*18C*/ OpJl,                    // #105  (0.001786%)
+    /*18D*/ OpJge,                   // #281  (0.000001%)
+    /*18E*/ OpJle,                   // #77   (0.009607%)
+    /*18F*/ OpJg,                    // #126  (0.000890%)
+    /*190*/ OpSeto,                  // #280  (0.000001%)
+    /*191*/ OpSetno,                 //
+    /*192*/ OpSetb,                  // #26   (0.364366%)
+    /*193*/ OpSetae,                 // #183  (0.000063%)
+    /*194*/ OpSete,                  // #78   (0.009363%)
+    /*195*/ OpSetne,                 // #94   (0.003096%)
+    /*196*/ OpSetbe,                 // #162  (0.000139%)
+    /*197*/ OpSeta,                  // #92   (0.003559%)
+    /*198*/ OpSets,                  //
+    /*199*/ OpSetns,                 //
+    /*19A*/ OpSetp,                  //
+    /*19B*/ OpSetnp,                 //
+    /*19C*/ OpSetl,                  // #119  (0.001079%)
+    /*19D*/ OpSetge,                 // #275  (0.000002%)
+    /*19E*/ OpSetle,                 // #167  (0.000112%)
+    /*19F*/ OpSetg,                  // #95   (0.002688%)
+    /*1A0*/ OpPushSeg,               //
+    /*1A1*/ OpPopSeg,                //
+    /*1A2*/ OpCpuid,                 // #285  (0.000001%)
+    /*1A3*/ OpBit,                   //
+    /*1A4*/ OpDoubleShift,           //
+    /*1A5*/ OpDoubleShift,           //
+    /*1A6*/ OpUd,                    //
+    /*1A7*/ OpUd,                    //
+    /*1A8*/ OpPushSeg,               //
+    /*1A9*/ OpPopSeg,                //
+    /*1AA*/ OpUd,                    //
+    /*1AB*/ OpBit,                   // #291  (0.000000%)
+    /*1AC*/ OpDoubleShift,           //
+    /*1AD*/ OpDoubleShift,           //
+    /*1AE*/ Op1ae,                   // #287  (0.000000%)
+    /*1AF*/ OpImulGvqpEvqp,          // #34   (0.299503%)
+    /*1B0*/ OpCmpxchgEbAlGb,         //
+    /*1B1*/ OpCmpxchgEvqpRaxGvqp,    // #87   (0.005376%)
+    /*1B2*/ OpUd,                    //
+    /*1B3*/ OpBit,                   // #199  (0.000035%)
+    /*1B4*/ OpUd,                    //
+    /*1B5*/ OpUd,                    //
+    /*1B6*/ OpMovzbGvqpEb,           // #37   (0.296523%)
+    /*1B7*/ OpMovzwGvqpEw,           // #137  (0.000433%)
+    /*1B8*/ Op1b8,                   //
+    /*1B9*/ OpUd,                    //
+    /*1BA*/ OpBit,                   // #127  (0.000879%)
+    /*1BB*/ OpBit,                   //
+    /*1BC*/ OpBsf,                   // #88   (0.005117%)
+    /*1BD*/ OpBsr,                   // #123  (0.000985%)
+    /*1BE*/ OpMovsbGvqpEb,           // #52   (0.035351%)
+    /*1BF*/ OpMovswGvqpEw,           // #63   (0.015753%)
+    /*1C0*/ OpXaddEbGb,              //
+    /*1C1*/ OpXaddEvqpGvqp,          //
+    /*1C2*/ OpCmppsd,                //
+    /*1C3*/ OpMovntiMdqpGdqp,        //
+    /*1C4*/ OpPinsrwVdqEwIb,         // #124  (0.000981%)
+    /*1C5*/ OpPextrwGdqpUdqIb,       // #277  (0.000002%)
+    /*1C6*/ OpShufpsd,               //
+    /*1C7*/ Op1c7,                   // #189  (0.000054%)
+    /*1C8*/ OpBswapZvqp,             // #159  (0.000145%)
+    /*1C9*/ OpBswapZvqp,             // #182  (0.000069%)
+    /*1CA*/ OpBswapZvqp,             // #197  (0.000039%)
+    /*1CB*/ OpBswapZvqp,             // #217  (0.000012%)
+    /*1CC*/ OpBswapZvqp,             //
+    /*1CD*/ OpBswapZvqp,             //
+    /*1CE*/ OpBswapZvqp,             // #129  (0.000863%)
+    /*1CF*/ OpBswapZvqp,             // #128  (0.000863%)
+    /*1D0*/ OpAddsubpsd,             //
+    /*1D1*/ OpSsePsrlwv,             // #256  (0.000005%)
+    /*1D2*/ OpSsePsrldv,             // #255  (0.000005%)
+    /*1D3*/ OpSsePsrlqv,             // #254  (0.000005%)
+    /*1D4*/ OpSsePaddq,              // #253  (0.000005%)
+    /*1D5*/ OpSsePmullw,             // #188  (0.000054%)
+    /*1D6*/ OpMov0fD6,               // #169  (0.000112%)
+    /*1D7*/ OpPmovmskbGdqpNqUdq,     // #117  (0.001235%)
+    /*1D8*/ OpSsePsubusb,            // #252  (0.000005%)
+    /*1D9*/ OpSsePsubusw,            // #251  (0.000005%)
+    /*1DA*/ OpSsePminub,             // #250  (0.000005%)
+    /*1DB*/ OpSsePand,               // #249  (0.000005%)
+    /*1DC*/ OpSsePaddusb,            // #248  (0.000005%)
+    /*1DD*/ OpSsePaddusw,            // #247  (0.000005%)
+    /*1DE*/ OpSsePmaxub,             // #246  (0.000005%)
+    /*1DF*/ OpSsePandn,              // #245  (0.000005%)
+    /*1E0*/ OpSsePavgb,              // #244  (0.000005%)
+    /*1E1*/ OpSsePsrawv,             // #230  (0.000005%)
+    /*1E2*/ OpSsePsradv,             // #224  (0.000008%)
+    /*1E3*/ OpSsePavgw,              // #243  (0.000005%)
+    /*1E4*/ OpSsePmulhuw,            // #229  (0.000005%)
+    /*1E5*/ OpSsePmulhw,             // #187  (0.000054%)
+    /*1E6*/ OpCvt0fE6,               //
+    /*1E7*/ OpMov0fE7,               //
+    /*1E8*/ OpSsePsubsb,             // #242  (0.000005%)
+    /*1E9*/ OpSsePsubsw,             // #241  (0.000005%)
+    /*1EA*/ OpSsePminsw,             // #240  (0.000005%)
+    /*1EB*/ OpSsePor,                // #239  (0.000005%)
+    /*1EC*/ OpSsePaddsb,             // #238  (0.000005%)
+    /*1ED*/ OpSsePaddsw,             // #228  (0.000006%)
+    /*1EE*/ OpSsePmaxsw,             // #237  (0.000005%)
+    /*1EF*/ OpSsePxor,               // #195  (0.000044%)
+    /*1F0*/ OpLddquVdqMdq,           //
+    /*1F1*/ OpSsePsllwv,             // #226  (0.000006%)
+    /*1F2*/ OpSsePslldv,             // #225  (0.000006%)
+    /*1F3*/ OpSsePsllqv,             // #236  (0.000005%)
+    /*1F4*/ OpSsePmuludq,            // #186  (0.000054%)
+    /*1F5*/ OpSsePmaddwd,            // #185  (0.000054%)
+    /*1F6*/ OpSsePsadbw,             // #270  (0.000003%)
+    /*1F7*/ OpMaskMovDiXmmRegXmmRm,  //
+    /*1F8*/ OpSsePsubb,              // #235  (0.000005%)
+    /*1F9*/ OpSsePsubw,              // #234  (0.000005%)
+    /*1FA*/ OpSsePsubd,              // #184  (0.000054%)
+    /*1FB*/ OpSsePsubq,              // #269  (0.000003%)
+    /*1FC*/ OpSsePaddb,              // #233  (0.000005%)
+    /*1FD*/ OpSsePaddw,              // #227  (0.000006%)
+    /*1FE*/ OpSsePaddd,              // #232  (0.000005%)
+    /*1FF*/ OpUd,                    //
+    /*200*/ OpSsePshufb,             // #268  (0.000003%)
+    /*201*/ OpSsePhaddw,             // #204  (0.000027%)
+    /*202*/ OpSsePhaddd,             // #210  (0.000027%)
+    /*203*/ OpSsePhaddsw,            // #203  (0.000027%)
+    /*204*/ OpSsePmaddubsw,          // #209  (0.000027%)
+    /*205*/ OpSsePhsubw,             // #208  (0.000027%)
+    /*206*/ OpSsePhsubd,             // #207  (0.000027%)
+    /*207*/ OpSsePhsubsw,            // #206  (0.000027%)
+    /*208*/ OpSsePsignb,             // #267  (0.000003%)
+    /*209*/ OpSsePsignw,             // #266  (0.000003%)
+    /*20A*/ OpSsePsignd,             // #265  (0.000003%)
+    /*20B*/ OpSsePmulhrsw,           // #205  (0.000027%)
 };
 
 void ExecuteSparseInstruction(struct Machine *m, u32 rde, u32 d) {
@@ -2126,6 +2128,7 @@ void ExecuteInstruction(struct Machine *m) {
   int dispatch;
   m->ip += m->xedd->length;
   dispatch = m->xedd->op.map << 8 | m->xedd->op.opcode;
+  kDispatchCount[dispatch]++;
   if (dispatch < ARRAYLEN(kNexgen32e)) {
     kNexgen32e[dispatch](m, m->xedd->op.rde);
   } else {

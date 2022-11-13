@@ -16,52 +16,61 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
+#include <limits.h>
+#include <stdatomic.h>
+#include <unistd.h>
 
-#include "blink/builtin.h"
+#include "blink/assert.h"
+#include "blink/dll.h"
 #include "blink/errno.h"
+#include "blink/fds.h"
+#include "blink/log.h"
+#include "blink/machine.h"
 
-static dontinline long ReturnErrno(int e) {
-  errno = e;
-  return -1;
+static int CloseFd(struct System *s, struct Fd *fd) {
+  int sf, rc;
+  unassert(fd->cb);
+  if ((sf = atomic_load_explicit(&fd->systemfd, memory_order_acquire)) >= 0) {
+    if (fd->dirstream) {
+      rc = closedir(fd->dirstream);
+    } else {
+      rc = fd->cb->close(sf);
+    }
+    FreeFd(&s->fds, fd);
+  } else {
+    rc = ebadf();
+  }
+  return rc;
 }
 
-long ebadf(void) {
-  return ReturnErrno(EBADF);
+int OpClose(struct System *s, i32 fildes) {
+  int rc;
+  struct Fd *fd;
+  LockFds(&s->fds);
+  if ((fd = GetFd(&s->fds, fildes))) {
+    rc = CloseFd(s, fd);
+  } else {
+    rc = -1;
+  }
+  UnlockFds(&s->fds);
+  return rc;
 }
 
-long einval(void) {
-  return ReturnErrno(EINVAL);
-}
-
-long eagain(void) {
-  return ReturnErrno(EAGAIN);
-}
-
-long enomem(void) {
-  return ReturnErrno(ENOMEM);
-}
-
-long enosys(void) {
-  return ReturnErrno(ENOSYS);
-}
-
-long efault(void) {
-  return ReturnErrno(EFAULT);
-}
-
-long eintr(void) {
-  return ReturnErrno(EINTR);
-}
-
-long eoverflow(void) {
-  return ReturnErrno(EOVERFLOW);
-}
-
-long enfile(void) {
-  return ReturnErrno(ENFILE);
-}
-
-long esrch(void) {
-  return ReturnErrno(ESRCH);
+int OpCloseRange(struct System *s, u32 first, u32 last, u32 flags) {
+  int rc;
+  struct Fd *fd;
+  dll_element *e, *e2;
+  if (flags || last > INT_MAX || first > INT_MAX || first > last) {
+    return einval();
+  }
+  LockFds(&s->fds);
+  for (rc = 0, e = dll_first(s->fds.list); e; e = e2) {
+    fd = FD_CONTAINER(e);
+    e2 = dll_next(s->fds.list, e);
+    if (first <= fd->fildes && fd->fildes <= last) {
+      rc |= CloseFd(s, fd);
+    }
+  }
+  UnlockFds(&s->fds);
+  return rc;
 }

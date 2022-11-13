@@ -20,8 +20,13 @@
 #include <stdlib.h>
 
 #include "blink/assert.h"
+#include "blink/log.h"
+#include "blink/macros.h"
 
 void AssertFailed(const char *file, int line, const char *msg) {
-  fprintf(stderr, "%s:%d: assertion failed: %s\n", file, line, msg);
+  char b[512];
+  snprintf(b, sizeof(b), "%s:%d: assertion failed: %s\n", file, line, msg);
+  b[sizeof(b) - 1] = 0;
+  WriteErrorString(b);
   abort();
 }

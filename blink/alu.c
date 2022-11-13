@@ -52,8 +52,7 @@ i64 Not64(u64 x, u64 y, u32 *f) {
   return ~x & 0xFFFFFFFFFFFFFFFF;
 }
 
-static i64 AluFlags(u64 x, u32 af, u32 *f, u32 of,
-                        u32 cf, u32 sf) {
+static i64 AluFlags(u64 x, u32 af, u32 *f, u32 of, u32 cf, u32 sf) {
   *f &= ~(1 << FLAGS_CF | 1 << FLAGS_ZF | 1 << FLAGS_SF | 1 << FLAGS_OF |
           1 << FLAGS_AF | 0xFF000000u);
   *f |= sf << FLAGS_SF | cf << FLAGS_CF | !x << FLAGS_ZF | of << FLAGS_OF |
@@ -61,8 +60,7 @@ static i64 AluFlags(u64 x, u32 af, u32 *f, u32 of,
   return x;
 }
 
-static i64 AluFlags8(u8 z, u32 af, u32 *f, u32 of,
-                         u32 cf) {
+static i64 AluFlags8(u8 z, u32 af, u32 *f, u32 of, u32 cf) {
   return AluFlags(z, af, f, of, cf, z >> 7);
 }
 
@@ -102,8 +100,7 @@ i64 Add8(u64 x64, u64 y64, u32 *f) {
   return AluFlags8(z, af, f, of, cf);
 }
 
-static i64 AluFlags32(u32 z, u32 af, u32 *f, u32 of,
-                          u32 cf) {
+static i64 AluFlags32(u32 z, u32 af, u32 *f, u32 of, u32 cf) {
   return AluFlags(z, af, f, of, cf, z >> 31);
 }
 
@@ -143,8 +140,7 @@ i64 Add32(u64 x64, u64 y64, u32 *f) {
   return AluFlags32(z, af, f, of, cf);
 }
 
-static i64 AluFlags64(u64 z, u32 af, u32 *f, u32 of,
-                          u32 cf) {
+static i64 AluFlags64(u64 z, u32 af, u32 *f, u32 of, u32 cf) {
   return AluFlags(z, af, f, of, cf, z >> 63);
 }
 
@@ -284,8 +280,7 @@ i64 Neg64(u64 x64, u64 y, u32 *f) {
   return AluFlags64(x, af, f, of, cf);
 }
 
-static i64 BumpFlags(u64 x, u32 af, u32 *f, u32 of,
-                         u32 sf) {
+static i64 BumpFlags(u64 x, u32 af, u32 *f, u32 of, u32 sf) {
   return AluFlags(x, af, f, of, GetFlag(*f, FLAGS_CF), sf);
 }
 
@@ -517,8 +512,7 @@ i64 Ror8(u64 x64, u64 y, u32 *f) {
   }
 }
 
-static i64 Rcr(u64 x, u64 y, u32 *f, u64 xm,
-                   u64 k) {
+static i64 Rcr(u64 x, u64 y, u32 *f, u64 xm, u64 k) {
   u64 cf;
   u32 ct;
   x &= xm;
@@ -552,8 +546,7 @@ i64 Rcr64(u64 x, u64 y, u32 *f) {
   return Rcr(x, y & 63, f, 0xffffffffffffffff, 64);
 }
 
-static i64 Rcl(u64 x, u64 y, u32 *f, u64 xm,
-                   u64 k) {
+static i64 Rcl(u64 x, u64 y, u32 *f, u64 xm, u64 k) {
   u64 cf;
   u32 ct;
   x &= xm;
@@ -587,8 +580,7 @@ i64 Rcl64(u64 x, u64 y, u32 *f) {
   return Rcl(x, y & 63, f, 0xffffffffffffffff, 64);
 }
 
-u64 BsuDoubleShift(int w, u64 x, u64 y, u8 b, bool isright,
-                        u32 *f) {
+u64 BsuDoubleShift(int w, u64 x, u64 y, u8 b, bool isright, u32 *f) {
   bool cf, of;
   u64 s, k, m, z;
   k = 8;
@@ -616,8 +608,7 @@ u64 BsuDoubleShift(int w, u64 x, u64 y, u8 b, bool isright,
   }
 }
 
-static i64 AluFlags16(u16 z, u32 af, u32 *f, u32 of,
-                          u32 cf) {
+static i64 AluFlags16(u16 z, u32 af, u32 *f, u32 of, u32 cf) {
   return AluFlags(z, af, f, of, cf, z >> 15);
 }
 

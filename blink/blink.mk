@@ -6,8 +6,6 @@ BLINK_FILES := $(wildcard blink/*)
 BLINK_SRCS = $(filter %.c,$(BLINK_FILES))
 BLINK_HDRS = $(filter %.h,$(BLINK_FILES))
 
-# o/$(MODE)/blink/tui.o: private CFLAGS += -xc
-
 o/$(MODE)/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/%.o)
 o/$(MODE)/i486/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/i486/%.o)
 o/$(MODE)/m68k/blink/blink.a: $(BLINK_SRCS:%.c=o/$(MODE)/m68k/%.o)

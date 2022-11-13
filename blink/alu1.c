@@ -73,7 +73,7 @@ static void AluEvqp(struct Machine *m, u32 rde, const aluop_f ops[4]) {
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64
       unsigned long x, z;
-      x = atomic_load((atomic_ulong *)p);
+      x = atomic_load_explicit((atomic_ulong *)p, memory_order_relaxed);
       do {
         z = ops[ALU_INT64](SWAP64LE(x), 0, &m->flags);
         z = SWAP64LE(z);
@@ -90,7 +90,7 @@ static void AluEvqp(struct Machine *m, u32 rde, const aluop_f ops[4]) {
     unsigned int x, z;
     p = GetModrmRegisterWordPointerWrite(m, rde, 4);
     if (Lock(rde) && !((intptr_t)p & 3)) {
-      x = atomic_load((atomic_uint *)p);
+      x = atomic_load_explicit((atomic_uint *)p, memory_order_relaxed);
       do {
         z = ops[ALU_INT32](SWAP32LE(x), 0, &m->flags);
         z = SWAP32LE(z);

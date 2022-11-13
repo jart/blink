@@ -16,33 +16,121 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <fcntl.h>
+#include <limits.h>
+#include <stdatomic.h>
 #include <stdlib.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
+#include "blink/assert.h"
+#include "blink/errno.h"
 #include "blink/fds.h"
+#include "blink/macros.h"
 
-int MachineFdAdd(struct MachineFds *mf) {
-  int fd;
-  struct MachineFdClosed *closed;
-  if ((closed = mf->closed)) {
-    fd = closed->fd;
-    mf->closed = closed->next;
-    free(closed);
-  } else {
-    fd = mf->i;
-    if (mf->i++ == mf->n) {
-      mf->n = mf->i + (mf->i >> 1);
-      mf->p = (struct MachineFd *)realloc(mf->p, mf->n * sizeof(*mf->p));
+// TODO(jart): We should track the first hole.
+// TODO(jart): We should track recently used fds.
+
+void InitFds(struct Fds *fds) {
+  fds->list = 0;
+  unassert(!pthread_mutex_init(&fds->lock, 0));
+}
+
+void LockFds(struct Fds *fds) {
+  unassert(!pthread_mutex_lock(&fds->lock));
+}
+
+struct Fd *AllocateFd(struct Fds *fds, int minfd, int oflags) {
+  struct Fd *fd;
+  dll_element *e1, *e2;
+  if (minfd < 0) {
+    einval();
+    return 0;
+  }
+  if ((fd = (struct Fd *)calloc(1, sizeof(*fd)))) {
+    dll_init(&fd->list);
+    fd->cb = &kFdCbHost;
+    fd->oflags = oflags & ~O_CLOEXEC;
+    fd->cloexec = !!(oflags & O_CLOEXEC);
+    unassert(!pthread_mutex_init(&fd->lock, 0));
+    atomic_store_explicit(&fd->systemfd, -1, memory_order_release);
+    if (!(e1 = dll_first(fds->list)) || minfd < FD_CONTAINER(e1)->fildes) {
+      fd->fildes = minfd;
+      fds->list = dll_make_first(fds->list, &fd->list);
+    } else {
+      for (;; e1 = e2) {
+        if ((!(e2 = dll_next(fds->list, e1)) ||
+             (FD_CONTAINER(e1)->fildes < minfd &&
+              minfd < FD_CONTAINER(e2)->fildes))) {
+          fd->fildes = MAX(FD_CONTAINER(e1)->fildes + 1, minfd);
+          if (e2) {
+            dll_splice_after(e1, &fd->list);
+          } else {
+            fds->list = dll_make_last(fds->list, &fd->list);
+          }
+          break;
+        }
+      }
     }
   }
   return fd;
 }
 
-void MachineFdRemove(struct MachineFds *mf, int fd) {
-  struct MachineFdClosed *closed;
-  mf->p[fd].cb = NULL;
-  if ((closed = (struct MachineFdClosed *)malloc(sizeof(*closed)))) {
-    closed->fd = fd;
-    closed->next = mf->closed;
-    mf->closed = closed;
+struct Fd *GetFd(struct Fds *fds, int fildes) {
+  dll_element *e;
+  if (fildes < 0) {
+    einval();
+    return 0;
   }
+  for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
+    if (FD_CONTAINER(e)->fildes == fildes) {
+      if (atomic_load_explicit(&FD_CONTAINER(e)->systemfd,
+                               memory_order_acquire) >= 0) {
+        return FD_CONTAINER(e);
+      } else {
+        ebadf();
+        break;
+      }
+    }
+  }
+  return 0;
+}
+
+void LockFd(struct Fd *fd) {
+  unassert(!pthread_mutex_lock(&fd->lock));
+}
+
+void UnlockFd(struct Fd *fd) {
+  unassert(!pthread_mutex_unlock(&fd->lock));
+}
+
+int CountFds(struct Fds *fds) {
+  int n = 0;
+  dll_element *e;
+  for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
+    ++n;
+  }
+  return n;
+}
+
+void FreeFd(struct Fds *fds, struct Fd *fd) {
+  if (fd) {
+    unassert(!pthread_mutex_destroy(&fd->lock));
+    fds->list = dll_remove(fds->list, &fd->list);
+    free(fd);
+  }
+}
+
+void UnlockFds(struct Fds *fds) {
+  unassert(!pthread_mutex_unlock(&fds->lock));
+}
+
+void DestroyFds(struct Fds *fds) {
+  dll_element *e, *e2;
+  for (e = dll_first(fds->list); e; e = e2) {
+    e2 = dll_next(fds->list, e);
+    FreeFd(fds, FD_CONTAINER(e));
+  }
+  unassert(!fds->list);
+  unassert(!pthread_mutex_destroy(&fds->lock));
 }

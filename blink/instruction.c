@@ -56,7 +56,7 @@ static void LoadInstructionSlow(struct Machine *m, u64 ip) {
   unsigned i;
   u8 *addr;
   u8 copy[15], *toil;
-  i = 0x1000 - (ip & 0xfff);
+  i = 4096 - (ip & 4095);
   addr = (u8 *)ResolveAddress(m, ip);
   if ((toil = (u8 *)FindReal(m, ip + i))) {
     memcpy(copy, addr, i);
@@ -69,18 +69,18 @@ static void LoadInstructionSlow(struct Machine *m, u64 ip) {
 
 void LoadInstruction(struct Machine *m) {
   u64 ip;
-  unsigned key;
   u8 *addr;
+  unsigned key;
   ip = Read64(m->cs) + MaskAddress(m->mode & 3, m->ip);
   key = ip & (ARRAYLEN(m->opcache->icache) - 1);
   m->xedd = (struct XedDecodedInst *)m->opcache->icache[key];
-  if ((ip & 0xfff) < 0x1000 - 15) {
-    if (ip - (ip & 0xfff) == m->opcache->codevirt && m->opcache->codehost) {
-      addr = m->opcache->codehost + (ip & 0xfff);
+  if ((ip & 4095) < 4096 - 15) {
+    if (ip - (ip & 4095) == m->opcache->codevirt && m->opcache->codehost) {
+      addr = m->opcache->codehost + (ip & 4095);
     } else {
-      m->opcache->codevirt = ip - (ip & 0xfff);
+      m->opcache->codevirt = ip - (ip & 4095);
       m->opcache->codehost = (u8 *)ResolveAddress(m, m->opcache->codevirt);
-      addr = m->opcache->codehost + (ip & 0xfff);
+      addr = m->opcache->codehost + (ip & 4095);
     }
     if (!IsOpcodeEqual(m->xedd, addr)) {
       ReadInstruction(m, addr, 15);

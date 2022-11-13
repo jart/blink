@@ -27,7 +27,6 @@
 #include "blink/buffer.h"
 #include "blink/macros.h"
 #include "blink/tpenc.h"
-#include "blink/util.h"
 
 void AppendData(struct Buffer *b, const char *data, int len) {
   char *p;
@@ -64,16 +63,26 @@ void AppendWide(struct Buffer *b, wint_t wc) {
 }
 
 int AppendFmt(struct Buffer *b, const char *fmt, ...) {
-  int bytes;
-  char *tmp;
-  va_list va;
-  tmp = NULL;
+  int n;
+  va_list va, vb;
   va_start(va, fmt);
-  bytes = vasprintf(&tmp, fmt, va);
+  va_copy(vb, va);
+  n = vsnprintf(b->p + b->i, b->n - b->i, fmt, va);
+  if (b->i + n + 1 > b->n) {
+    do {
+      if (b->n) {
+        b->n += b->n >> 1;
+      } else {
+        b->n = 16;
+      }
+    } while (b->i + n + 1 > b->n);
+    b->p = (char *)realloc(b->p, b->n);
+    vsnprintf(b->p + b->i, b->n - b->i, fmt, vb);
+  }
+  va_end(vb);
   va_end(va);
-  if (bytes != -1) AppendData(b, tmp, bytes);
-  free(tmp);
-  return bytes;
+  b->i += n;
+  return n;
 }
 
 /**

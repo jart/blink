@@ -22,6 +22,8 @@
 
 #define kInstructionBytes 40
 
+#define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, list, e)
+
 struct FreeList {
   int n;
   void **p;
@@ -97,19 +99,18 @@ struct Machine;
 
 struct System {
   u64 cr3;
+  i64 brk;
   bool dlab;
   bool isfork;
-  struct SystemReal real GUARDED_BY(real_lock);
   pthread_mutex_t real_lock;
+  struct SystemReal real GUARDED_BY(real_lock);
   pthread_mutex_t realfree_lock;
   struct SystemRealFree *realfree PT_GUARDED_BY(realfree_lock);
   struct MachineMemstat memstat;
-  i64 brk;
-  dll_list threads GUARDED_BY(threads_lock);
-  unsigned next_tid GUARDED_BY(threads_lock);
-  pthread_mutex_t threads_lock;
-  struct MachineFds fds GUARDED_BY(fds_lock);
-  pthread_mutex_t fds_lock;
+  pthread_mutex_t machines_lock;
+  dll_list machines GUARDED_BY(machines_lock);
+  unsigned next_tid GUARDED_BY(machines_lock);
+  struct Fds fds;
   pthread_mutex_t sig_lock;
   struct sigaction_linux hands[32] GUARDED_BY(sig_lock);
   void (*onbinbase)(struct Machine *);
@@ -127,7 +128,6 @@ struct System {
 
 struct Machine {
   struct XedDecodedInst *xedd;
-  struct OpCache *opcache;
   u64 ip;
   u8 cs[8];
   u8 ss[8];
@@ -164,17 +164,20 @@ struct Machine {
     u64 entry;
   } tlb[16];
   u8 xmm[16][16];
-  dll_element list GUARDED_BY(system->threads_lock);
+  dll_element list GUARDED_BY(system->machines_lock);
   u8 es[8];
   u8 ds[8];
   u8 fs[8];
   u8 gs[8];
   struct MachineFpu fpu;
   u32 mxcsr;
+  bool isthread;
+  pthread_t thread;
   struct FreeList freelist;
   i64 bofram[2];
   i64 faultaddr;
-  u8 sigmask[8];
+  u64 signals;
+  u64 sigmask;
   int sig;
   u64 siguc;
   u64 sigfp;
@@ -182,10 +185,14 @@ struct Machine {
   jmp_buf onhalt;
   i64 ctid;
   int tid;
+  struct OpCache opcache[1];
 };
+
+extern _Thread_local struct Machine *g_machine;
 
 struct System *NewSystem(void);
 void FreeSystem(struct System *);
+_Noreturn void Actor(struct Machine *);
 struct Machine *NewMachine(struct System *, struct Machine *);
 void FreeMachine(struct Machine *);
 void ResetMem(struct Machine *);
@@ -209,7 +216,6 @@ _Noreturn void ThrowSegmentationFault(struct Machine *, i64);
 _Noreturn void ThrowProtectionFault(struct Machine *);
 _Noreturn void OpUd(struct Machine *, u32);
 _Noreturn void OpHlt(struct Machine *, u32);
-void OpSyscall(struct Machine *, u32);
 void OpSsePclmulqdq(struct Machine *, u32);
 void OpCvt0f2a(struct Machine *, u32);
 void OpCvtt0f2c(struct Machine *, u32);
@@ -229,7 +235,7 @@ void OpMulAxAlEbUnsigned(struct Machine *, u32);
 void OpMulRdxRaxEvqpSigned(struct Machine *, u32);
 void OpMulRdxRaxEvqpUnsigned(struct Machine *, u32);
 u64 OpIn(struct Machine *, u16);
-void OpOut(struct Machine *, u16, u32);
+int OpOut(struct Machine *, u16, u32);
 void Op101(struct Machine *, u32);
 void OpRdrand(struct Machine *, u32);
 void OpRdseed(struct Machine *, u32);

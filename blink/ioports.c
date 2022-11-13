@@ -20,41 +20,42 @@
 #include <sys/uio.h>
 
 #include "blink/machine.h"
+#include "blink/syscall.h"
 #include "blink/uart.h"
 
 static int OpE9Read(struct Machine *m) {
-  int fd;
   u8 b;
+  struct Fd *fd;
   struct iovec t = {&b, 1};
-  fd = 0;
-  if (fd >= m->system->fds.i) return -1;
-  if (!m->system->fds.p[fd].cb) return -1;
-  if (m->system->fds.p[fd].cb->readv(m->system->fds.p[fd].fd, &t, 1) == 1) {
+  if (!(fd = GetAndLockFd(m, 0))) return -1;
+  if (fd->cb->readv(fd->systemfd, &t, 1) == 1) {
     return b;
   } else {
     return -1;
   }
 }
 
-static void OpE9Write(struct Machine *m, u8 b) {
-  int fd;
+static int OpE9Write(struct Machine *m, u8 b) {
+  int rc;
+  struct Fd *fd;
   struct iovec t = {&b, 1};
-  fd = 1;
-  if (fd >= m->system->fds.i) return;
-  if (!m->system->fds.p[fd].cb) return;
-  m->system->fds.p[fd].cb->writev(m->system->fds.p[fd].fd, &t, 1);
+  if (!(fd = GetAndLockFd(m, 1))) return -1;
+  rc = fd->cb->writev(fd->systemfd, &t, 1);
+  UnlockFd(fd);
+  return rc;
 }
 
 static int OpE9Poll(struct Machine *m) {
-  int rc, fd = 0;
+  int rc;
+  struct Fd *fd;
   struct pollfd pf;
-  if (fd >= m->system->fds.i) return -1;
-  if (!m->system->fds.p[fd].cb) return -1;
-  pf.fd = m->system->fds.p[fd].fd;
+  if (!(fd = GetAndLockFd(m, 0))) return -1;
+  pf.fd = fd->systemfd;
   pf.events = POLLIN | POLLOUT;
-  rc = m->system->fds.p[fd].cb->poll(&pf, 1, 20);
-  if (rc <= 0) return rc;
-  return pf.revents;
+  rc = fd->cb->poll(&pf, 1, 20);
+  if (rc > 0) rc = pf.revents;
+  UnlockFd(fd);
+  return rc;
 }
 
 static int OpSerialIn(struct Machine *m, int r) {
@@ -77,18 +78,18 @@ static int OpSerialIn(struct Machine *m, int r) {
   }
 }
 
-static void OpSerialOut(struct Machine *m, int r, u32 x) {
+static int OpSerialOut(struct Machine *m, int r, u32 x) {
   switch (r) {
     case UART_DLL:
       if (!m->system->dlab) {
         return OpE9Write(m, x);
       }
-      break;
+      return 0;
     case UART_LCR:
       m->system->dlab = !!(x & UART_DLAB);
-      break;
+      return 0;
     default:
-      break;
+      return -1;
   }
 }
 
@@ -103,15 +104,13 @@ u64 OpIn(struct Machine *m, u16 p) {
   }
 }
 
-void OpOut(struct Machine *m, u16 p, u32 x) {
+int OpOut(struct Machine *m, u16 p, u32 x) {
   switch (p) {
     case 0xE9:
-      OpE9Write(m, x);
-      break;
+      return OpE9Write(m, x);
     case 0x3F8 ... 0x3FF:
-      OpSerialOut(m, p - 0x3F8, x);
-      break;
+      return OpSerialOut(m, p - 0x3F8, x);
     default:
-      break;
+      return -1;
   }
 }

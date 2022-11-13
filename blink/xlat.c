@@ -35,12 +35,11 @@
 #include "blink/builtin.h"
 #include "blink/case.h"
 #include "blink/endian.h"
+#include "blink/errno.h"
+#include "blink/linux.h"
+#include "blink/log.h"
+#include "blink/sigwinch.h"
 #include "blink/xlat.h"
-
-static long einval(void) {
-  errno = EINVAL;
-  return -1;
-}
 
 int XlatErrno(int x) {
   switch (x) {
@@ -61,7 +60,9 @@ int XlatErrno(int x) {
     XLAT(ENOMEM, 12);
     XLAT(EACCES, 13);
     XLAT(EFAULT, 14);
+#ifdef ENOTBLK
     XLAT(ENOTBLK, 15);
+#endif
     XLAT(EBUSY, 16);
     XLAT(EEXIST, 17);
     XLAT(EXDEV, 18);
@@ -89,24 +90,32 @@ int XlatErrno(int x) {
     XLAT(ELOOP, 40);
     XLAT(ENOMSG, 42);
     XLAT(EIDRM, 43);
+#ifdef EREMOTE
     XLAT(EREMOTE, 66);
+#endif
     XLAT(EPROTO, 71);
     XLAT(EBADMSG, 74);
     XLAT(EOVERFLOW, 75);
     XLAT(EILSEQ, 84);
+#ifdef EUSERS
     XLAT(EUSERS, 87);
+#endif
     XLAT(ENOTSOCK, 88);
     XLAT(EDESTADDRREQ, 89);
     XLAT(EMSGSIZE, 90);
     XLAT(EPROTOTYPE, 91);
     XLAT(ENOPROTOOPT, 92);
     XLAT(EPROTONOSUPPORT, 93);
+#ifdef ESOCKTNOSUPPORT
     XLAT(ESOCKTNOSUPPORT, 94);
+#endif
     XLAT(ENOTSUP, 95);
 #if EOPNOTSUPP != ENOTSUP
     XLAT(EOPNOTSUPP, 95);
 #endif
+#ifdef EPFNOSUPPORT
     XLAT(EPFNOSUPPORT, 96);
+#endif
     XLAT(EAFNOSUPPORT, 97);
     XLAT(EADDRINUSE, 98);
     XLAT(EADDRNOTAVAIL, 99);
@@ -118,11 +127,17 @@ int XlatErrno(int x) {
     XLAT(ENOBUFS, 105);
     XLAT(EISCONN, 106);
     XLAT(ENOTCONN, 107);
+#ifdef ESHUTDOWN
     XLAT(ESHUTDOWN, 108);
+#endif
+#ifdef ETOOMANYREFS
     XLAT(ETOOMANYREFS, 109);
+#endif
     XLAT(ETIMEDOUT, 110);
     XLAT(ECONNREFUSED, 111);
+#ifdef EHOSTDOWN
     XLAT(EHOSTDOWN, 112);
+#endif
     XLAT(EHOSTUNREACH, 113);
     XLAT(EALREADY, 114);
     XLAT(EINPROGRESS, 115);
@@ -192,7 +207,9 @@ int XlatSignal(int x) {
     XLAT(26, SIGVTALRM);
     XLAT(27, SIGPROF);
     XLAT(28, SIGWINCH);
+#ifdef SIGIO
     XLAT(29, SIGIO);
+#endif
     XLAT(19, SIGSTOP);
     XLAT(31, SIGSYS);
     XLAT(20, SIGTSTP);
@@ -213,7 +230,9 @@ int XlatResource(int x) {
     XLAT(6, RLIMIT_NPROC);
     XLAT(7, RLIMIT_NOFILE);
     XLAT(8, RLIMIT_MEMLOCK);
+#ifdef RLIMIT_AS
     XLAT(9, RLIMIT_AS);
+#endif
 #ifdef RLIMIT_LOCKS
     XLAT(10, RLIMIT_LOCKS);
 #endif
@@ -263,113 +282,16 @@ int UnXlatSignal(int x) {
     XLAT(SIGVTALRM, 26);
     XLAT(SIGPROF, 27);
     XLAT(SIGWINCH, 28);
+#ifdef SIGIO
     XLAT(SIGIO, 29);
+#endif
     XLAT(SIGSTOP, 19);
     XLAT(SIGSYS, 31);
     XLAT(SIGTSTP, 20);
     XLAT(SIGURG, 23);
     default:
+      LOGF("unsupported signal %d", x);
       return 15;
-  }
-}
-
-int UnXlatSicode(int sig, int code) {
-  switch (code) {
-    XLAT(SI_USER, 0);
-    XLAT(SI_QUEUE, -1);
-    XLAT(SI_TIMER, -2);
-#ifdef SI_TKILL
-    XLAT(SI_TKILL, -6);
-#endif
-    XLAT(SI_MESGQ, -3);
-    XLAT(SI_ASYNCIO, -4);
-#ifdef SI_ASYNCNL
-    XLAT(SI_ASYNCNL, -60);
-#endif
-#ifdef SI_KERNEL
-    XLAT(SI_KERNEL, 0x80);
-#endif
-    default:
-      switch (sig) {
-        case SIGCHLD:
-          switch (code) {
-            XLAT(CLD_EXITED, 1);
-            XLAT(CLD_KILLED, 2);
-            XLAT(CLD_DUMPED, 3);
-            XLAT(CLD_TRAPPED, 4);
-            XLAT(CLD_STOPPED, 5);
-            XLAT(CLD_CONTINUED, 6);
-            default:
-              return -1;
-          }
-        case SIGTRAP:
-          switch (code) {
-            XLAT(TRAP_BRKPT, 1);
-            XLAT(TRAP_TRACE, 2);
-            default:
-              return -1;
-          }
-        case SIGSEGV:
-          switch (code) {
-            XLAT(SEGV_MAPERR, 1);
-            XLAT(SEGV_ACCERR, 2);
-            default:
-              return -1;
-          }
-        case SIGFPE:
-          switch (code) {
-            XLAT(FPE_INTDIV, 1);
-            XLAT(FPE_INTOVF, 2);
-            XLAT(FPE_FLTDIV, 3);
-            XLAT(FPE_FLTOVF, 4);
-            XLAT(FPE_FLTUND, 5);
-            XLAT(FPE_FLTRES, 6);
-            XLAT(FPE_FLTINV, 7);
-            XLAT(FPE_FLTSUB, 8);
-            default:
-              return -1;
-          }
-        case SIGILL:
-          switch (code) {
-            XLAT(ILL_ILLOPC, 1);
-            XLAT(ILL_ILLOPN, 2);
-            XLAT(ILL_ILLADR, 3);
-            XLAT(ILL_ILLTRP, 4);
-            XLAT(ILL_PRVOPC, 5);
-            XLAT(ILL_PRVREG, 6);
-            XLAT(ILL_COPROC, 7);
-            XLAT(ILL_BADSTK, 8);
-            default:
-              return -1;
-          }
-        case SIGBUS:
-          switch (code) {
-            XLAT(BUS_ADRALN, 1);
-            XLAT(BUS_ADRERR, 2);
-            XLAT(BUS_OBJERR, 3);
-#ifdef BUS_MCEERR_AR
-            XLAT(BUS_MCEERR_AR, 4);
-#endif
-#ifdef BUS_MCEERR_AO
-            XLAT(BUS_MCEERR_AO, 5);
-#endif
-            default:
-              return -1;
-          }
-        case SIGIO:
-          switch (code) {
-            XLAT(POLL_IN, 1);
-            XLAT(POLL_OUT, 2);
-            XLAT(POLL_MSG, 3);
-            XLAT(POLL_ERR, 4);
-            XLAT(POLL_PRI, 5);
-            XLAT(POLL_HUP, 6);
-            default:
-              return -1;
-          }
-        default:
-          return -1;
-      }
   }
 }
 
@@ -398,7 +320,7 @@ int XlatSocketFamily(int x) {
     XLAT(1, AF_UNIX);
     XLAT(2, AF_INET);
     default:
-      errno = EPFNOSUPPORT;
+      errno = ENOPROTOOPT;
       return -1;
   }
 }
@@ -424,6 +346,7 @@ int XlatSocketType(int x) {
 
 int XlatSocketProtocol(int x) {
   switch (x) {
+    XLAT(0, 0);
     XLAT(6, IPPROTO_TCP);
     XLAT(17, IPPROTO_UDP);
     default:
@@ -478,11 +401,20 @@ int XlatSocketOptname(int level, int optname) {
 }
 
 int XlatAccess(int x) {
-  int r = F_OK;
-  if (x & 1) r |= X_OK;
-  if (x & 2) r |= W_OK;
-  if (x & 4) r |= R_OK;
+  int r = 0;
+  if (x == F_OK_LINUX) return F_OK;
+  if (x & X_OK_LINUX) r |= X_OK, x &= ~X_OK_LINUX;
+  if (x & W_OK_LINUX) r |= W_OK, x &= ~W_OK_LINUX;
+  if (x & R_OK_LINUX) r |= R_OK, x &= ~R_OK_LINUX;
+  if (x) return einval();
   return r;
+}
+
+int XlatShutdown(int x) {
+  if (x == SHUT_RD_LINUX) return SHUT_RD;
+  if (x == SHUT_WR_LINUX) return SHUT_WR;
+  if (x == SHUT_RDWR_LINUX) return SHUT_RDWR;
+  return einval();
 }
 
 int XlatLock(int x) {
@@ -545,20 +477,34 @@ int XlatClock(int x) {
 
 int XlatAtf(int x) {
   int res = 0;
-  if (x & 0x0100) res |= AT_SYMLINK_NOFOLLOW;
-  if (x & 0x0200) res |= AT_REMOVEDIR;
-  if (x & 0x0400) res |= AT_SYMLINK_FOLLOW;
+  if (x & 0x0100) res |= AT_SYMLINK_NOFOLLOW, x &= ~0x0100;
+  if (x & 0x0200) res |= AT_REMOVEDIR, x &= ~0x0200;
+  if (x & 0x0400) res |= AT_SYMLINK_FOLLOW, x &= ~0x0400;
+  if (x) return einval();
   return res;
 }
 
 int XlatOpenMode(int flags) {
-  switch (flags & 3) {
-    case 0:
+  switch (flags & O_ACCMODE_LINUX) {
+    case O_RDONLY_LINUX:
       return O_RDONLY;
-    case 1:
+    case O_WRONLY_LINUX:
       return O_WRONLY;
-    case 2:
+    case O_RDWR_LINUX:
       return O_RDWR;
+    default:
+      __builtin_unreachable();
+  }
+}
+
+int UnXlatOpenMode(int flags) {
+  switch (flags & O_ACCMODE) {
+    case O_RDONLY:
+      return O_RDONLY_LINUX;
+    case O_WRONLY:
+      return O_WRONLY_LINUX;
+    case O_RDWR:
+      return O_RDWR_LINUX;
     default:
       __builtin_unreachable();
   }
@@ -567,60 +513,81 @@ int XlatOpenMode(int flags) {
 int XlatOpenFlags(int flags) {
   int res;
   res = XlatOpenMode(flags);
-  if (flags & 0x00400) res |= O_APPEND;
-  if (flags & 0x00040) res |= O_CREAT;
-  if (flags & 0x00080) res |= O_EXCL;
-  if (flags & 0x00200) res |= O_TRUNC;
-  if (flags & 0x00800) res |= O_NDELAY;
-#ifdef O_DIRECT
-  if (flags & 0x04000) res |= O_DIRECT;
+  if (flags & O_APPEND_LINUX) res |= O_APPEND, flags &= ~O_APPEND_LINUX;
+  if (flags & O_CREAT_LINUX) res |= O_CREAT, flags &= ~O_CREAT_LINUX;
+  if (flags & O_EXCL_LINUX) res |= O_EXCL, flags &= ~O_EXCL_LINUX;
+  if (flags & O_TRUNC_LINUX) res |= O_TRUNC, flags &= ~O_TRUNC_LINUX;
+#ifdef O_NDELAY
+  if (flags & O_NDELAY_LINUX) res |= O_NDELAY, flags &= ~O_NDELAY_LINUX;
 #endif
-  if (flags & 0x10000) res |= O_DIRECTORY;
-  if (flags & 0x20000) res |= O_NOFOLLOW;
-  if (flags & 0x80000) res |= O_CLOEXEC;
-  if (flags & 0x00100) res |= O_NOCTTY;
+#ifdef O_DIRECT
+  if (flags & O_DIRECT_LINUX) res |= O_DIRECT, flags &= ~O_DIRECT_LINUX;
+#endif
+  if (flags & O_DIRECTORY_LINUX) {
+    res |= O_DIRECTORY;
+    flags &= ~O_DIRECTORY_LINUX;
+  }
+#ifdef O_NOFOLLOW
+  if (flags & O_NOFOLLOW_LINUX) res |= O_NOFOLLOW, flags &= ~O_NOFOLLOW_LINUX;
+#endif
+  if (flags & O_CLOEXEC_LINUX) res |= O_CLOEXEC, flags &= ~O_CLOEXEC_LINUX;
+  if (flags & O_NOCTTY_LINUX) res |= O_NOCTTY, flags &= ~O_NOCTTY_LINUX;
 #ifdef O_ASYNC
-  if (flags & 0x02000) res |= O_ASYNC;
+  if (flags & O_ASYNC_LINUX) res |= O_ASYNC, flags &= ~O_ASYNC_LINUX;
 #endif
 #ifdef O_NOATIME
-  if (flags & 0x40000) res |= O_NOATIME;
+  if (flags & O_NOATIME_LINUX) res |= O_NOATIME, flags &= ~O_NOATIME_LINUX;
 #endif
 #ifdef O_DSYNC
-  if (flags & 0x000001000) res |= O_DSYNC;
+  if (flags & O_DSYNC_LINUX) res |= O_DSYNC, flags &= ~O_DSYNC_LINUX;
 #endif
-#ifdef O_SYNC
-  if ((flags & 0x00101000) == 0x00101000) res |= O_SYNC;
+  if (flags) return einval();
+  return res;
+}
+
+int UnXlatOpenFlags(int flags) {
+  int res;
+  res = UnXlatOpenMode(flags);
+  if (flags & O_APPEND) res |= 0x00400;
+  if (flags & O_CREAT) res |= 0x00040;
+  if (flags & O_EXCL) res |= 0x00080;
+  if (flags & O_TRUNC) res |= 0x00200;
+#ifdef O_NDELAY
+  if (flags & O_NDELAY) res |= 0x00800;
+#endif
+#ifdef O_DIRECT
+  if (flags & O_DIRECT) res |= 0x04000;
+#endif
+  if (flags & O_DIRECTORY) res |= 0x10000;
+#ifdef O_NOFOLLOW
+  if (flags & O_NOFOLLOW) res |= 0x20000;
+#endif
+  if (flags & O_CLOEXEC) res |= 0x80000;
+  if (flags & O_NOCTTY) res |= 0x00100;
+#ifdef O_ASYNC
+  if (flags & O_ASYNC) res |= 0x02000;
+#endif
+#ifdef O_NOATIME
+  if (flags & O_NOATIME) res |= 0x40000;
+#endif
+#ifdef O_DSYNC
+  if (flags & O_DSYNC) res |= 0x000001000;
 #endif
   return res;
 }
 
-int XlatFcntlCmd(int x) {
-  switch (x) {
-    XLAT(1, F_GETFD);
-    XLAT(2, F_SETFD);
-    XLAT(3, F_GETFL);
-    XLAT(4, F_SETFL);
-    default:
-      return einval();
+int XlatSockaddrToHost(struct sockaddr_in *dst,
+                       const struct sockaddr_in_linux *src) {
+  int family;
+  if ((family = XlatSocketFamily(Read16(src->sin_family))) != -1) {
+    memset(dst, 0, sizeof(*dst));
+    dst->sin_family = family;
+    dst->sin_port = src->sin_port;
+    dst->sin_addr.s_addr = src->sin_addr;
+    return 0;
+  } else {
+    return -1;
   }
-}
-
-int XlatFcntlArg(int x) {
-  switch (x) {
-    XLAT(0, 0);
-    XLAT(1, FD_CLOEXEC);
-    XLAT(0x0800, O_NONBLOCK);
-    default:
-      return einval();
-  }
-}
-
-void XlatSockaddrToHost(struct sockaddr_in *dst,
-                        const struct sockaddr_in_linux *src) {
-  memset(dst, 0, sizeof(*dst));
-  dst->sin_family = XlatSocketFamily(Read16(src->sin_family));
-  dst->sin_port = src->sin_port;
-  dst->sin_addr.s_addr = src->sin_addr;
 }
 
 void XlatSockaddrToLinux(struct sockaddr_in_linux *dst,
@@ -844,7 +811,9 @@ static int XlatTermiosIflag(int x) {
   if (x & 0x0080) r |= IGNCR;
   if (x & 0x0100) r |= ICRNL;
   if (x & 0x0400) r |= IXON;
+#ifdef IXANY
   if (x & 0x0800) r |= IXANY;
+#endif
   if (x & 0x1000) r |= IXOFF;
 #ifdef IMAXBEL
   if (x & 0x2000) r |= IMAXBEL;
@@ -870,7 +839,9 @@ static int UnXlatTermiosIflag(int x) {
   if (x & IGNCR) r |= 0x0080;
   if (x & ICRNL) r |= 0x0100;
   if (x & IXON) r |= 0x0400;
+#ifdef IXANY
   if (x & IXANY) r |= 0x0800;
+#endif
   if (x & IXOFF) r |= 0x1000;
 #ifdef IMAXBEL
   if (x & IMAXBEL) r |= 0x2000;
@@ -1144,4 +1115,14 @@ void XlatTermiosToLinux(struct termios_linux *dst, const struct termios *src) {
   Write32(dst->c_cflag, UnXlatTermiosCflag(src->c_cflag));
   Write32(dst->c_lflag, UnXlatTermiosLflag(src->c_lflag));
   UnXlatTermiosCc(dst, src);
+}
+
+int XlatWhence(int x) {
+  switch (x) {
+    XLAT(SEEK_SET_LINUX, SEEK_SET);
+    XLAT(SEEK_CUR_LINUX, SEEK_CUR);
+    XLAT(SEEK_END_LINUX, SEEK_END);
+    default:
+      return einval();
+  }
 }

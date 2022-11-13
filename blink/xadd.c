@@ -61,14 +61,14 @@ void OpXaddEvqpGvqp(struct Machine *m, u32 rde) {
     u64 x, y, z;
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64
-      x = atomic_load((atomic_ulong *)p);
-      y = atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed);
+      x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_relaxed);
+      y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);
       y = SWAP64LE(y);
       do {
-        atomic_store_explicit((atomic_ulong *)q, x, memory_order_relaxed);
+        atomic_store_explicit((_Atomic(u64) *)q, x, memory_order_relaxed);
         z = kAlu[ALU_ADD][ALU_INT64](SWAP64LE(x), y, &m->flags);
         z = SWAP64LE(z);
-      } while (!atomic_compare_exchange_weak_explicit((atomic_ulong *)p, &x, z,
+      } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x, z,
                                                       memory_order_acq_rel,
                                                       memory_order_relaxed));
 #else
@@ -84,15 +84,16 @@ void OpXaddEvqpGvqp(struct Machine *m, u32 rde) {
   } else if (!Osz(rde)) {
     u32 x, y, z;
     if (Lock(rde) && !((intptr_t)p & 3)) {
-      x = atomic_load((atomic_uint *)p);
-      y = atomic_load_explicit((atomic_uint *)q, memory_order_relaxed);
+      x = atomic_load_explicit((_Atomic(u32) *)p, memory_order_relaxed);
+      y = atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed);
       y = SWAP32LE(y);
       do {
-        atomic_store_explicit((atomic_uint *)q, x, memory_order_relaxed);
+        atomic_store_explicit((_Atomic(u32) *)q, x, memory_order_relaxed);
         z = kAlu[ALU_ADD][ALU_INT32](SWAP32LE(x), y, &m->flags);
         z = SWAP32LE(z);
-      } while (!atomic_compare_exchange_weak_explicit(
-          (atomic_uint *)p, &x, z, memory_order_acq_rel, memory_order_relaxed));
+      } while (!atomic_compare_exchange_weak_explicit((_Atomic(u32) *)p, &x, z,
+                                                      memory_order_acq_rel,
+                                                      memory_order_relaxed));
     } else {
       x = Read32(p);
       y = Read32(q);

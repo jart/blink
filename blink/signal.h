@@ -2,18 +2,10 @@
 #define BLINK_SIGNAL_H_
 #include "blink/machine.h"
 
-struct Signals {
-  int i, n;
-  struct Signal {
-    int sig;
-    int code;
-  } p[64];
-};
-
 void OpRestore(struct Machine *);
+int ConsumeSignal(struct Machine *);
+void EnqueueSignal(struct Machine *, int);
 void TerminateSignal(struct Machine *, int);
 void DeliverSignal(struct Machine *, int, int);
-int ConsumeSignal(struct Machine *, struct Signals *);
-void EnqueueSignal(struct Machine *, struct Signals *, int, int);
 
 #endif /* BLINK_SIGNAL_H_ */

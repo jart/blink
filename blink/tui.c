@@ -45,6 +45,7 @@
 #include "blink/cp437.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
+#include "blink/fds.h"
 #include "blink/flags.h"
 #include "blink/fpu.h"
 #include "blink/high.h"
@@ -59,7 +60,9 @@
 #include "blink/pty.h"
 #include "blink/real.h"
 #include "blink/signal.h"
+#include "blink/sigwinch.h"
 #include "blink/strwidth.h"
+#include "blink/syscall.h"
 #include "blink/termios.h"
 #include "blink/thompike.h"
 #include "blink/tpenc.h"
@@ -176,6 +179,8 @@ alt-t   slowmo"
 
 #define Ctrl(C) ((C) ^ 0100)
 
+#define m g_machine
+
 #ifdef IUTF8
 #define HR L'─'
 #else
@@ -247,24 +252,22 @@ static int exitcode;
 static long ips;
 static i64 oldlen;
 static i64 opstart;
-static i64 mapsstart;
 static u64 readaddr;
 static u64 readsize;
 static u64 writeaddr;
 static u64 writesize;
+static i64 mapsstart;
 static char *codepath;
 static i64 framesstart;
 static struct Pty *pty;
 static u64 last_opcount;
 static jmp_buf *onbusted;
-static struct Machine *m;
 static const char *dialog;
 static char *statusmessage;
 static unsigned long opcount;
 static i64 breakpointsstart;
 
 static struct Panels pan;
-static struct Signals signals;
 static struct Breakpoints breakpoints;
 static struct MemoryView codeview;
 static struct MemoryView readview;
@@ -615,11 +618,11 @@ static void OnV(void) {
 }
 
 static void OnSignal(int sig, siginfo_t *si, void *uc) {
-  EnqueueSignal(m, &signals, sig, si->si_code);
+  EnqueueSignal(m, sig);
 }
 
 static void OnSigWinch(int sig, siginfo_t *si, void *uc) {
-  EnqueueSignal(m, &signals, sig, si->si_code);
+  EnqueueSignal(m, sig);
   action |= WINCHED;
 }
 
@@ -628,7 +631,7 @@ static void OnSigInt(int sig, siginfo_t *si, void *uc) {
 }
 
 static void OnSigAlrm(int sig, siginfo_t *si, void *uc) {
-  EnqueueSignal(m, &signals, sig, si->si_code);
+  EnqueueSignal(m, sig);
   action |= ALARM;
 }
 
@@ -637,7 +640,7 @@ static void OnSigCont(int sig, siginfo_t *si, void *uc) {
     TuiRejuvinate();
     Redraw();
   }
-  EnqueueSignal(m, &signals, sig, si->si_code);
+  EnqueueSignal(m, sig);
 }
 
 static void TtyRestore1(void) {
@@ -655,7 +658,7 @@ static void TuiCleanup(void) {
   TtyRestore1();
   DisableMouseTracking();
   tuimode = false;
-  LeaveScreen();
+  // LeaveScreen();
 }
 
 static void ResolveBreakpoints(void) {
@@ -1577,7 +1580,7 @@ static void DrawStatus(struct Panel *p) {
   rw += AppendStat(s, "commit", a->committed, a->committed != b->committed);
   rw += AppendStat(s, "freed", a->freed, a->freed != b->freed);
   rw += AppendStat(s, "tables", a->pagetables, a->pagetables != b->pagetables);
-  rw += AppendStat(s, "fds", m->system->fds.i, false);
+  rw += AppendStat(s, "fds", CountFds(&m->system->fds), false);
   AppendFmt(&p->lines[0], "\033[7m%-*s%s\033[0m", xn - rw,
             statusmessage && nowl() < statusexpires ? statusmessage
                                                     : "das blinkenlights",
@@ -1799,7 +1802,7 @@ static int OnPtyFdIoctl(int fd, unsigned long request, ...) {
   va_end(va);
 }
 
-static const struct MachineFdCb kMachineFdCbPty = {
+static const struct FdCb kFdCbPty = {
     .close = OnPtyFdClose,
     .readv = OnPtyFdReadv,
     .writev = OnPtyFdWritev,
@@ -2213,7 +2216,7 @@ static void SetStatus(const char *fmt, ...) {
   va_list va;
   struct itimerval it;
   va_start(va, fmt);
-  unassert(vasprintf(&s, fmt, va) >= 0);
+  unassert(vasprintf_(&s, fmt, va) >= 0);
   va_end(va);
   free(statusmessage);
   statusmessage = s;
@@ -2581,8 +2584,8 @@ static void Exec(void) {
       LoadInstruction(m);
       if (verbose) LogInstruction();
       ExecuteInstruction(m);
-      if (signals.n && signals.i < signals.n) {
-        if ((sig = ConsumeSignal(m, &signals)) && sig != SIGALRM) {
+      if (m->signals) {
+        if ((sig = ConsumeSignal(m)) && sig != SIGALRM) {
           TerminateSignal(m, sig);
         }
       }
@@ -2600,8 +2603,8 @@ static void Exec(void) {
         }
         if (verbose) LogInstruction();
         ExecuteInstruction(m);
-        if (signals.n && signals.i < signals.n) {
-          if ((sig = ConsumeSignal(m, &signals)) && sig != SIGALRM) {
+        if (m->signals) {
+          if ((sig = ConsumeSignal(m)) && sig != SIGALRM) {
             TerminateSignal(m, sig);
           }
         }
@@ -2625,7 +2628,7 @@ static void Exec(void) {
             tuimode = true;
           } else {
             action &= ~INT;
-            EnqueueSignal(m, &signals, SIGINT, 0);
+            EnqueueSignal(m, SIGINT);
           }
         }
       }
@@ -2642,7 +2645,6 @@ static void Tui(void) {
   ssize_t bp;
   int interrupt;
   bool interactive;
-  /* LOGF("TUI"); */
   TuiSetup();
   SetupDraw();
   ScrollOp(&pan.disassembly, GetDisIndex());
@@ -2703,7 +2705,7 @@ static void Tui(void) {
         if (action & (CONTINUE | NEXT | FINISH)) {
           action &= ~(CONTINUE | NEXT | FINISH);
         } else {
-          EnqueueSignal(m, &signals, SIGINT, 0);
+          EnqueueSignal(m, SIGINT);
           action |= STEP;
         }
       }
@@ -2738,8 +2740,8 @@ static void Tui(void) {
           UpdateXmmType(m, &xmmtype);
           if (verbose) LogInstruction();
           ExecuteInstruction(m);
-          if (signals.n && signals.i < signals.n) {
-            if ((sig = ConsumeSignal(m, &signals)) && sig != SIGALRM) {
+          if (m->signals) {
+            if ((sig = ConsumeSignal(m)) && sig != SIGALRM) {
               TerminateSignal(m, sig);
             }
           }
@@ -2819,30 +2821,23 @@ static void GetOpts(int argc, char *argv[]) {
         PrintUsage(48, stderr);
     }
   }
-  OpenLog(logpath);
+  LogInit(logpath);
 }
 
 static int OpenDevTty(void) {
   return open("/dev/tty", O_RDWR | O_NOCTTY);
 }
 
-static void AddHostFd(int fd) {
-  int i = m->system->fds.i++;
-  m->system->fds.p[i].fd = fd;
-  m->system->fds.p[i].cb = &kMachineFdCbHost;
-}
-
 int VirtualMachine(int argc, char *argv[]) {
+  dll_element *e;
   codepath = argv[optind++];
-  m->system->fds.p = (struct MachineFd *)calloc((m->system->fds.n = 8),
-                                                sizeof(struct MachineFd));
   do {
     action = 0;
     LoadProgram(m, codepath, argv + optind, environ, elf);
     ScrollMemoryViews();
-    AddHostFd(0);
-    AddHostFd(1);
-    AddHostFd(2);
+    AddStdFd(&m->system->fds, 0);
+    AddStdFd(&m->system->fds, 1);
+    AddStdFd(&m->system->fds, 2);
     if (tuimode) {
       ttyin = isatty(0) ? 0 : OpenDevTty();
       ttyout = isatty(1) ? 1 : OpenDevTty();
@@ -2855,9 +2850,12 @@ int VirtualMachine(int argc, char *argv[]) {
       tyn = 24;
       txn = 80;
       GetTtySize(ttyout);
-      if (isatty(0)) m->system->fds.p[0].cb = &kMachineFdCbPty;
-      if (isatty(1)) m->system->fds.p[1].cb = &kMachineFdCbPty;
-      if (isatty(2)) m->system->fds.p[2].cb = &kMachineFdCbPty;
+      for (e = dll_first(m->system->fds.list); e;
+           e = dll_next(m->system->fds.list, e)) {
+        if (isatty(FD_CONTAINER(e)->fildes)) {
+          FD_CONTAINER(e)->cb = &kFdCbPty;
+        }
+      }
     }
     do {
       if (!tuimode) {
@@ -2878,6 +2876,7 @@ int main(int argc, char *argv[]) {
   static struct sigaction sa;
   react = true;
   tuimode = true;
+  WriteErrorInit();
   unassert((pty = NewPty()));
   unassert((s = NewSystem()));
   unassert((m = NewMachine(s, 0)));

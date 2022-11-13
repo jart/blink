@@ -36,6 +36,7 @@
 #include "blink/assert.h"
 #include "blink/errno.h"
 #include "blink/random.h"
+#include "blink/types.h"
 
 static ssize_t GetDevRandom(char *p, size_t n) {
   int fd;

@@ -21,6 +21,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
+#include "blink/bitscan.h"
 #include "blink/endian.h"
 #include "blink/linux.h"
 #include "blink/log.h"
@@ -28,11 +30,6 @@
 #include "blink/memory.h"
 #include "blink/signal.h"
 #include "blink/xlat.h"
-
-#define SIG_IGN_LINUX  1
-#define SIGCHLD_LINUX  17
-#define SIGURG_LINUX   23
-#define SIGWINCH_LINUX 28
 
 void OpRestore(struct Machine *m) {
   union {
@@ -124,45 +121,42 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   m->ip = Read64(m->system->hands[sig - 1].handler);
 }
 
-void EnqueueSignal(struct Machine *m, struct Signals *ss, int sig, int code) {
-  if (ss->n < ARRAYLEN(ss->p)) {
-    ss->p[ss->n].code = UnXlatSicode(sig, code);
-    ss->p[ss->n].sig = UnXlatSignal(sig);
-    ss->n++;
-  }
-}
-
-int ConsumeSignal(struct Machine *m, struct Signals *ss) {
-  int sig, code;
+int ConsumeSignal(struct Machine *m) {
+  int sig;
   i64 handler;
-  sig = ss->p[ss->i].sig;
-  code = ss->p[ss->i].code;
-  if (!m->sig ||
-      ((sig != m->sig ||
-        (Read64(m->system->hands[m->sig - 1].flags) & 0x40000000)) &&
-       !(Read64(m->system->hands[m->sig - 1].mask) & (1ull << (m->sig - 1))))) {
-    if (++ss->i == ss->n) ss->i = ss->n = 0;
-    handler = Read64(m->system->hands[sig - 1].handler);
-    if (!handler) {
-      if (sig == SIGCHLD_LINUX || sig == SIGURG_LINUX ||
-          sig == SIGWINCH_LINUX) {
+  u64 signals;
+  for (signals = m->signals; signals; signals &= ~(1ull << (sig - 1))) {
+    sig = bsr(signals) + 1;
+    if (!(m->sigmask & (1ull << (sig - 1))) &&
+        (!m->sig ||
+         ((sig != m->sig ||
+           (Read64(m->system->hands[m->sig - 1].flags) & 0x40000000)) &&
+          !(Read64(m->system->hands[m->sig - 1].mask) &
+            (1ull << (m->sig - 1)))))) {
+      m->signals &= ~(1ull << (sig - 1));
+      handler = Read64(m->system->hands[sig - 1].handler);
+      if (!handler) {
+        if (sig == SIGCHLD_LINUX || sig == SIGURG_LINUX ||
+            sig == SIGWINCH_LINUX) {
+          return 0;
+        } else {
+          return sig;
+        }
+      } else if (handler == SIG_IGN_LINUX) {
         return 0;
-      } else {
-        return sig;
       }
-    } else if (handler == SIG_IGN_LINUX) {
+      DeliverSignal(m, sig, 0);
       return 0;
     }
-    DeliverSignal(m, sig, code);
-    return 0;
   }
   return 0;
 }
 
+void EnqueueSignal(struct Machine *m, int sig) {
+  unassert(m);  // TODO(jart): Block signals at thread creation.
+  m->signals |= 1ul << (UnXlatSignal(sig) - 1);
+}
+
 void TerminateSignal(struct Machine *m, int sig) {
-  if (m->system->isfork) {
-    _exit(28 + sig);
-  } else {
-    exit(128 + sig);
-  }
+  exit(128 + sig);
 }

@@ -20,41 +20,44 @@ CPPFLAGS +=				\
 	-D_XOPEN_SOURCE=700		\
 	-D_DARWIN_C_SOURCE		\
 	-D_DEFAULT_SOURCE		\
+	-D_BSD_SOURCE			\
 	-D_GNU_SOURCE
 
 LDLIBS +=				\
 	-lm				\
 	-pthread
 
-TAGSFLAGS =								\
-	-e								\
-	-a								\
-	--if0=no							\
-	--langmap=c:.c.h.i						\
+TAGSFLAGS =				\
+	-e				\
+	-a				\
+	--if0=no			\
+	--langmap=c:.c.h.i		\
 	--line-directives=yes
 
 ifeq ($(MODE), tiny)
 CPPFLAGS += -DNDEBUG
-CFLAGS += -Os -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops
+CFLAGS += -std=c11 -Os -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops
 endif
 
 ifeq ($(MODE), rel)
 CPPFLAGS += -DNDEBUG
-CFLAGS += -O2
+CFLAGS += -std=c11 -O2
 endif
 
 ifeq ($(MODE), opt)
 CPPFLAGS += -DNDEBUG
-CFLAGS += -O3
+CFLAGS += -std=c11 -O3
 TARGET_ARCH = -march=native
 endif
 
 ifeq ($(MODE), asan)
+CFLAGS += -std=c11 -O
 CPPFLAGS += -fsanitize=address
 LDLIBS += -fsanitize=address
 endif
 
 ifeq ($(MODE), ubsan)
+CFLAGS += -std=c11 -O
 CPPFLAGS += -fsanitize=undefined
 LDLIBS += -fsanitize=undefined
 endif
@@ -66,11 +69,4 @@ CFLAGS += -xc++ -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS += -fuse-ld=lld
 CFLAGS += -fsanitize=thread
 LDLIBS += -fsanitize=thread
-endif
-
-# TODO(jart): is this obsolete?
-ifeq ($(MODE), aarch64)
-CPPFLAGS += -DNDEBUG
-CFLAGS += -Os
-CC = o/third_party/gcc/aarch64/bin/aarch64-linux-musl-gcc
 endif

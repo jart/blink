@@ -16,52 +16,48 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
+#include <fcntl.h>
+#include <stdatomic.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
-#include "blink/builtin.h"
-#include "blink/errno.h"
+#include "blink/fds.h"
+#include "blink/memory.h"
+#include "blink/syscall.h"
+#include "blink/xlat.h"
 
-static dontinline long ReturnErrno(int e) {
-  errno = e;
-  return -1;
-}
-
-long ebadf(void) {
-  return ReturnErrno(EBADF);
-}
-
-long einval(void) {
-  return ReturnErrno(EINVAL);
-}
-
-long eagain(void) {
-  return ReturnErrno(EAGAIN);
-}
-
-long enomem(void) {
-  return ReturnErrno(ENOMEM);
-}
-
-long enosys(void) {
-  return ReturnErrno(ENOSYS);
-}
-
-long efault(void) {
-  return ReturnErrno(EFAULT);
-}
-
-long eintr(void) {
-  return ReturnErrno(EINTR);
-}
-
-long eoverflow(void) {
-  return ReturnErrno(EOVERFLOW);
-}
-
-long enfile(void) {
-  return ReturnErrno(ENFILE);
-}
-
-long esrch(void) {
-  return ReturnErrno(ESRCH);
+int OpOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
+             i32 mode) {
+  const char *path;
+  struct Fd *fd, *dirfd;
+  int rc, sf, fildes, sysdirfd;
+  if (!(path = LoadStr(m, pathaddr))) return -1;
+  if ((oflags = XlatOpenFlags(oflags)) == -1) return -1;
+  LockFds(&m->system->fds);
+  if ((rc = GetAfd(m, dirfildes, &dirfd)) != -1) {
+    if (dirfd) LockFd(dirfd);
+    fd = AllocateFd(&m->system->fds, 0, oflags);
+  } else {
+    dirfd = 0;
+    fd = 0;
+  }
+  UnlockFds(&m->system->fds);
+  if (fd && rc != -1) {
+    if (dirfd) {
+      sysdirfd = atomic_load_explicit(&dirfd->systemfd, memory_order_relaxed);
+    } else {
+      sysdirfd = AT_FDCWD;
+    }
+    if ((sf = openat(sysdirfd, path, oflags, mode)) != -1) {
+      atomic_store_explicit(&fd->systemfd, sf, memory_order_release);
+      fildes = fd->fildes;
+    } else {
+      fildes = -1;
+    }
+  } else {
+    fildes = -1;
+  }
+  if (dirfd) UnlockFd(dirfd);
+  if (fildes == -1 && fd) DropFd(m, fd);
+  return fildes;
 }

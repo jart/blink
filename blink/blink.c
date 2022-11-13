@@ -25,75 +25,85 @@
 
 #include "blink/assert.h"
 #include "blink/case.h"
+#include "blink/dll.h"
 #include "blink/endian.h"
 #include "blink/loader.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/signal.h"
+#include "blink/sigwinch.h"
+#include "blink/syscall.h"
 #include "blink/xlat.h"
 
-struct Machine *m;
-struct Signals signals;
+extern _Atomic(long) kDispatchCount[0x500];
 
 static void OnSignal(int sig, siginfo_t *si, void *uc) {
-  EnqueueSignal(m, &signals, sig, si->si_code);
+  LOGF("%s", strsignal(sig));
+  EnqueueSignal(g_machine, sig);
 }
 
-static void AddHostFd(struct System *s, int fd) {
-  int i = s->fds.i++;
-  s->fds.p[i].fd = dup(fd);
-  unassert(s->fds.p[i].fd != -1);
-  s->fds.p[i].cb = &kMachineFdCbHost;
+static void ShowDispatchCount(void) {
+  long i;
+  FILE *f;
+  f = fopen("/tmp/dispatch.txt", "w");
+  for (i = 0; i < 0x500; ++i) {
+    if (kDispatchCount[i]) {
+      fprintf(f, "%ld %ld\n", kDispatchCount[i], i);
+    }
+  }
+  fclose(f);
 }
 
 static int Exec(char *prog, char **argv, char **envp) {
   int rc;
+  dll_element *e;
   struct Elf elf;
   struct System *s;
-  struct Machine *o = m;
-  unassert((s = NewSystem()));
-  unassert((m = NewMachine(s, 0)));
-  m->system->exec = Exec;
-  m->mode = XED_MACHINE_MODE_LONG_64;
-  LoadProgram(m, prog, argv, envp, &elf);
+  struct Machine *o = g_machine;
+  unassert((g_machine = NewMachine(NewSystem(), 0)));
+  g_machine->system->exec = Exec;
+  g_machine->mode = XED_MACHINE_MODE_LONG_64;
+  LoadProgram(g_machine, prog, argv, envp, &elf);
   if (!o) {
-    m->system->fds.n = 8;
-    m->system->fds.p =
-        (struct MachineFd *)calloc(m->system->fds.n, sizeof(struct MachineFd));
-    AddHostFd(m->system, 0);
-    AddHostFd(m->system, 1);
-    AddHostFd(m->system, 2);
+    AddStdFd(&g_machine->system->fds, 0);
+    AddStdFd(&g_machine->system->fds, 1);
+    AddStdFd(&g_machine->system->fds, 2);
   } else {
-    m->system->fds = o->system->fds;
-    o->system->fds.p = 0;
-    FreeMachine(o);
+    s = o->system;
+    unassert(!pthread_mutex_lock(&s->machines_lock));
+    while ((e = dll_first(s->machines))) {
+      if (MACHINE_CONTAINER(e)->isthread) {
+        pthread_kill(MACHINE_CONTAINER(e)->thread, SIGKILL);
+      }
+      FreeMachine(MACHINE_CONTAINER(e));
+    }
+    unassert(!pthread_mutex_unlock(&s->machines_lock));
+    unassert(!pthread_mutex_lock(&s->fds.lock));
+    g_machine->system->fds = s->fds;
+    memset(&s->fds, 0, sizeof(s->fds));
+    unassert(!pthread_mutex_unlock(&s->fds.lock));
     FreeSystem(s);
   }
-  if (!(rc = setjmp(m->onhalt))) {
-    for (;;) {
-      LoadInstruction(m);
-      ExecuteInstruction(m);
-      if (signals.i < signals.n) {
-        ConsumeSignal(m, &signals);
-      }
-    }
+  if (!(rc = setjmp(g_machine->onhalt))) {
+    Actor(g_machine);
   } else {
+    ShowDispatchCount();
     return rc;
   }
 }
 
 int main(int argc, char *argv[], char **envp) {
   struct sigaction sa;
+  WriteErrorInit();
   if (argc < 2) {
-    fputs("Usage: ", stderr);
-    fputs(argv[0], stderr);
-    fputs(" PROG [ARGS...]\r\n", stderr);
+    WriteErrorString("Usage: ");
+    WriteErrorString(argv[0]);
+    WriteErrorString(" PROG [ARGS...]\r\n");
     return 48;
   }
-  memset(&sa, 0, sizeof(sa));
   sigfillset(&sa.sa_mask);
-  sa.sa_flags |= SA_SIGINFO;
+  sa.sa_flags |= 0;
   sa.sa_sigaction = OnSignal;
   unassert(!sigaction(SIGHUP, &sa, 0));
   unassert(!sigaction(SIGINT, &sa, 0));

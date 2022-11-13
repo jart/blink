@@ -9,20 +9,25 @@ motivations for this tool, please read <https://justine.lol/ape.html>.
 ## Getting Started
 
 You can compile blink on x86-64 Linux, Darwin, FreeBSD, NetBSD, OpenBSD,
-or Apple Silicon with Rosetta installed, using your platform toolchain.
+Apple Silicon, and Raspberry Pi using your operating system's toolchain.
 
 ```sh
+# for all x86-64 platforms
 $ build/bootstrap/make.com -j8 o//blink/blink
+
+# for apple m1 arm silicon
+$ build/bootstrap/blink-darwin-arm64 build/bootstrap/make.com -j8 o//blink/blink
+
+# for linux raspberry pi
+$ build/bootstrap/blink-linux-aarch64 build/bootstrap/make.com -j8 o//blink/blink
+
+# run actually portable executable in virtual machine
 $ o//blink/blink third_party/cosmo/hello.com
 hello world
+
+# run static elf binary in virtual machine
 $ o//blink/blink third_party/cosmo/tinyhello.elf
 hello world
-```
-
-You can run some test binaries from the Cosmopolitan Libc project:
-
-```sh
-$ build/bootstrap/make.com -j8 check
 ```
 
 There's a terminal interface for debugging:
@@ -30,6 +35,26 @@ There's a terminal interface for debugging:
 ```
 $ build/bootstrap/make.com -j8 o///blink/tui
 $ o//blink/tui -t third_party/cosmo/tinyhello.elf
+```
+
+You can run our test executables to check your local platform build:
+
+```sh
+$ build/bootstrap/make.com -j8 check
+```
+
+For maximum performance, use `MODE=release` or `MODE=opt`.
+
+```sh
+$ build/bootstrap/make.com MODE=opt -j8 check
+```
+
+For maximum tinyness, use `MODE=tiny`.
+
+```
+$ build/bootstrap/make.com MODE=tiny -j8 check
+$ strip o/tiny/blink/blink
+$ ls -hal o/tiny/blink/blink
 ```
 
 If you're building your code on an x86-64 Linux machine, then the
@@ -52,11 +77,11 @@ Bochs, Blink doesn't do code generation; the primary focus is having a
 smaller binary footprint with a readable codebase. However we're still
 likely to add something like jit in the near future.
 
-The primary focus is acting as a virtual machine for userspace binaries
-that were compiled using Cosmopolitan Libc. Much of the surface area of
-the Linux SYSCALL ABI is supported, including fork() and clone(). The
-SSE2, SSE3, SSSE3, POPCNT, CLMUL, RDTSCP, and RDRND ISAs are supported.
-x87 currently only supports double (64-bit) precision.
+The prime directive of this project is to act as a virtual machine for
+userspace binaries compiled by Cosmopolitan Libc. Much of the surface
+area of the Linux SYSCALL ABI is supported, including fork() and
+clone(). The SSE2, SSE3, SSSE3, POPCNT, CLMUL, RDTSCP, and RDRND ISAs
+are supported. x87 currently only supports double (64-bit) precision.
 
 Blink supports 32-bit and 16-bit BIOS programs, plus just enough ring0
 instructions to test an operating system bootloader. Plus IBM PC Serial

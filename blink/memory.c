@@ -284,8 +284,8 @@ char *LoadStr(struct Machine *m, i64 addr) {
 
 char **LoadStrList(struct Machine *m, i64 addr) {
   int n;
-  char **list;
   u8 b[8];
+  char **list;
   for (list = 0, n = 0;;) {
     list = (char **)realloc(list, ++n * sizeof(*list));
     VirtualSendRead(m, b, addr + n * 8 - 8, 8);

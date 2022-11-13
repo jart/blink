@@ -25,6 +25,7 @@
 
 #include "blink/assert.h"
 #include "blink/loader.h"
+#include "blink/log.h"
 
 void LoadDebugSymbols(struct Elf *elf) {
   int fd, n;
@@ -42,5 +43,16 @@ void LoadDebugSymbols(struct Elf *elf) {
       elf->size = st.st_size;
     }
     close(fd);
+  }
+}
+
+void PrintFds(struct Fds *fds) {
+  struct Fd *fd;
+  dll_element *e;
+  LOGF("%-8s %-8s %-8s %-8s", "fildes", "systemfd", "oflags", "cloexec");
+  for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
+    fd = FD_CONTAINER(e);
+    LOGF("%-8d %-8d %-8x %-8s", fd->fildes, fd->systemfd, fd->oflags,
+         fd->cloexec ? "true" : "false");
   }
 }

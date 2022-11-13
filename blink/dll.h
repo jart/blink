@@ -1,5 +1,6 @@
 #ifndef BLINK_DLL_H_
 #define BLINK_DLL_H_
+#include <stddef.h>
 
 #define DLL_CONTAINER(t, f, p) ((t *)(((char *)(p)) - offsetof(t, f)))
 

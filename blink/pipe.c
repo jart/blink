@@ -16,52 +16,42 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
+#include <fcntl.h>
+#include <stdatomic.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
-#include "blink/builtin.h"
-#include "blink/errno.h"
+#include "blink/endian.h"
+#include "blink/fds.h"
+#include "blink/memory.h"
+#include "blink/syscall.h"
 
-static dontinline long ReturnErrno(int e) {
-  errno = e;
-  return -1;
-}
-
-long ebadf(void) {
-  return ReturnErrno(EBADF);
-}
-
-long einval(void) {
-  return ReturnErrno(EINVAL);
-}
-
-long eagain(void) {
-  return ReturnErrno(EAGAIN);
-}
-
-long enomem(void) {
-  return ReturnErrno(ENOMEM);
-}
-
-long enosys(void) {
-  return ReturnErrno(ENOSYS);
-}
-
-long efault(void) {
-  return ReturnErrno(EFAULT);
-}
-
-long eintr(void) {
-  return ReturnErrno(EINTR);
-}
-
-long eoverflow(void) {
-  return ReturnErrno(EOVERFLOW);
-}
-
-long enfile(void) {
-  return ReturnErrno(ENFILE);
-}
-
-long esrch(void) {
-  return ReturnErrno(ESRCH);
+int OpPipe(struct Machine *m, i64 pipefds_addr, i32 flags) {
+  u8 gpipefds[2][4];
+  int rc, hpipefds[2];
+  struct Fd *fd1, *fd2;
+  LockFds(&m->system->fds);
+  fd1 = AllocateFd(&m->system->fds, 0, O_RDONLY);
+  fd2 = AllocateFd(&m->system->fds, 0, O_WRONLY);
+  UnlockFds(&m->system->fds);
+  if (fd1 && fd2) {
+    if (pipe(hpipefds) != -1) {
+      Write32(gpipefds[0], hpipefds[0]);
+      Write32(gpipefds[1], hpipefds[1]);
+      VirtualRecvWrite(m, pipefds_addr, gpipefds, sizeof(gpipefds));
+      atomic_store_explicit(&fd1->systemfd, hpipefds[0], memory_order_release);
+      atomic_store_explicit(&fd2->systemfd, hpipefds[1], memory_order_release);
+      rc = 0;
+    } else {
+      rc = -1;
+    }
+  } else {
+    rc = -1;
+  }
+  if (rc == -1) {
+    DropFd(m, fd1);
+    DropFd(m, fd2);
+  }
+  return rc;
 }

@@ -2,6 +2,94 @@
 #define BLINK_LINUX_H_
 #include "blink/types.h"
 
+#define AT_FDCWD_LINUX -100
+
+#define O_RDONLY_LINUX  0
+#define O_WRONLY_LINUX  1
+#define O_RDWR_LINUX    2
+#define O_ACCMODE_LINUX 3
+
+#define O_APPEND_LINUX    0x000400
+#define O_CREAT_LINUX     0x000040
+#define O_EXCL_LINUX      0x000080
+#define O_TRUNC_LINUX     0x000200
+#define O_NDELAY_LINUX    0x000800
+#define O_DIRECT_LINUX    0x004000
+#define O_DIRECTORY_LINUX 0x010000
+#define O_NOFOLLOW_LINUX  0x020000
+#define O_CLOEXEC_LINUX   0x080000
+#define O_NOCTTY_LINUX    0x000100
+#define O_ASYNC_LINUX     0x002000
+#define O_NOATIME_LINUX   0x040000
+#define O_DSYNC_LINUX     0x001000
+
+#define F_DUPFD_LINUX         0
+#define F_DUPFD_CLOEXEC_LINUX 0x0406
+#define F_GETFD_LINUX         1
+#define F_SETFD_LINUX         2
+#define FD_CLOEXEC_LINUX      1
+#define F_GETFL_LINUX         3
+#define F_SETFL_LINUX         4
+
+#define SOCK_CLOEXEC_LINUX  O_CLOEXEC_LINUX
+#define SOCK_NONBLOCK_LINUX O_NDELAY_LINUX
+
+#define TIOCGWINSZ_LINUX    0x5413
+#define TCGETS_LINUX        0x5401
+#define TCSETS_LINUX        0x5402
+#define TCSETSW_LINUX       0x5403
+#define TCSETSF_LINUX       0x5404
+#define ARCH_SET_GS_LINUX   0x1001
+#define ARCH_SET_FS_LINUX   0x1002
+#define ARCH_GET_FS_LINUX   0x1003
+#define ARCH_GET_GS_LINUX   0x1004
+#define MAP_GROWSDOWN_LINUX 0x0100
+#define O_CLOEXEC_LINUX     0x080000
+#define POLLIN_LINUX        0x01
+#define POLLPRI_LINUX       0x02
+#define POLLOUT_LINUX       0x04
+#define POLLERR_LINUX       0x08
+#define POLLHUP_LINUX       0x10
+#define POLLNVAL_LINUX      0x20
+#define TIMER_ABSTIME_LINUX 0x01
+
+#define CLONE_VM_             0x00000100
+#define CLONE_THREAD_         0x00010000
+#define CLONE_FS_             0x00000200
+#define CLONE_FILES_          0x00000400
+#define CLONE_SIGHAND_        0x00000800
+#define CLONE_SETTLS_         0x00080000
+#define CLONE_PARENT_SETTID_  0x00100000
+#define CLONE_CHILD_CLEARTID_ 0x00200000
+#define CLONE_CHILD_SETTID_   0x01000000
+
+#define DT_UNKNOWN_LINUX 0
+#define DT_FIFO_LINUX    1
+#define DT_CHR_LINUX     2
+#define DT_DIR_LINUX     4
+#define DT_BLK_LINUX     6
+#define DT_REG_LINUX     8
+#define DT_LNK_LINUX     10
+#define DT_SOCK_LINUX    12
+
+#define SEEK_SET_LINUX 0
+#define SEEK_CUR_LINUX 1
+#define SEEK_END_LINUX 2
+
+#define F_OK_LINUX 0
+#define X_OK_LINUX 1
+#define W_OK_LINUX 2
+#define R_OK_LINUX 4
+
+#define SHUT_RD_LINUX   0
+#define SHUT_WR_LINUX   1
+#define SHUT_RDWR_LINUX 2
+
+#define SIG_IGN_LINUX  1
+#define SIGCHLD_LINUX  17
+#define SIGURG_LINUX   23
+#define SIGWINCH_LINUX 28
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];
@@ -172,6 +260,14 @@ struct utsname_linux {
 struct rlimit_linux {
   u8 rlim_cur[8];
   u8 rlim_max[8];
+};
+
+struct dirent_linux {
+  u8 d_ino[8];       // inode number
+  u8 d_off[8];       // implementation-dependent location number
+  u8 d_reclen[2];    // byte length of this whole struct and string
+  u8 d_type[1];      // DT_REG, DT_DIR, DT_UNKNOWN, DT_BLK, etc.
+  char d_name[256];  // NUL-terminated basename
 };
 
 #endif /* BLINK_LINUX_H_ */

@@ -10,30 +10,31 @@
 #include "blink/linux.h"
 #include "blink/termios.h"
 
+int UnXlatOpenFlags(int);
+int UnXlatOpenMode(int);
+int UnXlatSignal(int);
 int XlatAccess(int);
 int XlatAtf(int);
 int XlatClock(int);
 int XlatErrno(int);
-int XlatFcntlArg(int);
-int XlatFcntlCmd(int);
 int XlatLock(int);
 int XlatMapFlags(int);
 int XlatOpenFlags(int);
 int XlatOpenMode(int);
+int XlatResource(int);
 int XlatRusage(int);
+int XlatShutdown(int);
 int XlatSig(int);
 int XlatSignal(int);
-int UnXlatSignal(int);
-int UnXlatSicode(int, int);
 int XlatSocketFamily(int);
 int XlatSocketLevel(int);
 int XlatSocketOptname(int, int);
 int XlatSocketProtocol(int);
 int XlatSocketType(int);
 int XlatWait(int);
-int XlatResource(int);
+int XlatWhence(int);
 
-void XlatSockaddrToHost(struct sockaddr_in *, const struct sockaddr_in_linux *);
+int XlatSockaddrToHost(struct sockaddr_in *, const struct sockaddr_in_linux *);
 void XlatSockaddrToLinux(struct sockaddr_in_linux *,
                          const struct sockaddr_in *);
 void XlatStatToLinux(struct stat_linux *, const struct stat *);
