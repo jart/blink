@@ -57,7 +57,9 @@ void PrintMessageBox(int fd, const char *msg, long tyn, long txn) {
   AppendStr(&b, "╗ ");
   AppendFmt(&b, "\033[%d;%dH ║  %-*s  ║ ", y++, x, w - 8, "");
   for (i = 0; i < lines->n; ++i) {
-    AppendFmt(&b, "\033[%d;%dH ║  %-*s  ║ ", y++, x, w - 8, lines->p[i]);
+    int lw = strwidth(lines->p[i], 0);
+    AppendFmt(&b, "\033[%d;%dH ║  %s%-*s  ║ ", y++, x, lines->p[i],
+                                               w - 8 - lw, "");
   }
   FreeLines(lines);
   AppendFmt(&b, "\033[%d;%dH ║  %-*s  ║ ", y++, x, w - 8, "");
