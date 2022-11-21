@@ -1,0 +1,7 @@
+DEFINE_COUNTER(instructions_cached)
+DEFINE_COUNTER(instructions_decoded)
+DEFINE_COUNTER(instructions_dispatched)
+DEFINE_COUNTER(page_overlaps)
+DEFINE_COUNTER(tlb_hits_1)
+DEFINE_COUNTER(tlb_hits_2)
+DEFINE_COUNTER(tlb_misses)

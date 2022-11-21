@@ -27,6 +27,7 @@
 #include "blink/memory.h"
 #include "blink/pml4t.h"
 #include "blink/real.h"
+#include "blink/stats.h"
 
 void SetReadAddr(struct Machine *m, i64 addr, u32 size) {
   if (size) {
@@ -64,12 +65,14 @@ u64 FindPage(struct Machine *m, i64 virt) {
   virt &= -4096;
   for (i = 1; i < ARRAYLEN(m->tlb); ++i) {
     if (m->tlb[i].virt == virt && ((res = m->tlb[i].entry) & PAGE_V)) {
+      STATISTIC(++tlb_hits_2);
       bubble = m->tlb[i - 1];
       m->tlb[i - 1] = m->tlb[i];
       m->tlb[i] = bubble;
       return res;
     }
   }
+  STATISTIC(++tlb_misses);
   level = 39;
   entry = m->system->cr3;
   do {
@@ -94,6 +97,7 @@ u8 *FindReal(struct Machine *m, i64 virt) {
   u64 entry;
   if (m->mode != XED_MODE_REAL) {
     if (m->tlb[0].virt == (virt & -4096) && (m->tlb[0].entry & PAGE_V)) {
+      STATISTIC(++tlb_hits_1);
       return m->system->real.p + (m->tlb[0].entry & PAGE_TA) + (virt & 4095);
     }
     if (-0x800000000000 <= virt && virt < 0x800000000000) {
@@ -171,7 +175,10 @@ void VirtualRecvWrite(struct Machine *m, i64 addr, void *src, u64 n) {
 u8 *ReserveAddress(struct Machine *m, i64 v, size_t n) {
   u8 *r;
   unassert(n <= sizeof(m->opcache->stash));
-  if ((v & 4095) + n <= 4096) return ResolveAddress(m, v);
+  if ((v & 4095) + n <= 4096) {
+    return ResolveAddress(m, v);
+  }
+  STATISTIC(++page_overlaps);
   m->opcache->stashaddr = v;
   m->opcache->stashsize = n;
   r = m->opcache->stash;
@@ -184,7 +191,10 @@ u8 *AccessRam(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
   u8 *a, *b;
   unsigned k;
   unassert(n <= 4096);
-  if ((v & 4095) + n <= 4096) return ResolveAddress(m, v);
+  if ((v & 4095) + n <= 4096) {
+    return ResolveAddress(m, v);
+  }
+  STATISTIC(++page_overlaps);
   k = 4096;
   k -= v & 4095;
   unassert(k <= 4096);

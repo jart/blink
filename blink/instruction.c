@@ -25,6 +25,7 @@
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
+#include "blink/stats.h"
 #include "blink/x86.h"
 
 static bool IsOpcodeEqual(struct XedDecodedInst *xedd, u8 *a) {
@@ -44,6 +45,7 @@ static bool IsOpcodeEqual(struct XedDecodedInst *xedd, u8 *a) {
 
 static void ReadInstruction(struct Machine *m, u8 *p, unsigned n) {
   struct XedDecodedInst xedd[1];
+  STATISTIC(instructions_decoded++);
   if (!DecodeInstruction(xedd, p, n, m->mode)) {
     memcpy(m->xedd, xedd, kInstructionBytes);
   } else {
@@ -55,6 +57,7 @@ static void LoadInstructionSlow(struct Machine *m, u64 ip) {
   unsigned i;
   u8 *addr;
   u8 copy[15], *toil;
+  STATISTIC(page_overlaps++);
   i = 4096 - (ip & 4095);
   addr = ResolveAddress(m, ip);
   if ((toil = FindReal(m, ip + i))) {
@@ -81,7 +84,9 @@ void LoadInstruction(struct Machine *m) {
       m->opcache->codehost = ResolveAddress(m, m->opcache->codevirt);
       addr = m->opcache->codehost + (ip & 4095);
     }
-    if (!IsOpcodeEqual(m->xedd, addr)) {
+    if (IsOpcodeEqual(m->xedd, addr)) {
+      STATISTIC(instructions_cached++);
+    } else {
       ReadInstruction(m, addr, 15);
     }
   } else {
