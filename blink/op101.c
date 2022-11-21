@@ -26,7 +26,7 @@
 #include "blink/real.h"
 #include "blink/time.h"
 
-static void StoreDescriptorTable(struct Machine *m, u32 rde, u16 limit,
+static void StoreDescriptorTable(struct Machine *m, u64 rde, u16 limit,
                                  u64 base) {
   u64 l;
   l = ComputeAddress(m, rde);
@@ -47,7 +47,7 @@ static void StoreDescriptorTable(struct Machine *m, u32 rde, u16 limit,
   }
 }
 
-static void LoadDescriptorTable(struct Machine *m, u32 rde, u16 *out_limit,
+static void LoadDescriptorTable(struct Machine *m, u64 rde, u16 *out_limit,
                                 u64 *out_base) {
   u16 limit;
   u64 l, base;
@@ -75,48 +75,48 @@ static void LoadDescriptorTable(struct Machine *m, u32 rde, u16 *out_limit,
   }
 }
 
-static void SgdtMs(struct Machine *m, u32 rde) {
+static void SgdtMs(struct Machine *m, u64 rde) {
   StoreDescriptorTable(m, rde, m->system->gdt_limit, m->system->gdt_base);
 }
 
-static void LgdtMs(struct Machine *m, u32 rde) {
+static void LgdtMs(struct Machine *m, u64 rde) {
   LoadDescriptorTable(m, rde, &m->system->gdt_limit, &m->system->gdt_base);
 }
 
-static void SidtMs(struct Machine *m, u32 rde) {
+static void SidtMs(struct Machine *m, u64 rde) {
   StoreDescriptorTable(m, rde, m->system->idt_limit, m->system->idt_base);
 }
 
-static void LidtMs(struct Machine *m, u32 rde) {
+static void LidtMs(struct Machine *m, u64 rde) {
   LoadDescriptorTable(m, rde, &m->system->idt_limit, &m->system->idt_base);
 }
 
-static void Monitor(struct Machine *m, u32 rde) {
+static void Monitor(struct Machine *m, u64 rde) {
 }
 
-static void Mwait(struct Machine *m, u32 rde) {
+static void Mwait(struct Machine *m, u64 rde) {
 }
 
-static void Swapgs(struct Machine *m, u32 rde) {
+static void Swapgs(struct Machine *m, u64 rde) {
 }
 
-static void Vmcall(struct Machine *m, u32 rde) {
+static void Vmcall(struct Machine *m, u64 rde) {
 }
 
-static void Vmlaunch(struct Machine *m, u32 rde) {
+static void Vmlaunch(struct Machine *m, u64 rde) {
 }
 
-static void Vmresume(struct Machine *m, u32 rde) {
+static void Vmresume(struct Machine *m, u64 rde) {
 }
 
-static void Vmxoff(struct Machine *m, u32 rde) {
+static void Vmxoff(struct Machine *m, u64 rde) {
 }
 
-static void InvlpgM(struct Machine *m, u32 rde) {
+static void InvlpgM(struct Machine *m, u64 rde) {
   ResetTlb(m);
 }
 
-static void Smsw(struct Machine *m, u32 rde, bool ismem) {
+static void Smsw(struct Machine *m, u64 rde, bool ismem) {
   if (ismem) {
     Store16(GetModrmRegisterWordPointerWrite2(m, rde), m->system->cr0);
   } else if (Rexw(rde)) {
@@ -128,11 +128,11 @@ static void Smsw(struct Machine *m, u32 rde, bool ismem) {
   }
 }
 
-static void Lmsw(struct Machine *m, u32 rde) {
+static void Lmsw(struct Machine *m, u64 rde) {
   m->system->cr0 = Read16(GetModrmRegisterWordPointerRead2(m, rde));
 }
 
-void Op101(struct Machine *m, u32 rde) {
+void Op101(struct Machine *m, u64 rde) {
   bool ismem;
   ismem = !IsModrmRegister(rde);
   switch (ModrmReg(rde)) {

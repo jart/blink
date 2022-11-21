@@ -20,7 +20,7 @@
 #include "blink/x86.h"
 #include "test/test.h"
 
-enum XedError error;
+int error;
 struct XedDecodedInst xedd;
 
 void SetUp(void) {
@@ -30,13 +30,12 @@ void TearDown(void) {
 }
 
 TEST(x86, testPopR10) {
-  InitializeInstruction(&xedd, XED_MACHINE_MODE_LONG_64);
-  DecodeInstruction(&xedd, "\115\132\0\0", 4);
+  DecodeInstruction(&xedd, "\115\132\0\0", 4, XED_MODE_LONG);
   ASSERT_EQ(2, xedd.length);
-  ASSERT_EQ(0132, xedd.op.opcode);
+  ASSERT_EQ(0132, Opcode(xedd.op.rde));
   ASSERT_EQ(0, Osz(xedd.op.rde));
   ASSERT_EQ(0, Asz(xedd.op.rde));
-  ASSERT_EQ(0, xedd.op.rep);
+  ASSERT_EQ(0, Rep(xedd.op.rde));
   ASSERT_EQ(1, Rex(xedd.op.rde));
   ASSERT_EQ(1, Rexb(xedd.op.rde));
   ASSERT_EQ(1, Rexw(xedd.op.rde));
@@ -48,13 +47,12 @@ TEST(x86, testPopR10) {
 }
 
 TEST(x86, tesRepzCmpsb) {
-  InitializeInstruction(&xedd, XED_MACHINE_MODE_LONG_64);
-  DecodeInstruction(&xedd, "\363\246\0\0", 4);
+  DecodeInstruction(&xedd, "\363\246\0\0", 4, XED_MODE_LONG);
   ASSERT_EQ(2, xedd.length);
-  ASSERT_EQ(0246, xedd.op.opcode);
+  ASSERT_EQ(0246, Opcode(xedd.op.rde));
   ASSERT_EQ(0, Osz(xedd.op.rde));
   ASSERT_EQ(0, Asz(xedd.op.rde));
-  ASSERT_EQ(3, xedd.op.rep);
+  ASSERT_EQ(3, Rep(xedd.op.rde));
   ASSERT_EQ(0, Rex(xedd.op.rde));
   ASSERT_EQ(0, Rexb(xedd.op.rde));
   ASSERT_EQ(0, Rexw(xedd.op.rde));
@@ -66,20 +64,17 @@ TEST(x86, tesRepzCmpsb) {
 }
 
 int ild(const char *p, size_t n) {
-  error = DecodeInstruction(
-      InitializeInstruction(&xedd, XED_MACHINE_MODE_LONG_64), p, n);
+  error = DecodeInstruction(&xedd, p, n, XED_MODE_LONG);
   return error == XED_ERROR_NONE ? xedd.length : -error;
 }
 
 int ildreal(const char *p, size_t n) {
-  error = DecodeInstruction(InitializeInstruction(&xedd, XED_MACHINE_MODE_REAL),
-                            p, n);
+  error = DecodeInstruction(&xedd, p, n, XED_MODE_REAL);
   return error == XED_ERROR_NONE ? xedd.length : -error;
 }
 
 int ildlegacy(const char *p, size_t n) {
-  error = DecodeInstruction(
-      InitializeInstruction(&xedd, XED_MACHINE_MODE_LEGACY_32), p, n);
+  error = DecodeInstruction(&xedd, p, n, XED_MODE_LEGACY);
   return error == XED_ERROR_NONE ? xedd.length : -error;
 }
 

@@ -57,7 +57,7 @@ static i64 RipRelative(struct Dis *d, i64 i) {
   return d->addr + d->xedd->length + i;
 }
 
-static i64 ZeroExtend(u32 rde, i64 i) {
+static i64 ZeroExtend(u64 rde, i64 i) {
   switch (Mode(rde)) {
     case XED_MODE_REAL:
       return i & 0xffff;
@@ -68,7 +68,7 @@ static i64 ZeroExtend(u32 rde, i64 i) {
   }
 }
 
-static i64 Unrelative(u32 rde, i64 i) {
+static i64 Unrelative(u64 rde, i64 i) {
   switch (Eamode(rde)) {
     case XED_MODE_REAL:
       return i & 0xffff;
@@ -79,7 +79,7 @@ static i64 Unrelative(u32 rde, i64 i) {
   }
 }
 
-static const char *GetAddrReg(struct Dis *d, u32 rde, u8 x, u8 r) {
+static const char *GetAddrReg(struct Dis *d, u64 rde, u8 x, u8 r) {
   return kGreg[Eamode(rde) == XED_MODE_REAL][Eamode(rde) == XED_MODE_LONG]
               [x & 1][r & 7];
 }
@@ -92,11 +92,11 @@ static char *DisRegister(char *p, const char *s) {
   return p;
 }
 
-static char *DisRegisterByte(struct Dis *d, u32 rde, char *p, bool g, int r) {
+static char *DisRegisterByte(struct Dis *d, u64 rde, char *p, bool g, int r) {
   return DisRegister(p, kBreg[g][Rex(rde)][r]);
 }
 
-static char *DisRegisterWord(struct Dis *d, u32 rde, char *p, bool g, int r) {
+static char *DisRegisterWord(struct Dis *d, u64 rde, char *p, bool g, int r) {
   return DisRegister(p, kGreg[Osz(rde)][Rexw(rde)][g][r]);
 }
 
@@ -141,7 +141,7 @@ static char *DisSym(struct Dis *d, char *p, i64 value, i64 addr) {
   }
 }
 
-static char *DisSymLiteral(struct Dis *d, u32 rde, char *p, u64 addr, u64 ip) {
+static char *DisSymLiteral(struct Dis *d, u64 rde, char *p, u64 addr, u64 ip) {
   *p++ = '$';
   p = HighStart(p, g_high.literal);
   p = DisSym(d, p, addr, addr);
@@ -149,19 +149,19 @@ static char *DisSymLiteral(struct Dis *d, u32 rde, char *p, u64 addr, u64 ip) {
   return p;
 }
 
-static char *DisGvqp(struct Dis *d, u32 rde, char *p) {
+static char *DisGvqp(struct Dis *d, u64 rde, char *p) {
   return DisRegisterWord(d, rde, p, Rexr(rde), ModrmReg(rde));
 }
 
-static char *DisGdqp(struct Dis *d, u32 rde, char *p) {
+static char *DisGdqp(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kGreg[0][Rexw(rde)][Rexr(rde)][ModrmReg(rde)]);
 }
 
-static char *DisGb(struct Dis *d, u32 rde, char *p) {
+static char *DisGb(struct Dis *d, u64 rde, char *p) {
   return DisRegisterByte(d, rde, p, Rexr(rde), ModrmReg(rde));
 }
 
-static char *DisSego(struct Dis *d, u32 rde, char *p) {
+static char *DisSego(struct Dis *d, u64 rde, char *p) {
   if (Sego(rde)) {
     p = DisRegister(p, kSeg[Sego(rde) - 1]);
     *p++ = ':';
@@ -169,16 +169,16 @@ static char *DisSego(struct Dis *d, u32 rde, char *p) {
   return p;
 }
 
-static bool IsRealModrmAbsolute(u32 rde) {
+static bool IsRealModrmAbsolute(u64 rde) {
   return Eamode(rde) == XED_MODE_REAL && ModrmRm(rde) == 6 && !ModrmMod(rde);
 }
 
-static char *DisDisp(struct Dis *d, u32 rde, char *p) {
+static char *DisDisp(struct Dis *d, u64 rde, char *p) {
   i64 disp;
   if (ModrmMod(rde) == 1 || ModrmMod(rde) == 2 || IsRipRelative(rde) ||
       IsRealModrmAbsolute(rde) ||
       (Eamode(rde) != XED_MODE_REAL && ModrmMod(rde) == 0 &&
-       ModrmRm(rde) == 4 && SibBase(d->xedd) == 5)) {
+       ModrmRm(rde) == 4 && SibBase(rde) == 5)) {
     disp = d->xedd->op.disp;
     if (IsRipRelative(rde)) {
       if (Mode(rde) == XED_MODE_LONG) {
@@ -194,12 +194,11 @@ static char *DisDisp(struct Dis *d, u32 rde, char *p) {
   return p;
 }
 
-static char *DisBis(struct Dis *d, u32 rde, char *p) {
+static char *DisBis(struct Dis *d, u64 rde, char *p) {
   const char *base, *index, *scale;
   base = index = scale = NULL;
   if (Eamode(rde) != XED_MODE_REAL) {
     if (!SibExists(rde)) {
-      unassert(!d->xedd->op.has_sib);
       if (IsRipRelative(rde)) {
         if (Mode(rde) == XED_MODE_LONG) {
           base = kRip[Eamode(rde) == XED_MODE_LONG];
@@ -207,16 +206,16 @@ static char *DisBis(struct Dis *d, u32 rde, char *p) {
       } else {
         base = GetAddrReg(d, rde, Rexb(rde), ModrmRm(rde));
       }
-    } else if (!SibIsAbsolute(d->xedd, rde)) {
-      if (SibHasBase(d->xedd, rde)) {
-        base = GetAddrReg(d, rde, Rexb(rde), SibBase(d->xedd));
+    } else if (!SibIsAbsolute(rde)) {
+      if (SibHasBase(rde)) {
+        base = GetAddrReg(d, rde, Rexb(rde), SibBase(rde));
       }
-      if (SibHasIndex(d->xedd)) {
-        index = GetAddrReg(d, rde, Rexx(rde), SibIndex(d->xedd));
-      } else if (SibScale(d->xedd)) {
+      if (SibHasIndex(rde)) {
+        index = GetAddrReg(d, rde, Rexx(rde), SibIndex(rde));
+      } else if (SibScale(rde)) {
         index = kRiz[Eamode(rde) == XED_MODE_LONG];
       }
-      scale = kSka[SibScale(d->xedd)];
+      scale = kSka[SibScale(rde)];
     }
   } else {
     switch (ModrmRm(rde)) {
@@ -270,15 +269,15 @@ static char *DisBis(struct Dis *d, u32 rde, char *p) {
   return p;
 }
 
-static char *DisM(struct Dis *d, u32 rde, char *p) {
+static char *DisM(struct Dis *d, u64 rde, char *p) {
   p = DisSego(d, rde, p);
   p = DisDisp(d, rde, p);
   p = DisBis(d, rde, p);
   return p;
 }
 
-static char *DisRegMem(struct Dis *d, u32 rde, char *p,
-                       char *f(struct Dis *, u32, char *)) {
+static char *DisRegMem(struct Dis *d, u64 rde, char *p,
+                       char *f(struct Dis *, u64, char *)) {
   if (IsModrmRegister(rde)) {
     return f(d, rde, p);
   } else {
@@ -286,8 +285,8 @@ static char *DisRegMem(struct Dis *d, u32 rde, char *p,
   }
 }
 
-static char *DisE(struct Dis *d, u32 rde, char *p,
-                  char *f(struct Dis *, u32, char *, bool, int)) {
+static char *DisE(struct Dis *d, u64 rde, char *p,
+                  char *f(struct Dis *, u64, char *, bool, int)) {
   if (IsModrmRegister(rde)) {
     return f(d, rde, p, Rexb(rde), ModrmRm(rde));
   } else {
@@ -295,35 +294,35 @@ static char *DisE(struct Dis *d, u32 rde, char *p,
   }
 }
 
-static char *DisEb(struct Dis *d, u32 rde, char *p) {
+static char *DisEb(struct Dis *d, u64 rde, char *p) {
   return DisE(d, rde, p, DisRegisterByte);
 }
 
-static char *DisEvqp(struct Dis *d, u32 rde, char *p) {
+static char *DisEvqp(struct Dis *d, u64 rde, char *p) {
   return DisE(d, rde, p, DisRegisterWord);
 }
 
-static char *DisRv(struct Dis *d, u32 rde, char *p) {
+static char *DisRv(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kGreg[Osz(rde)][0][Rexb(rde)][ModrmRm(rde)]);
 }
 
-static char *DisRvqp(struct Dis *d, u32 rde, char *p) {
+static char *DisRvqp(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kGreg[Osz(rde)][Rexw(rde)][Rexb(rde)][ModrmRm(rde)]);
 }
 
-static char *DisRdqp(struct Dis *d, u32 rde, char *p) {
+static char *DisRdqp(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kGreg[0][Rexw(rde)][Rexb(rde)][ModrmRm(rde)]);
 }
 
-static char *DisEdqp(struct Dis *d, u32 rde, char *p) {
+static char *DisEdqp(struct Dis *d, u64 rde, char *p) {
   return DisRegMem(d, rde, p, DisRdqp);
 }
 
-static char *DisEv(struct Dis *d, u32 rde, char *p) {
+static char *DisEv(struct Dis *d, u64 rde, char *p) {
   return DisRegMem(d, rde, p, DisRv);
 }
 
-static char *DisGvq(struct Dis *d, u32 rde, char *p, int r) {
+static char *DisGvq(struct Dis *d, u64 rde, char *p, int r) {
   const char *s;
   if (Mode(rde) == XED_MODE_LONG) {
     s = kGreg[Osz(rde)][!Osz(rde)][Rexb(rde)][r];
@@ -333,27 +332,27 @@ static char *DisGvq(struct Dis *d, u32 rde, char *p, int r) {
   return DisRegister(p, s);
 }
 
-static char *DisZvq(struct Dis *d, u32 rde, char *p) {
+static char *DisZvq(struct Dis *d, u64 rde, char *p) {
   return DisGvq(d, rde, p, ModrmSrm(rde));
 }
 
-static char *DisEvqReg(struct Dis *d, u32 rde, char *p) {
+static char *DisEvqReg(struct Dis *d, u64 rde, char *p) {
   return DisGvq(d, rde, p, ModrmRm(rde));
 }
 
-static char *DisEvq(struct Dis *d, u32 rde, char *p) {
+static char *DisEvq(struct Dis *d, u64 rde, char *p) {
   return DisRegMem(d, rde, p, DisEvqReg);
 }
 
-static char *DisEdReg(struct Dis *d, u32 rde, char *p) {
+static char *DisEdReg(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kGreg[0][0][Rexb(rde)][ModrmRm(rde)]);
 }
 
-static char *DisEd(struct Dis *d, u32 rde, char *p) {
+static char *DisEd(struct Dis *d, u64 rde, char *p) {
   return DisRegMem(d, rde, p, DisEdReg);
 }
 
-static char *DisEqReg(struct Dis *d, u32 rde, char *p) {
+static char *DisEqReg(struct Dis *d, u64 rde, char *p) {
   const char *r;
   if (Mode(rde) == XED_MODE_LONG) {
     r = kGreg[0][1][Rexb(rde)][ModrmRm(rde)];
@@ -363,31 +362,31 @@ static char *DisEqReg(struct Dis *d, u32 rde, char *p) {
   return DisRegister(p, r);
 }
 
-static char *DisEq(struct Dis *d, u32 rde, char *p) {
+static char *DisEq(struct Dis *d, u64 rde, char *p) {
   return DisRegMem(d, rde, p, DisEqReg);
 }
 
-static char *DisZvqp(struct Dis *d, u32 rde, char *p) {
+static char *DisZvqp(struct Dis *d, u64 rde, char *p) {
   return DisRegisterWord(d, rde, p, Rexb(rde), ModrmSrm(rde));
 }
 
-static char *DisZb(struct Dis *d, u32 rde, char *p) {
+static char *DisZb(struct Dis *d, u64 rde, char *p) {
   return DisRegisterByte(d, rde, p, Rexb(rde), ModrmSrm(rde));
 }
 
-static char *DisEax(struct Dis *d, u32 rde, char *p) {
+static char *DisEax(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kGreg[Osz(rde)][0][0][0]);
 }
 
-static char *DisRax(struct Dis *d, u32 rde, char *p) {
+static char *DisRax(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kGreg[Osz(rde)][Rexw(rde)][0][0]);
 }
 
-static char *DisRdx(struct Dis *d, u32 rde, char *p) {
+static char *DisRdx(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kGreg[Osz(rde)][Rexw(rde)][0][2]);
 }
 
-static char *DisPort(struct Dis *d, u32 rde, char *p) {
+static char *DisPort(struct Dis *d, u64 rde, char *p) {
   *p++ = '(';
   p = DisRegister(p, kGreg[1][0][0][2]);
   *p++ = ')';
@@ -395,24 +394,24 @@ static char *DisPort(struct Dis *d, u32 rde, char *p) {
   return p;
 }
 
-static char *DisCd(struct Dis *d, u32 rde, char *p) {
+static char *DisCd(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kCtl[ModrmReg(rde)]);
 }
 
-static char *DisHd(struct Dis *d, u32 rde, char *p) {
+static char *DisHd(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kGreg[0][Mode(rde) == XED_MODE_LONG][0][ModrmRm(rde)]);
 }
 
-static char *DisImm(struct Dis *d, u32 rde, char *p) {
+static char *DisImm(struct Dis *d, u64 rde, char *p) {
   return DisSymLiteral(d, rde, p, d->xedd->op.uimm0,
                        ZeroExtend(rde, d->xedd->op.uimm0));
 }
 
-static char *DisRvds(struct Dis *d, u32 rde, char *p) {
+static char *DisRvds(struct Dis *d, u64 rde, char *p) {
   return DisSymLiteral(d, rde, p, d->xedd->op.disp, d->xedd->op.disp);
 }
 
-static char *DisKpvds(struct Dis *d, u32 rde, char *p, u64 x) {
+static char *DisKpvds(struct Dis *d, u64 rde, char *p, u64 x) {
   *p++ = '$';
   p = HighStart(p, g_high.literal);
   p = DisInt(p, x);
@@ -420,16 +419,16 @@ static char *DisKpvds(struct Dis *d, u32 rde, char *p, u64 x) {
   return p;
 }
 
-static char *DisKvds(struct Dis *d, u32 rde, char *p) {
+static char *DisKvds(struct Dis *d, u64 rde, char *p) {
   return DisKpvds(d, rde, p, d->xedd->op.uimm0);
 }
 
-static char *DisPvds(struct Dis *d, u32 rde, char *p) {
+static char *DisPvds(struct Dis *d, u64 rde, char *p) {
   return DisKpvds(d, rde, p,
                   d->xedd->op.disp & (Osz(rde) ? 0xffff : 0xffffffff));
 }
 
-static char *DisOne(struct Dis *d, u32 rde, char *p) {
+static char *DisOne(struct Dis *d, u64 rde, char *p) {
   *p++ = '$';
   p = HighStart(p, g_high.literal);
   p = stpcpy(p, "1");
@@ -437,33 +436,33 @@ static char *DisOne(struct Dis *d, u32 rde, char *p) {
   return p;
 }
 
-static char *DisJbs(struct Dis *d, u32 rde, char *p) {
+static char *DisJbs(struct Dis *d, u64 rde, char *p) {
   if (d->xedd->op.disp > 0) *p++ = '+';
   p += snprintf(p, 32, "%" PRId64, d->xedd->op.disp);
   return p;
 }
 
-static char *DisJb(struct Dis *d, u32 rde, char *p) {
+static char *DisJb(struct Dis *d, u64 rde, char *p) {
   if (d->xedd->op.disp > 0) *p++ = '+';
   p += snprintf(p, 32, "%d", (int)(d->xedd->op.disp & 0xff));
   return p;
 }
 
-static char *DisJvds(struct Dis *d, u32 rde, char *p) {
+static char *DisJvds(struct Dis *d, u64 rde, char *p) {
   return DisSym(d, p, RipRelative(d, d->xedd->op.disp),
                 RipRelative(d, d->xedd->op.disp) - d->m->cs);
 }
 
-static char *DisAbs(struct Dis *d, u32 rde, char *p) {
+static char *DisAbs(struct Dis *d, u64 rde, char *p) {
   return DisSym(d, p, d->xedd->op.disp, d->xedd->op.disp);
 }
 
-static char *DisSw(struct Dis *d, u32 rde, char *p) {
+static char *DisSw(struct Dis *d, u64 rde, char *p) {
   if (kSeg[ModrmReg(rde)][0]) p = DisRegister(p, kSeg[ModrmReg(rde)]);
   return p;
 }
 
-static char *DisSpecialAddr(struct Dis *d, u32 rde, char *p, int r) {
+static char *DisSpecialAddr(struct Dis *d, u64 rde, char *p, int r) {
   *p++ = '(';
   p = DisRegister(p, GetAddrReg(d, rde, 0, r));
   *p++ = ')';
@@ -471,21 +470,21 @@ static char *DisSpecialAddr(struct Dis *d, u32 rde, char *p, int r) {
   return p;
 }
 
-static char *DisY(struct Dis *d, u32 rde, char *p) {
+static char *DisY(struct Dis *d, u64 rde, char *p) {
   return DisSpecialAddr(d, rde, p, 7);  // es:di
 }
 
-static char *DisX(struct Dis *d, u32 rde, char *p) {
+static char *DisX(struct Dis *d, u64 rde, char *p) {
   p = DisSego(d, rde, p);
   return DisSpecialAddr(d, rde, p, 6);  // ds:si
 }
 
-static char *DisBBb(struct Dis *d, u32 rde, char *p) {
+static char *DisBBb(struct Dis *d, u64 rde, char *p) {
   p = DisSego(d, rde, p);
   return DisSpecialAddr(d, rde, p, 3);  // ds:bx
 }
 
-static char *DisXmm(struct Dis *d, u32 rde, char *p, const char *s, int reg) {
+static char *DisXmm(struct Dis *d, u64 rde, char *p, const char *s, int reg) {
   p = HighStart(p, g_high.reg);
   *p++ = '%';
   p = stpcpy(p, s);
@@ -494,31 +493,31 @@ static char *DisXmm(struct Dis *d, u32 rde, char *p, const char *s, int reg) {
   return p;
 }
 
-static char *DisNq(struct Dis *d, u32 rde, char *p) {
+static char *DisNq(struct Dis *d, u64 rde, char *p) {
   return DisXmm(d, rde, p, "mm", ModrmRm(rde));
 }
 
-static char *DisPq(struct Dis *d, u32 rde, char *p) {
+static char *DisPq(struct Dis *d, u64 rde, char *p) {
   return DisXmm(d, rde, p, "mm", ModrmReg(rde));
 }
 
-static char *DisUq(struct Dis *d, u32 rde, char *p) {
+static char *DisUq(struct Dis *d, u64 rde, char *p) {
   return DisXmm(d, rde, p, "xmm", RexbRm(rde));
 }
 
-static char *DisUdq(struct Dis *d, u32 rde, char *p) {
+static char *DisUdq(struct Dis *d, u64 rde, char *p) {
   return DisXmm(d, rde, p, "xmm", RexbRm(rde));
 }
 
-static char *DisVdq(struct Dis *d, u32 rde, char *p) {
+static char *DisVdq(struct Dis *d, u64 rde, char *p) {
   return DisXmm(d, rde, p, "xmm", RexrReg(rde));
 }
 
-static char *DisQq(struct Dis *d, u32 rde, char *p) {
+static char *DisQq(struct Dis *d, u64 rde, char *p) {
   return DisRegMem(d, rde, p, DisNq);
 }
 
-static char *DisEst(struct Dis *d, u32 rde, char *p) {
+static char *DisEst(struct Dis *d, u64 rde, char *p) {
   p = DisRegister(p, "st");
   if (ModrmRm(rde) != 0) {
     *p++ = '(';
@@ -529,7 +528,7 @@ static char *DisEst(struct Dis *d, u32 rde, char *p) {
   return p;
 }
 
-static char *DisEst1(struct Dis *d, u32 rde, char *p) {
+static char *DisEst1(struct Dis *d, u64 rde, char *p) {
   if (ModrmRm(rde) != 1) {
     p = DisEst(d, rde, p);
   } else {
@@ -538,11 +537,11 @@ static char *DisEst1(struct Dis *d, u32 rde, char *p) {
   return p;
 }
 
-static char *DisEssr(struct Dis *d, u32 rde, char *p) {
+static char *DisEssr(struct Dis *d, u64 rde, char *p) {
   return DisRegMem(d, rde, p, DisEst);
 }
 
-static char *DisWps(struct Dis *d, u32 rde, char *p) {
+static char *DisWps(struct Dis *d, u64 rde, char *p) {
   return DisRegMem(d, rde, p, DisUdq);
 }
 
@@ -596,7 +595,7 @@ static char *DisWps(struct Dis *d, u32 rde, char *p) {
 
 static const struct DisArg {
   char s[8];
-  char *(*f)(struct Dis *, u32, char *);
+  char *(*f)(struct Dis *, u64, char *);
 } kDisArgs[] = /* <sorted> */ {
     {"$1", DisOne},      //
     {"%Cd", DisCd},      //

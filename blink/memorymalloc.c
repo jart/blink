@@ -123,8 +123,8 @@ struct Machine *NewMachine(struct System *s, struct Machine *p) {
   struct Machine *m;
   unassert(s);
   unassert(!p || s == p->system);
-  if (!(m = (struct Machine *)memalign(_Alignof(struct Machine), sizeof(*m)))) {
-    free(m);
+  if (posix_memalign((void **)&m, _Alignof(struct Machine), sizeof(*m))) {
+    enomem();
     return 0;
   }
   if (p) {

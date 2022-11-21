@@ -98,7 +98,7 @@ struct Machine *m;
 void SetUp(void) {
   unassert((s = NewSystem()));
   unassert((m = NewMachine(s, 0)));
-  m->mode = XED_MACHINE_MODE_LONG_64;
+  m->mode = XED_MODE_LONG;
   m->system->cr3 = AllocateLinearPage(s);
   ReserveVirtual(s, 0, 4096, 0x0207);
   ASSERT_EQ(0x1007, Read64(m->system->real.p + 0x0000));  // PML4T
@@ -133,10 +133,6 @@ int ExecuteUntilHalt(struct Machine *m) {
   } else {
     return rc;
   }
-}
-
-TEST(x86, size) {
-  ASSERT_EQ(48, sizeof(struct XedDecodedInst));
 }
 
 TEST(machine, sizeIsReasonable) {

@@ -7,6 +7,24 @@ TEST_BLINK_SRCS = $(filter %.c,$(TEST_BLINK_FILES))
 TEST_BLINK_HDRS = $(filter %.h,$(TEST_BLINK_FILES))
 TEST_BLINK_OBJS = $(TEST_BLINK_SRCS:%.c=o/$(MODE)/%.o)
 
+# this file takes a minute to compile on raspi using -O2
+o/$(MODE)/test/blink/x86_test.o				\
+o/$(MODE)/i486/test/blink/x86_test.o			\
+o/$(MODE)/m68k/test/blink/x86_test.o			\
+o/$(MODE)/x86_64/test/blink/x86_test.o			\
+o/$(MODE)/arm/test/blink/x86_test.o			\
+o/$(MODE)/aarch64/test/blink/x86_test.o			\
+o/$(MODE)/riscv64/test/blink/x86_test.o			\
+o/$(MODE)/mips/test/blink/x86_test.o			\
+o/$(MODE)/mipsel/test/blink/x86_test.o			\
+o/$(MODE)/mips64/test/blink/x86_test.o			\
+o/$(MODE)/mips64el/test/blink/x86_test.o		\
+o/$(MODE)/s390x/test/blink/x86_test.o			\
+o/$(MODE)/microblaze/test/blink/x86_test.o		\
+o/$(MODE)/powerpc/test/blink/x86_test.o			\
+o/$(MODE)/powerpc64le/test/blink/x86_test.o:		\
+		private CFLAGS += -O0
+
 o/$(MODE)/test/blink/machine_test.com: o/$(MODE)/test/blink/machine_test.o o/$(MODE)/blink/blink.a
 	$(CC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/i486/test/blink/machine_test.com: o/$(MODE)/i486/test/blink/machine_test.o o/$(MODE)/i486/blink/blink.a

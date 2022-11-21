@@ -92,7 +92,7 @@ u64 FindPage(struct Machine *m, i64 virt) {
 
 u8 *FindReal(struct Machine *m, i64 virt) {
   u64 entry;
-  if ((m->mode & 3) != XED_MODE_REAL) {
+  if (m->mode != XED_MODE_REAL) {
     if (m->tlb[0].virt == (virt & -4096) && (m->tlb[0].entry & PAGE_V)) {
       return m->system->real.p + (m->tlb[0].entry & PAGE_TA) + (virt & 4095);
     }

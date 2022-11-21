@@ -31,13 +31,13 @@ struct Machine m[1];
 
 struct {
   const char *name;
-  void (*f)(struct Machine *, uint32_t);
-  uint32_t rde;
-  uint64_t ax;
-  uint64_t cx;
-  uint64_t dx;
-  uint64_t out_ax;
-  uint64_t out_dx;
+  void (*f)(struct Machine *, u64);
+  u64 rde;
+  u64 ax;
+  u64 cx;
+  u64 dx;
+  u64 out_ax;
+  u64 out_dx;
   bool out_cf;
   bool out_of;
 } kVector[] = {

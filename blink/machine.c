@@ -51,7 +51,7 @@
 
 // GetSegment
 
-typedef void (*nexgen32e_f)(struct Machine *, u32);
+typedef void (*nexgen32e_f)(struct Machine *, u64);
 
 static bool IsParity(struct Machine *m) {
   return GetFlag(m->flags, FLAGS_PF);
@@ -83,42 +83,42 @@ static bool IsGreater(struct Machine *m) {
          (GetFlag(m->flags, FLAGS_SF) == GetFlag(m->flags, FLAGS_OF));
 }
 
-static void OpNoop(struct Machine *m, u32 rde) {
+static void OpNoop(struct Machine *m, u64 rde) {
 }
 
-static void OpCmc(struct Machine *m, u32 rde) {
+static void OpCmc(struct Machine *m, u64 rde) {
   m->flags = SetFlag(m->flags, FLAGS_CF, !GetFlag(m->flags, FLAGS_CF));
 }
 
-static void OpClc(struct Machine *m, u32 rde) {
+static void OpClc(struct Machine *m, u64 rde) {
   m->flags = SetFlag(m->flags, FLAGS_CF, false);
 }
 
-static void OpStc(struct Machine *m, u32 rde) {
+static void OpStc(struct Machine *m, u64 rde) {
   m->flags = SetFlag(m->flags, FLAGS_CF, true);
 }
 
-static void OpCli(struct Machine *m, u32 rde) {
+static void OpCli(struct Machine *m, u64 rde) {
   m->flags = SetFlag(m->flags, FLAGS_IF, false);
 }
 
-static void OpSti(struct Machine *m, u32 rde) {
+static void OpSti(struct Machine *m, u64 rde) {
   m->flags = SetFlag(m->flags, FLAGS_IF, true);
 }
 
-static void OpCld(struct Machine *m, u32 rde) {
+static void OpCld(struct Machine *m, u64 rde) {
   m->flags = SetFlag(m->flags, FLAGS_DF, false);
 }
 
-static void OpStd(struct Machine *m, u32 rde) {
+static void OpStd(struct Machine *m, u64 rde) {
   m->flags = SetFlag(m->flags, FLAGS_DF, true);
 }
 
-static void OpPushf(struct Machine *m, u32 rde) {
+static void OpPushf(struct Machine *m, u64 rde) {
   Push(m, rde, ExportFlags(m->flags) & 0xFCFFFF);
 }
 
-static void OpPopf(struct Machine *m, u32 rde) {
+static void OpPopf(struct Machine *m, u64 rde) {
   if (!Osz(rde)) {
     ImportFlags(m, Pop(m, rde, 0));
   } else {
@@ -126,29 +126,29 @@ static void OpPopf(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpLahf(struct Machine *m, u32 rde) {
+static void OpLahf(struct Machine *m, u64 rde) {
   Put8(m->ax + 1, ExportFlags(m->flags));
 }
 
-static void OpSahf(struct Machine *m, u32 rde) {
+static void OpSahf(struct Machine *m, u64 rde) {
   ImportFlags(m, (m->flags & ~0xff) | m->ax[1]);
 }
 
-static void OpLeaGvqpM(struct Machine *m, u32 rde) {
+static void OpLeaGvqpM(struct Machine *m, u64 rde) {
   WriteRegister(rde, RegRexrReg(m, rde), LoadEffectiveAddress(m, rde).addr);
 }
 
-static void OpPushSeg(struct Machine *m, u32 rde) {
-  u8 seg = (m->xedd->op.opcode & 070) >> 3;
+static void OpPushSeg(struct Machine *m, u64 rde) {
+  u8 seg = (Opcode(rde) & 070) >> 3;
   Push(m, rde, *GetSegment(m, rde, seg) >> 4);
 }
 
-static void OpPopSeg(struct Machine *m, u32 rde) {
-  u8 seg = (m->xedd->op.opcode & 070) >> 3;
+static void OpPopSeg(struct Machine *m, u64 rde) {
+  u8 seg = (Opcode(rde) & 070) >> 3;
   *GetSegment(m, rde, seg) = Pop(m, rde, 0) << 4;
 }
 
-static void OpMovEvqpSw(struct Machine *m, u32 rde) {
+static void OpMovEvqpSw(struct Machine *m, u64 rde) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(m, rde),
                         *GetSegment(m, rde, ModrmReg(rde)) >> 4);
 }
@@ -176,12 +176,7 @@ static u64 GetDescriptorLimit(u64 d) {
 }
 
 static int GetDescriptorMode(u64 d) {
-  u8 kMode[] = {
-      XED_MACHINE_MODE_REAL,
-      XED_MACHINE_MODE_LONG_64,
-      XED_MACHINE_MODE_LEGACY_32,
-      XED_MACHINE_MODE_LONG_64,
-  };
+  u8 kMode[] = {XED_MODE_REAL, XED_MODE_LONG, XED_MODE_LEGACY, XED_MODE_LONG};
   return kMode[(d & 0x0060000000000000) >> 53];
 }
 
@@ -189,7 +184,7 @@ static bool IsProtectedMode(struct Machine *m) {
   return m->system->cr0 & 1;
 }
 
-static void OpMovSwEvqp(struct Machine *m, u32 rde) {
+static void OpMovSwEvqp(struct Machine *m, u64 rde) {
   u64 x, d;
   x = ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(m, rde));
   if (!IsProtectedMode(m)) {
@@ -202,7 +197,7 @@ static void OpMovSwEvqp(struct Machine *m, u32 rde) {
   *GetSegment(m, rde, ModrmReg(rde)) = x;
 }
 
-static void OpLsl(struct Machine *m, u32 rde) {
+static void OpLsl(struct Machine *m, u64 rde) {
   u64 descriptor;
   if (GetDescriptor(m, Load16(GetModrmRegisterWordPointerRead2(m, rde)),
                     &descriptor) != -1) {
@@ -219,7 +214,7 @@ static void ChangeMachineMode(struct Machine *m, int mode) {
   m->mode = mode;
 }
 
-static void OpJmpf(struct Machine *m, u32 rde) {
+static void OpJmpf(struct Machine *m, u64 rde) {
   u64 descriptor;
   if (!IsProtectedMode(m)) {
     m->cs = m->xedd->op.uimm0 << 4;
@@ -236,7 +231,7 @@ static void OpJmpf(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpXlatAlBbb(struct Machine *m, u32 rde) {
+static void OpXlatAlBbb(struct Machine *m, u64 rde) {
   u64 v;
   v = MaskAddress(Eamode(rde), Get64(m->bx) + Get8(m->ax));
   v = DataSegment(m, rde, v);
@@ -244,7 +239,7 @@ static void OpXlatAlBbb(struct Machine *m, u32 rde) {
   m->al = Load8(ResolveAddress(m, v));
 }
 
-static void PutEaxAx(struct Machine *m, u32 rde, u32 x) {
+static void PutEaxAx(struct Machine *m, u64 rde, u32 x) {
   if (!Osz(rde)) {
     Put64(m->ax, x);
   } else {
@@ -252,7 +247,7 @@ static void PutEaxAx(struct Machine *m, u32 rde, u32 x) {
   }
 }
 
-static u32 GetEaxAx(struct Machine *m, u32 rde) {
+static u32 GetEaxAx(struct Machine *m, u64 rde) {
   if (!Osz(rde)) {
     return Get32(m->ax);
   } else {
@@ -260,39 +255,39 @@ static u32 GetEaxAx(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpInAlImm(struct Machine *m, u32 rde) {
+static void OpInAlImm(struct Machine *m, u64 rde) {
   Put8(m->ax, OpIn(m, m->xedd->op.uimm0));
 }
 
-static void OpInAxImm(struct Machine *m, u32 rde) {
+static void OpInAxImm(struct Machine *m, u64 rde) {
   PutEaxAx(m, rde, OpIn(m, m->xedd->op.uimm0));
 }
 
-static void OpInAlDx(struct Machine *m, u32 rde) {
+static void OpInAlDx(struct Machine *m, u64 rde) {
   Put8(m->ax, OpIn(m, Get16(m->dx)));
 }
 
-static void OpInAxDx(struct Machine *m, u32 rde) {
+static void OpInAxDx(struct Machine *m, u64 rde) {
   PutEaxAx(m, rde, OpIn(m, Get16(m->dx)));
 }
 
-static void OpOutImmAl(struct Machine *m, u32 rde) {
+static void OpOutImmAl(struct Machine *m, u64 rde) {
   OpOut(m, m->xedd->op.uimm0, Get8(m->ax));
 }
 
-static void OpOutImmAx(struct Machine *m, u32 rde) {
+static void OpOutImmAx(struct Machine *m, u64 rde) {
   OpOut(m, m->xedd->op.uimm0, GetEaxAx(m, rde));
 }
 
-static void OpOutDxAl(struct Machine *m, u32 rde) {
+static void OpOutDxAl(struct Machine *m, u64 rde) {
   OpOut(m, Get16(m->dx), Get8(m->ax));
 }
 
-static void OpOutDxAx(struct Machine *m, u32 rde) {
+static void OpOutDxAx(struct Machine *m, u64 rde) {
   OpOut(m, Get16(m->dx), GetEaxAx(m, rde));
 }
 
-static void OpXchgZvqp(struct Machine *m, u32 rde) {
+static void OpXchgZvqp(struct Machine *m, u64 rde) {
   u64 x, y;
   x = Get64(m->ax);
   y = Get64(RegRexbSrm(m, rde));
@@ -300,7 +295,7 @@ static void OpXchgZvqp(struct Machine *m, u32 rde) {
   WriteRegister(rde, RegRexbSrm(m, rde), x);
 }
 
-static void Op1c7(struct Machine *m, u32 rde) {
+static void Op1c7(struct Machine *m, u64 rde) {
   bool ismem;
   ismem = !IsModrmRegister(rde);
   switch (ModrmReg(rde)) {
@@ -313,7 +308,7 @@ static void Op1c7(struct Machine *m, u32 rde) {
       break;
     case 7:
       if (!ismem) {
-        if (m->xedd->op.rep == 3) {
+        if (Rep(rde) == 3) {
           OpRdpid(m, rde);
         } else {
           OpRdseed(m, rde);
@@ -339,7 +334,7 @@ static u64 Btc(u64 x, u64 y) {
   return (x & ~y) | (~x & y);
 }
 
-static void OpBit(struct Machine *m, u32 rde) {
+static void OpBit(struct Machine *m, u64 rde) {
   int op;
   u8 *p;
   unsigned bit;
@@ -348,12 +343,12 @@ static void OpBit(struct Machine *m, u32 rde) {
   u8 w, W[2][2] = {{2, 3}, {1, 3}};
   unassert(!Lock(rde));
   w = W[Osz(rde)][Rexw(rde)];
-  if (m->xedd->op.opcode == 0xBA) {
+  if (Opcode(rde) == 0xBA) {
     op = ModrmReg(rde);
     bit = m->xedd->op.uimm0 & ((8 << w) - 1);
     disp = 0;
   } else {
-    op = (m->xedd->op.opcode & 070) >> 3;
+    op = (Opcode(rde) & 070) >> 3;
     disp = ReadRegisterSigned(rde, RegRexrReg(m, rde));
     bit = disp & ((8 << w) - 1);
     disp &= -(8 << w);
@@ -392,7 +387,7 @@ static void OpBit(struct Machine *m, u32 rde) {
   WriteRegisterOrMemory(rde, p, z);
 }
 
-static void OpSax(struct Machine *m, u32 rde) {
+static void OpSax(struct Machine *m, u64 rde) {
   if (Rexw(rde)) {
     Put64(m->ax, (i32)Get32(m->ax));
   } else if (!Osz(rde)) {
@@ -402,7 +397,7 @@ static void OpSax(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpConvert(struct Machine *m, u32 rde) {
+static void OpConvert(struct Machine *m, u64 rde) {
   if (Rexw(rde)) {
     Put64(m->dx, Get64(m->ax) & 0x8000000000000000 ? 0xffffffffffffffff : 0);
   } else if (!Osz(rde)) {
@@ -412,7 +407,7 @@ static void OpConvert(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpBswapZvqp(struct Machine *m, u32 rde) {
+static void OpBswapZvqp(struct Machine *m, u64 rde) {
   u64 x = Get64(RegRexbSrm(m, rde));
   if (Rexw(rde)) {
     Put64(RegRexbSrm(m, rde), SWAP64(x));
@@ -423,54 +418,54 @@ static void OpBswapZvqp(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpMovEbIb(struct Machine *m, u32 rde) {
+static void OpMovEbIb(struct Machine *m, u64 rde) {
   Store8(GetModrmRegisterBytePointerWrite(m, rde), m->xedd->op.uimm0);
 }
 
-static void OpMovAlOb(struct Machine *m, u32 rde) {
+static void OpMovAlOb(struct Machine *m, u64 rde) {
   i64 addr;
   addr = AddressOb(m, rde);
   SetWriteAddr(m, addr, 1);
   Put8(m->ax, Load8(ResolveAddress(m, addr)));
 }
 
-static void OpMovObAl(struct Machine *m, u32 rde) {
+static void OpMovObAl(struct Machine *m, u64 rde) {
   i64 addr;
   addr = AddressOb(m, rde);
   SetReadAddr(m, addr, 1);
   Store8(ResolveAddress(m, addr), Get8(m->ax));
 }
 
-static void OpMovRaxOvqp(struct Machine *m, u32 rde) {
+static void OpMovRaxOvqp(struct Machine *m, u64 rde) {
   u64 v;
   v = DataSegment(m, rde, m->xedd->op.disp);
   SetReadAddr(m, v, 1 << RegLog2(rde));
   WriteRegister(rde, m->ax, ReadMemory(rde, ResolveAddress(m, v)));
 }
 
-static void OpMovOvqpRax(struct Machine *m, u32 rde) {
+static void OpMovOvqpRax(struct Machine *m, u64 rde) {
   u64 v = DataSegment(m, rde, m->xedd->op.disp);
   SetWriteAddr(m, v, 1 << RegLog2(rde));
   WriteMemory(rde, ResolveAddress(m, v), Get64(m->ax));
 }
 
-static void OpMovEbGb(struct Machine *m, u32 rde) {
+static void OpMovEbGb(struct Machine *m, u64 rde) {
   Store8(GetModrmRegisterBytePointerWrite(m, rde), Get8(ByteRexrReg(m, rde)));
 }
 
-static void OpMovGbEb(struct Machine *m, u32 rde) {
+static void OpMovGbEb(struct Machine *m, u64 rde) {
   Put8(ByteRexrReg(m, rde), Load8(GetModrmRegisterBytePointerRead(m, rde)));
 }
 
-static void OpMovZbIb(struct Machine *m, u32 rde) {
+static void OpMovZbIb(struct Machine *m, u64 rde) {
   Put8(ByteRexbSrm(m, rde), m->xedd->op.uimm0);
 }
 
-static void OpMovZvqpIvqp(struct Machine *m, u32 rde) {
+static void OpMovZvqpIvqp(struct Machine *m, u64 rde) {
   WriteRegister(rde, RegRexbSrm(m, rde), m->xedd->op.uimm0);
 }
 
-static void OpIncZv(struct Machine *m, u32 rde) {
+static void OpIncZv(struct Machine *m, u64 rde) {
   if (!Osz(rde)) {
     Put32(RegSrm(m, rde), Inc32(Get32(RegSrm(m, rde)), 0, &m->flags));
   } else {
@@ -478,7 +473,7 @@ static void OpIncZv(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpDecZv(struct Machine *m, u32 rde) {
+static void OpDecZv(struct Machine *m, u64 rde) {
   if (!Osz(rde)) {
     Put32(RegSrm(m, rde), Dec32(Get32(RegSrm(m, rde)), 0, &m->flags));
   } else {
@@ -486,112 +481,112 @@ static void OpDecZv(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpMovEvqpIvds(struct Machine *m, u32 rde) {
+static void OpMovEvqpIvds(struct Machine *m, u64 rde) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(m, rde),
                         m->xedd->op.uimm0);
 }
 
-static void OpMovEvqpGvqp(struct Machine *m, u32 rde) {
+static void OpMovEvqpGvqp(struct Machine *m, u64 rde) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(m, rde),
                         ReadMemory(rde, RegRexrReg(m, rde)));
 }
 
-static void OpMovzbGvqpEb(struct Machine *m, u32 rde) {
+static void OpMovzbGvqpEb(struct Machine *m, u64 rde) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 Load8(GetModrmRegisterBytePointerRead(m, rde)));
 }
 
-static void OpMovzwGvqpEw(struct Machine *m, u32 rde) {
+static void OpMovzwGvqpEw(struct Machine *m, u64 rde) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 Load16(GetModrmRegisterWordPointerRead2(m, rde)));
 }
 
-static void OpMovsbGvqpEb(struct Machine *m, u32 rde) {
+static void OpMovsbGvqpEb(struct Machine *m, u64 rde) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 (i8)Load8(GetModrmRegisterBytePointerRead(m, rde)));
 }
 
-static void OpMovswGvqpEw(struct Machine *m, u32 rde) {
+static void OpMovswGvqpEw(struct Machine *m, u64 rde) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 (i16)Load16(GetModrmRegisterWordPointerRead2(m, rde)));
 }
 
-static void OpMovsxdGdqpEd(struct Machine *m, u32 rde) {
+static void OpMovsxdGdqpEd(struct Machine *m, u64 rde) {
   Put64(RegRexrReg(m, rde),
         (i32)Load32(GetModrmRegisterWordPointerRead4(m, rde)));
 }
 
-static void AlubRo(struct Machine *m, u32 rde, aluop_f op) {
+static void AlubRo(struct Machine *m, u64 rde, aluop_f op) {
   op(Load8(GetModrmRegisterBytePointerRead(m, rde)), Get8(ByteRexrReg(m, rde)),
      &m->flags);
 }
 
-static void OpAlubCmp(struct Machine *m, u32 rde) {
+static void OpAlubCmp(struct Machine *m, u64 rde) {
   AlubRo(m, rde, Sub8);
 }
 
-static void OpAlubTest(struct Machine *m, u32 rde) {
+static void OpAlubTest(struct Machine *m, u64 rde) {
   AlubRo(m, rde, And8);
 }
 
-static void AlubFlip(struct Machine *m, u32 rde, aluop_f op) {
+static void AlubFlip(struct Machine *m, u64 rde, aluop_f op) {
   Put8(ByteRexrReg(m, rde),
        op(Get8(ByteRexrReg(m, rde)),
           Load8(GetModrmRegisterBytePointerRead(m, rde)), &m->flags));
 }
 
-static void OpAlubFlipAdd(struct Machine *m, u32 rde) {
+static void OpAlubFlipAdd(struct Machine *m, u64 rde) {
   AlubFlip(m, rde, Add8);
 }
 
-static void OpAlubFlipOr(struct Machine *m, u32 rde) {
+static void OpAlubFlipOr(struct Machine *m, u64 rde) {
   AlubFlip(m, rde, Or8);
 }
 
-static void OpAlubFlipAdc(struct Machine *m, u32 rde) {
+static void OpAlubFlipAdc(struct Machine *m, u64 rde) {
   AlubFlip(m, rde, Adc8);
 }
 
-static void OpAlubFlipSbb(struct Machine *m, u32 rde) {
+static void OpAlubFlipSbb(struct Machine *m, u64 rde) {
   AlubFlip(m, rde, Sbb8);
 }
 
-static void OpAlubFlipAnd(struct Machine *m, u32 rde) {
+static void OpAlubFlipAnd(struct Machine *m, u64 rde) {
   AlubFlip(m, rde, And8);
 }
 
-static void OpAlubFlipSub(struct Machine *m, u32 rde) {
+static void OpAlubFlipSub(struct Machine *m, u64 rde) {
   AlubFlip(m, rde, Sub8);
 }
 
-static void OpAlubFlipXor(struct Machine *m, u32 rde) {
+static void OpAlubFlipXor(struct Machine *m, u64 rde) {
   AlubFlip(m, rde, Xor8);
 }
 
-static void AlubFlipRo(struct Machine *m, u32 rde, aluop_f op) {
+static void AlubFlipRo(struct Machine *m, u64 rde, aluop_f op) {
   op(Get8(ByteRexrReg(m, rde)), Load8(GetModrmRegisterBytePointerRead(m, rde)),
      &m->flags);
 }
 
-static void OpAlubFlipCmp(struct Machine *m, u32 rde) {
+static void OpAlubFlipCmp(struct Machine *m, u64 rde) {
   AlubFlipRo(m, rde, Sub8);
 }
 
-static void Alubi(struct Machine *m, u32 rde, aluop_f op) {
+static void Alubi(struct Machine *m, u64 rde, aluop_f op) {
   u8 *a = GetModrmRegisterBytePointerWrite(m, rde);
   Store8(a, op(Load8(a), m->xedd->op.uimm0, &m->flags));
 }
 
-static void AlubiRo(struct Machine *m, u32 rde, aluop_f op) {
+static void AlubiRo(struct Machine *m, u64 rde, aluop_f op) {
   op(Load8(GetModrmRegisterBytePointerRead(m, rde)), m->xedd->op.uimm0,
      &m->flags);
 }
 
-static void OpAlubiTest(struct Machine *m, u32 rde) {
+static void OpAlubiTest(struct Machine *m, u64 rde) {
   AlubiRo(m, rde, And8);
 }
 
-static void OpAlubiReg(struct Machine *m, u32 rde) {
+static void OpAlubiReg(struct Machine *m, u64 rde) {
   if (ModrmReg(rde) == ALU_CMP) {
     AlubiRo(m, rde, kAlu[ModrmReg(rde)][0]);
   } else {
@@ -599,41 +594,41 @@ static void OpAlubiReg(struct Machine *m, u32 rde) {
   }
 }
 
-static void AluwRo(struct Machine *m, u32 rde, const aluop_f ops[4]) {
+static void AluwRo(struct Machine *m, u64 rde, const aluop_f ops[4]) {
   ops[RegLog2(rde)](
       ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(m, rde)),
       Get64(RegRexrReg(m, rde)), &m->flags);
 }
 
-static void OpAluwCmp(struct Machine *m, u32 rde) {
+static void OpAluwCmp(struct Machine *m, u64 rde) {
   AluwRo(m, rde, kAlu[ALU_SUB]);
 }
 
-static void OpAluwTest(struct Machine *m, u32 rde) {
+static void OpAluwTest(struct Machine *m, u64 rde) {
   AluwRo(m, rde, kAlu[ALU_AND]);
 }
 
-static void OpAluwFlip(struct Machine *m, u32 rde) {
+static void OpAluwFlip(struct Machine *m, u64 rde) {
   WriteRegister(
       rde, RegRexrReg(m, rde),
-      kAlu[(m->xedd->op.opcode & 070) >> 3][RegLog2(rde)](
+      kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)](
           Get64(RegRexrReg(m, rde)),
           ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(m, rde)),
           &m->flags));
 }
 
-static void AluwFlipRo(struct Machine *m, u32 rde, const aluop_f ops[4]) {
+static void AluwFlipRo(struct Machine *m, u64 rde, const aluop_f ops[4]) {
   ops[RegLog2(rde)](
       Get64(RegRexrReg(m, rde)),
       ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(m, rde)),
       &m->flags);
 }
 
-static void OpAluwFlipCmp(struct Machine *m, u32 rde) {
+static void OpAluwFlipCmp(struct Machine *m, u64 rde) {
   AluwFlipRo(m, rde, kAlu[ALU_SUB]);
 }
 
-static void Aluwi(struct Machine *m, u32 rde, const aluop_f ops[4]) {
+static void Aluwi(struct Machine *m, u64 rde, const aluop_f ops[4]) {
   u8 *a;
   a = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
   WriteRegisterOrMemory(
@@ -641,13 +636,13 @@ static void Aluwi(struct Machine *m, u32 rde, const aluop_f ops[4]) {
       ops[RegLog2(rde)](ReadMemory(rde, a), m->xedd->op.uimm0, &m->flags));
 }
 
-static void AluwiRo(struct Machine *m, u32 rde, const aluop_f ops[4]) {
+static void AluwiRo(struct Machine *m, u64 rde, const aluop_f ops[4]) {
   ops[RegLog2(rde)](
       ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(m, rde)),
       m->xedd->op.uimm0, &m->flags);
 }
 
-static void OpAluwiReg(struct Machine *m, u32 rde) {
+static void OpAluwiReg(struct Machine *m, u64 rde) {
   if (ModrmReg(rde) == ALU_CMP) {
     AluwiRo(m, rde, kAlu[ModrmReg(rde)]);
   } else {
@@ -659,59 +654,59 @@ static void AluAlIb(struct Machine *m, aluop_f op) {
   Put8(m->ax, op(Get8(m->ax), m->xedd->op.uimm0, &m->flags));
 }
 
-static void OpAluAlIbAdd(struct Machine *m, u32 rde) {
+static void OpAluAlIbAdd(struct Machine *m, u64 rde) {
   AluAlIb(m, Add8);
 }
 
-static void OpAluAlIbOr(struct Machine *m, u32 rde) {
+static void OpAluAlIbOr(struct Machine *m, u64 rde) {
   AluAlIb(m, Or8);
 }
 
-static void OpAluAlIbAdc(struct Machine *m, u32 rde) {
+static void OpAluAlIbAdc(struct Machine *m, u64 rde) {
   AluAlIb(m, Adc8);
 }
 
-static void OpAluAlIbSbb(struct Machine *m, u32 rde) {
+static void OpAluAlIbSbb(struct Machine *m, u64 rde) {
   AluAlIb(m, Sbb8);
 }
 
-static void OpAluAlIbAnd(struct Machine *m, u32 rde) {
+static void OpAluAlIbAnd(struct Machine *m, u64 rde) {
   AluAlIb(m, And8);
 }
 
-static void OpAluAlIbSub(struct Machine *m, u32 rde) {
+static void OpAluAlIbSub(struct Machine *m, u64 rde) {
   AluAlIb(m, Sub8);
 }
 
-static void OpAluAlIbXor(struct Machine *m, u32 rde) {
+static void OpAluAlIbXor(struct Machine *m, u64 rde) {
   AluAlIb(m, Xor8);
 }
 
-static void OpAluRaxIvds(struct Machine *m, u32 rde) {
+static void OpAluRaxIvds(struct Machine *m, u64 rde) {
   WriteRegister(rde, m->ax,
-                kAlu[(m->xedd->op.opcode & 070) >> 3][RegLog2(rde)](
+                kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)](
                     ReadRegister(rde, m->ax), m->xedd->op.uimm0, &m->flags));
 }
 
-static void OpCmpAlIb(struct Machine *m, u32 rde) {
+static void OpCmpAlIb(struct Machine *m, u64 rde) {
   Sub8(Get8(m->ax), m->xedd->op.uimm0, &m->flags);
 }
 
-static void OpCmpRaxIvds(struct Machine *m, u32 rde) {
+static void OpCmpRaxIvds(struct Machine *m, u64 rde) {
   kAlu[ALU_SUB][RegLog2(rde)](ReadRegister(rde, m->ax), m->xedd->op.uimm0,
                               &m->flags);
 }
 
-static void OpTestAlIb(struct Machine *m, u32 rde) {
+static void OpTestAlIb(struct Machine *m, u64 rde) {
   And8(Get8(m->ax), m->xedd->op.uimm0, &m->flags);
 }
 
-static void OpTestRaxIvds(struct Machine *m, u32 rde) {
+static void OpTestRaxIvds(struct Machine *m, u64 rde) {
   kAlu[ALU_AND][RegLog2(rde)](ReadRegister(rde, m->ax), m->xedd->op.uimm0,
                               &m->flags);
 }
 
-static void Bsuwi(struct Machine *m, u32 rde, u64 y) {
+static void Bsuwi(struct Machine *m, u64 rde, u64 y) {
   u8 *p;
   p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
   WriteRegisterOrMemory(
@@ -719,332 +714,332 @@ static void Bsuwi(struct Machine *m, u32 rde, u64 y) {
       kBsu[ModrmReg(rde)][RegLog2(rde)](ReadMemory(rde, p), y, &m->flags));
 }
 
-static void OpBsuwi1(struct Machine *m, u32 rde) {
+static void OpBsuwi1(struct Machine *m, u64 rde) {
   Bsuwi(m, rde, 1);
 }
 
-static void OpBsuwiCl(struct Machine *m, u32 rde) {
+static void OpBsuwiCl(struct Machine *m, u64 rde) {
   Bsuwi(m, rde, Get8(m->cx));
 }
 
-static void OpBsuwiImm(struct Machine *m, u32 rde) {
+static void OpBsuwiImm(struct Machine *m, u64 rde) {
   Bsuwi(m, rde, m->xedd->op.uimm0);
 }
 
-static void Bsubi(struct Machine *m, u32 rde, u64 y) {
+static void Bsubi(struct Machine *m, u64 rde, u64 y) {
   u8 *a = GetModrmRegisterBytePointerWrite(m, rde);
   Store8(a, kBsu[ModrmReg(rde)][RegLog2(rde)](Load8(a), y, &m->flags));
 }
 
-static void OpBsubi1(struct Machine *m, u32 rde) {
+static void OpBsubi1(struct Machine *m, u64 rde) {
   Bsubi(m, rde, 1);
 }
 
-static void OpBsubiCl(struct Machine *m, u32 rde) {
+static void OpBsubiCl(struct Machine *m, u64 rde) {
   Bsubi(m, rde, Get8(m->cx));
 }
 
-static void OpBsubiImm(struct Machine *m, u32 rde) {
+static void OpBsubiImm(struct Machine *m, u64 rde) {
   Bsubi(m, rde, m->xedd->op.uimm0);
 }
 
-static void OpPushImm(struct Machine *m, u32 rde) {
+static void OpPushImm(struct Machine *m, u64 rde) {
   Push(m, rde, m->xedd->op.uimm0);
 }
 
-static void Interrupt(struct Machine *m, u32 rde, int i) {
+static void Interrupt(struct Machine *m, u64 rde, int i) {
   HaltMachine(m, i);
 }
 
-static void OpInterruptImm(struct Machine *m, u32 rde) {
+static void OpInterruptImm(struct Machine *m, u64 rde) {
   Interrupt(m, rde, m->xedd->op.uimm0);
 }
 
-static void OpInterrupt1(struct Machine *m, u32 rde) {
+static void OpInterrupt1(struct Machine *m, u64 rde) {
   Interrupt(m, rde, 1);
 }
 
-static void OpInterrupt3(struct Machine *m, u32 rde) {
+static void OpInterrupt3(struct Machine *m, u64 rde) {
   Interrupt(m, rde, 3);
 }
 
-static void OpJmp(struct Machine *m, u32 rde) {
+static void OpJmp(struct Machine *m, u64 rde) {
   m->ip += m->xedd->op.disp;
 }
 
-static void OpJe(struct Machine *m, u32 rde) {
+static void OpJe(struct Machine *m, u64 rde) {
   if (GetFlag(m->flags, FLAGS_ZF)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJne(struct Machine *m, u32 rde) {
+static void OpJne(struct Machine *m, u64 rde) {
   if (!GetFlag(m->flags, FLAGS_ZF)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJb(struct Machine *m, u32 rde) {
+static void OpJb(struct Machine *m, u64 rde) {
   if (GetFlag(m->flags, FLAGS_CF)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJbe(struct Machine *m, u32 rde) {
+static void OpJbe(struct Machine *m, u64 rde) {
   if (IsBelowOrEqual(m)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJo(struct Machine *m, u32 rde) {
+static void OpJo(struct Machine *m, u64 rde) {
   if (GetFlag(m->flags, FLAGS_OF)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJno(struct Machine *m, u32 rde) {
+static void OpJno(struct Machine *m, u64 rde) {
   if (!GetFlag(m->flags, FLAGS_OF)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJae(struct Machine *m, u32 rde) {
+static void OpJae(struct Machine *m, u64 rde) {
   if (!GetFlag(m->flags, FLAGS_CF)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJa(struct Machine *m, u32 rde) {
+static void OpJa(struct Machine *m, u64 rde) {
   if (IsAbove(m)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJs(struct Machine *m, u32 rde) {
+static void OpJs(struct Machine *m, u64 rde) {
   if (GetFlag(m->flags, FLAGS_SF)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJns(struct Machine *m, u32 rde) {
+static void OpJns(struct Machine *m, u64 rde) {
   if (!GetFlag(m->flags, FLAGS_SF)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJp(struct Machine *m, u32 rde) {
+static void OpJp(struct Machine *m, u64 rde) {
   if (IsParity(m)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJnp(struct Machine *m, u32 rde) {
+static void OpJnp(struct Machine *m, u64 rde) {
   if (!IsParity(m)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJl(struct Machine *m, u32 rde) {
+static void OpJl(struct Machine *m, u64 rde) {
   if (IsLess(m)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJge(struct Machine *m, u32 rde) {
+static void OpJge(struct Machine *m, u64 rde) {
   if (IsGreaterOrEqual(m)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJle(struct Machine *m, u32 rde) {
+static void OpJle(struct Machine *m, u64 rde) {
   if (IsLessOrEqual(m)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpJg(struct Machine *m, u32 rde) {
+static void OpJg(struct Machine *m, u64 rde) {
   if (IsGreater(m)) {
     OpJmp(m, rde);
   }
 }
 
-static void OpMovGvqpEvqp(struct Machine *m, u32 rde) {
+static void OpMovGvqpEvqp(struct Machine *m, u64 rde) {
   WriteRegister(
       rde, RegRexrReg(m, rde),
       ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(m, rde)));
 }
 
-static void OpCmovo(struct Machine *m, u32 rde) {
+static void OpCmovo(struct Machine *m, u64 rde) {
   if (GetFlag(m->flags, FLAGS_OF)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovno(struct Machine *m, u32 rde) {
+static void OpCmovno(struct Machine *m, u64 rde) {
   if (!GetFlag(m->flags, FLAGS_OF)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovb(struct Machine *m, u32 rde) {
+static void OpCmovb(struct Machine *m, u64 rde) {
   if (GetFlag(m->flags, FLAGS_CF)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovae(struct Machine *m, u32 rde) {
+static void OpCmovae(struct Machine *m, u64 rde) {
   if (!GetFlag(m->flags, FLAGS_CF)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmove(struct Machine *m, u32 rde) {
+static void OpCmove(struct Machine *m, u64 rde) {
   if (GetFlag(m->flags, FLAGS_ZF)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovne(struct Machine *m, u32 rde) {
+static void OpCmovne(struct Machine *m, u64 rde) {
   if (!GetFlag(m->flags, FLAGS_ZF)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovbe(struct Machine *m, u32 rde) {
+static void OpCmovbe(struct Machine *m, u64 rde) {
   if (IsBelowOrEqual(m)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmova(struct Machine *m, u32 rde) {
+static void OpCmova(struct Machine *m, u64 rde) {
   if (IsAbove(m)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovs(struct Machine *m, u32 rde) {
+static void OpCmovs(struct Machine *m, u64 rde) {
   if (GetFlag(m->flags, FLAGS_SF)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovns(struct Machine *m, u32 rde) {
+static void OpCmovns(struct Machine *m, u64 rde) {
   if (!GetFlag(m->flags, FLAGS_SF)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovp(struct Machine *m, u32 rde) {
+static void OpCmovp(struct Machine *m, u64 rde) {
   if (IsParity(m)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovnp(struct Machine *m, u32 rde) {
+static void OpCmovnp(struct Machine *m, u64 rde) {
   if (!IsParity(m)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovl(struct Machine *m, u32 rde) {
+static void OpCmovl(struct Machine *m, u64 rde) {
   if (IsLess(m)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovge(struct Machine *m, u32 rde) {
+static void OpCmovge(struct Machine *m, u64 rde) {
   if (IsGreaterOrEqual(m)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovle(struct Machine *m, u32 rde) {
+static void OpCmovle(struct Machine *m, u64 rde) {
   if (IsLessOrEqual(m)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void OpCmovg(struct Machine *m, u32 rde) {
+static void OpCmovg(struct Machine *m, u64 rde) {
   if (IsGreater(m)) {
     OpMovGvqpEvqp(m, rde);
   }
 }
 
-static void SetEb(struct Machine *m, u32 rde, bool x) {
+static void SetEb(struct Machine *m, u64 rde, bool x) {
   Store8(GetModrmRegisterBytePointerWrite(m, rde), x);
 }
 
-static void OpSeto(struct Machine *m, u32 rde) {
+static void OpSeto(struct Machine *m, u64 rde) {
   SetEb(m, rde, GetFlag(m->flags, FLAGS_OF));
 }
 
-static void OpSetno(struct Machine *m, u32 rde) {
+static void OpSetno(struct Machine *m, u64 rde) {
   SetEb(m, rde, !GetFlag(m->flags, FLAGS_OF));
 }
 
-static void OpSetb(struct Machine *m, u32 rde) {
+static void OpSetb(struct Machine *m, u64 rde) {
   SetEb(m, rde, GetFlag(m->flags, FLAGS_CF));
 }
 
-static void OpSetae(struct Machine *m, u32 rde) {
+static void OpSetae(struct Machine *m, u64 rde) {
   SetEb(m, rde, !GetFlag(m->flags, FLAGS_CF));
 }
 
-static void OpSete(struct Machine *m, u32 rde) {
+static void OpSete(struct Machine *m, u64 rde) {
   SetEb(m, rde, GetFlag(m->flags, FLAGS_ZF));
 }
 
-static void OpSetne(struct Machine *m, u32 rde) {
+static void OpSetne(struct Machine *m, u64 rde) {
   SetEb(m, rde, !GetFlag(m->flags, FLAGS_ZF));
 }
 
-static void OpSetbe(struct Machine *m, u32 rde) {
+static void OpSetbe(struct Machine *m, u64 rde) {
   SetEb(m, rde, IsBelowOrEqual(m));
 }
 
-static void OpSeta(struct Machine *m, u32 rde) {
+static void OpSeta(struct Machine *m, u64 rde) {
   SetEb(m, rde, IsAbove(m));
 }
 
-static void OpSets(struct Machine *m, u32 rde) {
+static void OpSets(struct Machine *m, u64 rde) {
   SetEb(m, rde, GetFlag(m->flags, FLAGS_SF));
 }
 
-static void OpSetns(struct Machine *m, u32 rde) {
+static void OpSetns(struct Machine *m, u64 rde) {
   SetEb(m, rde, !GetFlag(m->flags, FLAGS_SF));
 }
 
-static void OpSetp(struct Machine *m, u32 rde) {
+static void OpSetp(struct Machine *m, u64 rde) {
   SetEb(m, rde, IsParity(m));
 }
 
-static void OpSetnp(struct Machine *m, u32 rde) {
+static void OpSetnp(struct Machine *m, u64 rde) {
   SetEb(m, rde, !IsParity(m));
 }
 
-static void OpSetl(struct Machine *m, u32 rde) {
+static void OpSetl(struct Machine *m, u64 rde) {
   SetEb(m, rde, IsLess(m));
 }
 
-static void OpSetge(struct Machine *m, u32 rde) {
+static void OpSetge(struct Machine *m, u64 rde) {
   SetEb(m, rde, IsGreaterOrEqual(m));
 }
 
-static void OpSetle(struct Machine *m, u32 rde) {
+static void OpSetle(struct Machine *m, u64 rde) {
   SetEb(m, rde, IsLessOrEqual(m));
 }
 
-static void OpSetg(struct Machine *m, u32 rde) {
+static void OpSetg(struct Machine *m, u64 rde) {
   SetEb(m, rde, IsGreater(m));
 }
 
-static void OpJcxz(struct Machine *m, u32 rde) {
+static void OpJcxz(struct Machine *m, u64 rde) {
   if (!MaskAddress(Eamode(rde), Get64(m->cx))) {
     OpJmp(m, rde);
   }
 }
 
-static u64 AluPopcnt(struct Machine *m, u32 rde, u64 x) {
+static u64 AluPopcnt(struct Machine *m, u64 rde, u64 x) {
   m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
   m->flags = SetFlag(m->flags, FLAGS_CF, false);
   m->flags = SetFlag(m->flags, FLAGS_SF, false);
@@ -1053,7 +1048,7 @@ static u64 AluPopcnt(struct Machine *m, u32 rde, u64 x) {
   return popcount(x);
 }
 
-static u64 AluBsr(struct Machine *m, u32 rde, u64 x) {
+static u64 AluBsr(struct Machine *m, u64 rde, u64 x) {
   unsigned n;
   if (Rexw(rde)) {
     x &= 0xffffffffffffffff;
@@ -1065,7 +1060,7 @@ static u64 AluBsr(struct Machine *m, u32 rde, u64 x) {
     x &= 0xffff;
     n = 16;
   }
-  if (m->xedd->op.rep == 3) {
+  if (Rep(rde) == 3) {
     if (!x) {
       m->flags = SetFlag(m->flags, FLAGS_CF, true);
       m->flags = SetFlag(m->flags, FLAGS_ZF, false);
@@ -1081,7 +1076,7 @@ static u64 AluBsr(struct Machine *m, u32 rde, u64 x) {
   return bsr(x);
 }
 
-static u64 AluBsf(struct Machine *m, u32 rde, u64 x) {
+static u64 AluBsf(struct Machine *m, u64 rde, u64 x) {
   unsigned n;
   if (Rexw(rde)) {
     x &= 0xffffffffffffffff;
@@ -1093,7 +1088,7 @@ static u64 AluBsf(struct Machine *m, u32 rde, u64 x) {
     x &= 0xffff;
     n = 16;
   }
-  if (m->xedd->op.rep == 3) {
+  if (Rep(rde) == 3) {
     if (!x) {
       m->flags = SetFlag(m->flags, FLAGS_CF, true);
       m->flags = SetFlag(m->flags, FLAGS_ZF, false);
@@ -1109,45 +1104,45 @@ static u64 AluBsf(struct Machine *m, u32 rde, u64 x) {
   return bsf(x);
 }
 
-static void Bitscan(struct Machine *m, u32 rde,
-                    u64 op(struct Machine *, u32, u64)) {
+static void Bitscan(struct Machine *m, u64 rde,
+                    u64 op(struct Machine *, u64, u64)) {
   WriteRegister(
       rde, RegRexrReg(m, rde),
       op(m, rde,
          ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(m, rde))));
 }
 
-static void OpBsf(struct Machine *m, u32 rde) {
+static void OpBsf(struct Machine *m, u64 rde) {
   Bitscan(m, rde, AluBsf);
 }
 
-static void OpBsr(struct Machine *m, u32 rde) {
+static void OpBsr(struct Machine *m, u64 rde) {
   Bitscan(m, rde, AluBsr);
 }
 
-static void Op1b8(struct Machine *m, u32 rde) {
-  if (m->xedd->op.rep == 3) {
+static void Op1b8(struct Machine *m, u64 rde) {
+  if (Rep(rde) == 3) {
     Bitscan(m, rde, AluPopcnt);
   } else {
     OpUd(m, rde);
   }
 }
 
-static void LoadFarPointer(struct Machine *m, u32 rde, u64 *seg) {
+static void LoadFarPointer(struct Machine *m, u64 rde, u64 *seg) {
   u32 fp = Load32(ComputeReserveAddressRead4(m, rde));
   *seg = (fp & 0x0000ffff) << 4;
   Put16(RegRexrReg(m, rde), fp >> 16);
 }
 
-static void OpLes(struct Machine *m, u32 rde) {
+static void OpLes(struct Machine *m, u64 rde) {
   LoadFarPointer(m, rde, &m->es);
 }
 
-static void OpLds(struct Machine *m, u32 rde) {
+static void OpLds(struct Machine *m, u64 rde) {
   LoadFarPointer(m, rde, &m->ds);
 }
 
-static void Loop(struct Machine *m, u32 rde, bool cond) {
+static void Loop(struct Machine *m, u64 rde, bool cond) {
   u64 cx;
   cx = Get64(m->cx) - 1;
   if (Eamode(rde) != XED_MODE_REAL) {
@@ -1164,15 +1159,15 @@ static void Loop(struct Machine *m, u32 rde, bool cond) {
   }
 }
 
-static void OpLoope(struct Machine *m, u32 rde) {
+static void OpLoope(struct Machine *m, u64 rde) {
   Loop(m, rde, GetFlag(m->flags, FLAGS_ZF));
 }
 
-static void OpLoopne(struct Machine *m, u32 rde) {
+static void OpLoopne(struct Machine *m, u64 rde) {
   Loop(m, rde, !GetFlag(m->flags, FLAGS_ZF));
 }
 
-static void OpLoop1(struct Machine *m, u32 rde) {
+static void OpLoop1(struct Machine *m, u64 rde) {
   Loop(m, rde, true);
 }
 
@@ -1187,11 +1182,11 @@ static const nexgen32e_f kOp0f6[] = {
     OpDivAlAhAxEbSigned,
 };
 
-static void Op0f6(struct Machine *m, u32 rde) {
+static void Op0f6(struct Machine *m, u64 rde) {
   kOp0f6[ModrmReg(rde)](m, rde);
 }
 
-static void OpTestEvqpIvds(struct Machine *m, u32 rde) {
+static void OpTestEvqpIvds(struct Machine *m, u64 rde) {
   AluwiRo(m, rde, kAlu[ALU_AND]);
 }
 
@@ -1206,18 +1201,18 @@ static const nexgen32e_f kOp0f7[] = {
     OpDivRdxRaxEvqpSigned,
 };
 
-static void Op0f7(struct Machine *m, u32 rde) {
+static void Op0f7(struct Machine *m, u64 rde) {
   kOp0f7[ModrmReg(rde)](m, rde);
 }
 
 static const nexgen32e_f kOp0ff[] = {OpIncEvqp, OpDecEvqp, OpCallEq,  OpUd,
                                      OpJmpEq,   OpUd,      OpPushEvq, OpUd};
 
-static void Op0ff(struct Machine *m, u32 rde) {
+static void Op0ff(struct Machine *m, u64 rde) {
   kOp0ff[ModrmReg(rde)](m, rde);
 }
 
-static void OpDoubleShift(struct Machine *m, u32 rde) {
+static void OpDoubleShift(struct Machine *m, u64 rde) {
   u8 *p;
   u8 W[2][2] = {{2, 3}, {1, 3}};
   p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
@@ -1225,11 +1220,11 @@ static void OpDoubleShift(struct Machine *m, u32 rde) {
       rde, p,
       BsuDoubleShift(W[Osz(rde)][Rexw(rde)], ReadMemory(rde, p),
                      ReadRegister(rde, RegRexrReg(m, rde)),
-                     m->xedd->op.opcode & 1 ? Get8(m->cx) : m->xedd->op.uimm0,
-                     m->xedd->op.opcode & 8, &m->flags));
+                     Opcode(rde) & 1 ? Get8(m->cx) : m->xedd->op.uimm0,
+                     Opcode(rde) & 8, &m->flags));
 }
 
-static void OpFxsave(struct Machine *m, u32 rde) {
+static void OpFxsave(struct Machine *m, u64 rde) {
   i64 v;
   u8 buf[32];
   memset(buf, 0, 32);
@@ -1246,7 +1241,7 @@ static void OpFxsave(struct Machine *m, u32 rde) {
   SetWriteAddr(m, v, 416);
 }
 
-static void OpFxrstor(struct Machine *m, u32 rde) {
+static void OpFxrstor(struct Machine *m, u64 rde) {
   i64 v;
   u8 buf[32];
   v = ComputeAddress(m, rde);
@@ -1262,50 +1257,50 @@ static void OpFxrstor(struct Machine *m, u32 rde) {
   m->mxcsr = Load32(buf + 24);
 }
 
-static void OpXsave(struct Machine *m, u32 rde) {
+static void OpXsave(struct Machine *m, u64 rde) {
 }
 
-static void OpLdmxcsr(struct Machine *m, u32 rde) {
+static void OpLdmxcsr(struct Machine *m, u64 rde) {
   m->mxcsr = Load32(ComputeReserveAddressRead4(m, rde));
 }
 
-static void OpStmxcsr(struct Machine *m, u32 rde) {
+static void OpStmxcsr(struct Machine *m, u64 rde) {
   Store32(ComputeReserveAddressWrite4(m, rde), m->mxcsr);
 }
 
-static void OpRdfsbase(struct Machine *m, u32 rde) {
+static void OpRdfsbase(struct Machine *m, u64 rde) {
   WriteRegister(rde, RegRexbRm(m, rde), m->fs);
 }
 
-static void OpRdgsbase(struct Machine *m, u32 rde) {
+static void OpRdgsbase(struct Machine *m, u64 rde) {
   WriteRegister(rde, RegRexbRm(m, rde), m->gs);
 }
 
-static void OpWrfsbase(struct Machine *m, u32 rde) {
+static void OpWrfsbase(struct Machine *m, u64 rde) {
   m->fs = ReadRegister(rde, RegRexbRm(m, rde));
 }
 
-static void OpWrgsbase(struct Machine *m, u32 rde) {
+static void OpWrgsbase(struct Machine *m, u64 rde) {
   m->gs = ReadRegister(rde, RegRexbRm(m, rde));
 }
 
-static void OpMfence(struct Machine *m, u32 rde) {
+static void OpMfence(struct Machine *m, u64 rde) {
   atomic_thread_fence(memory_order_seq_cst);
 }
 
-static void OpLfence(struct Machine *m, u32 rde) {
+static void OpLfence(struct Machine *m, u64 rde) {
   OpMfence(m, rde);
 }
 
-static void OpSfence(struct Machine *m, u32 rde) {
+static void OpSfence(struct Machine *m, u64 rde) {
   OpMfence(m, rde);
 }
 
-static void OpClflush(struct Machine *m, u32 rde) {
+static void OpClflush(struct Machine *m, u64 rde) {
   OpMfence(m, rde);
 }
 
-static void Op1ae(struct Machine *m, u32 rde) {
+static void Op1ae(struct Machine *m, u64 rde) {
   bool ismem;
   ismem = !IsModrmRegister(rde);
   switch (ModrmReg(rde)) {
@@ -1362,7 +1357,7 @@ static void Op1ae(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpSalc(struct Machine *m, u32 rde) {
+static void OpSalc(struct Machine *m, u64 rde) {
   if (GetFlag(m->flags, FLAGS_CF)) {
     m->al = 255;
   } else {
@@ -1370,7 +1365,7 @@ static void OpSalc(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpBofram(struct Machine *m, u32 rde) {
+static void OpBofram(struct Machine *m, u64 rde) {
   if (m->xedd->op.disp) {
     m->bofram[0] = m->ip;
     m->bofram[1] = m->ip + (m->xedd->op.disp & 0xff);
@@ -1380,13 +1375,13 @@ static void OpBofram(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpBinbase(struct Machine *m, u32 rde) {
+static void OpBinbase(struct Machine *m, u64 rde) {
   if (m->system->onbinbase) {
     m->system->onbinbase(m);
   }
 }
 
-static void OpNopEv(struct Machine *m, u32 rde) {
+static void OpNopEv(struct Machine *m, u64 rde) {
   switch (ModrmMod(rde) << 6 | ModrmReg(rde) << 3 | ModrmRm(rde)) {
     case 0105:
       OpBofram(m, rde);
@@ -1401,17 +1396,17 @@ static void OpNopEv(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpNop(struct Machine *m, u32 rde) {
+static void OpNop(struct Machine *m, u64 rde) {
   if (Rexb(rde)) {
     OpXchgZvqp(m, rde);
-  } else if (m->xedd->op.rep == 3) {
+  } else if (Rep(rde) == 3) {
     OpPause(m, rde);
   } else {
     OpNoop(m, rde);
   }
 }
 
-static void OpMovRqCq(struct Machine *m, u32 rde) {
+static void OpMovRqCq(struct Machine *m, u64 rde) {
   switch (ModrmReg(rde)) {
     case 0:
       Put64(RegRexbRm(m, rde), m->system->cr0);
@@ -1430,7 +1425,7 @@ static void OpMovRqCq(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpMovCqRq(struct Machine *m, u32 rde) {
+static void OpMovCqRq(struct Machine *m, u64 rde) {
   i64 cr3;
   switch (ModrmReg(rde)) {
     case 0:
@@ -1455,19 +1450,19 @@ static void OpMovCqRq(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpWrmsr(struct Machine *m, u32 rde) {
+static void OpWrmsr(struct Machine *m, u64 rde) {
 }
 
-static void OpRdmsr(struct Machine *m, u32 rde) {
+static void OpRdmsr(struct Machine *m, u64 rde) {
   Put32(m->dx, 0);
   Put32(m->ax, 0);
 }
 
-static void OpEmms(struct Machine *m, u32 rde) {
+static void OpEmms(struct Machine *m, u64 rde) {
   m->fpu.tw = -1;
 }
 
-const nexgen32e_f kNexgen32e[] = {
+static const nexgen32e_f kNexgen32e[] = {
     /*000*/ OpAlubAdd,               //
     /*001*/ OpAluw,                  // #8    (5.653689%)
     /*002*/ OpAlubFlipAdd,           // #180  (0.000087%)
@@ -1994,7 +1989,7 @@ const nexgen32e_f kNexgen32e[] = {
     /*20B*/ OpSsePmulhrsw,           // #205  (0.000027%)
 };
 
-void ExecuteSparseInstruction(struct Machine *m, u32 rde, u32 d) {
+void ExecuteSparseInstruction(struct Machine *m, u64 rde, u32 d) {
   switch (d) {
     CASE(0x21c, OpSsePabsb(m, rde));
     CASE(0x21d, OpSsePabsw(m, rde));
@@ -2011,7 +2006,7 @@ void ExecuteSparseInstruction(struct Machine *m, u32 rde, u32 d) {
 void ExecuteInstruction(struct Machine *m) {
   int dispatch;
   m->ip += m->xedd->length;
-  dispatch = m->xedd->op.map << 8 | m->xedd->op.opcode;
+  dispatch = Mopcode(m->xedd->op.rde);
   if (dispatch < ARRAYLEN(kNexgen32e)) {
     kNexgen32e[dispatch](m, m->xedd->op.rde);
   } else {

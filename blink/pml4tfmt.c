@@ -74,7 +74,7 @@ char *FormatPml4t(struct Machine *m) {
   u16 i, a[4];
   struct Pml4tFormater pp = {0};
   u16 range[][2] = {{256, 512}, {0, 256}};
-  if ((m->mode & 3) != XED_MODE_LONG) return strdup("");
+  if (m->mode != XED_MODE_LONG) return strdup("");
   pd[0] = GetPt(m, m->system->cr3);
   for (i = 0; i < ARRAYLEN(range); ++i) {
     a[0] = range[i][0];

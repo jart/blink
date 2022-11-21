@@ -36,7 +36,7 @@ static struct clmul clmul(u64 a, u64 b) {
   return (struct clmul){x, y};
 }
 
-void OpSsePclmulqdq(struct Machine *m, u32 rde) {
+void OpSsePclmulqdq(struct Machine *m, u64 rde) {
   struct clmul res;
   res = clmul(Read64(XmmRexrReg(m, rde) + ((m->xedd->op.uimm0 & 0x01) << 3)),
               Read64(GetModrmRegisterXmmPointerRead16(m, rde) +

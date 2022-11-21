@@ -75,13 +75,13 @@ static char *DisByte(char *p, const u8 *d, size_t n) {
   return p;
 }
 
-static char *DisError(struct Dis *d, char *p) {
+static char *DisError(struct Dis *d, char *p, int err) {
   p = DisColumn(DisByte(p, d->xedd->bytes, MIN(15, d->xedd->length)), p,
                 CODELEN);
   p = HighStart(p, g_high.comment);
   *p++ = '#';
   *p++ = ' ';
-  p = stpcpy(p, doublenul(kXedErrorNames, d->xedd->op.error));
+  p = stpcpy(p, doublenul(kXedErrorNames, err));
   p = HighEnd(p);
   *p = '\0';
   return p;
@@ -119,19 +119,19 @@ static char *DisRaw(struct Dis *d, char *p) {
   return p;
 }
 
-static char *DisCode(struct Dis *d, char *p) {
+static char *DisCode(struct Dis *d, char *p, int err) {
   char optspecbuf[128];
-  if (!d->xedd->op.error) {
+  if (!err) {
     return DisInst(d, p, DisSpec(d->xedd, optspecbuf));
   } else {
-    return DisError(d, p);
+    return DisError(d, p, err);
   }
 }
 
-static char *DisLineCode(struct Dis *d, char *p) {
+static char *DisLineCode(struct Dis *d, char *p, int err) {
   p = DisColumn(DisAddr(d, p), p, ADDRLEN);
   p = DisColumn(DisRaw(d, p), p, PFIXLEN * 2 + 1 + BYTELEN * 2);
-  p = DisCode(d, p);
+  p = DisCode(d, p, err);
   return p;
 }
 
@@ -195,7 +195,7 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
   if (!(r = FindReal(m, addr))) return -1;
   k = 0x1000 - (addr & 0xfff);
   if (n <= k) {
-    p = r;
+    p = (u8 *)r;
   } else {
     p = b;
     memcpy(b, r, k);
@@ -205,9 +205,8 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
       n = k;
     }
   }
-  InitializeInstruction(d->xedd, m->mode);
-  DecodeInstruction(d->xedd, p, n);
-  n = d->xedd->op.error ? 1 : d->xedd->length;
+  DecodeInstruction(d->xedd, p, n, m->mode);
+  n = d->xedd->length;
   op.addr = addr;
   op.size = n;
   op.active = true;
@@ -237,18 +236,18 @@ long Dis(struct Dis *d, struct Machine *m, i64 addr, i64 ip, int lines) {
 }
 
 const char *DisGetLine(struct Dis *d, struct Machine *m, int i) {
-  void *r[2];
+  int err;
   u8 b[15];
+  void *r[2];
   if (i >= d->ops.i) return "";
   if (d->ops.p[i].s) return d->ops.p[i].s;
   unassert(d->ops.p[i].size <= 15);
-  InitializeInstruction(d->xedd, m->mode);
-  DecodeInstruction(
+  err = DecodeInstruction(
       d->xedd, AccessRam(m, d->ops.p[i].addr, d->ops.p[i].size, r, b, true),
-      d->ops.p[i].size);
+      d->ops.p[i].size, m->mode);
   d->m = m;
   d->addr = d->ops.p[i].addr;
-  if (DisLineCode(d, d->buf) - d->buf >= (int)sizeof(d->buf)) abort();
+  if (DisLineCode(d, d->buf, err) - d->buf >= (int)sizeof(d->buf)) abort();
   return d->buf;
 }
 

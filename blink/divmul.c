@@ -119,7 +119,7 @@ static struct Dubble DubbleIdiv(struct Dubble a, u64 b, u64 *r) {
   return q;
 }
 
-void OpDivAlAhAxEbSigned(struct Machine *m, u32 rde) {
+void OpDivAlAhAxEbSigned(struct Machine *m, u64 rde) {
   i8 y, r;
   i16 x, q;
   x = Get16(m->ax);
@@ -133,7 +133,7 @@ void OpDivAlAhAxEbSigned(struct Machine *m, u32 rde) {
   m->ah = r & 0xff;
 }
 
-void OpDivAlAhAxEbUnsigned(struct Machine *m, u32 rde) {
+void OpDivAlAhAxEbUnsigned(struct Machine *m, u64 rde) {
   u8 y, r;
   u16 x, q;
   x = Get16(m->ax);
@@ -146,7 +146,7 @@ void OpDivAlAhAxEbUnsigned(struct Machine *m, u32 rde) {
   m->ah = r & 0xff;
 }
 
-static void OpDivRdxRaxEvqpSigned64(struct Machine *m, u32 rde, u8 *p) {
+static void OpDivRdxRaxEvqpSigned64(struct Machine *m, u64 rde, u8 *p) {
   u64 d, r;
   struct Dubble q;
   q.lo = Get64(m->ax);
@@ -161,7 +161,7 @@ static void OpDivRdxRaxEvqpSigned64(struct Machine *m, u32 rde, u8 *p) {
   Put64(m->dx, r);
 }
 
-static void OpDivRdxRaxEvqpSigned32(struct Machine *m, u32 rde, u8 *p) {
+static void OpDivRdxRaxEvqpSigned32(struct Machine *m, u64 rde, u8 *p) {
   i32 y, r;
   i64 x, q;
   x = (u64)Get32(m->dx) << 32 | Get32(m->ax);
@@ -175,7 +175,7 @@ static void OpDivRdxRaxEvqpSigned32(struct Machine *m, u32 rde, u8 *p) {
   Put64(m->dx, r & 0xffffffff);
 }
 
-static void OpDivRdxRaxEvqpSigned16(struct Machine *m, u32 rde, u8 *p) {
+static void OpDivRdxRaxEvqpSigned16(struct Machine *m, u64 rde, u8 *p) {
   i16 y, r;
   i32 x, q;
   x = (u32)Get16(m->dx) << 16 | Get16(m->ax);
@@ -189,7 +189,7 @@ static void OpDivRdxRaxEvqpSigned16(struct Machine *m, u32 rde, u8 *p) {
   Put16(m->dx, r);
 }
 
-static void OpDivRdxRaxEvqpUnsigned16(struct Machine *m, u32 rde, u8 *p) {
+static void OpDivRdxRaxEvqpUnsigned16(struct Machine *m, u64 rde, u8 *p) {
   u16 y, r;
   u32 x, q;
   x = (u32)Get16(m->dx) << 16 | Get16(m->ax);
@@ -202,7 +202,7 @@ static void OpDivRdxRaxEvqpUnsigned16(struct Machine *m, u32 rde, u8 *p) {
   Put16(m->dx, r);
 }
 
-static void OpDivRdxRaxEvqpUnsigned32(struct Machine *m, u32 rde, u8 *p) {
+static void OpDivRdxRaxEvqpUnsigned32(struct Machine *m, u64 rde, u8 *p) {
   u32 y, r;
   u64 x, q;
   x = (u64)Get32(m->dx) << 32 | Get32(m->ax);
@@ -215,7 +215,7 @@ static void OpDivRdxRaxEvqpUnsigned32(struct Machine *m, u32 rde, u8 *p) {
   Put64(m->dx, r & 0xffffffff);
 }
 
-static void OpDivRdxRaxEvqpUnsigned64(struct Machine *m, u32 rde, u8 *p) {
+static void OpDivRdxRaxEvqpUnsigned64(struct Machine *m, u64 rde, u8 *p) {
   u64 d, r;
   struct Dubble q;
   q.lo = Get64(m->ax);
@@ -228,7 +228,7 @@ static void OpDivRdxRaxEvqpUnsigned64(struct Machine *m, u32 rde, u8 *p) {
   Put64(m->dx, r);
 }
 
-void OpDivRdxRaxEvqpSigned(struct Machine *m, u32 rde) {
+void OpDivRdxRaxEvqpSigned(struct Machine *m, u64 rde) {
   u8 *p = GetModrmRegisterWordPointerReadOszRexw(m, rde);
   if (Rexw(rde)) {
     OpDivRdxRaxEvqpSigned64(m, rde, p);
@@ -239,7 +239,7 @@ void OpDivRdxRaxEvqpSigned(struct Machine *m, u32 rde) {
   }
 }
 
-void OpDivRdxRaxEvqpUnsigned(struct Machine *m, u32 rde) {
+void OpDivRdxRaxEvqpUnsigned(struct Machine *m, u64 rde) {
   u8 *p = GetModrmRegisterWordPointerReadOszRexw(m, rde);
   if (Rexw(rde)) {
     OpDivRdxRaxEvqpUnsigned64(m, rde, p);
@@ -250,7 +250,7 @@ void OpDivRdxRaxEvqpUnsigned(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMulAxAlEbSigned(struct Machine *m, u32 rde) {
+void OpMulAxAlEbSigned(struct Machine *m, u64 rde) {
   u8 *p;
   i16 ax;
   unsigned of;
@@ -262,7 +262,7 @@ void OpMulAxAlEbSigned(struct Machine *m, u32 rde) {
   Put16(m->ax, ax);
 }
 
-void OpMulAxAlEbUnsigned(struct Machine *m, u32 rde) {
+void OpMulAxAlEbUnsigned(struct Machine *m, u64 rde) {
   u8 *p;
   int ax;
   unsigned of;
@@ -274,7 +274,7 @@ void OpMulAxAlEbUnsigned(struct Machine *m, u32 rde) {
   Put16(m->ax, ax);
 }
 
-void OpMulRdxRaxEvqpSigned(struct Machine *m, u32 rde) {
+void OpMulRdxRaxEvqpSigned(struct Machine *m, u64 rde) {
   u8 *p;
   i32 dxax;
   i64 edxeax;
@@ -301,7 +301,7 @@ void OpMulRdxRaxEvqpSigned(struct Machine *m, u32 rde) {
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
 }
 
-void OpMulRdxRaxEvqpUnsigned(struct Machine *m, u32 rde) {
+void OpMulRdxRaxEvqpUnsigned(struct Machine *m, u64 rde) {
   u8 *p;
   u32 dxax;
   u64 edxeax;
@@ -328,7 +328,7 @@ void OpMulRdxRaxEvqpUnsigned(struct Machine *m, u32 rde) {
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
 }
 
-static void AluImul(struct Machine *m, u32 rde, u8 *a, u8 *b) {
+static void AluImul(struct Machine *m, u64 rde, u8 *a, u8 *b) {
   unsigned of;
   if (Rexw(rde)) {
     struct Dubble p;
@@ -350,12 +350,12 @@ static void AluImul(struct Machine *m, u32 rde, u8 *a, u8 *b) {
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
 }
 
-void OpImulGvqpEvqp(struct Machine *m, u32 rde) {
+void OpImulGvqpEvqp(struct Machine *m, u64 rde) {
   AluImul(m, rde, RegRexrReg(m, rde),
           GetModrmRegisterWordPointerReadOszRexw(m, rde));
 }
 
-void OpImulGvqpEvqpImm(struct Machine *m, u32 rde) {
+void OpImulGvqpEvqpImm(struct Machine *m, u64 rde) {
   u8 b[8];
   Put64(b, m->xedd->op.uimm0);
   AluImul(m, rde, GetModrmRegisterWordPointerReadOszRexw(m, rde), b);

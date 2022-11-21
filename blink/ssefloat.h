@@ -2,29 +2,29 @@
 #define BLINK_SSEFLOAT_H_
 #include "blink/machine.h"
 
-void OpUnpcklpsd(struct Machine *, u32);
-void OpUnpckhpsd(struct Machine *, u32);
-void OpPextrwGdqpUdqIb(struct Machine *, u32);
-void OpPinsrwVdqEwIb(struct Machine *, u32);
-void OpShuffle(struct Machine *, u32);
-void OpShufpsd(struct Machine *, u32);
-void OpSqrtpsd(struct Machine *, u32);
-void OpRsqrtps(struct Machine *, u32);
-void OpRcpps(struct Machine *, u32);
-void OpComissVsWs(struct Machine *, u32);
-void OpAddpsd(struct Machine *, u32);
-void OpMulpsd(struct Machine *, u32);
-void OpSubpsd(struct Machine *, u32);
-void OpDivpsd(struct Machine *, u32);
-void OpMinpsd(struct Machine *, u32);
-void OpMaxpsd(struct Machine *, u32);
-void OpCmppsd(struct Machine *, u32);
-void OpAndpsd(struct Machine *, u32);
-void OpAndnpsd(struct Machine *, u32);
-void OpOrpsd(struct Machine *, u32);
-void OpXorpsd(struct Machine *, u32);
-void OpHaddpsd(struct Machine *, u32);
-void OpHsubpsd(struct Machine *, u32);
-void OpAddsubpsd(struct Machine *, u32);
+void OpUnpcklpsd(struct Machine *, u64);
+void OpUnpckhpsd(struct Machine *, u64);
+void OpPextrwGdqpUdqIb(struct Machine *, u64);
+void OpPinsrwVdqEwIb(struct Machine *, u64);
+void OpShuffle(struct Machine *, u64);
+void OpShufpsd(struct Machine *, u64);
+void OpSqrtpsd(struct Machine *, u64);
+void OpRsqrtps(struct Machine *, u64);
+void OpRcpps(struct Machine *, u64);
+void OpComissVsWs(struct Machine *, u64);
+void OpAddpsd(struct Machine *, u64);
+void OpMulpsd(struct Machine *, u64);
+void OpSubpsd(struct Machine *, u64);
+void OpDivpsd(struct Machine *, u64);
+void OpMinpsd(struct Machine *, u64);
+void OpMaxpsd(struct Machine *, u64);
+void OpCmppsd(struct Machine *, u64);
+void OpAndpsd(struct Machine *, u64);
+void OpAndnpsd(struct Machine *, u64);
+void OpOrpsd(struct Machine *, u64);
+void OpXorpsd(struct Machine *, u64);
+void OpHaddpsd(struct Machine *, u64);
+void OpHsubpsd(struct Machine *, u64);
+void OpAddsubpsd(struct Machine *, u64);
 
 #endif /* BLINK_SSEFLOAT_H_ */

@@ -110,28 +110,28 @@ i64 Rcl64(u64, u64, u32 *);
 
 u64 BsuDoubleShift(int, u64, u64, u8, bool, u32 *);
 
-void OpAluw(struct Machine *, u32);
-void OpXaddEbGb(struct Machine *, u32);
-void OpXaddEvqpGvqp(struct Machine *, u32);
-void Op0fe(struct Machine *, u32);
-void OpNegEb(struct Machine *, u32);
-void OpNotEb(struct Machine *, u32);
-void OpAlubAdd(struct Machine *, u32);
-void OpAlubOr(struct Machine *, u32);
-void OpAlubAdc(struct Machine *, u32);
-void OpAlubSbb(struct Machine *, u32);
-void OpAlubAnd(struct Machine *, u32);
-void OpAlubSub(struct Machine *, u32);
-void OpAlubXor(struct Machine *, u32);
-void OpNotEvqp(struct Machine *, u32);
-void OpNegEvqp(struct Machine *, u32);
-void OpIncEvqp(struct Machine *, u32);
-void OpDecEvqp(struct Machine *, u32);
+void OpAluw(struct Machine *, u64);
+void OpXaddEbGb(struct Machine *, u64);
+void OpXaddEvqpGvqp(struct Machine *, u64);
+void Op0fe(struct Machine *, u64);
+void OpNegEb(struct Machine *, u64);
+void OpNotEb(struct Machine *, u64);
+void OpAlubAdd(struct Machine *, u64);
+void OpAlubOr(struct Machine *, u64);
+void OpAlubAdc(struct Machine *, u64);
+void OpAlubSbb(struct Machine *, u64);
+void OpAlubAnd(struct Machine *, u64);
+void OpAlubSub(struct Machine *, u64);
+void OpAlubXor(struct Machine *, u64);
+void OpNotEvqp(struct Machine *, u64);
+void OpNegEvqp(struct Machine *, u64);
+void OpIncEvqp(struct Machine *, u64);
+void OpDecEvqp(struct Machine *, u64);
 
-void OpDas(struct Machine *, u32);
-void OpAaa(struct Machine *, u32);
-void OpAas(struct Machine *, u32);
-void OpAam(struct Machine *, u32);
-void OpAad(struct Machine *, u32);
+void OpDas(struct Machine *, u64);
+void OpAaa(struct Machine *, u64);
+void OpAas(struct Machine *, u64);
+void OpAam(struct Machine *, u64);
+void OpAad(struct Machine *, u64);
 
 #endif /* BLINK_ALU_H_ */

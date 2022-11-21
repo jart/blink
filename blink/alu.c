@@ -763,7 +763,7 @@ i64 Ror16(u64 x64, u64 y, u32 *f) {
   }
 }
 
-void OpDas(struct Machine *m, u32 rde) {
+void OpDas(struct Machine *m, u64 rde) {
   u8 al, af, cf;
   af = cf = 0;
   al = m->al;
@@ -779,7 +779,7 @@ void OpDas(struct Machine *m, u32 rde) {
   AluFlags8(m->al, af, &m->flags, 0, cf);
 }
 
-void OpAaa(struct Machine *m, u32 rde) {
+void OpAaa(struct Machine *m, u64 rde) {
   u8 af, cf;
   af = cf = 0;
   if ((m->al & 0x0f) > 9 || GetFlag(m->flags, FLAGS_AF)) {
@@ -791,7 +791,7 @@ void OpAaa(struct Machine *m, u32 rde) {
   AluFlags8(m->al, af, &m->flags, 0, cf);
 }
 
-void OpAas(struct Machine *m, u32 rde) {
+void OpAas(struct Machine *m, u64 rde) {
   u8 af, cf;
   af = cf = 0;
   if ((m->al & 0x0f) > 9 || GetFlag(m->flags, FLAGS_AF)) {
@@ -803,7 +803,7 @@ void OpAas(struct Machine *m, u32 rde) {
   AluFlags8(m->al, af, &m->flags, 0, cf);
 }
 
-void OpAam(struct Machine *m, u32 rde) {
+void OpAam(struct Machine *m, u64 rde) {
   u8 i = m->xedd->op.uimm0;
   if (!i) {
     RaiseDivideError(m);
@@ -814,7 +814,7 @@ void OpAam(struct Machine *m, u32 rde) {
   AluFlags8(m->al, 0, &m->flags, 0, 0);
 }
 
-void OpAad(struct Machine *m, u32 rde) {
+void OpAad(struct Machine *m, u64 rde) {
   u8 i = m->xedd->op.uimm0;
   Put16(m->ax, (m->ah * i + m->al) & 0xff);
   AluFlags8(m->al, 0, &m->flags, 0, 0);

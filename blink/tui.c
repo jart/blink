@@ -51,6 +51,7 @@
 #include "blink/high.h"
 #include "blink/loader.h"
 #include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/mda.h"
 #include "blink/memory.h"
@@ -331,22 +332,22 @@ static void SetCarry(bool cf) {
 }
 
 static bool IsCall(void) {
-  int dispatch = m->xedd->op.map << 8 | m->xedd->op.opcode;
+  int dispatch = Mopcode(m->xedd->op.rde);
   return (dispatch == 0x0E8 ||
           (dispatch == 0x0FF && ModrmReg(m->xedd->op.rde) == 2));
 }
 
 static bool IsDebugBreak(void) {
-  return m->xedd->op.map == XED_ILD_MAP0 && m->xedd->op.opcode == 0xCC;
+  return Mopcode(m->xedd->op.rde) == 0x0CC;
 }
 
 static bool IsRet(void) {
-  switch (m->xedd->op.map << 8 | m->xedd->op.opcode) {
-    case 0xC2:
-    case 0xC3:
-    case 0xCA:
-    case 0xCB:
-    case 0xCF:
+  switch (Mopcode(m->xedd->op.rde)) {
+    case 0x0C2:
+    case 0x0C3:
+    case 0x0CA:
+    case 0x0CB:
+    case 0x0CF:
       return true;
     default:
       return false;
@@ -405,7 +406,7 @@ static u8 CycleXmmSize(u8 w) {
 }
 
 static int GetPointerWidth(void) {
-  return 2 << (m->mode & 3);
+  return 2 << m->mode;
 }
 
 static i64 GetIp(void) {
@@ -1435,7 +1436,7 @@ static void DrawBreakpoints(struct Panel *p) {
 }
 
 static int GetPreferredStackAlignmentMask(void) {
-  switch (m->mode & 3) {
+  switch (m->mode) {
     case XED_MODE_LONG:
       return 15;
     case XED_MODE_LEGACY:
@@ -1849,8 +1850,7 @@ static void OnUndefinedInstruction(void) {
 }
 
 static void OnDecodeError(void) {
-  strcpy(stpcpy(systemfailure, "DECODE: "),
-         doublenul(kXedErrorNames, m->xedd->op.error));
+  stpcpy(systemfailure, "INSTRUCTION DECODE ERROR");
   LaunchDebuggerReactively();
 }
 
@@ -2659,7 +2659,8 @@ static void Tui(void) {
         m->xedd = (struct XedDecodedInst *)m->opcache->icache[0];
         m->xedd->length = 1;
         m->xedd->bytes[0] = 0xCC;
-        m->xedd->op.opcode = 0xCC;
+        m->xedd->op.rde &= ~00000077760000000000000;
+        m->xedd->op.rde &= 0xCCull << 40;  // sets mopcode to int3
       }
       if (action & WINCHED) {
         GetTtySize(ttyout);
@@ -2735,7 +2736,7 @@ static void Tui(void) {
           }
         }
         if (!IsDebugBreak()) {
-          UpdateXmmType(m, &xmmtype);
+          UpdateXmmType(m->xedd->op.rde, &xmmtype);
           if (verbose) LogInstruction();
           ExecuteInstruction(m);
           if (m->signals) {
@@ -2789,7 +2790,7 @@ static void GetOpts(int argc, char *argv[]) {
         react = false;
         break;
       case 'r':
-        m->mode = XED_MACHINE_MODE_REAL;
+        m->mode = XED_MODE_REAL;
         g_disisprog_disable = true;
         break;
       case 's':
@@ -2880,7 +2881,7 @@ int main(int argc, char *argv[]) {
   unassert((pty = NewPty()));
   unassert((s = NewSystem()));
   unassert((m = NewMachine(s, 0)));
-  m->mode = XED_MACHINE_MODE_LONG_64;
+  m->mode = XED_MODE_LONG;
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;
   m->system->onlongbranch = OnLongBranch;

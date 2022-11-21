@@ -55,7 +55,7 @@ static void WriteInt(u8 p[8], u64 x, unsigned long w) {
       Store16(p, x);
       break;
     case 2:
-      Store64(p, x & 0xffffffff);
+      Store32(p, x);
       break;
     case 3:
       Store64(p, x);
@@ -65,7 +65,7 @@ static void WriteInt(u8 p[8], u64 x, unsigned long w) {
   }
 }
 
-static void AddDi(struct Machine *m, u32 rde, u64 x) {
+static void AddDi(struct Machine *m, u64 rde, u64 x) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       Put64(m->di, Get64(m->di) + x);
@@ -81,7 +81,7 @@ static void AddDi(struct Machine *m, u32 rde, u64 x) {
   }
 }
 
-static void AddSi(struct Machine *m, u32 rde, u64 x) {
+static void AddSi(struct Machine *m, u64 rde, u64 x) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       Put64(m->si, Get64(m->si) + x);
@@ -97,7 +97,7 @@ static void AddSi(struct Machine *m, u32 rde, u64 x) {
   }
 }
 
-static u64 ReadCx(struct Machine *m, u32 rde) {
+static u64 ReadCx(struct Machine *m, u64 rde) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       return Get64(m->cx);
@@ -110,7 +110,7 @@ static u64 ReadCx(struct Machine *m, u32 rde) {
   }
 }
 
-static u64 SubtractCx(struct Machine *m, u32 rde, u64 x) {
+static u64 SubtractCx(struct Machine *m, u64 rde, u64 x) {
   u64 cx;
   cx = Get64(m->cx) - x;
   if (Eamode(rde) != XED_MODE_REAL) {
@@ -125,7 +125,7 @@ static u64 SubtractCx(struct Machine *m, u32 rde, u64 x) {
   return cx;
 }
 
-static void StringOp(struct Machine *m, u32 rde, int op) {
+static void StringOp(struct Machine *m, u64 rde, int op) {
   bool stop;
   void *p[2];
   unsigned n;
@@ -135,7 +135,7 @@ static void StringOp(struct Machine *m, u32 rde, int op) {
   n = 1 << RegLog2(rde);
   sgn = GetFlag(m->flags, FLAGS_DF) ? -1 : 1;
   do {
-    if (m->xedd->op.rep && !ReadCx(m, rde)) break;
+    if (Rep(rde) && !ReadCx(m, rde)) break;
     switch (op) {
       case STRING_CMPS:
         kAlu[ALU_SUB][RegLog2(rde)](
@@ -144,8 +144,8 @@ static void StringOp(struct Machine *m, u32 rde, int op) {
             &m->flags);
         AddDi(m, rde, sgn * n);
         AddSi(m, rde, sgn * n);
-        stop = (m->xedd->op.rep == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
-               (m->xedd->op.rep == 3 && !GetFlag(m->flags, FLAGS_ZF));
+        stop = (Rep(rde) == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
+               (Rep(rde) == 3 && !GetFlag(m->flags, FLAGS_ZF));
         break;
       case STRING_MOVS:
         memcpy(BeginStore(m, (v = AddressDi(m, rde)), n, p, s[0]),
@@ -168,8 +168,8 @@ static void StringOp(struct Machine *m, u32 rde, int op) {
             ReadInt(Load(m, AddressDi(m, rde), n, s[1]), RegLog2(rde)),
             ReadInt(m->ax, RegLog2(rde)), &m->flags);
         AddDi(m, rde, sgn * n);
-        stop = (m->xedd->op.rep == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
-               (m->xedd->op.rep == 3 && !GetFlag(m->flags, FLAGS_ZF));
+        stop = (Rep(rde) == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
+               (Rep(rde) == 3 && !GetFlag(m->flags, FLAGS_ZF));
         break;
       case STRING_OUTS:
         OpOut(m, Get16(m->dx),
@@ -185,7 +185,7 @@ static void StringOp(struct Machine *m, u32 rde, int op) {
       default:
         abort();
     }
-    if (m->xedd->op.rep) {
+    if (Rep(rde)) {
       SubtractCx(m, rde, 1);
     } else {
       break;
@@ -193,7 +193,7 @@ static void StringOp(struct Machine *m, u32 rde, int op) {
   } while (!stop);
 }
 
-static void RepMovsbEnhanced(struct Machine *m, u32 rde) {
+static void RepMovsbEnhanced(struct Machine *m, u64 rde) {
   u8 *direal, *sireal;
   u64 diactual, siactual, cx;
   unsigned diremain, siremain, i, n;
@@ -203,10 +203,10 @@ static void RepMovsbEnhanced(struct Machine *m, u32 rde) {
       siactual = AddressSi(m, rde);
       SetWriteAddr(m, diactual, cx);
       SetReadAddr(m, siactual, cx);
-      direal = (u8 *)ResolveAddress(m, diactual);
-      sireal = (u8 *)ResolveAddress(m, siactual);
-      diremain = 0x1000 - (diactual & 0xfff);
-      siremain = 0x1000 - (siactual & 0xfff);
+      direal = ResolveAddress(m, diactual);
+      sireal = ResolveAddress(m, siactual);
+      diremain = 4096 - (diactual & 4095);
+      siremain = 4096 - (siactual & 4095);
       n = MIN(cx, MIN(diremain, siremain));
       for (i = 0; i < n; ++i) direal[i] = sireal[i];
       AddDi(m, rde, n);
@@ -215,7 +215,7 @@ static void RepMovsbEnhanced(struct Machine *m, u32 rde) {
   }
 }
 
-static void RepStosbEnhanced(struct Machine *m, u32 rde) {
+static void RepStosbEnhanced(struct Machine *m, u64 rde) {
   u8 *direal;
   unsigned diremain, n;
   u64 diactual, cx;
@@ -223,8 +223,8 @@ static void RepStosbEnhanced(struct Machine *m, u32 rde) {
     do {
       diactual = AddressDi(m, rde);
       SetWriteAddr(m, diactual, cx);
-      direal = (u8 *)ResolveAddress(m, diactual);
-      diremain = 0x1000 - (diactual & 0xfff);
+      direal = ResolveAddress(m, diactual);
+      diremain = 4096 - (diactual & 4095);
       n = MIN(cx, diremain);
       memset(direal, Get8(m->ax), n);
       AddDi(m, rde, n);
@@ -232,44 +232,44 @@ static void RepStosbEnhanced(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMovs(struct Machine *m, u32 rde) {
+void OpMovs(struct Machine *m, u64 rde) {
   StringOp(m, rde, STRING_MOVS);
 }
 
-void OpCmps(struct Machine *m, u32 rde) {
+void OpCmps(struct Machine *m, u64 rde) {
   StringOp(m, rde, STRING_CMPS);
 }
 
-void OpStos(struct Machine *m, u32 rde) {
+void OpStos(struct Machine *m, u64 rde) {
   StringOp(m, rde, STRING_STOS);
 }
 
-void OpLods(struct Machine *m, u32 rde) {
+void OpLods(struct Machine *m, u64 rde) {
   StringOp(m, rde, STRING_LODS);
 }
 
-void OpScas(struct Machine *m, u32 rde) {
+void OpScas(struct Machine *m, u64 rde) {
   StringOp(m, rde, STRING_SCAS);
 }
 
-void OpIns(struct Machine *m, u32 rde) {
+void OpIns(struct Machine *m, u64 rde) {
   StringOp(m, rde, STRING_INS);
 }
 
-void OpOuts(struct Machine *m, u32 rde) {
+void OpOuts(struct Machine *m, u64 rde) {
   StringOp(m, rde, STRING_OUTS);
 }
 
-void OpMovsb(struct Machine *m, u32 rde) {
-  if (m->xedd->op.rep && !GetFlag(m->flags, FLAGS_DF)) {
+void OpMovsb(struct Machine *m, u64 rde) {
+  if (Rep(rde) && !GetFlag(m->flags, FLAGS_DF)) {
     RepMovsbEnhanced(m, rde);
   } else {
     OpMovs(m, rde);
   }
 }
 
-void OpStosb(struct Machine *m, u32 rde) {
-  if (m->xedd->op.rep && !GetFlag(m->flags, FLAGS_DF)) {
+void OpStosb(struct Machine *m, u64 rde) {
+  if (Rep(rde) && !GetFlag(m->flags, FLAGS_DF)) {
     RepStosbEnhanced(m, rde);
   } else {
     OpStos(m, rde);

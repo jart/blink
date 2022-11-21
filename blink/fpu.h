@@ -54,7 +54,7 @@ int FpuGetTag(struct Machine *, unsigned);
 void FpuPush(struct Machine *, double);
 void FpuSetTag(struct Machine *, unsigned, unsigned);
 void OpFinit(struct Machine *);
-void OpFpu(struct Machine *, u32);
-void OpFwait(struct Machine *, u32);
+void OpFpu(struct Machine *, u64);
+void OpFwait(struct Machine *, u64);
 
 #endif /* BLINK_FPU_H_ */

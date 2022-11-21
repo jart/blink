@@ -44,8 +44,7 @@ static bool IsOpcodeEqual(struct XedDecodedInst *xedd, u8 *a) {
 
 static void ReadInstruction(struct Machine *m, u8 *p, unsigned n) {
   struct XedDecodedInst xedd[1];
-  InitializeInstruction(xedd, m->mode);
-  if (!DecodeInstruction(xedd, p, n)) {
+  if (!DecodeInstruction(xedd, p, n, m->mode)) {
     memcpy(m->xedd, xedd, kInstructionBytes);
   } else {
     HaltMachine(m, kMachineDecodeError);
@@ -71,7 +70,7 @@ void LoadInstruction(struct Machine *m) {
   u64 ip;
   u8 *addr;
   unsigned key;
-  ip = m->cs + MaskAddress(m->mode & 3, m->ip);
+  ip = m->cs + MaskAddress(m->mode, m->ip);
   key = ip & (ARRAYLEN(m->opcache->icache) - 1);
   m->xedd = (struct XedDecodedInst *)m->opcache->icache[key];
   if ((ip & 4095) < 4096 - 15) {

@@ -27,7 +27,7 @@
 #include "blink/mop.h"
 #include "blink/swap.h"
 
-static void AluEb(struct Machine *m, u32 rde, aluop_f op) {
+static void AluEb(struct Machine *m, u64 rde, aluop_f op) {
   u8 *p;
   p = GetModrmRegisterBytePointerWrite(m, rde);
   if (!Lock(rde)) {
@@ -46,15 +46,15 @@ static void AluEb(struct Machine *m, u32 rde, aluop_f op) {
   }
 }
 
-void OpNotEb(struct Machine *m, u32 rde) {
+void OpNotEb(struct Machine *m, u64 rde) {
   AluEb(m, rde, Not8);
 }
 
-void OpNegEb(struct Machine *m, u32 rde) {
+void OpNegEb(struct Machine *m, u64 rde) {
   AluEb(m, rde, Neg8);
 }
 
-void Op0fe(struct Machine *m, u32 rde) {
+void Op0fe(struct Machine *m, u64 rde) {
   switch (ModrmReg(rde)) {
     case 0:
       AluEb(m, rde, Inc8);
@@ -67,7 +67,7 @@ void Op0fe(struct Machine *m, u32 rde) {
   }
 }
 
-static void AluEvqp(struct Machine *m, u32 rde, const aluop_f ops[4]) {
+static void AluEvqp(struct Machine *m, u64 rde, const aluop_f ops[4]) {
   u8 *p;
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite(m, rde, 8);
@@ -108,18 +108,18 @@ static void AluEvqp(struct Machine *m, u32 rde, const aluop_f ops[4]) {
   }
 }
 
-void OpNotEvqp(struct Machine *m, u32 rde) {
+void OpNotEvqp(struct Machine *m, u64 rde) {
   AluEvqp(m, rde, kAlu[ALU_NOT]);
 }
 
-void OpNegEvqp(struct Machine *m, u32 rde) {
+void OpNegEvqp(struct Machine *m, u64 rde) {
   AluEvqp(m, rde, kAlu[ALU_NEG]);
 }
 
-void OpIncEvqp(struct Machine *m, u32 rde) {
+void OpIncEvqp(struct Machine *m, u64 rde) {
   AluEvqp(m, rde, kAlu[ALU_INC]);
 }
 
-void OpDecEvqp(struct Machine *m, u32 rde) {
+void OpDecEvqp(struct Machine *m, u64 rde) {
   AluEvqp(m, rde, kAlu[ALU_DEC]);
 }

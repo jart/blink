@@ -35,11 +35,11 @@ static const char kCc[16][3] = {"o", "no", "b", "ae", "e", "ne", "be", "a",
                                 "s", "ns", "p", "np", "l", "ge", "le", "g"};
 
 static bool IsProbablyByteOp(struct XedDecodedInst *x) {
-  return !(x->op.opcode & 1);
+  return !(Opcode(x->op.rde) & 1);
 }
 
 static int IsRepOpcode(struct Dis *d) {
-  switch (d->xedd->op.opcode & ~1) {
+  switch (Opcode(d->xedd->op.rde) & ~1) {
     case 0x6C: /* INS */
       return 1;
     case 0x6E: /* OUTS */
@@ -60,7 +60,7 @@ static int IsRepOpcode(struct Dis *d) {
 }
 
 static char *DisRepPrefix(struct Dis *d, char *p) {
-  if (d->xedd->op.rep && d->xedd->op.map == XED_ILD_MAP0) {
+  if (Rep(d->xedd->op.rde) && Opmap(d->xedd->op.rde) == XED_ILD_MAP0) {
     switch (IsRepOpcode(d)) {
       case 0:
         break;
@@ -68,7 +68,7 @@ static char *DisRepPrefix(struct Dis *d, char *p) {
         p = stpcpy(p, "rep ");
         break;
       case 2:
-        p = stpcpy(p, d->xedd->op.rep == 2 ? "repnz " : "repz ");
+        p = stpcpy(p, Rep(d->xedd->op.rde) == 2 ? "repnz " : "repz ");
         break;
       default:
         break;
@@ -79,8 +79,8 @@ static char *DisRepPrefix(struct Dis *d, char *p) {
 
 static char *DisName(struct Dis *d, char *bp, const char *name,
                      bool ambiguous) {
+  u64 rde;
   char *p;
-  u32 rde;
   const char *np;
   bool notbyte, notlong, wantsuffix, wantsuffixsd;
   p = bp;
@@ -89,7 +89,7 @@ static char *DisName(struct Dis *d, char *bp, const char *name,
   p = DisRepPrefix(d, p);
   if (strcmp(name, "BIT") == 0) {
     p = stpcpy(p, kBitOp[ModrmReg(rde)]);
-  } else if (strcmp(name, "nop") == 0 && d->xedd->op.rep) {
+  } else if (strcmp(name, "nop") == 0 && Rep(d->xedd->op.rde)) {
     p = stpcpy(p, "pause");
   } else if (strcmp(name, "CALL") == 0) {
     p = stpcpy(p, "call");
@@ -121,14 +121,14 @@ static char *DisName(struct Dis *d, char *bp, const char *name,
       *p++ = *np;
     }
     if (strcmp(name, "ALU") == 0) {
-      p = stpcpy(p, kAluOp[(d->xedd->op.opcode & 070) >> 3]);
+      p = stpcpy(p, kAluOp[(Opcode(rde) & 070) >> 3]);
     } else if (strcmp(name, "ALU2") == 0) {
       p = stpcpy(p, kAluOp[ModrmReg(rde)]);
     } else if (strcmp(np, "WLQ") == 0) {
       notbyte = true;
       wantsuffix = true;
     } else if (strcmp(np, "CC") == 0) {
-      p = stpcpy(p, kCc[d->xedd->op.opcode & 15]);
+      p = stpcpy(p, kCc[Opcode(rde) & 15]);
     } else if (strcmp(np, "WQ") == 0) {
       notbyte = true;
       notlong = Eamode(rde) != XED_MODE_REAL;
@@ -164,7 +164,11 @@ static char *DisName(struct Dis *d, char *bp, const char *name,
     }
   }
   *p++ = ' ';
-  while (p - bp < 8) *p++ = ' ';
+  if (!d->notab) {
+    while (p - bp < 8) {
+      *p++ = ' ';
+    }
+  }
   *p = '\0';
   return p;
 }
@@ -180,7 +184,6 @@ char *DisInst(struct Dis *d, char *p, const char *spec) {
   char args[4][256];
   char *s, *name, *state;
   bool hasarg, hasmodrm, hasregister, hasmemory;
-  unassert(0 == (int)d->xedd->op.error);
   unassert(strlen(spec) < 128);
   hasarg = false;
   hasmodrm = d->xedd->op.has_modrm;

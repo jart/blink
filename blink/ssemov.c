@@ -33,35 +33,35 @@ static u32 pmovmskb(const u8 p[16]) {
   return m;
 }
 
-static void MovdquVdqWdq(struct Machine *m, u32 rde) {
+static void MovdquVdqWdq(struct Machine *m, u64 rde) {
   memcpy(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead16(m, rde), 16);
 }
 
-static void MovdquWdqVdq(struct Machine *m, u32 rde) {
+static void MovdquWdqVdq(struct Machine *m, u64 rde) {
   memcpy(GetModrmRegisterXmmPointerWrite16(m, rde), XmmRexrReg(m, rde), 16);
 }
 
-static void MovupsVpsWps(struct Machine *m, u32 rde) {
+static void MovupsVpsWps(struct Machine *m, u64 rde) {
   MovdquVdqWdq(m, rde);
 }
 
-static void MovupsWpsVps(struct Machine *m, u32 rde) {
+static void MovupsWpsVps(struct Machine *m, u64 rde) {
   MovdquWdqVdq(m, rde);
 }
 
-static void MovupdVpsWps(struct Machine *m, u32 rde) {
+static void MovupdVpsWps(struct Machine *m, u64 rde) {
   MovdquVdqWdq(m, rde);
 }
 
-static void MovupdWpsVps(struct Machine *m, u32 rde) {
+static void MovupdWpsVps(struct Machine *m, u64 rde) {
   MovdquWdqVdq(m, rde);
 }
 
-void OpLddquVdqMdq(struct Machine *m, u32 rde) {
+void OpLddquVdqMdq(struct Machine *m, u64 rde) {
   MovdquVdqWdq(m, rde);
 }
 
-void OpMovntiMdqpGdqp(struct Machine *m, u32 rde) {
+void OpMovntiMdqpGdqp(struct Machine *m, u64 rde) {
   if (Rexw(rde)) {
     memcpy(ComputeReserveAddressWrite8(m, rde), XmmRexrReg(m, rde), 8);
   } else {
@@ -69,7 +69,7 @@ void OpMovntiMdqpGdqp(struct Machine *m, u32 rde) {
   }
 }
 
-static void MovdqaVdqMdq(struct Machine *m, u32 rde) {
+static void MovdqaVdqMdq(struct Machine *m, u64 rde) {
   i64 v;
   u8 *p;
   v = ComputeAddress(m, rde);
@@ -80,7 +80,7 @@ static void MovdqaVdqMdq(struct Machine *m, u32 rde) {
   memcpy(XmmRexrReg(m, rde), p, 16);
 }
 
-static void MovdqaMdqVdq(struct Machine *m, u32 rde) {
+static void MovdqaMdqVdq(struct Machine *m, u64 rde) {
   i64 v;
   u8 *p;
   v = ComputeAddress(m, rde);
@@ -91,7 +91,7 @@ static void MovdqaMdqVdq(struct Machine *m, u32 rde) {
   memcpy(p, XmmRexrReg(m, rde), 16);
 }
 
-static void MovdqaVdqWdq(struct Machine *m, u32 rde) {
+static void MovdqaVdqWdq(struct Machine *m, u64 rde) {
   if (IsModrmRegister(rde)) {
     memcpy(XmmRexrReg(m, rde), XmmRexbRm(m, rde), 16);
   } else {
@@ -99,7 +99,7 @@ static void MovdqaVdqWdq(struct Machine *m, u32 rde) {
   }
 }
 
-static void MovdqaWdqVdq(struct Machine *m, u32 rde) {
+static void MovdqaWdqVdq(struct Machine *m, u64 rde) {
   if (IsModrmRegister(rde)) {
     memcpy(XmmRexbRm(m, rde), XmmRexrReg(m, rde), 16);
   } else {
@@ -107,50 +107,50 @@ static void MovdqaWdqVdq(struct Machine *m, u32 rde) {
   }
 }
 
-static void MovntdqMdqVdq(struct Machine *m, u32 rde) {
+static void MovntdqMdqVdq(struct Machine *m, u64 rde) {
   MovdqaMdqVdq(m, rde);
 }
 
-static void MovntpsMpsVps(struct Machine *m, u32 rde) {
+static void MovntpsMpsVps(struct Machine *m, u64 rde) {
   MovdqaMdqVdq(m, rde);
 }
 
-static void MovntpdMpdVpd(struct Machine *m, u32 rde) {
+static void MovntpdMpdVpd(struct Machine *m, u64 rde) {
   MovdqaMdqVdq(m, rde);
 }
 
-void OpMovntdqaVdqMdq(struct Machine *m, u32 rde) {
+void OpMovntdqaVdqMdq(struct Machine *m, u64 rde) {
   MovdqaVdqMdq(m, rde);
 }
 
-static void MovqPqQq(struct Machine *m, u32 rde) {
+static void MovqPqQq(struct Machine *m, u64 rde) {
   memcpy(MmReg(m, rde), GetModrmRegisterMmPointerRead8(m, rde), 8);
 }
 
-static void MovqQqPq(struct Machine *m, u32 rde) {
+static void MovqQqPq(struct Machine *m, u64 rde) {
   memcpy(GetModrmRegisterMmPointerWrite8(m, rde), MmReg(m, rde), 8);
 }
 
-static void MovqVdqEqp(struct Machine *m, u32 rde) {
+static void MovqVdqEqp(struct Machine *m, u64 rde) {
   memcpy(XmmRexrReg(m, rde), GetModrmRegisterWordPointerRead8(m, rde), 8);
   memset(XmmRexrReg(m, rde) + 8, 0, 8);
 }
 
-static void MovdVdqEd(struct Machine *m, u32 rde) {
+static void MovdVdqEd(struct Machine *m, u64 rde) {
   memset(XmmRexrReg(m, rde), 0, 16);
   memcpy(XmmRexrReg(m, rde), GetModrmRegisterWordPointerRead4(m, rde), 4);
 }
 
-static void MovqPqEqp(struct Machine *m, u32 rde) {
+static void MovqPqEqp(struct Machine *m, u64 rde) {
   memcpy(MmReg(m, rde), GetModrmRegisterWordPointerRead8(m, rde), 8);
 }
 
-static void MovdPqEd(struct Machine *m, u32 rde) {
+static void MovdPqEd(struct Machine *m, u64 rde) {
   memcpy(MmReg(m, rde), GetModrmRegisterWordPointerRead4(m, rde), 4);
   memset(MmReg(m, rde) + 4, 0, 4);
 }
 
-static void MovdEdVdq(struct Machine *m, u32 rde) {
+static void MovdEdVdq(struct Machine *m, u64 rde) {
   if (IsModrmRegister(rde)) {
     Put64(RegRexbRm(m, rde), Read32(XmmRexrReg(m, rde)));
   } else {
@@ -158,11 +158,11 @@ static void MovdEdVdq(struct Machine *m, u32 rde) {
   }
 }
 
-static void MovqEqpVdq(struct Machine *m, u32 rde) {
+static void MovqEqpVdq(struct Machine *m, u64 rde) {
   memcpy(GetModrmRegisterWordPointerWrite8(m, rde), XmmRexrReg(m, rde), 8);
 }
 
-static void MovdEdPq(struct Machine *m, u32 rde) {
+static void MovdEdPq(struct Machine *m, u64 rde) {
   if (IsModrmRegister(rde)) {
     Put64(RegRexbRm(m, rde), Read32(MmReg(m, rde)));
   } else {
@@ -170,20 +170,20 @@ static void MovdEdPq(struct Machine *m, u32 rde) {
   }
 }
 
-static void MovqEqpPq(struct Machine *m, u32 rde) {
+static void MovqEqpPq(struct Machine *m, u64 rde) {
   memcpy(GetModrmRegisterWordPointerWrite(m, rde, 8), MmReg(m, rde), 8);
 }
 
-static void MovntqMqPq(struct Machine *m, u32 rde) {
+static void MovntqMqPq(struct Machine *m, u64 rde) {
   memcpy(ComputeReserveAddressWrite8(m, rde), MmReg(m, rde), 8);
 }
 
-static void MovqVqWq(struct Machine *m, u32 rde) {
+static void MovqVqWq(struct Machine *m, u64 rde) {
   memcpy(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead8(m, rde), 8);
   memset(XmmRexrReg(m, rde) + 8, 0, 8);
 }
 
-static void MovssVpsWps(struct Machine *m, u32 rde) {
+static void MovssVpsWps(struct Machine *m, u64 rde) {
   if (IsModrmRegister(rde)) {
     memcpy(XmmRexrReg(m, rde), XmmRexbRm(m, rde), 4);
   } else {
@@ -192,11 +192,11 @@ static void MovssVpsWps(struct Machine *m, u32 rde) {
   }
 }
 
-static void MovssWpsVps(struct Machine *m, u32 rde) {
+static void MovssWpsVps(struct Machine *m, u64 rde) {
   memcpy(GetModrmRegisterXmmPointerWrite4(m, rde), XmmRexrReg(m, rde), 4);
 }
 
-static void MovsdVpsWps(struct Machine *m, u32 rde) {
+static void MovsdVpsWps(struct Machine *m, u64 rde) {
   if (IsModrmRegister(rde)) {
     memcpy(XmmRexrReg(m, rde), XmmRexbRm(m, rde), 8);
   } else {
@@ -205,30 +205,30 @@ static void MovsdVpsWps(struct Machine *m, u32 rde) {
   }
 }
 
-static void MovsdWpsVps(struct Machine *m, u32 rde) {
+static void MovsdWpsVps(struct Machine *m, u64 rde) {
   memcpy(GetModrmRegisterXmmPointerWrite8(m, rde), XmmRexrReg(m, rde), 8);
 }
 
-static void MovhlpsVqUq(struct Machine *m, u32 rde) {
+static void MovhlpsVqUq(struct Machine *m, u64 rde) {
   memcpy(XmmRexrReg(m, rde), XmmRexbRm(m, rde) + 8, 8);
 }
 
-static void MovlpsVqMq(struct Machine *m, u32 rde) {
+static void MovlpsVqMq(struct Machine *m, u64 rde) {
   memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(m, rde), 8);
 }
 
-static void MovlpdVqMq(struct Machine *m, u32 rde) {
+static void MovlpdVqMq(struct Machine *m, u64 rde) {
   memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(m, rde), 8);
 }
 
-static void MovddupVqWq(struct Machine *m, u32 rde) {
+static void MovddupVqWq(struct Machine *m, u64 rde) {
   u8 *src;
   src = GetModrmRegisterXmmPointerRead8(m, rde);
   memcpy(XmmRexrReg(m, rde) + 0, src, 8);
   memcpy(XmmRexrReg(m, rde) + 8, src, 8);
 }
 
-static void MovsldupVqWq(struct Machine *m, u32 rde) {
+static void MovsldupVqWq(struct Machine *m, u64 rde) {
   u8 *dst, *src;
   dst = XmmRexrReg(m, rde);
   src = GetModrmRegisterXmmPointerRead16(m, rde);
@@ -238,27 +238,27 @@ static void MovsldupVqWq(struct Machine *m, u32 rde) {
   memcpy(dst + 8 + 4, src + 8, 4);
 }
 
-static void MovlpsMqVq(struct Machine *m, u32 rde) {
+static void MovlpsMqVq(struct Machine *m, u64 rde) {
   memcpy(ComputeReserveAddressWrite8(m, rde), XmmRexrReg(m, rde), 8);
 }
 
-static void MovlpdMqVq(struct Machine *m, u32 rde) {
+static void MovlpdMqVq(struct Machine *m, u64 rde) {
   memcpy(ComputeReserveAddressWrite8(m, rde), XmmRexrReg(m, rde), 8);
 }
 
-static void MovlhpsVqUq(struct Machine *m, u32 rde) {
+static void MovlhpsVqUq(struct Machine *m, u64 rde) {
   memcpy(XmmRexrReg(m, rde) + 8, XmmRexbRm(m, rde), 8);
 }
 
-static void MovhpsVqMq(struct Machine *m, u32 rde) {
+static void MovhpsVqMq(struct Machine *m, u64 rde) {
   memcpy(XmmRexrReg(m, rde) + 8, ComputeReserveAddressRead8(m, rde), 8);
 }
 
-static void MovhpdVqMq(struct Machine *m, u32 rde) {
+static void MovhpdVqMq(struct Machine *m, u64 rde) {
   memcpy(XmmRexrReg(m, rde) + 8, ComputeReserveAddressRead8(m, rde), 8);
 }
 
-static void MovshdupVqWq(struct Machine *m, u32 rde) {
+static void MovshdupVqWq(struct Machine *m, u64 rde) {
   u8 *dst, *src;
   dst = XmmRexrReg(m, rde);
   src = GetModrmRegisterXmmPointerRead16(m, rde);
@@ -268,15 +268,15 @@ static void MovshdupVqWq(struct Machine *m, u32 rde) {
   memcpy(dst + 8 + 4, src + 12, 4);
 }
 
-static void MovhpsMqVq(struct Machine *m, u32 rde) {
+static void MovhpsMqVq(struct Machine *m, u64 rde) {
   memcpy(ComputeReserveAddressWrite8(m, rde), XmmRexrReg(m, rde) + 8, 8);
 }
 
-static void MovhpdMqVq(struct Machine *m, u32 rde) {
+static void MovhpdMqVq(struct Machine *m, u64 rde) {
   memcpy(ComputeReserveAddressWrite8(m, rde), XmmRexrReg(m, rde) + 8, 8);
 }
 
-static void MovqWqVq(struct Machine *m, u32 rde) {
+static void MovqWqVq(struct Machine *m, u64 rde) {
   if (IsModrmRegister(rde)) {
     memcpy(XmmRexbRm(m, rde), XmmRexrReg(m, rde), 8);
     memset(XmmRexbRm(m, rde) + 8, 0, 8);
@@ -285,33 +285,33 @@ static void MovqWqVq(struct Machine *m, u32 rde) {
   }
 }
 
-static void Movq2dqVdqNq(struct Machine *m, u32 rde) {
+static void Movq2dqVdqNq(struct Machine *m, u64 rde) {
   memcpy(XmmRexrReg(m, rde), MmRm(m, rde), 8);
   memset(XmmRexrReg(m, rde) + 8, 0, 8);
 }
 
-static void Movdq2qPqUq(struct Machine *m, u32 rde) {
+static void Movdq2qPqUq(struct Machine *m, u64 rde) {
   memcpy(MmReg(m, rde), XmmRexbRm(m, rde), 8);
 }
 
-static void MovapsVpsWps(struct Machine *m, u32 rde) {
+static void MovapsVpsWps(struct Machine *m, u64 rde) {
   MovdqaVdqWdq(m, rde);
 }
 
-static void MovapdVpdWpd(struct Machine *m, u32 rde) {
+static void MovapdVpdWpd(struct Machine *m, u64 rde) {
   MovdqaVdqWdq(m, rde);
 }
 
-static void MovapsWpsVps(struct Machine *m, u32 rde) {
+static void MovapsWpsVps(struct Machine *m, u64 rde) {
   MovdqaWdqVdq(m, rde);
 }
 
-static void MovapdWpdVpd(struct Machine *m, u32 rde) {
+static void MovapdWpdVpd(struct Machine *m, u64 rde) {
   MovdqaWdqVdq(m, rde);
 }
 
-void OpMovWpsVps(struct Machine *m, u32 rde) {
-  switch (m->xedd->op.rep | Osz(rde)) {
+void OpMovWpsVps(struct Machine *m, u64 rde) {
+  switch (Rep(rde) | Osz(rde)) {
     case 0:
       MovupsWpsVps(m, rde);
       break;
@@ -329,7 +329,7 @@ void OpMovWpsVps(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f28(struct Machine *m, u32 rde) {
+void OpMov0f28(struct Machine *m, u64 rde) {
   if (!Osz(rde)) {
     MovapsVpsWps(m, rde);
   } else {
@@ -337,7 +337,7 @@ void OpMov0f28(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f6e(struct Machine *m, u32 rde) {
+void OpMov0f6e(struct Machine *m, u64 rde) {
   if (Osz(rde)) {
     if (Rexw(rde)) {
       MovqVdqEqp(m, rde);
@@ -353,17 +353,17 @@ void OpMov0f6e(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f6f(struct Machine *m, u32 rde) {
+void OpMov0f6f(struct Machine *m, u64 rde) {
   if (Osz(rde)) {
     MovdqaVdqWdq(m, rde);
-  } else if (m->xedd->op.rep == 3) {
+  } else if (Rep(rde) == 3) {
     MovdquVdqWdq(m, rde);
   } else {
     MovqPqQq(m, rde);
   }
 }
 
-void OpMov0fE7(struct Machine *m, u32 rde) {
+void OpMov0fE7(struct Machine *m, u64 rde) {
   if (!Osz(rde)) {
     MovntqMqPq(m, rde);
   } else {
@@ -371,8 +371,8 @@ void OpMov0fE7(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f7e(struct Machine *m, u32 rde) {
-  if (m->xedd->op.rep == 3) {
+void OpMov0f7e(struct Machine *m, u64 rde) {
+  if (Rep(rde) == 3) {
     MovqVqWq(m, rde);
   } else if (Osz(rde)) {
     if (Rexw(rde)) {
@@ -389,8 +389,8 @@ void OpMov0f7e(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f7f(struct Machine *m, u32 rde) {
-  if (m->xedd->op.rep == 3) {
+void OpMov0f7f(struct Machine *m, u64 rde) {
+  if (Rep(rde) == 3) {
     MovdquWdqVdq(m, rde);
   } else if (Osz(rde)) {
     MovdqaWdqVdq(m, rde);
@@ -399,8 +399,8 @@ void OpMov0f7f(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f10(struct Machine *m, u32 rde) {
-  switch (m->xedd->op.rep | Osz(rde)) {
+void OpMov0f10(struct Machine *m, u64 rde) {
+  switch (Rep(rde) | Osz(rde)) {
     case 0:
       MovupsVpsWps(m, rde);
       break;
@@ -418,7 +418,7 @@ void OpMov0f10(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f29(struct Machine *m, u32 rde) {
+void OpMov0f29(struct Machine *m, u64 rde) {
   if (!Osz(rde)) {
     MovapsWpsVps(m, rde);
   } else {
@@ -426,7 +426,7 @@ void OpMov0f29(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f2b(struct Machine *m, u32 rde) {
+void OpMov0f2b(struct Machine *m, u64 rde) {
   if (!Osz(rde)) {
     MovntpsMpsVps(m, rde);
   } else {
@@ -434,8 +434,8 @@ void OpMov0f2b(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f12(struct Machine *m, u32 rde) {
-  switch (m->xedd->op.rep | Osz(rde)) {
+void OpMov0f12(struct Machine *m, u64 rde) {
+  switch (Rep(rde) | Osz(rde)) {
     case 0:
       if (IsModrmRegister(rde)) {
         MovhlpsVqUq(m, rde);
@@ -457,7 +457,7 @@ void OpMov0f12(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f13(struct Machine *m, u32 rde) {
+void OpMov0f13(struct Machine *m, u64 rde) {
   if (Osz(rde)) {
     MovlpdMqVq(m, rde);
   } else {
@@ -465,8 +465,8 @@ void OpMov0f13(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f16(struct Machine *m, u32 rde) {
-  switch (m->xedd->op.rep | Osz(rde)) {
+void OpMov0f16(struct Machine *m, u64 rde) {
+  switch (Rep(rde) | Osz(rde)) {
     case 0:
       if (IsModrmRegister(rde)) {
         MovlhpsVqUq(m, rde);
@@ -486,7 +486,7 @@ void OpMov0f16(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0f17(struct Machine *m, u32 rde) {
+void OpMov0f17(struct Machine *m, u64 rde) {
   if (Osz(rde)) {
     MovhpdMqVq(m, rde);
   } else {
@@ -494,10 +494,10 @@ void OpMov0f17(struct Machine *m, u32 rde) {
   }
 }
 
-void OpMov0fD6(struct Machine *m, u32 rde) {
-  if (m->xedd->op.rep == 3) {
+void OpMov0fD6(struct Machine *m, u64 rde) {
+  if (Rep(rde) == 3) {
     Movq2dqVdqNq(m, rde);
-  } else if (m->xedd->op.rep == 2) {
+  } else if (Rep(rde) == 2) {
     Movdq2qPqUq(m, rde);
   } else if (Osz(rde)) {
     MovqWqVq(m, rde);
@@ -506,12 +506,12 @@ void OpMov0fD6(struct Machine *m, u32 rde) {
   }
 }
 
-void OpPmovmskbGdqpNqUdq(struct Machine *m, u32 rde) {
+void OpPmovmskbGdqpNqUdq(struct Machine *m, u64 rde) {
   Put64(RegRexrReg(m, rde),
         pmovmskb(XmmRexbRm(m, rde)) & (Osz(rde) ? 0xffff : 0xff));
 }
 
-void OpMaskMovDiXmmRegXmmRm(struct Machine *m, u32 rde) {
+void OpMaskMovDiXmmRegXmmRm(struct Machine *m, u64 rde) {
   void *p[2];
   u64 v;
   unsigned i, n;

@@ -1445,7 +1445,7 @@ static int OpAccept(struct Machine *m, int fd, i64 sa, i64 sas) {
   return OpAccept4(m, fd, sa, sas, 0);
 }
 
-void OpSyscall(struct Machine *m, u32 rde) {
+void OpSyscall(struct Machine *m, u64 rde) {
   u64 ax, di, si, dx, r0, r8, r9;
   ax = Get64(m->ax);
   di = Get64(m->di);

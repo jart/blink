@@ -1420,7 +1420,7 @@ static void SsePmaddubsw(u8 x[16], const u8 y[16]) {
   MmxPmaddubsw(x + 8, y + 8);
 }
 
-static void OpPsb(struct Machine *m, u32 rde,
+static void OpPsb(struct Machine *m, u64 rde,
                   void MmxKernel(u8[8], unsigned),
                   void SseKernel(u8[16], unsigned)) {
   if (Osz(rde)) {
@@ -1430,7 +1430,7 @@ static void OpPsb(struct Machine *m, u32 rde,
   }
 }
 
-void Op171(struct Machine *m, u32 rde) {
+void Op171(struct Machine *m, u64 rde) {
   switch (ModrmReg(rde)) {
     case 2:
       OpPsb(m, rde, MmxPsrlw, SsePsrlw);
@@ -1446,7 +1446,7 @@ void Op171(struct Machine *m, u32 rde) {
   }
 }
 
-void Op172(struct Machine *m, u32 rde) {
+void Op172(struct Machine *m, u64 rde) {
   switch (ModrmReg(rde)) {
     case 2:
       OpPsb(m, rde, MmxPsrld, SsePsrld);
@@ -1462,7 +1462,7 @@ void Op172(struct Machine *m, u32 rde) {
   }
 }
 
-void Op173(struct Machine *m, u32 rde) {
+void Op173(struct Machine *m, u64 rde) {
   switch (ModrmReg(rde)) {
     case 2:
       OpPsb(m, rde, MmxPsrlq, SsePsrlq);
@@ -1481,7 +1481,7 @@ void Op173(struct Machine *m, u32 rde) {
   }
 }
 
-void OpSsePalignr(struct Machine *m, u32 rde) {
+void OpSsePalignr(struct Machine *m, u64 rde) {
   if (Osz(rde)) {
     SsePalignr(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead16(m, rde),
                m->xedd->op.uimm0);
@@ -1491,7 +1491,7 @@ void OpSsePalignr(struct Machine *m, u32 rde) {
   }
 }
 
-static void OpSse(struct Machine *m, u32 rde,
+static void OpSse(struct Machine *m, u64 rde,
                   void MmxKernel(u8[8], const u8[8]),
                   void SseKernel(u8[16], const u8[16])) {
   if (Osz(rde)) {
@@ -1502,77 +1502,77 @@ static void OpSse(struct Machine *m, u32 rde,
 }
 
 /* clang-format off */
-void OpSsePunpcklbw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPunpcklbw, SsePunpcklbw); }
-void OpSsePunpcklwd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPunpcklwd, SsePunpcklwd); }
-void OpSsePunpckldq(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPunpckldq, SsePunpckldq); }
-void OpSsePacksswb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPacksswb, SsePacksswb); }
-void OpSsePcmpgtb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPcmpgtb, SsePcmpgtb); }
-void OpSsePcmpgtw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPcmpgtw, SsePcmpgtw); }
-void OpSsePcmpgtd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPcmpgtd, SsePcmpgtd); }
-void OpSsePackuswb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPackuswb, SsePackuswb); }
-void OpSsePunpckhbw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPunpckhbw, SsePunpckhbw); }
-void OpSsePunpckhwd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPunpckhwd, SsePunpckhwd); }
-void OpSsePunpckhdq(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPunpckhdq, SsePunpckhdq); }
-void OpSsePackssdw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPackssdw, SsePackssdw); }
-void OpSsePunpcklqdq(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPunpcklqdq, SsePunpcklqdq); }
-void OpSsePunpckhqdq(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPunpckhqdq, SsePunpckhqdq); }
-void OpSsePcmpeqb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPcmpeqb, SsePcmpeqb); }
-void OpSsePcmpeqw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPcmpeqw, SsePcmpeqw); }
-void OpSsePcmpeqd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPcmpeqd, SsePcmpeqd); }
-void OpSsePsrlwv(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsrlwv, SsePsrlwv); }
-void OpSsePsrldv(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsrldv, SsePsrldv); }
-void OpSsePsrlqv(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsrlqv, SsePsrlqv); }
-void OpSsePaddq(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPaddq, SsePaddq); }
-void OpSsePmullw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPmullw, SsePmullw); }
-void OpSsePsubusb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsubusb, SsePsubusb); }
-void OpSsePsubusw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsubusw, SsePsubusw); }
-void OpSsePminub(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPminub, SsePminub); }
-void OpSsePand(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPand, SsePand); }
-void OpSsePaddusb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPaddusb, SsePaddusb); }
-void OpSsePaddusw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPaddusw, SsePaddusw); }
-void OpSsePmaxub(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPmaxub, SsePmaxub); }
-void OpSsePandn(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPandn, SsePandn); }
-void OpSsePavgb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPavgb, SsePavgb); }
-void OpSsePsrawv(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsrawv, SsePsrawv); }
-void OpSsePsradv(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsradv, SsePsradv); }
-void OpSsePavgw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPavgw, SsePavgw); }
-void OpSsePmulhuw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPmulhuw, SsePmulhuw); }
-void OpSsePmulhw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPmulhw, SsePmulhw); }
-void OpSsePsubsb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsubsb, SsePsubsb); }
-void OpSsePsubsw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsubsw, SsePsubsw); }
-void OpSsePminsw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPminsw, SsePminsw); }
-void OpSsePor(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPor, SsePor); }
-void OpSsePaddsb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPaddsb, SsePaddsb); }
-void OpSsePaddsw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPaddsw, SsePaddsw); }
-void OpSsePmaxsw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPmaxsw, SsePmaxsw); }
-void OpSsePxor(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPxor, SsePxor); }
-void OpSsePsllwv(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsllwv, SsePsllwv); }
-void OpSsePslldv(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPslldv, SsePslldv); }
-void OpSsePsllqv(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsllqv, SsePsllqv); }
-void OpSsePmuludq(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPmuludq, SsePmuludq); }
-void OpSsePmaddwd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPmaddwd, SsePmaddwd); }
-void OpSsePsadbw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsadbw, SsePsadbw); }
-void OpSsePsubb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsubb, SsePsubb); }
-void OpSsePsubw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsubw, SsePsubw); }
-void OpSsePsubd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsubd, SsePsubd); }
-void OpSsePsubq(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsubq, SsePsubq); }
-void OpSsePaddb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPaddb, SsePaddb); }
-void OpSsePaddw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPaddw, SsePaddw); }
-void OpSsePaddd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPaddd, SsePaddd); }
-void OpSsePshufb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPshufb, SsePshufb); }
-void OpSsePhaddw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPhaddw, SsePhaddw); }
-void OpSsePhaddd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPhaddd, SsePhaddd); }
-void OpSsePhaddsw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPhaddsw, SsePhaddsw); }
-void OpSsePmaddubsw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPmaddubsw, SsePmaddubsw); }
-void OpSsePhsubw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPhsubw, SsePhsubw); }
-void OpSsePhsubd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPhsubd, SsePhsubd); }
-void OpSsePhsubsw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPhsubsw, SsePhsubsw); }
-void OpSsePsignb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsignb, SsePsignb); }
-void OpSsePsignw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsignw, SsePsignw); }
-void OpSsePsignd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPsignd, SsePsignd); }
-void OpSsePmulhrsw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPmulhrsw, SsePmulhrsw); }
-void OpSsePabsb(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPabsb, SsePabsb); }
-void OpSsePabsw(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPabsw, SsePabsw); }
-void OpSsePabsd(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPabsd, SsePabsd); }
-void OpSsePmulld(struct Machine *m, u32 rde) { OpSse(m, rde, MmxPmulld, SsePmulld); }
+void OpSsePunpcklbw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpcklbw, SsePunpcklbw); }
+void OpSsePunpcklwd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpcklwd, SsePunpcklwd); }
+void OpSsePunpckldq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpckldq, SsePunpckldq); }
+void OpSsePacksswb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPacksswb, SsePacksswb); }
+void OpSsePcmpgtb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpgtb, SsePcmpgtb); }
+void OpSsePcmpgtw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpgtw, SsePcmpgtw); }
+void OpSsePcmpgtd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpgtd, SsePcmpgtd); }
+void OpSsePackuswb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPackuswb, SsePackuswb); }
+void OpSsePunpckhbw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpckhbw, SsePunpckhbw); }
+void OpSsePunpckhwd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpckhwd, SsePunpckhwd); }
+void OpSsePunpckhdq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpckhdq, SsePunpckhdq); }
+void OpSsePackssdw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPackssdw, SsePackssdw); }
+void OpSsePunpcklqdq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpcklqdq, SsePunpcklqdq); }
+void OpSsePunpckhqdq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpckhqdq, SsePunpckhqdq); }
+void OpSsePcmpeqb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpeqb, SsePcmpeqb); }
+void OpSsePcmpeqw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpeqw, SsePcmpeqw); }
+void OpSsePcmpeqd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpeqd, SsePcmpeqd); }
+void OpSsePsrlwv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsrlwv, SsePsrlwv); }
+void OpSsePsrldv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsrldv, SsePsrldv); }
+void OpSsePsrlqv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsrlqv, SsePsrlqv); }
+void OpSsePaddq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddq, SsePaddq); }
+void OpSsePmullw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmullw, SsePmullw); }
+void OpSsePsubusb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubusb, SsePsubusb); }
+void OpSsePsubusw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubusw, SsePsubusw); }
+void OpSsePminub(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPminub, SsePminub); }
+void OpSsePand(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPand, SsePand); }
+void OpSsePaddusb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddusb, SsePaddusb); }
+void OpSsePaddusw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddusw, SsePaddusw); }
+void OpSsePmaxub(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmaxub, SsePmaxub); }
+void OpSsePandn(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPandn, SsePandn); }
+void OpSsePavgb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPavgb, SsePavgb); }
+void OpSsePsrawv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsrawv, SsePsrawv); }
+void OpSsePsradv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsradv, SsePsradv); }
+void OpSsePavgw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPavgw, SsePavgw); }
+void OpSsePmulhuw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmulhuw, SsePmulhuw); }
+void OpSsePmulhw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmulhw, SsePmulhw); }
+void OpSsePsubsb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubsb, SsePsubsb); }
+void OpSsePsubsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubsw, SsePsubsw); }
+void OpSsePminsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPminsw, SsePminsw); }
+void OpSsePor(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPor, SsePor); }
+void OpSsePaddsb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddsb, SsePaddsb); }
+void OpSsePaddsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddsw, SsePaddsw); }
+void OpSsePmaxsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmaxsw, SsePmaxsw); }
+void OpSsePxor(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPxor, SsePxor); }
+void OpSsePsllwv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsllwv, SsePsllwv); }
+void OpSsePslldv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPslldv, SsePslldv); }
+void OpSsePsllqv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsllqv, SsePsllqv); }
+void OpSsePmuludq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmuludq, SsePmuludq); }
+void OpSsePmaddwd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmaddwd, SsePmaddwd); }
+void OpSsePsadbw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsadbw, SsePsadbw); }
+void OpSsePsubb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubb, SsePsubb); }
+void OpSsePsubw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubw, SsePsubw); }
+void OpSsePsubd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubd, SsePsubd); }
+void OpSsePsubq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubq, SsePsubq); }
+void OpSsePaddb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddb, SsePaddb); }
+void OpSsePaddw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddw, SsePaddw); }
+void OpSsePaddd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddd, SsePaddd); }
+void OpSsePshufb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPshufb, SsePshufb); }
+void OpSsePhaddw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhaddw, SsePhaddw); }
+void OpSsePhaddd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhaddd, SsePhaddd); }
+void OpSsePhaddsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhaddsw, SsePhaddsw); }
+void OpSsePmaddubsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmaddubsw, SsePmaddubsw); }
+void OpSsePhsubw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhsubw, SsePhsubw); }
+void OpSsePhsubd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhsubd, SsePhsubd); }
+void OpSsePhsubsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhsubsw, SsePhsubsw); }
+void OpSsePsignb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsignb, SsePsignb); }
+void OpSsePsignw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsignw, SsePsignw); }
+void OpSsePsignd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsignd, SsePsignd); }
+void OpSsePmulhrsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmulhrsw, SsePmulhrsw); }
+void OpSsePabsb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPabsb, SsePabsb); }
+void OpSsePabsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPabsw, SsePabsw); }
+void OpSsePabsd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPabsd, SsePabsd); }
+void OpSsePmulld(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmulld, SsePmulld); }
 /* clang-format on */

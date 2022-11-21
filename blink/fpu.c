@@ -969,7 +969,7 @@ void OpFinit(struct Machine *m) {
   m->fpu.tw = -1;
 }
 
-void OpFwait(struct Machine *m, u32 rde) {
+void OpFwait(struct Machine *m, u64 rde) {
   int sw, cw;
   sw = m->fpu.sw;
   cw = m->fpu.cw;
@@ -1023,10 +1023,10 @@ double FpuPop(struct Machine *m) {
   return x;
 }
 
-void OpFpu(struct Machine *m, u32 rde) {
+void OpFpu(struct Machine *m, u64 rde) {
   unsigned op;
   bool ismemory;
-  op = m->xedd->op.opcode & 7;
+  op = Opcode(rde) & 7;
   ismemory = ModrmMod(rde) != 3;
   m->fpu.ip = m->ip - m->xedd->length;
   m->fpu.op = op << 8 | ModrmMod(rde) << 6 | ModrmReg(rde) << 3 | ModrmRm(rde);

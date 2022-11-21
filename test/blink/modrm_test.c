@@ -23,23 +23,18 @@
 #include "blink/x86.h"
 #include "test/test.h"
 
-#define ILD(XEDD, OP, MODE)                                \
-  do {                                                     \
-    InitializeInstruction(XEDD, MODE);                     \
-    ASSERT_EQ(0, DecodeInstruction(XEDD, OP, sizeof(OP))); \
-  } while (0)
-
 struct System *s;
 struct Machine *m;
+struct XedDecodedInst xedd;
 
 void SetUp(void) {
   unassert((s = NewSystem()));
   unassert((m = NewMachine(s, 0)));
-  m->xedd = (struct XedDecodedInst *)calloc(1, sizeof(*m->xedd));
+  m->xedd = &xedd;
+  memset(&xedd, 0, sizeof(xedd));
 }
 
 void TearDown(void) {
-  free(m->xedd);
   FreeMachine(m);
   FreeSystem(s);
 }
@@ -48,7 +43,7 @@ TEST(modrm, testAddressSizeOverride_isNotPresent_keepsWholeExpression) {
   uint8_t op[] = {0x8d, 0x04, 0x03}; /* lea (%rbx,%rax,1),%eax */
   Write64(m->bx, 0x2);
   Write64(m->ax, 0xffffffff);
-  ILD(m->xedd, op, XED_MACHINE_MODE_LONG_64);
+  ASSERT_EQ(0, DecodeInstruction(m->xedd, op, sizeof(op), XED_MODE_LONG));
   EXPECT_EQ(0x100000001, ComputeAddress(m, m->xedd->op.rde));
 }
 
@@ -56,7 +51,7 @@ TEST(modrm, testAddressSizeOverride_isPresent_modulesWholeExpression) {
   uint8_t op[] = {0x67, 0x8d, 0x04, 0x03}; /* lea (%ebx,%eax,1),%eax */
   Write64(m->bx, 0x2);
   Write64(m->ax, 0xffffffff);
-  ILD(m->xedd, op, XED_MACHINE_MODE_LONG_64);
+  ASSERT_EQ(0, DecodeInstruction(m->xedd, op, sizeof(op), XED_MODE_LONG));
   EXPECT_EQ(0x000000001, ComputeAddress(m, m->xedd->op.rde));
 }
 
@@ -64,13 +59,13 @@ TEST(modrm, testOverflow_doesntTriggerTooling) {
   uint8_t op[] = {0x8d, 0x04, 0x03}; /* lea (%rbx,%rax,1),%eax */
   Write64(m->bx, 0x0000000000000001);
   Write64(m->ax, 0x7fffffffffffffff);
-  ILD(m->xedd, op, XED_MACHINE_MODE_LONG_64);
+  ASSERT_EQ(0, DecodeInstruction(m->xedd, op, sizeof(op), XED_MODE_LONG));
   EXPECT_EQ(0x8000000000000000ull,
             (uint64_t)ComputeAddress(m, m->xedd->op.rde));
 }
 
 TEST(modrm, testPuttingOnTheRiz) {
-  static uint8_t ops[][15] = {
+  static uint8_t op[][15] = {
       {0x8d, 0b00110100, 0b00100110},        // lea (%rsi),%esi
       {0x67, 0x8d, 0b00110100, 0b11100110},  // lea (%esi,%eiz,8),%esi
       {103, 141, 180, 229, 55, 19, 3, 0},    // lea 0x31337(%ebp,%eiz,8),%esi
@@ -78,13 +73,13 @@ TEST(modrm, testPuttingOnTheRiz) {
   };
   Write64(m->si, 0x100000001);
   Write64(m->bp, 0x200000002);
-  ILD(m->xedd, ops[0], XED_MACHINE_MODE_LONG_64);
+  ASSERT_EQ(0, DecodeInstruction(m->xedd, op[0], sizeof(op[0]), XED_MODE_LONG));
   EXPECT_EQ(0x100000001, ComputeAddress(m, m->xedd->op.rde));
-  ILD(m->xedd, ops[1], XED_MACHINE_MODE_LONG_64);
+  ASSERT_EQ(0, DecodeInstruction(m->xedd, op[1], sizeof(op[1]), XED_MODE_LONG));
   EXPECT_EQ(0x000000001, ComputeAddress(m, m->xedd->op.rde));
-  ILD(m->xedd, ops[2], XED_MACHINE_MODE_LONG_64);
+  ASSERT_EQ(0, DecodeInstruction(m->xedd, op[2], sizeof(op[2]), XED_MODE_LONG));
   EXPECT_EQ(0x31339, ComputeAddress(m, m->xedd->op.rde));
-  ILD(m->xedd, ops[3], XED_MACHINE_MODE_LONG_64);
+  ASSERT_EQ(0, DecodeInstruction(m->xedd, op[3], sizeof(op[3]), XED_MODE_LONG));
   EXPECT_EQ(0x31337, ComputeAddress(m, m->xedd->op.rde));
 }
 
@@ -99,7 +94,7 @@ TEST(modrm, testSibIndexOnly) {
   uint8_t op[] = {0x4c, 0x8d, 0x04, 0x8d, 0, 0, 0, 0};
   Write64(m->bp, 0x123);
   Write64(m->cx, 0x123);
-  ILD(m->xedd, op, XED_MACHINE_MODE_LONG_64);
+  ASSERT_EQ(0, DecodeInstruction(m->xedd, op, sizeof(op), XED_MODE_LONG));
   EXPECT_TRUE(Rexw(m->xedd->op.rde));
   EXPECT_TRUE(Rexr(m->xedd->op.rde));
   EXPECT_FALSE(Rexb(m->xedd->op.rde));

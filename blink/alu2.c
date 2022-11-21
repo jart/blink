@@ -28,7 +28,7 @@
 #include "blink/mop.h"
 #include "blink/swap.h"
 
-static void Alub(struct Machine *m, u32 rde, aluop_f op) {
+static void Alub(struct Machine *m, u64 rde, aluop_f op) {
   u8 *p, *q;
   p = GetModrmRegisterBytePointerWrite(m, rde);
   q = ByteRexrReg(m, rde);
@@ -50,35 +50,35 @@ static void Alub(struct Machine *m, u32 rde, aluop_f op) {
   }
 }
 
-void OpAlubAdd(struct Machine *m, u32 rde) {
+void OpAlubAdd(struct Machine *m, u64 rde) {
   Alub(m, rde, Add8);
 }
 
-void OpAlubOr(struct Machine *m, u32 rde) {
+void OpAlubOr(struct Machine *m, u64 rde) {
   Alub(m, rde, Or8);
 }
 
-void OpAlubAdc(struct Machine *m, u32 rde) {
+void OpAlubAdc(struct Machine *m, u64 rde) {
   Alub(m, rde, Adc8);
 }
 
-void OpAlubSbb(struct Machine *m, u32 rde) {
+void OpAlubSbb(struct Machine *m, u64 rde) {
   Alub(m, rde, Sbb8);
 }
 
-void OpAlubAnd(struct Machine *m, u32 rde) {
+void OpAlubAnd(struct Machine *m, u64 rde) {
   Alub(m, rde, And8);
 }
 
-void OpAlubSub(struct Machine *m, u32 rde) {
+void OpAlubSub(struct Machine *m, u64 rde) {
   Alub(m, rde, Sub8);
 }
 
-void OpAlubXor(struct Machine *m, u32 rde) {
+void OpAlubXor(struct Machine *m, u64 rde) {
   Alub(m, rde, Xor8);
 }
 
-void OpAluw(struct Machine *m, u32 rde) {
+void OpAluw(struct Machine *m, u64 rde) {
   u8 *p, *q;
   q = RegRexrReg(m, rde);
   if (Rexw(rde)) {
@@ -91,8 +91,8 @@ void OpAluw(struct Machine *m, u32 rde) {
         y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);
         y = Little64(y);
         do {
-          z = Little64(kAlu[(m->xedd->op.opcode & 070) >> 3][ALU_INT64](
-              Little64(x), y, &m->flags));
+          z = Little64(kAlu[(Opcode(rde) & 070) >> 3][ALU_INT64](Little64(x), y,
+                                                                 &m->flags));
         } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x,
                                                         z, memory_order_release,
                                                         memory_order_relaxed));
@@ -108,7 +108,7 @@ void OpAluw(struct Machine *m, u32 rde) {
       u64 x, y, z;
       x = Load64(p);
       y = Get64(q);
-      z = kAlu[(m->xedd->op.opcode & 070) >> 3][ALU_INT64](x, y, &m->flags);
+      z = kAlu[(Opcode(rde) & 070) >> 3][ALU_INT64](x, y, &m->flags);
       Store64(p, z);
     }
   } else if (!Osz(rde)) {
@@ -120,8 +120,8 @@ void OpAluw(struct Machine *m, u32 rde) {
         y = atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed);
         y = Little32(y);
         do {
-          z = Little32(kAlu[(m->xedd->op.opcode & 070) >> 3][ALU_INT32](
-              Little32(x), y, &m->flags));
+          z = Little32(kAlu[(Opcode(rde) & 070) >> 3][ALU_INT32](Little32(x), y,
+                                                                 &m->flags));
         } while (!atomic_compare_exchange_weak_explicit((_Atomic(u32) *)p, &x,
                                                         z, memory_order_release,
                                                         memory_order_relaxed));
@@ -132,7 +132,7 @@ void OpAluw(struct Machine *m, u32 rde) {
     } else {
       x = Load32(p);
       y = Get32(q);
-      z = kAlu[(m->xedd->op.opcode & 070) >> 3][ALU_INT32](x, y, &m->flags);
+      z = kAlu[(Opcode(rde) & 070) >> 3][ALU_INT32](x, y, &m->flags);
       Store32(p, z);
     }
     if (IsModrmRegister(rde)) {
@@ -144,7 +144,7 @@ void OpAluw(struct Machine *m, u32 rde) {
     p = GetModrmRegisterWordPointerWrite(m, rde, 2);
     x = Load16(p);
     y = Get16(q);
-    z = kAlu[(m->xedd->op.opcode & 070) >> 3][ALU_INT16](x, y, &m->flags);
+    z = kAlu[(Opcode(rde) & 070) >> 3][ALU_INT16](x, y, &m->flags);
     Store16(p, z);
   }
 }

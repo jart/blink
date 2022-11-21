@@ -27,7 +27,7 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 
-void OpCmpxchgEbAlGb(struct Machine *m, u32 rde) {
+void OpCmpxchgEbAlGb(struct Machine *m, u64 rde) {
   bool didit;
   if (!IsModrmRegister(rde)) {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
@@ -54,7 +54,7 @@ void OpCmpxchgEbAlGb(struct Machine *m, u32 rde) {
   m->flags = SetFlag(m->flags, FLAGS_ZF, didit);
 }
 
-void OpCmpxchgEvqpRaxGvqp(struct Machine *m, u32 rde) {
+void OpCmpxchgEvqpRaxGvqp(struct Machine *m, u64 rde) {
   bool didit;
   u8 *p, *q;
   q = RegRexrReg(m, rde);

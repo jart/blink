@@ -31,7 +31,8 @@ endif
 o:	o/$(MODE)/blink			\
 	o/$(MODE)/test
 
-check:	o/$(MODE)/test/asm		\
+check:	o				\
+	o/$(MODE)/test/asm		\
 	o/$(MODE)/third_party/cosmo
 
 emulates:				\

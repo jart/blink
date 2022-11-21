@@ -49,7 +49,7 @@ static int Exec(char *prog, char **argv, char **envp) {
   struct Machine *o = g_machine;
   unassert((g_machine = NewMachine(NewSystem(), 0)));
   g_machine->system->exec = Exec;
-  g_machine->mode = XED_MACHINE_MODE_LONG_64;
+  g_machine->mode = XED_MODE_LONG;
   LoadProgram(g_machine, prog, argv, envp, &elf);
   if (!o) {
     AddStdFd(&g_machine->system->fds, 0);

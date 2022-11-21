@@ -200,7 +200,7 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
   }
   close(fd);
   ResetCpu(m);
-  if ((m->mode & 3) == XED_MODE_REAL) {
+  if (m->mode == XED_MODE_REAL) {
     BootProgram(m, elf, elf->mapsize);
   } else {
     sp = 0x800000000000;

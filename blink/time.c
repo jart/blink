@@ -23,11 +23,11 @@
 #include "blink/modrm.h"
 #include "blink/time.h"
 
-void OpPause(struct Machine *m, u32 rde) {
+void OpPause(struct Machine *m, u64 rde) {
   sched_yield();
 }
 
-void OpRdtsc(struct Machine *m, u32 rde) {
+void OpRdtsc(struct Machine *m, u64 rde) {
   i64 c;
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -45,11 +45,11 @@ static i64 GetTscAux(struct Machine *m) {
   return (node & 0xfff) << 12 | (core & 0xfff);
 }
 
-void OpRdtscp(struct Machine *m, u32 rde) {
+void OpRdtscp(struct Machine *m, u64 rde) {
   OpRdtsc(m, rde);
   Put64(m->cx, GetTscAux(m));
 }
 
-void OpRdpid(struct Machine *m, u32 rde) {
+void OpRdpid(struct Machine *m, u64 rde) {
   Put64(RegRexbRm(m, rde), GetTscAux(m));
 }

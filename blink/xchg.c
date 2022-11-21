@@ -25,7 +25,7 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 
-void OpXchgGbEb(struct Machine *m, u32 rde) {
+void OpXchgGbEb(struct Machine *m, u64 rde) {
   u8 *q;
   q = ByteRexrReg(m, rde);
   if (!IsModrmRegister(rde)) {
@@ -47,7 +47,7 @@ void OpXchgGbEb(struct Machine *m, u32 rde) {
   }
 }
 
-void OpXchgGvqpEvqp(struct Machine *m, u32 rde) {
+void OpXchgGvqpEvqp(struct Machine *m, u64 rde) {
   u8 *q = RegRexrReg(m, rde);
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
   if (Rexw(rde)) {

@@ -19,30 +19,30 @@
 #include "blink/modrm.h"
 #include "blink/xmmtype.h"
 
-static void UpdateXmmTypes(struct Machine *m, struct XmmType *xt, int regtype,
+static void UpdateXmmTypes(u64 rde, struct XmmType *xt, int regtype,
                            int rmtype) {
-  xt->type[RexrReg(m->xedd->op.rde)] = regtype;
-  if (IsModrmRegister(m->xedd->op.rde)) {
-    xt->type[RexbRm(m->xedd->op.rde)] = rmtype;
+  xt->type[RexrReg(rde)] = regtype;
+  if (IsModrmRegister(rde)) {
+    xt->type[RexbRm(rde)] = rmtype;
   }
 }
 
-static void UpdateXmmSizes(struct Machine *m, struct XmmType *xt, int regsize,
+static void UpdateXmmSizes(u64 rde, struct XmmType *xt, int regsize,
                            int rmsize) {
-  xt->size[RexrReg(m->xedd->op.rde)] = regsize;
-  if (IsModrmRegister(m->xedd->op.rde)) {
-    xt->size[RexbRm(m->xedd->op.rde)] = rmsize;
+  xt->size[RexrReg(rde)] = regsize;
+  if (IsModrmRegister(rde)) {
+    xt->size[RexbRm(rde)] = rmsize;
   }
 }
 
-void UpdateXmmType(struct Machine *m, struct XmmType *xt) {
-  switch (m->xedd->op.map << 8 | m->xedd->op.opcode) {
+void UpdateXmmType(u64 rde, struct XmmType *xt) {
+  switch (Mopcode(rde)) {
     case 0x110:
     case 0x111: /* MOVSS,MOVSD */
-      if (m->xedd->op.rep == 3) {
-        UpdateXmmTypes(m, xt, kXmmFloat, kXmmFloat);
-      } else if (m->xedd->op.rep == 2) {
-        UpdateXmmTypes(m, xt, kXmmDouble, kXmmDouble);
+      if (Rep(rde) == 3) {
+        UpdateXmmTypes(rde, xt, kXmmFloat, kXmmFloat);
+      } else if (Rep(rde) == 2) {
+        UpdateXmmTypes(rde, xt, kXmmDouble, kXmmDouble);
       }
       break;
     case 0x12E: /* UCOMIS */
@@ -57,43 +57,43 @@ void UpdateXmmType(struct Machine *m, struct XmmType *xt) {
     case 0x15E: /* DIV */
     case 0x15F: /* MAX */
     case 0x1C2: /* CMP */
-      if (Osz(m->xedd->op.rde) || m->xedd->op.rep == 2) {
-        UpdateXmmTypes(m, xt, kXmmDouble, kXmmDouble);
+      if (Osz(rde) || Rep(rde) == 2) {
+        UpdateXmmTypes(rde, xt, kXmmDouble, kXmmDouble);
       } else {
-        UpdateXmmTypes(m, xt, kXmmFloat, kXmmFloat);
+        UpdateXmmTypes(rde, xt, kXmmFloat, kXmmFloat);
       }
       break;
     case 0x12A: /* CVTPI2PS,CVTSI2SS,CVTPI2PD,CVTSI2SD */
-      if (Osz(m->xedd->op.rde) || m->xedd->op.rep == 2) {
-        UpdateXmmSizes(m, xt, 8, 4);
-        UpdateXmmTypes(m, xt, kXmmDouble, kXmmIntegral);
+      if (Osz(rde) || Rep(rde) == 2) {
+        UpdateXmmSizes(rde, xt, 8, 4);
+        UpdateXmmTypes(rde, xt, kXmmDouble, kXmmIntegral);
       } else {
-        UpdateXmmSizes(m, xt, 4, 4);
-        UpdateXmmTypes(m, xt, kXmmFloat, kXmmIntegral);
+        UpdateXmmSizes(rde, xt, 4, 4);
+        UpdateXmmTypes(rde, xt, kXmmFloat, kXmmIntegral);
       }
       break;
     case 0x15A: /* CVT{P,S}{S,D}2{P,S}{S,D} */
-      if (Osz(m->xedd->op.rde) || m->xedd->op.rep == 2) {
-        UpdateXmmTypes(m, xt, kXmmFloat, kXmmDouble);
+      if (Osz(rde) || Rep(rde) == 2) {
+        UpdateXmmTypes(rde, xt, kXmmFloat, kXmmDouble);
       } else {
-        UpdateXmmTypes(m, xt, kXmmDouble, kXmmFloat);
+        UpdateXmmTypes(rde, xt, kXmmDouble, kXmmFloat);
       }
       break;
     case 0x15B: /* CVT{,T}{DQ,PS}2{PS,DQ} */
-      UpdateXmmSizes(m, xt, 4, 4);
-      if (Osz(m->xedd->op.rde) || m->xedd->op.rep == 3) {
-        UpdateXmmTypes(m, xt, kXmmIntegral, kXmmFloat);
+      UpdateXmmSizes(rde, xt, 4, 4);
+      if (Osz(rde) || Rep(rde) == 3) {
+        UpdateXmmTypes(rde, xt, kXmmIntegral, kXmmFloat);
       } else {
-        UpdateXmmTypes(m, xt, kXmmFloat, kXmmIntegral);
+        UpdateXmmTypes(rde, xt, kXmmFloat, kXmmIntegral);
       }
       break;
     case 0x17C: /* HADD */
     case 0x17D: /* HSUB */
     case 0x1D0: /* ADDSUB */
-      if (Osz(m->xedd->op.rde)) {
-        UpdateXmmTypes(m, xt, kXmmDouble, kXmmDouble);
+      if (Osz(rde)) {
+        UpdateXmmTypes(rde, xt, kXmmDouble, kXmmDouble);
       } else {
-        UpdateXmmTypes(m, xt, kXmmFloat, kXmmFloat);
+        UpdateXmmTypes(rde, xt, kXmmFloat, kXmmFloat);
       }
       break;
     case 0x164: /* PCMPGTB */
@@ -107,8 +107,8 @@ void UpdateXmmType(struct Machine *m, struct XmmType *xt) {
     case 0x1EC: /* PADDSB */
     case 0x1F8: /* PSUBB */
     case 0x1FC: /* PADDB */
-      UpdateXmmSizes(m, xt, 1, 1);
-      UpdateXmmTypes(m, xt, kXmmIntegral, kXmmIntegral);
+      UpdateXmmSizes(rde, xt, 1, 1);
+      UpdateXmmTypes(rde, xt, kXmmIntegral, kXmmIntegral);
       break;
     case 0x165: /* PCMPGTW */
     case 0x175: /* PCMPEQW */
@@ -129,8 +129,8 @@ void UpdateXmmType(struct Machine *m, struct XmmType *xt) {
     case 0x1F6: /* PSADBW */
     case 0x1F9: /* PSUBW */
     case 0x1FD: /* PADDW */
-      UpdateXmmSizes(m, xt, 2, 2);
-      UpdateXmmTypes(m, xt, kXmmIntegral, kXmmIntegral);
+      UpdateXmmSizes(rde, xt, 2, 2);
+      UpdateXmmTypes(rde, xt, kXmmIntegral, kXmmIntegral);
       break;
     case 0x166: /* PCMPGTD */
     case 0x176: /* PCMPEQD */
@@ -140,8 +140,8 @@ void UpdateXmmType(struct Machine *m, struct XmmType *xt) {
     case 0x1F2: /* PSLLD */
     case 0x1FA: /* PSUBD */
     case 0x1FE: /* PADDD */
-      UpdateXmmSizes(m, xt, 4, 4);
-      UpdateXmmTypes(m, xt, kXmmIntegral, kXmmIntegral);
+      UpdateXmmSizes(rde, xt, 4, 4);
+      UpdateXmmTypes(rde, xt, kXmmIntegral, kXmmIntegral);
       break;
     case 0x173: /* PSRLQ,PSRLQ,PSRLDQ,PSLLQ,PSLLDQ */
     case 0x1D3: /* PSRLQ */
@@ -149,35 +149,35 @@ void UpdateXmmType(struct Machine *m, struct XmmType *xt) {
     case 0x1F3: /* PSLLQ */
     case 0x1F4: /* PMULUDQ */
     case 0x1FB: /* PSUBQ */
-      UpdateXmmSizes(m, xt, 8, 8);
-      UpdateXmmTypes(m, xt, kXmmIntegral, kXmmIntegral);
+      UpdateXmmSizes(rde, xt, 8, 8);
+      UpdateXmmTypes(rde, xt, kXmmIntegral, kXmmIntegral);
       break;
     case 0x16B: /* PACKSSDW */
     case 0x1F5: /* PMADDWD */
-      UpdateXmmSizes(m, xt, 4, 2);
-      UpdateXmmTypes(m, xt, kXmmIntegral, kXmmIntegral);
+      UpdateXmmSizes(rde, xt, 4, 2);
+      UpdateXmmTypes(rde, xt, kXmmIntegral, kXmmIntegral);
       break;
     case 0x163: /* PACKSSWB */
     case 0x167: /* PACKUSWB */
-      UpdateXmmSizes(m, xt, 1, 2);
-      UpdateXmmTypes(m, xt, kXmmIntegral, kXmmIntegral);
+      UpdateXmmSizes(rde, xt, 1, 2);
+      UpdateXmmTypes(rde, xt, kXmmIntegral, kXmmIntegral);
       break;
     case 0x128: /* MOVAPS Vps Wps */
-      if (IsModrmRegister(m->xedd->op.rde)) {
-        xt->type[RexrReg(m->xedd->op.rde)] = xt->type[RexbRm(m->xedd->op.rde)];
-        xt->size[RexrReg(m->xedd->op.rde)] = xt->size[RexbRm(m->xedd->op.rde)];
+      if (IsModrmRegister(rde)) {
+        xt->type[RexrReg(rde)] = xt->type[RexbRm(rde)];
+        xt->size[RexrReg(rde)] = xt->size[RexbRm(rde)];
       }
       break;
     case 0x129: /* MOVAPS Wps Vps */
-      if (IsModrmRegister(m->xedd->op.rde)) {
-        xt->type[RexbRm(m->xedd->op.rde)] = xt->type[RexrReg(m->xedd->op.rde)];
-        xt->size[RexbRm(m->xedd->op.rde)] = xt->size[RexrReg(m->xedd->op.rde)];
+      if (IsModrmRegister(rde)) {
+        xt->type[RexbRm(rde)] = xt->type[RexrReg(rde)];
+        xt->size[RexbRm(rde)] = xt->size[RexrReg(rde)];
       }
       break;
     case 0x16F: /* MOVDQA Vdq Wdq */
-      if (Osz(m->xedd->op.rde) && IsModrmRegister(m->xedd->op.rde)) {
-        xt->type[RexrReg(m->xedd->op.rde)] = xt->type[RexbRm(m->xedd->op.rde)];
-        xt->size[RexrReg(m->xedd->op.rde)] = xt->size[RexbRm(m->xedd->op.rde)];
+      if (Osz(rde) && IsModrmRegister(rde)) {
+        xt->type[RexrReg(rde)] = xt->type[RexbRm(rde)];
+        xt->size[RexrReg(rde)] = xt->size[RexbRm(rde)];
       }
       break;
     default:

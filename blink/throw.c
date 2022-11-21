@@ -62,11 +62,11 @@ void ThrowProtectionFault(struct Machine *m) {
   HaltMachine(m, kMachineProtectionFault);
 }
 
-void OpUd(struct Machine *m, u32 rde) {
+void OpUd(struct Machine *m, u64 rde) {
   if (m->xedd) m->ip -= m->xedd->length;
   HaltMachine(m, kMachineUndefinedInstruction);
 }
 
-void OpHlt(struct Machine *m, u32 rde) {
+void OpHlt(struct Machine *m, u64 rde) {
   HaltMachine(m, kMachineHalt);
 }

@@ -83,7 +83,7 @@ static void pshufhw(i16 b[8], const i16 a[8], int m) {
   b[7] = t[3];
 }
 
-void OpUnpcklpsd(struct Machine *m, u32 rde) {
+void OpUnpcklpsd(struct Machine *m, u64 rde) {
   u8 *a, *b;
   a = XmmRexrReg(m, rde);
   b = GetModrmRegisterXmmPointerRead8(m, rde);
@@ -96,7 +96,7 @@ void OpUnpcklpsd(struct Machine *m, u32 rde) {
   }
 }
 
-void OpUnpckhpsd(struct Machine *m, u32 rde) {
+void OpUnpckhpsd(struct Machine *m, u64 rde) {
   u8 *a, *b;
   a = XmmRexrReg(m, rde);
   b = GetModrmRegisterXmmPointerRead16(m, rde);
@@ -111,14 +111,14 @@ void OpUnpckhpsd(struct Machine *m, u32 rde) {
   }
 }
 
-void OpPextrwGdqpUdqIb(struct Machine *m, u32 rde) {
+void OpPextrwGdqpUdqIb(struct Machine *m, u64 rde) {
   u8 i;
   i = m->xedd->op.uimm0;
   i &= Osz(rde) ? 7 : 3;
   Put16(RegRexrReg(m, rde), Get16(XmmRexbRm(m, rde) + i * 2));
 }
 
-void OpPinsrwVdqEwIb(struct Machine *m, u32 rde) {
+void OpPinsrwVdqEwIb(struct Machine *m, u64 rde) {
   u8 i;
   i = m->xedd->op.uimm0;
   i &= Osz(rde) ? 7 : 3;
@@ -126,11 +126,11 @@ void OpPinsrwVdqEwIb(struct Machine *m, u32 rde) {
         Read16(GetModrmRegisterWordPointerRead2(m, rde)));
 }
 
-void OpShuffle(struct Machine *m, u32 rde) {
+void OpShuffle(struct Machine *m, u64 rde) {
   i16 q16[4];
   i16 x16[8];
   i32 x32[4];
-  switch (m->xedd->op.rep | Osz(rde)) {
+  switch (Rep(rde) | Osz(rde)) {
     case 0:
       memcpy(q16, GetModrmRegisterXmmPointerRead8(m, rde), 8);
       pshufw(q16, q16, m->xedd->op.uimm0);
@@ -156,7 +156,7 @@ void OpShuffle(struct Machine *m, u32 rde) {
   }
 }
 
-static void Shufps(struct Machine *m, u32 rde) {
+static void Shufps(struct Machine *m, u64 rde) {
   u8 *p;
   union FloatPun x[4], y[4], z[4];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
@@ -179,7 +179,7 @@ static void Shufps(struct Machine *m, u32 rde) {
   Write32(p + 3 * 4, z[3].i);
 }
 
-static void Shufpd(struct Machine *m, u32 rde) {
+static void Shufpd(struct Machine *m, u64 rde) {
   u8 *p;
   union DoublePun x[2], y[2], z[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
@@ -194,7 +194,7 @@ static void Shufpd(struct Machine *m, u32 rde) {
   Write64(p + 1 * 4, z[1].i);
 }
 
-void OpShufpsd(struct Machine *m, u32 rde) {
+void OpShufpsd(struct Machine *m, u64 rde) {
   if (Osz(rde)) {
     Shufpd(m, rde);
   } else {
@@ -202,8 +202,8 @@ void OpShufpsd(struct Machine *m, u32 rde) {
   }
 }
 
-void OpSqrtpsd(struct Machine *m, u32 rde) {
-  switch (m->xedd->op.rep | Osz(rde)) {
+void OpSqrtpsd(struct Machine *m, u64 rde) {
+  switch (Rep(rde) | Osz(rde)) {
     case 0: {
       int i;
       u8 *p;
@@ -253,8 +253,8 @@ void OpSqrtpsd(struct Machine *m, u32 rde) {
   }
 }
 
-void OpRsqrtps(struct Machine *m, u32 rde) {
-  if (m->xedd->op.rep != 3) {
+void OpRsqrtps(struct Machine *m, u64 rde) {
+  if (Rep(rde) != 3) {
     int i;
     u8 *p;
     union FloatPun u[4];
@@ -277,8 +277,8 @@ void OpRsqrtps(struct Machine *m, u32 rde) {
   }
 }
 
-void OpRcpps(struct Machine *m, u32 rde) {
-  if (m->xedd->op.rep != 3) {
+void OpRcpps(struct Machine *m, u64 rde) {
+  if (Rep(rde) != 3) {
     int i;
     u8 *p;
     union FloatPun u[4];
@@ -301,7 +301,7 @@ void OpRcpps(struct Machine *m, u32 rde) {
   }
 }
 
-void OpComissVsWs(struct Machine *m, u32 rde) {
+void OpComissVsWs(struct Machine *m, u64 rde) {
   u8 zf, cf, pf, ie;
   if (!Osz(rde)) {
     union FloatPun xf, yf;
@@ -333,7 +333,7 @@ void OpComissVsWs(struct Machine *m, u32 rde) {
   m->flags = SetFlag(m->flags, FLAGS_CF, cf);
   m->flags = SetFlag(m->flags, FLAGS_SF, false);
   m->flags = SetFlag(m->flags, FLAGS_OF, false);
-  if (m->xedd->op.opcode & 1) {
+  if (Opcode(rde) & 1) {
     m->mxcsr &= ~kMxcsrIe;
     if (ie) {
       m->mxcsr |= kMxcsrIe;
@@ -344,15 +344,15 @@ void OpComissVsWs(struct Machine *m, u32 rde) {
   }
 }
 
-static inline void OpPsd(struct Machine *m, u32 rde, float fs(float x, float y),
+static inline void OpPsd(struct Machine *m, u64 rde, float fs(float x, float y),
                          double fd(double x, double y)) {
-  if (m->xedd->op.rep == 2) {
+  if (Rep(rde) == 2) {
     union DoublePun x, y;
     y.i = Read64(GetModrmRegisterXmmPointerRead8(m, rde));
     x.i = Read64(XmmRexrReg(m, rde));
     x.f = fd(x.f, y.f);
     Write64(XmmRexrReg(m, rde), x.i);
-  } else if (m->xedd->op.rep == 3) {
+  } else if (Rep(rde) == 3) {
     union FloatPun x, y;
     y.i = Read32(GetModrmRegisterXmmPointerRead4(m, rde));
     x.i = Read32(XmmRexrReg(m, rde));
@@ -403,7 +403,7 @@ static inline double Addd(double x, double y) {
   return x + y;
 }
 
-void OpAddpsd(struct Machine *m, u32 rde) {
+void OpAddpsd(struct Machine *m, u64 rde) {
   OpPsd(m, rde, Adds, Addd);
 }
 
@@ -415,7 +415,7 @@ static inline double Subd(double x, double y) {
   return x - y;
 }
 
-void OpSubpsd(struct Machine *m, u32 rde) {
+void OpSubpsd(struct Machine *m, u64 rde) {
   OpPsd(m, rde, Subs, Subd);
 }
 
@@ -427,7 +427,7 @@ static inline double Muld(double x, double y) {
   return x * y;
 }
 
-void OpMulpsd(struct Machine *m, u32 rde) {
+void OpMulpsd(struct Machine *m, u64 rde) {
   OpPsd(m, rde, Muls, Muld);
 }
 
@@ -439,7 +439,7 @@ static inline double Divd(double x, double y) {
   return x / y;
 }
 
-void OpDivpsd(struct Machine *m, u32 rde) {
+void OpDivpsd(struct Machine *m, u64 rde) {
   OpPsd(m, rde, Divs, Divd);
 }
 
@@ -451,7 +451,7 @@ static inline double Mind(double x, double y) {
   return MIN(x, y);
 }
 
-void OpMinpsd(struct Machine *m, u32 rde) {
+void OpMinpsd(struct Machine *m, u64 rde) {
   OpPsd(m, rde, Mins, Mind);
 }
 
@@ -463,7 +463,7 @@ static inline double Maxd(double x, double y) {
   return MAX(x, y);
 }
 
-void OpMaxpsd(struct Machine *m, u32 rde) {
+void OpMaxpsd(struct Machine *m, u64 rde) {
   OpPsd(m, rde, Maxs, Maxd);
 }
 
@@ -513,15 +513,15 @@ static i32 Cmpd(int imm, double x, double y) {
   }
 }
 
-void OpCmppsd(struct Machine *m, u32 rde) {
+void OpCmppsd(struct Machine *m, u64 rde) {
   int imm = m->xedd->op.uimm0;
-  if (m->xedd->op.rep == 2) {
+  if (Rep(rde) == 2) {
     union DoublePun x, y;
     y.i = Read64(GetModrmRegisterXmmPointerRead8(m, rde));
     x.i = Read64(XmmRexrReg(m, rde));
     x.f = Cmpd(imm, x.f, y.f);
     Write64(XmmRexrReg(m, rde), x.i);
-  } else if (m->xedd->op.rep == 3) {
+  } else if (Rep(rde) == 3) {
     union FloatPun x, y;
     y.i = Read32(GetModrmRegisterXmmPointerRead4(m, rde));
     x.i = Read32(XmmRexrReg(m, rde));
@@ -564,7 +564,7 @@ void OpCmppsd(struct Machine *m, u32 rde) {
   }
 }
 
-void OpAndpsd(struct Machine *m, u32 rde) {
+void OpAndpsd(struct Machine *m, u64 rde) {
   u64 x[2], y[2];
   memcpy(x, XmmRexrReg(m, rde), 16);
   memcpy(y, GetModrmRegisterXmmPointerRead16(m, rde), 16);
@@ -573,7 +573,7 @@ void OpAndpsd(struct Machine *m, u32 rde) {
   memcpy(XmmRexrReg(m, rde), x, 16);
 }
 
-void OpAndnpsd(struct Machine *m, u32 rde) {
+void OpAndnpsd(struct Machine *m, u64 rde) {
   u64 x[2], y[2];
   memcpy(x, XmmRexrReg(m, rde), 16);
   memcpy(y, GetModrmRegisterXmmPointerRead16(m, rde), 16);
@@ -582,7 +582,7 @@ void OpAndnpsd(struct Machine *m, u32 rde) {
   memcpy(XmmRexrReg(m, rde), x, 16);
 }
 
-void OpOrpsd(struct Machine *m, u32 rde) {
+void OpOrpsd(struct Machine *m, u64 rde) {
   u64 x[2], y[2];
   memcpy(x, XmmRexrReg(m, rde), 16);
   memcpy(y, GetModrmRegisterXmmPointerRead16(m, rde), 16);
@@ -591,7 +591,7 @@ void OpOrpsd(struct Machine *m, u32 rde) {
   memcpy(XmmRexrReg(m, rde), x, 16);
 }
 
-void OpXorpsd(struct Machine *m, u32 rde) {
+void OpXorpsd(struct Machine *m, u64 rde) {
   u64 x[2], y[2];
   memcpy(x, XmmRexrReg(m, rde), 16);
   memcpy(y, GetModrmRegisterXmmPointerRead16(m, rde), 16);
@@ -600,9 +600,9 @@ void OpXorpsd(struct Machine *m, u32 rde) {
   memcpy(XmmRexrReg(m, rde), x, 16);
 }
 
-void OpHaddpsd(struct Machine *m, u32 rde) {
+void OpHaddpsd(struct Machine *m, u64 rde) {
   u8 *p;
-  if (m->xedd->op.rep == 2) {
+  if (Rep(rde) == 2) {
     union FloatPun x[4], y[4], z[4];
     p = GetModrmRegisterXmmPointerRead16(m, rde);
     y[0].i = Read32(p + 0 * 4);
@@ -639,9 +639,9 @@ void OpHaddpsd(struct Machine *m, u32 rde) {
   }
 }
 
-void OpHsubpsd(struct Machine *m, u32 rde) {
+void OpHsubpsd(struct Machine *m, u64 rde) {
   u8 *p;
-  if (m->xedd->op.rep == 2) {
+  if (Rep(rde) == 2) {
     union FloatPun x[4], y[4], z[4];
     p = GetModrmRegisterXmmPointerRead16(m, rde);
     y[0].i = Read32(p + 0 * 4);
@@ -678,9 +678,9 @@ void OpHsubpsd(struct Machine *m, u32 rde) {
   }
 }
 
-void OpAddsubpsd(struct Machine *m, u32 rde) {
+void OpAddsubpsd(struct Machine *m, u64 rde) {
   u8 *p;
-  if (m->xedd->op.rep == 2) {
+  if (Rep(rde) == 2) {
     union FloatPun x[4], y[4], z[4];
     p = GetModrmRegisterXmmPointerRead16(m, rde);
     y[0].i = Read32(p + 0 * 4);
