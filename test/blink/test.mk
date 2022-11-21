@@ -20,7 +20,6 @@ o/$(MODE)/mipsel/test/blink/x86_test.o			\
 o/$(MODE)/mips64/test/blink/x86_test.o			\
 o/$(MODE)/mips64el/test/blink/x86_test.o		\
 o/$(MODE)/s390x/test/blink/x86_test.o			\
-o/$(MODE)/microblaze/test/blink/x86_test.o		\
 o/$(MODE)/powerpc/test/blink/x86_test.o			\
 o/$(MODE)/powerpc64le/test/blink/x86_test.o:		\
 		private CFLAGS += -O0
@@ -49,8 +48,6 @@ o/$(MODE)/mips64el/test/blink/machine_test.com: o/$(MODE)/mips64el/test/blink/ma
 	o/third_party/gcc/mips64el/bin/mips64el-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/s390x/test/blink/machine_test.com: o/$(MODE)/s390x/test/blink/machine_test.o o/$(MODE)/s390x/blink/blink.a
 	o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-# o/$(MODE)/microblaze/test/blink/machine_test.com: o/$(MODE)/microblaze/test/blink/machine_test.o o/$(MODE)/microblaze/blink/blink.a
-# 	o/third_party/gcc/microblaze/bin/microblaze-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc/test/blink/machine_test.com: o/$(MODE)/powerpc/test/blink/machine_test.o o/$(MODE)/powerpc/blink/blink.a
 	o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc64le/test/blink/machine_test.com: o/$(MODE)/powerpc64le/test/blink/machine_test.o o/$(MODE)/powerpc64le/blink/blink.a
@@ -80,8 +77,6 @@ o/$(MODE)/mips64el/test/blink/divmul_test.com: o/$(MODE)/mips64el/test/blink/div
 	o/third_party/gcc/mips64el/bin/mips64el-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/s390x/test/blink/divmul_test.com: o/$(MODE)/s390x/test/blink/divmul_test.o o/$(MODE)/s390x/blink/blink.a
 	o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/microblaze/test/blink/divmul_test.com: o/$(MODE)/microblaze/test/blink/divmul_test.o o/$(MODE)/microblaze/blink/blink.a
-	o/third_party/gcc/microblaze/bin/microblaze-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc/test/blink/divmul_test.com: o/$(MODE)/powerpc/test/blink/divmul_test.o o/$(MODE)/powerpc/blink/blink.a
 	o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc64le/test/blink/divmul_test.com: o/$(MODE)/powerpc64le/test/blink/divmul_test.o o/$(MODE)/powerpc64le/blink/blink.a
@@ -111,8 +106,6 @@ o/$(MODE)/mips64el/test/blink/modrm_test.com: o/$(MODE)/mips64el/test/blink/modr
 	o/third_party/gcc/mips64el/bin/mips64el-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/s390x/test/blink/modrm_test.com: o/$(MODE)/s390x/test/blink/modrm_test.o o/$(MODE)/s390x/blink/blink.a
 	o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/microblaze/test/blink/modrm_test.com: o/$(MODE)/microblaze/test/blink/modrm_test.o o/$(MODE)/microblaze/blink/blink.a
-	o/third_party/gcc/microblaze/bin/microblaze-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc/test/blink/modrm_test.com: o/$(MODE)/powerpc/test/blink/modrm_test.o o/$(MODE)/powerpc/blink/blink.a
 	o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc64le/test/blink/modrm_test.com: o/$(MODE)/powerpc64le/test/blink/modrm_test.o o/$(MODE)/powerpc64le/blink/blink.a
@@ -142,8 +135,6 @@ o/$(MODE)/mips64el/test/blink/iovs_test.com: o/$(MODE)/mips64el/test/blink/iovs_
 	o/third_party/gcc/mips64el/bin/mips64el-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/s390x/test/blink/iovs_test.com: o/$(MODE)/s390x/test/blink/iovs_test.o o/$(MODE)/s390x/blink/blink.a
 	o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/microblaze/test/blink/iovs_test.com: o/$(MODE)/microblaze/test/blink/iovs_test.o o/$(MODE)/microblaze/blink/blink.a
-	o/third_party/gcc/microblaze/bin/microblaze-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc/test/blink/iovs_test.com: o/$(MODE)/powerpc/test/blink/iovs_test.o o/$(MODE)/powerpc/blink/blink.a
 	o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc64le/test/blink/iovs_test.com: o/$(MODE)/powerpc64le/test/blink/iovs_test.o o/$(MODE)/powerpc64le/blink/blink.a
@@ -173,8 +164,6 @@ o/$(MODE)/mips64el/test/blink/x86_test.com: o/$(MODE)/mips64el/test/blink/x86_te
 	o/third_party/gcc/mips64el/bin/mips64el-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/s390x/test/blink/x86_test.com: o/$(MODE)/s390x/test/blink/x86_test.o o/$(MODE)/s390x/blink/blink.a
 	o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/microblaze/test/blink/x86_test.com: o/$(MODE)/microblaze/test/blink/x86_test.o o/$(MODE)/microblaze/blink/blink.a
-	o/third_party/gcc/microblaze/bin/microblaze-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc/test/blink/x86_test.com: o/$(MODE)/powerpc/test/blink/x86_test.o o/$(MODE)/powerpc/blink/blink.a
 	o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc64le/test/blink/x86_test.com: o/$(MODE)/powerpc64le/test/blink/x86_test.o o/$(MODE)/powerpc64le/blink/blink.a
@@ -204,8 +193,6 @@ o/$(MODE)/mips64el/test/blink/ldbl_test.com: o/$(MODE)/mips64el/test/blink/ldbl_
 	o/third_party/gcc/mips64el/bin/mips64el-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/s390x/test/blink/ldbl_test.com: o/$(MODE)/s390x/test/blink/ldbl_test.o o/$(MODE)/s390x/blink/blink.a
 	o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/microblaze/test/blink/ldbl_test.com: o/$(MODE)/microblaze/test/blink/ldbl_test.o o/$(MODE)/microblaze/blink/blink.a
-	o/third_party/gcc/microblaze/bin/microblaze-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc/test/blink/ldbl_test.com: o/$(MODE)/powerpc/test/blink/ldbl_test.o o/$(MODE)/powerpc/blink/blink.a
 	o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc64le/test/blink/ldbl_test.com: o/$(MODE)/powerpc64le/test/blink/ldbl_test.o o/$(MODE)/powerpc64le/blink/blink.a
@@ -235,15 +222,10 @@ o/$(MODE)/mips64el/test/blink/fds_test.com: o/$(MODE)/mips64el/test/blink/fds_te
 	o/third_party/gcc/mips64el/bin/mips64el-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/s390x/test/blink/fds_test.com: o/$(MODE)/s390x/test/blink/fds_test.o o/$(MODE)/s390x/blink/blink.a
 	o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/microblaze/test/blink/fds_test.com: o/$(MODE)/microblaze/test/blink/fds_test.o o/$(MODE)/microblaze/blink/blink.a
-	o/third_party/gcc/microblaze/bin/microblaze-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc/test/blink/fds_test.com: o/$(MODE)/powerpc/test/blink/fds_test.o o/$(MODE)/powerpc/blink/blink.a
 	o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc64le/test/blink/fds_test.com: o/$(MODE)/powerpc64le/test/blink/fds_test.o o/$(MODE)/powerpc64le/blink/blink.a
 	o/third_party/gcc/powerpc64le/bin/powerpc64le-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-
-# TODO(jart): what's wrong with it?
-#		o/$(MODE)/microblaze/test/blink/machine_test.com.runs
 
 o/$(MODE)/test/blink:							\
 		$(TEST_BLINK_OBJS)					\
@@ -268,7 +250,6 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/mips64/blink/blink				\
 		o/$(MODE)/mips64el/blink/blink				\
 		o/$(MODE)/s390x/blink/blink				\
-		o/$(MODE)/microblaze/blink/blink			\
 		o/$(MODE)/powerpc/blink/blink				\
 		o/$(MODE)/powerpc64le/blink/blink			\
 		o/$(MODE)/blink/blink					\
@@ -283,7 +264,6 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/mips64/blink/blink				\
 		o/$(MODE)/mips64el/blink/blink				\
 		o/$(MODE)/s390x/blink/blink				\
-		o/$(MODE)/microblaze/blink/blink			\
 		o/$(MODE)/powerpc/blink/blink				\
 		o/$(MODE)/powerpc64le/blink/blink			\
 		o/$(MODE)/i486/test/blink/machine_test.com.runs		\
@@ -310,7 +290,6 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/mips64/test/blink/divmul_test.com.runs	\
 		o/$(MODE)/mips64el/test/blink/divmul_test.com.runs	\
 		o/$(MODE)/s390x/test/blink/divmul_test.com.runs		\
-		o/$(MODE)/microblaze/test/blink/divmul_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/divmul_test.com.runs	\
 		o/$(MODE)/powerpc64le/test/blink/divmul_test.com.runs	\
 		o/$(MODE)/i486/test/blink/modrm_test.com.runs		\
@@ -324,7 +303,6 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/mips64/test/blink/modrm_test.com.runs		\
 		o/$(MODE)/mips64el/test/blink/modrm_test.com.runs	\
 		o/$(MODE)/s390x/test/blink/modrm_test.com.runs		\
-		o/$(MODE)/microblaze/test/blink/modrm_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/modrm_test.com.runs	\
 		o/$(MODE)/powerpc64le/test/blink/modrm_test.com.runs	\
 		o/$(MODE)/i486/test/blink/iovs_test.com.runs		\
@@ -338,7 +316,6 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/mips64/test/blink/iovs_test.com.runs		\
 		o/$(MODE)/mips64el/test/blink/iovs_test.com.runs	\
 		o/$(MODE)/s390x/test/blink/iovs_test.com.runs		\
-		o/$(MODE)/microblaze/test/blink/iovs_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/iovs_test.com.runs		\
 		o/$(MODE)/powerpc64le/test/blink/iovs_test.com.runs	\
 		o/$(MODE)/i486/test/blink/x86_test.com.runs		\
@@ -352,7 +329,6 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/mips64/test/blink/x86_test.com.runs		\
 		o/$(MODE)/mips64el/test/blink/x86_test.com.runs		\
 		o/$(MODE)/s390x/test/blink/x86_test.com.runs		\
-		o/$(MODE)/microblaze/test/blink/x86_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/x86_test.com.runs		\
 		o/$(MODE)/powerpc64le/test/blink/x86_test.com.runs	\
 		o/$(MODE)/i486/test/blink/ldbl_test.com.runs		\
@@ -366,7 +342,6 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/mips64/test/blink/ldbl_test.com.runs		\
 		o/$(MODE)/mips64el/test/blink/ldbl_test.com.runs	\
 		o/$(MODE)/s390x/test/blink/ldbl_test.com.runs		\
-		o/$(MODE)/microblaze/test/blink/ldbl_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/ldbl_test.com.runs		\
 		o/$(MODE)/powerpc64le/test/blink/ldbl_test.com.runs	\
 		o/$(MODE)/i486/test/blink/fds_test.com.runs		\
@@ -380,6 +355,5 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/mips64/test/blink/fds_test.com.runs		\
 		o/$(MODE)/mips64el/test/blink/fds_test.com.runs		\
 		o/$(MODE)/s390x/test/blink/fds_test.com.runs		\
-		o/$(MODE)/microblaze/test/blink/fds_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/fds_test.com.runs		\
 		o/$(MODE)/powerpc64le/test/blink/fds_test.com.runs

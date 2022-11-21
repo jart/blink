@@ -23,9 +23,86 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "blink/address.h"
 #include "blink/assert.h"
+#include "blink/dis.h"
+#include "blink/endian.h"
 #include "blink/loader.h"
 #include "blink/log.h"
+#include "blink/memory.h"
+#include "blink/stats.h"
+
+#define MAX_BACKTRACE_LINES 64
+
+#define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
+
+static i64 ReadWord(struct Machine *m, u8 *p) {
+  switch (2 << m->mode) {
+    default:
+    case 8:
+      return Read64(p);
+    case 4:
+      return Read32(p);
+    case 2:
+      return Read16(p);
+  }
+}
+
+int GetInstruction(struct Machine *m, struct XedDecodedInst *x) {
+  u64 pc;
+  int i, err;
+  u8 copy[15], *toil, *addr;
+  pc = m->cs + MaskAddress(m->mode, m->ip);
+  if ((addr = FindReal(m, pc))) {
+    if ((i = 4096 - (pc & 4095)) >= 15) {
+      if (!DecodeInstruction(x, ResolveAddress(m, pc), 15, m->mode)) {
+        return 0;
+      } else {
+        return kMachineDecodeError;
+      }
+    } else if ((toil = FindReal(m, pc + i))) {
+      memcpy(copy, addr, i);
+      memcpy(copy + i, toil, 15 - i);
+      if (!DecodeInstruction(x, copy, 15, m->mode)) {
+        return 0;
+      } else {
+        return kMachineDecodeError;
+      }
+    } else if (!(err = DecodeInstruction(x, addr, i, m->mode))) {
+      return 0;
+    } else if (err == XED_ERROR_BUFFER_TOO_SHORT) {
+      return kMachineSegmentationFault;
+    } else {
+      return kMachineDecodeError;
+    }
+  } else {
+    memset(x, 0, sizeof(*x));
+    return kMachineSegmentationFault;
+  }
+}
+
+const char *DescribeOp(struct Machine *m) {
+  _Thread_local static char b[256];
+  int i, o = 0, n = sizeof(b);
+  struct Dis d = {true};
+  char spec[64];
+  if (!GetInstruction(m, d.xedd)) {
+    DisInst(&d, b + o, DisSpec(d.xedd, spec));
+  } else if (d.xedd->length) {
+    for (i = 0; i < d.xedd->length; ++i) {
+      if (i) {
+        APPEND(",");
+      } else {
+        APPEND(".byte\t");
+      }
+      APPEND("0x%02x", d.xedd->bytes[i]);
+    }
+  } else {
+    APPEND("indescribable");
+  }
+  DisFree(&d);
+  return b;
+}
 
 void LoadDebugSymbols(struct Elf *elf) {
   int fd, n;
@@ -54,4 +131,80 @@ void PrintFds(struct Fds *fds) {
          FD_CONTAINER(e)->systemfd, FD_CONTAINER(e)->oflags,
          FD_CONTAINER(e)->cloexec ? "true" : "false");
   }
+}
+
+const char *GetBacktrace(struct Machine *m) {
+  _Thread_local static char b[4096];
+  u8 *r;
+  int i;
+  int o = 0;
+  int n = sizeof(b);
+  i64 sym, sp, bp, rp;
+  struct Dis dis = {true};
+  char kAlignmentMask[] = {3, 3, 15};
+  LoadDebugSymbols(&m->system->elf);
+  DisLoadElf(&dis, &m->system->elf);
+
+  APPEND(" PC %" PRIx64 " %s\n\t"
+         " AX %016" PRIx64 " "
+         " CX %016" PRIx64 " "
+         " DX %016" PRIx64 " "
+         " BX %016" PRIx64 "\n\t"
+         " SP %016" PRIx64 " "
+         " BP %016" PRIx64 " "
+         " SI %016" PRIx64 " "
+         " DI %016" PRIx64 "\n\t"
+         " R8 %016" PRIx64 " "
+         " R9 %016" PRIx64 " "
+         "R10 %016" PRIx64 " "
+         "R11 %016" PRIx64 "\n\t"
+         "R12 %016" PRIx64 " "
+         "R13 %016" PRIx64 " "
+         "R14 %016" PRIx64 " "
+         "R15 %016" PRIx64 "\n\t"
+         " FS %016" PRIx64 " "
+         " GS %016" PRIx64 " "
+         "OPS %-16ld "
+         "JIT %-16ld\n\t"
+         "%s\n\t",
+         m->cs + MaskAddress(m->mode, m->ip), DescribeOp(m), Get64(m->ax),
+         Get64(m->cx), Get64(m->dx), Get64(m->bx), Get64(m->sp), Get64(m->bp),
+         Get64(m->si), Get64(m->di), Get64(m->r8), Get64(m->r9), Get64(m->r10),
+         Get64(m->r11), Get64(m->r12), Get64(m->r13), Get64(m->r14),
+         Get64(m->r15), m->fs, m->gs, GET_COUNTER(instructions_decoded),
+         GET_COUNTER(instructions_jitted), g_progname);
+
+  rp = m->ip;
+  bp = Get64(m->bp);
+  sp = Get64(m->sp);
+  for (i = 0; i < MAX_BACKTRACE_LINES;) {
+    if (i) APPEND("\n\t");
+    sym = DisFindSym(&dis, rp);
+    APPEND("%012" PRIx64 " %012" PRIx64 " %s", m->ss + bp, rp,
+           sym != -1 ? dis.syms.stab + dis.syms.p[sym].name : "UNKNOWN");
+    if (sym != -1 && rp != dis.syms.p[sym].addr) {
+      APPEND("+%#" PRIx64 "", rp - dis.syms.p[sym].addr);
+    }
+    if (!bp) break;
+    if (bp < sp) {
+      APPEND(" [STRAY]");
+    } else if (bp - sp <= 0x1000) {
+      APPEND(" %" PRId64 " bytes", bp - sp);
+    }
+    if (bp & kAlignmentMask[m->mode] && i) {
+      APPEND(" [MISALIGN]");
+    }
+    ++i;
+    if (((m->ss + bp) & 0xfff) > 0xff0) break;
+    if (!(r = FindReal(m, m->ss + bp))) {
+      APPEND(" [CORRUPT FRAME POINTER]");
+      break;
+    }
+    sp = bp;
+    bp = ReadWord(m, r + 0);
+    rp = ReadWord(m, r + 8);
+  }
+
+  DisFree(&dis);
+  return b;
 }

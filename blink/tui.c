@@ -278,7 +278,6 @@ static struct MemoryView stackview;
 static struct MachineState laststate;
 static struct MachineMemstat lastmemstat;
 static struct XmmType xmmtype;
-static struct Elf elf[1];
 static struct Dis dis[1];
 
 static long double last_seconds;
@@ -689,8 +688,8 @@ static void BreakAtNextInstruction(void) {
 }
 
 static void LoadSyms(void) {
-  LoadDebugSymbols(elf);
-  DisLoadElf(dis, elf);
+  LoadDebugSymbols(&m->system->elf);
+  DisLoadElf(dis, &m->system->elf);
 }
 
 static int DrainInput(int fd) {
@@ -1140,7 +1139,7 @@ static void DrawRegister(struct Panel *p, i64 i, i64 r) {
   snprintf(buf, sizeof(buf), "%-3s", kRegisterNames[r]);
   AppendPanel(p, i, buf);
   AppendPanel(p, i, " ");
-  snprintf(buf, sizeof(buf), "0x%016" PRIx64, value);
+  snprintf(buf, sizeof(buf), "%016" PRIx64, value);
   AppendPanel(p, i, buf);
   if (value != previous) AppendPanel(p, i, "\033[27m");
   AppendPanel(p, i, "  ");
@@ -1153,7 +1152,7 @@ static void DrawSegment(struct Panel *p, i64 i, u64 value, u64 previous,
   snprintf(buf, sizeof(buf), "%-3s", name);
   AppendPanel(p, i, buf);
   AppendPanel(p, i, " ");
-  snprintf(buf, sizeof(buf), "0x%016" PRIx64, value);
+  snprintf(buf, sizeof(buf), "%016" PRIx64, value);
   AppendPanel(p, i, buf);
   if (value != previous) AppendPanel(p, i, "\033[27m");
   AppendPanel(p, i, "  ");
@@ -1187,7 +1186,7 @@ static void DrawCpu(struct Panel *p) {
   DrawRegister(p, 5, 9), DrawRegister(p, 5, 13), DrawSt(p, 5, 5);
   DrawRegister(p, 6, 10), DrawRegister(p, 6, 14), DrawSt(p, 6, 6);
   DrawRegister(p, 7, 11), DrawRegister(p, 7, 15), DrawSt(p, 7, 7);
-  snprintf(buf, sizeof(buf), "RIP 0x%016" PRIx64 "  FLG", m->ip);
+  snprintf(buf, sizeof(buf), "RIP %016" PRIx64 "  FLG", m->ip);
   AppendPanel(p, 8, buf);
   DrawFlag(p, 8, 'C', GetFlag(m->flags, FLAGS_CF));
   DrawFlag(p, 8, 'P', GetFlag(m->flags, FLAGS_PF));
@@ -1892,9 +1891,9 @@ static void OnDiskServiceBadCommand(void) {
 
 static void OnDiskServiceGetParams(void) {
   size_t lastsector, lastcylinder, lasthead;
-  lastcylinder = GetLastIndex(elf->mapsize, 512 * 63 * 255, 0, 1023);
-  lasthead = GetLastIndex(elf->mapsize, 512 * 63, 0, 255);
-  lastsector = GetLastIndex(elf->mapsize, 512, 1, 63);
+  lastcylinder = GetLastIndex(m->system->elf.mapsize, 512 * 63 * 255, 0, 1023);
+  lasthead = GetLastIndex(m->system->elf.mapsize, 512 * 63, 0, 255);
+  lastsector = GetLastIndex(m->system->elf.mapsize, 512, 1, 63);
   m->dl = 1;
   m->dh = lasthead;
   m->cl = lastcylinder >> 8 << 6 | lastsector;
@@ -1920,11 +1919,11 @@ static void OnDiskServiceReadSectors(void) {
        "@ sector %" PRId64 " cylinder %" PRId64 " head %" PRId64
        " drive %" PRId64 " offset %#" PRIx64 "",
        sectors, sector, cylinder, head, drive, offset);
-  if (0 <= sector && offset + size <= elf->mapsize) {
+  if (0 <= sector && offset + size <= m->system->elf.mapsize) {
     addr = m->es + Get16(m->bx);
     if (addr + size <= GetRealMemorySize(m->system)) {
       SetWriteAddr(m, addr, size);
-      memcpy(m->system->real.p + addr, elf->map + offset, size);
+      memcpy(m->system->real.p + addr, m->system->elf.map + offset, size);
       m->ah = 0x00;
       SetCarry(false);
     } else {
@@ -1935,7 +1934,7 @@ static void OnDiskServiceReadSectors(void) {
   } else {
     LOGF("bios read sector failed 0 <= %" PRId64 " && %" PRIx64 " + %" PRIx64
          " <= %" PRIx64 "",
-         sector, offset, size, elf->mapsize);
+         sector, offset, size, m->system->elf.mapsize);
     m->al = 0x00;
     m->ah = 0x0d;
     SetCarry(true);
@@ -2780,9 +2779,13 @@ static void Tui(void) {
 
 static void GetOpts(int argc, char *argv[]) {
   int opt;
+  bool wantjit = false;
   const char *logpath = 0;
-  while ((opt = getopt(argc, argv, "hvtrzRsb:HL:")) != -1) {
+  while ((opt = getopt(argc, argv, "hjvtrzRsb:HL:")) != -1) {
     switch (opt) {
+      case 'j':
+        wantjit = true;
+        break;
       case 't':
         tuimode = false;
         break;
@@ -2821,6 +2824,9 @@ static void GetOpts(int argc, char *argv[]) {
     }
   }
   LogInit(logpath);
+  if (!wantjit) {
+    DisableJit(&m->system->jit);
+  }
 }
 
 static int OpenDevTty(void) {
@@ -2832,7 +2838,7 @@ int VirtualMachine(int argc, char *argv[]) {
   codepath = argv[optind++];
   do {
     action = 0;
-    LoadProgram(m, codepath, argv + optind, environ, elf);
+    LoadProgram(m, codepath, argv + optind - 1, environ);
     ScrollMemoryViews();
     AddStdFd(&m->system->fds, 0);
     AddStdFd(&m->system->fds, 1);
@@ -2864,11 +2870,21 @@ int VirtualMachine(int argc, char *argv[]) {
       }
     } while (!(action & (RESTART | EXIT)));
   } while (action & RESTART);
-  if (elf->ehdr) {
-    unassert(!munmap(elf->ehdr, elf->size));
+  if (m->system->elf.ehdr) {
+    unassert(!munmap(m->system->elf.ehdr, m->system->elf.size));
   }
   DisFree(dis);
   return exitcode;
+}
+
+void FreePanels(void) {
+  int i, j;
+  for (i = 0; i < ARRAYLEN(pan.p); ++i) {
+    for (j = 0; j < pan.p[i].n; ++j) {
+      free(pan.p[i].lines[j].p);
+    }
+    free(pan.p[i].lines);
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -2888,12 +2904,6 @@ int main(int argc, char *argv[]) {
   speed = 16;
   SetXmmSize(2);
   SetXmmDisp(kXmmHex);
-  g_high.keyword = 155;
-  g_high.reg = 215;
-  g_high.literal = 182;
-  g_high.label = 221;
-  g_high.comment = 112;
-  g_high.quote = 215;
   GetOpts(argc, argv);
   sigfillset(&sa.sa_mask);
   sa.sa_sigaction = OnSignal;
@@ -2917,5 +2927,6 @@ int main(int argc, char *argv[]) {
   rc = VirtualMachine(argc, argv);
   FreeMachine(m);
   FreeSystem(s);
+  FreePanels();
   return rc;
 }

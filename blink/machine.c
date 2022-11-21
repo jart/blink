@@ -1971,18 +1971,24 @@ void ExecuteSparseInstruction(struct Machine *m, u64 rde, u32 d) {
   }
 }
 
-void ExecuteInstruction(struct Machine *m) {
+void GeneralDispatch(struct Machine *m, u64 rde) {
   int dispatch;
-  m->ip += m->xedd->length;
-  dispatch = Mopcode(m->xedd->op.rde);
+  m->oldip = m->ip;
+  m->ip += Oplength(rde);
+  dispatch = Mopcode(rde);
   if (dispatch < ARRAYLEN(kNexgen32e)) {
-    kNexgen32e[dispatch](m, m->xedd->op.rde);
+    kNexgen32e[dispatch](m, rde);
   } else {
-    ExecuteSparseInstruction(m, m->xedd->op.rde, dispatch);
+    ExecuteSparseInstruction(m, rde, dispatch);
   }
   if (m->opcache->stashaddr) {
     VirtualRecv(m, m->opcache->stashaddr, m->opcache->stash,
                 m->opcache->stashsize);
     m->opcache->stashaddr = 0;
   }
+  m->oldip = INT64_MIN;
+}
+
+void ExecuteInstruction(struct Machine *m) {
+  GeneralDispatch(m, m->xedd->op.rde);
 }

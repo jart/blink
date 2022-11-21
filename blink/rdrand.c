@@ -19,6 +19,7 @@
 #include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
+#include "blink/lock.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
@@ -47,12 +48,12 @@ static void OpRand(struct Machine *m, u64 rde, u64 x) {
 }
 
 void OpRdrand(struct Machine *m, u64 rde) {
-  pthread_mutex_lock(&g_rdrand.lock);
+  LOCK(&g_rdrand.lock);
   if (!(g_rdrand.count++ % RESEED_INTERVAL)) {
     unassert(GetRandom(&g_rdrand.state, 8) == 8);
   }
   OpRand(m, rde, Vigna(&g_rdrand.state));
-  pthread_mutex_unlock(&g_rdrand.lock);
+  UNLOCK(&g_rdrand.lock);
 }
 
 void OpRdseed(struct Machine *m, u64 rde) {

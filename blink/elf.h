@@ -1,6 +1,7 @@
 #ifndef BLINK_ELF_H_
 #define BLINK_ELF_H_
 #include <stddef.h>
+
 #include "blink/types.h"
 
 /**

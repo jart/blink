@@ -5,10 +5,18 @@
 #include <stdbool.h>
 
 #include "blink/dll.h"
+#include "blink/elf.h"
 #include "blink/fds.h"
+#include "blink/jit.h"
 #include "blink/linux.h"
 #include "blink/tsan.h"
 #include "blink/x86.h"
+
+#define kOpNormal    0
+#define kOpBranching 1
+#define kOpPrecious  2
+
+#define kInstructionBytes 40
 
 #define kMachineHalt                 -1
 #define kMachineDecodeError          -2
@@ -19,8 +27,6 @@
 #define kMachineFpuException         -7
 #define kMachineProtectionFault      -8
 #define kMachineSimdException        -9
-
-#define kInstructionBytes 40
 
 #define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, list, e)
 
@@ -90,6 +96,16 @@ struct MachineState {
   struct MachineMemstat memstat;
 };
 
+struct Elf {
+  const char *prog;
+  Elf64_Ehdr *ehdr;
+  long size;
+  i64 base;
+  char *map;
+  long mapsize;
+  bool debugonce;
+};
+
 struct OpCache {
   u64 codevirt;    // current rip page in guest memory
   u8 *codehost;    // current rip page in host memory
@@ -104,6 +120,9 @@ struct System {
   i64 brk;
   bool dlab;
   bool isfork;
+  i64 codestart;
+  nexgen32e_f *fun;
+  unsigned long codesize;
   pthread_mutex_t real_lock;
   struct SystemReal real GUARDED_BY(real_lock);
   pthread_mutex_t realfree_lock;
@@ -112,7 +131,9 @@ struct System {
   pthread_mutex_t machines_lock;
   dll_list machines GUARDED_BY(machines_lock);
   unsigned next_tid GUARDED_BY(machines_lock);
+  struct Jit jit;
   struct Fds fds;
+  struct Elf elf;
   pthread_mutex_t sig_lock;
   struct sigaction_linux hands[32] GUARDED_BY(sig_lock);
   void (*onbinbase)(struct Machine *);
@@ -128,14 +149,21 @@ struct System {
   u64 cr4;
 };
 
+struct Path {
+  i64 start;
+  int elements;
+  struct JitPage *jp;
+};
+
 struct MachineTlb {
   i64 virt;
   u64 entry;
 };
 
 struct Machine {
-  struct XedDecodedInst *xedd;
+  nexgen32e_f *fun;
   u64 ip;
+  u64 oldip;
   u64 cs;
   u64 ss;
   int mode;
@@ -188,6 +216,7 @@ struct Machine {
   };
   _Alignas(64) struct MachineTlb tlb[16];
   _Alignas(16) u8 xmm[16][16];
+  struct XedDecodedInst *xedd;
   dll_element list GUARDED_BY(system->machines_lock);
   i64 readaddr;
   i64 writeaddr;
@@ -202,6 +231,7 @@ struct Machine {
   bool isthread;
   pthread_t thread;
   struct FreeList freelist;
+  struct Path path;
   i64 bofram[2];
   i64 faultaddr;
   u64 signals;
@@ -229,6 +259,7 @@ void ResetCpu(struct Machine *);
 void ResetTlb(struct Machine *);
 void CollectGarbage(struct Machine *);
 void ResetInstructionCache(struct Machine *);
+void GeneralDispatch(struct Machine *, u64);
 void LoadInstruction(struct Machine *);
 void ExecuteInstruction(struct Machine *);
 long AllocateLinearPage(struct System *);

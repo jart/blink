@@ -26,6 +26,7 @@
 #include "blink/assert.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
+#include "blink/lock.h"
 #include "blink/macros.h"
 
 // TODO(jart): We should track the first hole.
@@ -33,11 +34,11 @@
 
 void InitFds(struct Fds *fds) {
   fds->list = 0;
-  unassert(!pthread_mutex_init(&fds->lock, 0));
+  pthread_mutex_init(&fds->lock, 0);
 }
 
 void LockFds(struct Fds *fds) {
-  unassert(!pthread_mutex_lock(&fds->lock));
+  LOCK(&fds->lock);
 }
 
 struct Fd *AllocateFd(struct Fds *fds, int minfd, int oflags) {
@@ -52,7 +53,7 @@ struct Fd *AllocateFd(struct Fds *fds, int minfd, int oflags) {
     fd->cb = &kFdCbHost;
     fd->oflags = oflags & ~O_CLOEXEC;
     fd->cloexec = !!(oflags & O_CLOEXEC);
-    unassert(!pthread_mutex_init(&fd->lock, 0));
+    pthread_mutex_init(&fd->lock, 0);
     atomic_store_explicit(&fd->systemfd, -1, memory_order_release);
     if (!(e1 = dll_first(fds->list)) || minfd < FD_CONTAINER(e1)->fildes) {
       fd->fildes = minfd;
@@ -97,11 +98,11 @@ struct Fd *GetFd(struct Fds *fds, int fildes) {
 }
 
 void LockFd(struct Fd *fd) {
-  unassert(!pthread_mutex_lock(&fd->lock));
+  LOCK(&fd->lock);
 }
 
 void UnlockFd(struct Fd *fd) {
-  unassert(!pthread_mutex_unlock(&fd->lock));
+  UNLOCK(&fd->lock);
 }
 
 int CountFds(struct Fds *fds) {
@@ -122,7 +123,7 @@ void FreeFd(struct Fds *fds, struct Fd *fd) {
 }
 
 void UnlockFds(struct Fds *fds) {
-  unassert(!pthread_mutex_unlock(&fds->lock));
+  UNLOCK(&fds->lock);
 }
 
 void DestroyFds(struct Fds *fds) {

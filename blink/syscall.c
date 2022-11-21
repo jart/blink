@@ -48,6 +48,7 @@
 #include "blink/errno.h"
 #include "blink/iovs.h"
 #include "blink/linux.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -1342,7 +1343,7 @@ static int OpTkill(struct Machine *m, int tid, int sig) {
   dll_element *e;
   bool gotsome = false;
   if (!(1 <= sig && sig <= 64)) return einval();
-  unassert(!pthread_mutex_lock(&m->system->machines_lock));
+  LOCK(&m->system->machines_lock);
   for (e = dll_first(m->system->machines); e;
        e = dll_next(m->system->machines, e)) {
     if (MACHINE_CONTAINER(e)->tid == tid) {
@@ -1351,7 +1352,7 @@ static int OpTkill(struct Machine *m, int tid, int sig) {
       break;
     }
   }
-  unassert(!pthread_mutex_unlock(&m->system->machines_lock));
+  UNLOCK(&m->system->machines_lock);
   if (!gotsome) return esrch();
   return 0;
 }

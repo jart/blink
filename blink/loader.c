@@ -40,8 +40,9 @@
 #define READ32(p) Read32((const u8 *)(p))
 
 static void LoadElfLoadSegment(struct Machine *m, void *code, size_t codesize,
-                               Elf64_Phdr *phdr) {
-  i64 align, bsssize;
+                               const Elf64_Phdr *phdr, i64 *out_mincode,
+                               i64 *out_maxcode) {
+  i64 align, bsssize, mincode, maxcode;
   i64 felf, fstart, fend, vstart, vbss, vend;
   align = MAX(Read64(phdr->p_align), 4096);
   unassert(0 == (Read64(phdr->p_vaddr) - Read64(phdr->p_offset)) % align);
@@ -77,10 +78,23 @@ static void LoadElfLoadSegment(struct Machine *m, void *code, size_t codesize,
     VirtualSet(m, Read64(phdr->p_vaddr) + Read64(phdr->p_filesz), 0,
                Read64(phdr->p_memsz) - Read64(phdr->p_filesz) - bsssize);
   }
+  if (Read32(phdr->p_flags) & PF_X) {
+    mincode = Read64(phdr->p_vaddr);
+    maxcode = Read64(phdr->p_vaddr) + Read64(phdr->p_memsz);
+    if (!*out_mincode) {
+      *out_mincode = mincode;
+      *out_maxcode = maxcode;
+    } else {
+      *out_mincode = MIN(*out_mincode, mincode);
+      *out_maxcode = MAX(*out_maxcode, maxcode);
+    }
+  }
 }
 
 static void LoadElf(struct Machine *m, struct Elf *elf) {
   int i;
+  i64 mincode = 0;
+  i64 maxcode = 0;
   Elf64_Phdr *phdr;
   m->ip = elf->base = Read64(elf->ehdr->e_entry);
   for (i = 0; i < Read16(elf->ehdr->e_phnum); ++i) {
@@ -88,16 +102,20 @@ static void LoadElf(struct Machine *m, struct Elf *elf) {
     switch (Read32(phdr->p_type)) {
       case PT_LOAD:
         elf->base = MIN(elf->base, (i64)Read64(phdr->p_vaddr));
-        LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr);
+        LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, &mincode, &maxcode);
         break;
       default:
         break;
     }
   }
+  m->system->codestart = mincode;
+  m->system->codesize = maxcode - mincode;
 }
 
 static void LoadBin(struct Machine *m, intptr_t base, const char *prog,
                     void *code, size_t codesize) {
+  i64 mincode = 0;
+  i64 maxcode = 0;
   Elf64_Phdr phdr;
   Write32(phdr.p_type, PT_LOAD);
   Write32(phdr.p_flags, PF_X | PF_R | PF_W);
@@ -107,11 +125,14 @@ static void LoadBin(struct Machine *m, intptr_t base, const char *prog,
   Write64(phdr.p_filesz, codesize);
   Write64(phdr.p_memsz, ROUNDUP(codesize + 4 * 1024 * 1024, 4 * 1024 * 1024));
   Write64(phdr.p_align, 4096);
-  LoadElfLoadSegment(m, code, codesize, &phdr);
+  LoadElfLoadSegment(m, code, codesize, &phdr, &mincode, &maxcode);
+  m->system->codestart = mincode;
+  m->system->codesize = maxcode - mincode;
   m->ip = base;
 }
 
 static void BootProgram(struct Machine *m, struct Elf *elf, size_t codesize) {
+  m->cs = 0;
   m->ip = 0x7c00;
   elf->base = 0x7c00;
   if (ReserveReal(m->system, 0x00f00000) == -1) {
@@ -122,8 +143,7 @@ static void BootProgram(struct Machine *m, struct Elf *elf, size_t codesize) {
   Write16(m->system->real.p + 0x40E, 0xb0000 >> 4);
   Write16(m->system->real.p + 0x413, 0xb0000 / 1024);
   Write16(m->system->real.p + 0x44A, 80);
-  m->cs = 0;
-  Put64(m->dx, 0);
+  Write64(m->dx, 0);
   memcpy(m->system->real.p + 0x7c00, elf->map, 512);
   if (memcmp(elf->map, "\177ELF", 4) == 0) {
     elf->ehdr = (Elf64_Ehdr *)elf->map;
@@ -178,14 +198,29 @@ static int GetElfHeader(char ehdr[64], const char *prog, const char *image) {
   return -1;
 }
 
-void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
-                 struct Elf *elf) {
+static void SetupDispatch(struct Machine *m) {
+  size_t n;
+  unsigned long i;
+  free(m->system->fun);
+  if ((n = m->system->codesize)) {
+    unassert((m->system->fun = (nexgen32e_f *)calloc(n, sizeof(nexgen32e_f))));
+    m->fun = m->system->fun - m->system->codestart;
+    for (i = 0; i < n; ++i) {
+      m->system->fun[i] = GeneralDispatch;
+    }
+  }
+}
+
+void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
   int fd;
   i64 sp;
   char ehdr[64];
   struct stat st;
+  struct Elf *elf;
   unassert(prog);
+  elf = &m->system->elf;
   elf->prog = prog;
+  g_progname = prog;
   if ((fd = open(prog, O_RDONLY)) == -1 ||
       (fstat(fd, &st) == -1 || !st.st_size)) {
     LOGF("%s: not found", prog);
@@ -200,7 +235,7 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
   }
   close(fd);
   ResetCpu(m);
-  if (m->mode == XED_MODE_REAL) {
+  if ((m->mode & 3) == XED_MODE_REAL) {
     BootProgram(m, elf, elf->mapsize);
   } else {
     sp = 0x800000000000;
@@ -229,4 +264,5 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars,
       LoadBin(m, elf->base, prog, elf->map, elf->mapsize);
     }
   }
+  SetupDispatch(m);
 }

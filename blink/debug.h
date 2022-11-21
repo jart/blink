@@ -1,6 +1,7 @@
 #ifndef BLINK_DEBUG_H_
 #define BLINK_DEBUG_H_
 #include "blink/fds.h"
+#include "blink/machine.h"
 
 #define LOGCPU(M, FMT, ...)                                                   \
   LOGF(FMT " IP %" PRIx64 " AX %" PRIx64 " CX %" PRIx64 " DX %" PRIx64        \
@@ -14,5 +15,8 @@
        Read64(M->r12), Read64(M->r13), Read64(M->r14), Read64(M->r15));
 
 void PrintFds(struct Fds *);
+const char *DescribeOp(struct Machine *);
+const char *GetBacktrace(struct Machine *);
+int GetInstruction(struct Machine *, struct XedDecodedInst *);
 
 #endif /* BLINK_DEBUG_H_ */

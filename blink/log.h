@@ -1,5 +1,6 @@
 #ifndef BLINK_LOG_H_
 #define BLINK_LOG_H_
+#include <stdatomic.h>
 #include <stdio.h>
 
 #ifndef NDEBUG
@@ -7,6 +8,20 @@
 #else
 #define LOGF(...) (void)0
 #endif
+
+#if LOG_ENABLED
+#define LOG_ONCE(x)                                                   \
+  do {                                                                \
+    static _Atomic(int) once_;                                        \
+    if (!atomic_exchange_explicit(&once_, 1, memory_order_relaxed)) { \
+      x;                                                              \
+    }                                                                 \
+  } while (0)
+#else
+#define LOG_ONCE(x) (void)0
+#endif
+
+extern const char *g_progname;
 
 void LogInit(const char *);
 void Log(const char *, int, const char *, ...);

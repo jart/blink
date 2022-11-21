@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <fcntl.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <time.h>
@@ -25,7 +26,9 @@
 
 #include "blink/assert.h"
 #include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/tsan.h"
 #include "blink/types.h"
 
 #define APPEND(F, ...) n += F(b + n, PIPE_BUF - n, __VA_ARGS__)
@@ -34,13 +37,18 @@ static int g_log;
 
 static char *GetTimestamp(void) {
   int x;
+  sigset_t ss, oldss;
   struct timespec ts;
   static _Thread_local char s[27];
   static _Thread_local i64 last;
   static _Thread_local struct tm tm;
+  IGNORE_RACES_START();
   clock_gettime(CLOCK_REALTIME, &ts);
   if (ts.tv_sec != last) {
+    sigfillset(&ss);
+    sigprocmask(SIG_SETMASK, &ss, &oldss);
     localtime_r(&ts.tv_sec, &tm);
+    sigprocmask(SIG_SETMASK, &oldss, 0);
     x = tm.tm_year + 1900;
     s[0] = '0' + x / 1000;
     s[1] = '0' + x / 100 % 10;
@@ -70,6 +78,7 @@ static char *GetTimestamp(void) {
     s[26] = 0;
     last = ts.tv_sec;
   }
+  IGNORE_RACES_END();
   x = ts.tv_nsec;
   s[20] = '0' + x / 100000000;
   s[21] = '0' + x / 10000000 % 10;
@@ -85,7 +94,8 @@ void Log(const char *file, int line, const char *fmt, ...) {
   va_list va;
   char b[PIPE_BUF];
   va_start(va, fmt);
-  APPEND(snprintf, "I%s:%s:%d: ", GetTimestamp(), file, line);
+  APPEND(snprintf, "I%s:%s:%d: %d: ", GetTimestamp(), file, line,
+         g_machine->tid);
   APPEND(vsnprintf, fmt, va);
   APPEND(snprintf, "\n");
   va_end(va);

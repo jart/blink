@@ -28,6 +28,7 @@
 #include "blink/dll.h"
 #include "blink/endian.h"
 #include "blink/loader.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -44,31 +45,31 @@ static void OnSignal(int sig, siginfo_t *si, void *uc) {
 static int Exec(char *prog, char **argv, char **envp) {
   int rc;
   dll_element *e;
-  struct Elf elf;
   struct System *s;
   struct Machine *o = g_machine;
   unassert((g_machine = NewMachine(NewSystem(), 0)));
   g_machine->system->exec = Exec;
   g_machine->mode = XED_MODE_LONG;
-  LoadProgram(g_machine, prog, argv, envp, &elf);
   if (!o) {
+    LoadProgram(g_machine, prog, argv, envp);
     AddStdFd(&g_machine->system->fds, 0);
     AddStdFd(&g_machine->system->fds, 1);
     AddStdFd(&g_machine->system->fds, 2);
   } else {
     s = o->system;
-    unassert(!pthread_mutex_lock(&s->machines_lock));
+    LOCK(&s->machines_lock);
     while ((e = dll_first(s->machines))) {
       if (MACHINE_CONTAINER(e)->isthread) {
         pthread_kill(MACHINE_CONTAINER(e)->thread, SIGKILL);
       }
       FreeMachine(MACHINE_CONTAINER(e));
     }
-    unassert(!pthread_mutex_unlock(&s->machines_lock));
-    unassert(!pthread_mutex_lock(&s->fds.lock));
+    UNLOCK(&s->machines_lock);
+    LoadProgram(g_machine, prog, argv, envp);
+    LOCK(&s->fds.lock);
     g_machine->system->fds = s->fds;
     memset(&s->fds, 0, sizeof(s->fds));
-    unassert(!pthread_mutex_unlock(&s->fds.lock));
+    UNLOCK(&s->fds.lock);
     FreeSystem(s);
   }
   if (!(rc = setjmp(g_machine->onhalt))) {

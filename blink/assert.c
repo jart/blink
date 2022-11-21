@@ -16,17 +16,36 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "blink/assert.h"
+#include "blink/debug.h"
+#include "blink/endian.h"
 #include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
+
+int asan_backtrace_index;
+int asan_backtrace_buffer[1];
+
+static void PrintBacktraceUsingAsan(void) {
+  volatile int x;
+  x = asan_backtrace_buffer[asan_backtrace_index + 1];
+  (void)x;
+}
 
 void AssertFailed(const char *file, int line, const char *msg) {
   char b[512];
   snprintf(b, sizeof(b), "%s:%d: assertion failed: %s\n", file, line, msg);
   b[sizeof(b) - 1] = 0;
   WriteErrorString(b);
+  if (g_machine) {
+    WriteErrorString("\t");
+    WriteErrorString(GetBacktrace(g_machine));
+    WriteErrorString("\n");
+  }
+  PrintBacktraceUsingAsan();
   abort();
 }

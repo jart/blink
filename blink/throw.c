@@ -23,9 +23,17 @@
 #include <string.h>
 
 #include "blink/address.h"
+#include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/log.h"
 #include "blink/signal.h"
+
+static void RestoreIp(struct Machine *m) {
+  if (m->oldip != INT64_MIN) {
+    m->ip = m->oldip;
+    m->oldip = INT64_MIN;
+  }
+}
 
 static bool IsHaltingInitialized(struct Machine *m) {
   jmp_buf zb;
@@ -34,27 +42,21 @@ static bool IsHaltingInitialized(struct Machine *m) {
 }
 
 void HaltMachine(struct Machine *m, int code) {
+  RestoreIp(m);
   if (!IsHaltingInitialized(m)) abort();
   longjmp(m->onhalt, code);
 }
 
 void RaiseDivideError(struct Machine *m) {
+  RestoreIp(m);
   EnqueueSignal(m, SIGFPE);
   ConsumeSignal(m);
 }
 
 void ThrowSegmentationFault(struct Machine *m, i64 va) {
+  RestoreIp(m);
   m->faultaddr = va;
-  if (m->xedd) m->ip -= m->xedd->length;
-  LOGF("SEGMENTATION FAULT ADDR %" PRIx64 " IP %" PRIx64 " AX %" PRIx64
-       " CX %" PRIx64 " DX %" PRIx64 " BX %" PRIx64 " SP %" PRIx64 " "
-       "BP %" PRIx64 " SI %" PRIx64 " DI %" PRIx64 " R8 %" PRIx64 " R9 %" PRIx64
-       " R10 %" PRIx64 " R11 %" PRIx64 " R12 %" PRIx64 " "
-       "R13 %" PRIx64 " R14 %" PRIx64 " R15 %" PRIx64,
-       va, m->ip, Get64(m->ax), Get64(m->cx), Get64(m->dx), Get64(m->bx),
-       Get64(m->sp), Get64(m->bp), Get64(m->si), Get64(m->di), Get64(m->r8),
-       Get64(m->r9), Get64(m->r10), Get64(m->r11), Get64(m->r12), Get64(m->r13),
-       Get64(m->r14), Get64(m->r15));
+  LOGF("SEGMENTATION FAULT AT ADDRESS %" PRIx64 "\n\t%s", va, GetBacktrace(m));
   HaltMachine(m, kMachineSegmentationFault);
 }
 
@@ -63,7 +65,8 @@ void ThrowProtectionFault(struct Machine *m) {
 }
 
 void OpUd(struct Machine *m, u64 rde) {
-  if (m->xedd) m->ip -= m->xedd->length;
+  RestoreIp(m);
+  LOGF("UNDEFINED INSTRUCTION\n\t%s", GetBacktrace(m));
   HaltMachine(m, kMachineUndefinedInstruction);
 }
 

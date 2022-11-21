@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <limits.h>
+#include <signal.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,6 +30,8 @@
 #include "blink/dll.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
+#include "blink/jit.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -37,13 +40,16 @@
 #include "blink/real.h"
 
 #define MAX_THREAD_IDS    32768
-#define MINIMUM_THREAD_ID 262144
-#define GRANULARITY       131072
-#define MAX_MEMORY        268435456
+#define MINIMUM_THREAD_ID 262144     // our fake tids start here
+#define GRANULARITY       131072     // how often we check in with the os
+#define MAX_MEMORY        268435456  // 256mb ought to be enough for anyone
+#define JIT_RESERVE       134217728  // 128mb is max branch displacement on arm
 
 #ifndef MAP_NORESERVE
 #define MAP_NORESERVE 0
 #endif
+
+extern char end[];
 
 static void FillPage(u8 *p, int c) {
   IGNORE_RACES_START();
@@ -75,10 +81,20 @@ static bool IsPageStillPoisoned(u8 *p) {
   return true;
 }
 
+static void FreeSystemRealFree(struct System *s) {
+  struct SystemRealFree *rf;
+  LOCK(&s->realfree_lock);
+  while ((rf = s->realfree)) {
+    s->realfree = rf->next;
+    free(rf);
+  }
+  UNLOCK(&s->realfree_lock);
+}
+
 struct System *NewSystem(void) {
   void *p;
   struct System *s;
-  if ((p = mmap(0, MAX_MEMORY, PROT_NONE,
+  if ((p = mmap(end + JIT_RESERVE, MAX_MEMORY, PROT_NONE,
                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0)) ==
       MAP_FAILED) {
     LOGF("could not register %zu bytes of memory: %s", MAX_MEMORY,
@@ -87,28 +103,55 @@ struct System *NewSystem(void) {
   }
   if ((s = (struct System *)calloc(1, sizeof(*s)))) {
     s->real.p = (u8 *)p;
+    InitJit(&s->jit);
     InitFds(&s->fds);
-    unassert(!pthread_mutex_init(&s->sig_lock, 0));
-    unassert(!pthread_mutex_init(&s->real_lock, 0));
-    unassert(!pthread_mutex_init(&s->machines_lock, 0));
-    unassert(!pthread_mutex_init(&s->realfree_lock, 0));
+    pthread_mutex_init(&s->sig_lock, 0);
+    pthread_mutex_init(&s->real_lock, 0);
+    pthread_mutex_init(&s->machines_lock, 0);
+    pthread_mutex_init(&s->realfree_lock, 0);
   }
   return s;
 }
 
-static void FreeSystemRealFree(struct System *s) {
-  struct SystemRealFree *rf;
-  unassert(!pthread_mutex_lock(&s->realfree_lock));
-  while ((rf = s->realfree)) {
-    s->realfree = rf->next;
-    free(rf);
+static void FreeMachineImpl(struct Machine *m) {
+  if (g_machine == m) {
+    g_machine = 0;
   }
-  unassert(!pthread_mutex_unlock(&s->realfree_lock));
+  if (m->path.jp) {
+    AbandonJit(&m->system->jit, m->path.jp);
+  }
+  CollectGarbage(m);
+  free(m->freelist.p);
+  free(m);
+}
+
+void FreeSystem(struct System *s) {
+  dll_element *e;
+  struct Machine *m;
+  LOCK(&s->machines_lock);
+  while ((e = dll_first(s->machines))) {
+    m = MACHINE_CONTAINER(e);
+    m->system->machines = dll_remove(m->system->machines, &m->list);
+    unassert(!pthread_kill(m->thread, SIGKILL));
+    FreeMachineImpl(m);
+  }
+  UNLOCK(&s->machines_lock);
+  FreeSystemRealFree(s);
+  LOCK(&s->real_lock);
+  unassert(!munmap(s->real.p, MAX_MEMORY));
+  UNLOCK(&s->real_lock);
+  unassert(!pthread_mutex_destroy(&s->realfree_lock));
+  unassert(!pthread_mutex_destroy(&s->machines_lock));
+  unassert(!pthread_mutex_destroy(&s->real_lock));
+  unassert(!pthread_mutex_destroy(&s->sig_lock));
+  DestroyFds(&s->fds);
+  DestroyJit(&s->jit);
+  free(s->fun);
 }
 
 static void AssignTid(struct Machine *m) {
   _Static_assert(IS2POW(MAX_THREAD_IDS), "");
-  unassert(!pthread_mutex_lock(&m->system->machines_lock));
+  LOCK(&m->system->machines_lock);
   if (dll_is_empty(m->system->machines)) {
     m->tid = getpid();
   } else {
@@ -116,7 +159,7 @@ static void AssignTid(struct Machine *m) {
     m->tid = (m->system->next_tid++ & (MAX_THREAD_IDS - 1)) + MINIMUM_THREAD_ID;
   }
   m->system->machines = dll_make_first(m->system->machines, &m->list);
-  unassert(!pthread_mutex_unlock(&m->system->machines_lock));
+  UNLOCK(&m->system->machines_lock);
 }
 
 struct Machine *NewMachine(struct System *s, struct Machine *p) {
@@ -132,6 +175,7 @@ struct Machine *NewMachine(struct System *s, struct Machine *p) {
     IGNORE_RACES_START();
     memcpy(m, p, sizeof(*m));
     IGNORE_RACES_END();
+    memset(&m->path, 0, sizeof(m->path));
     memset(&m->freelist, 0, sizeof(m->freelist));
   } else {
     memset(m, 0, sizeof(*m));
@@ -141,19 +185,6 @@ struct Machine *NewMachine(struct System *s, struct Machine *p) {
   m->system = s;
   AssignTid(m);
   return m;
-}
-
-void FreeSystem(struct System *s) {
-  FreeSystemRealFree(s);
-  unassert(!pthread_mutex_lock(&s->real_lock));
-  unassert(!munmap(s->real.p, MAX_MEMORY));
-  unassert(!pthread_mutex_unlock(&s->real_lock));
-  unassert(!pthread_mutex_destroy(&s->realfree_lock));
-  unassert(!pthread_mutex_destroy(&s->machines_lock));
-  unassert(!pthread_mutex_destroy(&s->real_lock));
-  unassert(!pthread_mutex_destroy(&s->sig_lock));
-  DestroyFds(&s->fds);
-  free(s);
 }
 
 void CollectGarbage(struct Machine *m) {
@@ -166,12 +197,10 @@ void CollectGarbage(struct Machine *m) {
 
 void FreeMachine(struct Machine *m) {
   if (m) {
-    pthread_mutex_lock(&m->system->machines_lock);
+    LOCK(&m->system->machines_lock);
     m->system->machines = dll_remove(m->system->machines, &m->list);
-    pthread_mutex_unlock(&m->system->machines_lock);
-    CollectGarbage(m);
-    free(m->freelist.p);
-    free(m);
+    UNLOCK(&m->system->machines_lock);
+    FreeMachineImpl(m);
   }
 }
 
@@ -219,7 +248,7 @@ int ReserveReal(struct System *s, long n)
 long AllocateLinearPageRaw(struct System *s) {
   size_t i, n;
   struct SystemRealFree *rf;
-  pthread_mutex_lock(&s->realfree_lock);
+  LOCK(&s->realfree_lock);
   if ((rf = s->realfree)) {
     unassert(rf->n);
     unassert(!(rf->i & 4095));
@@ -229,23 +258,23 @@ long AllocateLinearPageRaw(struct System *s) {
     rf->i += 4096;
     if (!(rf->n -= 4096)) {
       s->realfree = rf->next;
-      pthread_mutex_unlock(&s->realfree_lock);
+      UNLOCK(&s->realfree_lock);
       free(rf);
     } else {
-      pthread_mutex_unlock(&s->realfree_lock);
+      UNLOCK(&s->realfree_lock);
     }
     --s->memstat.freed;
     ++s->memstat.reclaimed;
   } else {
-    pthread_mutex_unlock(&s->realfree_lock);
-    pthread_mutex_lock(&s->real_lock);
+    UNLOCK(&s->realfree_lock);
+    LOCK(&s->real_lock);
     i = s->real.i;
     n = s->real.n;
     if (i == n) {
       n += GRANULARITY;
       n = ROUNDUP(n, 4096);
       if (ReserveReal(s, n) == -1) {
-        pthread_mutex_unlock(&s->real_lock);
+        UNLOCK(&s->real_lock);
         return -1;
       }
     }
@@ -253,7 +282,7 @@ long AllocateLinearPageRaw(struct System *s) {
     unassert(!(n & 4095));
     unassert(i + 4096 <= n);
     s->real.i += 4096;
-    pthread_mutex_unlock(&s->real_lock);
+    UNLOCK(&s->real_lock);
     ++s->memstat.allocated;
   }
   ++s->memstat.committed;
@@ -322,7 +351,7 @@ i64 FindVirtual(struct System *s, i64 virt, size_t size) {
 
 static void AppendRealFree(struct System *s, u64 real) {
   struct SystemRealFree *rf;
-  pthread_mutex_lock(&s->realfree_lock);
+  LOCK(&s->realfree_lock);
   PoisonPage(s->real.p + real);
   if (s->realfree && real == s->realfree->i + s->realfree->n) {
     s->realfree->n += 4096;
@@ -332,7 +361,7 @@ static void AppendRealFree(struct System *s, u64 real) {
     rf->next = s->realfree;
     s->realfree = rf;
   }
-  pthread_mutex_unlock(&s->realfree_lock);
+  UNLOCK(&s->realfree_lock);
 }
 
 int FreeVirtual(struct System *s, i64 base, size_t size) {
