@@ -82,10 +82,10 @@ hello world
 
 blink is an x86-64 interpreter for POSIX platforms that's written in
 ANSI C11 that's compatible with C++ compilers. Instruction decoding is
-done using our trimmed-down version of Intel's disassembler Xed. Like
-Bochs, Blink doesn't do code generation; the primary focus is having a
-smaller binary footprint with a readable codebase. However we're still
-likely to add something like jit in the near future.
+done using our trimmed-down version of Intel's disassembler Xed. Blink
+does *some* code generation at runtime, using a just-in-time approach,
+where functions are generated that thread statically-compiled operation
+functions together.
 
 The prime directive of this project is to act as a virtual machine for
 userspace binaries compiled by Cosmopolitan Libc. Much of the surface

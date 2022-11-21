@@ -152,9 +152,9 @@ static bool IsOrphan(struct Machine *m) {
 }
 
 _Noreturn static void OpExit(struct Machine *m, int rc) {
-  u8 *ctid;
-  if (m->ctid && (ctid = FindReal(m, m->ctid))) {
-    Store32(ctid, 0);
+  atomic_int *ctid;
+  if (m->ctid && (ctid = (atomic_int *)FindReal(m, m->ctid))) {
+    atomic_store_explicit(ctid, 0, memory_order_seq_cst);
   }
   if (IsOrphan(m)) {
     HaltMachine(m, kMachineExit | (rc & 255));
@@ -181,13 +181,13 @@ static int OpFork(struct Machine *m) {
 
 static void *OnSpawn(void *arg) {
   int rc;
-  u8 *ctid;
+  atomic_int *ctid;
   struct Machine *m = (struct Machine *)arg;
   g_machine = m;
   if (!(rc = setjmp(m->onhalt))) {
     unassert(!pthread_sigmask(SIG_SETMASK, &m->thread_sigmask, 0));
-    if (m->ctid && (ctid = FindReal(m, m->ctid))) {
-      Store32(ctid, m->tid);
+    if (m->ctid && (ctid = (atomic_int *)FindReal(m, m->ctid))) {
+      atomic_store_explicit(ctid, Little32(m->tid), memory_order_seq_cst);
     }
     Actor(m);
   } else {
@@ -228,7 +228,8 @@ static int OpSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
     unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
     return eagain();
   }
-  Store32(ResolveAddress(m, ptid), tid);
+  atomic_store_explicit((atomic_int *)ResolveAddress(m, ptid), Little32(tid),
+                        memory_order_release);
   unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
   return tid;
 }
