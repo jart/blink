@@ -175,12 +175,11 @@ void VirtualRecvWrite(struct Machine *m, i64 addr, void *src, u64 n) {
 }
 
 void CommitStash(struct Machine *m) {
-  unassert(m->opcache->stashaddr);
+  unassert(m->stashaddr);
   if (m->opcache->writable) {
-    VirtualRecv(m, m->opcache->stashaddr, m->opcache->stash,
-                m->opcache->stashsize);
+    VirtualRecv(m, m->stashaddr, m->opcache->stash, m->opcache->stashsize);
   }
-  m->opcache->stashaddr = 0;
+  m->stashaddr = 0;
 }
 
 u8 *ReserveAddress(struct Machine *m, i64 v, size_t n) {
@@ -190,7 +189,7 @@ u8 *ReserveAddress(struct Machine *m, i64 v, size_t n) {
     return ResolveAddress(m, v);
   }
   STATISTIC(++page_overlaps);
-  m->opcache->stashaddr = v;
+  m->stashaddr = v;
   m->opcache->stashsize = n;
   r = m->opcache->stash;
   VirtualSend(m, r, v, n);

@@ -2072,10 +2072,10 @@ void StartOp(struct Machine *m, DISPATCH_PARAMETERS) {
 
 void EndOp(struct Machine *m) {
   JIT_LOGF("%" PRIx64 "   </op>", m->ip);
-  if (m->opcache->stashaddr) {
+  m->oldip = -1;
+  if (m->stashaddr) {
     CommitStash(m);
   }
-  m->oldip = INT64_MIN;
 }
 
 static void EndPath(struct Machine *m) {
@@ -2141,12 +2141,35 @@ static bool AddPath(struct Machine *m, DISPATCH_PARAMETERS) {
   ++m->path.elements;
   STATISTIC(++path_elements);
   AppendJitSetArg(m->path.jp, kParamDisp, Oplength(rde));
+#if defined(__x86_64__)
+  AppendJitMovReg(m->path.jp, kAmdDi, kAmdBx);
+  u8 code[] = {
+      0x48, 0x8b, 0107, 0x08,               // mov 8(%rdi),%rax
+      0x48, 0x89, 0107, 0x10,               // mov %rax,16(%rdi)
+      0x48, 0x83, 0300, (u8)Oplength(rde),  // add $i,%rax
+      0x48, 0x89, 0107, 0x08,               // mov %rax,8(%rdi)
+  };
+  AppendJit(m->path.jp, code, sizeof(code));
+#elif defined(__aarch64__)
+  AppendJitMovReg(m->path.jp, 0, 19);
   AppendJitCall(m->path.jp, (void *)StartOp);
+#endif
   AppendJitSetArg(m->path.jp, kParamRde, rde);
   AppendJitSetArg(m->path.jp, kParamDisp, disp);
   AppendJitSetArg(m->path.jp, kParamUimm0, uimm0);
   AppendJitCall(m->path.jp, (void *)GetOp(Mopcode(rde)));
+#if defined(__x86_64__)
+  AppendJitMovReg(m->path.jp, kAmdDi, kAmdBx);
+  u8 code2[] = {
+      0x48, 0x83, 0177, 0030, 0x00,  // cmpq $0x0,0x18(%rdi)
+      0x74, 0x05,                    // jnz +5
+  };
+  AppendJit(m->path.jp, code2, sizeof(code2));
+  AppendJitCall(m->path.jp, (void *)CommitStash);
+#elif defined(__aarch64__)
+  AppendJitMovReg(m->path.jp, 0, 19);
   AppendJitCall(m->path.jp, (void *)EndOp);
+#endif
   return true;
 }
 
@@ -2163,14 +2186,13 @@ void JitlessDispatch(struct Machine *m, DISPATCH_PARAMETERS) {
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m), GetPc(m));
   LoadInstruction(m);
   m->oldip = m->ip;
-  darg = 0;
   rde = m->xedd->op.rde;
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
   m->ip += Oplength(rde);
   GetOp(Mopcode(rde))(m, DISPATCH_ARGUMENTS);
-  if (m->opcache->stashaddr) CommitStash(m);
-  m->oldip = INT64_MIN;
+  if (m->stashaddr) CommitStash(m);
+  m->oldip = -1;
 }
 
 void GeneralDispatch(struct Machine *m, DISPATCH_PARAMETERS) {
@@ -2180,7 +2202,6 @@ void GeneralDispatch(struct Machine *m, DISPATCH_PARAMETERS) {
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m), GetPc(m));
   LoadInstruction(m);
   m->oldip = m->ip;
-  darg = 0;
   rde = m->xedd->op.rde;
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
@@ -2192,7 +2213,7 @@ void GeneralDispatch(struct Machine *m, DISPATCH_PARAMETERS) {
   }
   m->ip += Oplength(rde);
   GetOp(Mopcode(rde))(m, DISPATCH_ARGUMENTS);
-  if (m->opcache->stashaddr) CommitStash(m);
+  if (m->stashaddr) CommitStash(m);
   if (jitpc) {
     newip = m->ip;
     m->ip = m->oldip;
@@ -2209,7 +2230,7 @@ void GeneralDispatch(struct Machine *m, DISPATCH_PARAMETERS) {
     }
     m->ip = newip;
   }
-  m->oldip = INT64_MIN;
+  m->oldip = -1;
 }
 
 void ExecuteInstruction(struct Machine *m) {
@@ -2220,25 +2241,25 @@ void ExecuteInstruction(struct Machine *m) {
     func = atomic_load_explicit(m->fun + pc, memory_order_relaxed);
     unassert(func != NULL);
     if (!m->path.jp) {
-      func(m, 0, 0, 0, 0);
+      func(m, DISPATCH_NOTHING);
       return;
     } else if (func == JitlessDispatch) {
       JIT_LOGF("abandoning path starting at %" PRIx64
                " due to running into staged path",
                m->path.start);
       AbandonPath(m);
-      func(m, 0, 0, 0, 0);
+      func(m, DISPATCH_NOTHING);
       return;
     } else if (func != GeneralDispatch) {
       JIT_LOGF("splicing path starting at %" PRIx64
                " into previously created function %p",
                m->path.start, func);
       CommitPath(m, (intptr_t)func);
-      func(m, 0, 0, 0, 0);
+      func(m, DISPATCH_NOTHING);
       return;
     }
   }
-  GeneralDispatch(m, 0, 0, 0, 0);
+  GeneralDispatch(m, DISPATCH_NOTHING);
 }
 
 void Actor(struct Machine *m) {

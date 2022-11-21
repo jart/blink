@@ -29,9 +29,9 @@
 #include "blink/signal.h"
 
 static void RestoreIp(struct Machine *m) {
-  if (m->oldip != INT64_MIN) {
+  if (m->oldip != -1) {
     m->ip = m->oldip;
-    m->oldip = INT64_MIN;
+    m->oldip = -1;
   }
 }
 

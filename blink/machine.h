@@ -34,8 +34,9 @@
 #define kMachineProtectionFault      -8
 #define kMachineSimdException        -9
 
-#define DISPATCH_PARAMETERS u64 rde, i64 disp, u64 uimm0, intptr_t darg
-#define DISPATCH_ARGUMENTS  rde, disp, uimm0, darg
+#define DISPATCH_PARAMETERS u64 rde, i64 disp, u64 uimm0
+#define DISPATCH_ARGUMENTS  rde, disp, uimm0
+#define DISPATCH_NOTHING    0, 0, 0
 
 #define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, list, e)
 
@@ -120,7 +121,6 @@ struct OpCache {
   u64 codevirt;   // current rip page in guest memory
   u8 *codehost;   // current rip page in host memory
   u32 stashsize;  // for writes that overlap page
-  i64 stashaddr;  // for writes that overlap page
   u8 stash[16];   // for writes that overlap page
   u64 icache[1024][kInstructionBytes / 8];
 };
@@ -172,8 +172,9 @@ struct MachineTlb {
 
 struct Machine {
   _Atomic(nexgen32e_f) * fun;
-  u64 ip;
-  u64 oldip;
+  u64 ip;         // 0x08
+  u64 oldip;      // 0x10
+  i64 stashaddr;  // 0x18
   u64 cs;
   u64 ss;
   int mode;

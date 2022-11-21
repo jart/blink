@@ -48,44 +48,6 @@
  * to memory at runtime, i.e. a small function that calls the functions.
  */
 
-#define kAmdXor      0x31
-#define kAmdJmp      0xe9
-#define kAmdCall     0xe8
-#define kAmdJmpAx    "\377\340"
-#define kAmdCallAx   "\377\320"
-#define kAmdDispMin  INT32_MIN
-#define kAmdDispMax  INT32_MAX
-#define kAmdDispMask 0xffffffffu
-#define kAmdRex      0x40  // turns ah/ch/dh/bh into spl/bpl/sil/dil
-#define kAmdRexb     0x41  // turns 0007 (r/m) of modrm into r8..r15
-#define kAmdRexr     0x44  // turns 0070 (reg) of modrm into r8..r15
-#define kAmdRexw     0x48  // makes instruction 64-bit
-#define kAmdMovImm   0xb8
-#define kAmdAx       0  // first function result
-#define kAmdCx       1  // third function parameter
-#define kAmdDx       2  // fourth function parameter, second function result
-#define kAmdBx       3  // generic saved register
-#define kAmdSp       4  // stack pointer
-#define kAmdBp       5  // backtrace pointer
-#define kAmdSi       6  // second function parameter
-#define kAmdDi       7  // first function parameter
-
-#define kArmJmp      0x14000000u  // B
-#define kArmCall     0x94000000u  // BL
-#define kArmMovNex   0xf2800000u  // sets sub-word of register to immediate
-#define kArmMovZex   0xd2800000u  // load immediate into reg w/ zero-extend
-#define kArmMovSex   0x92800000u  // load 1's complement imm w/ sign-extend
-#define kArmDispMin  -33554432    // can jump -2**25 ints backward
-#define kArmDispMax  +33554431    // can jump +2**25-1 ints forward
-#define kArmDispMask 0x03ffffff   // mask of branch displacement
-#define kArmRegOff   0            // bit offset of destination register
-#define kArmRegMask  0x0000001fu  // mask of destination register
-#define kArmImmOff   5            // bit offset of mov immediate value
-#define kArmImmMask  0x001fffe0u  // bit offset of mov immediate value
-#define kArmImmMax   0xffffu      // maximum immediate value per instruction
-#define kArmIdxOff   21           // bit offset of u16[4] sub-word index
-#define kArmIdxMask  0x00600000u  // mask of u16[4] sub-word index
-
 #ifdef MAP_FIXED_NOREPLACE
 // The mmap() address parameter without MAP_FIXED is documented by
 // Linux as a hint for locality. However our testing indicates the
@@ -505,7 +467,7 @@ intptr_t SpliceJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
   }
 }
 
-static bool AppendJitMovReg(struct JitPage *jp, int dst, int src) {
+bool AppendJitMovReg(struct JitPage *jp, int dst, int src) {
 #if defined(__x86_64__)
   unassert(!(dst & ~15));
   unassert(!(src & ~15));
@@ -537,7 +499,6 @@ static bool AppendJitMovReg(struct JitPage *jp, int dst, int src) {
  */
 bool AppendJitSetArg(struct JitPage *jp, int param, u64 value) {
   unassert(0 <= param && param < 6);
-  jp->setargs |= 1 << param;
 #if defined(__x86_64__)
   u8 reg[6] = {kAmdDi, kAmdSi, kAmdDx, kAmdCx, 8, 9};
   param = reg[param];
@@ -558,10 +519,6 @@ bool AppendJitCall(struct JitPage *jp, void *func) {
   addr = (intptr_t)func;
 #if defined(__x86_64__)
   u8 buf[5];
-  if (~jp->setargs & 1) {
-    AppendJitMovReg(jp, kAmdDi, kAmdBx);
-  }
-  jp->setargs = 0;
   disp = addr - (GetJitPc(jp) + 5);
   if (kAmdDispMin <= disp && disp <= kAmdDispMax) {
     // AMD function calls are encoded using an 0xE8 byte, followed by a
@@ -579,9 +536,6 @@ bool AppendJitCall(struct JitPage *jp, void *func) {
   }
 #elif defined(__aarch64__)
   uint32_t buf[1];
-  if (~jp->setargs & 1) {
-    AppendJitMovReg(jp, 0, 19);
-  }
   jp->setargs = 0;
   // ARM function calls are encoded as:
   //

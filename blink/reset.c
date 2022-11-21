@@ -63,7 +63,7 @@ void ResetInstructionCache(struct Machine *m) {
 void ResetCpu(struct Machine *m) {
   m->faultaddr = 0;
   m->opcache->stashsize = 0;
-  m->opcache->stashaddr = 0;
+  m->stashaddr = 0;
   m->writeaddr = 0;
   m->readaddr = 0;
   m->writesize = 0;

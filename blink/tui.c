@@ -807,7 +807,7 @@ static bool IsXmmNonZero(i64 start, i64 end) {
 static bool IsSegNonZero(void) {
   unsigned i;
   for (i = 0; i < 6; ++i) {
-    if (*GetSegment(m, 0, 0, 0, 0, i)) {
+    if (*GetSegment(m, DISPATCH_NOTHING, i)) {
       return true;
     }
   }

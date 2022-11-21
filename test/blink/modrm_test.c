@@ -45,7 +45,7 @@ TEST(modrm, testAddressSizeOverride_isNotPresent_keepsWholeExpression) {
   Write64(m->ax, 0xffffffff);
   ASSERT_EQ(0, DecodeInstruction(m->xedd, op, sizeof(op), XED_MODE_LONG));
   EXPECT_EQ(0x100000001, ComputeAddress(m, m->xedd->op.rde, m->xedd->op.disp,
-                                        m->xedd->op.uimm0, 0));
+                                        m->xedd->op.uimm0));
 }
 
 TEST(modrm, testAddressSizeOverride_isPresent_modulesWholeExpression) {
@@ -54,7 +54,7 @@ TEST(modrm, testAddressSizeOverride_isPresent_modulesWholeExpression) {
   Write64(m->ax, 0xffffffff);
   ASSERT_EQ(0, DecodeInstruction(m->xedd, op, sizeof(op), XED_MODE_LONG));
   EXPECT_EQ(0x000000001, ComputeAddress(m, m->xedd->op.rde, m->xedd->op.disp,
-                                        m->xedd->op.uimm0, 0));
+                                        m->xedd->op.uimm0));
 }
 
 TEST(modrm, testOverflow_doesntTriggerTooling) {
@@ -64,7 +64,7 @@ TEST(modrm, testOverflow_doesntTriggerTooling) {
   ASSERT_EQ(0, DecodeInstruction(m->xedd, op, sizeof(op), XED_MODE_LONG));
   EXPECT_EQ(0x8000000000000000ull,
             (uint64_t)ComputeAddress(m, m->xedd->op.rde, m->xedd->op.disp,
-                                     m->xedd->op.uimm0, 0));
+                                     m->xedd->op.uimm0));
 }
 
 TEST(modrm, testPuttingOnTheRiz) {
@@ -78,16 +78,16 @@ TEST(modrm, testPuttingOnTheRiz) {
   Write64(m->bp, 0x200000002);
   ASSERT_EQ(0, DecodeInstruction(m->xedd, op[0], sizeof(op[0]), XED_MODE_LONG));
   EXPECT_EQ(0x100000001, ComputeAddress(m, m->xedd->op.rde, m->xedd->op.disp,
-                                        m->xedd->op.uimm0, 0));
+                                        m->xedd->op.uimm0));
   ASSERT_EQ(0, DecodeInstruction(m->xedd, op[1], sizeof(op[1]), XED_MODE_LONG));
   EXPECT_EQ(0x000000001, ComputeAddress(m, m->xedd->op.rde, m->xedd->op.disp,
-                                        m->xedd->op.uimm0, 0));
+                                        m->xedd->op.uimm0));
   ASSERT_EQ(0, DecodeInstruction(m->xedd, op[2], sizeof(op[2]), XED_MODE_LONG));
   EXPECT_EQ(0x31339, ComputeAddress(m, m->xedd->op.rde, m->xedd->op.disp,
-                                    m->xedd->op.uimm0, 0));
+                                    m->xedd->op.uimm0));
   ASSERT_EQ(0, DecodeInstruction(m->xedd, op[3], sizeof(op[3]), XED_MODE_LONG));
   EXPECT_EQ(0x31337, ComputeAddress(m, m->xedd->op.rde, m->xedd->op.disp,
-                                    m->xedd->op.uimm0, 0));
+                                    m->xedd->op.uimm0));
 }
 
 TEST(modrm, testSibIndexOnly) {
@@ -109,5 +109,5 @@ TEST(modrm, testSibIndexOnly) {
   EXPECT_EQ(0b100, ModrmRm(m->xedd->op.rde));
   EXPECT_EQ(0x123 * 4,
             (uint64_t)ComputeAddress(m, m->xedd->op.rde, m->xedd->op.disp,
-                                     m->xedd->op.uimm0, 0));
+                                     m->xedd->op.uimm0));
 }
