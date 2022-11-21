@@ -2145,7 +2145,7 @@ static bool AddPath(struct Machine *m, DISPATCH_PARAMETERS) {
   AppendJitSetArg(m->path.jp, kParamRde, rde);
   AppendJitSetArg(m->path.jp, kParamDisp, disp);
   AppendJitSetArg(m->path.jp, kParamUimm0, uimm0);
-  AppendJitCall(m->path.jp, (void *)kNexgen32e[Mopcode(rde)]);
+  AppendJitCall(m->path.jp, (void *)GetOp(Mopcode(rde)));
   AppendJitCall(m->path.jp, (void *)EndOp);
   return true;
 }
@@ -2217,7 +2217,7 @@ void ExecuteInstruction(struct Machine *m) {
   u64 pc;
   nexgen32e_f func;
   if ((pc = GetPc(m)) - m->system->codestart < m->system->codesize) {
-    func = m->fun[pc];
+    func = atomic_load_explicit(m->fun + pc, memory_order_relaxed);
     unassert(func != NULL);
     if (!m->path.jp) {
       func(m, 0, 0, 0, 0);

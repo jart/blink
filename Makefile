@@ -32,10 +32,10 @@ o:	o/$(MODE)/blink			\
 	o/$(MODE)/test
 
 check:	o				\
-	o/$(MODE)/test/asm		\
 	o/$(MODE)/third_party/cosmo
 
 emulates:				\
+	o/$(MODE)/test/asm		\
 	o/$(MODE)/test/emulates		\
 	o/$(MODE)/third_party/cosmo/emulates
 

@@ -153,8 +153,7 @@ int ConsumeSignal(struct Machine *m) {
 }
 
 void EnqueueSignal(struct Machine *m, int sig) {
-  unassert(m);  // TODO(jart): Block signals at thread creation.
-  m->signals |= 1ul << (UnXlatSignal(sig) - 1);
+  if (m) m->signals |= 1ul << (UnXlatSignal(sig) - 1);
 }
 
 void TerminateSignal(struct Machine *m, int sig) {

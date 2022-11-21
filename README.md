@@ -3,7 +3,7 @@
 blink is a virtual machine for running x86-64-linux programs on different
 operating systems and hardware architectures. It's designed to do the
 same thing as the `qemu-x86_64` command, except rather than being a 10mb
-binary, blink only has a ~142kb footprint. For further details on the
+binary, blink only has a ~146kb footprint. For further details on the
 motivations for this tool, please read <https://justine.lol/ape.html>.
 
 ## Caveat Emptor
@@ -102,10 +102,11 @@ a sister project sometime soon.
 
 ![Blink Flakes: The Original and Best Unexplained Errors](test/flakes.png)
 
-Mutex lock tests sometimes flake:
+Mutex lock tests sometimes flake in a very specific way after joining
+threads on qemu-aarch64, qemu-mips, and qemu-s390x:
 
 ```
-// this happens on aarch64 and mips (probably s390x too?)
+// this happens on aarch64, mips, and s390x
 error:test/libc/intrin/pthread_mutex_lock2_test.c:95: pthread_mutex_lock_contention(pthread_mutex_lock_recursive) on blink.local pid 22952 tid 22952
         EXPECT_EQ(THREADS, started)
                 need 16 (or 0x10 or '►') =

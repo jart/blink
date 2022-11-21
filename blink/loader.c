@@ -203,10 +203,12 @@ static void SetupDispatch(struct Machine *m) {
   unsigned long i;
   free(m->system->fun);
   if ((n = m->system->codesize)) {
-    unassert((m->system->fun = (nexgen32e_f *)calloc(n, sizeof(nexgen32e_f))));
+    unassert((m->system->fun =
+                  (_Atomic(nexgen32e_f) *)calloc(n, sizeof(nexgen32e_f))));
     m->fun = m->system->fun - m->system->codestart;
     for (i = 0; i < n; ++i) {
-      m->system->fun[i] = GeneralDispatch;
+      atomic_store_explicit(m->system->fun + i, GeneralDispatch,
+                            memory_order_relaxed);
     }
   }
 }

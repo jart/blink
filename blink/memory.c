@@ -25,6 +25,7 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/memory.h"
+#include "blink/mop.h"
 #include "blink/pml4t.h"
 #include "blink/real.h"
 #include "blink/stats.h"
@@ -49,7 +50,7 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
   if ((page = AllocateLinearPage(m->system)) != -1) {
     --m->system->memstat.reserved;
     x = page | (entry & ~(PAGE_TA | PAGE_IGN1));
-    Write64(m->system->real.p + table + index * 8, x);
+    Store64(m->system->real.p + table + index * 8, x);
     return x;
   } else {
     return 0;
@@ -79,7 +80,7 @@ u64 FindPage(struct Machine *m, i64 virt) {
     table = entry & PAGE_TA;
     unassert(table < GetRealMemorySize(m->system));
     index = (virt >> level) & 511;
-    entry = Get64(m->system->real.p + table + index * 8);
+    entry = Load64(m->system->real.p + table + index * 8);
     if (!(entry & 1)) return 0;
   } while ((level -= 9) >= 12);
   if ((entry & PAGE_RSRV) &&
@@ -96,9 +97,10 @@ u64 FindPage(struct Machine *m, i64 virt) {
 u8 *FindReal(struct Machine *m, i64 virt) {
   u64 entry;
   if (m->mode != XED_MODE_REAL) {
-    if (m->tlb[0].virt == (virt & -4096) && (m->tlb[0].entry & PAGE_V)) {
+    if (m->tlb[0].virt == (virt & -4096) &&
+        ((entry = m->tlb[0].entry) & PAGE_V)) {
       STATISTIC(++tlb_hits_1);
-      return m->system->real.p + (m->tlb[0].entry & PAGE_TA) + (virt & 4095);
+      return m->system->real.p + (entry & PAGE_TA) + (virt & 4095);
     }
     if (-0x800000000000 <= virt && virt < 0x800000000000) {
       if (!(entry = FindPage(m, virt))) return NULL;

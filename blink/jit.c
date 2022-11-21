@@ -330,7 +330,7 @@ static int CommitJit(struct JitPage *jp, long pagesize) {
       js = JITSTAGE_CONTAINER(e);
       if (js->index <= pageoff) {
         atomic_store_explicit(js->hook, (intptr_t)jp->addr + js->start,
-                              memory_order_release);
+                              memory_order_relaxed);
         jp->staged = dll_remove(jp->staged, e);
         free(js);
         ++count;

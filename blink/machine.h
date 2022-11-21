@@ -2,6 +2,7 @@
 #define BLINK_MACHINE_H_
 #include <pthread.h>
 #include <setjmp.h>
+#include <signal.h>
 #include <stdbool.h>
 
 #include "blink/dll.h"
@@ -130,9 +131,9 @@ struct System {
   bool dlab;
   bool isfork;
   i64 codestart;
-  nexgen32e_f *fun;
   unsigned long codesize;
   pthread_mutex_t real_lock;
+  _Atomic(nexgen32e_f) * fun;
   struct SystemReal real GUARDED_BY(real_lock);
   pthread_mutex_t realfree_lock;
   struct SystemRealFree *realfree PT_GUARDED_BY(realfree_lock);
@@ -170,7 +171,7 @@ struct MachineTlb {
 };
 
 struct Machine {
-  nexgen32e_f *fun;
+  _Atomic(nexgen32e_f) * fun;
   u64 ip;
   u64 oldip;
   u64 cs;
@@ -253,6 +254,7 @@ struct Machine {
   jmp_buf onhalt;
   i64 ctid;
   int tid;
+  sigset_t thread_sigmask;
   struct OpCache opcache[1];
 };
 

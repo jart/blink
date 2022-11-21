@@ -35,6 +35,7 @@
 #include "blink/macros.h"
 #include "blink/signal.h"
 #include "blink/sigwinch.h"
+#include "blink/stats.h"
 #include "blink/syscall.h"
 #include "blink/xlat.h"
 
@@ -49,7 +50,7 @@ static int Exec(char *prog, char **argv, char **envp) {
   struct System *s;
   struct Machine *o = g_machine;
   unassert((g_machine = NewMachine(NewSystem(), 0)));
-  DisableJit(&g_machine->system->jit);
+  // DisableJit(&g_machine->system->jit);
   g_machine->system->exec = Exec;
   g_machine->mode = XED_MODE_LONG;
   if (!o) {
@@ -77,6 +78,10 @@ static int Exec(char *prog, char **argv, char **envp) {
   if (!(rc = setjmp(g_machine->onhalt))) {
     Actor(g_machine);
   } else {
+    s = g_machine->system;
+    FreeMachine(g_machine);
+    FreeSystem(s);
+    // PrintStats();
     return rc;
   }
 }

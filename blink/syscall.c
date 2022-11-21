@@ -182,11 +182,10 @@ static int OpFork(struct Machine *m) {
 static void *OnSpawn(void *arg) {
   int rc;
   u8 *ctid;
-  sigset_t ss;
   struct Machine *m = (struct Machine *)arg;
-  sigfillset(&ss);
-  unassert(!sigprocmask(SIG_SETMASK, &ss, 0));
+  g_machine = m;
   if (!(rc = setjmp(m->onhalt))) {
+    unassert(!pthread_sigmask(SIG_SETMASK, &m->thread_sigmask, 0));
     if (m->ctid && (ctid = FindReal(m, m->ctid))) {
       Store32(ctid, m->tid);
     }
@@ -200,6 +199,7 @@ static void *OnSpawn(void *arg) {
 static int OpSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
                    u64 tls, u64 func) {
   int tid, err;
+  sigset_t ss, oldss;
   pthread_attr_t attr;
   struct Machine *m2 = 0;
   if (flags != (CLONE_VM_ | CLONE_THREAD_ | CLONE_FS_ | CLONE_FILES_ |
@@ -211,20 +211,25 @@ static int OpSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   if (!(m2 = NewMachine(m->system, m))) {
     return eagain();
   }
+  sigfillset(&ss);
+  unassert(!pthread_sigmask(SIG_SETMASK, &ss, &oldss));
   tid = m2->tid;
   m2->ctid = ctid;
   Put64(m2->ax, 0);
   m2->fs = tls;
   Put64(m2->sp, stack);
+  m2->thread_sigmask = oldss;
   unassert(!pthread_attr_init(&attr));
   unassert(!pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
   err = pthread_create(&m2->thread, &attr, OnSpawn, m2);
   unassert(!pthread_attr_destroy(&attr));
   if (err) {
     FreeMachine(m2);
+    unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
     return eagain();
   }
   Store32(ResolveAddress(m, ptid), tid);
+  unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
   return tid;
 }
 

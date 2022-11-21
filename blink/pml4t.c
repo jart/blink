@@ -20,6 +20,7 @@
 
 #include "blink/endian.h"
 #include "blink/machine.h"
+#include "blink/mop.h"
 #include "blink/pml4t.h"
 #include "blink/real.h"
 
@@ -37,7 +38,7 @@ static void FindContiguousMemoryRangesImpl(
   u64 entry;
   i64 i, page;
   for (i = a; i < b; ++i) {
-    entry = Read64(m->system->real.p + pt + i * 8);
+    entry = Load64(m->system->real.p + pt + i * 8);
     if (!(entry & 1)) continue;
     entry &= 0x7ffffffff000;
     page = (addr | i << level) << 16 >> 16;
