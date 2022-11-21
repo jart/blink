@@ -126,6 +126,11 @@ struct System {
   u64 cr4;
 };
 
+struct MachineTlb {
+  i64 virt;
+  u64 entry;
+};
+
 struct Machine {
   struct XedDecodedInst *xedd;
   u64 ip;
@@ -133,11 +138,6 @@ struct Machine {
   u64 ss;
   int mode;
   u32 flags;
-  u32 tlbindex;
-  i64 readaddr;
-  i64 writeaddr;
-  u32 readsize;
-  u32 writesize;
   union {
     u64 align8_;
     u8 reg[16][8];
@@ -184,12 +184,13 @@ struct Machine {
       u8 r15[8];
     };
   };
-  struct MachineTlb {
-    i64 virt;
-    u64 entry;
-  } tlb[16];
+  _Alignas(64) struct MachineTlb tlb[16];
   _Alignas(16) u8 xmm[16][16];
   dll_element list GUARDED_BY(system->machines_lock);
+  i64 readaddr;
+  i64 writeaddr;
+  u32 readsize;
+  u32 writesize;
   u64 es;
   u64 ds;
   u64 fs;
@@ -203,6 +204,7 @@ struct Machine {
   i64 faultaddr;
   u64 signals;
   u64 sigmask;
+  u32 tlbindex;
   int sig;
   u64 siguc;
   u64 sigfp;

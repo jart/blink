@@ -58,12 +58,16 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
 u64 FindPage(struct Machine *m, i64 virt) {
   long i;
   i64 table;
-  u64 entry;
+  u64 entry, res;
   unsigned level, index;
+  struct MachineTlb bubble;
   virt &= -4096;
-  for (i = 0; i < ARRAYLEN(m->tlb); ++i) {
-    if (m->tlb[i].virt == virt && (m->tlb[i].entry & 1)) {
-      return m->tlb[i].entry;
+  for (i = 1; i < ARRAYLEN(m->tlb); ++i) {
+    if (m->tlb[i].virt == virt && ((res = m->tlb[i].entry) & PAGE_V)) {
+      bubble = m->tlb[i - 1];
+      m->tlb[i - 1] = m->tlb[i];
+      m->tlb[i] = bubble;
+      return res;
     }
   }
   level = 39;
@@ -72,7 +76,7 @@ u64 FindPage(struct Machine *m, i64 virt) {
     table = entry & PAGE_TA;
     unassert(table < GetRealMemorySize(m->system));
     index = (virt >> level) & 511;
-    entry = Read64(m->system->real.p + table + index * 8);
+    entry = Get64(m->system->real.p + table + index * 8);
     if (!(entry & 1)) return 0;
   } while ((level -= 9) >= 12);
   if ((entry & PAGE_RSRV) &&
@@ -89,6 +93,9 @@ u64 FindPage(struct Machine *m, i64 virt) {
 u8 *FindReal(struct Machine *m, i64 virt) {
   u64 entry;
   if ((m->mode & 3) != XED_MODE_REAL) {
+    if (m->tlb[0].virt == (virt & -4096) && (m->tlb[0].entry & PAGE_V)) {
+      return m->system->real.p + (m->tlb[0].entry & PAGE_TA) + (virt & 4095);
+    }
     if (-0x800000000000 <= virt && virt < 0x800000000000) {
       if (!(entry = FindPage(m, virt))) return NULL;
       return m->system->real.p + (entry & PAGE_TA) + (virt & 4095);
@@ -110,12 +117,12 @@ u8 *ResolveAddress(struct Machine *m, i64 v) {
 }
 
 void VirtualSet(struct Machine *m, i64 v, char c, u64 n) {
-  char *p;
+  u8 *p;
   u64 k;
   k = 4096 - (v & 4095);
   while (n) {
     k = MIN(k, n);
-    p = (char *)ResolveAddress(m, v);
+    p = ResolveAddress(m, v);
     memset(p, c, k);
     n -= k;
     v += k;
@@ -124,12 +131,12 @@ void VirtualSet(struct Machine *m, i64 v, char c, u64 n) {
 }
 
 void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
-  char *p;
+  u8 *p;
   u64 k;
   k = 4096 - (v & 4095);
   while (n) {
     k = MIN(k, n);
-    p = (char *)ResolveAddress(m, v);
+    p = ResolveAddress(m, v);
     if (d) {
       memcpy(r, p, k);
     } else {
