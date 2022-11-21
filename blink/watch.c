@@ -16,53 +16,52 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/dll.h"
+#include <stdlib.h>
+#include <string.h>
 
-/**
- * @fileoverview Doubly-Linked Lists
- */
+#include "blink/endian.h"
+#include "blink/machine.h"
+#include "blink/memory.h"
+#include "blink/watch.h"
 
-dll_list dll_remove(dll_list list, dll_element *e) {
-  if (list == e) {
-    if (list->prev == list) {
-      list = 0;
-    } else {
-      list = list->prev;
+void PopWatchpoint(struct Watchpoints *wps) {
+  if (wps->i) {
+    --wps->i;
+  }
+}
+
+ssize_t PushWatchpoint(struct Watchpoints *wps, struct Watchpoint *b) {
+  int i;
+  for (i = 0; i < wps->i; ++i) {
+    if (wps->p[i].disable) {
+      memcpy(&wps->p[i], b, sizeof(*b));
+      return i;
     }
   }
-  e->next->prev = e->prev;
-  e->prev->next = e->next;
-  e->next = e;
-  e->prev = e;
-  return list;
+  if (wps->i++ == wps->n) {
+    wps->n = wps->i + (wps->i >> 1);
+    wps->p = (struct Watchpoint *)realloc(wps->p, wps->n * sizeof(*wps->p));
+  }
+  wps->p[wps->i - 1] = *b;
+  return wps->i - 1;
 }
 
-void dll_splice_after(dll_element *p, dll_element *n) {
-  dll_element *p2;
-  dll_element *nl;
-  p2 = p->next;
-  nl = n->prev;
-  p->next = n;
-  n->prev = p;
-  nl->next = p2;
-  p2->prev = nl;
-}
-
-dll_list dll_make_first(dll_list list, dll_element *e) {
-  if (e) {
-    if (!list) {
-      list = e->prev;
-    } else {
-      dll_splice_after(list, e);
+ssize_t IsAtWatchpoint(struct Watchpoints *wps, struct Machine *m) {
+  u8 *r;
+  for (int i = wps->i; i--;) {
+    if (wps->p[i].disable) continue;
+    // TODO(jart): Handle case of overlapping page boundary.
+    // TODO(jart): Possibly track munmap() type cases.
+    if ((r = FindReal(m, wps->p[i].addr))) {
+      u64 w = Read64(r);
+      if (!wps->p[i].initialized) {
+        wps->p[i].oldvalue = w;
+        wps->p[i].initialized = true;
+      } else if (w != wps->p[i].oldvalue) {
+        wps->p[i].oldvalue = w;
+        return i;
+      }
     }
   }
-  return list;
-}
-
-dll_list dll_make_last(dll_list list, dll_element *e) {
-  if (e) {
-    dll_make_first(list, e->next);
-    list = e;
-  }
-  return list;
+  return -1;
 }

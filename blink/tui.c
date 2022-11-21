@@ -70,58 +70,60 @@
 #include "blink/tpenc.h"
 #include "blink/types.h"
 #include "blink/util.h"
+#include "blink/watch.h"
 #include "blink/xlat.h"
 #include "blink/xmmtype.h"
 
 #define USAGE \
-  " [-?HhrRstv] [ROM] [ARGS...]\n\
-\n\
-DESCRIPTION\n\
-\n\
-  blink is an x86-64-linux virtual machine w/ memory visualization\n\
-  please keep still and only watchen astaunished das blinkenlights\n\
-\n\
-FLAGS\n\
-\n\
-  -h        help\n\
-  -z        zoom\n\
-  -v        verbosity\n\
-  -r        real mode\n\
-  -s        statistics\n\
-  -H        disable highlight\n\
-  -t        disable tui mode\n\
-  -R        disable reactive\n\
-  -b ADDR   push a breakpoint\n\
-  -L PATH   log file location\n\
-\n\
-ARGUMENTS\n\
-\n\
-  ROM files can be ELF or a flat αcτµαlly pδrταblε εxεcµταblε.\n\
-  It should use x86_64 in accordance with the System Five ABI.\n\
-  The SYSCALL ABI is defined as it is written in Linux Kernel.\n\
-\n\
-FEATURES\n\
-\n\
-  8086, 8087, i386, x86_64, SSE3, SSSE3, POPCNT, MDA, CGA, TTY\n\
-  Type ? for keyboard shortcuts and CLI flags inside emulator.\n\
-\n"
+  " [-?HhrRstv] [ROM] [ARGS...]\r\n\
+\r\n\
+DESCRIPTION\r\n\
+\r\n\
+  blink virtual machine terminal user interface\r\n\
+\r\n\
+FLAGS\r\n\
+\r\n\
+  -h        help\r\n\
+  -z        zoom\r\n\
+  -v        verbosity\r\n\
+  -r        real mode\r\n\
+  -s        statistics\r\n\
+  -H        disable highlight\r\n\
+  -t        disable tui mode\r\n\
+  -R        disable reactive\r\n\
+  -b ADDR   push a breakpoint\r\n\
+  -w ADDR   push a watchpoint\r\n\
+  -L PATH   log file location\r\n\
+\r\n\
+ARGUMENTS\r\n\
+\r\n\
+  ROM files may be ELF, Actually Portable Executable, or flat.\r\n\
+  It should use x86_64 in accordance with the System Five ABI.\r\n\
+  The SYSCALL ABI is defined as it is written in Linux Kernel.\r\n\
+\r\n\
+FEATURES\r\n\
+\r\n\
+  8086, 8087, i386, x86_64, SSE3, SSSE3, POPCNT, MDA, CGA, TTY\r\n\
+  Type ? for keyboard shortcuts and CLI flags inside emulator.\r\n\
+\r\n"
 
 #define HELP \
   "\033[1mBLINK v1.o\033[22m\
-                 https://justine.lol/blinkenlights/\n\
+                        https://github.com/jart/blink/\n\
 \n\
-KEYBOARD SHORTCUTS                 CLI FLAGS\n\
+KEYBOARD SHORTCUTS                CLI FLAGS\n\
 \n\
-ctrl-c  interrupt                  -t       tui mode\n\
-s       step                       -r       real mode\n\
-n       next                       -s       statistics\n\
-c       continue                   -b ADDR  push breakpoint\n\
-q       quit                       -L PATH  log file location\n\
-f       finish                     -R       reactive tui mode\n\
-R       restart                    -H       disable highlighting\n\
-x       hex                        -v       increase verbosity\n\
-?       help                       -?       help\n\
-t       sse type\n\
+ctrl-c  interrupt                 -t       no tui\n\
+s       step                      -r       real mode\n\
+n       next                      -s       statistics\n\
+c       continue                  -b ADDR  push breakpoint\n\
+C       continue harder           -w ADDR  push watchpoint\n\
+q       quit                      -L PATH  log file location\n\
+f       finish                    -R       reactive tui mode\n\
+R       restart                   -H       disable highlighting\n\
+x       hex                       -v       increase verbosity\n\
+?       help                      -j       enables jit\n\
+t       sse type                  -?       help\n\
 w       sse width\n\
 B       pop breakpoint\n\
 ctrl-t  turbo\n\
@@ -271,6 +273,7 @@ static i64 breakpointsstart;
 
 static struct Panels pan;
 static struct Breakpoints breakpoints;
+static struct Watchpoints watchpoints;
 static struct MemoryView codeview;
 static struct MemoryView readview;
 static struct MemoryView writeview;
@@ -2535,6 +2538,17 @@ static void HandleBreakpointFlag(const char *s) {
   PushBreakpoint(&breakpoints, &b);
 }
 
+static void HandleWatchpointFlag(const char *s) {
+  struct Watchpoint b;
+  memset(&b, 0, sizeof(b));
+  if (isdigit(*s)) {
+    b.addr = ParseHexValue(s);
+  } else {
+    b.symbol = optarg;
+  }
+  PushWatchpoint(&watchpoints, &b);
+}
+
 _Noreturn static void PrintUsage(int rc, FILE *f) {
   fprintf(f, "SYNOPSIS\n\n  %s%s", "blink", USAGE);
   exit(rc);
@@ -2554,6 +2568,19 @@ static void LogInstruction(void) {
        m->gs & 0xffffffffffff);
 }
 
+static void EnterWatchpoint(long bp) {
+  LOGF("WATCHPOINT %012" PRIx64 " %s", watchpoints.p[bp].addr,
+       watchpoints.p[bp].symbol);
+  snprintf(systemfailure, sizeof(systemfailure),
+           "watchpoint %" PRIx64 " triggered%s%s", watchpoints.p[bp].addr,
+           watchpoints.p[bp].symbol ? "\n" : "",
+           watchpoints.p[bp].symbol ? watchpoints.p[bp].symbol : "");
+  dialog = systemfailure;
+  action &= ~(FINISH | NEXT | CONTINUE);
+  action |= FAILURE;
+  tuimode = true;
+}
+
 static void Exec(void) {
   int sig;
   ssize_t bp;
@@ -2563,6 +2590,7 @@ static void Exec(void) {
     if (!(action & CONTINUE) &&
         (bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
       LOGF("BREAK1 %012" PRIx64 "", breakpoints.p[bp].addr);
+    ReactToPoint:
       tuimode = true;
       LoadInstruction(m);
       if (verbose) LogInstruction();
@@ -2574,6 +2602,11 @@ static void Exec(void) {
       }
       ++opcount;
       CheckFramePointer();
+    } else if (!(action & CONTINUE) &&
+               (bp = IsAtWatchpoint(&watchpoints, m)) != -1) {
+      LOGF("WATCH1 %012" PRIx64 " %s", watchpoints.p[bp].addr,
+           watchpoints.p[bp].symbol);
+      goto ReactToPoint;
     } else {
       action &= ~CONTINUE;
       for (;;) {
@@ -2582,6 +2615,10 @@ static void Exec(void) {
           LOGF("BREAK2 %012" PRIx64 "", breakpoints.p[bp].addr);
           action &= ~(FINISH | NEXT | CONTINUE);
           tuimode = true;
+          break;
+        }
+        if ((bp = IsAtWatchpoint(&watchpoints, m)) != -1) {
+          EnterWatchpoint(bp);
           break;
         }
         if (verbose) LogInstruction();
@@ -2640,6 +2677,9 @@ static void Tui(void) {
           action &= ~(FINISH | NEXT | CONTINUE);
           LOGF("BREAK %012" PRIx64 "", breakpoints.p[bp].addr);
         }
+      } else if ((action & (FINISH | NEXT | CONTINUE)) &&
+                 (bp = IsAtWatchpoint(&watchpoints, m)) != -1) {
+        EnterWatchpoint(bp);
       } else {
         m->xedd = (struct XedDecodedInst *)m->opcache->icache[0];
         m->xedd->length = 1;
@@ -2787,6 +2827,9 @@ static void GetOpts(int argc, char *argv[]) {
         break;
       case 'b':
         HandleBreakpointFlag(optarg);
+        break;
+      case 'w':
+        HandleWatchpointFlag(optarg);
         break;
       case 'H':
         memset(&g_high, 0, sizeof(g_high));

@@ -242,9 +242,10 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
         if (jp->addr != MAP_FAILED) {
           distance = ABS(jp->addr - END_OF_IMAGE);
           if (distance > kArmDispMax * 4 / 2) {
-            LOGF("mmap() returned suboptimal address %p that's %" PRIdPTR
-                 " bytes away from our program image which ends near %p",
-                 jp, distance, END_OF_IMAGE);
+            LOG_ONCE(
+                LOGF("mmap() returned suboptimal address %p that's %" PRIdPTR
+                     " bytes away from our program image which ends near %p",
+                     jp, distance, END_OF_IMAGE));
           }
           jit->brk = jp->addr + kJitPageSize;
           dll_init(&jp->list);

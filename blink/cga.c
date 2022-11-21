@@ -23,9 +23,9 @@
 #include "blink/cp437.h"
 #include "blink/macros.h"
 
-/*                                     blk blu grn cyn red mag yel wht */
+/*                                blk blu grn cyn red mag yel wht */
 static const u8 kCgaToAnsi[16] = {30, 34, 32, 36, 31, 35, 33, 37,
-                                       90, 94, 92, 96, 91, 95, 93, 97};
+                                  90, 94, 92, 96, 91, 95, 93, 97};
 
 size_t FormatCga(u8 bgfg, char buf[11]) {
   return sprintf(buf, "\033[%d;%dm", kCgaToAnsi[(bgfg & 0xF0) >> 4] + 10,
