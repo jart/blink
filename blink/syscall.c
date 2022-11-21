@@ -66,7 +66,7 @@
 
 #define POLLING_INTERVAL_MS 50
 
-#define SYSCALL(x, y) CASE(x, /* LOGF("%s", #y);  */ ax = y)
+#define SYSCALL(x, y) CASE(x, SYS_LOGF("%s", #y); ax = y)
 #define ASSIGN(D, S)  memcpy(&D, &S, MIN(sizeof(S), sizeof(D)))
 
 // delegate to work around function pointer errors, b/c
@@ -137,63 +137,38 @@ int GetAfd(struct Machine *m, int fildes, struct Fd **out_fd) {
   }
 }
 
-static int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr,
-                          u64 size) {
-  void *real;
-  unsigned got;
-  u64 have;
-  while (size) {
-    if (!(real = FindReal(m, addr))) return efault();
-    have = 4096 - (addr & 4095);
-    got = MIN(size, have);
-    if (AppendIovs(ib, real, got) == -1) return -1;
-    addr += got;
-    size -= got;
-  }
-  return 0;
-}
-
-static int AppendIovsGuest(struct Machine *m, struct Iovs *iv, i64 iovaddr,
-                           i64 iovlen) {
-  int rc;
-  size_t i;
-  u64 iovsize;
-  struct iovec_linux *guestiovs;
-  if (!mulo(iovlen, sizeof(struct iovec_linux), &iovsize) &&
-      (0 <= iovsize && iovsize <= 0x7ffff000)) {
-    if ((guestiovs = (struct iovec_linux *)malloc(iovsize))) {
-      VirtualSendRead(m, guestiovs, iovaddr, iovsize);
-      for (rc = i = 0; i < iovlen; ++i) {
-        if (AppendIovsReal(m, iv, Read64(guestiovs[i].iov_base),
-                           Read64(guestiovs[i].iov_len)) == -1) {
-          rc = -1;
-          break;
-        }
-      }
-      free(guestiovs);
-      return rc;
-    } else {
-      return enomem();
-    }
+static bool IsOrphan(struct Machine *m) {
+  bool res;
+  LOCK(&m->system->machines_lock);
+  if (m->system->machines == m->system->machines->next &&
+      m->system->machines == m->system->machines->prev) {
+    unassert(m == MACHINE_CONTAINER(m->system->machines));
+    res = true;
   } else {
-    return eoverflow();
+    res = false;
   }
+  UNLOCK(&m->system->machines_lock);
+  return res;
 }
 
 _Noreturn static void OpExit(struct Machine *m, int rc) {
-  atomic_int *ctid;
-  if (m->ctid && (ctid = (atomic_int *)FindReal(m, m->ctid))) {
-    atomic_store_explicit(ctid, 0, memory_order_release);
+  u8 *ctid;
+  if (m->ctid && (ctid = FindReal(m, m->ctid))) {
+    Store32(ctid, 0);
   }
-  FreeMachine(m);
-  pthread_exit(0);
+  if (IsOrphan(m)) {
+    HaltMachine(m, kMachineExit | (rc & 255));
+  } else {
+    FreeMachine(m);
+    pthread_exit(0);
+  }
 }
 
 _Noreturn static void OpExitGroup(struct Machine *m, int rc) {
   if (m->system->isfork) {
     _Exit(rc);
   } else {
-    HaltMachine(m, rc | 0x100);
+    HaltMachine(m, kMachineExit | (rc & 255));
   }
 }
 
@@ -1446,7 +1421,7 @@ static int OpAccept(struct Machine *m, int fd, i64 sa, i64 sas) {
   return OpAccept4(m, fd, sa, sas, 0);
 }
 
-void OpSyscall(struct Machine *m, u64 rde) {
+void OpSyscall(struct Machine *m, DISPATCH_PARAMETERS) {
   u64 ax, di, si, dx, r0, r8, r9;
   ax = Get64(m->ax);
   di = Get64(m->di);

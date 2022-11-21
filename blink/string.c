@@ -65,7 +65,7 @@ static void WriteInt(u8 p[8], u64 x, unsigned long w) {
   }
 }
 
-static void AddDi(struct Machine *m, u64 rde, u64 x) {
+static void AddDi(struct Machine *m, DISPATCH_PARAMETERS, u64 x) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       Put64(m->di, Get64(m->di) + x);
@@ -81,7 +81,7 @@ static void AddDi(struct Machine *m, u64 rde, u64 x) {
   }
 }
 
-static void AddSi(struct Machine *m, u64 rde, u64 x) {
+static void AddSi(struct Machine *m, DISPATCH_PARAMETERS, u64 x) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       Put64(m->si, Get64(m->si) + x);
@@ -97,7 +97,7 @@ static void AddSi(struct Machine *m, u64 rde, u64 x) {
   }
 }
 
-static u64 ReadCx(struct Machine *m, u64 rde) {
+static u64 ReadCx(struct Machine *m, DISPATCH_PARAMETERS) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       return Get64(m->cx);
@@ -110,7 +110,7 @@ static u64 ReadCx(struct Machine *m, u64 rde) {
   }
 }
 
-static u64 SubtractCx(struct Machine *m, u64 rde, u64 x) {
+static u64 SubtractCx(struct Machine *m, DISPATCH_PARAMETERS, u64 x) {
   u64 cx;
   cx = Get64(m->cx) - x;
   if (Eamode(rde) != XED_MODE_REAL) {
@@ -125,7 +125,7 @@ static u64 SubtractCx(struct Machine *m, u64 rde, u64 x) {
   return cx;
 }
 
-static void StringOp(struct Machine *m, u64 rde, int op) {
+static void StringOp(struct Machine *m, DISPATCH_PARAMETERS, int op) {
   bool stop;
   void *p[2];
   unsigned n;
@@ -135,72 +135,72 @@ static void StringOp(struct Machine *m, u64 rde, int op) {
   n = 1 << RegLog2(rde);
   sgn = GetFlag(m->flags, FLAGS_DF) ? -1 : 1;
   do {
-    if (Rep(rde) && !ReadCx(m, rde)) break;
+    if (Rep(rde) && !ReadCx(m, DISPATCH_ARGUMENTS)) break;
     switch (op) {
       case STRING_CMPS:
         kAlu[ALU_SUB][RegLog2(rde)](
-            ReadInt(Load(m, AddressSi(m, rde), n, s[2]), RegLog2(rde)),
-            ReadInt(Load(m, AddressDi(m, rde), n, s[1]), RegLog2(rde)),
+            ReadInt(Load(m, AddressSi(m, DISPATCH_ARGUMENTS), n, s[2]), RegLog2(rde)),
+            ReadInt(Load(m, AddressDi(m, DISPATCH_ARGUMENTS), n, s[1]), RegLog2(rde)),
             &m->flags);
-        AddDi(m, rde, sgn * n);
-        AddSi(m, rde, sgn * n);
+        AddDi(m, DISPATCH_ARGUMENTS, sgn * n);
+        AddSi(m, DISPATCH_ARGUMENTS, sgn * n);
         stop = (Rep(rde) == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
                (Rep(rde) == 3 && !GetFlag(m->flags, FLAGS_ZF));
         break;
       case STRING_MOVS:
-        memcpy(BeginStore(m, (v = AddressDi(m, rde)), n, p, s[0]),
-               Load(m, AddressSi(m, rde), n, s[1]), n);
-        AddDi(m, rde, sgn * n);
-        AddSi(m, rde, sgn * n);
+        memcpy(BeginStore(m, (v = AddressDi(m, DISPATCH_ARGUMENTS)), n, p, s[0]),
+               Load(m, AddressSi(m, DISPATCH_ARGUMENTS), n, s[1]), n);
+        AddDi(m, DISPATCH_ARGUMENTS, sgn * n);
+        AddSi(m, DISPATCH_ARGUMENTS, sgn * n);
         EndStore(m, v, n, p, s[0]);
         break;
       case STRING_STOS:
-        memcpy(BeginStore(m, (v = AddressDi(m, rde)), n, p, s[0]), m->ax, n);
-        AddDi(m, rde, sgn * n);
+        memcpy(BeginStore(m, (v = AddressDi(m, DISPATCH_ARGUMENTS)), n, p, s[0]), m->ax, n);
+        AddDi(m, DISPATCH_ARGUMENTS, sgn * n);
         EndStore(m, v, n, p, s[0]);
         break;
       case STRING_LODS:
-        memcpy(m->ax, Load(m, AddressSi(m, rde), n, s[1]), n);
-        AddSi(m, rde, sgn * n);
+        memcpy(m->ax, Load(m, AddressSi(m, DISPATCH_ARGUMENTS), n, s[1]), n);
+        AddSi(m, DISPATCH_ARGUMENTS, sgn * n);
         break;
       case STRING_SCAS:
         kAlu[ALU_SUB][RegLog2(rde)](
-            ReadInt(Load(m, AddressDi(m, rde), n, s[1]), RegLog2(rde)),
+            ReadInt(Load(m, AddressDi(m, DISPATCH_ARGUMENTS), n, s[1]), RegLog2(rde)),
             ReadInt(m->ax, RegLog2(rde)), &m->flags);
-        AddDi(m, rde, sgn * n);
+        AddDi(m, DISPATCH_ARGUMENTS, sgn * n);
         stop = (Rep(rde) == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
                (Rep(rde) == 3 && !GetFlag(m->flags, FLAGS_ZF));
         break;
       case STRING_OUTS:
         OpOut(m, Get16(m->dx),
-              ReadInt(Load(m, AddressSi(m, rde), n, s[1]), RegLog2(rde)));
-        AddSi(m, rde, sgn * n);
+              ReadInt(Load(m, AddressSi(m, DISPATCH_ARGUMENTS), n, s[1]), RegLog2(rde)));
+        AddSi(m, DISPATCH_ARGUMENTS, sgn * n);
         break;
       case STRING_INS:
-        WriteInt((u8 *)BeginStore(m, (v = AddressDi(m, rde)), n, p, s[0]),
+        WriteInt((u8 *)BeginStore(m, (v = AddressDi(m, DISPATCH_ARGUMENTS)), n, p, s[0]),
                  OpIn(m, Get16(m->dx)), RegLog2(rde));
-        AddDi(m, rde, sgn * n);
+        AddDi(m, DISPATCH_ARGUMENTS, sgn * n);
         EndStore(m, v, n, p, s[0]);
         break;
       default:
         abort();
     }
     if (Rep(rde)) {
-      SubtractCx(m, rde, 1);
+      SubtractCx(m, DISPATCH_ARGUMENTS, 1);
     } else {
       break;
     }
   } while (!stop);
 }
 
-static void RepMovsbEnhanced(struct Machine *m, u64 rde) {
+static void RepMovsbEnhanced(struct Machine *m, DISPATCH_PARAMETERS) {
   u8 *direal, *sireal;
   u64 diactual, siactual, cx;
   unsigned diremain, siremain, i, n;
-  if ((cx = ReadCx(m, rde))) {
+  if ((cx = ReadCx(m, DISPATCH_ARGUMENTS))) {
     do {
-      diactual = AddressDi(m, rde);
-      siactual = AddressSi(m, rde);
+      diactual = AddressDi(m, DISPATCH_ARGUMENTS);
+      siactual = AddressSi(m, DISPATCH_ARGUMENTS);
       SetWriteAddr(m, diactual, cx);
       SetReadAddr(m, siactual, cx);
       direal = ResolveAddress(m, diactual);
@@ -209,69 +209,69 @@ static void RepMovsbEnhanced(struct Machine *m, u64 rde) {
       siremain = 4096 - (siactual & 4095);
       n = MIN(cx, MIN(diremain, siremain));
       for (i = 0; i < n; ++i) direal[i] = sireal[i];
-      AddDi(m, rde, n);
-      AddSi(m, rde, n);
-    } while ((cx = SubtractCx(m, rde, n)));
+      AddDi(m, DISPATCH_ARGUMENTS, n);
+      AddSi(m, DISPATCH_ARGUMENTS, n);
+    } while ((cx = SubtractCx(m, DISPATCH_ARGUMENTS, n)));
   }
 }
 
-static void RepStosbEnhanced(struct Machine *m, u64 rde) {
+static void RepStosbEnhanced(struct Machine *m, DISPATCH_PARAMETERS) {
   u8 *direal;
   unsigned diremain, n;
   u64 diactual, cx;
-  if ((cx = ReadCx(m, rde))) {
+  if ((cx = ReadCx(m, DISPATCH_ARGUMENTS))) {
     do {
-      diactual = AddressDi(m, rde);
+      diactual = AddressDi(m, DISPATCH_ARGUMENTS);
       SetWriteAddr(m, diactual, cx);
       direal = ResolveAddress(m, diactual);
       diremain = 4096 - (diactual & 4095);
       n = MIN(cx, diremain);
       memset(direal, Get8(m->ax), n);
-      AddDi(m, rde, n);
-    } while ((cx = SubtractCx(m, rde, n)));
+      AddDi(m, DISPATCH_ARGUMENTS, n);
+    } while ((cx = SubtractCx(m, DISPATCH_ARGUMENTS, n)));
   }
 }
 
-void OpMovs(struct Machine *m, u64 rde) {
-  StringOp(m, rde, STRING_MOVS);
+void OpMovs(struct Machine *m, DISPATCH_PARAMETERS) {
+  StringOp(m, DISPATCH_ARGUMENTS, STRING_MOVS);
 }
 
-void OpCmps(struct Machine *m, u64 rde) {
-  StringOp(m, rde, STRING_CMPS);
+void OpCmps(struct Machine *m, DISPATCH_PARAMETERS) {
+  StringOp(m, DISPATCH_ARGUMENTS, STRING_CMPS);
 }
 
-void OpStos(struct Machine *m, u64 rde) {
-  StringOp(m, rde, STRING_STOS);
+void OpStos(struct Machine *m, DISPATCH_PARAMETERS) {
+  StringOp(m, DISPATCH_ARGUMENTS, STRING_STOS);
 }
 
-void OpLods(struct Machine *m, u64 rde) {
-  StringOp(m, rde, STRING_LODS);
+void OpLods(struct Machine *m, DISPATCH_PARAMETERS) {
+  StringOp(m, DISPATCH_ARGUMENTS, STRING_LODS);
 }
 
-void OpScas(struct Machine *m, u64 rde) {
-  StringOp(m, rde, STRING_SCAS);
+void OpScas(struct Machine *m, DISPATCH_PARAMETERS) {
+  StringOp(m, DISPATCH_ARGUMENTS, STRING_SCAS);
 }
 
-void OpIns(struct Machine *m, u64 rde) {
-  StringOp(m, rde, STRING_INS);
+void OpIns(struct Machine *m, DISPATCH_PARAMETERS) {
+  StringOp(m, DISPATCH_ARGUMENTS, STRING_INS);
 }
 
-void OpOuts(struct Machine *m, u64 rde) {
-  StringOp(m, rde, STRING_OUTS);
+void OpOuts(struct Machine *m, DISPATCH_PARAMETERS) {
+  StringOp(m, DISPATCH_ARGUMENTS, STRING_OUTS);
 }
 
-void OpMovsb(struct Machine *m, u64 rde) {
+void OpMovsb(struct Machine *m, DISPATCH_PARAMETERS) {
   if (Rep(rde) && !GetFlag(m->flags, FLAGS_DF)) {
-    RepMovsbEnhanced(m, rde);
+    RepMovsbEnhanced(m, DISPATCH_ARGUMENTS);
   } else {
-    OpMovs(m, rde);
+    OpMovs(m, DISPATCH_ARGUMENTS);
   }
 }
 
-void OpStosb(struct Machine *m, u64 rde) {
+void OpStosb(struct Machine *m, DISPATCH_PARAMETERS) {
   if (Rep(rde) && !GetFlag(m->flags, FLAGS_DF)) {
-    RepStosbEnhanced(m, rde);
+    RepStosbEnhanced(m, DISPATCH_ARGUMENTS);
   } else {
-    OpStos(m, rde);
+    OpStos(m, DISPATCH_ARGUMENTS);
   }
 }

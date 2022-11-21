@@ -31,7 +31,7 @@ struct Machine m[1];
 
 struct {
   const char *name;
-  void (*f)(struct Machine *, u64);
+  void (*f)(struct Machine *, DISPATCH_PARAMETERS);
   u64 rde;
   u64 ax;
   u64 cx;
@@ -59,7 +59,7 @@ TEST(divmul, test) {
     Write64(m->ax, kVector[i].ax);
     Write64(m->cx, kVector[i].cx);
     Write64(m->dx, kVector[i].dx);
-    kVector[i].f(m, kVector[i].rde);
+    kVector[i].f(m, kVector[i].rde, 0, 0, 0);
     ASSERT_EQ(kVector[i].out_ax, Read64(m->ax), "%d: %s", i, kVector[i].name);
     ASSERT_EQ(kVector[i].out_dx, Read64(m->dx), "%d: %s", i, kVector[i].name);
     ASSERT_EQ(kVector[i].out_cf, GetFlag(m->flags, FLAGS_CF), "%d: %s", i,

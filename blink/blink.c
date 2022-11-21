@@ -27,6 +27,7 @@
 #include "blink/case.h"
 #include "blink/dll.h"
 #include "blink/endian.h"
+#include "blink/jit.h"
 #include "blink/loader.h"
 #include "blink/lock.h"
 #include "blink/log.h"
@@ -48,6 +49,7 @@ static int Exec(char *prog, char **argv, char **envp) {
   struct System *s;
   struct Machine *o = g_machine;
   unassert((g_machine = NewMachine(NewSystem(), 0)));
+  DisableJit(&g_machine->system->jit);
   g_machine->system->exec = Exec;
   g_machine->mode = XED_MODE_LONG;
   if (!o) {
@@ -85,7 +87,7 @@ int main(int argc, char *argv[], char **envp) {
   if (argc < 2) {
     WriteErrorString("Usage: ");
     WriteErrorString(argv[0]);
-    WriteErrorString(" PROG [ARGS...]\r\n");
+    WriteErrorString(" PROG [ARGS...]\n");
     return 48;
   }
   sigfillset(&sa.sa_mask);

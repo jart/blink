@@ -4,9 +4,44 @@
 #include <stdio.h>
 
 #ifndef NDEBUG
+#define LOG_ENABLED 1
+#else
+#define LOG_ENABLED 0
+#endif
+
+#define LOG_SYS 0
+#define LOG_SIG 0
+#define LOG_ASM 0
+#define LOG_JIT 0
+
+#if LOG_ENABLED
 #define LOGF(...) Log(__FILE__, __LINE__, __VA_ARGS__)
 #else
 #define LOGF(...) (void)0
+#endif
+
+#if LOG_SYS
+#define SYS_LOGF(...) Log(__FILE__, __LINE__, "(sys) " __VA_ARGS__)
+#else
+#define SYS_LOGF(...) (void)0
+#endif
+
+#if LOG_SIG
+#define SIG_LOGF(...) Log(__FILE__, __LINE__, "(sig) " __VA_ARGS__)
+#else
+#define SIG_LOGF(...) (void)0
+#endif
+
+#if LOG_ASM
+#define ASM_LOGF(...) Log(__FILE__, __LINE__, "(asm) " __VA_ARGS__)
+#else
+#define ASM_LOGF(...) (void)0
+#endif
+
+#if LOG_JIT
+#define JIT_LOGF(...) Log(__FILE__, __LINE__, "(jit) " __VA_ARGS__)
+#else
+#define JIT_LOGF(...) (void)0
 #endif
 
 #if LOG_ENABLED

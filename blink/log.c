@@ -95,7 +95,7 @@ void Log(const char *file, int line, const char *fmt, ...) {
   char b[PIPE_BUF];
   va_start(va, fmt);
   APPEND(snprintf, "I%s:%s:%d: %d: ", GetTimestamp(), file, line,
-         g_machine->tid);
+         g_machine ? g_machine->tid : 0);
   APPEND(vsnprintf, fmt, va);
   APPEND(snprintf, "\n");
   va_end(va);

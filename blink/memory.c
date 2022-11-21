@@ -172,6 +172,15 @@ void VirtualRecvWrite(struct Machine *m, i64 addr, void *src, u64 n) {
   SetWriteAddr(m, addr, n);
 }
 
+void CommitStash(struct Machine *m) {
+  unassert(m->opcache->stashaddr);
+  if (m->opcache->writable) {
+    VirtualRecv(m, m->opcache->stashaddr, m->opcache->stash,
+                m->opcache->stashsize);
+  }
+  m->opcache->stashaddr = 0;
+}
+
 u8 *ReserveAddress(struct Machine *m, i64 v, size_t n) {
   u8 *r;
   unassert(n <= sizeof(m->opcache->stash));

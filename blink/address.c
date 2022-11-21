@@ -22,11 +22,38 @@
 #include "blink/modrm.h"
 #include "blink/x86.h"
 
-u64 AddressOb(struct Machine *m, u64 rde) {
-  return AddSegment(m, rde, m->xedd->op.disp, m->ds);
+i64 GetIp(struct Machine *m) {
+  return MaskAddress(m->mode, m->ip);
 }
 
-u64 *(GetSegment)(struct Machine *m, u64 rde, int s) {
+i64 GetPc(struct Machine *m) {
+  return m->cs + GetIp(m);
+}
+
+u64 MaskAddress(u32 mode, u64 x) {
+  if (mode != XED_MODE_LONG) {
+    if (mode == XED_MODE_REAL) {
+      x &= 0xffff;
+    } else {
+      x &= 0xffffffff;
+    }
+  }
+  return x;
+}
+
+u64 AddSegment(struct Machine *m, DISPATCH_PARAMETERS, u64 i, u64 s) {
+  if (!Sego(rde)) {
+    return i + s;
+  } else {
+    return i + *GetSegment(m, DISPATCH_ARGUMENTS, Sego(rde) - 1);
+  }
+}
+
+u64 AddressOb(struct Machine *m, DISPATCH_PARAMETERS) {
+  return AddSegment(m, DISPATCH_ARGUMENTS, disp, m->ds);
+}
+
+u64 *GetSegment(struct Machine *m, DISPATCH_PARAMETERS, int s) {
   switch (s & 7) {
     case 0:
       return &m->es;
@@ -42,30 +69,30 @@ u64 *(GetSegment)(struct Machine *m, u64 rde, int s) {
       return &m->gs;
     case 6:
     case 7:
-      OpUd(m, rde);
+      OpUdImpl(m);
     default:
       __builtin_unreachable();
   }
 }
 
-u64 DataSegment(struct Machine *m, u64 rde, u64 i) {
-  return AddSegment(m, rde, i, m->ds);
+u64 DataSegment(struct Machine *m, DISPATCH_PARAMETERS, u64 i) {
+  return AddSegment(m, DISPATCH_ARGUMENTS, i, m->ds);
 }
 
-u64 AddressSi(struct Machine *m, u64 rde) {
+u64 AddressSi(struct Machine *m, DISPATCH_PARAMETERS) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
-      return DataSegment(m, rde, Get64(m->si));
+      return DataSegment(m, DISPATCH_ARGUMENTS, Get64(m->si));
     case XED_MODE_REAL:
-      return DataSegment(m, rde, Get16(m->si));
+      return DataSegment(m, DISPATCH_ARGUMENTS, Get16(m->si));
     case XED_MODE_LEGACY:
-      return DataSegment(m, rde, Get32(m->si));
+      return DataSegment(m, DISPATCH_ARGUMENTS, Get32(m->si));
     default:
       __builtin_unreachable();
   }
 }
 
-u64 AddressDi(struct Machine *m, u64 rde) {
+u64 AddressDi(struct Machine *m, DISPATCH_PARAMETERS) {
   u64 i = m->es;
   switch (Eamode(rde)) {
     case XED_MODE_LONG:

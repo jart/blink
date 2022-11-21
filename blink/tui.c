@@ -74,37 +74,37 @@
 #include "blink/xmmtype.h"
 
 #define USAGE \
-  " [-?HhrRstv] [ROM] [ARGS...]\r\n\
-\r\n\
-DESCRIPTION\r\n\
-\r\n\
-  blink is an x86-64-linux virtual machine w/ memory visualization\r\n\
-  please keep still and only watchen astaunished das blinkenlights\r\n\
-\r\n\
-FLAGS\r\n\
-\r\n\
-  -h        help\r\n\
-  -z        zoom\r\n\
-  -v        verbosity\r\n\
-  -r        real mode\r\n\
-  -s        statistics\r\n\
-  -H        disable highlight\r\n\
-  -t        disable tui mode\r\n\
-  -R        disable reactive\r\n\
-  -b ADDR   push a breakpoint\r\n\
-  -L PATH   log file location\r\n\
-\r\n\
-ARGUMENTS\r\n\
-\r\n\
-  ROM files can be ELF or a flat αcτµαlly pδrταblε εxεcµταblε.\r\n\
-  It should use x86_64 in accordance with the System Five ABI.\r\n\
-  The SYSCALL ABI is defined as it is written in Linux Kernel.\r\n\
-\r\n\
-FEATURES\r\n\
-\r\n\
-  8086, 8087, i386, x86_64, SSE3, SSSE3, POPCNT, MDA, CGA, TTY\r\n\
-  Type ? for keyboard shortcuts and CLI flags inside emulator.\r\n\
-\r\n"
+  " [-?HhrRstv] [ROM] [ARGS...]\n\
+\n\
+DESCRIPTION\n\
+\n\
+  blink is an x86-64-linux virtual machine w/ memory visualization\n\
+  please keep still and only watchen astaunished das blinkenlights\n\
+\n\
+FLAGS\n\
+\n\
+  -h        help\n\
+  -z        zoom\n\
+  -v        verbosity\n\
+  -r        real mode\n\
+  -s        statistics\n\
+  -H        disable highlight\n\
+  -t        disable tui mode\n\
+  -R        disable reactive\n\
+  -b ADDR   push a breakpoint\n\
+  -L PATH   log file location\n\
+\n\
+ARGUMENTS\n\
+\n\
+  ROM files can be ELF or a flat αcτµαlly pδrταblε εxεcµταblε.\n\
+  It should use x86_64 in accordance with the System Five ABI.\n\
+  The SYSCALL ABI is defined as it is written in Linux Kernel.\n\
+\n\
+FEATURES\n\
+\n\
+  8086, 8087, i386, x86_64, SSE3, SSSE3, POPCNT, MDA, CGA, TTY\n\
+  Type ? for keyboard shortcuts and CLI flags inside emulator.\n\
+\n"
 
 #define HELP \
   "\033[1mBLINK v1.o\033[22m\
@@ -408,18 +408,6 @@ static int GetPointerWidth(void) {
   return 2 << m->mode;
 }
 
-static i64 GetIp(void) {
-  switch (GetPointerWidth()) {
-    default:
-    case 8:
-      return m->ip;
-    case 4:
-      return m->cs + (m->ip & 0xffff);
-    case 2:
-      return m->cs + (m->ip & 0xffff);
-  }
-}
-
 static i64 GetSp(void) {
   switch (GetPointerWidth()) {
     default:
@@ -561,7 +549,7 @@ static void ToggleMouseTracking(void) {
 
 static void LeaveScreen(void) {
   char buf[64];
-  sprintf(buf, "\033[%d;%dH\033[S\r\n", tyn, txn);
+  sprintf(buf, "\033[%d;%dH\033[S\n", tyn, txn);
   TtyWriteString(buf);
 }
 
@@ -669,10 +657,9 @@ static void ResolveBreakpoints(void) {
       if ((sym = DisFindSymByName(dis, breakpoints.p[i].symbol)) != -1) {
         breakpoints.p[i].addr = dis->syms.p[sym].addr;
       } else {
-        fprintf(
-            stderr,
-            "error: breakpoint not found: %s (out of %d loaded symbols)\r\n",
-            breakpoints.p[i].symbol, dis->syms.i);
+        fprintf(stderr,
+                "error: breakpoint not found: %s (out of %d loaded symbols)\n",
+                breakpoints.p[i].symbol, dis->syms.i);
         exit(1);
       }
     }
@@ -682,7 +669,7 @@ static void ResolveBreakpoints(void) {
 static void BreakAtNextInstruction(void) {
   struct Breakpoint b;
   memset(&b, 0, sizeof(b));
-  b.addr = GetIp() + m->xedd->length;
+  b.addr = GetPc(m) + m->xedd->length;
   b.oneshot = true;
   PushBreakpoint(&breakpoints, &b);
 }
@@ -749,7 +736,7 @@ void TuiSetup(void) {
   struct sigaction sa;
   report = false;
   if (!once) {
-    /* LOGF("loaded program %s\r\n%s", codepath, gc(FormatPml4t(m))); */
+    /* LOGF("loaded program %s\n%s", codepath, gc(FormatPml4t(m))); */
     CommonSetup();
     ioctl(ttyout, TCGETS, &oldterm);
     atexit(TtyRestore2);
@@ -817,7 +804,7 @@ static bool IsXmmNonZero(i64 start, i64 end) {
 static bool IsSegNonZero(void) {
   unsigned i;
   for (i = 0; i < 6; ++i) {
-    if (*GetSegment(m, 0, i)) {
+    if (*GetSegment(m, 0, 0, 0, 0, i)) {
       return true;
     }
   }
@@ -1018,8 +1005,8 @@ void SetupDraw(void) {
 static i64 Disassemble(void) {
   i64 lines;
   lines = pan.disassembly.bottom - pan.disassembly.top * 2;
-  if (Dis(dis, m, GetIp(), m->ip, lines) != -1) {
-    return DisFind(dis, GetIp());
+  if (Dis(dis, m, GetPc(m), m->ip, lines) != -1) {
+    return DisFind(dis, GetPc(m));
   } else {
     return -1;
   }
@@ -1027,7 +1014,7 @@ static i64 Disassemble(void) {
 
 static i64 GetDisIndex(void) {
   i64 i;
-  if ((i = DisFind(dis, GetIp())) == -1) {
+  if ((i = DisFind(dis, GetPc(m))) == -1) {
     i = Disassemble();
   }
   while (i + 1 < dis->ops.i && !dis->ops.p[i].size) ++i;
@@ -1310,7 +1297,7 @@ static void ZoomMemoryView(struct MemoryView *v, i64 y, i64 x, int dy) {
 }
 
 static void ScrollMemoryViews(void) {
-  ScrollMemoryView(&pan.code, &codeview, GetIp());
+  ScrollMemoryView(&pan.code, &codeview, GetPc(m));
   ScrollMemoryView(&pan.readdata, &readview, readaddr);
   ScrollMemoryView(&pan.writedata, &writeview, writeaddr);
   ScrollMemoryView(&pan.stack, &stackview, GetSp());
@@ -1635,7 +1622,7 @@ static void Redraw(void) {
   DrawMaps(&pan.maps);
   DrawFrames(&pan.frames);
   DrawBreakpoints(&pan.breakpoints);
-  DrawMemory(&pan.code, &codeview, GetIp(), GetIp() + m->xedd->length);
+  DrawMemory(&pan.code, &codeview, GetPc(m), GetPc(m) + m->xedd->length);
   DrawMemory(&pan.readdata, &readview, readaddr, readaddr + readsize);
   DrawMemory(&pan.writedata, &writeview, writeaddr, writeaddr + writesize);
   DrawMemory(&pan.stack, &stackview, GetSp(), GetSp() + GetPointerWidth());
@@ -1798,6 +1785,7 @@ static int OnPtyFdIoctl(int fd, unsigned long request, ...) {
     return -1;
   }
   va_end(va);
+  return 0;
 }
 
 static const struct FdCb kFdCbPty = {
@@ -1816,7 +1804,7 @@ static void LaunchDebuggerReactively(void) {
       tuimode = true;
       action |= FAILURE;
     } else {
-      fprintf(stderr, "ERROR: %s\r\n", systemfailure);
+      fprintf(stderr, "ERROR: %s\n", systemfailure);
       exit(1);
     }
   }
@@ -2175,10 +2163,9 @@ static bool OnHalt(int interrupt) {
     case kMachineFpuException:
       OnFpuException();
       return false;
-    case kMachineExit:
     case kMachineHalt:
     default:
-      OnExit(interrupt);
+      OnExit(interrupt & 255);
       return false;
   }
 }
@@ -2187,7 +2174,7 @@ static void OnBinbase(struct Machine *m) {
   int i;
   i64 skew;
   skew = m->xedd->op.disp * 512;
-  LOGF("skew binbase %" PRId64 " @ %012" PRIx64 "", skew, GetIp());
+  LOGF("skew binbase %" PRId64 " @ %012" PRIx64 "", skew, GetPc(m));
   for (i = 0; i < dis->syms.i; ++i) dis->syms.p[i].addr += skew;
   for (i = 0; i < dis->loads.i; ++i) dis->loads.p[i].addr += skew;
   for (i = 0; i < breakpoints.i; ++i) breakpoints.p[i].addr += skew;
@@ -2457,7 +2444,7 @@ static void ReadKeyboard(void) {
     if (errno == EINTR) {
       return;
     }
-    fprintf(stderr, "ReadKeyboard failed: %s\r\n", strerror(errno));
+    fprintf(stderr, "ReadKeyboard failed: %s\n", strerror(errno));
     exit(1);
   }
   switch (*p++) {
@@ -2531,7 +2518,6 @@ static i64 ParseHexValue(const char *s) {
   if (*ep) {
     fputs("ERROR: bad hexadecimal: ", stderr);
     fputs(s, stderr);
-    fputc('\r', stderr);
     fputc('\n', stderr);
     exit(EXIT_FAILURE);
   }
@@ -2550,7 +2536,7 @@ static void HandleBreakpointFlag(const char *s) {
 }
 
 _Noreturn static void PrintUsage(int rc, FILE *f) {
-  fprintf(f, "SYNOPSIS\r\n\r\n  %s%s", "blink", USAGE);
+  fprintf(f, "SYNOPSIS\n\n  %s%s", "blink", USAGE);
   exit(rc);
 }
 
@@ -2575,7 +2561,7 @@ static void Exec(void) {
   ExecSetup();
   if (!(interrupt = setjmp(m->onhalt))) {
     if (!(action & CONTINUE) &&
-        (bp = IsAtBreakpoint(&breakpoints, GetIp())) != -1) {
+        (bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
       LOGF("BREAK1 %012" PRIx64 "", breakpoints.p[bp].addr);
       tuimode = true;
       LoadInstruction(m);
@@ -2592,7 +2578,7 @@ static void Exec(void) {
       action &= ~CONTINUE;
       for (;;) {
         LoadInstruction(m);
-        if ((bp = IsAtBreakpoint(&breakpoints, GetIp())) != -1) {
+        if ((bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
           LOGF("BREAK2 %012" PRIx64 "", breakpoints.p[bp].addr);
           action &= ~(FINISH | NEXT | CONTINUE);
           tuimode = true;
@@ -2650,7 +2636,7 @@ static void Tui(void) {
       if (!(action & FAILURE)) {
         LoadInstruction(m);
         if ((action & (FINISH | NEXT | CONTINUE)) &&
-            (bp = IsAtBreakpoint(&breakpoints, GetIp())) != -1) {
+            (bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
           action &= ~(FINISH | NEXT | CONTINUE);
           LOGF("BREAK %012" PRIx64 "", breakpoints.p[bp].addr);
         }

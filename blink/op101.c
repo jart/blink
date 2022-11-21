@@ -26,10 +26,10 @@
 #include "blink/real.h"
 #include "blink/time.h"
 
-static void StoreDescriptorTable(struct Machine *m, u64 rde, u16 limit,
+static void StoreDescriptorTable(struct Machine *m, DISPATCH_PARAMETERS, u16 limit,
                                  u64 base) {
   u64 l;
-  l = ComputeAddress(m, rde);
+  l = ComputeAddress(m, DISPATCH_ARGUMENTS);
   if (l + 10 <= GetRealMemorySize(m->system)) {
     Write16(m->system->real.p + l, limit);
     if (Rexw(rde)) {
@@ -47,11 +47,11 @@ static void StoreDescriptorTable(struct Machine *m, u64 rde, u16 limit,
   }
 }
 
-static void LoadDescriptorTable(struct Machine *m, u64 rde, u16 *out_limit,
+static void LoadDescriptorTable(struct Machine *m, DISPATCH_PARAMETERS, u16 *out_limit,
                                 u64 *out_base) {
   u16 limit;
   u64 l, base;
-  l = ComputeAddress(m, rde);
+  l = ComputeAddress(m, DISPATCH_ARGUMENTS);
   if (l + 10 <= GetRealMemorySize(m->system)) {
     limit = Read16(m->system->real.p + l);
     if (Rexw(rde)) {
@@ -75,50 +75,50 @@ static void LoadDescriptorTable(struct Machine *m, u64 rde, u16 *out_limit,
   }
 }
 
-static void SgdtMs(struct Machine *m, u64 rde) {
-  StoreDescriptorTable(m, rde, m->system->gdt_limit, m->system->gdt_base);
+static void SgdtMs(struct Machine *m, DISPATCH_PARAMETERS) {
+  StoreDescriptorTable(m, DISPATCH_ARGUMENTS, m->system->gdt_limit, m->system->gdt_base);
 }
 
-static void LgdtMs(struct Machine *m, u64 rde) {
-  LoadDescriptorTable(m, rde, &m->system->gdt_limit, &m->system->gdt_base);
+static void LgdtMs(struct Machine *m, DISPATCH_PARAMETERS) {
+  LoadDescriptorTable(m, DISPATCH_ARGUMENTS, &m->system->gdt_limit, &m->system->gdt_base);
 }
 
-static void SidtMs(struct Machine *m, u64 rde) {
-  StoreDescriptorTable(m, rde, m->system->idt_limit, m->system->idt_base);
+static void SidtMs(struct Machine *m, DISPATCH_PARAMETERS) {
+  StoreDescriptorTable(m, DISPATCH_ARGUMENTS, m->system->idt_limit, m->system->idt_base);
 }
 
-static void LidtMs(struct Machine *m, u64 rde) {
-  LoadDescriptorTable(m, rde, &m->system->idt_limit, &m->system->idt_base);
+static void LidtMs(struct Machine *m, DISPATCH_PARAMETERS) {
+  LoadDescriptorTable(m, DISPATCH_ARGUMENTS, &m->system->idt_limit, &m->system->idt_base);
 }
 
-static void Monitor(struct Machine *m, u64 rde) {
+static void Monitor(struct Machine *m, DISPATCH_PARAMETERS) {
 }
 
-static void Mwait(struct Machine *m, u64 rde) {
+static void Mwait(struct Machine *m, DISPATCH_PARAMETERS) {
 }
 
-static void Swapgs(struct Machine *m, u64 rde) {
+static void Swapgs(struct Machine *m, DISPATCH_PARAMETERS) {
 }
 
-static void Vmcall(struct Machine *m, u64 rde) {
+static void Vmcall(struct Machine *m, DISPATCH_PARAMETERS) {
 }
 
-static void Vmlaunch(struct Machine *m, u64 rde) {
+static void Vmlaunch(struct Machine *m, DISPATCH_PARAMETERS) {
 }
 
-static void Vmresume(struct Machine *m, u64 rde) {
+static void Vmresume(struct Machine *m, DISPATCH_PARAMETERS) {
 }
 
-static void Vmxoff(struct Machine *m, u64 rde) {
+static void Vmxoff(struct Machine *m, DISPATCH_PARAMETERS) {
 }
 
-static void InvlpgM(struct Machine *m, u64 rde) {
+static void InvlpgM(struct Machine *m, DISPATCH_PARAMETERS) {
   ResetTlb(m);
 }
 
-static void Smsw(struct Machine *m, u64 rde, bool ismem) {
+static void Smsw(struct Machine *m, DISPATCH_PARAMETERS, bool ismem) {
   if (ismem) {
-    Store16(GetModrmRegisterWordPointerWrite2(m, rde), m->system->cr0);
+    Store16(GetModrmRegisterWordPointerWrite2(m, DISPATCH_ARGUMENTS), m->system->cr0);
   } else if (Rexw(rde)) {
     Put64(RegRexrReg(m, rde), m->system->cr0);
   } else if (!Osz(rde)) {
@@ -128,89 +128,89 @@ static void Smsw(struct Machine *m, u64 rde, bool ismem) {
   }
 }
 
-static void Lmsw(struct Machine *m, u64 rde) {
-  m->system->cr0 = Read16(GetModrmRegisterWordPointerRead2(m, rde));
+static void Lmsw(struct Machine *m, DISPATCH_PARAMETERS) {
+  m->system->cr0 = Read16(GetModrmRegisterWordPointerRead2(m, DISPATCH_ARGUMENTS));
 }
 
-void Op101(struct Machine *m, u64 rde) {
+void Op101(struct Machine *m, DISPATCH_PARAMETERS) {
   bool ismem;
   ismem = !IsModrmRegister(rde);
   switch (ModrmReg(rde)) {
     case 0:
       if (ismem) {
-        SgdtMs(m, rde);
+        SgdtMs(m, DISPATCH_ARGUMENTS);
       } else {
         switch (ModrmRm(rde)) {
           case 1:
-            Vmcall(m, rde);
+            Vmcall(m, DISPATCH_ARGUMENTS);
             break;
           case 2:
-            Vmlaunch(m, rde);
+            Vmlaunch(m, DISPATCH_ARGUMENTS);
             break;
           case 3:
-            Vmresume(m, rde);
+            Vmresume(m, DISPATCH_ARGUMENTS);
             break;
           case 4:
-            Vmxoff(m, rde);
+            Vmxoff(m, DISPATCH_ARGUMENTS);
             break;
           default:
-            OpUd(m, rde);
+            OpUdImpl(m);
         }
       }
       break;
     case 1:
       if (ismem) {
-        SidtMs(m, rde);
+        SidtMs(m, DISPATCH_ARGUMENTS);
       } else {
         switch (ModrmRm(rde)) {
           case 0:
-            Monitor(m, rde);
+            Monitor(m, DISPATCH_ARGUMENTS);
             break;
           case 1:
-            Mwait(m, rde);
+            Mwait(m, DISPATCH_ARGUMENTS);
             break;
           default:
-            OpUd(m, rde);
+            OpUdImpl(m);
         }
       }
       break;
     case 2:
       if (ismem) {
-        LgdtMs(m, rde);
+        LgdtMs(m, DISPATCH_ARGUMENTS);
       } else {
-        OpUd(m, rde);
+        OpUdImpl(m);
       }
       break;
     case 3:
       if (ismem) {
-        LidtMs(m, rde);
+        LidtMs(m, DISPATCH_ARGUMENTS);
       } else {
-        OpUd(m, rde);
+        OpUdImpl(m);
       }
       break;
     case 4:
-      Smsw(m, rde, ismem);
+      Smsw(m, DISPATCH_ARGUMENTS, ismem);
       break;
     case 6:
-      Lmsw(m, rde);
+      Lmsw(m, DISPATCH_ARGUMENTS);
       break;
     case 7:
       if (ismem) {
-        InvlpgM(m, rde);
+        InvlpgM(m, DISPATCH_ARGUMENTS);
       } else {
         switch (ModrmRm(rde)) {
           case 0:
-            Swapgs(m, rde);
+            Swapgs(m, DISPATCH_ARGUMENTS);
             break;
           case 1:
-            OpRdtscp(m, rde);
+            OpRdtscp(m, DISPATCH_ARGUMENTS);
             break;
           default:
-            OpUd(m, rde);
+            OpUdImpl(m);
         }
       }
       break;
     default:
-      OpUd(m, rde);
+      OpUdImpl(m);
   }
 }

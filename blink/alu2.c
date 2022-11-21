@@ -28,9 +28,9 @@
 #include "blink/mop.h"
 #include "blink/swap.h"
 
-static void Alub(struct Machine *m, u64 rde, aluop_f op) {
+static void Alub(struct Machine *m, DISPATCH_PARAMETERS, aluop_f op) {
   u8 *p, *q;
-  p = GetModrmRegisterBytePointerWrite(m, rde);
+  p = GetModrmRegisterBytePointerWrite(m, DISPATCH_ARGUMENTS);
   q = ByteRexrReg(m, rde);
   if (!Lock(rde)) {
     Store8(p, op(Load8(p), Get8(q), &m->flags));
@@ -45,44 +45,44 @@ static void Alub(struct Machine *m, u64 rde, aluop_f op) {
         (atomic_uchar *)p, &x, z, memory_order_release, memory_order_relaxed));
 #else
     LOGF("can't %s on this platform", "lock alub");
-    OpUd(m, rde);
+    OpUdImpl(m);
 #endif
   }
 }
 
-void OpAlubAdd(struct Machine *m, u64 rde) {
-  Alub(m, rde, Add8);
+void OpAlubAdd(struct Machine *m, DISPATCH_PARAMETERS) {
+  Alub(m, DISPATCH_ARGUMENTS, Add8);
 }
 
-void OpAlubOr(struct Machine *m, u64 rde) {
-  Alub(m, rde, Or8);
+void OpAlubOr(struct Machine *m, DISPATCH_PARAMETERS) {
+  Alub(m, DISPATCH_ARGUMENTS, Or8);
 }
 
-void OpAlubAdc(struct Machine *m, u64 rde) {
-  Alub(m, rde, Adc8);
+void OpAlubAdc(struct Machine *m, DISPATCH_PARAMETERS) {
+  Alub(m, DISPATCH_ARGUMENTS, Adc8);
 }
 
-void OpAlubSbb(struct Machine *m, u64 rde) {
-  Alub(m, rde, Sbb8);
+void OpAlubSbb(struct Machine *m, DISPATCH_PARAMETERS) {
+  Alub(m, DISPATCH_ARGUMENTS, Sbb8);
 }
 
-void OpAlubAnd(struct Machine *m, u64 rde) {
-  Alub(m, rde, And8);
+void OpAlubAnd(struct Machine *m, DISPATCH_PARAMETERS) {
+  Alub(m, DISPATCH_ARGUMENTS, And8);
 }
 
-void OpAlubSub(struct Machine *m, u64 rde) {
-  Alub(m, rde, Sub8);
+void OpAlubSub(struct Machine *m, DISPATCH_PARAMETERS) {
+  Alub(m, DISPATCH_ARGUMENTS, Sub8);
 }
 
-void OpAlubXor(struct Machine *m, u64 rde) {
-  Alub(m, rde, Xor8);
+void OpAlubXor(struct Machine *m, DISPATCH_PARAMETERS) {
+  Alub(m, DISPATCH_ARGUMENTS, Xor8);
 }
 
-void OpAluw(struct Machine *m, u64 rde) {
+void OpAluw(struct Machine *m, DISPATCH_PARAMETERS) {
   u8 *p, *q;
   q = RegRexrReg(m, rde);
   if (Rexw(rde)) {
-    p = GetModrmRegisterWordPointerWrite(m, rde, 8);
+    p = GetModrmRegisterWordPointerWrite8(m, DISPATCH_ARGUMENTS);
     if (Lock(rde)) {
 #if LONG_BIT == 64
       if (!((intptr_t)p & 7)) {
@@ -98,11 +98,11 @@ void OpAluw(struct Machine *m, u64 rde) {
                                                         memory_order_relaxed));
       } else {
         LOGF("can't %s misaligned address", "lock aluq");
-        OpUd(m, rde);
+        OpUdImpl(m);
       }
 #else
       LOGF("can't %s on this platform", "lock aluq");
-      OpUd(m, rde);
+      OpUdImpl(m);
 #endif
     } else {
       u64 x, y, z;
@@ -113,7 +113,7 @@ void OpAluw(struct Machine *m, u64 rde) {
     }
   } else if (!Osz(rde)) {
     u32 x, y, z;
-    p = GetModrmRegisterWordPointerWrite(m, rde, 4);
+    p = GetModrmRegisterWordPointerWrite4(m, DISPATCH_ARGUMENTS);
     if (Lock(rde)) {
       if (!((intptr_t)p & 3)) {
         x = atomic_load_explicit((_Atomic(u32) *)p, memory_order_acquire);
@@ -127,7 +127,7 @@ void OpAluw(struct Machine *m, u64 rde) {
                                                         memory_order_relaxed));
       } else {
         LOGF("can't %s misaligned address", "lock alul");
-        OpUd(m, rde);
+        OpUdImpl(m);
       }
     } else {
       x = Load32(p);
@@ -141,7 +141,7 @@ void OpAluw(struct Machine *m, u64 rde) {
   } else {
     u16 x, y, z;
     unassert(!Lock(rde));
-    p = GetModrmRegisterWordPointerWrite(m, rde, 2);
+    p = GetModrmRegisterWordPointerWrite2(m, DISPATCH_ARGUMENTS);
     x = Load16(p);
     y = Get16(q);
     z = kAlu[(Opcode(rde) & 070) >> 3][ALU_INT16](x, y, &m->flags);

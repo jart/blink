@@ -26,6 +26,7 @@
 
 #include "blink/assert.h"
 #include "blink/dll.h"
+#include "blink/end.h"
 #include "blink/endian.h"
 #include "blink/jit.h"
 #include "blink/lock.h"
@@ -105,8 +106,6 @@ struct JitStage {
   dll_element list;
 };
 
-extern u8 end[];
-
 #if defined(__x86_64__)
 static const u8 kPrologue[] = {
     0x55,              // push %rbp
@@ -134,6 +133,14 @@ static const u32 kEpilogue[] = {
 };
 #endif
 
+static long GetSystemPageSize(void) {
+  long pagesize;
+  unassert((pagesize = sysconf(_SC_PAGESIZE)) > 0);
+  unassert(IS2POW(pagesize));
+  unassert(pagesize <= kJitPageSize);
+  return pagesize;
+}
+
 static void DestroyJitPage(struct JitPage *jp) {
   dll_element *e;
   while ((e = dll_first(jp->staged))) {
@@ -156,7 +163,6 @@ static void DestroyJitPage(struct JitPage *jp) {
 int InitJit(struct Jit *jit) {
   memset(jit, 0, sizeof(*jit));
   pthread_mutex_init(&jit->lock, 0);
-  // jit->disabled = true;
   return 0;
 }
 
@@ -224,7 +230,7 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
       // away from a brk()-based libc malloc() function which may have
       // already allocated memory in this space. the reason it matters
       // is because the x86 and arm isas impose limits on displacement
-      jit->brk = (u8 *)ROUNDUP((intptr_t)end, 65536) + 8388608;
+      jit->brk = (u8 *)ROUNDUP((intptr_t)END_OF_IMAGE, kJitPageSize) + 1048576;
     }
     e = dll_first(jit->pages);
     if (e && (jp = JITPAGE_CONTAINER(e))->index + reserve <= kJitPageSize) {
@@ -234,23 +240,20 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
         jp->addr = (u8 *)mmap(jit->brk, kJitPageSize, PROT_READ | PROT_WRITE,
                               MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0);
         if (jp->addr != MAP_FAILED) {
-          distance = ABS(jp->addr - end);
+          distance = ABS(jp->addr - END_OF_IMAGE);
           if (distance > kArmDispMax * 4 / 2) {
             LOGF("mmap() returned suboptimal address %p that's %" PRIdPTR
-                 " bytes away from our program image which ends at %p",
-                 jp, distance, end);
+                 " bytes away from our program image which ends near %p",
+                 jp, distance, END_OF_IMAGE);
           }
           jit->brk = jp->addr + kJitPageSize;
           dll_init(&jp->list);
           break;
         } else if (errno == EEXIST) {
-          LOG_ONCE(LOGF("mmap() conflict at %p while probing for jit memory",
-                        jit->brk));
           jit->brk += kJitPageSize;
-          DisableJit(jit);
-          jp = 0;
           continue;
         } else {
+          LOGF("mmap() error at %p is %s", jit->brk, strerror(errno));
           DisableJit(jit);
           free(jp);
           jp = 0;
@@ -305,14 +308,6 @@ bool AppendJit(struct JitPage *jp, const void *data, long size) {
     jp->index = kJitPageSize + 1;
     return false;
   }
-}
-
-static long GetSystemPageSize(void) {
-  long pagesize;
-  unassert((pagesize = sysconf(_SC_PAGESIZE)) > 0);
-  unassert(IS2POW(pagesize));
-  unassert(pagesize <= kJitPageSize);
-  return pagesize;
 }
 
 static int CommitJit(struct JitPage *jp, long pagesize) {
@@ -513,11 +508,10 @@ static bool AppendJitMovReg(struct JitPage *jp, int dst, int src) {
 #if defined(__x86_64__)
   unassert(!(dst & ~15));
   unassert(!(src & ~15));
-  u8 buf[3] = {
-      kAmdRexw | (dst & 8 ? kAmdRexr : 0) | (dst & 8 ? kAmdRexb : 0),
-      0x89,
-      0300 | (src & 7) << 3 | (dst & 7),
-  };
+  u8 buf[3];
+  buf[0] = kAmdRexw | (dst & 8 ? kAmdRexr : 0) | (dst & 8 ? kAmdRexb : 0);
+  buf[1] = 0x89;
+  buf[2] = 0300 | (src & 7) << 3 | (dst & 7);
 #elif defined(__aarch64__)
   //               src            target
   //              ┌─┴─┐           ┌─┴─┐
@@ -542,11 +536,11 @@ static bool AppendJitMovReg(struct JitPage *jp, int dst, int src) {
  */
 bool AppendJitSetArg(struct JitPage *jp, int param, u64 value) {
   unassert(0 <= param && param < 6);
+  jp->setargs |= 1 << param;
 #if defined(__x86_64__)
   u8 reg[6] = {kAmdDi, kAmdSi, kAmdDx, kAmdCx, 8, 9};
   param = reg[param];
 #endif
-  jp->setargs |= 1 << param;
   return AppendJitSetReg(jp, param, value);
 }
 
@@ -668,12 +662,14 @@ bool AppendJitSetReg(struct JitPage *jp, int reg, u64 value) {
   u8 buf[10];
   u8 rex = 0;
   if (reg & 8) rex |= kAmdRexb;
-  if (value > 0xffffffff) rex |= kAmdRexw;
-  if (rex) buf[n++] = rex;
   if (!value) {
+    if (reg & 8) rex |= kAmdRexr;
+    if (rex) buf[n++] = rex;
     buf[n++] = kAmdXor;
     buf[n++] = 0300 | (reg & 7) << 3 | (reg & 7);
   } else {
+    if (value > 0xffffffff) rex |= kAmdRexw;
+    if (rex) buf[n++] = rex;
     buf[n++] = kAmdMovImm | (reg & 7);
     if ((rex & kAmdRexw) != kAmdRexw) {
       Write32(buf + n, value);

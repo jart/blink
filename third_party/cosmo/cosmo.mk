@@ -17,6 +17,7 @@ third_party/cosmo/%.com: third_party/cosmo/%.com.gz third_party/cosmo/%.com.dbg
 	chmod +x $@
 
 o/$(MODE)/third_party/cosmo/%.com.ok: third_party/cosmo/%.com o/$(MODE)/blink/blink
+	@mkdir -p $(@D)
 	o/$(MODE)/blink/blink $<
 	@touch $@
 

@@ -36,11 +36,11 @@ static struct clmul clmul(u64 a, u64 b) {
   return (struct clmul){x, y};
 }
 
-void OpSsePclmulqdq(struct Machine *m, u64 rde) {
+void OpSsePclmulqdq(struct Machine *m, DISPATCH_PARAMETERS) {
   struct clmul res;
-  res = clmul(Read64(XmmRexrReg(m, rde) + ((m->xedd->op.uimm0 & 0x01) << 3)),
-              Read64(GetModrmRegisterXmmPointerRead16(m, rde) +
-                     ((m->xedd->op.uimm0 & 0x10) >> 1)));
+  res = clmul(Read64(XmmRexrReg(m, rde) + ((uimm0 & 0x01) << 3)),
+              Read64(GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS) +
+                     ((uimm0 & 0x10) >> 1)));
   Write64(XmmRexrReg(m, rde) + 0, res.x);
   Write64(XmmRexrReg(m, rde) + 8, res.y);
 }

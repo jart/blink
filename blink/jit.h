@@ -8,7 +8,7 @@
 #include "blink/tsan.h"
 #include "blink/types.h"
 
-#define kJitPageSize  131072
+#define kJitPageSize  65536
 #define kJitPageFit   600
 #define kJitPageAlign 16
 

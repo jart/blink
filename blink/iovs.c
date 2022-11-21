@@ -16,12 +16,17 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/types.h"
 #include <stdlib.h>
 #include <string.h>
 
+#include "blink/endian.h"
+#include "blink/errno.h"
 #include "blink/iovs.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/memory.h"
+#include "blink/types.h"
+#include "blink/util.h"
 
 void InitIovs(struct Iovs *ib) {
   ib->p = ib->init;
@@ -66,4 +71,46 @@ int AppendIovs(struct Iovs *ib, void *base, size_t len) {
     }
   }
   return 0;
+}
+
+int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr, u64 size) {
+  void *real;
+  unsigned got;
+  u64 have;
+  while (size) {
+    if (!(real = FindReal(m, addr))) return efault();
+    have = 4096 - (addr & 4095);
+    got = MIN(size, have);
+    if (AppendIovs(ib, real, got) == -1) return -1;
+    addr += got;
+    size -= got;
+  }
+  return 0;
+}
+
+int AppendIovsGuest(struct Machine *m, struct Iovs *iv, i64 iovaddr,
+                    i64 iovlen) {
+  int rc;
+  size_t i;
+  u64 iovsize;
+  struct iovec_linux *guestiovs;
+  if (!mulo(iovlen, sizeof(struct iovec_linux), &iovsize) &&
+      (0 <= iovsize && iovsize <= 0x7ffff000)) {
+    if ((guestiovs = (struct iovec_linux *)malloc(iovsize))) {
+      VirtualSendRead(m, guestiovs, iovaddr, iovsize);
+      for (rc = i = 0; i < iovlen; ++i) {
+        if (AppendIovsReal(m, iv, Read64(guestiovs[i].iov_base),
+                           Read64(guestiovs[i].iov_len)) == -1) {
+          rc = -1;
+          break;
+        }
+      }
+      free(guestiovs);
+      return rc;
+    } else {
+      return enomem();
+    }
+  } else {
+    return eoverflow();
+  }
 }

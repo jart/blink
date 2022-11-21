@@ -64,12 +64,15 @@ void ThrowProtectionFault(struct Machine *m) {
   HaltMachine(m, kMachineProtectionFault);
 }
 
-void OpUd(struct Machine *m, u64 rde) {
-  RestoreIp(m);
+void OpUdImpl(struct Machine *m) {
   LOGF("UNDEFINED INSTRUCTION\n\t%s", GetBacktrace(m));
   HaltMachine(m, kMachineUndefinedInstruction);
 }
 
-void OpHlt(struct Machine *m, u64 rde) {
+void OpUd(struct Machine *m, DISPATCH_PARAMETERS) {
+  OpUdImpl(m);
+}
+
+void OpHlt(struct Machine *m, DISPATCH_PARAMETERS) {
   HaltMachine(m, kMachineHalt);
 }

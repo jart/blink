@@ -12,27 +12,35 @@
 #include "blink/tsan.h"
 #include "blink/x86.h"
 
+#define kParamRde   1
+#define kParamDisp  2
+#define kParamUimm0 3
+#define kParamArg   4
+
 #define kOpNormal    0
 #define kOpBranching 1
 #define kOpPrecious  2
 
 #define kInstructionBytes 40
 
+#define kMachineExit                 256
 #define kMachineHalt                 -1
 #define kMachineDecodeError          -2
 #define kMachineUndefinedInstruction -3
 #define kMachineSegmentationFault    -4
-#define kMachineExit                 -5
 #define kMachineDivideError          -6
 #define kMachineFpuException         -7
 #define kMachineProtectionFault      -8
 #define kMachineSimdException        -9
 
+#define DISPATCH_PARAMETERS u64 rde, i64 disp, u64 uimm0, intptr_t darg
+#define DISPATCH_ARGUMENTS  rde, disp, uimm0, darg
+
 #define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, list, e)
 
 struct Machine;
 
-typedef void (*nexgen32e_f)(struct Machine *, u64);
+typedef void (*nexgen32e_f)(struct Machine *, DISPATCH_PARAMETERS);
 
 struct FreeList {
   int n;
@@ -107,11 +115,12 @@ struct Elf {
 };
 
 struct OpCache {
-  u64 codevirt;    // current rip page in guest memory
-  u8 *codehost;    // current rip page in host memory
-  u32 stashsize;   // for writes that overlap page
-  i64 stashaddr;   // for writes that overlap page
-  u8 stash[4096];  // for writes that overlap page
+  bool writable;
+  u64 codevirt;   // current rip page in guest memory
+  u8 *codehost;   // current rip page in host memory
+  u32 stashsize;  // for writes that overlap page
+  i64 stashaddr;  // for writes that overlap page
+  u8 stash[16];   // for writes that overlap page
   u64 icache[1024][kInstructionBytes / 8];
 };
 
@@ -259,7 +268,7 @@ void ResetCpu(struct Machine *);
 void ResetTlb(struct Machine *);
 void CollectGarbage(struct Machine *);
 void ResetInstructionCache(struct Machine *);
-void GeneralDispatch(struct Machine *, u64);
+void GeneralDispatch(struct Machine *, DISPATCH_PARAMETERS);
 void LoadInstruction(struct Machine *);
 void ExecuteInstruction(struct Machine *);
 long AllocateLinearPage(struct System *);
@@ -274,54 +283,56 @@ _Noreturn void HaltMachine(struct Machine *, int);
 void RaiseDivideError(struct Machine *);
 _Noreturn void ThrowSegmentationFault(struct Machine *, i64);
 _Noreturn void ThrowProtectionFault(struct Machine *);
-_Noreturn void OpUd(struct Machine *, u64);
-_Noreturn void OpHlt(struct Machine *, u64);
-void OpSsePclmulqdq(struct Machine *, u64);
-void OpCvt0f2a(struct Machine *, u64);
-void OpCvtt0f2c(struct Machine *, u64);
-void OpCvt0f2d(struct Machine *, u64);
-void OpCvt0f5a(struct Machine *, u64);
-void OpCvt0f5b(struct Machine *, u64);
-void OpCvt0fE6(struct Machine *, u64);
-void OpCpuid(struct Machine *, u64);
-void OpDivAlAhAxEbSigned(struct Machine *, u64);
-void OpDivAlAhAxEbUnsigned(struct Machine *, u64);
-void OpDivRdxRaxEvqpSigned(struct Machine *, u64);
-void OpDivRdxRaxEvqpUnsigned(struct Machine *, u64);
-void OpImulGvqpEvqp(struct Machine *, u64);
-void OpImulGvqpEvqpImm(struct Machine *, u64);
-void OpMulAxAlEbSigned(struct Machine *, u64);
-void OpMulAxAlEbUnsigned(struct Machine *, u64);
-void OpMulRdxRaxEvqpSigned(struct Machine *, u64);
-void OpMulRdxRaxEvqpUnsigned(struct Machine *, u64);
+_Noreturn void OpUdImpl(struct Machine *);
+_Noreturn void OpUd(struct Machine *, DISPATCH_PARAMETERS);
+_Noreturn void OpHlt(struct Machine *, DISPATCH_PARAMETERS);
+void OpSsePclmulqdq(struct Machine *, DISPATCH_PARAMETERS);
+void OpCvt0f2a(struct Machine *, DISPATCH_PARAMETERS);
+void OpCvtt0f2c(struct Machine *, DISPATCH_PARAMETERS);
+void OpCvt0f2d(struct Machine *, DISPATCH_PARAMETERS);
+void OpCvt0f5a(struct Machine *, DISPATCH_PARAMETERS);
+void OpCvt0f5b(struct Machine *, DISPATCH_PARAMETERS);
+void OpCvt0fE6(struct Machine *, DISPATCH_PARAMETERS);
+void OpCpuid(struct Machine *, DISPATCH_PARAMETERS);
+void OpDivAlAhAxEbSigned(struct Machine *, DISPATCH_PARAMETERS);
+void OpDivAlAhAxEbUnsigned(struct Machine *, DISPATCH_PARAMETERS);
+void OpDivRdxRaxEvqpSigned(struct Machine *, DISPATCH_PARAMETERS);
+void OpDivRdxRaxEvqpUnsigned(struct Machine *, DISPATCH_PARAMETERS);
+void OpImulGvqpEvqp(struct Machine *, DISPATCH_PARAMETERS);
+void OpImulGvqpEvqpImm(struct Machine *, DISPATCH_PARAMETERS);
+void OpMulAxAlEbSigned(struct Machine *, DISPATCH_PARAMETERS);
+void OpMulAxAlEbUnsigned(struct Machine *, DISPATCH_PARAMETERS);
+void OpMulRdxRaxEvqpSigned(struct Machine *, DISPATCH_PARAMETERS);
+void OpMulRdxRaxEvqpUnsigned(struct Machine *, DISPATCH_PARAMETERS);
 u64 OpIn(struct Machine *, u16);
 int OpOut(struct Machine *, u16, u32);
-void Op101(struct Machine *, u64);
-void OpRdrand(struct Machine *, u64);
-void OpRdseed(struct Machine *, u64);
-void Op171(struct Machine *, u64);
-void Op172(struct Machine *, u64);
-void Op173(struct Machine *, u64);
-void Push(struct Machine *, u64, u64);
-u64 Pop(struct Machine *, u64, u16);
-void OpCallJvds(struct Machine *, u64);
-void OpRet(struct Machine *, u64);
-void OpRetf(struct Machine *, u64);
-void OpLeave(struct Machine *, u64);
-void OpCallEq(struct Machine *, u64);
-void OpPopEvq(struct Machine *, u64);
-void OpPopZvq(struct Machine *, u64);
-void OpPushZvq(struct Machine *, u64);
-void OpPushEvq(struct Machine *, u64);
-void PopVq(struct Machine *, u64);
-void PushVq(struct Machine *, u64);
-void OpJmpEq(struct Machine *, u64);
-void OpPusha(struct Machine *, u64);
-void OpPopa(struct Machine *, u64);
-void OpCallf(struct Machine *, u64);
-void OpXchgGbEb(struct Machine *, u64);
-void OpXchgGvqpEvqp(struct Machine *, u64);
-void OpCmpxchgEbAlGb(struct Machine *, u64);
-void OpCmpxchgEvqpRaxGvqp(struct Machine *, u64);
+void Op101(struct Machine *, DISPATCH_PARAMETERS);
+void OpRdrand(struct Machine *, DISPATCH_PARAMETERS);
+void OpRdseed(struct Machine *, DISPATCH_PARAMETERS);
+void Op171(struct Machine *, DISPATCH_PARAMETERS);
+void Op172(struct Machine *, DISPATCH_PARAMETERS);
+void Op173(struct Machine *, DISPATCH_PARAMETERS);
+void Push(struct Machine *, DISPATCH_PARAMETERS, u64);
+u64 Pop(struct Machine *, DISPATCH_PARAMETERS, u16);
+void OpCallJvds(struct Machine *, DISPATCH_PARAMETERS);
+void OpRet(struct Machine *, DISPATCH_PARAMETERS);
+void OpRetf(struct Machine *, DISPATCH_PARAMETERS);
+void OpLeave(struct Machine *, DISPATCH_PARAMETERS);
+void OpCallEq(struct Machine *, DISPATCH_PARAMETERS);
+void OpPopEvq(struct Machine *, DISPATCH_PARAMETERS);
+void OpPopZvq(struct Machine *, DISPATCH_PARAMETERS);
+void OpPushZvq(struct Machine *, DISPATCH_PARAMETERS);
+void OpPushEvq(struct Machine *, DISPATCH_PARAMETERS);
+void PopVq(struct Machine *, DISPATCH_PARAMETERS);
+void PushVq(struct Machine *, DISPATCH_PARAMETERS);
+void OpJmpEq(struct Machine *, DISPATCH_PARAMETERS);
+void OpPusha(struct Machine *, DISPATCH_PARAMETERS);
+void OpPopa(struct Machine *, DISPATCH_PARAMETERS);
+void OpCallf(struct Machine *, DISPATCH_PARAMETERS);
+void OpXchgGbEb(struct Machine *, DISPATCH_PARAMETERS);
+void OpXchgGvqpEvqp(struct Machine *, DISPATCH_PARAMETERS);
+void OpCmpxchgEbAlGb(struct Machine *, DISPATCH_PARAMETERS);
+void OpCmpxchgEvqpRaxGvqp(struct Machine *, DISPATCH_PARAMETERS);
+void JitlessDispatch(struct Machine *, DISPATCH_PARAMETERS);
 
 #endif /* BLINK_MACHINE_H_ */

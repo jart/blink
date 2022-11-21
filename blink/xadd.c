@@ -28,9 +28,9 @@
 #include "blink/mop.h"
 #include "blink/swap.h"
 
-void OpXaddEbGb(struct Machine *m, u64 rde) {
+void OpXaddEbGb(struct Machine *m, DISPATCH_PARAMETERS) {
   u8 x, y, z, *p, *q;
-  p = GetModrmRegisterBytePointerWrite(m, rde);
+  p = GetModrmRegisterBytePointerWrite(m, DISPATCH_ARGUMENTS);
   q = ByteRexrReg(m, rde);
   x = Load8(p);
   y = Get8(q);
@@ -51,15 +51,15 @@ void OpXaddEbGb(struct Machine *m, u64 rde) {
     Store8(p, z);
   } else {
     LOGF("can't %s on this platform", "lock xaddb");
-    OpUd(m, rde);
+    OpUdImpl(m);
   }
 #endif
 }
 
-void OpXaddEvqpGvqp(struct Machine *m, u64 rde) {
+void OpXaddEvqpGvqp(struct Machine *m, DISPATCH_PARAMETERS) {
   u8 *p, *q;
   q = RegRexrReg(m, rde);
-  p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
+  p = GetModrmRegisterWordPointerWriteOszRexw(m, DISPATCH_ARGUMENTS);
   if (Rexw(rde)) {
     u64 x, y, z;
     if (Lock(rde)) {
@@ -76,11 +76,11 @@ void OpXaddEvqpGvqp(struct Machine *m, u64 rde) {
                                                         memory_order_relaxed));
       } else {
         LOGF("can't %s misaligned address", "lock xaddq");
-        OpUd(m, rde);
+        OpUdImpl(m);
       }
 #else
       LOGF("can't %s on this platform", "lock xaddq");
-      OpUd(m, rde);
+      OpUdImpl(m);
 #endif
     } else {
       x = Load64(p);
@@ -104,7 +104,7 @@ void OpXaddEvqpGvqp(struct Machine *m, u64 rde) {
                                                         memory_order_relaxed));
       } else {
         LOGF("can't %s misaligned address", "lock xaddq");
-        OpUd(m, rde);
+        OpUdImpl(m);
       }
     } else {
       x = Load32(p);

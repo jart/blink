@@ -27,15 +27,16 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 
-void OpCmpxchgEbAlGb(struct Machine *m, u64 rde) {
+void OpCmpxchgEbAlGb(struct Machine *m, DISPATCH_PARAMETERS) {
   bool didit;
   if (!IsModrmRegister(rde)) {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
     didit = atomic_compare_exchange_strong_explicit(
-        (atomic_uchar *)ComputeReserveAddressWrite1(m, rde), m->ax,
-        *ByteRexrReg(m, rde), memory_order_acq_rel, memory_order_acquire);
+        (atomic_uchar *)ComputeReserveAddressWrite1(m, DISPATCH_ARGUMENTS),
+        m->ax, *ByteRexrReg(m, rde), memory_order_acq_rel,
+        memory_order_acquire);
 #else
-    OpUd(m, rde);
+    OpUdImpl(m);
 #endif
   } else {
     u8 *p, *q;
@@ -54,11 +55,11 @@ void OpCmpxchgEbAlGb(struct Machine *m, u64 rde) {
   m->flags = SetFlag(m->flags, FLAGS_ZF, didit);
 }
 
-void OpCmpxchgEvqpRaxGvqp(struct Machine *m, u64 rde) {
+void OpCmpxchgEvqpRaxGvqp(struct Machine *m, DISPATCH_PARAMETERS) {
   bool didit;
   u8 *p, *q;
   q = RegRexrReg(m, rde);
-  p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
+  p = GetModrmRegisterWordPointerWriteOszRexw(m, DISPATCH_ARGUMENTS);
   if (Rexw(rde)) {
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64
@@ -67,7 +68,7 @@ void OpCmpxchgEvqpRaxGvqp(struct Machine *m, u64 rde) {
           atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
           memory_order_acq_rel, memory_order_acquire);
 #else
-      OpUd(m, rde);
+      OpUdImpl(m);
 #endif
     } else {
       u64 x, y, z;

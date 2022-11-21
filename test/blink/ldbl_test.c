@@ -26,14 +26,10 @@
 #include "blink/ldbl.h"
 #include "test/test.h"
 
-char *fmt(const char *fmt, ...) {
-  char *s;
-  va_list va;
-  s = (char *)malloc(64);
-  va_start(va, fmt);
-  vsnprintf(s, 64, fmt, va);
-  va_end(va);
-  return s;
+void SetUp(void) {
+}
+
+void TearDown(void) {
 }
 
 double RoundTrip(double x) {
@@ -41,20 +37,14 @@ double RoundTrip(double x) {
   return DeserializeLdbl(SerializeLdbl(b, x));
 }
 
-void SetUp(void) {
-}
-
-void TearDown(void) {
-}
-
 TEST(SerializeLdbl, testRoundTrip) {
-  EXPECT_STREQ("0", fmt("%g", RoundTrip(0)));
-  EXPECT_STREQ("-0", fmt("%g", RoundTrip(-0.)));
-  EXPECT_STREQ("nan", fmt("%g", RoundTrip(NAN)));
-  EXPECT_STREQ("inf", fmt("%g", RoundTrip(INFINITY)));
-  EXPECT_STREQ("-inf", fmt("%g", RoundTrip(-INFINITY)));
-  EXPECT_STREQ(fmt("%.17g", DBL_MIN), fmt("%.17g", RoundTrip(DBL_MIN)));
-  EXPECT_STREQ(fmt("%.17g", DBL_MAX), fmt("%.17g", RoundTrip(DBL_MAX)));
+  EXPECT_STREQ("0", Format("%g", RoundTrip(0)));
+  EXPECT_STREQ("-0", Format("%g", RoundTrip(-0.)));
+  EXPECT_STREQ("nan", Format("%g", RoundTrip(NAN)));
+  EXPECT_STREQ("inf", Format("%g", RoundTrip(INFINITY)));
+  EXPECT_STREQ("-inf", Format("%g", RoundTrip(-INFINITY)));
+  EXPECT_STREQ(Format("%.17g", DBL_MIN), Format("%.17g", RoundTrip(DBL_MIN)));
+  EXPECT_STREQ(Format("%.17g", DBL_MAX), Format("%.17g", RoundTrip(DBL_MAX)));
   // TODO(jart): What's up with Apple Silicon here?
-  // EXPECT_STREQ("-nan", fmt("%g", RoundTrip(-NAN)));
+  // EXPECT_STREQ("-nan", Format("%g", RoundTrip(-NAN)));
 }

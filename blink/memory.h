@@ -39,5 +39,6 @@ void VirtualRecv(struct Machine *, i64, void *, u64);
 void VirtualRecvWrite(struct Machine *, i64, void *, u64);
 void VirtualSendRead(struct Machine *, void *, i64, u64);
 void VirtualSet(struct Machine *, i64, char, u64);
+void CommitStash(struct Machine *);
 
 #endif /* BLINK_MEMORY_H_ */

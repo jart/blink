@@ -1,9 +1,11 @@
 #ifndef BLINK_HIGH_H_
 #define BLINK_HIGH_H_
 #include <stdbool.h>
+
 #include "blink/types.h"
 
 struct High {
+  bool enabled;
   bool active;
   u8 keyword;
   u8 reg;

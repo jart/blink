@@ -110,28 +110,28 @@ i64 Rcl64(u64, u64, u32 *);
 
 u64 BsuDoubleShift(int, u64, u64, u8, bool, u32 *);
 
-void OpAluw(struct Machine *, u64);
-void OpXaddEbGb(struct Machine *, u64);
-void OpXaddEvqpGvqp(struct Machine *, u64);
-void Op0fe(struct Machine *, u64);
-void OpNegEb(struct Machine *, u64);
-void OpNotEb(struct Machine *, u64);
-void OpAlubAdd(struct Machine *, u64);
-void OpAlubOr(struct Machine *, u64);
-void OpAlubAdc(struct Machine *, u64);
-void OpAlubSbb(struct Machine *, u64);
-void OpAlubAnd(struct Machine *, u64);
-void OpAlubSub(struct Machine *, u64);
-void OpAlubXor(struct Machine *, u64);
-void OpNotEvqp(struct Machine *, u64);
-void OpNegEvqp(struct Machine *, u64);
-void OpIncEvqp(struct Machine *, u64);
-void OpDecEvqp(struct Machine *, u64);
+void OpAluw(struct Machine *, DISPATCH_PARAMETERS);
+void OpXaddEbGb(struct Machine *, DISPATCH_PARAMETERS);
+void OpXaddEvqpGvqp(struct Machine *, DISPATCH_PARAMETERS);
+void Op0fe(struct Machine *, DISPATCH_PARAMETERS);
+void OpNegEb(struct Machine *, DISPATCH_PARAMETERS);
+void OpNotEb(struct Machine *, DISPATCH_PARAMETERS);
+void OpAlubAdd(struct Machine *, DISPATCH_PARAMETERS);
+void OpAlubOr(struct Machine *, DISPATCH_PARAMETERS);
+void OpAlubAdc(struct Machine *, DISPATCH_PARAMETERS);
+void OpAlubSbb(struct Machine *, DISPATCH_PARAMETERS);
+void OpAlubAnd(struct Machine *, DISPATCH_PARAMETERS);
+void OpAlubSub(struct Machine *, DISPATCH_PARAMETERS);
+void OpAlubXor(struct Machine *, DISPATCH_PARAMETERS);
+void OpNotEvqp(struct Machine *, DISPATCH_PARAMETERS);
+void OpNegEvqp(struct Machine *, DISPATCH_PARAMETERS);
+void OpIncEvqp(struct Machine *, DISPATCH_PARAMETERS);
+void OpDecEvqp(struct Machine *, DISPATCH_PARAMETERS);
 
-void OpDas(struct Machine *, u64);
-void OpAaa(struct Machine *, u64);
-void OpAas(struct Machine *, u64);
-void OpAam(struct Machine *, u64);
-void OpAad(struct Machine *, u64);
+void OpDas(struct Machine *, DISPATCH_PARAMETERS);
+void OpAaa(struct Machine *, DISPATCH_PARAMETERS);
+void OpAas(struct Machine *, DISPATCH_PARAMETERS);
+void OpAam(struct Machine *, DISPATCH_PARAMETERS);
+void OpAad(struct Machine *, DISPATCH_PARAMETERS);
 
 #endif /* BLINK_ALU_H_ */

@@ -10,14 +10,14 @@
 #define STRING_OUTS 5
 #define STRING_INS  6
 
-void OpMovsb(struct Machine *, u64);
-void OpStosb(struct Machine *, u64);
-void OpMovs(struct Machine *, u64);
-void OpCmps(struct Machine *, u64);
-void OpStos(struct Machine *, u64);
-void OpLods(struct Machine *, u64);
-void OpScas(struct Machine *, u64);
-void OpIns(struct Machine *, u64);
-void OpOuts(struct Machine *, u64);
+void OpMovsb(struct Machine *, DISPATCH_PARAMETERS);
+void OpStosb(struct Machine *, DISPATCH_PARAMETERS);
+void OpMovs(struct Machine *, DISPATCH_PARAMETERS);
+void OpCmps(struct Machine *, DISPATCH_PARAMETERS);
+void OpStos(struct Machine *, DISPATCH_PARAMETERS);
+void OpLods(struct Machine *, DISPATCH_PARAMETERS);
+void OpScas(struct Machine *, DISPATCH_PARAMETERS);
+void OpIns(struct Machine *, DISPATCH_PARAMETERS);
+void OpOuts(struct Machine *, DISPATCH_PARAMETERS);
 
 #endif /* BLINK_STRING_H_ */

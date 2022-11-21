@@ -1,5 +1,6 @@
 #ifndef TEST_TEST_H_
 #define TEST_TEST_H_
+#include <ctype.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stdarg.h>
@@ -9,13 +10,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define TEST(GROUP, NAME)                                                    \
-  void GROUP##_##NAME(void);                                                 \
-  __attribute__((__constructor__)) void GROUP##_##NAME##_init(void) {        \
-    g_tests.p =                                                              \
-        (struct Test *)realloc(g_tests.p, ++g_tests.n * sizeof(*g_tests.p)); \
-    g_tests.p[g_tests.n - 1].f = GROUP##_##NAME;                             \
-  }                                                                          \
+#define TEST(GROUP, NAME)                                             \
+  void GROUP##_##NAME(void);                                          \
+  __attribute__((__constructor__)) void GROUP##_##NAME##_init(void) { \
+    static struct Test test;                                          \
+    test.func = GROUP##_##NAME;                                       \
+    test.next = g_testing.tests;                                      \
+    g_testing.tests = &test;                                          \
+  }                                                                   \
   void GROUP##_##NAME(void)
 
 #define ASSERT_EQ(WANT, GOT, ...)                                 \
@@ -24,48 +26,65 @@
 #define EXPECT_EQ(WANT, GOT, ...)                                  \
   AssertionInt64(AssertEq, false, "EXPECT_EQ", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
+
 #define ASSERT_NE(WANT, GOT, ...)                                 \
   AssertionInt64(AssertNe, true, "ASSERT_NE", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
 #define EXPECT_NE(WANT, GOT, ...)                                  \
   AssertionInt64(AssertNe, false, "EXPECT_NE", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
+
 #define ASSERT_LE(WANT, GOT, ...)                                 \
   AssertionInt64(AssertLe, true, "ASSERT_LE", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
 #define EXPECT_LE(WANT, GOT, ...)                                  \
   AssertionInt64(AssertLe, false, "EXPECT_LE", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
+
 #define ASSERT_GE(WANT, GOT, ...)                                 \
   AssertionInt64(AssertGe, true, "ASSERT_GE", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
 #define EXPECT_GE(WANT, GOT, ...)                                  \
   AssertionInt64(AssertGe, false, "EXPECT_GE", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
+
 #define ASSERT_LT(WANT, GOT, ...)                                 \
   AssertionInt64(AssertLt, true, "ASSERT_LT", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
 #define EXPECT_LT(WANT, GOT, ...)                                  \
   AssertionInt64(AssertLt, false, "EXPECT_LT", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
+
 #define ASSERT_GT(WANT, GOT, ...)                                 \
   AssertionInt64(AssertGt, true, "ASSERT_GT", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
 #define EXPECT_GT(WANT, GOT, ...)                                  \
   AssertionInt64(AssertGt, false, "EXPECT_GT", __FILE__, __LINE__, \
                  __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
+
 #define ASSERT_STREQ(WANT, GOT, ...)                                  \
   AssertionStr(AssertStreq, true, "ASSERT_STREQ", __FILE__, __LINE__, \
                __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
 #define EXPECT_STREQ(WANT, GOT, ...)                                   \
   AssertionStr(AssertStreq, false, "EXPECT_STREQ", __FILE__, __LINE__, \
                __FUNCTION__, WANT, #WANT, GOT, #GOT, " " __VA_ARGS__)
+
+#define ASSERT_NOTNULL(GOT, ...)                                       \
+  AssertionInt64(AssertNe, true, "ASSERT_NOTNULL", __FILE__, __LINE__, \
+                 __FUNCTION__, 0, "NULL", (i64)(intptr_t)(GOT), #GOT,  \
+                 " " __VA_ARGS__)
+#define EXPECT_NOTNULL(GOT, ...)                                        \
+  AssertionInt64(AssertNe, false, "EXPECT_NOTNULL", __FILE__, __LINE__, \
+                 __FUNCTION__, 0, "NULL", (i64)(intptr_t)(GOT), #GOT,   \
+                 " " __VA_ARGS__)
+
 #define ASSERT_TRUE(GOT, ...)                                            \
   AssertionBool(true, true, __FILE__, __LINE__, __FUNCTION__, GOT, #GOT, \
                 " " __VA_ARGS__)
 #define EXPECT_TRUE(GOT, ...)                                             \
   AssertionBool(true, false, __FILE__, __LINE__, __FUNCTION__, GOT, #GOT, \
                 " " __VA_ARGS__)
+
 #define ASSERT_FALSE(GOT, ...)                                            \
   AssertionBool(false, true, __FILE__, __LINE__, __FUNCTION__, GOT, #GOT, \
                 " " __VA_ARGS__)
@@ -91,16 +110,48 @@
   } while (0)
 
 struct Test {
-  void (*f)(void);
+  struct Test *next;
+  void (*func)(void);
 };
 
 struct Tests {
-  int n, f;
-  struct Test *p;
-} g_tests;
+  int fails;
+  struct Test *tests;
+} g_testing;
+
+struct Garbage {
+  struct Garbage *next;
+  void *ptr;
+} *g_garbage;
 
 void SetUp(void);
 void TearDown(void);
+
+void *Gc(void *ptr) {
+  struct Garbage *g;
+  g = (struct Garbage *)malloc(sizeof(struct Garbage));
+  g->ptr = ptr;
+  g->next = g_garbage;
+  g_garbage = g;
+  return ptr;
+}
+
+void Collect(struct Garbage *g) {
+  if (!g) return;
+  Collect(g->next);
+  free(g->ptr);
+  free(g);
+}
+
+char *Format(const char *Format, ...) {
+  char *s;
+  va_list va;
+  s = (char *)Gc(malloc(64));
+  va_start(va, Format);
+  vsnprintf(s, 64, Format, va);
+  va_end(va);
+  return s;
+}
 
 static void AssertionInt64(bool pred(int64_t, int64_t), bool isfatal,
                            const char *test, const char *file, int line,
@@ -120,7 +171,7 @@ static void AssertionInt64(bool pred(int64_t, int64_t), bool isfatal,
     if (isfatal) {
       exit(1);
     } else {
-      ++g_tests.f;
+      ++g_testing.fails;
     }
   }
 }
@@ -131,19 +182,39 @@ static void AssertionStr(bool pred(const char *, const char *), bool isfatal,
                          const char *wantstr, const char *got,
                          const char *gotstr, const char *fmt, ...) {
   va_list va;
+  char *gotcopy;
+  char *wantcopy;
   if (!pred(want, got)) {
     fprintf(stderr, "error:%s:%d: %s() %s failed:", file, line, func, test);
     va_start(va, fmt);
     vfprintf(stderr, fmt, va);
     va_end(va);
+    // we should ideally display an escaped version, but this should be
+    // sufficient to not lose one's mind, when the strings are the same
+    // but one of them contains invisible ansi escape sequences.
+    gotcopy = strdup(got);
+    wantcopy = strdup(want);
+    for (long i = 0; gotcopy[i]; ++i) {
+      if (!isprint(gotcopy[i])) {
+        gotcopy[i] = '?';
+      }
+    }
+    for (long i = 0; wantcopy[i]; ++i) {
+      if (!isprint(wantcopy[i])) {
+        wantcopy[i] = '?';
+      }
+    }
     fprintf(stderr,
-            "\n\twant %s (%s)\n"
+            "\n"
+            "\twant %s (%s)\n"
             "\tgot  %s (%s)\n",
-            want, wantstr, got, gotstr);
+            wantcopy, wantstr, gotcopy, gotstr);
+    free(gotcopy);
+    free(wantcopy);
     if (isfatal) {
       exit(1);
     } else {
-      ++g_tests.f;
+      ++g_testing.fails;
     }
   }
 }
@@ -162,7 +233,7 @@ static void AssertionBool(bool need, bool isfatal, const char *file, int line,
     if (isfatal) {
       exit(1);
     } else {
-      ++g_tests.f;
+      ++g_testing.fails;
     }
   }
 }
@@ -196,13 +267,14 @@ static bool AssertGt(int64_t want, int64_t got) {
 }
 
 int main(int argc, char *argv[]) {
-  size_t i;
-  for (i = 0; i < g_tests.n; ++i) {
+  struct Test *test;
+  for (test = g_testing.tests; test; test = test->next) {
     SetUp();
-    g_tests.p[i].f();
+    test->func();
     TearDown();
+    Collect(g_garbage);
   }
-  return g_tests.f;
+  return g_testing.fails;
 }
 
 #endif /* TEST_TEST_H_ */

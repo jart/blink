@@ -21,8 +21,7 @@ o/$(MODE)/x86_64/test/asm/%.elf.ok:					\
 
 o/$(MODE)/x86_64/test/asm/%.elf:					\
 		o/$(MODE)/x86_64/test/asm/%.o				\
-		o/$(MODE)/x86_64/test/asm/elf.o				\
-		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-ld.bfd	\
+		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc	\
 		test/asm/asm.lds
 	$(TEST_ASM_LINK)
 
@@ -39,6 +38,7 @@ o/$(MODE)/test/asm:							\
 o/$(MODE)/test/asm/%.com:						\
 		o/$(MODE)/x86_64/test/asm/%.elf				\
 		o/$(MODE)/blink/blink
+	@mkdir -p $(@D)
 	echo "#!/bin/sh" >$@
 	echo "echo testing $<" >>$@
 	echo "$(VM) $< || exit" >>$@

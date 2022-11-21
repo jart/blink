@@ -4,7 +4,7 @@
 #include "blink/machine.h"
 #include "blink/types.h"
 
-void OpSyscall(struct Machine *, u64);
+void OpSyscall(struct Machine *, DISPATCH_PARAMETERS);
 
 int OpClose(struct System *, i32);
 int OpCloseRange(struct System *, u32, u32, u32);

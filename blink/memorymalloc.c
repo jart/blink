@@ -28,6 +28,7 @@
 #include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/dll.h"
+#include "blink/end.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/jit.h"
@@ -48,8 +49,6 @@
 #ifndef MAP_NORESERVE
 #define MAP_NORESERVE 0
 #endif
-
-extern char end[];
 
 static void FillPage(u8 *p, int c) {
   IGNORE_RACES_START();
@@ -94,7 +93,7 @@ static void FreeSystemRealFree(struct System *s) {
 struct System *NewSystem(void) {
   void *p;
   struct System *s;
-  if ((p = mmap(end + JIT_RESERVE, MAX_MEMORY, PROT_NONE,
+  if ((p = mmap(END_OF_IMAGE + JIT_RESERVE, MAX_MEMORY, PROT_NONE,
                 MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0)) ==
       MAP_FAILED) {
     LOGF("could not register %zu bytes of memory: %s", MAX_MEMORY,
@@ -147,6 +146,7 @@ void FreeSystem(struct System *s) {
   DestroyFds(&s->fds);
   DestroyJit(&s->jit);
   free(s->fun);
+  free(s);
 }
 
 static void AssignTid(struct Machine *m) {

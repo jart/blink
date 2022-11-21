@@ -19,7 +19,7 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 
-void OpCpuid(struct Machine *m, u64 rde) {
+void OpCpuid(struct Machine *m, DISPATCH_PARAMETERS) {
   u32 ax, bx, cx, dx;
   ax = 0;
   bx = 0;

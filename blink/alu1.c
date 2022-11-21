@@ -27,9 +27,9 @@
 #include "blink/mop.h"
 #include "blink/swap.h"
 
-static void AluEb(struct Machine *m, u64 rde, aluop_f op) {
+static void AluEb(struct Machine *m, DISPATCH_PARAMETERS, aluop_f op) {
   u8 *p;
-  p = GetModrmRegisterBytePointerWrite(m, rde);
+  p = GetModrmRegisterBytePointerWrite(m, DISPATCH_ARGUMENTS);
   if (!Lock(rde)) {
     Store8(p, op(Load8(p), 0, &m->flags));
   } else {
@@ -41,36 +41,37 @@ static void AluEb(struct Machine *m, u64 rde, aluop_f op) {
     } while (!atomic_compare_exchange_weak_explicit(
         (atomic_uchar *)p, &x, z, memory_order_release, memory_order_relaxed));
 #else
-    OpUd(m, rde);
+    OpUdImpl(m);
 #endif
   }
 }
 
-void OpNotEb(struct Machine *m, u64 rde) {
-  AluEb(m, rde, Not8);
+void OpNotEb(struct Machine *m, DISPATCH_PARAMETERS) {
+  AluEb(m, DISPATCH_ARGUMENTS, Not8);
 }
 
-void OpNegEb(struct Machine *m, u64 rde) {
-  AluEb(m, rde, Neg8);
+void OpNegEb(struct Machine *m, DISPATCH_PARAMETERS) {
+  AluEb(m, DISPATCH_ARGUMENTS, Neg8);
 }
 
-void Op0fe(struct Machine *m, u64 rde) {
+void Op0fe(struct Machine *m, DISPATCH_PARAMETERS) {
   switch (ModrmReg(rde)) {
     case 0:
-      AluEb(m, rde, Inc8);
+      AluEb(m, DISPATCH_ARGUMENTS, Inc8);
       break;
     case 1:
-      AluEb(m, rde, Dec8);
+      AluEb(m, DISPATCH_ARGUMENTS, Dec8);
       break;
     default:
-      OpUd(m, rde);
+      OpUdImpl(m);
   }
 }
 
-static void AluEvqp(struct Machine *m, u64 rde, const aluop_f ops[4]) {
+static void AluEvqp(struct Machine *m, DISPATCH_PARAMETERS,
+                    const aluop_f ops[4]) {
   u8 *p;
   if (Rexw(rde)) {
-    p = GetModrmRegisterWordPointerWrite(m, rde, 8);
+    p = GetModrmRegisterWordPointerWrite8(m, DISPATCH_ARGUMENTS);
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64
       unsigned long x, z;
@@ -81,14 +82,14 @@ static void AluEvqp(struct Machine *m, u64 rde, const aluop_f ops[4]) {
                                                       memory_order_release,
                                                       memory_order_relaxed));
 #else
-      OpUd(m, rde);
+      OpUdImpl(m);
 #endif
     } else {
       Store64(p, ops[ALU_INT64](Load64(p), 0, &m->flags));
     }
   } else if (!Osz(rde)) {
     unsigned int x, z;
-    p = GetModrmRegisterWordPointerWrite(m, rde, 4);
+    p = GetModrmRegisterWordPointerWrite4(m, DISPATCH_ARGUMENTS);
     if (Lock(rde) && !((intptr_t)p & 3)) {
       x = atomic_load_explicit((atomic_uint *)p, memory_order_acquire);
       do {
@@ -103,23 +104,23 @@ static void AluEvqp(struct Machine *m, u64 rde, const aluop_f ops[4]) {
     }
   } else {
     unassert(!Lock(rde));
-    p = GetModrmRegisterWordPointerWrite(m, rde, 2);
+    p = GetModrmRegisterWordPointerWrite2(m, DISPATCH_ARGUMENTS);
     Store16(p, ops[ALU_INT16](Load16(p), 0, &m->flags));
   }
 }
 
-void OpNotEvqp(struct Machine *m, u64 rde) {
-  AluEvqp(m, rde, kAlu[ALU_NOT]);
+void OpNotEvqp(struct Machine *m, DISPATCH_PARAMETERS) {
+  AluEvqp(m, DISPATCH_ARGUMENTS, kAlu[ALU_NOT]);
 }
 
-void OpNegEvqp(struct Machine *m, u64 rde) {
-  AluEvqp(m, rde, kAlu[ALU_NEG]);
+void OpNegEvqp(struct Machine *m, DISPATCH_PARAMETERS) {
+  AluEvqp(m, DISPATCH_ARGUMENTS, kAlu[ALU_NEG]);
 }
 
-void OpIncEvqp(struct Machine *m, u64 rde) {
-  AluEvqp(m, rde, kAlu[ALU_INC]);
+void OpIncEvqp(struct Machine *m, DISPATCH_PARAMETERS) {
+  AluEvqp(m, DISPATCH_ARGUMENTS, kAlu[ALU_INC]);
 }
 
-void OpDecEvqp(struct Machine *m, u64 rde) {
-  AluEvqp(m, rde, kAlu[ALU_DEC]);
+void OpDecEvqp(struct Machine *m, DISPATCH_PARAMETERS) {
+  AluEvqp(m, DISPATCH_ARGUMENTS, kAlu[ALU_DEC]);
 }

@@ -328,16 +328,14 @@ static void MmxPsubusw(u8 x[8], const u8 y[8]) {
 static void MmxPminsw(u8 x[8], const u8 y[8]) {
   unsigned i;
   for (i = 0; i < 4; ++i) {
-    Write16(x + i * 2,
-            MIN((i16)Read16(x + i * 2), (i16)Read16(y + i * 2)));
+    Write16(x + i * 2, MIN((i16)Read16(x + i * 2), (i16)Read16(y + i * 2)));
   }
 }
 
 static void MmxPmaxsw(u8 x[8], const u8 y[8]) {
   unsigned i;
   for (i = 0; i < 4; ++i) {
-    Write16(x + i * 2,
-            MAX((i16)Read16(x + i * 2), (i16)Read16(y + i * 2)));
+    Write16(x + i * 2, MAX((i16)Read16(x + i * 2), (i16)Read16(y + i * 2)));
   }
 }
 
@@ -380,8 +378,7 @@ static void MmxPackssdw(u8 x[8], const u8 y[8]) {
 static void MmxPcmpgtw(u8 x[8], const u8 y[8]) {
   unsigned i;
   for (i = 0; i < 4; ++i) {
-    Write16(x + i * 2,
-            -((i16)Read16(x + i * 2) > (i16)Read16(y + i * 2)));
+    Write16(x + i * 2, -((i16)Read16(x + i * 2) > (i16)Read16(y + i * 2)));
   }
 }
 
@@ -395,8 +392,7 @@ static void MmxPcmpeqw(u8 x[8], const u8 y[8]) {
 static void MmxPcmpgtd(u8 x[8], const u8 y[8]) {
   unsigned i;
   for (i = 0; i < 2; ++i) {
-    Write32(x + i * 4,
-            -((i32)Read32(x + i * 4) > (i32)Read32(y + i * 4)));
+    Write32(x + i * 4, -((i32)Read32(x + i * 4) > (i32)Read32(y + i * 4)));
   }
 }
 
@@ -537,8 +533,7 @@ static void MmxPmulhuw(u8 x[8], const u8 y[8]) {
 static void MmxPmulhw(u8 x[8], const u8 y[8]) {
   unsigned i;
   for (i = 0; i < 4; ++i) {
-    Write16(x + i * 2,
-            ((i16)Read16(x + i * 2) * (i16)Read16(y + i * 2)) >> 16);
+    Write16(x + i * 2, ((i16)Read16(x + i * 2) * (i16)Read16(y + i * 2)) >> 16);
   }
 }
 
@@ -1420,159 +1415,161 @@ static void SsePmaddubsw(u8 x[16], const u8 y[16]) {
   MmxPmaddubsw(x + 8, y + 8);
 }
 
-static void OpPsb(struct Machine *m, u64 rde,
+static void OpPsb(struct Machine *m, DISPATCH_PARAMETERS,
                   void MmxKernel(u8[8], unsigned),
                   void SseKernel(u8[16], unsigned)) {
   if (Osz(rde)) {
-    SseKernel(XmmRexbRm(m, rde), m->xedd->op.uimm0);
+    SseKernel(XmmRexbRm(m, rde), uimm0);
   } else {
-    MmxKernel(XmmRexbRm(m, rde), m->xedd->op.uimm0);
+    MmxKernel(XmmRexbRm(m, rde), uimm0);
   }
 }
 
-void Op171(struct Machine *m, u64 rde) {
+void Op171(struct Machine *m, DISPATCH_PARAMETERS) {
   switch (ModrmReg(rde)) {
     case 2:
-      OpPsb(m, rde, MmxPsrlw, SsePsrlw);
+      OpPsb(m, DISPATCH_ARGUMENTS, MmxPsrlw, SsePsrlw);
       break;
     case 4:
-      OpPsb(m, rde, MmxPsraw, SsePsraw);
+      OpPsb(m, DISPATCH_ARGUMENTS, MmxPsraw, SsePsraw);
       break;
     case 6:
-      OpPsb(m, rde, MmxPsllw, SsePsllw);
+      OpPsb(m, DISPATCH_ARGUMENTS, MmxPsllw, SsePsllw);
       break;
     default:
-      OpUd(m, rde);
+      OpUdImpl(m);
   }
 }
 
-void Op172(struct Machine *m, u64 rde) {
+void Op172(struct Machine *m, DISPATCH_PARAMETERS) {
   switch (ModrmReg(rde)) {
     case 2:
-      OpPsb(m, rde, MmxPsrld, SsePsrld);
+      OpPsb(m, DISPATCH_ARGUMENTS, MmxPsrld, SsePsrld);
       break;
     case 4:
-      OpPsb(m, rde, MmxPsrad, SsePsrad);
+      OpPsb(m, DISPATCH_ARGUMENTS, MmxPsrad, SsePsrad);
       break;
     case 6:
-      OpPsb(m, rde, MmxPslld, SsePslld);
+      OpPsb(m, DISPATCH_ARGUMENTS, MmxPslld, SsePslld);
       break;
     default:
-      OpUd(m, rde);
+      OpUdImpl(m);
   }
 }
 
-void Op173(struct Machine *m, u64 rde) {
+void Op173(struct Machine *m, DISPATCH_PARAMETERS) {
   switch (ModrmReg(rde)) {
     case 2:
-      OpPsb(m, rde, MmxPsrlq, SsePsrlq);
+      OpPsb(m, DISPATCH_ARGUMENTS, MmxPsrlq, SsePsrlq);
       break;
     case 3:
-      OpPsb(m, rde, MmxPsrldq, SsePsrldq);
+      OpPsb(m, DISPATCH_ARGUMENTS, MmxPsrldq, SsePsrldq);
       break;
     case 6:
-      OpPsb(m, rde, MmxPsllq, SsePsllq);
+      OpPsb(m, DISPATCH_ARGUMENTS, MmxPsllq, SsePsllq);
       break;
     case 7:
-      OpPsb(m, rde, MmxPslldq, SsePslldq);
+      OpPsb(m, DISPATCH_ARGUMENTS, MmxPslldq, SsePslldq);
       break;
     default:
-      OpUd(m, rde);
+      OpUdImpl(m);
   }
 }
 
-void OpSsePalignr(struct Machine *m, u64 rde) {
+void OpSsePalignr(struct Machine *m, DISPATCH_PARAMETERS) {
   if (Osz(rde)) {
-    SsePalignr(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead16(m, rde),
-               m->xedd->op.uimm0);
+    SsePalignr(XmmRexrReg(m, rde),
+               GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS), uimm0);
   } else {
-    MmxPalignr(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead8(m, rde),
-               m->xedd->op.uimm0);
+    MmxPalignr(XmmRexrReg(m, rde),
+               GetModrmRegisterXmmPointerRead8(m, DISPATCH_ARGUMENTS), uimm0);
   }
 }
 
-static void OpSse(struct Machine *m, u64 rde,
+static void OpSse(struct Machine *m, DISPATCH_PARAMETERS,
                   void MmxKernel(u8[8], const u8[8]),
                   void SseKernel(u8[16], const u8[16])) {
   if (Osz(rde)) {
-    SseKernel(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead16(m, rde));
+    SseKernel(XmmRexrReg(m, rde),
+              GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS));
   } else {
-    MmxKernel(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead8(m, rde));
+    MmxKernel(XmmRexrReg(m, rde),
+              GetModrmRegisterXmmPointerRead8(m, DISPATCH_ARGUMENTS));
   }
 }
 
 /* clang-format off */
-void OpSsePunpcklbw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpcklbw, SsePunpcklbw); }
-void OpSsePunpcklwd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpcklwd, SsePunpcklwd); }
-void OpSsePunpckldq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpckldq, SsePunpckldq); }
-void OpSsePacksswb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPacksswb, SsePacksswb); }
-void OpSsePcmpgtb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpgtb, SsePcmpgtb); }
-void OpSsePcmpgtw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpgtw, SsePcmpgtw); }
-void OpSsePcmpgtd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpgtd, SsePcmpgtd); }
-void OpSsePackuswb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPackuswb, SsePackuswb); }
-void OpSsePunpckhbw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpckhbw, SsePunpckhbw); }
-void OpSsePunpckhwd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpckhwd, SsePunpckhwd); }
-void OpSsePunpckhdq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpckhdq, SsePunpckhdq); }
-void OpSsePackssdw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPackssdw, SsePackssdw); }
-void OpSsePunpcklqdq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpcklqdq, SsePunpcklqdq); }
-void OpSsePunpckhqdq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPunpckhqdq, SsePunpckhqdq); }
-void OpSsePcmpeqb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpeqb, SsePcmpeqb); }
-void OpSsePcmpeqw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpeqw, SsePcmpeqw); }
-void OpSsePcmpeqd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPcmpeqd, SsePcmpeqd); }
-void OpSsePsrlwv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsrlwv, SsePsrlwv); }
-void OpSsePsrldv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsrldv, SsePsrldv); }
-void OpSsePsrlqv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsrlqv, SsePsrlqv); }
-void OpSsePaddq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddq, SsePaddq); }
-void OpSsePmullw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmullw, SsePmullw); }
-void OpSsePsubusb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubusb, SsePsubusb); }
-void OpSsePsubusw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubusw, SsePsubusw); }
-void OpSsePminub(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPminub, SsePminub); }
-void OpSsePand(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPand, SsePand); }
-void OpSsePaddusb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddusb, SsePaddusb); }
-void OpSsePaddusw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddusw, SsePaddusw); }
-void OpSsePmaxub(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmaxub, SsePmaxub); }
-void OpSsePandn(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPandn, SsePandn); }
-void OpSsePavgb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPavgb, SsePavgb); }
-void OpSsePsrawv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsrawv, SsePsrawv); }
-void OpSsePsradv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsradv, SsePsradv); }
-void OpSsePavgw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPavgw, SsePavgw); }
-void OpSsePmulhuw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmulhuw, SsePmulhuw); }
-void OpSsePmulhw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmulhw, SsePmulhw); }
-void OpSsePsubsb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubsb, SsePsubsb); }
-void OpSsePsubsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubsw, SsePsubsw); }
-void OpSsePminsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPminsw, SsePminsw); }
-void OpSsePor(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPor, SsePor); }
-void OpSsePaddsb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddsb, SsePaddsb); }
-void OpSsePaddsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddsw, SsePaddsw); }
-void OpSsePmaxsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmaxsw, SsePmaxsw); }
-void OpSsePxor(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPxor, SsePxor); }
-void OpSsePsllwv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsllwv, SsePsllwv); }
-void OpSsePslldv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPslldv, SsePslldv); }
-void OpSsePsllqv(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsllqv, SsePsllqv); }
-void OpSsePmuludq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmuludq, SsePmuludq); }
-void OpSsePmaddwd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmaddwd, SsePmaddwd); }
-void OpSsePsadbw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsadbw, SsePsadbw); }
-void OpSsePsubb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubb, SsePsubb); }
-void OpSsePsubw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubw, SsePsubw); }
-void OpSsePsubd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubd, SsePsubd); }
-void OpSsePsubq(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsubq, SsePsubq); }
-void OpSsePaddb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddb, SsePaddb); }
-void OpSsePaddw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddw, SsePaddw); }
-void OpSsePaddd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPaddd, SsePaddd); }
-void OpSsePshufb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPshufb, SsePshufb); }
-void OpSsePhaddw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhaddw, SsePhaddw); }
-void OpSsePhaddd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhaddd, SsePhaddd); }
-void OpSsePhaddsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhaddsw, SsePhaddsw); }
-void OpSsePmaddubsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmaddubsw, SsePmaddubsw); }
-void OpSsePhsubw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhsubw, SsePhsubw); }
-void OpSsePhsubd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhsubd, SsePhsubd); }
-void OpSsePhsubsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPhsubsw, SsePhsubsw); }
-void OpSsePsignb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsignb, SsePsignb); }
-void OpSsePsignw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsignw, SsePsignw); }
-void OpSsePsignd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPsignd, SsePsignd); }
-void OpSsePmulhrsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmulhrsw, SsePmulhrsw); }
-void OpSsePabsb(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPabsb, SsePabsb); }
-void OpSsePabsw(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPabsw, SsePabsw); }
-void OpSsePabsd(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPabsd, SsePabsd); }
-void OpSsePmulld(struct Machine *m, u64 rde) { OpSse(m, rde, MmxPmulld, SsePmulld); }
+void OpSsePunpcklbw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPunpcklbw, SsePunpcklbw); }
+void OpSsePunpcklwd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPunpcklwd, SsePunpcklwd); }
+void OpSsePunpckldq(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPunpckldq, SsePunpckldq); }
+void OpSsePacksswb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPacksswb, SsePacksswb); }
+void OpSsePcmpgtb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPcmpgtb, SsePcmpgtb); }
+void OpSsePcmpgtw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPcmpgtw, SsePcmpgtw); }
+void OpSsePcmpgtd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPcmpgtd, SsePcmpgtd); }
+void OpSsePackuswb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPackuswb, SsePackuswb); }
+void OpSsePunpckhbw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPunpckhbw, SsePunpckhbw); }
+void OpSsePunpckhwd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPunpckhwd, SsePunpckhwd); }
+void OpSsePunpckhdq(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPunpckhdq, SsePunpckhdq); }
+void OpSsePackssdw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPackssdw, SsePackssdw); }
+void OpSsePunpcklqdq(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPunpcklqdq, SsePunpcklqdq); }
+void OpSsePunpckhqdq(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPunpckhqdq, SsePunpckhqdq); }
+void OpSsePcmpeqb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPcmpeqb, SsePcmpeqb); }
+void OpSsePcmpeqw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPcmpeqw, SsePcmpeqw); }
+void OpSsePcmpeqd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPcmpeqd, SsePcmpeqd); }
+void OpSsePsrlwv(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsrlwv, SsePsrlwv); }
+void OpSsePsrldv(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsrldv, SsePsrldv); }
+void OpSsePsrlqv(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsrlqv, SsePsrlqv); }
+void OpSsePaddq(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPaddq, SsePaddq); }
+void OpSsePmullw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPmullw, SsePmullw); }
+void OpSsePsubusb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsubusb, SsePsubusb); }
+void OpSsePsubusw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsubusw, SsePsubusw); }
+void OpSsePminub(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPminub, SsePminub); }
+void OpSsePand(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPand, SsePand); }
+void OpSsePaddusb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPaddusb, SsePaddusb); }
+void OpSsePaddusw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPaddusw, SsePaddusw); }
+void OpSsePmaxub(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPmaxub, SsePmaxub); }
+void OpSsePandn(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPandn, SsePandn); }
+void OpSsePavgb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPavgb, SsePavgb); }
+void OpSsePsrawv(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsrawv, SsePsrawv); }
+void OpSsePsradv(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsradv, SsePsradv); }
+void OpSsePavgw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPavgw, SsePavgw); }
+void OpSsePmulhuw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPmulhuw, SsePmulhuw); }
+void OpSsePmulhw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPmulhw, SsePmulhw); }
+void OpSsePsubsb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsubsb, SsePsubsb); }
+void OpSsePsubsw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsubsw, SsePsubsw); }
+void OpSsePminsw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPminsw, SsePminsw); }
+void OpSsePor(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPor, SsePor); }
+void OpSsePaddsb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPaddsb, SsePaddsb); }
+void OpSsePaddsw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPaddsw, SsePaddsw); }
+void OpSsePmaxsw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPmaxsw, SsePmaxsw); }
+void OpSsePxor(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPxor, SsePxor); }
+void OpSsePsllwv(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsllwv, SsePsllwv); }
+void OpSsePslldv(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPslldv, SsePslldv); }
+void OpSsePsllqv(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsllqv, SsePsllqv); }
+void OpSsePmuludq(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPmuludq, SsePmuludq); }
+void OpSsePmaddwd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPmaddwd, SsePmaddwd); }
+void OpSsePsadbw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsadbw, SsePsadbw); }
+void OpSsePsubb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsubb, SsePsubb); }
+void OpSsePsubw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsubw, SsePsubw); }
+void OpSsePsubd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsubd, SsePsubd); }
+void OpSsePsubq(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsubq, SsePsubq); }
+void OpSsePaddb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPaddb, SsePaddb); }
+void OpSsePaddw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPaddw, SsePaddw); }
+void OpSsePaddd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPaddd, SsePaddd); }
+void OpSsePshufb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPshufb, SsePshufb); }
+void OpSsePhaddw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPhaddw, SsePhaddw); }
+void OpSsePhaddd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPhaddd, SsePhaddd); }
+void OpSsePhaddsw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPhaddsw, SsePhaddsw); }
+void OpSsePmaddubsw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPmaddubsw, SsePmaddubsw); }
+void OpSsePhsubw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPhsubw, SsePhsubw); }
+void OpSsePhsubd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPhsubd, SsePhsubd); }
+void OpSsePhsubsw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPhsubsw, SsePhsubsw); }
+void OpSsePsignb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsignb, SsePsignb); }
+void OpSsePsignw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsignw, SsePsignw); }
+void OpSsePsignd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPsignd, SsePsignd); }
+void OpSsePmulhrsw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPmulhrsw, SsePmulhrsw); }
+void OpSsePabsb(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPabsb, SsePabsb); }
+void OpSsePabsw(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPabsw, SsePabsw); }
+void OpSsePabsd(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPabsd, SsePabsd); }
+void OpSsePmulld(struct Machine *m, DISPATCH_PARAMETERS) { OpSse(m, DISPATCH_ARGUMENTS, MmxPmulld, SsePmulld); }
 /* clang-format on */
