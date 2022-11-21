@@ -120,6 +120,7 @@ struct XedDecodedInst {
   struct XedOperands op;
 };
 
+extern const char kXedCopyright[];
 extern const char kXedErrorNames[];
 
 struct XedDecodedInst *InitializeInstruction(struct XedDecodedInst *, int);
