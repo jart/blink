@@ -855,7 +855,7 @@ static int OpFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
   if (cmd == F_GETFD_LINUX) {
     rc = fd->cloexec ? FD_CLOEXEC_LINUX : 0;
   } else if (cmd == F_GETFL_LINUX) {
-    rc = UnXlatOpenMode(fd->oflags);
+    rc = UnXlatOpenFlags(fd->oflags);
   } else if (cmd == F_SETFD_LINUX) {
     if (!(arg & ~FD_CLOEXEC_LINUX)) {
       if (fcntl(fd->systemfd, F_SETFD, arg ? FD_CLOEXEC : 0) != -1) {

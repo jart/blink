@@ -1,6 +1,14 @@
 #-*-mode:makefile-gmake;indent-tabs-mode:t;tab-width:8;coding:utf-8-*-┐
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
+o/$(MODE)/%.o: %.s
+	@mkdir -p $(@D)
+	$(AS) -o $@ $<
+
+o/$(MODE)/%.o: %.S
+	@mkdir -p $(@D)
+	$(CC) $(CPPFLAGS) -c -o $@ $<
+
 o/$(MODE)/%.o: %.c
 	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<

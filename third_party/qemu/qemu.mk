@@ -3,7 +3,7 @@
 
 third_party/qemu/%.xz: third_party/qemu/%.xz.sha256
 	curl -so $@ https://justine.lol/compilers/$(notdir $@)
-	build/bootstrap/sha256sum.com $<
+	$(VM) build/bootstrap/sha256sum.com $<
 
 o/third_party/qemu/qemu-aarch64: third_party/qemu/qemu-aarch64-static.xz
 	@mkdir -p $(@D)

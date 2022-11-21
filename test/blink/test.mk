@@ -5,6 +5,7 @@ PKGS += TEST_BLINK
 TEST_BLINK_FILES := $(wildcard test/blink/*)
 TEST_BLINK_SRCS = $(filter %.c,$(TEST_BLINK_FILES))
 TEST_BLINK_HDRS = $(filter %.h,$(TEST_BLINK_FILES))
+TEST_BLINK_OBJS = $(TEST_BLINK_SRCS:%.c=o/$(MODE)/%.o)
 
 o/$(MODE)/test/blink/machine_test.com: o/$(MODE)/test/blink/machine_test.o o/$(MODE)/blink/blink.a
 	$(CC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
@@ -227,12 +228,14 @@ o/$(MODE)/powerpc64le/test/blink/fds_test.com: o/$(MODE)/powerpc64le/test/blink/
 #		o/$(MODE)/microblaze/test/blink/machine_test.com.runs
 
 o/$(MODE)/test/blink:							\
+		$(TEST_BLINK_OBJS)					\
 		o/$(MODE)/test/blink/machine_test.com.runs		\
 		o/$(MODE)/test/blink/divmul_test.com.runs		\
 		o/$(MODE)/test/blink/modrm_test.com.runs		\
 		o/$(MODE)/test/blink/iovs_test.com.runs			\
 		o/$(MODE)/test/blink/x86_test.com.runs			\
 		o/$(MODE)/test/blink/ldbl_test.com.runs			\
+		o/$(MODE)/test/blink/fds_test.com.runs
 
 o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/blink/blink					\
@@ -347,4 +350,18 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/s390x/test/blink/ldbl_test.com.runs		\
 		o/$(MODE)/microblaze/test/blink/ldbl_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/ldbl_test.com.runs		\
-		o/$(MODE)/powerpc64le/test/blink/ldbl_test.com.runs
+		o/$(MODE)/powerpc64le/test/blink/ldbl_test.com.runs	\
+		o/$(MODE)/i486/test/blink/fds_test.com.runs		\
+		o/$(MODE)/m68k/test/blink/fds_test.com.runs		\
+		o/$(MODE)/x86_64/test/blink/fds_test.com.runs		\
+		o/$(MODE)/arm/test/blink/fds_test.com.runs		\
+		o/$(MODE)/aarch64/test/blink/fds_test.com.runs		\
+		o/$(MODE)/riscv64/test/blink/fds_test.com.runs		\
+		o/$(MODE)/mips/test/blink/fds_test.com.runs		\
+		o/$(MODE)/mipsel/test/blink/fds_test.com.runs		\
+		o/$(MODE)/mips64/test/blink/fds_test.com.runs		\
+		o/$(MODE)/mips64el/test/blink/fds_test.com.runs		\
+		o/$(MODE)/s390x/test/blink/fds_test.com.runs		\
+		o/$(MODE)/microblaze/test/blink/fds_test.com.runs	\
+		o/$(MODE)/powerpc/test/blink/fds_test.com.runs		\
+		o/$(MODE)/powerpc64le/test/blink/fds_test.com.runs

@@ -588,7 +588,7 @@ static void TuiRejuvinate(void) {
       ~(IEXTEN | ICANON | ECHO | ECHOE | ECHONL | NOFLSH | TOSTOP | ECHOK);
   term.c_cflag &= ~(CSIZE | PARENB);
   term.c_cflag |= CS8 | CREAD;
-  term.c_oflag &= ~OPOST;
+  term.c_oflag |= OPOST | ONLCR;
 #ifdef IMAXBEL
   term.c_iflag &= ~IMAXBEL;
 #endif
@@ -1883,12 +1883,12 @@ static size_t GetLastIndex(size_t size, unsigned unit, int i, unsigned limit) {
 }
 
 static void OnDiskServiceReset(void) {
-  m->ax[1] = 0x00;
+  m->ah = 0x00;
   SetCarry(false);
 }
 
 static void OnDiskServiceBadCommand(void) {
-  m->ax[1] = 0x01;
+  m->ah = 0x01;
   SetCarry(true);
 }
 
@@ -1897,11 +1897,11 @@ static void OnDiskServiceGetParams(void) {
   lastcylinder = GetLastIndex(elf->mapsize, 512 * 63 * 255, 0, 1023);
   lasthead = GetLastIndex(elf->mapsize, 512 * 63, 0, 255);
   lastsector = GetLastIndex(elf->mapsize, 512, 1, 63);
-  m->dx[0] = 1;
-  m->dx[1] = lasthead;
-  m->cx[0] = lastcylinder >> 8 << 6 | lastsector;
-  m->cx[1] = lastcylinder;
-  m->ax[1] = 0;
+  m->dl = 1;
+  m->dh = lasthead;
+  m->cl = lastcylinder >> 8 << 6 | lastsector;
+  m->ch = lastcylinder;
+  m->ah = 0;
   Write64(m->es, 0);
   Write16(m->di, 0);
   SetCarry(false);
@@ -1910,11 +1910,11 @@ static void OnDiskServiceGetParams(void) {
 static void OnDiskServiceReadSectors(void) {
   i64 addr, size;
   i64 sectors, drive, head, cylinder, sector, offset;
-  sectors = m->ax[0];
-  drive = m->dx[0];
-  head = m->dx[1];
-  cylinder = (m->cx[0] & 192) << 2 | m->cx[1];
-  sector = (m->cx[0] & 63) - 1;
+  sectors = m->al;
+  drive = m->dl;
+  head = m->dh;
+  cylinder = (m->cl & 192) << 2 | m->ch;
+  sector = (m->cl & 63) - 1;
   size = sectors * 512;
   offset = sector * 512 + head * 512 * 63 + cylinder * 512 * 63 * 255;
   (void)drive;
@@ -1927,25 +1927,25 @@ static void OnDiskServiceReadSectors(void) {
     if (addr + size <= GetRealMemorySize(m->system)) {
       SetWriteAddr(m, addr, size);
       memcpy(m->system->real.p + addr, elf->map + offset, size);
-      m->ax[1] = 0x00;
+      m->ah = 0x00;
       SetCarry(false);
     } else {
-      m->ax[0] = 0x00;
-      m->ax[1] = 0x02;
+      m->al = 0x00;
+      m->ah = 0x02;
       SetCarry(true);
     }
   } else {
     LOGF("bios read sector failed 0 <= %" PRId64 " && %" PRIx64 " + %" PRIx64
          " <= %" PRIx64 "",
          sector, offset, size, elf->mapsize);
-    m->ax[0] = 0x00;
-    m->ax[1] = 0x0d;
+    m->al = 0x00;
+    m->ah = 0x0d;
     SetCarry(true);
   }
 }
 
 static void OnDiskService(void) {
-  switch (m->ax[1]) {
+  switch (m->ah) {
     case 0x00:
       OnDiskServiceReset();
       break;
@@ -1963,28 +1963,28 @@ static void OnDiskService(void) {
 
 static void OnVidyaServiceSetMode(void) {
   if (FindReal(m, 0xB0000)) {
-    vidya = m->ax[0];
+    vidya = m->al;
   } else {
     LOGF("maybe you forgot -r flag");
   }
 }
 
 static void OnVidyaServiceGetMode(void) {
-  m->ax[0] = vidya;
-  m->ax[1] = 80;  // columns
-  m->bx[1] = 0;   // page
+  m->al = vidya;
+  m->ah = 80;  // columns
+  m->bh = 0;   // page
 }
 
 static void OnVidyaServiceSetCursorPosition(void) {
-  PtySetY(pty, m->dx[1]);
-  PtySetX(pty, m->dx[0]);
+  PtySetY(pty, m->dh);
+  PtySetX(pty, m->dl);
 }
 
 static void OnVidyaServiceGetCursorPosition(void) {
-  m->dx[1] = pty->y;
-  m->dx[0] = pty->x;
-  m->cx[1] = 5;  // cursor ▂ scan lines 5..7 of 0..7
-  m->cx[0] = 7 | !!(pty->conf & kPtyNocursor) << 5;
+  m->dh = pty->y;
+  m->dl = pty->x;
+  m->ch = 5;  // cursor ▂ scan lines 5..7 of 0..7
+  m->cl = 7 | !!(pty->conf & kPtyNocursor) << 5;
 }
 
 static int GetVidyaByte(unsigned char b) {
@@ -1998,9 +1998,9 @@ static void OnVidyaServiceWriteCharacter(void) {
   u64 w;
   char *p, buf[32];
   p = buf;
-  p += FormatCga(m->bx[0], p);
+  p += FormatCga(m->bl, p);
   p = stpcpy(p, "\0337");
-  w = tpenc(GetVidyaByte(m->ax[0]));
+  w = tpenc(GetVidyaByte(m->al));
   do {
     *p++ = w;
   } while ((w >>= 8));
@@ -2027,8 +2027,8 @@ static void OnVidyaServiceTeletypeOutput(void) {
   int n;
   u64 w;
   char buf[12];
-  n = FormatCga(m->bx[0], buf);
-  w = tpenc(VidyaServiceXlatTeletype(m->ax[0]));
+  n = FormatCga(m->bl, buf);
+  w = tpenc(VidyaServiceXlatTeletype(m->al));
   do {
     buf[n++] = w;
   } while ((w >>= 8));
@@ -2036,7 +2036,7 @@ static void OnVidyaServiceTeletypeOutput(void) {
 }
 
 static void OnVidyaService(void) {
-  switch (m->ax[1]) {
+  switch (m->ah) {
     case 0x00:
       OnVidyaServiceSetMode();
       break;
@@ -2075,12 +2075,12 @@ static void OnKeyboardServiceReadKeyPress(void) {
   pty->conf &= ~kPtyBlinkcursor;
   ReactiveDraw();
   if (b == 0x7F) b = '\b';
-  m->ax[0] = b;
-  m->ax[1] = 0;
+  m->al = b;
+  m->ah = 0;
 }
 
 static void OnKeyboardService(void) {
-  switch (m->ax[1]) {
+  switch (m->ah) {
     case 0x00:
       OnKeyboardServiceReadKeyPress();
       break;
@@ -2095,7 +2095,7 @@ static void OnApmService(void) {
     SetCarry(false);
   } else if (Read16(m->ax) == 0x5301 && Read16(m->bx) == 0x0000) {
     SetCarry(false);
-  } else if (Read16(m->ax) == 0x5307 && m->bx[0] == 1 && m->cx[0] == 3) {
+  } else if (Read16(m->ax) == 0x5307 && m->bl == 1 && m->cl == 3) {
     LOGF("APM SHUTDOWN");
     exit(0);
   } else {
@@ -2131,7 +2131,7 @@ static void OnE820(void) {
 static void OnInt15h(void) {
   if (Read32(m->ax) == 0xE820) {
     OnE820();
-  } else if (m->ax[1] == 0x53) {
+  } else if (m->ah == 0x53) {
     OnApmService();
   } else {
     SetCarry(true);
@@ -2865,7 +2865,9 @@ int VirtualMachine(int argc, char *argv[]) {
       }
     } while (!(action & (RESTART | EXIT)));
   } while (action & RESTART);
-  unassert(!munmap(elf->ehdr, elf->size));
+  if (elf->ehdr) {
+    unassert(!munmap(elf->ehdr, elf->size));
+  }
   DisFree(dis);
   return exitcode;
 }

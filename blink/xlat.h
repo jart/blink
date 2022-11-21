@@ -11,7 +11,7 @@
 #include "blink/termios.h"
 
 int UnXlatOpenFlags(int);
-int UnXlatOpenMode(int);
+int UnXlatAccMode(int);
 int UnXlatSignal(int);
 int XlatAccess(int);
 int XlatAtf(int);
@@ -20,7 +20,7 @@ int XlatErrno(int);
 int XlatLock(int);
 int XlatMapFlags(int);
 int XlatOpenFlags(int);
-int XlatOpenMode(int);
+int XlatAccMode(int);
 int XlatResource(int);
 int XlatRusage(int);
 int XlatShutdown(int);

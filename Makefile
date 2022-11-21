@@ -48,6 +48,7 @@ include build/config.mk
 include build/rules.mk
 include blink/blink.mk
 include test/test.mk
+include test/asm/asm.mk
 include test/blink/test.mk
 include third_party/gcc/gcc.mk
 include third_party/qemu/qemu.mk

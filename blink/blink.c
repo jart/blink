@@ -36,23 +36,9 @@
 #include "blink/syscall.h"
 #include "blink/xlat.h"
 
-extern _Atomic(long) kDispatchCount[0x500];
-
 static void OnSignal(int sig, siginfo_t *si, void *uc) {
   LOGF("%s", strsignal(sig));
   EnqueueSignal(g_machine, sig);
-}
-
-static void ShowDispatchCount(void) {
-  long i;
-  FILE *f;
-  f = fopen("/tmp/dispatch.txt", "w");
-  for (i = 0; i < 0x500; ++i) {
-    if (kDispatchCount[i]) {
-      fprintf(f, "%ld %ld\n", kDispatchCount[i], i);
-    }
-  }
-  fclose(f);
 }
 
 static int Exec(char *prog, char **argv, char **envp) {
@@ -88,7 +74,6 @@ static int Exec(char *prog, char **argv, char **envp) {
   if (!(rc = setjmp(g_machine->onhalt))) {
     Actor(g_machine);
   } else {
-    ShowDispatchCount();
     return rc;
   }
 }

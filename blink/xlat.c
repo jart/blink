@@ -215,6 +215,7 @@ int XlatSignal(int x) {
     XLAT(20, SIGTSTP);
     XLAT(23, SIGURG);
     default:
+      LOGF("signal %d not supported yet", x);
       return einval();
   }
 }
@@ -252,6 +253,7 @@ int XlatResource(int x) {
     XLAT(15, RLIMIT_RTTIME);
 #endif
     default:
+      LOGF("rlimit %d not supported yet", x);
       return einval();
   }
 }
@@ -290,7 +292,7 @@ int UnXlatSignal(int x) {
     XLAT(SIGTSTP, 20);
     XLAT(SIGURG, 23);
     default:
-      LOGF("unsupported signal %d", x);
+      LOGF("don't know how to translate %s %d", "signal", x);
       return 15;
   }
 }
@@ -310,6 +312,7 @@ int XlatRusage(int x) {
     XLAT(0, RUSAGE_SELF);
     XLAT(-1, RUSAGE_CHILDREN);
     default:
+      LOGF("%s %d not supported yet", "rusage", x);
       return einval();
   }
 }
@@ -320,6 +323,7 @@ int XlatSocketFamily(int x) {
     XLAT(1, AF_UNIX);
     XLAT(2, AF_INET);
     default:
+      LOGF("%s %d not supported yet", "socket family", x);
       errno = ENOPROTOOPT;
       return -1;
   }
@@ -331,6 +335,7 @@ int UnXlatSocketFamily(int x) {
     XLAT(AF_UNIX, 1);
     XLAT(AF_INET, 2);
     default:
+      LOGF("don't know how to translate %s %d", "socket family", x);
       return x;
   }
 }
@@ -340,6 +345,7 @@ int XlatSocketType(int x) {
     XLAT(1, SOCK_STREAM);
     XLAT(2, SOCK_DGRAM);
     default:
+      LOGF("%s %d not supported yet", "socket type", x);
       return einval();
   }
 }
@@ -350,16 +356,18 @@ int XlatSocketProtocol(int x) {
     XLAT(6, IPPROTO_TCP);
     XLAT(17, IPPROTO_UDP);
     default:
+      LOGF("%s %d not supported yet", "socket protocol", x);
       return einval();
   }
 }
 
-int XlatSocketLevel(int level) {
-  switch (level) {
+int XlatSocketLevel(int x) {
+  switch (x) {
     XLAT(1, SOL_SOCKET);
     XLAT(6, IPPROTO_TCP);
     XLAT(17, IPPROTO_UDP);
     default:
+      LOGF("%s %d not supported yet", "socket level", x);
       return einval();
   }
 }
@@ -376,7 +384,7 @@ int XlatSocketOptname(int level, int optname) {
         XLAT(13, SO_LINGER);
         XLAT(15, SO_REUSEPORT);
         default:
-          return einval();
+          break;
       }
     case IPPROTO_TCP:
       switch (optname) {
@@ -393,11 +401,13 @@ int XlatSocketOptname(int level, int optname) {
         XLAT(12, TCP_QUICKACK);
 #endif
         default:
-          return einval();
+          break;
       }
     default:
-      return einval();
+      break;
   }
+  LOGF("socket level %d optname %d not supported yet", level, optname);
+  return einval();
 }
 
 int XlatAccess(int x) {
@@ -428,9 +438,10 @@ int XlatLock(int x) {
 
 int XlatWait(int x) {
   int r = 0;
-  if (x & 1) r |= WNOHANG;
-  if (x & 2) r |= WUNTRACED;
-  if (x & 8) r |= WCONTINUED;
+  if (x & 1) r |= WNOHANG, x &= ~1;
+  if (x & 2) r |= WUNTRACED, x &= ~2;
+  if (x & 8) r |= WCONTINUED, x &= ~8;
+  LOGF("%s %d not supported yet", "wait", x);
   return r;
 }
 
@@ -471,6 +482,7 @@ int XlatClock(int x) {
     XLAT(11, CLOCK_TAI);
 #endif
     default:
+      LOGF("%s %d not supported yet", "clock", x);
       return einval();
   }
 }
@@ -480,12 +492,15 @@ int XlatAtf(int x) {
   if (x & 0x0100) res |= AT_SYMLINK_NOFOLLOW, x &= ~0x0100;
   if (x & 0x0200) res |= AT_REMOVEDIR, x &= ~0x0200;
   if (x & 0x0400) res |= AT_SYMLINK_FOLLOW, x &= ~0x0400;
-  if (x) return einval();
+  if (x) {
+    LOGF("%s %d not supported yet", "atf", x);
+    return einval();
+  }
   return res;
 }
 
-int XlatOpenMode(int flags) {
-  switch (flags & O_ACCMODE_LINUX) {
+int XlatAccMode(int x) {
+  switch (x & O_ACCMODE_LINUX) {
     case O_RDONLY_LINUX:
       return O_RDONLY;
     case O_WRONLY_LINUX:
@@ -493,11 +508,11 @@ int XlatOpenMode(int flags) {
     case O_RDWR_LINUX:
       return O_RDWR;
     default:
-      __builtin_unreachable();
+      return einval();
   }
 }
 
-int UnXlatOpenMode(int flags) {
+int UnXlatAccMode(int flags) {
   switch (flags & O_ACCMODE) {
     case O_RDONLY:
       return O_RDONLY_LINUX;
@@ -506,72 +521,76 @@ int UnXlatOpenMode(int flags) {
     case O_RDWR:
       return O_RDWR_LINUX;
     default:
-      __builtin_unreachable();
+      return einval();
   }
 }
 
-int XlatOpenFlags(int flags) {
+int XlatOpenFlags(int x) {
   int res;
-  res = XlatOpenMode(flags);
-  if (flags & O_APPEND_LINUX) res |= O_APPEND, flags &= ~O_APPEND_LINUX;
-  if (flags & O_CREAT_LINUX) res |= O_CREAT, flags &= ~O_CREAT_LINUX;
-  if (flags & O_EXCL_LINUX) res |= O_EXCL, flags &= ~O_EXCL_LINUX;
-  if (flags & O_TRUNC_LINUX) res |= O_TRUNC, flags &= ~O_TRUNC_LINUX;
+  res = XlatAccMode(x);
+  x &= ~O_ACCMODE_LINUX;
+  if (x & O_APPEND_LINUX) res |= O_APPEND, x &= ~O_APPEND_LINUX;
+  if (x & O_CREAT_LINUX) res |= O_CREAT, x &= ~O_CREAT_LINUX;
+  if (x & O_EXCL_LINUX) res |= O_EXCL, x &= ~O_EXCL_LINUX;
+  if (x & O_TRUNC_LINUX) res |= O_TRUNC, x &= ~O_TRUNC_LINUX;
 #ifdef O_NDELAY
-  if (flags & O_NDELAY_LINUX) res |= O_NDELAY, flags &= ~O_NDELAY_LINUX;
+  if (x & O_NDELAY_LINUX) res |= O_NDELAY, x &= ~O_NDELAY_LINUX;
 #endif
 #ifdef O_DIRECT
-  if (flags & O_DIRECT_LINUX) res |= O_DIRECT, flags &= ~O_DIRECT_LINUX;
+  if (x & O_DIRECT_LINUX) res |= O_DIRECT, x &= ~O_DIRECT_LINUX;
 #endif
-  if (flags & O_DIRECTORY_LINUX) {
+  if (x & O_DIRECTORY_LINUX) {
     res |= O_DIRECTORY;
-    flags &= ~O_DIRECTORY_LINUX;
+    x &= ~O_DIRECTORY_LINUX;
   }
 #ifdef O_NOFOLLOW
-  if (flags & O_NOFOLLOW_LINUX) res |= O_NOFOLLOW, flags &= ~O_NOFOLLOW_LINUX;
+  if (x & O_NOFOLLOW_LINUX) res |= O_NOFOLLOW, x &= ~O_NOFOLLOW_LINUX;
 #endif
-  if (flags & O_CLOEXEC_LINUX) res |= O_CLOEXEC, flags &= ~O_CLOEXEC_LINUX;
-  if (flags & O_NOCTTY_LINUX) res |= O_NOCTTY, flags &= ~O_NOCTTY_LINUX;
+  if (x & O_CLOEXEC_LINUX) res |= O_CLOEXEC, x &= ~O_CLOEXEC_LINUX;
+  if (x & O_NOCTTY_LINUX) res |= O_NOCTTY, x &= ~O_NOCTTY_LINUX;
 #ifdef O_ASYNC
-  if (flags & O_ASYNC_LINUX) res |= O_ASYNC, flags &= ~O_ASYNC_LINUX;
+  if (x & O_ASYNC_LINUX) res |= O_ASYNC, x &= ~O_ASYNC_LINUX;
 #endif
 #ifdef O_NOATIME
-  if (flags & O_NOATIME_LINUX) res |= O_NOATIME, flags &= ~O_NOATIME_LINUX;
+  if (x & O_NOATIME_LINUX) res |= O_NOATIME, x &= ~O_NOATIME_LINUX;
 #endif
 #ifdef O_DSYNC
-  if (flags & O_DSYNC_LINUX) res |= O_DSYNC, flags &= ~O_DSYNC_LINUX;
+  if (x & O_DSYNC_LINUX) res |= O_DSYNC, x &= ~O_DSYNC_LINUX;
 #endif
-  if (flags) return einval();
+  if (x) {
+    LOGF("%s %d not supported yet", "open flags", x);
+    return einval();
+  }
   return res;
 }
 
-int UnXlatOpenFlags(int flags) {
+int UnXlatOpenFlags(int x) {
   int res;
-  res = UnXlatOpenMode(flags);
-  if (flags & O_APPEND) res |= 0x00400;
-  if (flags & O_CREAT) res |= 0x00040;
-  if (flags & O_EXCL) res |= 0x00080;
-  if (flags & O_TRUNC) res |= 0x00200;
+  res = UnXlatAccMode(x);
+  if (x & O_APPEND) res |= 0x00400;
+  if (x & O_CREAT) res |= 0x00040;
+  if (x & O_EXCL) res |= 0x00080;
+  if (x & O_TRUNC) res |= 0x00200;
 #ifdef O_NDELAY
-  if (flags & O_NDELAY) res |= 0x00800;
+  if (x & O_NDELAY) res |= 0x00800;
 #endif
 #ifdef O_DIRECT
-  if (flags & O_DIRECT) res |= 0x04000;
+  if (x & O_DIRECT) res |= 0x04000;
 #endif
-  if (flags & O_DIRECTORY) res |= 0x10000;
+  if (x & O_DIRECTORY) res |= 0x10000;
 #ifdef O_NOFOLLOW
-  if (flags & O_NOFOLLOW) res |= 0x20000;
+  if (x & O_NOFOLLOW) res |= 0x20000;
 #endif
-  if (flags & O_CLOEXEC) res |= 0x80000;
-  if (flags & O_NOCTTY) res |= 0x00100;
+  if (x & O_CLOEXEC) res |= 0x80000;
+  if (x & O_NOCTTY) res |= 0x00100;
 #ifdef O_ASYNC
-  if (flags & O_ASYNC) res |= 0x02000;
+  if (x & O_ASYNC) res |= 0x02000;
 #endif
 #ifdef O_NOATIME
-  if (flags & O_NOATIME) res |= 0x40000;
+  if (x & O_NOATIME) res |= 0x40000;
 #endif
 #ifdef O_DSYNC
-  if (flags & O_DSYNC) res |= 0x000001000;
+  if (x & O_DSYNC) res |= 0x000001000;
 #endif
   return res;
 }
@@ -1123,6 +1142,7 @@ int XlatWhence(int x) {
     XLAT(SEEK_CUR_LINUX, SEEK_CUR);
     XLAT(SEEK_END_LINUX, SEEK_END);
     default:
+      LOGF("unrecognized whence: %d", x);
       return einval();
   }
 }

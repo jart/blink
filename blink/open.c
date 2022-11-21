@@ -16,12 +16,16 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
 #include <fcntl.h>
 #include <stdatomic.h>
+#include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "blink/errno.h"
 #include "blink/fds.h"
+#include "blink/log.h"
 #include "blink/memory.h"
 #include "blink/syscall.h"
 #include "blink/xlat.h"
@@ -31,7 +35,7 @@ int OpOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
   const char *path;
   struct Fd *fd, *dirfd;
   int rc, sf, fildes, sysdirfd;
-  if (!(path = LoadStr(m, pathaddr))) return -1;
+  if (!(path = LoadStr(m, pathaddr))) return efault();
   if ((oflags = XlatOpenFlags(oflags)) == -1) return -1;
   LockFds(&m->system->fds);
   if ((rc = GetAfd(m, dirfildes, &dirfd)) != -1) {
@@ -52,6 +56,7 @@ int OpOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
       atomic_store_explicit(&fd->systemfd, sf, memory_order_release);
       fildes = fd->fildes;
     } else {
+      LOGF("%s failed: %s", "openat", strerror(errno));
       fildes = -1;
     }
   } else {

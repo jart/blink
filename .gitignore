@@ -5,3 +5,6 @@
 /TAGS
 /perf.data
 /perf.data.old
+/third_party/cosmo/*.gz
+/third_party/cosmo/*.com
+/third_party/cosmo/*.dbg

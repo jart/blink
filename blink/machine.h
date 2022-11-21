@@ -141,10 +141,34 @@ struct Machine {
   union {
     u8 reg[16][8];
     struct {
-      u8 ax[8];
-      u8 cx[8];
-      u8 dx[8];
-      u8 bx[8];
+      union {
+        struct {
+          u8 al;
+          u8 ah;
+        };
+        u8 ax[8];
+      };
+      union {
+        struct {
+          u8 cl;
+          u8 ch;
+        };
+        u8 cx[8];
+      };
+      union {
+        struct {
+          u8 dl;
+          u8 dh;
+        };
+        u8 dx[8];
+      };
+      union {
+        struct {
+          u8 bl;
+          u8 bh;
+        };
+        u8 bx[8];
+      };
       u8 sp[8];
       u8 bp[8];
       u8 si[8];

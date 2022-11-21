@@ -128,8 +128,8 @@ void OpDivAlAhAxEbSigned(struct Machine *m, u32 rde) {
   q = x / y;
   r = x % y;
   if (q != (i8)q) ThrowDivideError(m);
-  m->ax[0] = q & 0xff;
-  m->ax[1] = r & 0xff;
+  m->al = q & 0xff;
+  m->ah = r & 0xff;
 }
 
 void OpDivAlAhAxEbUnsigned(struct Machine *m, u32 rde) {
@@ -141,8 +141,8 @@ void OpDivAlAhAxEbUnsigned(struct Machine *m, u32 rde) {
   q = x / y;
   r = x % y;
   if (q > UINT8_MAX) ThrowDivideError(m);
-  m->ax[0] = q & 0xff;
-  m->ax[1] = r & 0xff;
+  m->al = q & 0xff;
+  m->ah = r & 0xff;
 }
 
 static void OpDivRdxRaxEvqpSigned64(struct Machine *m, u32 rde, u8 *p) {

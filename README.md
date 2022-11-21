@@ -6,6 +6,12 @@ same thing as the `qemu-x86_64` command, except rather than being a 10mb
 binary, blink only has a ~142kb footprint. For further details on the
 motivations for this tool, please read <https://justine.lol/ape.html>.
 
+## Caveat Emptor
+
+Welcome everyone from the Hacker News, Lobsters, and Reddit communities!
+This project is a work in progress. Please don't use this for production
+yet. If you try this be sure to calibrate your expectations accordingly.
+
 ## Getting Started
 
 You can compile blink on x86-64 Linux, Darwin, FreeBSD, NetBSD, OpenBSD,

@@ -123,7 +123,6 @@ void OpAluw(struct Machine *m, u32 rde) {
       z = kAlu[(m->xedd->op.opcode & 070) >> 3][ALU_INT32](x, y, &m->flags);
       Write32(p, z);
     }
-    Write32(q + 4, 0);
     if (IsModrmRegister(rde)) {
       Write32(p + 4, 0);
     }

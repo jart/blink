@@ -1478,9 +1478,9 @@ static void Op1ae(struct Machine *m, u32 rde) {
 
 static void OpSalc(struct Machine *m, u32 rde) {
   if (GetFlag(m->flags, FLAGS_CF)) {
-    m->ax[0] = 255;
+    m->al = 255;
   } else {
-    m->ax[0] = 0;
+    m->al = 0;
   }
 }
 
@@ -1580,8 +1580,6 @@ static void OpRdmsr(struct Machine *m, u32 rde) {
 static void OpEmms(struct Machine *m, u32 rde) {
   m->fpu.tw = -1;
 }
-
-_Atomic(long) kDispatchCount[0x500];
 
 const nexgen32e_f kNexgen32e[] = {
     /*000*/ OpAlubAdd,               //
@@ -2128,7 +2126,6 @@ void ExecuteInstruction(struct Machine *m) {
   int dispatch;
   m->ip += m->xedd->length;
   dispatch = m->xedd->op.map << 8 | m->xedd->op.opcode;
-  kDispatchCount[dispatch]++;
   if (dispatch < ARRAYLEN(kNexgen32e)) {
     kNexgen32e[dispatch](m, m->xedd->op.rde);
   } else {

@@ -96,7 +96,6 @@ void OpCmpxchgEvqpRaxGvqp(struct Machine *m, u32 rde) {
         Write32(q, z);
       }
     }
-    Write32(q + 4, 0);
     Write32(m->ax + 4, 0);
     if (IsModrmRegister(rde)) {
       Write32(p + 4, 0);
