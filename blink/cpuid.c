@@ -25,7 +25,7 @@ void OpCpuid(struct Machine *m, u32 rde) {
   bx = 0;
   cx = 0;
   dx = 0;
-  switch (Read32(m->ax)) {
+  switch (Get32(m->ax)) {
     case 0:
     case 0x80000000:
       ax = 7;
@@ -53,7 +53,7 @@ void OpCpuid(struct Machine *m, u32 rde) {
       dx |= 1 << 26; /* sse2 */
       break;
     case 7:
-      switch (Read32(m->cx)) {
+      switch (Get32(m->cx)) {
         case 0:
           bx |= 1 << 0;  /* fsgsbase */
           bx |= 1 << 9;  /* erms */
@@ -81,8 +81,8 @@ void OpCpuid(struct Machine *m, u32 rde) {
     default:
       break;
   }
-  Write64(m->ax, ax);
-  Write64(m->bx, bx);
-  Write64(m->cx, cx);
-  Write64(m->dx, dx);
+  Put64(m->ax, ax);
+  Put64(m->bx, bx);
+  Put64(m->cx, cx);
+  Put64(m->dx, dx);
 }

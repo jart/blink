@@ -22,11 +22,12 @@
 #include "blink/machine.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 #include "blink/real.h"
 #include "blink/time.h"
 
-static void StoreDescriptorTable(struct Machine *m, u32 rde,
-                                 u16 limit, u64 base) {
+static void StoreDescriptorTable(struct Machine *m, u32 rde, u16 limit,
+                                 u64 base) {
   u64 l;
   l = ComputeAddress(m, rde);
   if (l + 10 <= GetRealMemorySize(m->system)) {
@@ -46,8 +47,8 @@ static void StoreDescriptorTable(struct Machine *m, u32 rde,
   }
 }
 
-static void LoadDescriptorTable(struct Machine *m, u32 rde,
-                                u16 *out_limit, u64 *out_base) {
+static void LoadDescriptorTable(struct Machine *m, u32 rde, u16 *out_limit,
+                                u64 *out_base) {
   u16 limit;
   u64 l, base;
   l = ComputeAddress(m, rde);
@@ -117,13 +118,13 @@ static void InvlpgM(struct Machine *m, u32 rde) {
 
 static void Smsw(struct Machine *m, u32 rde, bool ismem) {
   if (ismem) {
-    Write16(GetModrmRegisterWordPointerWrite2(m, rde), m->system->cr0);
+    Store16(GetModrmRegisterWordPointerWrite2(m, rde), m->system->cr0);
   } else if (Rexw(rde)) {
-    Write64(RegRexrReg(m, rde), m->system->cr0);
+    Put64(RegRexrReg(m, rde), m->system->cr0);
   } else if (!Osz(rde)) {
-    Write64(RegRexrReg(m, rde), m->system->cr0 & 0xffffffff);
+    Put64(RegRexrReg(m, rde), m->system->cr0 & 0xffffffff);
   } else {
-    Write16(RegRexrReg(m, rde), m->system->cr0);
+    Put16(RegRexrReg(m, rde), m->system->cr0);
   }
 }
 

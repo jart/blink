@@ -123,7 +123,7 @@ struct Machine *NewMachine(struct System *s, struct Machine *p) {
   struct Machine *m;
   unassert(s);
   unassert(!p || s == p->system);
-  if (!(m = (struct Machine *)malloc(sizeof(*m)))) {
+  if (!(m = (struct Machine *)memalign(_Alignof(struct Machine), sizeof(*m)))) {
     free(m);
     return 0;
   }

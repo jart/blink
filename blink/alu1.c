@@ -24,17 +24,18 @@
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 #include "blink/swap.h"
 
 static void AluEb(struct Machine *m, u32 rde, aluop_f op) {
   u8 *p;
   p = GetModrmRegisterBytePointerWrite(m, rde);
   if (!Lock(rde)) {
-    Write8(p, op(Read8(p), 0, &m->flags));
+    Store8(p, op(Load8(p), 0, &m->flags));
   } else {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
     u8 x, z;
-    x = Read8(p);
+    x = Load8(p);
     do {
       z = op(x, 0, &m->flags);
     } while (!atomic_compare_exchange_weak_explicit(
@@ -73,10 +74,9 @@ static void AluEvqp(struct Machine *m, u32 rde, const aluop_f ops[4]) {
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64
       unsigned long x, z;
-      x = atomic_load_explicit((atomic_ulong *)p, memory_order_relaxed);
+      x = atomic_load_explicit((atomic_ulong *)p, memory_order_acquire);
       do {
-        z = ops[ALU_INT64](SWAP64LE(x), 0, &m->flags);
-        z = SWAP64LE(z);
+        z = Little64(ops[ALU_INT64](Little64(x), 0, &m->flags));
       } while (!atomic_compare_exchange_weak_explicit((atomic_ulong *)p, &x, z,
                                                       memory_order_release,
                                                       memory_order_relaxed));
@@ -84,20 +84,19 @@ static void AluEvqp(struct Machine *m, u32 rde, const aluop_f ops[4]) {
       OpUd(m, rde);
 #endif
     } else {
-      Write64(p, ops[ALU_INT64](Read64(p), 0, &m->flags));
+      Store64(p, ops[ALU_INT64](Load64(p), 0, &m->flags));
     }
   } else if (!Osz(rde)) {
     unsigned int x, z;
     p = GetModrmRegisterWordPointerWrite(m, rde, 4);
     if (Lock(rde) && !((intptr_t)p & 3)) {
-      x = atomic_load_explicit((atomic_uint *)p, memory_order_relaxed);
+      x = atomic_load_explicit((atomic_uint *)p, memory_order_acquire);
       do {
-        z = ops[ALU_INT32](SWAP32LE(x), 0, &m->flags);
-        z = SWAP32LE(z);
+        z = Little32(ops[ALU_INT32](Little32(x), 0, &m->flags));
       } while (!atomic_compare_exchange_weak_explicit(
           (atomic_uint *)p, &x, z, memory_order_release, memory_order_relaxed));
     } else {
-      Write32(p, ops[ALU_INT32](Read32(p), 0, &m->flags));
+      Store32(p, ops[ALU_INT32](Load32(p), 0, &m->flags));
     }
     if (IsModrmRegister(rde)) {
       Write32(p + 4, 0);
@@ -105,7 +104,7 @@ static void AluEvqp(struct Machine *m, u32 rde, const aluop_f ops[4]) {
   } else {
     unassert(!Lock(rde));
     p = GetModrmRegisterWordPointerWrite(m, rde, 2);
-    Write16(p, ops[ALU_INT16](Read16(p), 0, &m->flags));
+    Store16(p, ops[ALU_INT16](Load16(p), 0, &m->flags));
   }
 }
 

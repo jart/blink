@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <inttypes.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +25,7 @@
 #include "blink/address.h"
 #include "blink/endian.h"
 #include "blink/log.h"
+#include "blink/signal.h"
 
 static bool IsHaltingInitialized(struct Machine *m) {
   jmp_buf zb;
@@ -36,8 +38,9 @@ void HaltMachine(struct Machine *m, int code) {
   longjmp(m->onhalt, code);
 }
 
-void ThrowDivideError(struct Machine *m) {
-  HaltMachine(m, kMachineDivideError);
+void RaiseDivideError(struct Machine *m) {
+  EnqueueSignal(m, SIGFPE);
+  ConsumeSignal(m);
 }
 
 void ThrowSegmentationFault(struct Machine *m, i64 va) {
@@ -48,10 +51,10 @@ void ThrowSegmentationFault(struct Machine *m, i64 va) {
        "BP %" PRIx64 " SI %" PRIx64 " DI %" PRIx64 " R8 %" PRIx64 " R9 %" PRIx64
        " R10 %" PRIx64 " R11 %" PRIx64 " R12 %" PRIx64 " "
        "R13 %" PRIx64 " R14 %" PRIx64 " R15 %" PRIx64,
-       va, m->ip, Read64(m->ax), Read64(m->cx), Read64(m->dx), Read64(m->bx),
-       Read64(m->sp), Read64(m->bp), Read64(m->si), Read64(m->di),
-       Read64(m->r8), Read64(m->r9), Read64(m->r10), Read64(m->r11),
-       Read64(m->r12), Read64(m->r13), Read64(m->r14), Read64(m->r15));
+       va, m->ip, Get64(m->ax), Get64(m->cx), Get64(m->dx), Get64(m->bx),
+       Get64(m->sp), Get64(m->bp), Get64(m->si), Get64(m->di), Get64(m->r8),
+       Get64(m->r9), Get64(m->r10), Get64(m->r11), Get64(m->r12), Get64(m->r13),
+       Get64(m->r14), Get64(m->r15));
   HaltMachine(m, kMachineSegmentationFault);
 }
 

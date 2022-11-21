@@ -900,7 +900,7 @@ static void OpFstswMw(struct Machine *m) {
 }
 
 static void OpFstswAx(struct Machine *m) {
-  Write16(m->ax, m->fpu.sw);
+  Put16(m->ax, m->fpu.sw);
 }
 
 static void SetFpuEnv(struct Machine *m, u8 p[28]) {

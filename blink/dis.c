@@ -17,7 +17,6 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <limits.h>
-#include "blink/types.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -30,6 +29,7 @@
 #include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/tpenc.h"
+#include "blink/types.h"
 #include "blink/util.h"
 
 #define ADDRLEN 8
@@ -163,14 +163,14 @@ long DisFind(struct Dis *d, i64 addr) {
 }
 
 static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
-  void *r;
+  u8 *r;
   i64 ip;
   unsigned k;
   struct DisOp op;
   long n, symbol;
   u8 *p, b[15];
   n = 15;
-  ip = addr - Read64(m->cs);
+  ip = addr - m->cs;
   if ((symbol = DisFindSym(d, ip)) != -1) {
     if (d->syms.p[symbol].addr <= ip &&
         ip < d->syms.p[symbol].addr + d->syms.p[symbol].size) {
@@ -195,7 +195,7 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
   if (!(r = FindReal(m, addr))) return -1;
   k = 0x1000 - (addr & 0xfff);
   if (n <= k) {
-    p = (u8 *)r;
+    p = r;
   } else {
     p = b;
     memcpy(b, r, k);
@@ -220,8 +220,7 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
   return n;
 }
 
-long Dis(struct Dis *d, struct Machine *m, i64 addr, i64 ip,
-         int lines) {
+long Dis(struct Dis *d, struct Machine *m, i64 addr, i64 ip, int lines) {
   i64 i, j, symbol;
   DisFreeOps(&d->ops);
   if ((symbol = DisFindSym(d, addr)) != -1 &&

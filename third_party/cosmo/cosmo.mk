@@ -34,7 +34,9 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/rand64_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/alu_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/bsu_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/divmul_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/once_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/test_suite_ecp.com.ok				\
 		o/$(MODE)/third_party/cosmo/dll_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/note_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/wait_test.com.ok					\
@@ -47,6 +49,9 @@ o/$(MODE)/third_party/cosmo:									\
 
 o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/intrin_test.com.emulates			\
+		o/$(MODE)/aarch64/third_party/cosmo/palandprintf_test.com.emulates		\
+		o/$(MODE)/aarch64/third_party/cosmo/divmul_test.com.emulates			\
+		o/$(MODE)/aarch64/third_party/cosmo/test_suite_ecp.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/lockscale_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/palignr_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/pmulhrsw_test.com.emulates			\
@@ -57,6 +62,9 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/pthread_mutex_lock_test.com.emulates	\
 		o/$(MODE)/aarch64/third_party/cosmo/pthread_spin_lock_test.com.emulates		\
 		o/$(MODE)/mips64/third_party/cosmo/intrin_test.com.emulates			\
+		o/$(MODE)/mips64/third_party/cosmo/palandprintf_test.com.emulates		\
+		o/$(MODE)/mips64/third_party/cosmo/divmul_test.com.emulates			\
+		o/$(MODE)/mips64/third_party/cosmo/test_suite_ecp.com.emulates			\
 		o/$(MODE)/mips64/third_party/cosmo/lockscale_test.com.emulates			\
 		o/$(MODE)/mips64/third_party/cosmo/palignr_test.com.emulates			\
 		o/$(MODE)/mips64/third_party/cosmo/pmulhrsw_test.com.emulates			\
@@ -65,6 +73,9 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/mips64/third_party/cosmo/pthread_mutex_lock_test.com.emulates		\
 		o/$(MODE)/mips64/third_party/cosmo/pthread_spin_lock_test.com.emulates		\
 		o/$(MODE)/mips64el/third_party/cosmo/intrin_test.com.emulates			\
+		o/$(MODE)/mips64el/third_party/cosmo/palandprintf_test.com.emulates		\
+		o/$(MODE)/mips64el/third_party/cosmo/divmul_test.com.emulates			\
+		o/$(MODE)/mips64el/third_party/cosmo/test_suite_ecp.com.emulates		\
 		o/$(MODE)/mips64el/third_party/cosmo/lockscale_test.com.emulates		\
 		o/$(MODE)/mips64el/third_party/cosmo/palignr_test.com.emulates			\
 		o/$(MODE)/mips64el/third_party/cosmo/pmulhrsw_test.com.emulates			\
@@ -73,6 +84,9 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/mips64el/third_party/cosmo/pthread_mutex_lock_test.com.emulates	\
 		o/$(MODE)/mips64el/third_party/cosmo/pthread_spin_lock_test.com.emulates	\
 		o/$(MODE)/s390x/third_party/cosmo/intrin_test.com.emulates			\
+		o/$(MODE)/s390x/third_party/cosmo/palandprintf_test.com.emulates		\
+		o/$(MODE)/s390x/third_party/cosmo/divmul_test.com.emulates			\
+		o/$(MODE)/s390x/third_party/cosmo/test_suite_ecp.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/lockscale_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/palignr_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/pmulhrsw_test.com.emulates			\
@@ -82,6 +96,9 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/s390x/third_party/cosmo/pthread_mutex_lock_test.com.emulates		\
 		o/$(MODE)/s390x/third_party/cosmo/pthread_spin_lock_test.com.emulates		\
 		o/$(MODE)/powerpc64le/third_party/cosmo/intrin_test.com.emulates		\
+		o/$(MODE)/powerpc64le/third_party/cosmo/palandprintf_test.com.emulates		\
+		o/$(MODE)/powerpc64le/third_party/cosmo/divmul_test.com.emulates		\
+		o/$(MODE)/powerpc64le/third_party/cosmo/test_suite_ecp.com.emulates		\
 		o/$(MODE)/powerpc64le/third_party/cosmo/lockscale_test.com.emulates		\
 		o/$(MODE)/powerpc64le/third_party/cosmo/palignr_test.com.emulates		\
 		o/$(MODE)/powerpc64le/third_party/cosmo/pmulhrsw_test.com.emulates		\

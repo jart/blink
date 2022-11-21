@@ -16,40 +16,79 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <sched.h>
-#include <time.h>
+#include <limits.h>
+#include <stdatomic.h>
 
 #include "blink/endian.h"
 #include "blink/modrm.h"
-#include "blink/time.h"
+#include "blink/mop.h"
+#include "blink/swap.h"
+#include "blink/tsan.h"
 
-void OpPause(struct Machine *m, u32 rde) {
-  sched_yield();
+u64 ReadRegister(u64 rde, u8 p[8]) {
+  if (Rexw(rde)) {
+    return Get64(p);
+  } else if (!Osz(rde)) {
+    return Get32(p);
+  } else {
+    return Get16(p);
+  }
 }
 
-void OpRdtsc(struct Machine *m, u32 rde) {
-  i64 c;
-  struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
-  c = ts.tv_sec;
-  c *= 1000000000;
-  c += ts.tv_nsec;
-  Put64(m->ax, (c & 0x00000000ffffffff) >> 000);
-  Put64(m->dx, (c & 0xffffffff00000000) >> 040);
+i64 ReadRegisterSigned(u64 rde, u8 p[8]) {
+  if (Rexw(rde)) {
+    return (i64)Get64(p);
+  } else if (!Osz(rde)) {
+    return (i32)Get32(p);
+  } else {
+    return (i16)Get16(p);
+  }
 }
 
-static i64 GetTscAux(struct Machine *m) {
-  u32 core, node;
-  core = 0;
-  node = 0;
-  return (node & 0xfff) << 12 | (core & 0xfff);
+void WriteRegister(u64 rde, u8 p[8], u64 x) {
+  if (Rexw(rde)) {
+    Put64(p, x);
+  } else if (!Osz(rde)) {
+    Put64(p, x & 0xffffffff);
+  } else {
+    Put16(p, x);
+  }
 }
 
-void OpRdtscp(struct Machine *m, u32 rde) {
-  OpRdtsc(m, rde);
-  Put64(m->cx, GetTscAux(m));
+u64 ReadMemory(u64 rde, u8 p[8]) {
+  if (Rexw(rde)) {
+    return Load64(p);
+  } else if (!Osz(rde)) {
+    return Load32(p);
+  } else {
+    return Load16(p);
+  }
 }
 
-void OpRdpid(struct Machine *m, u32 rde) {
-  Put64(RegRexbRm(m, rde), GetTscAux(m));
+u64 ReadMemorySigned(u64 rde, u8 p[8]) {
+  if (Rexw(rde)) {
+    return (i64)Load64(p);
+  } else if (!Osz(rde)) {
+    return (i32)Load32(p);
+  } else {
+    return (i16)Load16(p);
+  }
+}
+
+void WriteMemory(u64 rde, u8 p[8], u64 x) {
+  if (Rexw(rde)) {
+    Store64(p, x);
+  } else if (!Osz(rde)) {
+    Store32(p, x);
+  } else {
+    Store16(p, x);
+  }
+}
+
+void WriteRegisterOrMemory(u64 rde, u8 p[8], u64 x) {
+  if (IsModrmRegister(rde)) {
+    WriteRegister(rde, p, x);
+  } else {
+    WriteMemory(rde, p, x);
+  }
 }

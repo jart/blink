@@ -23,14 +23,16 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 
 void OpXchgGbEb(struct Machine *m, u32 rde) {
   u8 *q;
   q = ByteRexrReg(m, rde);
   if (!IsModrmRegister(rde)) {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
-    *q = atomic_exchange((atomic_uchar *)ComputeReserveAddressWrite1(m, rde),
-                         *q);
+    *q = atomic_exchange_explicit(
+        (atomic_uchar *)ComputeReserveAddressWrite1(m, rde), *q,
+        memory_order_acq_rel);
 #else
     OpUd(m, rde);
 #endif
@@ -38,10 +40,10 @@ void OpXchgGbEb(struct Machine *m, u32 rde) {
     u8 *p;
     u8 x, y;
     p = ByteRexbRm(m, rde);
-    x = Read8(q);
-    y = Read8(p);
-    Write8(q, y);
-    Write8(p, x);
+    x = Get8(q);
+    y = Load8(p);
+    Put8(q, y);
+    Store8(p, x);
   }
 }
 
@@ -53,9 +55,10 @@ void OpXchgGvqpEvqp(struct Machine *m, u32 rde) {
 #if LONG_BIT == 64
       atomic_store_explicit(
           (atomic_ulong *)q,
-          atomic_exchange(
+          atomic_exchange_explicit(
               (atomic_ulong *)p,
-              atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed)),
+              atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
+              memory_order_acq_rel),
           memory_order_relaxed);
 #else
       OpUd(m, rde);
@@ -71,9 +74,10 @@ void OpXchgGvqpEvqp(struct Machine *m, u32 rde) {
     if (!IsModrmRegister(rde) && !((intptr_t)p & 3)) {
       atomic_store_explicit(
           (atomic_uint *)q,
-          atomic_exchange(
+          atomic_exchange_explicit(
               (atomic_uint *)p,
-              atomic_load_explicit((atomic_uint *)q, memory_order_relaxed)),
+              atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
+              memory_order_acq_rel),
           memory_order_relaxed);
     } else {
       u32 x, y;

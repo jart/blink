@@ -52,6 +52,7 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/memory.h"
+#include "blink/mop.h"
 #include "blink/pml4t.h"
 #include "blink/random.h"
 #include "blink/signal.h"
@@ -204,14 +205,14 @@ static int OpFork(struct Machine *m) {
 
 static void *OnSpawn(void *arg) {
   int rc;
+  u8 *ctid;
   sigset_t ss;
-  atomic_int *ctid;
   struct Machine *m = (struct Machine *)arg;
   sigfillset(&ss);
   unassert(!sigprocmask(SIG_SETMASK, &ss, 0));
   if (!(rc = setjmp(m->onhalt))) {
-    if (m->ctid && (ctid = (atomic_int *)FindReal(m, m->ctid))) {
-      atomic_store_explicit(ctid, SWAP32LE(m->tid), memory_order_release);
+    if (m->ctid && (ctid = FindReal(m, m->ctid))) {
+      Store32(ctid, m->tid);
     }
     Actor(m);
   } else {
@@ -236,9 +237,9 @@ static int OpSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   }
   tid = m2->tid;
   m2->ctid = ctid;
-  Write64(m2->ax, 0);
-  Write64(m2->fs, tls);
-  Write64(m2->sp, stack);
+  Put64(m2->ax, 0);
+  m2->fs = tls;
+  Put64(m2->sp, stack);
   unassert(!pthread_attr_init(&attr));
   unassert(!pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
   err = pthread_create(&m2->thread, &attr, OnSpawn, m2);
@@ -247,8 +248,7 @@ static int OpSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
     FreeMachine(m2);
     return eagain();
   }
-  atomic_store_explicit((atomic_int *)ResolveAddress(m, ptid), SWAP32LE(tid),
-                        memory_order_release);
+  Store32(ResolveAddress(m, ptid), tid);
   return tid;
 }
 
@@ -266,18 +266,21 @@ static int OpPrctl(struct Machine *m, int op, i64 a, i64 b, i64 c, i64 d) {
 }
 
 static int OpArchPrctl(struct Machine *m, int code, i64 addr) {
+  u8 buf[8];
   switch (code) {
     case ARCH_SET_GS_LINUX:
-      Write64(m->gs, addr);
+      m->gs = addr;
       return 0;
     case ARCH_SET_FS_LINUX:
-      Write64(m->fs, addr);
+      m->fs = addr;
       return 0;
     case ARCH_GET_GS_LINUX:
-      VirtualRecvWrite(m, addr, m->gs, 8);
+      Write64(buf, m->gs);
+      VirtualRecvWrite(m, addr, buf, 8);
       return 0;
     case ARCH_GET_FS_LINUX:
-      VirtualRecvWrite(m, addr, m->fs, 8);
+      Write64(buf, m->fs);
+      VirtualRecvWrite(m, addr, buf, 8);
       return 0;
     default:
       return einval();
@@ -871,7 +874,14 @@ static int OpFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
     fl = XlatOpenFlags(arg & (O_APPEND_LINUX | O_ASYNC_LINUX | O_DIRECT_LINUX |
                               O_NOATIME_LINUX | O_NDELAY_LINUX));
     if (fcntl(fd->systemfd, F_SETFL, fl) != -1) {
-      fd->oflags &= ~(O_APPEND | O_ASYNC | O_DIRECT | O_NOATIME | O_NDELAY);
+      fd->oflags &= ~(O_APPEND | O_ASYNC |
+#ifdef O_DIRECT
+                      O_DIRECT |
+#endif
+#ifdef O_NOATIME
+                      O_NOATIME |
+#endif
+                      O_NDELAY);
       fd->oflags |= fl;
       rc = 0;
     } else {
@@ -1437,13 +1447,13 @@ static int OpAccept(struct Machine *m, int fd, i64 sa, i64 sas) {
 
 void OpSyscall(struct Machine *m, u32 rde) {
   u64 ax, di, si, dx, r0, r8, r9;
-  ax = Read64(m->ax);
-  di = Read64(m->di);
-  si = Read64(m->si);
-  dx = Read64(m->dx);
-  r0 = Read64(m->r10);
-  r8 = Read64(m->r8);
-  r9 = Read64(m->r9);
+  ax = Get64(m->ax);
+  di = Get64(m->di);
+  si = Get64(m->si);
+  dx = Get64(m->dx);
+  r0 = Get64(m->r10);
+  r8 = Get64(m->r8);
+  r9 = Get64(m->r9);
   switch (ax & 0x1ff) {
     SYSCALL(0x000, OpRead(m, di, si, dx));
     SYSCALL(0x001, OpWrite(m, di, si, dx));
@@ -1560,6 +1570,6 @@ void OpSyscall(struct Machine *m, u32 rde) {
       ax = enosys();
       break;
   }
-  Write64(m->ax, ax != -1 ? ax : -(XlatErrno(errno) & 0xfff));
+  Put64(m->ax, ax != -1 ? ax : -(XlatErrno(errno) & 0xfff));
   CollectGarbage(m);
 }

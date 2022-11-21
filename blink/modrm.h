@@ -50,21 +50,21 @@
 
 struct AddrSeg {
   i64 addr;
-  const u8 *seg;
+  u64 seg;
 };
 
 extern const u8 kByteReg[32];
 
 i64 ComputeAddress(struct Machine *, u32);
 struct AddrSeg LoadEffectiveAddress(const struct Machine *, u32);
-void *ComputeReserveAddressRead(struct Machine *, u32, size_t);
-void *ComputeReserveAddressRead1(struct Machine *, u32);
-void *ComputeReserveAddressRead4(struct Machine *, u32);
-void *ComputeReserveAddressRead8(struct Machine *, u32);
-void *ComputeReserveAddressWrite(struct Machine *, u32, size_t);
-void *ComputeReserveAddressWrite1(struct Machine *, u32);
-void *ComputeReserveAddressWrite4(struct Machine *, u32);
-void *ComputeReserveAddressWrite8(struct Machine *, u32);
+u8 *ComputeReserveAddressRead(struct Machine *, u32, size_t);
+u8 *ComputeReserveAddressRead1(struct Machine *, u32);
+u8 *ComputeReserveAddressRead4(struct Machine *, u32);
+u8 *ComputeReserveAddressRead8(struct Machine *, u32);
+u8 *ComputeReserveAddressWrite(struct Machine *, u32, size_t);
+u8 *ComputeReserveAddressWrite1(struct Machine *, u32);
+u8 *ComputeReserveAddressWrite4(struct Machine *, u32);
+u8 *ComputeReserveAddressWrite8(struct Machine *, u32);
 u8 *GetModrmRegisterBytePointerRead(struct Machine *, u32);
 u8 *GetModrmRegisterBytePointerWrite(struct Machine *, u32);
 u8 *GetModrmRegisterMmPointerRead(struct Machine *, u32, size_t);

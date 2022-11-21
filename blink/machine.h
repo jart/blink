@@ -73,12 +73,12 @@ struct MachineMemstat {
 
 struct MachineState {
   u64 ip;
-  u8 cs[8];
-  u8 ss[8];
-  u8 es[8];
-  u8 ds[8];
-  u8 fs[8];
-  u8 gs[8];
+  u64 cs;
+  u64 ss;
+  u64 es;
+  u64 ds;
+  u64 fs;
+  u64 gs;
   u8 reg[16][8];
   u8 xmm[16][16];
   u32 mxcsr;
@@ -129,8 +129,8 @@ struct System {
 struct Machine {
   struct XedDecodedInst *xedd;
   u64 ip;
-  u8 cs[8];
-  u8 ss[8];
+  u64 cs;
+  u64 ss;
   int mode;
   u32 flags;
   u32 tlbindex;
@@ -139,6 +139,7 @@ struct Machine {
   u32 readsize;
   u32 writesize;
   union {
+    u64 align8_;
     u8 reg[16][8];
     struct {
       union {
@@ -187,12 +188,12 @@ struct Machine {
     i64 virt;
     u64 entry;
   } tlb[16];
-  u8 xmm[16][16];
+  _Alignas(16) u8 xmm[16][16];
   dll_element list GUARDED_BY(system->machines_lock);
-  u8 es[8];
-  u8 ds[8];
-  u8 fs[8];
-  u8 gs[8];
+  u64 es;
+  u64 ds;
+  u64 fs;
+  u64 gs;
   struct MachineFpu fpu;
   u32 mxcsr;
   bool isthread;
@@ -235,7 +236,7 @@ i64 FindVirtual(struct System *, i64, size_t);
 int FreeVirtual(struct System *, i64, size_t);
 void LoadArgv(struct Machine *, char *, char **, char **);
 _Noreturn void HaltMachine(struct Machine *, int);
-_Noreturn void ThrowDivideError(struct Machine *);
+void RaiseDivideError(struct Machine *);
 _Noreturn void ThrowSegmentationFault(struct Machine *, i64);
 _Noreturn void ThrowProtectionFault(struct Machine *);
 _Noreturn void OpUd(struct Machine *, u32);

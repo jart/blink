@@ -19,6 +19,7 @@
 #include "blink/alu.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
+#include "blink/machine.h"
 
 const aluop_f kAlu[12][4] = {
     {Add8, Add16, Add32, Add64}, {Or8, Or16, Or32, Or64},
@@ -783,7 +784,7 @@ void OpAaa(struct Machine *m, u32 rde) {
   af = cf = 0;
   if ((m->al & 0x0f) > 9 || GetFlag(m->flags, FLAGS_AF)) {
     cf = m->al < 6 || GetFlag(m->flags, FLAGS_CF);
-    Write16(m->ax, Read16(m->ax) + 0x106);
+    Put16(m->ax, Get16(m->ax) + 0x106);
     af = cf = 1;
   }
   m->al &= 0x0f;
@@ -795,7 +796,7 @@ void OpAas(struct Machine *m, u32 rde) {
   af = cf = 0;
   if ((m->al & 0x0f) > 9 || GetFlag(m->flags, FLAGS_AF)) {
     cf = m->al < 6 || GetFlag(m->flags, FLAGS_CF);
-    Write16(m->ax, Read16(m->ax) - 0x106);
+    Put16(m->ax, Get16(m->ax) - 0x106);
     af = cf = 1;
   }
   m->al &= 0x0f;
@@ -804,7 +805,10 @@ void OpAas(struct Machine *m, u32 rde) {
 
 void OpAam(struct Machine *m, u32 rde) {
   u8 i = m->xedd->op.uimm0;
-  if (!i) ThrowDivideError(m);
+  if (!i) {
+    RaiseDivideError(m);
+    return;
+  }
   m->ah = m->al / i;
   m->al = m->al % i;
   AluFlags8(m->al, 0, &m->flags, 0, 0);
@@ -812,6 +816,6 @@ void OpAam(struct Machine *m, u32 rde) {
 
 void OpAad(struct Machine *m, u32 rde) {
   u8 i = m->xedd->op.uimm0;
-  Write16(m->ax, (m->ah * i + m->al) & 0xff);
+  Put16(m->ax, (m->ah * i + m->al) & 0xff);
   AluFlags8(m->al, 0, &m->flags, 0, 0);
 }

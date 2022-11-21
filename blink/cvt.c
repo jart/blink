@@ -26,6 +26,7 @@
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 #include "blink/pun.h"
 
 #define kOpCvt0f2a  0
@@ -53,66 +54,62 @@ static double SseRoundDouble(struct Machine *m, double x) {
 static void OpGdqpWssCvttss2si(struct Machine *m, u32 rde) {
   i64 n;
   union FloatPun f;
-  f.i = Read32(GetModrmRegisterXmmPointerRead4(m, rde));
+  f.i = Load32(GetModrmRegisterXmmPointerRead4(m, rde));
   n = f.f;
   if (!Rexw(rde)) n &= 0xffffffff;
-  Write64(RegRexrReg(m, rde), n);
+  Put64(RegRexrReg(m, rde), n);
 }
 
 static void OpGdqpWsdCvttsd2si(struct Machine *m, u32 rde) {
   i64 n;
   union DoublePun d;
-  d.i = Read64(GetModrmRegisterXmmPointerRead8(m, rde));
+  d.i = Load64(GetModrmRegisterXmmPointerRead8(m, rde));
   n = d.f;
   if (!Rexw(rde)) n &= 0xffffffff;
-  Write64(RegRexrReg(m, rde), n);
+  Put64(RegRexrReg(m, rde), n);
 }
 
 static void OpGdqpWssCvtss2si(struct Machine *m, u32 rde) {
   i64 n;
   union FloatPun f;
-  f.i = Read32(GetModrmRegisterXmmPointerRead4(m, rde));
+  f.i = Load32(GetModrmRegisterXmmPointerRead4(m, rde));
   n = rintf(f.f);
   if (!Rexw(rde)) n &= 0xffffffff;
-  Write64(RegRexrReg(m, rde), n);
+  Put64(RegRexrReg(m, rde), n);
 }
 
 static void OpGdqpWsdCvtsd2si(struct Machine *m, u32 rde) {
   i64 n;
   union DoublePun d;
-  d.i = Read64(GetModrmRegisterXmmPointerRead8(m, rde));
+  d.i = Load64(GetModrmRegisterXmmPointerRead8(m, rde));
   n = SseRoundDouble(m, d.f);
   if (!Rexw(rde)) n &= 0xffffffff;
-  Write64(RegRexrReg(m, rde), n);
+  Put64(RegRexrReg(m, rde), n);
 }
 
 static void OpVssEdqpCvtsi2ss(struct Machine *m, u32 rde) {
   union FloatPun f;
   if (Rexw(rde)) {
-    i64 n;
-    n = Read64(GetModrmRegisterWordPointerRead8(m, rde));
+    i64 n = Load64(GetModrmRegisterWordPointerRead8(m, rde));
     f.f = n;
-    Write32(XmmRexrReg(m, rde), f.i);
+    Put32(XmmRexrReg(m, rde), f.i);
   } else {
-    i32 n;
-    n = Read32(GetModrmRegisterWordPointerRead4(m, rde));
+    i32 n = Load32(GetModrmRegisterWordPointerRead4(m, rde));
     f.f = n;
-    Write32(XmmRexrReg(m, rde), f.i);
+    Put32(XmmRexrReg(m, rde), f.i);
   }
 }
 
 static void OpVsdEdqpCvtsi2sd(struct Machine *m, u32 rde) {
   union DoublePun d;
   if (Rexw(rde)) {
-    i64 n;
-    n = Read64(GetModrmRegisterWordPointerRead8(m, rde));
+    i64 n = Load64(GetModrmRegisterWordPointerRead8(m, rde));
     d.f = n;
-    Write64(XmmRexrReg(m, rde), d.i);
+    Put64(XmmRexrReg(m, rde), d.i);
   } else {
-    i32 n;
-    n = Read32(GetModrmRegisterWordPointerRead4(m, rde));
+    i32 n = Load32(GetModrmRegisterWordPointerRead4(m, rde));
     d.f = n;
-    Write64(XmmRexrReg(m, rde), d.i);
+    Put64(XmmRexrReg(m, rde), d.i);
   }
 }
 
@@ -121,12 +118,12 @@ static void OpVpsQpiCvtpi2ps(struct Machine *m, u32 rde) {
   i32 i[2];
   union FloatPun f[2];
   p = GetModrmRegisterMmPointerRead8(m, rde);
-  i[0] = Read32(p + 0);
-  i[1] = Read32(p + 4);
+  i[0] = Load32(p + 0);
+  i[1] = Load32(p + 4);
   f[0].f = i[0];
   f[1].f = i[1];
-  Write32(XmmRexrReg(m, rde) + 0, f[0].i);
-  Write32(XmmRexrReg(m, rde) + 4, f[1].i);
+  Put32(XmmRexrReg(m, rde) + 0, f[0].i);
+  Put32(XmmRexrReg(m, rde) + 4, f[1].i);
 }
 
 static void OpVpdQpiCvtpi2pd(struct Machine *m, u32 rde) {
@@ -134,12 +131,12 @@ static void OpVpdQpiCvtpi2pd(struct Machine *m, u32 rde) {
   i32 n[2];
   union DoublePun f[2];
   p = GetModrmRegisterMmPointerRead8(m, rde);
-  n[0] = Read32(p + 0);
-  n[1] = Read32(p + 4);
+  n[0] = Load32(p + 0);
+  n[1] = Load32(p + 4);
   f[0].f = n[0];
   f[1].f = n[1];
-  Write64(XmmRexrReg(m, rde) + 0, f[0].i);
-  Write64(XmmRexrReg(m, rde) + 8, f[1].i);
+  Put64(XmmRexrReg(m, rde) + 0, f[0].i);
+  Put64(XmmRexrReg(m, rde) + 8, f[1].i);
 }
 
 static void OpPpiWpsqCvtps2pi(struct Machine *m, u32 rde) {
@@ -148,8 +145,8 @@ static void OpPpiWpsqCvtps2pi(struct Machine *m, u32 rde) {
   i32 n[2];
   union FloatPun f[2];
   p = GetModrmRegisterXmmPointerRead8(m, rde);
-  f[0].i = Read32(p + 0 * 4);
-  f[1].i = Read32(p + 1 * 4);
+  f[0].i = Load32(p + 0 * 4);
+  f[1].i = Load32(p + 1 * 4);
   switch ((m->mxcsr & kMxcsrRc) >> 13) {
     case 0:
       for (i = 0; i < 2; ++i) n[i] = rintf(f[i].f);
@@ -166,8 +163,8 @@ static void OpPpiWpsqCvtps2pi(struct Machine *m, u32 rde) {
     default:
       __builtin_unreachable();
   }
-  Write32(MmReg(m, rde) + 0, n[0]);
-  Write32(MmReg(m, rde) + 4, n[1]);
+  Put32(MmReg(m, rde) + 0, n[0]);
+  Put32(MmReg(m, rde) + 4, n[1]);
 }
 
 static void OpPpiWpsqCvttps2pi(struct Machine *m, u32 rde) {
@@ -175,12 +172,12 @@ static void OpPpiWpsqCvttps2pi(struct Machine *m, u32 rde) {
   i32 n[2];
   union FloatPun f[2];
   p = GetModrmRegisterXmmPointerRead8(m, rde);
-  f[0].i = Read32(p + 0);
-  f[1].i = Read32(p + 4);
+  f[0].i = Load32(p + 0);
+  f[1].i = Load32(p + 4);
   n[0] = f[0].f;
   n[1] = f[1].f;
-  Write32(MmReg(m, rde) + 0, n[0]);
-  Write32(MmReg(m, rde) + 4, n[1]);
+  Put32(MmReg(m, rde) + 0, n[0]);
+  Put32(MmReg(m, rde) + 4, n[1]);
 }
 
 static void OpPpiWpdCvtpd2pi(struct Machine *m, u32 rde) {
@@ -189,11 +186,11 @@ static void OpPpiWpdCvtpd2pi(struct Machine *m, u32 rde) {
   i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
-  d[0].i = Read64(p + 0);
-  d[1].i = Read64(p + 8);
+  d[0].i = Load64(p + 0);
+  d[1].i = Load64(p + 8);
   for (i = 0; i < 2; ++i) n[i] = SseRoundDouble(m, d[i].f);
-  Write32(MmReg(m, rde) + 0, n[0]);
-  Write32(MmReg(m, rde) + 4, n[1]);
+  Put32(MmReg(m, rde) + 0, n[0]);
+  Put32(MmReg(m, rde) + 4, n[1]);
 }
 
 static void OpPpiWpdCvttpd2pi(struct Machine *m, u32 rde) {
@@ -201,12 +198,12 @@ static void OpPpiWpdCvttpd2pi(struct Machine *m, u32 rde) {
   i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
-  d[0].i = Read64(p + 0);
-  d[1].i = Read64(p + 8);
+  d[0].i = Load64(p + 0);
+  d[1].i = Load64(p + 8);
   n[0] = d[0].f;
   n[1] = d[1].f;
-  Write32(MmReg(m, rde) + 0, n[0]);
-  Write32(MmReg(m, rde) + 4, n[1]);
+  Put32(MmReg(m, rde) + 0, n[0]);
+  Put32(MmReg(m, rde) + 4, n[1]);
 }
 
 static void OpVpdWpsCvtps2pd(struct Machine *m, u32 rde) {
@@ -214,12 +211,12 @@ static void OpVpdWpsCvtps2pd(struct Machine *m, u32 rde) {
   union FloatPun f[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead8(m, rde);
-  f[0].i = Read32(p + 0);
-  f[1].i = Read32(p + 4);
+  f[0].i = Load32(p + 0);
+  f[1].i = Load32(p + 4);
   d[0].f = f[0].f;
   d[1].f = f[1].f;
-  Write64(XmmRexrReg(m, rde) + 0, d[0].i);
-  Write64(XmmRexrReg(m, rde) + 8, d[1].i);
+  Put64(XmmRexrReg(m, rde) + 0, d[0].i);
+  Put64(XmmRexrReg(m, rde) + 8, d[1].i);
 }
 
 static void OpVpsWpdCvtpd2ps(struct Machine *m, u32 rde) {
@@ -227,28 +224,28 @@ static void OpVpsWpdCvtpd2ps(struct Machine *m, u32 rde) {
   union FloatPun f[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
-  d[0].i = Read64(p + 0);
-  d[1].i = Read64(p + 8);
+  d[0].i = Load64(p + 0);
+  d[1].i = Load64(p + 8);
   f[0].f = d[0].f;
   f[1].f = d[1].f;
-  Write32(XmmRexrReg(m, rde) + 0, f[0].i);
-  Write32(XmmRexrReg(m, rde) + 4, f[1].i);
+  Put32(XmmRexrReg(m, rde) + 0, f[0].i);
+  Put32(XmmRexrReg(m, rde) + 4, f[1].i);
 }
 
 static void OpVssWsdCvtsd2ss(struct Machine *m, u32 rde) {
   union FloatPun f;
   union DoublePun d;
-  d.i = Read64(GetModrmRegisterXmmPointerRead8(m, rde));
+  d.i = Load64(GetModrmRegisterXmmPointerRead8(m, rde));
   f.f = d.f;
-  Write32(XmmRexrReg(m, rde), f.i);
+  Put32(XmmRexrReg(m, rde), f.i);
 }
 
 static void OpVsdWssCvtss2sd(struct Machine *m, u32 rde) {
   union FloatPun f;
   union DoublePun d;
-  f.i = Read32(GetModrmRegisterXmmPointerRead4(m, rde));
+  f.i = Load32(GetModrmRegisterXmmPointerRead4(m, rde));
   d.f = f.f;
-  Write64(XmmRexrReg(m, rde), d.i);
+  Put64(XmmRexrReg(m, rde), d.i);
 }
 
 static void OpVpsWdqCvtdq2ps(struct Machine *m, u32 rde) {
@@ -256,18 +253,18 @@ static void OpVpsWdqCvtdq2ps(struct Machine *m, u32 rde) {
   i32 n[4];
   union FloatPun f[4];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
-  n[0] = Read32(p + 0 * 4);
-  n[1] = Read32(p + 1 * 4);
-  n[2] = Read32(p + 2 * 4);
-  n[3] = Read32(p + 3 * 4);
+  n[0] = Load32(p + 0 * 4);
+  n[1] = Load32(p + 1 * 4);
+  n[2] = Load32(p + 2 * 4);
+  n[3] = Load32(p + 3 * 4);
   f[0].f = n[0];
   f[1].f = n[1];
   f[2].f = n[2];
   f[3].f = n[3];
-  Write32(XmmRexrReg(m, rde) + 0 * 4, f[0].i);
-  Write32(XmmRexrReg(m, rde) + 1 * 4, f[1].i);
-  Write32(XmmRexrReg(m, rde) + 2 * 4, f[2].i);
-  Write32(XmmRexrReg(m, rde) + 3 * 4, f[3].i);
+  Put32(XmmRexrReg(m, rde) + 0 * 4, f[0].i);
+  Put32(XmmRexrReg(m, rde) + 1 * 4, f[1].i);
+  Put32(XmmRexrReg(m, rde) + 2 * 4, f[2].i);
+  Put32(XmmRexrReg(m, rde) + 3 * 4, f[3].i);
 }
 
 static void OpVpdWdqCvtdq2pd(struct Machine *m, u32 rde) {
@@ -275,12 +272,12 @@ static void OpVpdWdqCvtdq2pd(struct Machine *m, u32 rde) {
   i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead8(m, rde);
-  n[0] = Read32(p + 0 * 4);
-  n[1] = Read32(p + 1 * 4);
+  n[0] = Load32(p + 0 * 4);
+  n[1] = Load32(p + 1 * 4);
   d[0].f = n[0];
   d[1].f = n[1];
-  Write64(XmmRexrReg(m, rde) + 0, d[0].i);
-  Write64(XmmRexrReg(m, rde) + 8, d[1].i);
+  Put64(XmmRexrReg(m, rde) + 0, d[0].i);
+  Put64(XmmRexrReg(m, rde) + 8, d[1].i);
 }
 
 static void OpVdqWpsCvttps2dq(struct Machine *m, u32 rde) {
@@ -288,18 +285,18 @@ static void OpVdqWpsCvttps2dq(struct Machine *m, u32 rde) {
   i32 n[4];
   union FloatPun f[4];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
-  f[0].i = Read32(p + 0 * 4);
-  f[1].i = Read32(p + 1 * 4);
-  f[2].i = Read32(p + 2 * 4);
-  f[3].i = Read32(p + 3 * 4);
+  f[0].i = Load32(p + 0 * 4);
+  f[1].i = Load32(p + 1 * 4);
+  f[2].i = Load32(p + 2 * 4);
+  f[3].i = Load32(p + 3 * 4);
   n[0] = f[0].f;
   n[1] = f[1].f;
   n[2] = f[2].f;
   n[3] = f[3].f;
-  Write32(XmmRexrReg(m, rde) + 0 * 4, n[0]);
-  Write32(XmmRexrReg(m, rde) + 1 * 4, n[1]);
-  Write32(XmmRexrReg(m, rde) + 2 * 4, n[2]);
-  Write32(XmmRexrReg(m, rde) + 3 * 4, n[3]);
+  Put32(XmmRexrReg(m, rde) + 0 * 4, n[0]);
+  Put32(XmmRexrReg(m, rde) + 1 * 4, n[1]);
+  Put32(XmmRexrReg(m, rde) + 2 * 4, n[2]);
+  Put32(XmmRexrReg(m, rde) + 3 * 4, n[3]);
 }
 
 static void OpVdqWpsCvtps2dq(struct Machine *m, u32 rde) {
@@ -308,10 +305,10 @@ static void OpVdqWpsCvtps2dq(struct Machine *m, u32 rde) {
   i32 n[4];
   union FloatPun f[4];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
-  f[0].i = Read32(p + 0 * 4);
-  f[1].i = Read32(p + 1 * 4);
-  f[2].i = Read32(p + 2 * 4);
-  f[3].i = Read32(p + 3 * 4);
+  f[0].i = Load32(p + 0 * 4);
+  f[1].i = Load32(p + 1 * 4);
+  f[2].i = Load32(p + 2 * 4);
+  f[3].i = Load32(p + 3 * 4);
   switch ((m->mxcsr & kMxcsrRc) >> 13) {
     case 0:
       for (i = 0; i < 4; ++i) n[i] = rintf(f[i].f);
@@ -328,10 +325,10 @@ static void OpVdqWpsCvtps2dq(struct Machine *m, u32 rde) {
     default:
       __builtin_unreachable();
   }
-  Write32(XmmRexrReg(m, rde) + 0 * 4, n[0]);
-  Write32(XmmRexrReg(m, rde) + 1 * 4, n[1]);
-  Write32(XmmRexrReg(m, rde) + 2 * 4, n[2]);
-  Write32(XmmRexrReg(m, rde) + 3 * 4, n[3]);
+  Put32(XmmRexrReg(m, rde) + 0 * 4, n[0]);
+  Put32(XmmRexrReg(m, rde) + 1 * 4, n[1]);
+  Put32(XmmRexrReg(m, rde) + 2 * 4, n[2]);
+  Put32(XmmRexrReg(m, rde) + 3 * 4, n[3]);
 }
 
 static void OpVdqWpdCvttpd2dq(struct Machine *m, u32 rde) {
@@ -339,12 +336,12 @@ static void OpVdqWpdCvttpd2dq(struct Machine *m, u32 rde) {
   i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
-  d[0].i = Read64(p + 0);
-  d[1].i = Read64(p + 8);
+  d[0].i = Load64(p + 0);
+  d[1].i = Load64(p + 8);
   n[0] = d[0].f;
   n[1] = d[1].f;
-  Write32(XmmRexrReg(m, rde) + 0, n[0]);
-  Write32(XmmRexrReg(m, rde) + 4, n[1]);
+  Put32(XmmRexrReg(m, rde) + 0, n[0]);
+  Put32(XmmRexrReg(m, rde) + 4, n[1]);
 }
 
 static void OpVdqWpdCvtpd2dq(struct Machine *m, u32 rde) {
@@ -353,11 +350,11 @@ static void OpVdqWpdCvtpd2dq(struct Machine *m, u32 rde) {
   i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(m, rde);
-  d[0].i = Read64(p + 0);
-  d[1].i = Read64(p + 8);
+  d[0].i = Load64(p + 0);
+  d[1].i = Load64(p + 8);
   for (i = 0; i < 2; ++i) n[i] = SseRoundDouble(m, d[i].f);
-  Write32(XmmRexrReg(m, rde) + 0, n[0]);
-  Write32(XmmRexrReg(m, rde) + 4, n[1]);
+  Put32(XmmRexrReg(m, rde) + 0, n[0]);
+  Put32(XmmRexrReg(m, rde) + 4, n[1]);
 }
 
 static void OpCvt(struct Machine *m, u32 rde, unsigned long op) {

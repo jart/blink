@@ -122,8 +122,8 @@ static void BootProgram(struct Machine *m, struct Elf *elf, size_t codesize) {
   Write16(m->system->real.p + 0x40E, 0xb0000 >> 4);
   Write16(m->system->real.p + 0x413, 0xb0000 / 1024);
   Write16(m->system->real.p + 0x44A, 80);
-  Write64(m->cs, 0);
-  Write64(m->dx, 0);
+  m->cs = 0;
+  Put64(m->dx, 0);
   memcpy(m->system->real.p + 0x7c00, elf->map, 512);
   if (memcmp(elf->map, "\177ELF", 4) == 0) {
     elf->ehdr = (Elf64_Ehdr *)elf->map;

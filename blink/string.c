@@ -28,18 +28,19 @@
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 #include "blink/string.h"
 
 static u64 ReadInt(u8 p[8], unsigned long w) {
   switch (w) {
     case 0:
-      return Read8(p);
+      return Load8(p);
     case 1:
-      return Read16(p);
+      return Load16(p);
     case 2:
-      return Read32(p);
+      return Load32(p);
     case 3:
-      return Read64(p);
+      return Load64(p);
     default:
       __builtin_unreachable();
   }
@@ -48,16 +49,16 @@ static u64 ReadInt(u8 p[8], unsigned long w) {
 static void WriteInt(u8 p[8], u64 x, unsigned long w) {
   switch (w) {
     case 0:
-      Write8(p, x);
+      Store8(p, x);
       break;
     case 1:
-      Write16(p, x);
+      Store16(p, x);
       break;
     case 2:
-      Write64(p, x & 0xffffffff);
+      Store64(p, x & 0xffffffff);
       break;
     case 3:
-      Write64(p, x);
+      Store64(p, x);
       break;
     default:
       __builtin_unreachable();
@@ -67,13 +68,13 @@ static void WriteInt(u8 p[8], u64 x, unsigned long w) {
 static void AddDi(struct Machine *m, u32 rde, u64 x) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
-      Write64(m->di, Read64(m->di) + x);
+      Put64(m->di, Get64(m->di) + x);
       return;
     case XED_MODE_LEGACY:
-      Write64(m->di, (Read32(m->di) + x) & 0xffffffff);
+      Put64(m->di, (Get32(m->di) + x) & 0xffffffff);
       return;
     case XED_MODE_REAL:
-      Write16(m->di, Read16(m->di) + x);
+      Put16(m->di, Get16(m->di) + x);
       return;
     default:
       __builtin_unreachable();
@@ -83,13 +84,13 @@ static void AddDi(struct Machine *m, u32 rde, u64 x) {
 static void AddSi(struct Machine *m, u32 rde, u64 x) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
-      Write64(m->si, Read64(m->si) + x);
+      Put64(m->si, Get64(m->si) + x);
       return;
     case XED_MODE_LEGACY:
-      Write64(m->si, (Read32(m->si) + x) & 0xffffffff);
+      Put64(m->si, (Get32(m->si) + x) & 0xffffffff);
       return;
     case XED_MODE_REAL:
-      Write16(m->si, Read16(m->si) + x);
+      Put16(m->si, Get16(m->si) + x);
       return;
     default:
       __builtin_unreachable();
@@ -99,11 +100,11 @@ static void AddSi(struct Machine *m, u32 rde, u64 x) {
 static u64 ReadCx(struct Machine *m, u32 rde) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
-      return Read64(m->cx);
+      return Get64(m->cx);
     case XED_MODE_LEGACY:
-      return Read32(m->cx);
+      return Get32(m->cx);
     case XED_MODE_REAL:
-      return Read16(m->cx);
+      return Get16(m->cx);
     default:
       __builtin_unreachable();
   }
@@ -111,15 +112,15 @@ static u64 ReadCx(struct Machine *m, u32 rde) {
 
 static u64 SubtractCx(struct Machine *m, u32 rde, u64 x) {
   u64 cx;
-  cx = Read64(m->cx) - x;
+  cx = Get64(m->cx) - x;
   if (Eamode(rde) != XED_MODE_REAL) {
     if (Eamode(rde) == XED_MODE_LEGACY) {
       cx &= 0xffffffff;
     }
-    Write64(m->cx, cx);
+    Put64(m->cx, cx);
   } else {
     cx &= 0xffff;
-    Write16(m->cx, cx);
+    Put16(m->cx, cx);
   }
   return cx;
 }
@@ -171,13 +172,13 @@ static void StringOp(struct Machine *m, u32 rde, int op) {
                (m->xedd->op.rep == 3 && !GetFlag(m->flags, FLAGS_ZF));
         break;
       case STRING_OUTS:
-        OpOut(m, Read16(m->dx),
+        OpOut(m, Get16(m->dx),
               ReadInt(Load(m, AddressSi(m, rde), n, s[1]), RegLog2(rde)));
         AddSi(m, rde, sgn * n);
         break;
       case STRING_INS:
         WriteInt((u8 *)BeginStore(m, (v = AddressDi(m, rde)), n, p, s[0]),
-                 OpIn(m, Read16(m->dx)), RegLog2(rde));
+                 OpIn(m, Get16(m->dx)), RegLog2(rde));
         AddDi(m, rde, sgn * n);
         EndStore(m, v, n, p, s[0]);
         break;
@@ -225,7 +226,7 @@ static void RepStosbEnhanced(struct Machine *m, u32 rde) {
       direal = (u8 *)ResolveAddress(m, diactual);
       diremain = 0x1000 - (diactual & 0xfff);
       n = MIN(cx, diremain);
-      memset(direal, Read8(m->ax), n);
+      memset(direal, Get8(m->ax), n);
       AddDi(m, rde, n);
     } while ((cx = SubtractCx(m, rde, n)));
   }

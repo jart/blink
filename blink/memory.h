@@ -17,21 +17,19 @@
 char **LoadStrList(struct Machine *, i64);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
 u64 FindPage(struct Machine *, i64);
-u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *,
-                   bool);
-u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2],
-                        u8 *);
+u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *, bool);
+u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *FindReal(struct Machine *, i64);
 u8 *Load(struct Machine *, i64, size_t, u8 *);
-void *LoadBuf(struct Machine *, i64, size_t);
+u8 *LoadBuf(struct Machine *, i64, size_t);
 char *LoadStr(struct Machine *, i64);
-void *MallocPage(void);
-void *RealAddress(struct Machine *, i64);
-void *ReserveAddress(struct Machine *, i64, size_t);
+u8 *MallocPage(void);
+u8 *RealAddress(struct Machine *, i64);
+u8 *ReserveAddress(struct Machine *, i64, size_t);
 u8 *ResolveAddress(struct Machine *, i64);
-void *VirtualSend(struct Machine *, void *, i64, u64);
+u8 *VirtualSend(struct Machine *, void *, i64, u64);
 void EndStore(struct Machine *, i64, size_t, void *[2], u8 *);
 void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 void ResetRam(struct Machine *);

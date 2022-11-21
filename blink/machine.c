@@ -35,6 +35,7 @@
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 #include "blink/random.h"
 #include "blink/real.h"
 #include "blink/sse.h"
@@ -46,130 +47,11 @@
 #include "blink/time.h"
 #include "blink/util.h"
 
-#define OpLfence    OpNoop
-#define OpMfence    OpNoop
-#define OpSfence    OpNoop
-#define OpClflush   OpNoop
 #define OpHintNopEv OpNoop
 
 // GetSegment
 
 typedef void (*nexgen32e_f)(struct Machine *, u32);
-
-static u64 ReadRegister(u32 rde, u8 p[8]) {
-  if (Rexw(rde)) {
-    return Read64(p);
-  } else if (!Osz(rde)) {
-    return Read32(p);
-  } else {
-    return Read16(p);
-  }
-}
-
-static i64 ReadRegisterSigned(u32 rde, u8 p[8]) {
-  if (Rexw(rde)) {
-    return (i64)Read64(p);
-  } else if (!Osz(rde)) {
-    return (i32)Read32(p);
-  } else {
-    return (i16)Read16(p);
-  }
-}
-
-static void WriteRegister(u32 rde, u8 p[8], u64 x) {
-  if (Rexw(rde)) {
-    Write64(p, x);
-  } else if (!Osz(rde)) {
-    Write64(p, x & 0xffffffff);
-  } else {
-    Write16(p, x);
-  }
-}
-
-static u64 ReadMemory(u32 rde, u8 p[8]) {
-  u64 x;
-  if (Rexw(rde)) {
-#if LONG_BIT == 64
-    if (!((intptr_t)p & 7)) {
-      x = atomic_load_explicit((atomic_ulong *)p, memory_order_acquire);
-      x = SWAP64LE(x);
-    } else {
-      x = Read64(p);
-    }
-#else
-    x = Read64(p);
-#endif
-  } else if (!Osz(rde)) {
-    if (!((intptr_t)p & 3)) {
-      x = atomic_load_explicit((atomic_uint *)p, memory_order_acquire);
-      x = SWAP32LE(x);
-    } else {
-      x = Read32(p);
-    }
-  } else {
-    x = Read16(p);
-  }
-  return x;
-}
-
-static u64 ReadMemorySigned(u32 rde, u8 p[8]) {
-  u64 x;
-  if (Rexw(rde)) {
-#if LONG_BIT == 64
-    if (!((intptr_t)p & 7)) {
-      x = atomic_load_explicit((atomic_ulong *)p, memory_order_acquire);
-      x = SWAP64LE(x);
-    } else {
-      x = Read64(p);
-    }
-#else
-    x = Read64(p);
-#endif
-  } else if (!Osz(rde)) {
-    if (!((intptr_t)p & 3)) {
-      x = atomic_load_explicit((atomic_uint *)p, memory_order_acquire);
-      x = SWAP32LE(x);
-    } else {
-      x = Read32(p);
-    }
-    x = (i32)x;
-  } else {
-    x = (i16)Read16(p);
-  }
-  return x;
-}
-
-static void WriteMemory(u32 rde, u8 p[8], u64 x) {
-  if (Rexw(rde)) {
-#if LONG_BIT == 64
-    if (!((intptr_t)p & 7)) {
-      atomic_store_explicit((atomic_ulong *)p, SWAP64LE(x),
-                            memory_order_release);
-    } else {
-      Write64(p, x);
-    }
-#else
-    Write64(p, x);
-#endif
-  } else if (!Osz(rde)) {
-    if (!((intptr_t)p & 3)) {
-      atomic_store_explicit((atomic_uint *)p, SWAP32LE(x),
-                            memory_order_release);
-    } else {
-      Write32(p, x);
-    }
-  } else {
-    Write16(p, x);
-  }
-}
-
-static void WriteRegisterOrMemory(u32 rde, u8 p[8], u64 x) {
-  if (IsModrmRegister(rde)) {
-    WriteRegister(rde, p, x);
-  } else {
-    WriteMemory(rde, p, x);
-  }
-}
 
 static bool IsParity(struct Machine *m) {
   return GetFlag(m->flags, FLAGS_PF);
@@ -245,7 +127,7 @@ static void OpPopf(struct Machine *m, u32 rde) {
 }
 
 static void OpLahf(struct Machine *m, u32 rde) {
-  Write8(m->ax + 1, ExportFlags(m->flags));
+  Put8(m->ax + 1, ExportFlags(m->flags));
 }
 
 static void OpSahf(struct Machine *m, u32 rde) {
@@ -258,17 +140,17 @@ static void OpLeaGvqpM(struct Machine *m, u32 rde) {
 
 static void OpPushSeg(struct Machine *m, u32 rde) {
   u8 seg = (m->xedd->op.opcode & 070) >> 3;
-  Push(m, rde, Read64(GetSegment(m, rde, seg)) >> 4);
+  Push(m, rde, *GetSegment(m, rde, seg) >> 4);
 }
 
 static void OpPopSeg(struct Machine *m, u32 rde) {
   u8 seg = (m->xedd->op.opcode & 070) >> 3;
-  Write64(GetSegment(m, rde, seg), Pop(m, rde, 0) << 4);
+  *GetSegment(m, rde, seg) = Pop(m, rde, 0) << 4;
 }
 
 static void OpMovEvqpSw(struct Machine *m, u32 rde) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(m, rde),
-                        Read64(GetSegment(m, rde, ModrmReg(rde))) >> 4);
+                        *GetSegment(m, rde, ModrmReg(rde)) >> 4);
 }
 
 static int GetDescriptor(struct Machine *m, int selector, u64 *out_descriptor) {
@@ -278,7 +160,7 @@ static int GetDescriptor(struct Machine *m, int selector, u64 *out_descriptor) {
   if (8 <= selector && selector + 8 <= m->system->gdt_limit) {
     SetReadAddr(m, m->system->gdt_base + selector, 8);
     *out_descriptor =
-        Read64(m->system->real.p + m->system->gdt_base + selector);
+        Load64(m->system->real.p + m->system->gdt_base + selector);
     return 0;
   } else {
     return -1;
@@ -317,12 +199,12 @@ static void OpMovSwEvqp(struct Machine *m, u32 rde) {
   } else {
     ThrowProtectionFault(m);
   }
-  Write64(GetSegment(m, rde, ModrmReg(rde)), x);
+  *GetSegment(m, rde, ModrmReg(rde)) = x;
 }
 
 static void OpLsl(struct Machine *m, u32 rde) {
   u64 descriptor;
-  if (GetDescriptor(m, Read16(GetModrmRegisterWordPointerRead2(m, rde)),
+  if (GetDescriptor(m, Load16(GetModrmRegisterWordPointerRead2(m, rde)),
                     &descriptor) != -1) {
     WriteRegister(rde, RegRexrReg(m, rde), GetDescriptorLimit(descriptor));
     m->flags = SetFlag(m->flags, FLAGS_ZF, true);
@@ -340,10 +222,10 @@ static void ChangeMachineMode(struct Machine *m, int mode) {
 static void OpJmpf(struct Machine *m, u32 rde) {
   u64 descriptor;
   if (!IsProtectedMode(m)) {
-    Write64(m->cs, m->xedd->op.uimm0 << 4);
+    m->cs = m->xedd->op.uimm0 << 4;
     m->ip = m->xedd->op.disp;
   } else if (GetDescriptor(m, m->xedd->op.uimm0, &descriptor) != -1) {
-    Write64(m->cs, GetDescriptorBase(descriptor));
+    m->cs = GetDescriptorBase(descriptor);
     m->ip = m->xedd->op.disp;
     ChangeMachineMode(m, GetDescriptorMode(descriptor));
   } else {
@@ -356,64 +238,64 @@ static void OpJmpf(struct Machine *m, u32 rde) {
 
 static void OpXlatAlBbb(struct Machine *m, u32 rde) {
   u64 v;
-  v = MaskAddress(Eamode(rde), Read64(m->bx) + Read8(m->ax));
+  v = MaskAddress(Eamode(rde), Get64(m->bx) + Get8(m->ax));
   v = DataSegment(m, rde, v);
   SetReadAddr(m, v, 1);
-  Write8(m->ax, Read8(ResolveAddress(m, v)));
+  m->al = Load8(ResolveAddress(m, v));
 }
 
-static void WriteEaxAx(struct Machine *m, u32 rde, u32 x) {
+static void PutEaxAx(struct Machine *m, u32 rde, u32 x) {
   if (!Osz(rde)) {
-    Write64(m->ax, x);
+    Put64(m->ax, x);
   } else {
-    Write16(m->ax, x);
+    Put16(m->ax, x);
   }
 }
 
-static u32 ReadEaxAx(struct Machine *m, u32 rde) {
+static u32 GetEaxAx(struct Machine *m, u32 rde) {
   if (!Osz(rde)) {
-    return Read32(m->ax);
+    return Get32(m->ax);
   } else {
-    return Read16(m->ax);
+    return Get16(m->ax);
   }
 }
 
 static void OpInAlImm(struct Machine *m, u32 rde) {
-  Write8(m->ax, OpIn(m, m->xedd->op.uimm0));
+  Put8(m->ax, OpIn(m, m->xedd->op.uimm0));
 }
 
 static void OpInAxImm(struct Machine *m, u32 rde) {
-  WriteEaxAx(m, rde, OpIn(m, m->xedd->op.uimm0));
+  PutEaxAx(m, rde, OpIn(m, m->xedd->op.uimm0));
 }
 
 static void OpInAlDx(struct Machine *m, u32 rde) {
-  Write8(m->ax, OpIn(m, Read16(m->dx)));
+  Put8(m->ax, OpIn(m, Get16(m->dx)));
 }
 
 static void OpInAxDx(struct Machine *m, u32 rde) {
-  WriteEaxAx(m, rde, OpIn(m, Read16(m->dx)));
+  PutEaxAx(m, rde, OpIn(m, Get16(m->dx)));
 }
 
 static void OpOutImmAl(struct Machine *m, u32 rde) {
-  OpOut(m, m->xedd->op.uimm0, Read8(m->ax));
+  OpOut(m, m->xedd->op.uimm0, Get8(m->ax));
 }
 
 static void OpOutImmAx(struct Machine *m, u32 rde) {
-  OpOut(m, m->xedd->op.uimm0, ReadEaxAx(m, rde));
+  OpOut(m, m->xedd->op.uimm0, GetEaxAx(m, rde));
 }
 
 static void OpOutDxAl(struct Machine *m, u32 rde) {
-  OpOut(m, Read16(m->dx), Read8(m->ax));
+  OpOut(m, Get16(m->dx), Get8(m->ax));
 }
 
 static void OpOutDxAx(struct Machine *m, u32 rde) {
-  OpOut(m, Read16(m->dx), ReadEaxAx(m, rde));
+  OpOut(m, Get16(m->dx), GetEaxAx(m, rde));
 }
 
 static void OpXchgZvqp(struct Machine *m, u32 rde) {
   u64 x, y;
-  x = Read64(m->ax);
-  y = Read64(RegRexbSrm(m, rde));
+  x = Get64(m->ax);
+  y = Get64(RegRexbSrm(m, rde));
   WriteRegister(rde, m->ax, y);
   WriteRegister(rde, RegRexbSrm(m, rde), x);
 }
@@ -481,7 +363,7 @@ static void OpBit(struct Machine *m, u32 rde) {
     p = RegRexbRm(m, rde);
   } else {
     v = MaskAddress(Eamode(rde), ComputeAddress(m, rde) + disp);
-    p = (u8 *)ReserveAddress(m, v, 1 << w);
+    p = ReserveAddress(m, v, 1 << w);
     if (op == 4) {
       SetReadAddr(m, v, 1 << w);
     } else {
@@ -512,85 +394,76 @@ static void OpBit(struct Machine *m, u32 rde) {
 
 static void OpSax(struct Machine *m, u32 rde) {
   if (Rexw(rde)) {
-    Write64(m->ax, (i32)Read32(m->ax));
+    Put64(m->ax, (i32)Get32(m->ax));
   } else if (!Osz(rde)) {
-    Write64(m->ax, (u32)(i16)Read16(m->ax));
+    Put64(m->ax, (u32)(i16)Get16(m->ax));
   } else {
-    Write16(m->ax, (i8)Read8(m->ax));
+    Put16(m->ax, (i8)Get8(m->ax));
   }
 }
 
 static void OpConvert(struct Machine *m, u32 rde) {
   if (Rexw(rde)) {
-    Write64(m->dx, Read64(m->ax) & 0x8000000000000000 ? 0xffffffffffffffff : 0);
+    Put64(m->dx, Get64(m->ax) & 0x8000000000000000 ? 0xffffffffffffffff : 0);
   } else if (!Osz(rde)) {
-    Write64(m->dx, Read32(m->ax) & 0x80000000 ? 0xffffffff : 0);
+    Put64(m->dx, Get32(m->ax) & 0x80000000 ? 0xffffffff : 0);
   } else {
-    Write16(m->dx, Read16(m->ax) & 0x8000 ? 0xffff : 0);
+    Put16(m->dx, Get16(m->ax) & 0x8000 ? 0xffff : 0);
   }
 }
 
 static void OpBswapZvqp(struct Machine *m, u32 rde) {
-  u64 x;
-  x = Read64(RegRexbSrm(m, rde));
+  u64 x = Get64(RegRexbSrm(m, rde));
   if (Rexw(rde)) {
-    Write64(
-        RegRexbSrm(m, rde),
-        ((x & 0xff00000000000000) >> 070 | (x & 0x00000000000000ff) << 070 |
-         (x & 0x00ff000000000000) >> 050 | (x & 0x000000000000ff00) << 050 |
-         (x & 0x0000ff0000000000) >> 030 | (x & 0x0000000000ff0000) << 030 |
-         (x & 0x000000ff00000000) >> 010 | (x & 0x00000000ff000000) << 010));
+    Put64(RegRexbSrm(m, rde), SWAP64(x));
   } else if (!Osz(rde)) {
-    Write64(RegRexbSrm(m, rde),
-            ((x & 0xff000000) >> 030 | (x & 0x000000ff) << 030 |
-             (x & 0x00ff0000) >> 010 | (x & 0x0000ff00) << 010));
+    Put64(RegRexbSrm(m, rde), SWAP32(x));
   } else {
-    Write16(RegRexbSrm(m, rde), (x & 0x00ff) << 010 | (x & 0xff00) << 010);
+    Put16(RegRexbSrm(m, rde), SWAP16(x));
   }
 }
 
 static void OpMovEbIb(struct Machine *m, u32 rde) {
-  Write8(GetModrmRegisterBytePointerWrite(m, rde), m->xedd->op.uimm0);
+  Store8(GetModrmRegisterBytePointerWrite(m, rde), m->xedd->op.uimm0);
 }
 
 static void OpMovAlOb(struct Machine *m, u32 rde) {
   i64 addr;
   addr = AddressOb(m, rde);
   SetWriteAddr(m, addr, 1);
-  Write8(m->ax, Read8(ResolveAddress(m, addr)));
+  Put8(m->ax, Load8(ResolveAddress(m, addr)));
 }
 
 static void OpMovObAl(struct Machine *m, u32 rde) {
   i64 addr;
   addr = AddressOb(m, rde);
   SetReadAddr(m, addr, 1);
-  Write8((u8 *)ResolveAddress(m, addr), Read8(m->ax));
+  Store8(ResolveAddress(m, addr), Get8(m->ax));
 }
 
 static void OpMovRaxOvqp(struct Machine *m, u32 rde) {
   u64 v;
   v = DataSegment(m, rde, m->xedd->op.disp);
   SetReadAddr(m, v, 1 << RegLog2(rde));
-  WriteRegister(rde, m->ax, ReadMemory(rde, (u8 *)ResolveAddress(m, v)));
+  WriteRegister(rde, m->ax, ReadMemory(rde, ResolveAddress(m, v)));
 }
 
 static void OpMovOvqpRax(struct Machine *m, u32 rde) {
-  u64 v;
-  v = DataSegment(m, rde, m->xedd->op.disp);
+  u64 v = DataSegment(m, rde, m->xedd->op.disp);
   SetWriteAddr(m, v, 1 << RegLog2(rde));
-  WriteMemory(rde, (u8 *)ResolveAddress(m, v), Read64(m->ax));
+  WriteMemory(rde, ResolveAddress(m, v), Get64(m->ax));
 }
 
 static void OpMovEbGb(struct Machine *m, u32 rde) {
-  memcpy(GetModrmRegisterBytePointerWrite(m, rde), ByteRexrReg(m, rde), 1);
+  Store8(GetModrmRegisterBytePointerWrite(m, rde), Get8(ByteRexrReg(m, rde)));
 }
 
 static void OpMovGbEb(struct Machine *m, u32 rde) {
-  memcpy(ByteRexrReg(m, rde), GetModrmRegisterBytePointerRead(m, rde), 1);
+  Put8(ByteRexrReg(m, rde), Load8(GetModrmRegisterBytePointerRead(m, rde)));
 }
 
 static void OpMovZbIb(struct Machine *m, u32 rde) {
-  Write8(ByteRexbSrm(m, rde), m->xedd->op.uimm0);
+  Put8(ByteRexbSrm(m, rde), m->xedd->op.uimm0);
 }
 
 static void OpMovZvqpIvqp(struct Machine *m, u32 rde) {
@@ -599,17 +472,17 @@ static void OpMovZvqpIvqp(struct Machine *m, u32 rde) {
 
 static void OpIncZv(struct Machine *m, u32 rde) {
   if (!Osz(rde)) {
-    Write32(RegSrm(m, rde), Inc32(Read32(RegSrm(m, rde)), 0, &m->flags));
+    Put32(RegSrm(m, rde), Inc32(Get32(RegSrm(m, rde)), 0, &m->flags));
   } else {
-    Write16(RegSrm(m, rde), Inc16(Read16(RegSrm(m, rde)), 0, &m->flags));
+    Put16(RegSrm(m, rde), Inc16(Get16(RegSrm(m, rde)), 0, &m->flags));
   }
 }
 
 static void OpDecZv(struct Machine *m, u32 rde) {
   if (!Osz(rde)) {
-    Write32(RegSrm(m, rde), Dec32(Read32(RegSrm(m, rde)), 0, &m->flags));
+    Put32(RegSrm(m, rde), Dec32(Get32(RegSrm(m, rde)), 0, &m->flags));
   } else {
-    Write16(RegSrm(m, rde), Dec16(Read16(RegSrm(m, rde)), 0, &m->flags));
+    Put16(RegSrm(m, rde), Dec16(Get16(RegSrm(m, rde)), 0, &m->flags));
   }
 }
 
@@ -625,31 +498,31 @@ static void OpMovEvqpGvqp(struct Machine *m, u32 rde) {
 
 static void OpMovzbGvqpEb(struct Machine *m, u32 rde) {
   WriteRegister(rde, RegRexrReg(m, rde),
-                Read8(GetModrmRegisterBytePointerRead(m, rde)));
+                Load8(GetModrmRegisterBytePointerRead(m, rde)));
 }
 
 static void OpMovzwGvqpEw(struct Machine *m, u32 rde) {
   WriteRegister(rde, RegRexrReg(m, rde),
-                Read16(GetModrmRegisterWordPointerRead2(m, rde)));
+                Load16(GetModrmRegisterWordPointerRead2(m, rde)));
 }
 
 static void OpMovsbGvqpEb(struct Machine *m, u32 rde) {
   WriteRegister(rde, RegRexrReg(m, rde),
-                (i8)Read8(GetModrmRegisterBytePointerRead(m, rde)));
+                (i8)Load8(GetModrmRegisterBytePointerRead(m, rde)));
 }
 
 static void OpMovswGvqpEw(struct Machine *m, u32 rde) {
   WriteRegister(rde, RegRexrReg(m, rde),
-                (i16)Read16(GetModrmRegisterWordPointerRead2(m, rde)));
+                (i16)Load16(GetModrmRegisterWordPointerRead2(m, rde)));
 }
 
 static void OpMovsxdGdqpEd(struct Machine *m, u32 rde) {
-  Write64(RegRexrReg(m, rde),
-          (i32)Read32(GetModrmRegisterWordPointerRead4(m, rde)));
+  Put64(RegRexrReg(m, rde),
+        (i32)Load32(GetModrmRegisterWordPointerRead4(m, rde)));
 }
 
 static void AlubRo(struct Machine *m, u32 rde, aluop_f op) {
-  op(Read8(GetModrmRegisterBytePointerRead(m, rde)), Read8(ByteRexrReg(m, rde)),
+  op(Load8(GetModrmRegisterBytePointerRead(m, rde)), Get8(ByteRexrReg(m, rde)),
      &m->flags);
 }
 
@@ -662,9 +535,9 @@ static void OpAlubTest(struct Machine *m, u32 rde) {
 }
 
 static void AlubFlip(struct Machine *m, u32 rde, aluop_f op) {
-  Write8(ByteRexrReg(m, rde),
-         op(Read8(ByteRexrReg(m, rde)),
-            Read8(GetModrmRegisterBytePointerRead(m, rde)), &m->flags));
+  Put8(ByteRexrReg(m, rde),
+       op(Get8(ByteRexrReg(m, rde)),
+          Load8(GetModrmRegisterBytePointerRead(m, rde)), &m->flags));
 }
 
 static void OpAlubFlipAdd(struct Machine *m, u32 rde) {
@@ -696,7 +569,7 @@ static void OpAlubFlipXor(struct Machine *m, u32 rde) {
 }
 
 static void AlubFlipRo(struct Machine *m, u32 rde, aluop_f op) {
-  op(Read8(ByteRexrReg(m, rde)), Read8(GetModrmRegisterBytePointerRead(m, rde)),
+  op(Get8(ByteRexrReg(m, rde)), Load8(GetModrmRegisterBytePointerRead(m, rde)),
      &m->flags);
 }
 
@@ -706,14 +579,12 @@ static void OpAlubFlipCmp(struct Machine *m, u32 rde) {
 
 static void Alubi(struct Machine *m, u32 rde, aluop_f op) {
   u8 *a = GetModrmRegisterBytePointerWrite(m, rde);
-  Write8(a, op(Read8(a), m->xedd->op.uimm0, &m->flags));
+  Store8(a, op(Load8(a), m->xedd->op.uimm0, &m->flags));
 }
 
 static void AlubiRo(struct Machine *m, u32 rde, aluop_f op) {
-  op(atomic_load_explicit(
-         (atomic_uchar *)GetModrmRegisterBytePointerRead(m, rde),
-         memory_order_acquire),
-     m->xedd->op.uimm0, &m->flags);
+  op(Load8(GetModrmRegisterBytePointerRead(m, rde)), m->xedd->op.uimm0,
+     &m->flags);
 }
 
 static void OpAlubiTest(struct Machine *m, u32 rde) {
@@ -731,7 +602,7 @@ static void OpAlubiReg(struct Machine *m, u32 rde) {
 static void AluwRo(struct Machine *m, u32 rde, const aluop_f ops[4]) {
   ops[RegLog2(rde)](
       ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(m, rde)),
-      Read64(RegRexrReg(m, rde)), &m->flags);
+      Get64(RegRexrReg(m, rde)), &m->flags);
 }
 
 static void OpAluwCmp(struct Machine *m, u32 rde) {
@@ -746,14 +617,14 @@ static void OpAluwFlip(struct Machine *m, u32 rde) {
   WriteRegister(
       rde, RegRexrReg(m, rde),
       kAlu[(m->xedd->op.opcode & 070) >> 3][RegLog2(rde)](
-          Read64(RegRexrReg(m, rde)),
+          Get64(RegRexrReg(m, rde)),
           ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(m, rde)),
           &m->flags));
 }
 
 static void AluwFlipRo(struct Machine *m, u32 rde, const aluop_f ops[4]) {
   ops[RegLog2(rde)](
-      Read64(RegRexrReg(m, rde)),
+      Get64(RegRexrReg(m, rde)),
       ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(m, rde)),
       &m->flags);
 }
@@ -785,7 +656,7 @@ static void OpAluwiReg(struct Machine *m, u32 rde) {
 }
 
 static void AluAlIb(struct Machine *m, aluop_f op) {
-  Write8(m->ax, op(Read8(m->ax), m->xedd->op.uimm0, &m->flags));
+  Put8(m->ax, op(Get8(m->ax), m->xedd->op.uimm0, &m->flags));
 }
 
 static void OpAluAlIbAdd(struct Machine *m, u32 rde) {
@@ -823,7 +694,7 @@ static void OpAluRaxIvds(struct Machine *m, u32 rde) {
 }
 
 static void OpCmpAlIb(struct Machine *m, u32 rde) {
-  Sub8(Read8(m->ax), m->xedd->op.uimm0, &m->flags);
+  Sub8(Get8(m->ax), m->xedd->op.uimm0, &m->flags);
 }
 
 static void OpCmpRaxIvds(struct Machine *m, u32 rde) {
@@ -832,7 +703,7 @@ static void OpCmpRaxIvds(struct Machine *m, u32 rde) {
 }
 
 static void OpTestAlIb(struct Machine *m, u32 rde) {
-  And8(Read8(m->ax), m->xedd->op.uimm0, &m->flags);
+  And8(Get8(m->ax), m->xedd->op.uimm0, &m->flags);
 }
 
 static void OpTestRaxIvds(struct Machine *m, u32 rde) {
@@ -853,7 +724,7 @@ static void OpBsuwi1(struct Machine *m, u32 rde) {
 }
 
 static void OpBsuwiCl(struct Machine *m, u32 rde) {
-  Bsuwi(m, rde, Read8(m->cx));
+  Bsuwi(m, rde, Get8(m->cx));
 }
 
 static void OpBsuwiImm(struct Machine *m, u32 rde) {
@@ -862,7 +733,7 @@ static void OpBsuwiImm(struct Machine *m, u32 rde) {
 
 static void Bsubi(struct Machine *m, u32 rde, u64 y) {
   u8 *a = GetModrmRegisterBytePointerWrite(m, rde);
-  Write8(a, kBsu[ModrmReg(rde)][RegLog2(rde)](Read8(a), y, &m->flags));
+  Store8(a, kBsu[ModrmReg(rde)][RegLog2(rde)](Load8(a), y, &m->flags));
 }
 
 static void OpBsubi1(struct Machine *m, u32 rde) {
@@ -870,7 +741,7 @@ static void OpBsubi1(struct Machine *m, u32 rde) {
 }
 
 static void OpBsubiCl(struct Machine *m, u32 rde) {
-  Bsubi(m, rde, Read8(m->cx));
+  Bsubi(m, rde, Get8(m->cx));
 }
 
 static void OpBsubiImm(struct Machine *m, u32 rde) {
@@ -1100,7 +971,7 @@ static void OpCmovg(struct Machine *m, u32 rde) {
 }
 
 static void SetEb(struct Machine *m, u32 rde, bool x) {
-  Write8(GetModrmRegisterBytePointerWrite(m, rde), x);
+  Store8(GetModrmRegisterBytePointerWrite(m, rde), x);
 }
 
 static void OpSeto(struct Machine *m, u32 rde) {
@@ -1168,7 +1039,7 @@ static void OpSetg(struct Machine *m, u32 rde) {
 }
 
 static void OpJcxz(struct Machine *m, u32 rde) {
-  if (!MaskAddress(Eamode(rde), Read64(m->cx))) {
+  if (!MaskAddress(Eamode(rde), Get64(m->cx))) {
     OpJmp(m, rde);
   }
 }
@@ -1262,32 +1133,31 @@ static void Op1b8(struct Machine *m, u32 rde) {
   }
 }
 
-static void LoadFarPointer(struct Machine *m, u32 rde, u8 seg[8]) {
-  u32 fp;
-  fp = Read32((u8 *)ComputeReserveAddressRead4(m, rde));
-  Write64(seg, (fp & 0x0000ffff) << 4);
-  Write16(RegRexrReg(m, rde), fp >> 16);
+static void LoadFarPointer(struct Machine *m, u32 rde, u64 *seg) {
+  u32 fp = Load32(ComputeReserveAddressRead4(m, rde));
+  *seg = (fp & 0x0000ffff) << 4;
+  Put16(RegRexrReg(m, rde), fp >> 16);
 }
 
 static void OpLes(struct Machine *m, u32 rde) {
-  LoadFarPointer(m, rde, m->es);
+  LoadFarPointer(m, rde, &m->es);
 }
 
 static void OpLds(struct Machine *m, u32 rde) {
-  LoadFarPointer(m, rde, m->ds);
+  LoadFarPointer(m, rde, &m->ds);
 }
 
 static void Loop(struct Machine *m, u32 rde, bool cond) {
   u64 cx;
-  cx = Read64(m->cx) - 1;
+  cx = Get64(m->cx) - 1;
   if (Eamode(rde) != XED_MODE_REAL) {
     if (Eamode(rde) == XED_MODE_LEGACY) {
       cx &= 0xffffffff;
     }
-    Write64(m->cx, cx);
+    Put64(m->cx, cx);
   } else {
     cx &= 0xffff;
-    Write16(m->cx, cx);
+    Put16(m->cx, cx);
   }
   if (cx && cond) {
     OpJmp(m, rde);
@@ -1355,7 +1225,7 @@ static void OpDoubleShift(struct Machine *m, u32 rde) {
       rde, p,
       BsuDoubleShift(W[Osz(rde)][Rexw(rde)], ReadMemory(rde, p),
                      ReadRegister(rde, RegRexrReg(m, rde)),
-                     m->xedd->op.opcode & 1 ? Read8(m->cx) : m->xedd->op.uimm0,
+                     m->xedd->op.opcode & 1 ? Get8(m->cx) : m->xedd->op.uimm0,
                      m->xedd->op.opcode & 8, &m->flags));
 }
 
@@ -1384,39 +1254,55 @@ static void OpFxrstor(struct Machine *m, u32 rde) {
   VirtualSend(m, buf, v + 0, 32);
   VirtualSend(m, m->fpu.st, v + 32, 128);
   VirtualSend(m, m->xmm, v + 160, 256);
-  m->fpu.cw = Read16(buf + 0);
-  m->fpu.sw = Read16(buf + 2);
-  m->fpu.tw = Read8(buf + 4);
-  m->fpu.op = Read16(buf + 6);
-  m->fpu.ip = Read32(buf + 8);
-  m->mxcsr = Read32(buf + 24);
+  m->fpu.cw = Load16(buf + 0);
+  m->fpu.sw = Load16(buf + 2);
+  m->fpu.tw = Load8(buf + 4);
+  m->fpu.op = Load16(buf + 6);
+  m->fpu.ip = Load32(buf + 8);
+  m->mxcsr = Load32(buf + 24);
 }
 
 static void OpXsave(struct Machine *m, u32 rde) {
 }
 
 static void OpLdmxcsr(struct Machine *m, u32 rde) {
-  m->mxcsr = Read32((u8 *)ComputeReserveAddressRead4(m, rde));
+  m->mxcsr = Load32(ComputeReserveAddressRead4(m, rde));
 }
 
 static void OpStmxcsr(struct Machine *m, u32 rde) {
-  Write32((u8 *)ComputeReserveAddressWrite4(m, rde), m->mxcsr);
+  Store32(ComputeReserveAddressWrite4(m, rde), m->mxcsr);
 }
 
 static void OpRdfsbase(struct Machine *m, u32 rde) {
-  WriteRegister(rde, RegRexbRm(m, rde), Read64(m->fs));
+  WriteRegister(rde, RegRexbRm(m, rde), m->fs);
 }
 
 static void OpRdgsbase(struct Machine *m, u32 rde) {
-  WriteRegister(rde, RegRexbRm(m, rde), Read64(m->gs));
+  WriteRegister(rde, RegRexbRm(m, rde), m->gs);
 }
 
 static void OpWrfsbase(struct Machine *m, u32 rde) {
-  Write64(m->fs, ReadRegister(rde, RegRexbRm(m, rde)));
+  m->fs = ReadRegister(rde, RegRexbRm(m, rde));
 }
 
 static void OpWrgsbase(struct Machine *m, u32 rde) {
-  Write64(m->gs, ReadRegister(rde, RegRexbRm(m, rde)));
+  m->gs = ReadRegister(rde, RegRexbRm(m, rde));
+}
+
+static void OpMfence(struct Machine *m, u32 rde) {
+  atomic_thread_fence(memory_order_seq_cst);
+}
+
+static void OpLfence(struct Machine *m, u32 rde) {
+  OpMfence(m, rde);
+}
+
+static void OpSfence(struct Machine *m, u32 rde) {
+  OpMfence(m, rde);
+}
+
+static void OpClflush(struct Machine *m, u32 rde) {
+  OpMfence(m, rde);
 }
 
 static void Op1ae(struct Machine *m, u32 rde) {
@@ -1528,16 +1414,16 @@ static void OpNop(struct Machine *m, u32 rde) {
 static void OpMovRqCq(struct Machine *m, u32 rde) {
   switch (ModrmReg(rde)) {
     case 0:
-      Write64(RegRexbRm(m, rde), m->system->cr0);
+      Put64(RegRexbRm(m, rde), m->system->cr0);
       break;
     case 2:
-      Write64(RegRexbRm(m, rde), m->system->cr2);
+      Put64(RegRexbRm(m, rde), m->system->cr2);
       break;
     case 3:
-      Write64(RegRexbRm(m, rde), m->system->cr3);
+      Put64(RegRexbRm(m, rde), m->system->cr3);
       break;
     case 4:
-      Write64(RegRexbRm(m, rde), m->system->cr4);
+      Put64(RegRexbRm(m, rde), m->system->cr4);
       break;
     default:
       OpUd(m, rde);
@@ -1548,13 +1434,13 @@ static void OpMovCqRq(struct Machine *m, u32 rde) {
   i64 cr3;
   switch (ModrmReg(rde)) {
     case 0:
-      m->system->cr0 = Read64(RegRexbRm(m, rde));
+      m->system->cr0 = Get64(RegRexbRm(m, rde));
       break;
     case 2:
-      m->system->cr2 = Read64(RegRexbRm(m, rde));
+      m->system->cr2 = Get64(RegRexbRm(m, rde));
       break;
     case 3:
-      cr3 = Read64(RegRexbRm(m, rde));
+      cr3 = Get64(RegRexbRm(m, rde));
       if (0 <= cr3 && cr3 + 512 * 8 <= GetRealMemorySize(m->system)) {
         m->system->cr3 = cr3;
       } else {
@@ -1562,7 +1448,7 @@ static void OpMovCqRq(struct Machine *m, u32 rde) {
       }
       break;
     case 4:
-      m->system->cr4 = Read64(RegRexbRm(m, rde));
+      m->system->cr4 = Get64(RegRexbRm(m, rde));
       break;
     default:
       OpUd(m, rde);
@@ -1573,8 +1459,8 @@ static void OpWrmsr(struct Machine *m, u32 rde) {
 }
 
 static void OpRdmsr(struct Machine *m, u32 rde) {
-  Write32(m->dx, 0);
-  Write32(m->ax, 0);
+  Put32(m->dx, 0);
+  Put32(m->ax, 0);
 }
 
 static void OpEmms(struct Machine *m, u32 rde) {

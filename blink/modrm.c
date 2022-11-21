@@ -27,7 +27,7 @@
 
 struct AddrSeg LoadEffectiveAddress(const struct Machine *m, u32 rde) {
   struct AddrSeg res;
-  const u8 *s = m->ds;
+  u64 s = m->ds;
   u64 i = m->xedd->op.disp;
   unassert(!IsModrmRegister(rde));
   if (Eamode(rde) != XED_MODE_REAL) {
@@ -37,20 +37,20 @@ struct AddrSeg LoadEffectiveAddress(const struct Machine *m, u32 rde) {
           i += m->ip;
         }
       } else {
-        i += Read64(RegRexbRm(m, rde));
+        i += Get64(RegRexbRm(m, rde));
         if (RexbRm(rde) == 4 || RexbRm(rde) == 5) {
           s = m->ss;
         }
       }
     } else {
       if (SibHasBase(m->xedd, rde)) {
-        i += Read64(RegRexbBase(m, rde));
+        i += Get64(RegRexbBase(m, rde));
         if (RexbBase(m, rde) == 4 || RexbBase(m, rde) == 5) {
           s = m->ss;
         }
       }
       if (SibHasIndex(m->xedd)) {
-        i += Read64(RegRexxIndex(m, rde)) << SibScale(m->xedd);
+        i += Get64(RegRexxIndex(m, rde)) << SibScale(m->xedd);
       }
     }
     if (Eamode(rde) == XED_MODE_LEGACY) {
@@ -59,37 +59,37 @@ struct AddrSeg LoadEffectiveAddress(const struct Machine *m, u32 rde) {
   } else {
     switch (ModrmRm(rde)) {
       case 0:
-        i += Read16(m->bx);
-        i += Read16(m->si);
+        i += Get16(m->bx);
+        i += Get16(m->si);
         break;
       case 1:
-        i += Read16(m->bx);
-        i += Read16(m->di);
+        i += Get16(m->bx);
+        i += Get16(m->di);
         break;
       case 2:
         s = m->ss;
-        i += Read16(m->bp);
-        i += Read16(m->si);
+        i += Get16(m->bp);
+        i += Get16(m->si);
         break;
       case 3:
         s = m->ss;
-        i += Read16(m->bp);
-        i += Read16(m->di);
+        i += Get16(m->bp);
+        i += Get16(m->di);
         break;
       case 4:
-        i += Read16(m->si);
+        i += Get16(m->si);
         break;
       case 5:
-        i += Read16(m->di);
+        i += Get16(m->di);
         break;
       case 6:
         if (ModrmMod(rde)) {
           s = m->ss;
-          i += Read16(m->bp);
+          i += Get16(m->bp);
         }
         break;
       case 7:
-        i += Read16(m->bx);
+        i += Get16(m->bx);
         break;
       default:
         __builtin_unreachable();
@@ -107,50 +107,49 @@ i64 ComputeAddress(struct Machine *m, u32 rde) {
   return AddSegment(m, rde, ea.addr, ea.seg);
 }
 
-void *ComputeReserveAddressRead(struct Machine *m, u32 rde, size_t n) {
+u8 *ComputeReserveAddressRead(struct Machine *m, u32 rde, size_t n) {
   i64 v;
   v = ComputeAddress(m, rde);
   SetReadAddr(m, v, n);
   return ReserveAddress(m, v, n);
 }
 
-void *ComputeReserveAddressRead1(struct Machine *m, u32 rde) {
+u8 *ComputeReserveAddressRead1(struct Machine *m, u32 rde) {
   return ComputeReserveAddressRead(m, rde, 1);
 }
 
-void *ComputeReserveAddressRead4(struct Machine *m, u32 rde) {
+u8 *ComputeReserveAddressRead4(struct Machine *m, u32 rde) {
   return ComputeReserveAddressRead(m, rde, 4);
 }
 
-void *ComputeReserveAddressRead8(struct Machine *m, u32 rde) {
+u8 *ComputeReserveAddressRead8(struct Machine *m, u32 rde) {
   return ComputeReserveAddressRead(m, rde, 8);
 }
 
-void *ComputeReserveAddressWrite(struct Machine *m, u32 rde, size_t n) {
+u8 *ComputeReserveAddressWrite(struct Machine *m, u32 rde, size_t n) {
   i64 v;
   v = ComputeAddress(m, rde);
   SetWriteAddr(m, v, n);
   return ReserveAddress(m, v, n);
 }
 
-void *ComputeReserveAddressWrite1(struct Machine *m, u32 rde) {
+u8 *ComputeReserveAddressWrite1(struct Machine *m, u32 rde) {
   return ComputeReserveAddressWrite(m, rde, 1);
 }
 
-void *ComputeReserveAddressWrite4(struct Machine *m, u32 rde) {
+u8 *ComputeReserveAddressWrite4(struct Machine *m, u32 rde) {
   return ComputeReserveAddressWrite(m, rde, 4);
 }
 
-void *ComputeReserveAddressWrite8(struct Machine *m, u32 rde) {
+u8 *ComputeReserveAddressWrite8(struct Machine *m, u32 rde) {
   return ComputeReserveAddressWrite(m, rde, 8);
 }
 
-u8 *GetModrmRegisterMmPointerRead(struct Machine *m, u32 rde,
-                                       size_t n) {
+u8 *GetModrmRegisterMmPointerRead(struct Machine *m, u32 rde, size_t n) {
   if (IsModrmRegister(rde)) {
     return MmRm(m, rde);
   } else {
-    return (u8 *)ComputeReserveAddressRead(m, rde, n);
+    return ComputeReserveAddressRead(m, rde, n);
   }
 }
 
@@ -158,12 +157,11 @@ u8 *GetModrmRegisterMmPointerRead8(struct Machine *m, u32 rde) {
   return GetModrmRegisterMmPointerRead(m, rde, 8);
 }
 
-u8 *GetModrmRegisterMmPointerWrite(struct Machine *m, u32 rde,
-                                        size_t n) {
+u8 *GetModrmRegisterMmPointerWrite(struct Machine *m, u32 rde, size_t n) {
   if (IsModrmRegister(rde)) {
     return MmRm(m, rde);
   } else {
-    return (u8 *)ComputeReserveAddressWrite(m, rde, n);
+    return ComputeReserveAddressWrite(m, rde, n);
   }
 }
 
@@ -175,7 +173,7 @@ u8 *GetModrmRegisterBytePointerRead(struct Machine *m, u32 rde) {
   if (IsModrmRegister(rde)) {
     return ByteRexbRm(m, rde);
   } else {
-    return (u8 *)ComputeReserveAddressRead1(m, rde);
+    return ComputeReserveAddressRead1(m, rde);
   }
 }
 
@@ -183,16 +181,15 @@ u8 *GetModrmRegisterBytePointerWrite(struct Machine *m, u32 rde) {
   if (IsModrmRegister(rde)) {
     return ByteRexbRm(m, rde);
   } else {
-    return (u8 *)ComputeReserveAddressWrite1(m, rde);
+    return ComputeReserveAddressWrite1(m, rde);
   }
 }
 
-u8 *GetModrmRegisterWordPointerRead(struct Machine *m, u32 rde,
-                                         size_t n) {
+u8 *GetModrmRegisterWordPointerRead(struct Machine *m, u32 rde, size_t n) {
   if (IsModrmRegister(rde)) {
     return RegRexbRm(m, rde);
   } else {
-    return (u8 *)ComputeReserveAddressRead(m, rde, n);
+    return ComputeReserveAddressRead(m, rde, n);
   }
 }
 
@@ -216,8 +213,7 @@ u8 *GetModrmRegisterWordPointerReadOsz(struct Machine *m, u32 rde) {
   }
 }
 
-u8 *GetModrmRegisterWordPointerReadOszRexw(struct Machine *m,
-                                                u32 rde) {
+u8 *GetModrmRegisterWordPointerReadOszRexw(struct Machine *m, u32 rde) {
   if (Rexw(rde)) {
     return GetModrmRegisterWordPointerRead8(m, rde);
   } else if (!Osz(rde)) {
@@ -227,12 +223,11 @@ u8 *GetModrmRegisterWordPointerReadOszRexw(struct Machine *m,
   }
 }
 
-u8 *GetModrmRegisterWordPointerWrite(struct Machine *m, u32 rde,
-                                          size_t n) {
+u8 *GetModrmRegisterWordPointerWrite(struct Machine *m, u32 rde, size_t n) {
   if (IsModrmRegister(rde)) {
     return RegRexbRm(m, rde);
   } else {
-    return (u8 *)ComputeReserveAddressWrite(m, rde, n);
+    return ComputeReserveAddressWrite(m, rde, n);
   }
 }
 
@@ -248,8 +243,7 @@ u8 *GetModrmRegisterWordPointerWrite8(struct Machine *m, u32 rde) {
   return GetModrmRegisterWordPointerWrite(m, rde, 8);
 }
 
-u8 *GetModrmRegisterWordPointerWriteOszRexw(struct Machine *m,
-                                                 u32 rde) {
+u8 *GetModrmRegisterWordPointerWriteOszRexw(struct Machine *m, u32 rde) {
   if (Rexw(rde)) {
     return GetModrmRegisterWordPointerWrite(m, rde, 8);
   } else if (!Osz(rde)) {
@@ -267,12 +261,11 @@ u8 *GetModrmRegisterWordPointerWriteOsz(struct Machine *m, u32 rde) {
   }
 }
 
-u8 *GetModrmRegisterXmmPointerRead(struct Machine *m, u32 rde,
-                                        size_t n) {
+u8 *GetModrmRegisterXmmPointerRead(struct Machine *m, u32 rde, size_t n) {
   if (IsModrmRegister(rde)) {
     return XmmRexbRm(m, rde);
   } else {
-    return (u8 *)ComputeReserveAddressRead(m, rde, n);
+    return ComputeReserveAddressRead(m, rde, n);
   }
 }
 
@@ -288,12 +281,11 @@ u8 *GetModrmRegisterXmmPointerRead16(struct Machine *m, u32 rde) {
   return GetModrmRegisterXmmPointerRead(m, rde, 16);
 }
 
-u8 *GetModrmRegisterXmmPointerWrite(struct Machine *m, u32 rde,
-                                         size_t n) {
+u8 *GetModrmRegisterXmmPointerWrite(struct Machine *m, u32 rde, size_t n) {
   if (IsModrmRegister(rde)) {
     return XmmRexbRm(m, rde);
   } else {
-    return (u8 *)ComputeReserveAddressWrite(m, rde, n);
+    return ComputeReserveAddressWrite(m, rde, n);
   }
 }
 

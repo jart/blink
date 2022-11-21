@@ -22,32 +22,35 @@
 #include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/endian.h"
+#include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 #include "blink/swap.h"
 
 void OpXaddEbGb(struct Machine *m, u32 rde) {
   u8 x, y, z, *p, *q;
   p = GetModrmRegisterBytePointerWrite(m, rde);
   q = ByteRexrReg(m, rde);
-  x = Read8(p);
-  y = Read8(q);
+  x = Load8(p);
+  y = Get8(q);
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
   do {
     z = Add8(x, y, &m->flags);
-    Write8(q, x);
+    Put8(q, x);
     if (!Lock(rde)) {
       *p = z;
       break;
     }
   } while (!atomic_compare_exchange_weak_explicit(
-      (atomic_uchar *)p, &x, *q, memory_order_acq_rel, memory_order_relaxed));
+      (atomic_uchar *)p, &x, *q, memory_order_release, memory_order_relaxed));
 #else
   if (!Lock(rde)) {
     z = Add8(x, y, &m->flags);
-    Write8(q, x);
-    Write8(p, z);
+    Put8(q, x);
+    Store8(p, z);
   } else {
+    LOGF("can't %s on this platform", "lock xaddb");
     OpUd(m, rde);
   }
 #endif
@@ -59,58 +62,68 @@ void OpXaddEvqpGvqp(struct Machine *m, u32 rde) {
   p = GetModrmRegisterWordPointerWriteOszRexw(m, rde);
   if (Rexw(rde)) {
     u64 x, y, z;
-    if (Lock(rde) && !((intptr_t)p & 7)) {
+    if (Lock(rde)) {
 #if LONG_BIT == 64
-      x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_relaxed);
-      y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);
-      y = SWAP64LE(y);
-      do {
-        atomic_store_explicit((_Atomic(u64) *)q, x, memory_order_relaxed);
-        z = kAlu[ALU_ADD][ALU_INT64](SWAP64LE(x), y, &m->flags);
-        z = SWAP64LE(z);
-      } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x, z,
-                                                      memory_order_acq_rel,
-                                                      memory_order_relaxed));
+      if (!((intptr_t)p & 7)) {
+        x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
+        y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);
+        y = Little64(y);
+        do {
+          atomic_store_explicit((_Atomic(u64) *)q, x, memory_order_relaxed);
+          z = Little64(kAlu[ALU_ADD][ALU_INT64](Little64(x), y, &m->flags));
+        } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x,
+                                                        z, memory_order_release,
+                                                        memory_order_relaxed));
+      } else {
+        LOGF("can't %s misaligned address", "lock xaddq");
+        OpUd(m, rde);
+      }
 #else
+      LOGF("can't %s on this platform", "lock xaddq");
       OpUd(m, rde);
 #endif
     } else {
-      x = Read64(p);
-      y = Read64(q);
+      x = Load64(p);
+      y = Get64(q);
       z = kAlu[ALU_ADD][ALU_INT64](x, y, &m->flags);
-      Write64(q, x);
-      Write64(p, z);
+      Put64(q, x);
+      Store64(p, z);
     }
   } else if (!Osz(rde)) {
     u32 x, y, z;
-    if (Lock(rde) && !((intptr_t)p & 3)) {
-      x = atomic_load_explicit((_Atomic(u32) *)p, memory_order_relaxed);
-      y = atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed);
-      y = SWAP32LE(y);
-      do {
-        atomic_store_explicit((_Atomic(u32) *)q, x, memory_order_relaxed);
-        z = kAlu[ALU_ADD][ALU_INT32](SWAP32LE(x), y, &m->flags);
-        z = SWAP32LE(z);
-      } while (!atomic_compare_exchange_weak_explicit((_Atomic(u32) *)p, &x, z,
-                                                      memory_order_acq_rel,
-                                                      memory_order_relaxed));
+    if (Lock(rde)) {
+      if (!((intptr_t)p & 3)) {
+        x = atomic_load_explicit((_Atomic(u32) *)p, memory_order_acquire);
+        y = atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed);
+        y = Little32(y);
+        do {
+          atomic_store_explicit((_Atomic(u32) *)q, x, memory_order_relaxed);
+          z = Little32(kAlu[ALU_ADD][ALU_INT32](Little32(x), y, &m->flags));
+        } while (!atomic_compare_exchange_weak_explicit((_Atomic(u32) *)p, &x,
+                                                        z, memory_order_release,
+                                                        memory_order_relaxed));
+      } else {
+        LOGF("can't %s misaligned address", "lock xaddq");
+        OpUd(m, rde);
+      }
     } else {
-      x = Read32(p);
-      y = Read32(q);
+      x = Load32(p);
+      y = Get32(q);
       z = kAlu[ALU_ADD][ALU_INT32](x, y, &m->flags);
-      Write32(q, x);
-      Write32(p, z);
+      Put32(q, x);
+      Store32(p, z);
     }
+    Put32(q + 4, 0);
     if (IsModrmRegister(rde)) {
-      Write32(p + 4, 0);
+      Put32(p + 4, 0);
     }
   } else {
     u16 x, y, z;
     unassert(!Lock(rde));
-    x = Read16(p);
-    y = Read16(q);
+    x = Load16(p);
+    y = Get16(q);
     z = kAlu[ALU_ADD][ALU_INT16](x, y, &m->flags);
-    Write16(q, x);
-    Write16(p, z);
+    Put16(q, x);
+    Store16(p, z);
   }
 }

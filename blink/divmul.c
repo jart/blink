@@ -22,6 +22,7 @@
 #include "blink/flags.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 
 struct Dubble {
   u64 lo;
@@ -54,8 +55,8 @@ static inline unsigned DubbleLte(struct Dubble a, struct Dubble b) {
 }
 
 static struct Dubble DubbleMul(u64 a, u64 b) {
-  struct Dubble d;
   u64 x, y, t;
+  struct Dubble d;
   x = (a & 0xffffffff) * (b & 0xffffffff);
   t = x >> 32;
   x &= 0xffffffff;
@@ -83,8 +84,8 @@ static struct Dubble DubbleImul(u64 a, u64 b) {
 }
 
 static struct Dubble DubbleDiv(struct Dubble a, u64 b, u64 *r) {
-  int n, c;
   u64 s;
+  int n, c;
   struct Dubble d, q, t;
   d.lo = b, d.hi = 0;
   q.lo = 0, q.hi = 0;
@@ -121,13 +122,13 @@ static struct Dubble DubbleIdiv(struct Dubble a, u64 b, u64 *r) {
 void OpDivAlAhAxEbSigned(struct Machine *m, u32 rde) {
   i8 y, r;
   i16 x, q;
-  x = Read16(m->ax);
-  y = Read8(GetModrmRegisterBytePointerRead(m, rde));
-  if (!y) ThrowDivideError(m);
-  if (x == INT16_MIN) ThrowDivideError(m);
+  x = Get16(m->ax);
+  y = Load8(GetModrmRegisterBytePointerRead(m, rde));
+  if (!y) return RaiseDivideError(m);
+  if (x == INT16_MIN) return RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q != (i8)q) ThrowDivideError(m);
+  if (q != (i8)q) return RaiseDivideError(m);
   m->al = q & 0xff;
   m->ah = r & 0xff;
 }
@@ -135,12 +136,12 @@ void OpDivAlAhAxEbSigned(struct Machine *m, u32 rde) {
 void OpDivAlAhAxEbUnsigned(struct Machine *m, u32 rde) {
   u8 y, r;
   u16 x, q;
-  x = Read16(m->ax);
-  y = Read8(GetModrmRegisterBytePointerRead(m, rde));
-  if (!y) ThrowDivideError(m);
+  x = Get16(m->ax);
+  y = Load8(GetModrmRegisterBytePointerRead(m, rde));
+  if (!y) return RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q > UINT8_MAX) ThrowDivideError(m);
+  if (q > UINT8_MAX) return RaiseDivideError(m);
   m->al = q & 0xff;
   m->ah = r & 0xff;
 }
@@ -148,88 +149,87 @@ void OpDivAlAhAxEbUnsigned(struct Machine *m, u32 rde) {
 static void OpDivRdxRaxEvqpSigned64(struct Machine *m, u32 rde, u8 *p) {
   u64 d, r;
   struct Dubble q;
-  q.lo = Read64(m->ax);
-  q.hi = Read64(m->dx);
-  d = Read64(p);
-  if (!d) ThrowDivideError(m);
-  if (!q.lo && q.hi == 0x8000000000000000) ThrowDivideError(m);
+  q.lo = Get64(m->ax);
+  q.hi = Get64(m->dx);
+  d = Load64(p);
+  if (!d) return RaiseDivideError(m);
+  if (!q.lo && q.hi == 0x8000000000000000) return RaiseDivideError(m);
   q = DubbleIdiv(q, d, &r);
-  if ((i64)q.lo < 0 && (i64)q.hi != -1) ThrowDivideError(m);
-  if ((i64)q.lo >= 0 && q.hi) ThrowDivideError(m);
-  Write64(m->ax, q.lo);
-  Write64(m->dx, r);
+  if ((i64)q.lo < 0 && (i64)q.hi != -1) return RaiseDivideError(m);
+  if ((i64)q.lo >= 0 && q.hi) return RaiseDivideError(m);
+  Put64(m->ax, q.lo);
+  Put64(m->dx, r);
 }
 
 static void OpDivRdxRaxEvqpSigned32(struct Machine *m, u32 rde, u8 *p) {
   i32 y, r;
   i64 x, q;
-  x = (u64)Read32(m->dx) << 32 | Read32(m->ax);
-  y = Read32(p);
-  if (!y) ThrowDivideError(m);
-  if (x == INT64_MIN) ThrowDivideError(m);
+  x = (u64)Get32(m->dx) << 32 | Get32(m->ax);
+  y = Load32(p);
+  if (!y) return RaiseDivideError(m);
+  if (x == INT64_MIN) return RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q != (i32)q) ThrowDivideError(m);
-  Write64(m->ax, q & 0xffffffff);
-  Write64(m->dx, r & 0xffffffff);
+  if (q != (i32)q) return RaiseDivideError(m);
+  Put64(m->ax, q & 0xffffffff);
+  Put64(m->dx, r & 0xffffffff);
 }
 
 static void OpDivRdxRaxEvqpSigned16(struct Machine *m, u32 rde, u8 *p) {
   i16 y, r;
   i32 x, q;
-  x = (u32)Read16(m->dx) << 16 | Read16(m->ax);
-  y = Read16(p);
-  if (!y) ThrowDivideError(m);
-  if (x == INT32_MIN) ThrowDivideError(m);
+  x = (u32)Get16(m->dx) << 16 | Get16(m->ax);
+  y = Load16(p);
+  if (!y) return RaiseDivideError(m);
+  if (x == INT32_MIN) return RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q != (i16)q) ThrowDivideError(m);
-  Write16(m->ax, q);
-  Write16(m->dx, r);
+  if (q != (i16)q) return RaiseDivideError(m);
+  Put16(m->ax, q);
+  Put16(m->dx, r);
 }
 
 static void OpDivRdxRaxEvqpUnsigned16(struct Machine *m, u32 rde, u8 *p) {
   u16 y, r;
   u32 x, q;
-  x = (u32)Read16(m->dx) << 16 | Read16(m->ax);
-  y = Read16(p);
-  if (!y) ThrowDivideError(m);
+  x = (u32)Get16(m->dx) << 16 | Get16(m->ax);
+  y = Load16(p);
+  if (!y) return RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q > UINT16_MAX) ThrowDivideError(m);
-  Write16(m->ax, q);
-  Write16(m->dx, r);
+  if (q > UINT16_MAX) return RaiseDivideError(m);
+  Put16(m->ax, q);
+  Put16(m->dx, r);
 }
 
 static void OpDivRdxRaxEvqpUnsigned32(struct Machine *m, u32 rde, u8 *p) {
   u32 y, r;
   u64 x, q;
-  x = (u64)Read32(m->dx) << 32 | Read32(m->ax);
-  y = Read32(p);
-  if (!y) ThrowDivideError(m);
+  x = (u64)Get32(m->dx) << 32 | Get32(m->ax);
+  y = Load32(p);
+  if (!y) return RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q > UINT32_MAX) ThrowDivideError(m);
-  Write64(m->ax, q & 0xffffffff);
-  Write64(m->dx, r & 0xffffffff);
+  if (q > UINT32_MAX) return RaiseDivideError(m);
+  Put64(m->ax, q & 0xffffffff);
+  Put64(m->dx, r & 0xffffffff);
 }
 
 static void OpDivRdxRaxEvqpUnsigned64(struct Machine *m, u32 rde, u8 *p) {
   u64 d, r;
   struct Dubble q;
-  q.lo = Read64(m->ax);
-  q.hi = Read64(m->dx);
-  d = Read64(p);
-  if (!d) ThrowDivideError(m);
+  q.lo = Get64(m->ax);
+  q.hi = Get64(m->dx);
+  d = Load64(p);
+  if (!d) return RaiseDivideError(m);
   q = DubbleDiv(q, d, &r);
-  if (q.hi) ThrowDivideError(m);
-  Write64(m->ax, q.lo);
-  Write64(m->dx, r);
+  if (q.hi) return RaiseDivideError(m);
+  Put64(m->ax, q.lo);
+  Put64(m->dx, r);
 }
 
 void OpDivRdxRaxEvqpSigned(struct Machine *m, u32 rde) {
-  u8 *p;
-  p = GetModrmRegisterWordPointerReadOszRexw(m, rde);
+  u8 *p = GetModrmRegisterWordPointerReadOszRexw(m, rde);
   if (Rexw(rde)) {
     OpDivRdxRaxEvqpSigned64(m, rde, p);
   } else if (!Osz(rde)) {
@@ -240,8 +240,7 @@ void OpDivRdxRaxEvqpSigned(struct Machine *m, u32 rde) {
 }
 
 void OpDivRdxRaxEvqpUnsigned(struct Machine *m, u32 rde) {
-  u8 *p;
-  p = GetModrmRegisterWordPointerReadOszRexw(m, rde);
+  u8 *p = GetModrmRegisterWordPointerReadOszRexw(m, rde);
   if (Rexw(rde)) {
     OpDivRdxRaxEvqpUnsigned64(m, rde, p);
   } else if (!Osz(rde)) {
@@ -252,51 +251,51 @@ void OpDivRdxRaxEvqpUnsigned(struct Machine *m, u32 rde) {
 }
 
 void OpMulAxAlEbSigned(struct Machine *m, u32 rde) {
-  i16 ax;
   u8 *p;
+  i16 ax;
   unsigned of;
   p = GetModrmRegisterBytePointerRead(m, rde);
-  ax = (i8)Read8(m->ax) * (i8)Read8(p);
+  ax = (i8)Get8(m->ax) * (i8)Load8(p);
   of = ax != (i8)ax;
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
-  Write16(m->ax, ax);
+  Put16(m->ax, ax);
 }
 
 void OpMulAxAlEbUnsigned(struct Machine *m, u32 rde) {
-  int ax;
   u8 *p;
+  int ax;
   unsigned of;
   p = GetModrmRegisterBytePointerRead(m, rde);
-  ax = Read8(m->ax) * Read8(p);
+  ax = Get8(m->ax) * Load8(p);
   of = ax != (u8)ax;
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
-  Write16(m->ax, ax);
+  Put16(m->ax, ax);
 }
 
 void OpMulRdxRaxEvqpSigned(struct Machine *m, u32 rde) {
   u8 *p;
-  unsigned of;
   i32 dxax;
   i64 edxeax;
+  unsigned of;
   struct Dubble rdxrax;
   p = GetModrmRegisterWordPointerReadOszRexw(m, rde);
   if (Rexw(rde)) {
-    rdxrax = DubbleImul(Read64(m->ax), Read64(p));
+    rdxrax = DubbleImul(Get64(m->ax), Load64(p));
     of = !!(rdxrax.hi + (rdxrax.lo >> 63));
-    Write64(m->ax, rdxrax.lo);
-    Write64(m->dx, rdxrax.hi);
+    Put64(m->ax, rdxrax.lo);
+    Put64(m->dx, rdxrax.hi);
   } else if (!Osz(rde)) {
-    edxeax = (i64)(i32)Read32(m->ax) * (i32)Read32(p);
+    edxeax = (i64)(i32)Get32(m->ax) * (i32)Load32(p);
     of = edxeax != (i32)edxeax;
-    Write64(m->ax, edxeax);
-    Write64(m->dx, edxeax >> 32);
+    Put64(m->ax, edxeax);
+    Put64(m->dx, edxeax >> 32);
   } else {
-    dxax = (i32)(i16)Read16(m->ax) * (i16)Read16(p);
+    dxax = (i32)(i16)Get16(m->ax) * (i16)Load16(p);
     of = dxax != (i16)dxax;
-    Write16(m->ax, dxax);
-    Write16(m->dx, dxax >> 16);
+    Put16(m->ax, dxax);
+    Put16(m->dx, dxax >> 16);
   }
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
@@ -304,26 +303,26 @@ void OpMulRdxRaxEvqpSigned(struct Machine *m, u32 rde) {
 
 void OpMulRdxRaxEvqpUnsigned(struct Machine *m, u32 rde) {
   u8 *p;
-  unsigned of;
   u32 dxax;
   u64 edxeax;
+  unsigned of;
   struct Dubble rdxrax;
   p = GetModrmRegisterWordPointerReadOszRexw(m, rde);
   if (Rexw(rde)) {
-    rdxrax = DubbleMul(Read64(m->ax), Read64(p));
+    rdxrax = DubbleMul(Get64(m->ax), Load64(p));
     of = !!rdxrax.hi;
-    Write64(m->ax, rdxrax.lo);
-    Write64(m->dx, rdxrax.hi);
+    Put64(m->ax, rdxrax.lo);
+    Put64(m->dx, rdxrax.hi);
   } else if (!Osz(rde)) {
-    edxeax = (u64)Read32(m->ax) * Read32(p);
+    edxeax = (u64)Get32(m->ax) * Load32(p);
     of = (u32)edxeax != edxeax;
-    Write64(m->ax, edxeax);
-    Write64(m->dx, edxeax >> 32);
+    Put64(m->ax, edxeax);
+    Put64(m->dx, edxeax >> 32);
   } else {
-    dxax = (u32)(u16)Read16(m->ax) * (u16)Read16(p);
+    dxax = (u32)(u16)Get16(m->ax) * (u16)Load16(p);
     of = (u16)dxax != dxax;
-    Write16(m->ax, dxax);
-    Write16(m->dx, dxax >> 16);
+    Put16(m->ax, dxax);
+    Put16(m->dx, dxax >> 16);
   }
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
@@ -333,19 +332,19 @@ static void AluImul(struct Machine *m, u32 rde, u8 *a, u8 *b) {
   unsigned of;
   if (Rexw(rde)) {
     struct Dubble p;
-    p = DubbleImul(Read64(a), Read64(b));
+    p = DubbleImul(Get64(a), Load64(b));
     of = !!(p.hi + (p.lo >> 63));
-    Write64(RegRexrReg(m, rde), p.lo);
+    Put64(RegRexrReg(m, rde), p.lo);
   } else if (!Osz(rde)) {
     i64 z;
-    z = (i64)(i32)Read32(a) * (i32)Read32(b);
+    z = (i64)(i32)Get32(a) * (i32)Load32(b);
     of = z != (i32)z;
-    Write64(RegRexrReg(m, rde), z & 0xffffffff);
+    Put64(RegRexrReg(m, rde), z & 0xffffffff);
   } else {
     i32 z;
-    z = (i32)(i16)Read16(a) * (i16)Read16(b);
+    z = (i32)(i16)Get16(a) * (i16)Load16(b);
     of = z != (i16)z;
-    Write16(RegRexrReg(m, rde), z);
+    Put16(RegRexrReg(m, rde), z);
   }
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
@@ -358,6 +357,6 @@ void OpImulGvqpEvqp(struct Machine *m, u32 rde) {
 
 void OpImulGvqpEvqpImm(struct Machine *m, u32 rde) {
   u8 b[8];
-  Write64(b, m->xedd->op.uimm0);
+  Put64(b, m->xedd->op.uimm0);
   AluImul(m, rde, GetModrmRegisterWordPointerReadOszRexw(m, rde), b);
 }

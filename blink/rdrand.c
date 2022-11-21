@@ -21,6 +21,7 @@
 #include "blink/flags.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 #include "blink/random.h"
 
 #define RESEED_INTERVAL 16
@@ -41,14 +42,7 @@ static u64 Vigna(u64 s[1]) {
 }
 
 static void OpRand(struct Machine *m, u32 rde, u64 x) {
-  u8 *q = RegRexbRm(m, rde);
-  if (Rexw(rde)) {
-    Write64(q, x);
-  } else if (!Osz(rde)) {
-    Write64(q, (u32)x);
-  } else {
-    Write16(q, x);
-  }
+  WriteRegister(rde, RegRexbRm(m, rde), x);
   m->flags = SetFlag(m->flags, FLAGS_CF, true);
 }
 

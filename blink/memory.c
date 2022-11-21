@@ -142,9 +142,9 @@ void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
   }
 }
 
-void *VirtualSend(struct Machine *m, void *dst, i64 src, u64 n) {
+u8 *VirtualSend(struct Machine *m, void *dst, i64 src, u64 n) {
   VirtualCopy(m, src, (char *)dst, n, true);
-  return dst;
+  return (u8 *)dst;
 }
 
 void VirtualSendRead(struct Machine *m, void *dst, i64 addr, u64 n) {
@@ -161,8 +161,8 @@ void VirtualRecvWrite(struct Machine *m, i64 addr, void *src, u64 n) {
   SetWriteAddr(m, addr, n);
 }
 
-void *ReserveAddress(struct Machine *m, i64 v, size_t n) {
-  void *r;
+u8 *ReserveAddress(struct Machine *m, i64 v, size_t n) {
+  u8 *r;
   unassert(n <= sizeof(m->opcache->stash));
   if ((v & 4095) + n <= 4096) return ResolveAddress(m, v);
   m->opcache->stashaddr = v;
@@ -174,15 +174,15 @@ void *ReserveAddress(struct Machine *m, i64 v, size_t n) {
 
 u8 *AccessRam(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
               bool copy) {
-  unsigned k;
   u8 *a, *b;
+  unsigned k;
   unassert(n <= 4096);
   if ((v & 4095) + n <= 4096) return ResolveAddress(m, v);
   k = 4096;
   k -= v & 4095;
   unassert(k <= 4096);
-  a = (u8 *)ResolveAddress(m, v);
-  b = (u8 *)ResolveAddress(m, v + k);
+  a = ResolveAddress(m, v);
+  b = ResolveAddress(m, v + k);
   if (copy) {
     memcpy(tmp, a, k);
     memcpy(tmp + k, b, n - k);
@@ -230,18 +230,18 @@ void EndStoreNp(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   if (v) EndStore(m, v, n, p, b);
 }
 
-void *LoadBuf(struct Machine *m, i64 addr, size_t size) {
+u8 *LoadBuf(struct Machine *m, i64 addr, size_t size) {
   size_t have, need;
-  char *buf, *copy, *page;
+  u8 *buf, *copy, *page;
   have = 4096 - (addr & 4095);
   if (!addr) return NULL;
-  if (!(buf = (char *)FindReal(m, addr))) return NULL;
+  if (!(buf = (u8 *)FindReal(m, addr))) return NULL;
   if (size > have) {
-    if (!(copy = (char *)malloc(size))) return NULL;
-    buf = (char *)memcpy(copy, buf, have);
+    if (!(copy = (u8 *)malloc(size))) return NULL;
+    buf = (u8 *)memcpy(copy, buf, have);
     do {
       need = MIN(4096, size - have);
-      if ((page = (char *)FindReal(m, addr + have))) {
+      if ((page = (u8 *)FindReal(m, addr + have))) {
         memcpy(copy + have, page, need);
         have += need;
       } else {

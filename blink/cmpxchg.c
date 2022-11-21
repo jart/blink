@@ -25,6 +25,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 
 void OpCmpxchgEbAlGb(struct Machine *m, u32 rde) {
   bool didit;
@@ -32,7 +33,7 @@ void OpCmpxchgEbAlGb(struct Machine *m, u32 rde) {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
     didit = atomic_compare_exchange_strong_explicit(
         (atomic_uchar *)ComputeReserveAddressWrite1(m, rde), m->ax,
-        *ByteRexrReg(m, rde), memory_order_acq_rel, memory_order_relaxed);
+        *ByteRexrReg(m, rde), memory_order_acq_rel, memory_order_acquire);
 #else
     OpUd(m, rde);
 #endif
@@ -41,13 +42,13 @@ void OpCmpxchgEbAlGb(struct Machine *m, u32 rde) {
     u64 x, y, z;
     p = ByteRexbRm(m, rde);
     q = ByteRexrReg(m, rde);
-    x = Read64(p);
-    y = Read8(m->ax);
-    z = Read8(q);
+    x = Get64(p);
+    y = Get8(m->ax);
+    z = Get8(q);
     if ((didit = x == y)) {
-      Write64(p, z);
+      Put64(p, z);
     } else {
-      Write8(q, z);
+      Put8(q, z);
     }
   }
   m->flags = SetFlag(m->flags, FLAGS_ZF, didit);
@@ -64,19 +65,19 @@ void OpCmpxchgEvqpRaxGvqp(struct Machine *m, u32 rde) {
       didit = atomic_compare_exchange_strong_explicit(
           (atomic_ulong *)p, (unsigned long *)m->ax,
           atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
-          memory_order_acq_rel, memory_order_relaxed);
+          memory_order_acq_rel, memory_order_acquire);
 #else
       OpUd(m, rde);
 #endif
     } else {
       u64 x, y, z;
-      x = Read64(p);
-      y = Read64(m->ax);
-      z = Read64(q);
+      x = Load64(p);
+      y = Get64(m->ax);
+      z = Get64(q);
       if ((didit = x == y)) {
-        Write64(p, z);
+        Store64(p, z);
       } else {
-        Write64(q, z);
+        Put64(q, z);
       }
     }
   } else if (!Osz(rde)) {
@@ -84,32 +85,32 @@ void OpCmpxchgEvqpRaxGvqp(struct Machine *m, u32 rde) {
       didit = atomic_compare_exchange_strong_explicit(
           (atomic_uint *)p, (unsigned int *)m->ax,
           atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
-          memory_order_acq_rel, memory_order_relaxed);
+          memory_order_acq_rel, memory_order_acquire);
     } else {
       u32 x, y, z;
-      x = Read32(p);
-      y = Read32(m->ax);
-      z = Read32(q);
+      x = Load32(p);
+      y = Get32(m->ax);
+      z = Get32(q);
       if ((didit = x == y)) {
-        Write32(p, z);
+        Store32(p, z);
       } else {
-        Write32(q, z);
+        Put32(q, z);
       }
     }
-    Write32(m->ax + 4, 0);
+    Put32(m->ax + 4, 0);
     if (IsModrmRegister(rde)) {
-      Write32(p + 4, 0);
+      Put32(p + 4, 0);
     }
   } else {
     u16 x, y, z;
     unassert(!Lock(rde));
-    x = Read16(p);
-    y = Read16(m->ax);
-    z = Read16(q);
+    x = Load16(p);
+    y = Get16(m->ax);
+    z = Get16(q);
     if ((didit = x == y)) {
-      Write16(p, z);
+      Store16(p, z);
     } else {
-      Write16(q, z);
+      Put16(q, z);
     }
   }
   m->flags = SetFlag(m->flags, FLAGS_ZF, didit);

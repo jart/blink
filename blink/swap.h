@@ -25,14 +25,4 @@
    ((0xff00000000000000ull & (x)) >> 070))
 #endif
 
-#if __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#define SWAP16LE(x) SWAP16(x)
-#define SWAP32LE(x) SWAP32(x)
-#define SWAP64LE(x) SWAP64(x)
-#else
-#define SWAP16LE(x) (x)
-#define SWAP32LE(x) (x)
-#define SWAP64LE(x) (x)
-#endif
-
 #endif /* BLINK_SWAP_H_ */

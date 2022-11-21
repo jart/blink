@@ -117,7 +117,7 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   Write64(m->sp, sp);
   Write64(m->di, sig);
   Write64(m->si, siaddr);
-  Write64(m->dx, m->siguc);
+  Put64(m->dx, m->siguc);
   m->ip = Read64(m->system->hands[sig - 1].handler);
 }
 

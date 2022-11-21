@@ -55,6 +55,7 @@
 #include "blink/mda.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 #include "blink/panel.h"
 #include "blink/pml4t.h"
 #include "blink/pty.h"
@@ -413,9 +414,9 @@ static i64 GetIp(void) {
     case 8:
       return m->ip;
     case 4:
-      return Read64(m->cs) + (m->ip & 0xffff);
+      return m->cs + (m->ip & 0xffff);
     case 2:
-      return Read64(m->cs) + (m->ip & 0xffff);
+      return m->cs + (m->ip & 0xffff);
   }
 }
 
@@ -425,9 +426,9 @@ static i64 GetSp(void) {
     case 8:
       return Read64(m->sp);
     case 4:
-      return Read64(m->ss) + Read32(m->sp);
+      return m->ss + Read32(m->sp);
     case 2:
-      return Read64(m->ss) + Read16(m->sp);
+      return m->ss + Read16(m->sp);
   }
 }
 
@@ -445,12 +446,12 @@ static i64 ReadWord(u8 *p) {
 
 static void CopyMachineState(struct MachineState *ms) {
   ms->ip = m->ip;
-  memcpy(ms->cs, m->cs, sizeof(m->cs));
-  memcpy(ms->ss, m->ss, sizeof(m->ss));
-  memcpy(ms->es, m->es, sizeof(m->es));
-  memcpy(ms->ds, m->ds, sizeof(m->ds));
-  memcpy(ms->fs, m->fs, sizeof(m->fs));
-  memcpy(ms->gs, m->gs, sizeof(m->gs));
+  ms->cs = m->cs;
+  ms->ss = m->ss;
+  ms->es = m->es;
+  ms->ds = m->ds;
+  ms->fs = m->fs;
+  ms->gs = m->gs;
   memcpy(ms->reg, m->reg, sizeof(m->reg));
   memcpy(ms->xmm, m->xmm, sizeof(m->xmm));
   memcpy(&ms->fpu, &m->fpu, sizeof(m->fpu));
@@ -816,7 +817,7 @@ static bool IsXmmNonZero(i64 start, i64 end) {
 static bool IsSegNonZero(void) {
   unsigned i;
   for (i = 0; i < 6; ++i) {
-    if (Read64(GetSegment(m, 0, i))) {
+    if (*GetSegment(m, 0, i)) {
       return true;
     }
   }
@@ -1144,12 +1145,9 @@ static void DrawRegister(struct Panel *p, i64 i, i64 r) {
   AppendPanel(p, i, "  ");
 }
 
-static void DrawSegment(struct Panel *p, i64 i, const u8 seg[8],
-                        const u8 last[8], const char *name) {
+static void DrawSegment(struct Panel *p, i64 i, u64 value, u64 previous,
+                        const char *name) {
   char buf[32];
-  u64 value, previous;
-  value = Read64(seg);
-  previous = Read64(last);
   if (value != previous) AppendPanel(p, i, "\033[7m");
   snprintf(buf, sizeof(buf), "%-3s", name);
   AppendPanel(p, i, buf);
@@ -1464,7 +1462,7 @@ static void DrawFrames(struct Panel *p) {
     sym = DisFindSym(dis, rp);
     name = sym != -1 ? dis->syms.stab + dis->syms.p[sym].name : "UNKNOWN";
     s = line;
-    s += sprintf(s, "%012" PRIx64 " %012" PRIx64 " ", Read64(m->ss) + bp, rp);
+    s += sprintf(s, "%012" PRIx64 " %012" PRIx64 " ", m->ss + bp, rp);
     strcpy(s, name);
     AppendPanel(p, i - framesstart, line);
     if (sym != -1 && rp != dis->syms.p[sym].addr) {
@@ -1482,8 +1480,8 @@ static void DrawFrames(struct Panel *p) {
       AppendPanel(p, i - framesstart, " [MISALIGN]");
     }
     ++i;
-    if (((Read64(m->ss) + bp) & 0xfff) > 0xff0) break;
-    if (!(r = FindReal(m, Read64(m->ss) + bp))) {
+    if (((m->ss + bp) & 0xfff) > 0xff0) break;
+    if (!(r = FindReal(m, m->ss + bp))) {
       AppendPanel(p, i - framesstart, "CORRUPT FRAME POINTER");
       break;
     }
@@ -1502,7 +1500,7 @@ static void CheckFramePointerImpl(void) {
   lastbp = bp;
   rp = m->ip;
   while (bp) {
-    if (!(r = FindReal(m, Read64(m->ss) + bp))) {
+    if (!(r = FindReal(m, m->ss + bp))) {
       LOGF("corrupt frame: %012" PRIx64 "", bp);
       ThrowProtectionFault(m);
     }
@@ -1902,8 +1900,8 @@ static void OnDiskServiceGetParams(void) {
   m->cl = lastcylinder >> 8 << 6 | lastsector;
   m->ch = lastcylinder;
   m->ah = 0;
-  Write64(m->es, 0);
-  Write16(m->di, 0);
+  m->es = 0;
+  Put16(m->di, 0);
   SetCarry(false);
 }
 
@@ -1923,7 +1921,7 @@ static void OnDiskServiceReadSectors(void) {
        " drive %" PRId64 " offset %#" PRIx64 "",
        sectors, sector, cylinder, head, drive, offset);
   if (0 <= sector && offset + size <= elf->mapsize) {
-    addr = Read64(m->es) + Read16(m->bx);
+    addr = m->es + Get16(m->bx);
     if (addr + size <= GetRealMemorySize(m->system)) {
       SetWriteAddr(m, addr, size);
       memcpy(m->system->real.p + addr, elf->map + offset, size);
@@ -2005,7 +2003,7 @@ static void OnVidyaServiceWriteCharacter(void) {
     *p++ = w;
   } while ((w >>= 8));
   p = stpcpy(p, "\0338");
-  for (i = Read16(m->cx); i--;) {
+  for (i = Get16(m->cx); i--;) {
     PtyWrite(pty, buf, p - buf);
   }
 }
@@ -2090,12 +2088,12 @@ static void OnKeyboardService(void) {
 }
 
 static void OnApmService(void) {
-  if (Read16(m->ax) == 0x5300 && Read16(m->bx) == 0x0000) {
-    Write16(m->bx, 'P' << 8 | 'M');
+  if (Get16(m->ax) == 0x5300 && Get16(m->bx) == 0x0000) {
+    Put16(m->bx, 'P' << 8 | 'M');
     SetCarry(false);
-  } else if (Read16(m->ax) == 0x5301 && Read16(m->bx) == 0x0000) {
+  } else if (Get16(m->ax) == 0x5301 && Get16(m->bx) == 0x0000) {
     SetCarry(false);
-  } else if (Read16(m->ax) == 0x5307 && m->bl == 1 && m->cl == 3) {
+  } else if (Get16(m->ax) == 0x5307 && m->bl == 1 && m->cl == 3) {
     LOGF("APM SHUTDOWN");
     exit(0);
   } else {
@@ -2106,22 +2104,22 @@ static void OnApmService(void) {
 static void OnE820(void) {
   i64 addr;
   u8 p[20];
-  addr = Read64(m->es) + Read16(m->di);
-  if (Read32(m->dx) == 0x534D4150 && Read32(m->cx) == 24 &&
+  addr = m->es + Get16(m->di);
+  if (Get32(m->dx) == 0x534D4150 && Get32(m->cx) == 24 &&
       addr + (int)sizeof(p) <= GetRealMemorySize(m->system)) {
-    if (!Read32(m->bx)) {
-      Write64(p + 0, 0);
-      Write64(p + 8, GetRealMemorySize(m->system));
-      Write32(p + 16, 1);
+    if (!Get32(m->bx)) {
+      Store64(p + 0, 0);
+      Store64(p + 8, GetRealMemorySize(m->system));
+      Store32(p + 16, 1);
       memcpy(m->system->real.p + addr, p, sizeof(p));
       SetWriteAddr(m, addr, sizeof(p));
-      Write32(m->cx, sizeof(p));
-      Write32(m->bx, 1);
+      Put32(m->cx, sizeof(p));
+      Put32(m->bx, 1);
     } else {
-      Write32(m->bx, 0);
-      Write32(m->cx, 0);
+      Put32(m->bx, 0);
+      Put32(m->cx, 0);
     }
-    Write32(m->ax, 0x534D4150);
+    Put32(m->ax, 0x534D4150);
     SetCarry(false);
   } else {
     SetCarry(true);
@@ -2129,7 +2127,7 @@ static void OnE820(void) {
 }
 
 static void OnInt15h(void) {
-  if (Read32(m->ax) == 0xE820) {
+  if (Get32(m->ax) == 0xE820) {
     OnE820();
   } else if (m->ah == 0x53) {
     OnApmService();
@@ -2558,17 +2556,17 @@ _Noreturn static void PrintUsage(int rc, FILE *f) {
 }
 
 static void LogInstruction(void) {
-  LOGF(
-      "EXEC %8" PRIx64 " SP %012" PRIx64 " AX %016" PRIx64 " CX %016" PRIx64
-      " DX %016" PRIx64 " BX %016" PRIx64 " BP %016" PRIx64 " SI %016" PRIx64
-      " DI %016" PRIx64 " R8 %016" PRIx64 " R9 %016" PRIx64 " R10 %016" PRIx64
-      " R11 %016" PRIx64 " R12 %016" PRIx64 " R13 %016" PRIx64
-      " R14 %016" PRIx64 " R15 %016" PRIx64 " FS %012" PRIx64 " GS %012" PRIx64,
-      m->ip, Read64(m->sp) & 0xffffffffffff, Read64(m->ax), Read64(m->cx),
-      Read64(m->dx), Read64(m->bx), Read64(m->bp), Read64(m->si), Read64(m->di),
-      Read64(m->r8), Read64(m->r9), Read64(m->r10), Read64(m->r11),
-      Read64(m->r12), Read64(m->r13), Read64(m->r14), Read64(m->r15),
-      Read64(m->fs) & 0xffffffffffff, Read64(m->gs) & 0xffffffffffff);
+  LOGF("EXEC %8" PRIx64 " SP %012" PRIx64 " AX %016" PRIx64 " CX %016" PRIx64
+       " DX %016" PRIx64 " BX %016" PRIx64 " BP %016" PRIx64 " SI %016" PRIx64
+       " DI %016" PRIx64 " R8 %016" PRIx64 " R9 %016" PRIx64 " R10 %016" PRIx64
+       " R11 %016" PRIx64 " R12 %016" PRIx64 " R13 %016" PRIx64
+       " R14 %016" PRIx64 " R15 %016" PRIx64 " FS %012" PRIx64
+       " GS %012" PRIx64,
+       m->ip, Get64(m->sp) & 0xffffffffffff, Get64(m->ax), Get64(m->cx),
+       Get64(m->dx), Get64(m->bx), Get64(m->bp), Get64(m->si), Get64(m->di),
+       Get64(m->r8), Get64(m->r9), Get64(m->r10), Get64(m->r11), Get64(m->r12),
+       Get64(m->r13), Get64(m->r14), Get64(m->r15), m->fs & 0xffffffffffff,
+       m->gs & 0xffffffffffff);
 }
 
 static void Exec(void) {

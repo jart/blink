@@ -115,15 +115,15 @@ void OpPextrwGdqpUdqIb(struct Machine *m, u32 rde) {
   u8 i;
   i = m->xedd->op.uimm0;
   i &= Osz(rde) ? 7 : 3;
-  Write16(RegRexrReg(m, rde), Read16(XmmRexbRm(m, rde) + i * 2));
+  Put16(RegRexrReg(m, rde), Get16(XmmRexbRm(m, rde) + i * 2));
 }
 
 void OpPinsrwVdqEwIb(struct Machine *m, u32 rde) {
   u8 i;
   i = m->xedd->op.uimm0;
   i &= Osz(rde) ? 7 : 3;
-  Write16(XmmRexrReg(m, rde) + i * 2,
-          Read16(GetModrmRegisterWordPointerRead2(m, rde)));
+  Put16(XmmRexrReg(m, rde) + i * 2,
+        Read16(GetModrmRegisterWordPointerRead2(m, rde)));
 }
 
 void OpShuffle(struct Machine *m, u32 rde) {
@@ -344,8 +344,7 @@ void OpComissVsWs(struct Machine *m, u32 rde) {
   }
 }
 
-static inline void OpPsd(struct Machine *m, u32 rde,
-                         float fs(float x, float y),
+static inline void OpPsd(struct Machine *m, u32 rde, float fs(float x, float y),
                          double fd(double x, double y)) {
   if (m->xedd->op.rep == 2) {
     union DoublePun x, y;

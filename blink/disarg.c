@@ -79,8 +79,7 @@ static i64 Unrelative(u32 rde, i64 i) {
   }
 }
 
-static const char *GetAddrReg(struct Dis *d, u32 rde, u8 x,
-                              u8 r) {
+static const char *GetAddrReg(struct Dis *d, u32 rde, u8 x, u8 r) {
   return kGreg[Eamode(rde) == XED_MODE_REAL][Eamode(rde) == XED_MODE_LONG]
               [x & 1][r & 7];
 }
@@ -93,13 +92,11 @@ static char *DisRegister(char *p, const char *s) {
   return p;
 }
 
-static char *DisRegisterByte(struct Dis *d, u32 rde, char *p, bool g,
-                             int r) {
+static char *DisRegisterByte(struct Dis *d, u32 rde, char *p, bool g, int r) {
   return DisRegister(p, kBreg[g][Rex(rde)][r]);
 }
 
-static char *DisRegisterWord(struct Dis *d, u32 rde, char *p, bool g,
-                             int r) {
+static char *DisRegisterWord(struct Dis *d, u32 rde, char *p, bool g, int r) {
   return DisRegister(p, kGreg[Osz(rde)][Rexw(rde)][g][r]);
 }
 
@@ -144,8 +141,7 @@ static char *DisSym(struct Dis *d, char *p, i64 value, i64 addr) {
   }
 }
 
-static char *DisSymLiteral(struct Dis *d, u32 rde, char *p, u64 addr,
-                           u64 ip) {
+static char *DisSymLiteral(struct Dis *d, u32 rde, char *p, u64 addr, u64 ip) {
   *p++ = '$';
   p = HighStart(p, g_high.literal);
   p = DisSym(d, p, addr, addr);
@@ -455,7 +451,7 @@ static char *DisJb(struct Dis *d, u32 rde, char *p) {
 
 static char *DisJvds(struct Dis *d, u32 rde, char *p) {
   return DisSym(d, p, RipRelative(d, d->xedd->op.disp),
-                RipRelative(d, d->xedd->op.disp) - Read64(d->m->cs));
+                RipRelative(d, d->xedd->op.disp) - d->m->cs);
 }
 
 static char *DisAbs(struct Dis *d, u32 rde, char *p) {
@@ -489,8 +485,7 @@ static char *DisBBb(struct Dis *d, u32 rde, char *p) {
   return DisSpecialAddr(d, rde, p, 3);  // ds:bx
 }
 
-static char *DisXmm(struct Dis *d, u32 rde, char *p, const char *s,
-                    int reg) {
+static char *DisXmm(struct Dis *d, u32 rde, char *p, const char *s, int reg) {
   p = HighStart(p, g_high.reg);
   *p++ = '%';
   p = stpcpy(p, s);

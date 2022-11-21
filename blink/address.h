@@ -7,7 +7,7 @@
 u64 AddressOb(struct Machine *, u32);
 u64 AddressDi(struct Machine *, u32);
 u64 AddressSi(struct Machine *, u32);
-u8 *GetSegment(struct Machine *, u32, int);
+u64 *GetSegment(struct Machine *, u32, int);
 u64 DataSegment(struct Machine *, u32, u64);
 
 static inline u64 MaskAddress(u32 mode, u64 x) {
@@ -21,12 +21,11 @@ static inline u64 MaskAddress(u32 mode, u64 x) {
   return x;
 }
 
-static inline u64 AddSegment(struct Machine *m, u32 rde, u64 i,
-                             const u8 s[8]) {
+static inline u64 AddSegment(struct Machine *m, u32 rde, u64 i, u64 s) {
   if (!Sego(rde)) {
-    return i + Read64(s);
+    return i + s;
   } else {
-    return i + Read64(GetSegment(m, rde, Sego(rde) - 1));
+    return i + *GetSegment(m, rde, Sego(rde) - 1);
   }
 }
 

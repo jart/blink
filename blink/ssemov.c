@@ -74,7 +74,7 @@ static void MovdqaVdqMdq(struct Machine *m, u32 rde) {
   u8 *p;
   v = ComputeAddress(m, rde);
   SetReadAddr(m, v, 16);
-  if ((v & 15) || !(p = (u8 *)FindReal(m, v))) {
+  if ((v & 15) || !(p = FindReal(m, v))) {
     ThrowSegmentationFault(m, v);
   }
   memcpy(XmmRexrReg(m, rde), p, 16);
@@ -85,7 +85,7 @@ static void MovdqaMdqVdq(struct Machine *m, u32 rde) {
   u8 *p;
   v = ComputeAddress(m, rde);
   SetWriteAddr(m, v, 16);
-  if ((v & 15) || !(p = (u8 *)FindReal(m, v))) {
+  if ((v & 15) || !(p = FindReal(m, v))) {
     ThrowSegmentationFault(m, v);
   }
   memcpy(p, XmmRexrReg(m, rde), 16);
@@ -152,7 +152,7 @@ static void MovdPqEd(struct Machine *m, u32 rde) {
 
 static void MovdEdVdq(struct Machine *m, u32 rde) {
   if (IsModrmRegister(rde)) {
-    Write64(RegRexbRm(m, rde), Read32(XmmRexrReg(m, rde)));
+    Put64(RegRexbRm(m, rde), Read32(XmmRexrReg(m, rde)));
   } else {
     memcpy(ComputeReserveAddressWrite4(m, rde), XmmRexrReg(m, rde), 4);
   }
@@ -164,7 +164,7 @@ static void MovqEqpVdq(struct Machine *m, u32 rde) {
 
 static void MovdEdPq(struct Machine *m, u32 rde) {
   if (IsModrmRegister(rde)) {
-    Write64(RegRexbRm(m, rde), Read32(MmReg(m, rde)));
+    Put64(RegRexbRm(m, rde), Read32(MmReg(m, rde)));
   } else {
     memcpy(ComputeReserveAddressWrite4(m, rde), MmReg(m, rde), 4);
   }
@@ -507,8 +507,8 @@ void OpMov0fD6(struct Machine *m, u32 rde) {
 }
 
 void OpPmovmskbGdqpNqUdq(struct Machine *m, u32 rde) {
-  Write64(RegRexrReg(m, rde),
-          pmovmskb(XmmRexbRm(m, rde)) & (Osz(rde) ? 0xffff : 0xff));
+  Put64(RegRexrReg(m, rde),
+        pmovmskb(XmmRexbRm(m, rde)) & (Osz(rde) ? 0xffff : 0xff));
 }
 
 void OpMaskMovDiXmmRegXmmRm(struct Machine *m, u32 rde) {
@@ -518,7 +518,7 @@ void OpMaskMovDiXmmRegXmmRm(struct Machine *m, u32 rde) {
   u8 *mem, b[16];
   v = AddressDi(m, rde);
   n = Osz(rde) ? 16 : 8;
-  mem = (u8 *)BeginStore(m, v, n, p, b);
+  mem = BeginStore(m, v, n, p, b);
   for (i = 0; i < n; ++i) {
     if (XmmRexbRm(m, rde)[i] & 0x80) {
       mem[i] = XmmRexrReg(m, rde)[i];
