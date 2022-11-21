@@ -49,4 +49,32 @@ static inline u32 SetFlag(u32 f, int b, bool v) {
   }
 }
 
+static inline bool IsParity(struct Machine *m) {
+  return GetFlag(m->flags, FLAGS_PF);
+}
+
+static inline bool IsBelowOrEqual(struct Machine *m) {  // CF || ZF
+  return ((m->flags >> 6) | m->flags) & 1;
+}
+
+static inline bool IsAbove(struct Machine *m) {  // !CF && ~ZF
+  return ((~m->flags >> 6) & ~m->flags) & 1;
+}
+
+static inline bool IsLess(struct Machine *m) {  // SF != OF
+  return (i8)(m->flags ^ (m->flags >> 4)) < 0;
+}
+
+static inline bool IsGreaterOrEqual(struct Machine *m) {  // SF == OF
+  return (i8)(~(m->flags ^ (m->flags >> 4))) < 0;
+}
+
+static inline bool IsLessOrEqual(struct Machine *m) {  // ZF || SF != OF
+  return (i8)((m->flags ^ (m->flags >> 4)) | (m->flags << 1)) < 0;
+}
+
+static inline bool IsGreater(struct Machine *m) {  // !ZF && SF == OF
+  return (i8)(~(m->flags ^ (m->flags >> 4)) & ~(m->flags << 1)) < 0;
+}
+
 #endif /* BLINK_FLAGS_H_ */

@@ -51,38 +51,6 @@
 
 // GetSegment
 
-typedef void (*nexgen32e_f)(struct Machine *, u64);
-
-static bool IsParity(struct Machine *m) {
-  return GetFlag(m->flags, FLAGS_PF);
-}
-
-static bool IsBelowOrEqual(struct Machine *m) {
-  return GetFlag(m->flags, FLAGS_CF) || GetFlag(m->flags, FLAGS_ZF);
-}
-
-static bool IsAbove(struct Machine *m) {
-  return !GetFlag(m->flags, FLAGS_CF) && !GetFlag(m->flags, FLAGS_ZF);
-}
-
-static bool IsLess(struct Machine *m) {
-  return GetFlag(m->flags, FLAGS_SF) != GetFlag(m->flags, FLAGS_OF);
-}
-
-static bool IsGreaterOrEqual(struct Machine *m) {
-  return GetFlag(m->flags, FLAGS_SF) == GetFlag(m->flags, FLAGS_OF);
-}
-
-static bool IsLessOrEqual(struct Machine *m) {
-  return GetFlag(m->flags, FLAGS_ZF) ||
-         (GetFlag(m->flags, FLAGS_SF) != GetFlag(m->flags, FLAGS_OF));
-}
-
-static bool IsGreater(struct Machine *m) {
-  return !GetFlag(m->flags, FLAGS_ZF) &&
-         (GetFlag(m->flags, FLAGS_SF) == GetFlag(m->flags, FLAGS_OF));
-}
-
 static void OpNoop(struct Machine *m, u64 rde) {
 }
 

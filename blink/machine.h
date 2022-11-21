@@ -24,6 +24,10 @@
 
 #define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, list, e)
 
+struct Machine;
+
+typedef void (*nexgen32e_f)(struct Machine *, u64);
+
 struct FreeList {
   int n;
   void **p;
@@ -94,8 +98,6 @@ struct OpCache {
   u8 stash[4096];  // for writes that overlap page
   u64 icache[1024][kInstructionBytes / 8];
 };
-
-struct Machine;
 
 struct System {
   u64 cr3;
