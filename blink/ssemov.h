@@ -2,25 +2,25 @@
 #define BLINK_SSEMOV_H_
 #include "blink/machine.h"
 
-void OpLddquVdqMdq(struct Machine *, DISPATCH_PARAMETERS);
-void OpMovntiMdqpGdqp(struct Machine *, DISPATCH_PARAMETERS);
-void OpPmovmskbGdqpNqUdq(struct Machine *, DISPATCH_PARAMETERS);
-void OpMaskMovDiXmmRegXmmRm(struct Machine *, DISPATCH_PARAMETERS);
-void OpMovntdqaVdqMdq(struct Machine *, DISPATCH_PARAMETERS);
-void OpMovWpsVps(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f28(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f6e(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f6f(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0fE7(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f7e(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f7f(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f10(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f29(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f2b(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f12(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f13(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f16(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0f17(struct Machine *, DISPATCH_PARAMETERS);
-void OpMov0fD6(struct Machine *, DISPATCH_PARAMETERS);
+void OpLddquVdqMdq(P);
+void OpMaskMovDiXmmRegXmmRm(P);
+void OpMov0f10(P);
+void OpMov0f12(P);
+void OpMov0f13(P);
+void OpMov0f16(P);
+void OpMov0f17(P);
+void OpMov0f28(P);
+void OpMov0f29(P);
+void OpMov0f2b(P);
+void OpMov0f6e(P);
+void OpMov0f6f(P);
+void OpMov0f7e(P);
+void OpMov0f7f(P);
+void OpMov0fD6(P);
+void OpMov0fE7(P);
+void OpMovWpsVps(P);
+void OpMovntdqaVdqMdq(P);
+void OpMovntiMdqpGdqp(P);
+void OpPmovmskbGdqpNqUdq(P);
 
 #endif /* BLINK_SSEMOV_H_ */

@@ -51,73 +51,73 @@ static double SseRoundDouble(struct Machine *m, double x) {
   }
 }
 
-static void OpGdqpWssCvttss2si(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpGdqpWssCvttss2si(P) {
   i64 n;
   union FloatPun f;
-  f.i = Load32(GetModrmRegisterXmmPointerRead4(m, DISPATCH_ARGUMENTS));
+  f.i = Load32(GetModrmRegisterXmmPointerRead4(A));
   n = f.f;
   if (!Rexw(rde)) n &= 0xffffffff;
   Put64(RegRexrReg(m, rde), n);
 }
 
-static void OpGdqpWsdCvttsd2si(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpGdqpWsdCvttsd2si(P) {
   i64 n;
   union DoublePun d;
-  d.i = Load64(GetModrmRegisterXmmPointerRead8(m, DISPATCH_ARGUMENTS));
+  d.i = Load64(GetModrmRegisterXmmPointerRead8(A));
   n = d.f;
   if (!Rexw(rde)) n &= 0xffffffff;
   Put64(RegRexrReg(m, rde), n);
 }
 
-static void OpGdqpWssCvtss2si(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpGdqpWssCvtss2si(P) {
   i64 n;
   union FloatPun f;
-  f.i = Load32(GetModrmRegisterXmmPointerRead4(m, DISPATCH_ARGUMENTS));
+  f.i = Load32(GetModrmRegisterXmmPointerRead4(A));
   n = rintf(f.f);
   if (!Rexw(rde)) n &= 0xffffffff;
   Put64(RegRexrReg(m, rde), n);
 }
 
-static void OpGdqpWsdCvtsd2si(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpGdqpWsdCvtsd2si(P) {
   i64 n;
   union DoublePun d;
-  d.i = Load64(GetModrmRegisterXmmPointerRead8(m, DISPATCH_ARGUMENTS));
+  d.i = Load64(GetModrmRegisterXmmPointerRead8(A));
   n = SseRoundDouble(m, d.f);
   if (!Rexw(rde)) n &= 0xffffffff;
   Put64(RegRexrReg(m, rde), n);
 }
 
-static void OpVssEdqpCvtsi2ss(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVssEdqpCvtsi2ss(P) {
   union FloatPun f;
   if (Rexw(rde)) {
-    i64 n = Load64(GetModrmRegisterWordPointerRead8(m, DISPATCH_ARGUMENTS));
+    i64 n = Load64(GetModrmRegisterWordPointerRead8(A));
     f.f = n;
     Put32(XmmRexrReg(m, rde), f.i);
   } else {
-    i32 n = Load32(GetModrmRegisterWordPointerRead4(m, DISPATCH_ARGUMENTS));
+    i32 n = Load32(GetModrmRegisterWordPointerRead4(A));
     f.f = n;
     Put32(XmmRexrReg(m, rde), f.i);
   }
 }
 
-static void OpVsdEdqpCvtsi2sd(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVsdEdqpCvtsi2sd(P) {
   union DoublePun d;
   if (Rexw(rde)) {
-    i64 n = Load64(GetModrmRegisterWordPointerRead8(m, DISPATCH_ARGUMENTS));
+    i64 n = Load64(GetModrmRegisterWordPointerRead8(A));
     d.f = n;
     Put64(XmmRexrReg(m, rde), d.i);
   } else {
-    i32 n = Load32(GetModrmRegisterWordPointerRead4(m, DISPATCH_ARGUMENTS));
+    i32 n = Load32(GetModrmRegisterWordPointerRead4(A));
     d.f = n;
     Put64(XmmRexrReg(m, rde), d.i);
   }
 }
 
-static void OpVpsQpiCvtpi2ps(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVpsQpiCvtpi2ps(P) {
   u8 *p;
   i32 i[2];
   union FloatPun f[2];
-  p = GetModrmRegisterMmPointerRead8(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterMmPointerRead8(A);
   i[0] = Load32(p + 0);
   i[1] = Load32(p + 4);
   f[0].f = i[0];
@@ -126,11 +126,11 @@ static void OpVpsQpiCvtpi2ps(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(XmmRexrReg(m, rde) + 4, f[1].i);
 }
 
-static void OpVpdQpiCvtpi2pd(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVpdQpiCvtpi2pd(P) {
   u8 *p;
   i32 n[2];
   union DoublePun f[2];
-  p = GetModrmRegisterMmPointerRead8(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterMmPointerRead8(A);
   n[0] = Load32(p + 0);
   n[1] = Load32(p + 4);
   f[0].f = n[0];
@@ -139,12 +139,12 @@ static void OpVpdQpiCvtpi2pd(struct Machine *m, DISPATCH_PARAMETERS) {
   Put64(XmmRexrReg(m, rde) + 8, f[1].i);
 }
 
-static void OpPpiWpsqCvtps2pi(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpPpiWpsqCvtps2pi(P) {
   u8 *p;
   unsigned i;
   i32 n[2];
   union FloatPun f[2];
-  p = GetModrmRegisterXmmPointerRead8(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead8(A);
   f[0].i = Load32(p + 0 * 4);
   f[1].i = Load32(p + 1 * 4);
   switch ((m->mxcsr & kMxcsrRc) >> 13) {
@@ -167,11 +167,11 @@ static void OpPpiWpsqCvtps2pi(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(MmReg(m, rde) + 4, n[1]);
 }
 
-static void OpPpiWpsqCvttps2pi(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpPpiWpsqCvttps2pi(P) {
   u8 *p;
   i32 n[2];
   union FloatPun f[2];
-  p = GetModrmRegisterXmmPointerRead8(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead8(A);
   f[0].i = Load32(p + 0);
   f[1].i = Load32(p + 4);
   n[0] = f[0].f;
@@ -180,12 +180,12 @@ static void OpPpiWpsqCvttps2pi(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(MmReg(m, rde) + 4, n[1]);
 }
 
-static void OpPpiWpdCvtpd2pi(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpPpiWpdCvtpd2pi(P) {
   u8 *p;
   unsigned i;
   i32 n[2];
   union DoublePun d[2];
-  p = GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead16(A);
   d[0].i = Load64(p + 0);
   d[1].i = Load64(p + 8);
   for (i = 0; i < 2; ++i) n[i] = SseRoundDouble(m, d[i].f);
@@ -193,11 +193,11 @@ static void OpPpiWpdCvtpd2pi(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(MmReg(m, rde) + 4, n[1]);
 }
 
-static void OpPpiWpdCvttpd2pi(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpPpiWpdCvttpd2pi(P) {
   u8 *p;
   i32 n[2];
   union DoublePun d[2];
-  p = GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead16(A);
   d[0].i = Load64(p + 0);
   d[1].i = Load64(p + 8);
   n[0] = d[0].f;
@@ -206,11 +206,11 @@ static void OpPpiWpdCvttpd2pi(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(MmReg(m, rde) + 4, n[1]);
 }
 
-static void OpVpdWpsCvtps2pd(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVpdWpsCvtps2pd(P) {
   u8 *p;
   union FloatPun f[2];
   union DoublePun d[2];
-  p = GetModrmRegisterXmmPointerRead8(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead8(A);
   f[0].i = Load32(p + 0);
   f[1].i = Load32(p + 4);
   d[0].f = f[0].f;
@@ -219,11 +219,11 @@ static void OpVpdWpsCvtps2pd(struct Machine *m, DISPATCH_PARAMETERS) {
   Put64(XmmRexrReg(m, rde) + 8, d[1].i);
 }
 
-static void OpVpsWpdCvtpd2ps(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVpsWpdCvtpd2ps(P) {
   u8 *p;
   union FloatPun f[2];
   union DoublePun d[2];
-  p = GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead16(A);
   d[0].i = Load64(p + 0);
   d[1].i = Load64(p + 8);
   f[0].f = d[0].f;
@@ -232,27 +232,27 @@ static void OpVpsWpdCvtpd2ps(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(XmmRexrReg(m, rde) + 4, f[1].i);
 }
 
-static void OpVssWsdCvtsd2ss(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVssWsdCvtsd2ss(P) {
   union FloatPun f;
   union DoublePun d;
-  d.i = Load64(GetModrmRegisterXmmPointerRead8(m, DISPATCH_ARGUMENTS));
+  d.i = Load64(GetModrmRegisterXmmPointerRead8(A));
   f.f = d.f;
   Put32(XmmRexrReg(m, rde), f.i);
 }
 
-static void OpVsdWssCvtss2sd(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVsdWssCvtss2sd(P) {
   union FloatPun f;
   union DoublePun d;
-  f.i = Load32(GetModrmRegisterXmmPointerRead4(m, DISPATCH_ARGUMENTS));
+  f.i = Load32(GetModrmRegisterXmmPointerRead4(A));
   d.f = f.f;
   Put64(XmmRexrReg(m, rde), d.i);
 }
 
-static void OpVpsWdqCvtdq2ps(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVpsWdqCvtdq2ps(P) {
   u8 *p;
   i32 n[4];
   union FloatPun f[4];
-  p = GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead16(A);
   n[0] = Load32(p + 0 * 4);
   n[1] = Load32(p + 1 * 4);
   n[2] = Load32(p + 2 * 4);
@@ -267,11 +267,11 @@ static void OpVpsWdqCvtdq2ps(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(XmmRexrReg(m, rde) + 3 * 4, f[3].i);
 }
 
-static void OpVpdWdqCvtdq2pd(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVpdWdqCvtdq2pd(P) {
   u8 *p;
   i32 n[2];
   union DoublePun d[2];
-  p = GetModrmRegisterXmmPointerRead8(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead8(A);
   n[0] = Load32(p + 0 * 4);
   n[1] = Load32(p + 1 * 4);
   d[0].f = n[0];
@@ -280,11 +280,11 @@ static void OpVpdWdqCvtdq2pd(struct Machine *m, DISPATCH_PARAMETERS) {
   Put64(XmmRexrReg(m, rde) + 8, d[1].i);
 }
 
-static void OpVdqWpsCvttps2dq(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVdqWpsCvttps2dq(P) {
   u8 *p;
   i32 n[4];
   union FloatPun f[4];
-  p = GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead16(A);
   f[0].i = Load32(p + 0 * 4);
   f[1].i = Load32(p + 1 * 4);
   f[2].i = Load32(p + 2 * 4);
@@ -299,12 +299,12 @@ static void OpVdqWpsCvttps2dq(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(XmmRexrReg(m, rde) + 3 * 4, n[3]);
 }
 
-static void OpVdqWpsCvtps2dq(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVdqWpsCvtps2dq(P) {
   u8 *p;
   unsigned i;
   i32 n[4];
   union FloatPun f[4];
-  p = GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead16(A);
   f[0].i = Load32(p + 0 * 4);
   f[1].i = Load32(p + 1 * 4);
   f[2].i = Load32(p + 2 * 4);
@@ -331,11 +331,11 @@ static void OpVdqWpsCvtps2dq(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(XmmRexrReg(m, rde) + 3 * 4, n[3]);
 }
 
-static void OpVdqWpdCvttpd2dq(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVdqWpdCvttpd2dq(P) {
   u8 *p;
   i32 n[2];
   union DoublePun d[2];
-  p = GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead16(A);
   d[0].i = Load64(p + 0);
   d[1].i = Load64(p + 8);
   n[0] = d[0].f;
@@ -344,12 +344,12 @@ static void OpVdqWpdCvttpd2dq(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(XmmRexrReg(m, rde) + 4, n[1]);
 }
 
-static void OpVdqWpdCvtpd2dq(struct Machine *m, DISPATCH_PARAMETERS) {
+static void OpVdqWpdCvtpd2dq(P) {
   u8 *p;
   i32 n[2];
   unsigned i;
   union DoublePun d[2];
-  p = GetModrmRegisterXmmPointerRead16(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterXmmPointerRead16(A);
   d[0].i = Load64(p + 0);
   d[1].i = Load64(p + 8);
   for (i = 0; i < 2; ++i) n[i] = SseRoundDouble(m, d[i].f);
@@ -357,99 +357,99 @@ static void OpVdqWpdCvtpd2dq(struct Machine *m, DISPATCH_PARAMETERS) {
   Put32(XmmRexrReg(m, rde) + 4, n[1]);
 }
 
-static void OpCvt(struct Machine *m, DISPATCH_PARAMETERS, unsigned long op) {
+static void OpCvt(P, unsigned long op) {
   switch (op | Rep(rde) | Osz(rde)) {
     case kOpCvt0f2a + 0:
-      OpVpsQpiCvtpi2ps(m, DISPATCH_ARGUMENTS);
+      OpVpsQpiCvtpi2ps(A);
       break;
     case kOpCvt0f2a + 1:
-      OpVpdQpiCvtpi2pd(m, DISPATCH_ARGUMENTS);
+      OpVpdQpiCvtpi2pd(A);
       break;
     case kOpCvt0f2a + 2:
-      OpVsdEdqpCvtsi2sd(m, DISPATCH_ARGUMENTS);
+      OpVsdEdqpCvtsi2sd(A);
       break;
     case kOpCvt0f2a + 3:
-      OpVssEdqpCvtsi2ss(m, DISPATCH_ARGUMENTS);
+      OpVssEdqpCvtsi2ss(A);
       break;
     case kOpCvtt0f2c + 0:
-      OpPpiWpsqCvttps2pi(m, DISPATCH_ARGUMENTS);
+      OpPpiWpsqCvttps2pi(A);
       break;
     case kOpCvtt0f2c + 1:
-      OpPpiWpdCvttpd2pi(m, DISPATCH_ARGUMENTS);
+      OpPpiWpdCvttpd2pi(A);
       break;
     case kOpCvtt0f2c + 2:
-      OpGdqpWsdCvttsd2si(m, DISPATCH_ARGUMENTS);
+      OpGdqpWsdCvttsd2si(A);
       break;
     case kOpCvtt0f2c + 3:
-      OpGdqpWssCvttss2si(m, DISPATCH_ARGUMENTS);
+      OpGdqpWssCvttss2si(A);
       break;
     case kOpCvt0f2d + 0:
-      OpPpiWpsqCvtps2pi(m, DISPATCH_ARGUMENTS);
+      OpPpiWpsqCvtps2pi(A);
       break;
     case kOpCvt0f2d + 1:
-      OpPpiWpdCvtpd2pi(m, DISPATCH_ARGUMENTS);
+      OpPpiWpdCvtpd2pi(A);
       break;
     case kOpCvt0f2d + 2:
-      OpGdqpWsdCvtsd2si(m, DISPATCH_ARGUMENTS);
+      OpGdqpWsdCvtsd2si(A);
       break;
     case kOpCvt0f2d + 3:
-      OpGdqpWssCvtss2si(m, DISPATCH_ARGUMENTS);
+      OpGdqpWssCvtss2si(A);
       break;
     case kOpCvt0f5a + 0:
-      OpVpdWpsCvtps2pd(m, DISPATCH_ARGUMENTS);
+      OpVpdWpsCvtps2pd(A);
       break;
     case kOpCvt0f5a + 1:
-      OpVpsWpdCvtpd2ps(m, DISPATCH_ARGUMENTS);
+      OpVpsWpdCvtpd2ps(A);
       break;
     case kOpCvt0f5a + 2:
-      OpVssWsdCvtsd2ss(m, DISPATCH_ARGUMENTS);
+      OpVssWsdCvtsd2ss(A);
       break;
     case kOpCvt0f5a + 3:
-      OpVsdWssCvtss2sd(m, DISPATCH_ARGUMENTS);
+      OpVsdWssCvtss2sd(A);
       break;
     case kOpCvt0f5b + 0:
-      OpVpsWdqCvtdq2ps(m, DISPATCH_ARGUMENTS);
+      OpVpsWdqCvtdq2ps(A);
       break;
     case kOpCvt0f5b + 1:
-      OpVdqWpsCvtps2dq(m, DISPATCH_ARGUMENTS);
+      OpVdqWpsCvtps2dq(A);
       break;
     case kOpCvt0f5b + 3:
-      OpVdqWpsCvttps2dq(m, DISPATCH_ARGUMENTS);
+      OpVdqWpsCvttps2dq(A);
       break;
     case kOpCvt0fE6 + 1:
-      OpVdqWpdCvtpd2dq(m, DISPATCH_ARGUMENTS);
+      OpVdqWpdCvtpd2dq(A);
       break;
     case kOpCvt0fE6 + 2:
-      OpVdqWpdCvttpd2dq(m, DISPATCH_ARGUMENTS);
+      OpVdqWpdCvttpd2dq(A);
       break;
     case kOpCvt0fE6 + 3:
-      OpVpdWdqCvtdq2pd(m, DISPATCH_ARGUMENTS);
+      OpVpdWdqCvtdq2pd(A);
       break;
     default:
       OpUdImpl(m);
   }
 }
 
-void OpCvt0f2a(struct Machine *m, DISPATCH_PARAMETERS) {
-  OpCvt(m, DISPATCH_ARGUMENTS, kOpCvt0f2a);
+void OpCvt0f2a(P) {
+  OpCvt(A, kOpCvt0f2a);
 }
 
-void OpCvtt0f2c(struct Machine *m, DISPATCH_PARAMETERS) {
-  OpCvt(m, DISPATCH_ARGUMENTS, kOpCvtt0f2c);
+void OpCvtt0f2c(P) {
+  OpCvt(A, kOpCvtt0f2c);
 }
 
-void OpCvt0f2d(struct Machine *m, DISPATCH_PARAMETERS) {
-  OpCvt(m, DISPATCH_ARGUMENTS, kOpCvt0f2d);
+void OpCvt0f2d(P) {
+  OpCvt(A, kOpCvt0f2d);
 }
 
-void OpCvt0f5a(struct Machine *m, DISPATCH_PARAMETERS) {
-  OpCvt(m, DISPATCH_ARGUMENTS, kOpCvt0f5a);
+void OpCvt0f5a(P) {
+  OpCvt(A, kOpCvt0f5a);
 }
 
-void OpCvt0f5b(struct Machine *m, DISPATCH_PARAMETERS) {
-  OpCvt(m, DISPATCH_ARGUMENTS, kOpCvt0f5b);
+void OpCvt0f5b(P) {
+  OpCvt(A, kOpCvt0f5b);
 }
 
-void OpCvt0fE6(struct Machine *m, DISPATCH_PARAMETERS) {
-  OpCvt(m, DISPATCH_ARGUMENTS, kOpCvt0fE6);
+void OpCvt0fE6(P) {
+  OpCvt(A, kOpCvt0fE6);
 }

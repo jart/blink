@@ -37,7 +37,6 @@ static int g_log;
 
 static char *GetTimestamp(void) {
   int x;
-  sigset_t ss, oldss;
   struct timespec ts;
   static _Thread_local char s[27];
   static _Thread_local i64 last;
@@ -45,10 +44,7 @@ static char *GetTimestamp(void) {
   IGNORE_RACES_START();
   clock_gettime(CLOCK_REALTIME, &ts);
   if (ts.tv_sec != last) {
-    sigfillset(&ss);
-    sigprocmask(SIG_SETMASK, &ss, &oldss);
     localtime_r(&ts.tv_sec, &tm);
-    sigprocmask(SIG_SETMASK, &oldss, 0);
     x = tm.tm_year + 1900;
     s[0] = '0' + x / 1000;
     s[1] = '0' + x / 100 % 10;

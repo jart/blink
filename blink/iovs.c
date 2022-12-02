@@ -97,7 +97,7 @@ int AppendIovsGuest(struct Machine *m, struct Iovs *iv, i64 iovaddr,
   if (!mulo(iovlen, sizeof(struct iovec_linux), &iovsize) &&
       (0 <= iovsize && iovsize <= 0x7ffff000)) {
     if ((guestiovs = (struct iovec_linux *)malloc(iovsize))) {
-      VirtualSendRead(m, guestiovs, iovaddr, iovsize);
+      CopyFromUserRead(m, guestiovs, iovaddr, iovsize);
       for (rc = i = 0; i < iovlen; ++i) {
         if (AppendIovsReal(m, iv, Read64(guestiovs[i].iov_base),
                            Read64(guestiovs[i].iov_len)) == -1) {

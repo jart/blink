@@ -27,12 +27,12 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 
-void OpCmpxchgEbAlGb(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpCmpxchgEbAlGb(P) {
   bool didit;
   if (!IsModrmRegister(rde)) {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
     didit = atomic_compare_exchange_strong_explicit(
-        (atomic_uchar *)ComputeReserveAddressWrite1(m, DISPATCH_ARGUMENTS),
+        (atomic_uchar *)ComputeReserveAddressWrite1(A),
         m->ax, *ByteRexrReg(m, rde), memory_order_acq_rel,
         memory_order_acquire);
 #else
@@ -55,11 +55,11 @@ void OpCmpxchgEbAlGb(struct Machine *m, DISPATCH_PARAMETERS) {
   m->flags = SetFlag(m->flags, FLAGS_ZF, didit);
 }
 
-void OpCmpxchgEvqpRaxGvqp(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpCmpxchgEvqpRaxGvqp(P) {
   bool didit;
   u8 *p, *q;
   q = RegRexrReg(m, rde);
-  p = GetModrmRegisterWordPointerWriteOszRexw(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64

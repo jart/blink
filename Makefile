@@ -71,7 +71,7 @@ o/$(MODE)/.x:
 o/$(MODE)/srcs.txt: o/$(MODE)/.x $(MAKEFILES) $(SRCS) $(call uniq,$(foreach x,$(SRCS),$(dir $(x))))
 	$(file >$@) $(foreach x,$(SRCS),$(file >>$@,$(x)))
 o/$(MODE)/hdrs.txt: o/$(MODE)/.x $(MAKEFILES) $(HDRS) $(call uniq,$(foreach x,$(HDRS) $(INCS),$(dir $(x))))
-	$(file >$@) $(foreach x,$(HDRS) $(INCS),$(file >>$@,$(x)))
+	$(file >$@) $(foreach x,blink/types.h $(HDRS) $(INCS),$(file >>$@,$(x)))
 
 DEPENDS =				\
 	o/$(MODE)/depend.host		\

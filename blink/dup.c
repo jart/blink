@@ -28,7 +28,7 @@
 #include "blink/log.h"
 #include "blink/syscall.h"
 
-int OpDup(struct Machine *m, i32 fildes, i32 newfildes, i32 flags, i32 minfd) {
+int SysDup(struct Machine *m, i32 fildes, i32 newfildes, i32 flags, i32 minfd) {
   int systemfd;
   struct Fd *fd1, *fd2, *freeme;
   unassert(newfildes >= -1);

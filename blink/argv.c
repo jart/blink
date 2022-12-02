@@ -39,7 +39,7 @@ static i64 PushString(struct Machine *m, char *s) {
   sp = Read64(m->sp);
   sp -= n;
   Write64(m->sp, sp);
-  VirtualRecv(m, sp, s, n);
+  CopyToUser(m, sp, s, n);
   return sp;
 }
 
@@ -69,7 +69,7 @@ void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
   for (i = 0; i < nall; ++i) {
     Write64(bytes + i * 8, bloc[i]);
   }
-  VirtualRecv(m, sp, bytes, nall * 8);
+  CopyToUser(m, sp, bytes, nall * 8);
   free(bytes);
   free(bloc);
 }

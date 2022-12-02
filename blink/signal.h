@@ -2,7 +2,7 @@
 #define BLINK_SIGNAL_H_
 #include "blink/machine.h"
 
-void OpRestore(struct Machine *);
+void SigRestore(struct Machine *);
 int ConsumeSignal(struct Machine *);
 void EnqueueSignal(struct Machine *, int);
 void TerminateSignal(struct Machine *, int);

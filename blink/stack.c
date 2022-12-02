@@ -78,7 +78,7 @@ static u64 ReadStackWord(u8 *p, u32 osz) {
   return x;
 }
 
-static void PushN(struct Machine *m, DISPATCH_PARAMETERS, u64 x, unsigned mode,
+static void PushN(P, u64 x, unsigned mode,
                   unsigned osz) {
   u8 *w;
   u64 v;
@@ -109,17 +109,17 @@ static void PushN(struct Machine *m, DISPATCH_PARAMETERS, u64 x, unsigned mode,
   IGNORE_RACES_END();
 }
 
-void Push(struct Machine *m, DISPATCH_PARAMETERS, u64 x) {
-  PushN(m, DISPATCH_ARGUMENTS, x, Eamode(rde), kStackOsz[Osz(rde)][Mode(rde)]);
+void Push(P, u64 x) {
+  PushN(A, x, Eamode(rde), kStackOsz[Osz(rde)][Mode(rde)]);
 }
 
-void OpPushZvq(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpPushZvq(P) {
   unsigned osz = kStackOsz[Osz(rde)][Mode(rde)];
-  PushN(m, DISPATCH_ARGUMENTS, ReadStackWord(RegRexbSrm(m, rde), osz),
+  PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz),
         Eamode(rde), osz);
 }
 
-static u64 PopN(struct Machine *m, DISPATCH_PARAMETERS, u16 extra,
+static u64 PopN(P, u16 extra,
                 unsigned osz) {
   u64 v;
   void *p[2];
@@ -145,15 +145,15 @@ static u64 PopN(struct Machine *m, DISPATCH_PARAMETERS, u16 extra,
   return ReadStackWord(AccessRam(m, v, osz, p, b, true), osz);
 }
 
-u64 Pop(struct Machine *m, DISPATCH_PARAMETERS, u16 extra) {
-  return PopN(m, DISPATCH_ARGUMENTS, extra, kStackOsz[Osz(rde)][Mode(rde)]);
+u64 Pop(P, u16 extra) {
+  return PopN(A, extra, kStackOsz[Osz(rde)][Mode(rde)]);
 }
 
-void OpPopZvq(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpPopZvq(P) {
   u64 x;
   unsigned osz;
   osz = kStackOsz[Osz(rde)][Mode(rde)];
-  x = PopN(m, DISPATCH_ARGUMENTS, 0, osz);
+  x = PopN(A, 0, osz);
   switch (osz) {
     case 8:
     case 4:
@@ -167,69 +167,69 @@ void OpPopZvq(struct Machine *m, DISPATCH_PARAMETERS) {
   }
 }
 
-static void OpCall(struct Machine *m, DISPATCH_PARAMETERS, u64 func) {
-  PushN(m, DISPATCH_ARGUMENTS, m->ip, Mode(rde), kCallOsz[Osz(rde)][Mode(rde)]);
+static void OpCall(P, u64 func) {
+  PushN(A, m->ip, Mode(rde), kCallOsz[Osz(rde)][Mode(rde)]);
   m->ip = func;
 }
 
-void OpCallJvds(struct Machine *m, DISPATCH_PARAMETERS) {
-  OpCall(m, DISPATCH_ARGUMENTS, m->ip + disp);
+void OpCallJvds(P) {
+  OpCall(A, m->ip + disp);
 }
 
-static u64 LoadAddressFromMemory(struct Machine *m, DISPATCH_PARAMETERS) {
+static u64 LoadAddressFromMemory(P) {
   unsigned osz;
   osz = kCallOsz[Osz(rde)][Mode(rde)];
   return ReadStackWord(
-      GetModrmRegisterWordPointerRead(m, DISPATCH_ARGUMENTS, osz), osz);
+      GetModrmRegisterWordPointerRead(A, osz), osz);
 }
 
-void OpCallEq(struct Machine *m, DISPATCH_PARAMETERS) {
-  OpCall(m, DISPATCH_ARGUMENTS, LoadAddressFromMemory(m, DISPATCH_ARGUMENTS));
+void OpCallEq(P) {
+  OpCall(A, LoadAddressFromMemory(A));
 }
 
-void OpJmpEq(struct Machine *m, DISPATCH_PARAMETERS) {
-  m->ip = LoadAddressFromMemory(m, DISPATCH_ARGUMENTS);
+void OpJmpEq(P) {
+  m->ip = LoadAddressFromMemory(A);
 }
 
-void OpLeave(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpLeave(P) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       Put64(m->sp, Get64(m->bp));
-      Put64(m->bp, Pop(m, DISPATCH_ARGUMENTS, 0));
+      Put64(m->bp, Pop(A, 0));
       break;
     case XED_MODE_LEGACY:
       Put64(m->sp, Get32(m->bp));
-      Put64(m->bp, Pop(m, DISPATCH_ARGUMENTS, 0));
+      Put64(m->bp, Pop(A, 0));
       break;
     case XED_MODE_REAL:
       Put16(m->sp, Get16(m->bp));
-      Put16(m->bp, Pop(m, DISPATCH_ARGUMENTS, 0));
+      Put16(m->bp, Pop(A, 0));
       break;
     default:
       __builtin_unreachable();
   }
 }
 
-void OpRet(struct Machine *m, DISPATCH_PARAMETERS) {
-  m->ip = Pop(m, DISPATCH_ARGUMENTS, uimm0);
+void OpRet(P) {
+  m->ip = Pop(A, uimm0);
 }
 
-void OpPushEvq(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpPushEvq(P) {
   unsigned osz;
   osz = kStackOsz[Osz(rde)][Mode(rde)];
-  Push(m, DISPATCH_ARGUMENTS,
+  Push(A,
        ReadStackWord(
-           GetModrmRegisterWordPointerRead(m, DISPATCH_ARGUMENTS, osz), osz));
+           GetModrmRegisterWordPointerRead(A, osz), osz));
 }
 
-void OpPopEvq(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpPopEvq(P) {
   unsigned osz;
   osz = kStackOsz[Osz(rde)][Mode(rde)];
-  WriteStackWord(GetModrmRegisterWordPointerWrite(m, DISPATCH_ARGUMENTS, osz),
-                 rde, osz, Pop(m, DISPATCH_ARGUMENTS, 0));
+  WriteStackWord(GetModrmRegisterWordPointerWrite(A, osz),
+                 rde, osz, Pop(A, 0));
 }
 
-static void Pushaw(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Pushaw(P) {
   u16 v;
   u8 b[8][2];
   memcpy(b[0], m->di, 2);
@@ -241,10 +241,10 @@ static void Pushaw(struct Machine *m, DISPATCH_PARAMETERS) {
   memcpy(b[6], m->cx, 2);
   memcpy(b[7], m->ax, 2);
   Put16(m->sp, (v = (Read16(m->sp) - sizeof(b)) & 0xffff));
-  VirtualRecv(m, m->ss + v, b, sizeof(b));
+  CopyToUser(m, m->ss + v, b, sizeof(b));
 }
 
-static void Pushad(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Pushad(P) {
   u32 v;
   u8 b[8][4];
   memcpy(b[0], m->di, 4);
@@ -256,12 +256,12 @@ static void Pushad(struct Machine *m, DISPATCH_PARAMETERS) {
   memcpy(b[6], m->cx, 4);
   memcpy(b[7], m->ax, 4);
   Put64(m->sp, (v = (Get32(m->sp) - sizeof(b)) & 0xffffffff));
-  VirtualRecv(m, m->ss + v, b, sizeof(b));
+  CopyToUser(m, m->ss + v, b, sizeof(b));
 }
 
-static void Popaw(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Popaw(P) {
   u8 b[8][2];
-  VirtualSend(m, b, m->ss + Read16(m->sp), sizeof(b));
+  CopyFromUser(m, b, m->ss + Read16(m->sp), sizeof(b));
   Put16(m->sp, (Get32(m->sp) + sizeof(b)) & 0xffff);
   memcpy(m->di, b[0], 2);
   memcpy(m->si, b[1], 2);
@@ -273,9 +273,9 @@ static void Popaw(struct Machine *m, DISPATCH_PARAMETERS) {
   memcpy(m->ax, b[7], 2);
 }
 
-static void Popad(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Popad(P) {
   u8 b[8][4];
-  VirtualSend(m, b, m->ss + Get32(m->sp), sizeof(b));
+  CopyFromUser(m, b, m->ss + Get32(m->sp), sizeof(b));
   Put64(m->sp, (Get32(m->sp) + sizeof(b)) & 0xffffffff);
   memcpy(m->di, b[0], 4);
   memcpy(m->si, b[1], 4);
@@ -287,13 +287,13 @@ static void Popad(struct Machine *m, DISPATCH_PARAMETERS) {
   memcpy(m->ax, b[7], 4);
 }
 
-void OpPusha(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpPusha(P) {
   switch (Eamode(rde)) {
     case XED_MODE_REAL:
-      Pushaw(m, DISPATCH_ARGUMENTS);
+      Pushaw(A);
       break;
     case XED_MODE_LEGACY:
-      Pushad(m, DISPATCH_ARGUMENTS);
+      Pushad(A);
       break;
     case XED_MODE_LONG:
       OpUdImpl(m);
@@ -302,13 +302,13 @@ void OpPusha(struct Machine *m, DISPATCH_PARAMETERS) {
   }
 }
 
-void OpPopa(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpPopa(P) {
   switch (Eamode(rde)) {
     case XED_MODE_REAL:
-      Popaw(m, DISPATCH_ARGUMENTS);
+      Popaw(A);
       break;
     case XED_MODE_LEGACY:
-      Popad(m, DISPATCH_ARGUMENTS);
+      Popad(A);
       break;
     case XED_MODE_LONG:
       OpUdImpl(m);
@@ -317,9 +317,9 @@ void OpPopa(struct Machine *m, DISPATCH_PARAMETERS) {
   }
 }
 
-void OpCallf(struct Machine *m, DISPATCH_PARAMETERS) {
-  Push(m, DISPATCH_ARGUMENTS, m->cs >> 4);
-  Push(m, DISPATCH_ARGUMENTS, m->ip);
+void OpCallf(P) {
+  Push(A, m->cs >> 4);
+  Push(A, m->ip);
   m->cs = uimm0 << 4;
   m->ip = disp & (Osz(rde) ? 0xffff : 0xffffffff);
   if (m->system->onlongbranch) {
@@ -327,9 +327,9 @@ void OpCallf(struct Machine *m, DISPATCH_PARAMETERS) {
   }
 }
 
-void OpRetf(struct Machine *m, DISPATCH_PARAMETERS) {
-  m->ip = Pop(m, DISPATCH_ARGUMENTS, 0);
-  m->cs = Pop(m, DISPATCH_ARGUMENTS, uimm0) << 4;
+void OpRetf(P) {
+  m->ip = Pop(A, 0);
+  m->cs = Pop(A, uimm0) << 4;
   if (m->system->onlongbranch) {
     m->system->onlongbranch(m);
   }

@@ -31,12 +31,12 @@
 #include "blink/signal.h"
 #include "blink/xlat.h"
 
-void OpRestore(struct Machine *m) {
+void SigRestore(struct Machine *m) {
   union {
     struct fpstate_linux fp;
     struct ucontext_linux uc;
   } u;
-  VirtualSendRead(m, &u.uc, m->siguc, sizeof(u.uc));
+  CopyFromUserRead(m, &u.uc, m->siguc, sizeof(u.uc));
   m->ip = Read64(u.uc.rip);
   m->flags = Read64(u.uc.eflags);
   memcpy(m->r8, u.uc.r8, 8);
@@ -55,7 +55,7 @@ void OpRestore(struct Machine *m) {
   memcpy(m->ax, u.uc.rax, 8);
   memcpy(m->cx, u.uc.rcx, 8);
   memcpy(m->sp, u.uc.rsp, 8);
-  VirtualSendRead(m, &u.fp, m->sigfp, sizeof(u.fp));
+  CopyFromUserRead(m, &u.fp, m->sigfp, sizeof(u.fp));
   m->fpu.cw = Read16(u.fp.cwd);
   m->fpu.sw = Read16(u.fp.swd);
   m->fpu.tw = Read16(u.fp.ftw);
@@ -102,18 +102,18 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   memcpy(fp.xmm, m->xmm, 256);
   sp = Read64(m->sp);
   sp = ROUNDDOWN(sp - sizeof(si), 16);
-  VirtualRecvWrite(m, sp, &si, sizeof(si));
+  CopyToUserWrite(m, sp, &si, sizeof(si));
   siaddr = sp;
   sp = ROUNDDOWN(sp - sizeof(fp), 16);
-  VirtualRecvWrite(m, sp, &fp, sizeof(fp));
+  CopyToUserWrite(m, sp, &fp, sizeof(fp));
   m->sigfp = sp;
   Write64(uc.fpstate, sp);
   sp = ROUNDDOWN(sp - sizeof(uc), 16);
-  VirtualRecvWrite(m, sp, &uc, sizeof(uc));
+  CopyToUserWrite(m, sp, &uc, sizeof(uc));
   m->siguc = sp;
   m->sig = sig;
   sp -= 8;
-  VirtualRecvWrite(m, sp, m->system->hands[sig - 1].restorer, 8);
+  CopyToUserWrite(m, sp, m->system->hands[sig - 1].restorer, 8);
   Write64(m->sp, sp);
   Write64(m->di, sig);
   Write64(m->si, siaddr);

@@ -34,15 +34,15 @@
 #define kMachineProtectionFault      -8
 #define kMachineSimdException        -9
 
-#define DISPATCH_PARAMETERS u64 rde, i64 disp, u64 uimm0
-#define DISPATCH_ARGUMENTS  rde, disp, uimm0
-#define DISPATCH_NOTHING    0, 0, 0
+#define P                struct Machine *m, u64 rde, i64 disp, u64 uimm0
+#define A                m, rde, disp, uimm0
+#define DISPATCH_NOTHING m, 0, 0, 0
 
-#define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, list, e)
+#define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, elem, e)
 
 struct Machine;
 
-typedef void (*nexgen32e_f)(struct Machine *, DISPATCH_PARAMETERS);
+typedef void (*nexgen32e_f)(P);
 
 struct FreeList {
   int n;
@@ -99,7 +99,7 @@ struct MachineState {
   u64 ds;
   u64 fs;
   u64 gs;
-  u8 reg[16][8];
+  u8 weg[16][8];
   u8 xmm[16][16];
   u32 mxcsr;
   struct MachineFpu fpu;
@@ -139,7 +139,7 @@ struct System {
   struct SystemRealFree *realfree PT_GUARDED_BY(realfree_lock);
   struct MachineMemstat memstat;
   pthread_mutex_t machines_lock;
-  dll_list machines GUARDED_BY(machines_lock);
+  struct Dll *machines GUARDED_BY(machines_lock);
   unsigned next_tid GUARDED_BY(machines_lock);
   struct Jit jit;
   struct Fds fds;
@@ -170,92 +170,92 @@ struct MachineTlb {
   u64 entry;
 };
 
-struct Machine {
-  _Atomic(nexgen32e_f) * fun;
-  u64 ip;         // 0x08
-  u64 oldip;      // 0x10
-  i64 stashaddr;  // 0x18
-  u64 cs;
-  u64 ss;
-  int mode;
-  u32 flags;
-  union {
-    u64 align8_;
-    u8 reg[16][8];
-    struct {
-      union {
-        struct {
-          u8 al;
-          u8 ah;
-        };
-        u8 ax[8];
-      };
-      union {
-        struct {
-          u8 cl;
-          u8 ch;
-        };
-        u8 cx[8];
-      };
-      union {
-        struct {
-          u8 dl;
-          u8 dh;
-        };
-        u8 dx[8];
-      };
-      union {
-        struct {
-          u8 bl;
-          u8 bh;
-        };
-        u8 bx[8];
-      };
-      u8 sp[8];
-      u8 bp[8];
-      u8 si[8];
-      u8 di[8];
-      u8 r8[8];
-      u8 r9[8];
-      u8 r10[8];
-      u8 r11[8];
-      u8 r12[8];
-      u8 r13[8];
-      u8 r14[8];
-      u8 r15[8];
-    };
-  };
-  _Alignas(64) struct MachineTlb tlb[16];
-  _Alignas(16) u8 xmm[16][16];
-  struct XedDecodedInst *xedd;
-  dll_element list GUARDED_BY(system->machines_lock);
-  i64 readaddr;
-  i64 writeaddr;
-  u32 readsize;
-  u32 writesize;
-  u64 es;
-  u64 ds;
-  u64 fs;
-  u64 gs;
-  struct MachineFpu fpu;
-  u32 mxcsr;
-  bool isthread;
-  pthread_t thread;
-  struct FreeList freelist;
-  struct Path path;
-  i64 bofram[2];
-  i64 faultaddr;
-  u64 signals;
-  u64 sigmask;
-  u32 tlbindex;
-  int sig;
-  u64 siguc;
-  u64 sigfp;
-  struct System *system;
-  jmp_buf onhalt;
-  i64 ctid;
-  int tid;
-  sigset_t thread_sigmask;
+struct Machine {                           //
+  _Atomic(nexgen32e_f) * fun;              // DISPATCHER
+  u64 ip;                                  // [abi] 0x08
+  u64 oldip;                               // [abi] 0x10
+  i64 stashaddr;                           // [abi] 0x18
+  u64 cs;                                  //
+  u64 ss;                                  //
+  int mode;                                //
+  u32 flags;                               //
+  union {                                  // GENERAL REGISTER FILE
+    u64 align8_;                           //
+    u8 beg[128];                           //
+    u8 weg[16][8];                         //
+    struct {                               //
+      union {                              //
+        u8 ax[8];                          // [vol] accumulator, result:1/2
+        struct {                           //
+          u8 al;                           //
+          u8 ah;                           //
+        };                                 //
+      };                                   //
+      union {                              //
+        u8 cx[8];                          // [vol] param:4/6
+        struct {                           //
+          u8 cl;                           //
+          u8 ch;                           //
+        };                                 //
+      };                                   //
+      union {                              //
+        u8 dx[8];                          // [vol] param:3/6, result:2/2
+        struct {                           //
+          u8 dl;                           //
+          u8 dh;                           //
+        };                                 //
+      };                                   //
+      union {                              //
+        u8 bx[8];                          // [sav] base index
+        struct {                           //
+          u8 bl;                           //
+          u8 bh;                           //
+        };                                 //
+      };                                   //
+      u8 sp[8];                            // [sav] stack pointer
+      u8 bp[8];                            // [sav] backtrace pointer
+      u8 si[8];                            // [vol] param:2/6
+      u8 di[8];                            // [vol] param:1/6
+      u8 r8[8];                            // [vol] param:5/6
+      u8 r9[8];                            // [vol] param:6/6
+      u8 r10[8];                           // [vol]
+      u8 r11[8];                           // [vol]
+      u8 r12[8];                           // [sav]
+      u8 r13[8];                           // [sav]
+      u8 r14[8];                           // [sav]
+      u8 r15[8];                           // [sav]
+    };                                     //
+  };                                       //
+  _Alignas(64) struct MachineTlb tlb[16];  // TRANSLATION LOOKASIDE BUFFER
+  _Alignas(16) u8 xmm[16][16];             // 128-BIT VECTOR REGISTER FILE
+  struct XedDecodedInst *xedd;             // ->opcache->icache if non-jit
+  i64 readaddr;                            // so tui can show memory reads
+  i64 writeaddr;                           // so tui can show memory write
+  u32 readsize;                            // bytes length of last read op
+  u32 writesize;                           // byte length of last write op
+  u64 fs;                                  // thred-local segment register
+  u64 gs;                                  // winple thread-local register
+  u64 ds;                                  // data segment (legacy / real)
+  u64 es;                                  // xtra segment (legacy / real)
+  struct MachineFpu fpu;                   // FLOATING-POINT REGISTER FILE
+  u32 mxcsr;                               // SIMD status control register
+  pthread_t thread;                        // POSIX thread of this machine
+  struct FreeList freelist;                // to make system calls simpler
+  struct Path path;                        // under construction jit route
+  i64 bofram[2];                           // helps debug bootloading code
+  i64 faultaddr;                           //
+  u64 signals;                             //
+  u64 sigmask;                             //
+  u32 tlbindex;                            //
+  int sig;                                 //
+  u64 siguc;                               //
+  u64 sigfp;                               //
+  struct System *system;                   //
+  jmp_buf onhalt;                          //
+  i64 ctid;                                //
+  int tid;                                 //
+  sigset_t thread_sigmask;                 //
+  struct Dll elem GUARDED_BY(system->machines_lock);
   struct OpCache opcache[1];
 };
 
@@ -266,12 +266,14 @@ void FreeSystem(struct System *);
 _Noreturn void Actor(struct Machine *);
 struct Machine *NewMachine(struct System *, struct Machine *);
 void FreeMachine(struct Machine *);
+void FreeMachineUnlocked(struct Machine *);
+void KillOtherThreads(struct System *);
 void ResetMem(struct Machine *);
 void ResetCpu(struct Machine *);
 void ResetTlb(struct Machine *);
 void CollectGarbage(struct Machine *);
 void ResetInstructionCache(struct Machine *);
-void GeneralDispatch(struct Machine *, DISPATCH_PARAMETERS);
+void GeneralDispatch(P);
 void LoadInstruction(struct Machine *);
 void ExecuteInstruction(struct Machine *);
 long AllocateLinearPage(struct System *);
@@ -287,55 +289,79 @@ void RaiseDivideError(struct Machine *);
 _Noreturn void ThrowSegmentationFault(struct Machine *, i64);
 _Noreturn void ThrowProtectionFault(struct Machine *);
 _Noreturn void OpUdImpl(struct Machine *);
-_Noreturn void OpUd(struct Machine *, DISPATCH_PARAMETERS);
-_Noreturn void OpHlt(struct Machine *, DISPATCH_PARAMETERS);
-void OpSsePclmulqdq(struct Machine *, DISPATCH_PARAMETERS);
-void OpCvt0f2a(struct Machine *, DISPATCH_PARAMETERS);
-void OpCvtt0f2c(struct Machine *, DISPATCH_PARAMETERS);
-void OpCvt0f2d(struct Machine *, DISPATCH_PARAMETERS);
-void OpCvt0f5a(struct Machine *, DISPATCH_PARAMETERS);
-void OpCvt0f5b(struct Machine *, DISPATCH_PARAMETERS);
-void OpCvt0fE6(struct Machine *, DISPATCH_PARAMETERS);
-void OpCpuid(struct Machine *, DISPATCH_PARAMETERS);
-void OpDivAlAhAxEbSigned(struct Machine *, DISPATCH_PARAMETERS);
-void OpDivAlAhAxEbUnsigned(struct Machine *, DISPATCH_PARAMETERS);
-void OpDivRdxRaxEvqpSigned(struct Machine *, DISPATCH_PARAMETERS);
-void OpDivRdxRaxEvqpUnsigned(struct Machine *, DISPATCH_PARAMETERS);
-void OpImulGvqpEvqp(struct Machine *, DISPATCH_PARAMETERS);
-void OpImulGvqpEvqpImm(struct Machine *, DISPATCH_PARAMETERS);
-void OpMulAxAlEbSigned(struct Machine *, DISPATCH_PARAMETERS);
-void OpMulAxAlEbUnsigned(struct Machine *, DISPATCH_PARAMETERS);
-void OpMulRdxRaxEvqpSigned(struct Machine *, DISPATCH_PARAMETERS);
-void OpMulRdxRaxEvqpUnsigned(struct Machine *, DISPATCH_PARAMETERS);
-u64 OpIn(struct Machine *, u16);
+_Noreturn void OpUd(P);
+_Noreturn void OpHlt(P);
+void JitlessDispatch(P);
+
+void Push(P, u64);
+u64 Pop(P, u16);
+void PopVq(P);
+void PushVq(P);
 int OpOut(struct Machine *, u16, u32);
-void Op101(struct Machine *, DISPATCH_PARAMETERS);
-void OpRdrand(struct Machine *, DISPATCH_PARAMETERS);
-void OpRdseed(struct Machine *, DISPATCH_PARAMETERS);
-void Op171(struct Machine *, DISPATCH_PARAMETERS);
-void Op172(struct Machine *, DISPATCH_PARAMETERS);
-void Op173(struct Machine *, DISPATCH_PARAMETERS);
-void Push(struct Machine *, DISPATCH_PARAMETERS, u64);
-u64 Pop(struct Machine *, DISPATCH_PARAMETERS, u16);
-void OpCallJvds(struct Machine *, DISPATCH_PARAMETERS);
-void OpRet(struct Machine *, DISPATCH_PARAMETERS);
-void OpRetf(struct Machine *, DISPATCH_PARAMETERS);
-void OpLeave(struct Machine *, DISPATCH_PARAMETERS);
-void OpCallEq(struct Machine *, DISPATCH_PARAMETERS);
-void OpPopEvq(struct Machine *, DISPATCH_PARAMETERS);
-void OpPopZvq(struct Machine *, DISPATCH_PARAMETERS);
-void OpPushZvq(struct Machine *, DISPATCH_PARAMETERS);
-void OpPushEvq(struct Machine *, DISPATCH_PARAMETERS);
-void PopVq(struct Machine *, DISPATCH_PARAMETERS);
-void PushVq(struct Machine *, DISPATCH_PARAMETERS);
-void OpJmpEq(struct Machine *, DISPATCH_PARAMETERS);
-void OpPusha(struct Machine *, DISPATCH_PARAMETERS);
-void OpPopa(struct Machine *, DISPATCH_PARAMETERS);
-void OpCallf(struct Machine *, DISPATCH_PARAMETERS);
-void OpXchgGbEb(struct Machine *, DISPATCH_PARAMETERS);
-void OpXchgGvqpEvqp(struct Machine *, DISPATCH_PARAMETERS);
-void OpCmpxchgEbAlGb(struct Machine *, DISPATCH_PARAMETERS);
-void OpCmpxchgEvqpRaxGvqp(struct Machine *, DISPATCH_PARAMETERS);
-void JitlessDispatch(struct Machine *, DISPATCH_PARAMETERS);
+u64 OpIn(struct Machine *, u16);
+
+void Op0fe(P);
+void Op101(P);
+void Op171(P);
+void Op172(P);
+void Op173(P);
+void OpAaa(P);
+void OpAad(P);
+void OpAam(P);
+void OpAas(P);
+void OpAlubAdc(P);
+void OpAlubAdd(P);
+void OpAlubAnd(P);
+void OpAlubOr(P);
+void OpAlubSbb(P);
+void OpAlubSub(P);
+void OpAlubXor(P);
+void OpAluw(P);
+void OpCallEq(P);
+void OpCallJvds(P);
+void OpCallf(P);
+void OpCmpxchgEbAlGb(P);
+void OpCmpxchgEvqpRaxGvqp(P);
+void OpCpuid(P);
+void OpCvt0f2a(P);
+void OpCvt0f2d(P);
+void OpCvt0f5a(P);
+void OpCvt0f5b(P);
+void OpCvt0fE6(P);
+void OpCvtt0f2c(P);
+void OpDas(P);
+void OpDecEvqp(P);
+void OpDivAlAhAxEbSigned(P);
+void OpDivAlAhAxEbUnsigned(P);
+void OpDivRdxRaxEvqpSigned(P);
+void OpDivRdxRaxEvqpUnsigned(P);
+void OpImulGvqpEvqp(P);
+void OpImulGvqpEvqpImm(P);
+void OpIncEvqp(P);
+void OpJmpEq(P);
+void OpLeave(P);
+void OpMulAxAlEbSigned(P);
+void OpMulAxAlEbUnsigned(P);
+void OpMulRdxRaxEvqpSigned(P);
+void OpMulRdxRaxEvqpUnsigned(P);
+void OpNegEb(P);
+void OpNegEvqp(P);
+void OpNotEb(P);
+void OpNotEvqp(P);
+void OpPopEvq(P);
+void OpPopZvq(P);
+void OpPopa(P);
+void OpPushEvq(P);
+void OpPushZvq(P);
+void OpPusha(P);
+void OpRdrand(P);
+void OpRdseed(P);
+void OpRet(P);
+void OpRetf(P);
+void OpSsePclmulqdq(P);
+void OpXaddEbGb(P);
+void OpXaddEvqpGvqp(P);
+void OpXchgGbEb(P);
+void OpXchgGvqpEvqp(P);
 
 #endif /* BLINK_MACHINE_H_ */

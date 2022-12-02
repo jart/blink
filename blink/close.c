@@ -43,7 +43,7 @@ static int CloseFd(struct System *s, struct Fd *fd) {
   return rc;
 }
 
-int OpClose(struct System *s, i32 fildes) {
+int SysClose(struct System *s, i32 fildes) {
   int rc;
   struct Fd *fd;
   LockFds(&s->fds);
@@ -56,10 +56,10 @@ int OpClose(struct System *s, i32 fildes) {
   return rc;
 }
 
-int OpCloseRange(struct System *s, u32 first, u32 last, u32 flags) {
+int SysCloseRange(struct System *s, u32 first, u32 last, u32 flags) {
   int rc;
   struct Fd *fd;
-  dll_element *e, *e2;
+  struct Dll *e, *e2;
   if (flags || last > INT_MAX || first > INT_MAX || first > last) {
     return einval();
   }

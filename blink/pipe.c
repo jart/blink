@@ -27,7 +27,7 @@
 #include "blink/memory.h"
 #include "blink/syscall.h"
 
-int OpPipe(struct Machine *m, i64 pipefds_addr, i32 flags) {
+int SysPipe(struct Machine *m, i64 pipefds_addr, i32 flags) {
   u8 gpipefds[2][4];
   int rc, hpipefds[2];
   struct Fd *fd1, *fd2;
@@ -39,7 +39,7 @@ int OpPipe(struct Machine *m, i64 pipefds_addr, i32 flags) {
     if (pipe(hpipefds) != -1) {
       Write32(gpipefds[0], hpipefds[0]);
       Write32(gpipefds[1], hpipefds[1]);
-      VirtualRecvWrite(m, pipefds_addr, gpipefds, sizeof(gpipefds));
+      CopyToUserWrite(m, pipefds_addr, gpipefds, sizeof(gpipefds));
       atomic_store_explicit(&fd1->systemfd, hpipefds[0], memory_order_release);
       atomic_store_explicit(&fd2->systemfd, hpipefds[1], memory_order_release);
       rc = 0;

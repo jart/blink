@@ -125,7 +125,7 @@ void LoadDebugSymbols(struct Elf *elf) {
 }
 
 void PrintFds(struct Fds *fds) {
-  dll_element *e;
+  struct Dll *e;
   LOGF("%-8s %-8s %-8s %-8s", "fildes", "systemfd", "oflags", "cloexec");
   for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
     LOGF("%-8d %-8d %-8x %-8s", FD_CONTAINER(e)->fildes,

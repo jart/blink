@@ -69,10 +69,10 @@ void OpUdImpl(struct Machine *m) {
   HaltMachine(m, kMachineUndefinedInstruction);
 }
 
-void OpUd(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpUd(P) {
   OpUdImpl(m);
 }
 
-void OpHlt(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpHlt(P) {
   HaltMachine(m, kMachineHalt);
 }

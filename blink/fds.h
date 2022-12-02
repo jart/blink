@@ -9,7 +9,7 @@
 #include "blink/dll.h"
 #include "blink/types.h"
 
-#define FD_CONTAINER(e) DLL_CONTAINER(struct Fd, list, e)
+#define FD_CONTAINER(e) DLL_CONTAINER(struct Fd, elem, e)
 
 struct FdCb {
   int (*close)(int);
@@ -24,14 +24,14 @@ struct Fd {
   int oflags;
   int cloexec;
   DIR *dirstream;
-  dll_element list;
+  struct Dll elem;
   pthread_mutex_t lock;
   _Atomic(int) systemfd;
   const struct FdCb *cb;
 };
 
 struct Fds {
-  dll_list list;
+  struct Dll *list;
   pthread_mutex_t lock;
 };
 

@@ -40,45 +40,38 @@
 #include "blink/xlat.h"
 
 static void OnSignal(int sig, siginfo_t *si, void *uc) {
-  LOGF("%s", strsignal(sig));
   EnqueueSignal(g_machine, sig);
 }
 
 static int Exec(char *prog, char **argv, char **envp) {
   int rc;
-  dll_element *e;
   struct System *s;
-  struct Machine *o = g_machine;
+  struct Machine *old;
+  old = g_machine;
   unassert((g_machine = NewMachine(NewSystem(), 0)));
   // DisableJit(&g_machine->system->jit);
   g_machine->system->exec = Exec;
   g_machine->mode = XED_MODE_LONG;
-  if (!o) {
+  if (!old) {
     LoadProgram(g_machine, prog, argv, envp);
     AddStdFd(&g_machine->system->fds, 0);
     AddStdFd(&g_machine->system->fds, 1);
     AddStdFd(&g_machine->system->fds, 2);
   } else {
-    s = o->system;
-    LOCK(&s->machines_lock);
-    while ((e = dll_first(s->machines))) {
-      if (MACHINE_CONTAINER(e)->isthread) {
-        pthread_kill(MACHINE_CONTAINER(e)->thread, SIGKILL);
-      }
-      FreeMachine(MACHINE_CONTAINER(e));
-    }
-    UNLOCK(&s->machines_lock);
+    KillOtherThreads(old->system);
     LoadProgram(g_machine, prog, argv, envp);
-    LOCK(&s->fds.lock);
-    g_machine->system->fds = s->fds;
-    memset(&s->fds, 0, sizeof(s->fds));
-    UNLOCK(&s->fds.lock);
-    FreeSystem(s);
+    LOCK(&old->system->fds.lock);
+    g_machine->system->fds.list = old->system->fds.list;
+    old->system->fds.list = 0;
+    UNLOCK(&old->system->fds.lock);
+    FreeMachine(old);
+    FreeSystem(old->system);
   }
   if (!(rc = setjmp(g_machine->onhalt))) {
     Actor(g_machine);
   } else {
     s = g_machine->system;
+    KillOtherThreads(s);
     FreeMachine(g_machine);
     FreeSystem(s);
     // PrintStats();

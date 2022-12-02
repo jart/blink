@@ -1,6 +1,8 @@
 #ifndef BLINK_ALU_H_
 #define BLINK_ALU_H_
-#include "blink/machine.h"
+#include <stdbool.h>
+
+#include "blink/types.h"
 
 #define ALU_ADD 0
 #define ALU_OR  1
@@ -109,29 +111,5 @@ i64 Rcl32(u64, u64, u32 *);
 i64 Rcl64(u64, u64, u32 *);
 
 u64 BsuDoubleShift(int, u64, u64, u8, bool, u32 *);
-
-void OpAluw(struct Machine *, DISPATCH_PARAMETERS);
-void OpXaddEbGb(struct Machine *, DISPATCH_PARAMETERS);
-void OpXaddEvqpGvqp(struct Machine *, DISPATCH_PARAMETERS);
-void Op0fe(struct Machine *, DISPATCH_PARAMETERS);
-void OpNegEb(struct Machine *, DISPATCH_PARAMETERS);
-void OpNotEb(struct Machine *, DISPATCH_PARAMETERS);
-void OpAlubAdd(struct Machine *, DISPATCH_PARAMETERS);
-void OpAlubOr(struct Machine *, DISPATCH_PARAMETERS);
-void OpAlubAdc(struct Machine *, DISPATCH_PARAMETERS);
-void OpAlubSbb(struct Machine *, DISPATCH_PARAMETERS);
-void OpAlubAnd(struct Machine *, DISPATCH_PARAMETERS);
-void OpAlubSub(struct Machine *, DISPATCH_PARAMETERS);
-void OpAlubXor(struct Machine *, DISPATCH_PARAMETERS);
-void OpNotEvqp(struct Machine *, DISPATCH_PARAMETERS);
-void OpNegEvqp(struct Machine *, DISPATCH_PARAMETERS);
-void OpIncEvqp(struct Machine *, DISPATCH_PARAMETERS);
-void OpDecEvqp(struct Machine *, DISPATCH_PARAMETERS);
-
-void OpDas(struct Machine *, DISPATCH_PARAMETERS);
-void OpAaa(struct Machine *, DISPATCH_PARAMETERS);
-void OpAas(struct Machine *, DISPATCH_PARAMETERS);
-void OpAam(struct Machine *, DISPATCH_PARAMETERS);
-void OpAad(struct Machine *, DISPATCH_PARAMETERS);
 
 #endif /* BLINK_ALU_H_ */

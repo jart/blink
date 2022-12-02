@@ -101,7 +101,7 @@ LDLIBS += -fsanitize=memory
 endif
 
 ifeq ($(MODE), tiny)
-CPPFLAGS += -DNDEBUG  -DTINY
+CPPFLAGS += -DNDEBUG -DTINY
 CFLAGS += -std=c11 -Os -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-pie
 LDFLAGS += -no-pie -Wl,--cref,-Map=$@.map
 endif
@@ -110,6 +110,23 @@ endif
 # CC = clang
 # AR = llvm-ar
 # CPPFLAGS += -DNDEBUG -DTINY
+# LDFLAGS += -fuse-ld=lld
 # CFLAGS += -std=c11 -Oz -fno-pie
 # LDFLAGS += -no-pie -Wl,--cref,-Map=$@.map
 # endif
+
+ifeq ($(MODE), llvm)
+CC = clang
+AR = llvm-ar
+CPPFLAGS += -DDEBUG
+CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS += --rtlib=compiler-rt
+endif
+
+ifeq ($(MODE), llvm++)
+CC = clang++
+AR = llvm-ar
+CPPFLAGS += -DDEBUG
+CFLAGS += -xc++ -Werror -Wno-unused-parameter -Wno-missing-field-initializers
+LDFLAGS += --rtlib=compiler-rt
+endif

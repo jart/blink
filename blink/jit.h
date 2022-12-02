@@ -5,7 +5,6 @@
 #include <stdbool.h>
 
 #include "blink/dll.h"
-#include "blink/tsan.h"
 #include "blink/types.h"
 
 #define kJitPageSize  65536
@@ -50,7 +49,7 @@
 #define kArmIdxOff   21           // bit offset of u16[4] sub-word index
 #define kArmIdxMask  0x00600000u  // mask of u16[4] sub-word index
 
-#define JITPAGE_CONTAINER(e) DLL_CONTAINER(struct JitPage, list, e)
+#define JITPAGE_CONTAINER(e) DLL_CONTAINER(struct JitPage, elem, e)
 
 struct JitPage {
   u8 *addr;
@@ -59,15 +58,15 @@ struct JitPage {
   int saved;
   int setargs;
   int committed;
-  dll_list staged;
-  dll_element list;
+  struct Dll *staged;
+  struct Dll elem;
 };
 
 struct Jit {
   u8 *brk;
   pthread_mutex_t lock;
   _Atomic(int) disabled;
-  dll_list pages GUARDED_BY(lock);
+  struct Dll *pages;
 };
 
 typedef _Atomic(intptr_t) hook_t;

@@ -28,9 +28,9 @@
 #include "blink/mop.h"
 #include "blink/swap.h"
 
-void OpXaddEbGb(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpXaddEbGb(P) {
   u8 x, y, z, *p, *q;
-  p = GetModrmRegisterBytePointerWrite(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterBytePointerWrite(A);
   q = ByteRexrReg(m, rde);
   x = Load8(p);
   y = Get8(q);
@@ -56,10 +56,10 @@ void OpXaddEbGb(struct Machine *m, DISPATCH_PARAMETERS) {
 #endif
 }
 
-void OpXaddEvqpGvqp(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpXaddEvqpGvqp(P) {
   u8 *p, *q;
   q = RegRexrReg(m, rde);
-  p = GetModrmRegisterWordPointerWriteOszRexw(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
     u64 x, y, z;
     if (Lock(rde)) {

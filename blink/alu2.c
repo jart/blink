@@ -28,9 +28,9 @@
 #include "blink/mop.h"
 #include "blink/swap.h"
 
-static void Alub(struct Machine *m, DISPATCH_PARAMETERS, aluop_f op) {
+static void Alub(P, aluop_f op) {
   u8 *p, *q;
-  p = GetModrmRegisterBytePointerWrite(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterBytePointerWrite(A);
   q = ByteRexrReg(m, rde);
   if (!Lock(rde)) {
     Store8(p, op(Load8(p), Get8(q), &m->flags));
@@ -50,39 +50,39 @@ static void Alub(struct Machine *m, DISPATCH_PARAMETERS, aluop_f op) {
   }
 }
 
-void OpAlubAdd(struct Machine *m, DISPATCH_PARAMETERS) {
-  Alub(m, DISPATCH_ARGUMENTS, Add8);
+void OpAlubAdd(P) {
+  Alub(A, Add8);
 }
 
-void OpAlubOr(struct Machine *m, DISPATCH_PARAMETERS) {
-  Alub(m, DISPATCH_ARGUMENTS, Or8);
+void OpAlubOr(P) {
+  Alub(A, Or8);
 }
 
-void OpAlubAdc(struct Machine *m, DISPATCH_PARAMETERS) {
-  Alub(m, DISPATCH_ARGUMENTS, Adc8);
+void OpAlubAdc(P) {
+  Alub(A, Adc8);
 }
 
-void OpAlubSbb(struct Machine *m, DISPATCH_PARAMETERS) {
-  Alub(m, DISPATCH_ARGUMENTS, Sbb8);
+void OpAlubSbb(P) {
+  Alub(A, Sbb8);
 }
 
-void OpAlubAnd(struct Machine *m, DISPATCH_PARAMETERS) {
-  Alub(m, DISPATCH_ARGUMENTS, And8);
+void OpAlubAnd(P) {
+  Alub(A, And8);
 }
 
-void OpAlubSub(struct Machine *m, DISPATCH_PARAMETERS) {
-  Alub(m, DISPATCH_ARGUMENTS, Sub8);
+void OpAlubSub(P) {
+  Alub(A, Sub8);
 }
 
-void OpAlubXor(struct Machine *m, DISPATCH_PARAMETERS) {
-  Alub(m, DISPATCH_ARGUMENTS, Xor8);
+void OpAlubXor(P) {
+  Alub(A, Xor8);
 }
 
-void OpAluw(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpAluw(P) {
   u8 *p, *q;
   q = RegRexrReg(m, rde);
   if (Rexw(rde)) {
-    p = GetModrmRegisterWordPointerWrite8(m, DISPATCH_ARGUMENTS);
+    p = GetModrmRegisterWordPointerWrite8(A);
     if (Lock(rde)) {
 #if LONG_BIT == 64
       if (!((intptr_t)p & 7)) {
@@ -113,7 +113,7 @@ void OpAluw(struct Machine *m, DISPATCH_PARAMETERS) {
     }
   } else if (!Osz(rde)) {
     u32 x, y, z;
-    p = GetModrmRegisterWordPointerWrite4(m, DISPATCH_ARGUMENTS);
+    p = GetModrmRegisterWordPointerWrite4(A);
     if (Lock(rde)) {
       if (!((intptr_t)p & 3)) {
         x = atomic_load_explicit((_Atomic(u32) *)p, memory_order_acquire);
@@ -141,7 +141,7 @@ void OpAluw(struct Machine *m, DISPATCH_PARAMETERS) {
   } else {
     u16 x, y, z;
     unassert(!Lock(rde));
-    p = GetModrmRegisterWordPointerWrite2(m, DISPATCH_ARGUMENTS);
+    p = GetModrmRegisterWordPointerWrite2(A);
     x = Load16(p);
     y = Get16(q);
     z = kAlu[(Opcode(rde) & 070) >> 3][ALU_INT16](x, y, &m->flags);

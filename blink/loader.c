@@ -67,7 +67,7 @@ static void LoadElfLoadSegment(struct Machine *m, void *code, size_t codesize,
     LOGF("ReserveVirtual failed");
     exit(200);
   }
-  VirtualRecv(m, vstart, (void *)(uintptr_t)fstart, fend - fstart);
+  CopyToUser(m, vstart, (void *)(uintptr_t)fstart, fend - fstart);
   if (bsssize) {
     if (ReserveVirtual(m->system, vbss, bsssize, 0x0207) == -1) {
       LOGF("ReserveVirtual failed");

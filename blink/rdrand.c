@@ -42,22 +42,22 @@ static u64 Vigna(u64 s[1]) {
   return z ^ (z >> 31);
 }
 
-static void OpRand(struct Machine *m, DISPATCH_PARAMETERS, u64 x) {
+static void OpRand(P, u64 x) {
   WriteRegister(rde, RegRexbRm(m, rde), x);
   m->flags = SetFlag(m->flags, FLAGS_CF, true);
 }
 
-void OpRdrand(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpRdrand(P) {
   LOCK(&g_rdrand.lock);
   if (!(g_rdrand.count++ % RESEED_INTERVAL)) {
     unassert(GetRandom(&g_rdrand.state, 8) == 8);
   }
-  OpRand(m, DISPATCH_ARGUMENTS, Vigna(&g_rdrand.state));
+  OpRand(A, Vigna(&g_rdrand.state));
   UNLOCK(&g_rdrand.lock);
 }
 
-void OpRdseed(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpRdseed(P) {
   u64 x;
   unassert(GetRandom(&x, 8) == 8);
-  OpRand(m, DISPATCH_ARGUMENTS, x);
+  OpRand(A, x);
 }

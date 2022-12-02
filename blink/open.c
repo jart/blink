@@ -30,8 +30,8 @@
 #include "blink/syscall.h"
 #include "blink/xlat.h"
 
-int OpOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
-             i32 mode) {
+int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
+              i32 mode) {
   const char *path;
   struct Fd *fd, *dirfd;
   int rc, sf, fildes, sysdirfd;

@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include "blink/builtin.h"
+#include "blink/case.h"
 #include "blink/jit.h"
 #include "test/test.h"
 
@@ -56,38 +57,28 @@ void TearDown(void) {
   DestroyJit(&jit);
 }
 
-u64 PickMask(u64 x) {
+u64 PickRandMask(u64 x) {
   switch (x % 9) {
-    case 0:
-      return 0xffffffffffffffff;
-    case 1:
-      return 0x00000000ffffffff;
-    case 2:
-      return 0x000000000000ffff;
-    case 3:
-      return 0x00000000ffff0000;
-    case 4:
-      return 0x0000ffff00000000;
-    case 5:
-      return 0xffff000000000000;
-    case 6:
-      return 0xffff00000000ffff;
-    case 7:
-      return 0xffff0000ffff0000;
-    case 8:
-      return 0xffffffffffff0000;
+    XLAT(0, 0xffffffffffffffff);
+    XLAT(1, 0x00000000ffffffff);
+    XLAT(2, 0x000000000000ffff);
+    XLAT(3, 0x00000000ffff0000);
+    XLAT(4, 0x0000ffff00000000);
+    XLAT(5, 0xffff000000000000);
+    XLAT(6, 0xffff00000000ffff);
+    XLAT(7, 0xffff0000ffff0000);
+    XLAT(8, 0xffffffffffff0000);
     default:
       abort();
   }
 }
 
 u64 Rando(void) {
-  static u64 s;
-  u64 z = (s += 0x9e3779b97f4a7c15);
-  z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
-  z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
-  z = (z ^ (z >> 31)) & PickMask(z);
-  return z;
+  static u64 global_rand_seed;
+  u64 rand = global_rand_seed += 0x9e3779b97f4a7c15;
+  rand = (rand ^ (rand >> 30)) * 0xbf58476d1ce4e5b9;
+  rand = (rand ^ (rand >> 27)) * 0x94d049bb133111eb;
+  return (rand ^ (rand >> 31)) & PickRandMask(rand);
 }
 
 u64 CallMe(u64 p0, u64 p1, u64 p2, u64 p3, u64 p4, u64 p5) {

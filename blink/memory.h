@@ -15,30 +15,29 @@
 #define PAGE_XD   0x8000000000000000
 
 char **LoadStrList(struct Machine *, i64);
+char *LoadStr(struct Machine *, i64);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
 u64 FindPage(struct Machine *, i64);
 u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *, bool);
 u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
+u8 *CopyFromUser(struct Machine *, void *, i64, u64);
 u8 *FindReal(struct Machine *, i64);
 u8 *Load(struct Machine *, i64, size_t, u8 *);
-u8 *LoadBuf(struct Machine *, i64, size_t);
-char *LoadStr(struct Machine *, i64);
 u8 *MallocPage(void);
 u8 *RealAddress(struct Machine *, i64);
 u8 *ReserveAddress(struct Machine *, i64, size_t);
 u8 *ResolveAddress(struct Machine *, i64);
-u8 *VirtualSend(struct Machine *, void *, i64, u64);
+void CommitStash(struct Machine *);
+void CopyFromUserRead(struct Machine *, void *, i64, u64);
+void CopyToUser(struct Machine *, i64, void *, u64);
+void CopyToUserWrite(struct Machine *, i64, void *, u64);
 void EndStore(struct Machine *, i64, size_t, void *[2], u8 *);
 void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 void ResetRam(struct Machine *);
 void SetReadAddr(struct Machine *, i64, u32);
 void SetWriteAddr(struct Machine *, i64, u32);
-void VirtualRecv(struct Machine *, i64, void *, u64);
-void VirtualRecvWrite(struct Machine *, i64, void *, u64);
-void VirtualSendRead(struct Machine *, void *, i64, u64);
 void VirtualSet(struct Machine *, i64, char, u64);
-void CommitStash(struct Machine *);
 
 #endif /* BLINK_MEMORY_H_ */

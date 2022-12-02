@@ -41,19 +41,19 @@ u64 MaskAddress(u32 mode, u64 x) {
   return x;
 }
 
-u64 AddSegment(struct Machine *m, DISPATCH_PARAMETERS, u64 i, u64 s) {
+u64 AddSegment(P, u64 i, u64 s) {
   if (!Sego(rde)) {
     return i + s;
   } else {
-    return i + *GetSegment(m, DISPATCH_ARGUMENTS, Sego(rde) - 1);
+    return i + *GetSegment(A, Sego(rde) - 1);
   }
 }
 
-u64 AddressOb(struct Machine *m, DISPATCH_PARAMETERS) {
-  return AddSegment(m, DISPATCH_ARGUMENTS, disp, m->ds);
+u64 AddressOb(P) {
+  return AddSegment(A, disp, m->ds);
 }
 
-u64 *GetSegment(struct Machine *m, DISPATCH_PARAMETERS, int s) {
+u64 *GetSegment(P, int s) {
   switch (s & 7) {
     case 0:
       return &m->es;
@@ -75,24 +75,24 @@ u64 *GetSegment(struct Machine *m, DISPATCH_PARAMETERS, int s) {
   }
 }
 
-u64 DataSegment(struct Machine *m, DISPATCH_PARAMETERS, u64 i) {
-  return AddSegment(m, DISPATCH_ARGUMENTS, i, m->ds);
+u64 DataSegment(P, u64 i) {
+  return AddSegment(A, i, m->ds);
 }
 
-u64 AddressSi(struct Machine *m, DISPATCH_PARAMETERS) {
+u64 AddressSi(P) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
-      return DataSegment(m, DISPATCH_ARGUMENTS, Get64(m->si));
+      return DataSegment(A, Get64(m->si));
     case XED_MODE_REAL:
-      return DataSegment(m, DISPATCH_ARGUMENTS, Get16(m->si));
+      return DataSegment(A, Get16(m->si));
     case XED_MODE_LEGACY:
-      return DataSegment(m, DISPATCH_ARGUMENTS, Get32(m->si));
+      return DataSegment(A, Get32(m->si));
     default:
       __builtin_unreachable();
   }
 }
 
-u64 AddressDi(struct Machine *m, DISPATCH_PARAMETERS) {
+u64 AddressDi(P) {
   u64 i = m->es;
   switch (Eamode(rde)) {
     case XED_MODE_LONG:

@@ -112,7 +112,7 @@ struct System *NewSystem(void) {
   return s;
 }
 
-static void FreeMachineImpl(struct Machine *m) {
+void FreeMachineUnlocked(struct Machine *m) {
   if (g_machine == m) {
     g_machine = 0;
   }
@@ -124,17 +124,27 @@ static void FreeMachineImpl(struct Machine *m) {
   free(m);
 }
 
-void FreeSystem(struct System *s) {
-  dll_element *e;
+void KillOtherThreads(struct System *s) {
   struct Machine *m;
+  struct Dll *e, *g;
+StartOver:
   LOCK(&s->machines_lock);
-  while ((e = dll_first(s->machines))) {
+  for (e = dll_first(s->machines); e; e = g) {
+    g = dll_next(s->machines, e);
     m = MACHINE_CONTAINER(e);
-    m->system->machines = dll_remove(m->system->machines, &m->list);
-    unassert(!pthread_kill(m->thread, SIGKILL));
-    FreeMachineImpl(m);
+    if (m != g_machine) {
+      s->machines = dll_remove(s->machines, &m->elem);
+      unassert(!pthread_kill(m->thread, SIGKILL));
+      UNLOCK(&s->machines_lock);
+      FreeMachineUnlocked(m);
+      goto StartOver;
+    }
   }
   UNLOCK(&s->machines_lock);
+}
+
+void FreeSystem(struct System *s) {
+  unassert(dll_is_empty(s->machines));  // Use KillOtherThreads & FreeMachine
   FreeSystemRealFree(s);
   LOCK(&s->real_lock);
   unassert(!munmap(s->real.p, MAX_MEMORY));
@@ -149,41 +159,36 @@ void FreeSystem(struct System *s) {
   free(s);
 }
 
-static void AssignTid(struct Machine *m) {
+struct Machine *NewMachine(struct System *system, struct Machine *parent) {
   _Static_assert(IS2POW(MAX_THREAD_IDS), "");
-  LOCK(&m->system->machines_lock);
-  if (dll_is_empty(m->system->machines)) {
-    m->tid = getpid();
-  } else {
-    m->isthread = true;
-    m->tid = (m->system->next_tid++ & (MAX_THREAD_IDS - 1)) + MINIMUM_THREAD_ID;
-  }
-  m->system->machines = dll_make_first(m->system->machines, &m->list);
-  UNLOCK(&m->system->machines_lock);
-}
-
-struct Machine *NewMachine(struct System *s, struct Machine *p) {
   struct Machine *m;
-  unassert(s);
-  unassert(!p || s == p->system);
+  unassert(system);
+  unassert(!parent || system == parent->system);
   if (posix_memalign((void **)&m, _Alignof(struct Machine), sizeof(*m))) {
     enomem();
     return 0;
   }
-  if (p) {
-    // TODO(jart): Why does TSAN whine here?
-    IGNORE_RACES_START();
-    memcpy(m, p, sizeof(*m));
-    IGNORE_RACES_END();
+  // TODO(jart): We shouldn't be doing expensive ops in an allocator.
+  LOCK(&system->machines_lock);
+  if (parent) {
+    memcpy(m, parent, sizeof(*m));
     memset(&m->path, 0, sizeof(m->path));
     memset(&m->freelist, 0, sizeof(m->freelist));
   } else {
     memset(m, 0, sizeof(*m));
     ResetCpu(m);
   }
-  dll_init(&m->list);
-  m->system = s;
-  AssignTid(m);
+  m->system = system;
+  if (parent) {
+    m->tid = (system->next_tid++ & (MAX_THREAD_IDS - 1)) + MINIMUM_THREAD_ID;
+  } else {
+    // TODO(jart): We shouldn't be doing system calls in an allocator.
+    m->tid = getpid();
+  }
+  dll_init(&m->elem);
+  // TODO(jart): Child thread should add itself to system.
+  system->machines = dll_make_first(system->machines, &m->elem);
+  UNLOCK(&system->machines_lock);
   return m;
 }
 
@@ -197,10 +202,11 @@ void CollectGarbage(struct Machine *m) {
 
 void FreeMachine(struct Machine *m) {
   if (m) {
+    unassert(m->system);
     LOCK(&m->system->machines_lock);
-    m->system->machines = dll_remove(m->system->machines, &m->list);
+    m->system->machines = dll_remove(m->system->machines, &m->elem);
     UNLOCK(&m->system->machines_lock);
-    FreeMachineImpl(m);
+    FreeMachineUnlocked(m);
   }
 }
 
@@ -248,6 +254,7 @@ int ReserveReal(struct System *s, long n)
 long AllocateLinearPageRaw(struct System *s) {
   size_t i, n;
   struct SystemRealFree *rf;
+  ReserveReal(s, 0);
   LOCK(&s->realfree_lock);
   if ((rf = s->realfree)) {
     unassert(rf->n);

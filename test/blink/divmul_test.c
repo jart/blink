@@ -31,7 +31,7 @@ struct Machine m[1];
 
 struct {
   const char *name;
-  void (*f)(struct Machine *, DISPATCH_PARAMETERS);
+  void (*f)(P);
   u64 rde;
   u64 ax;
   u64 cx;

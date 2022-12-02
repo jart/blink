@@ -26,10 +26,10 @@
 #include "blink/real.h"
 #include "blink/time.h"
 
-static void StoreDescriptorTable(struct Machine *m, DISPATCH_PARAMETERS, u16 limit,
+static void StoreDescriptorTable(P, u16 limit,
                                  u64 base) {
   u64 l;
-  l = ComputeAddress(m, DISPATCH_ARGUMENTS);
+  l = ComputeAddress(A);
   if (l + 10 <= GetRealMemorySize(m->system)) {
     Write16(m->system->real.p + l, limit);
     if (Rexw(rde)) {
@@ -47,11 +47,11 @@ static void StoreDescriptorTable(struct Machine *m, DISPATCH_PARAMETERS, u16 lim
   }
 }
 
-static void LoadDescriptorTable(struct Machine *m, DISPATCH_PARAMETERS, u16 *out_limit,
+static void LoadDescriptorTable(P, u16 *out_limit,
                                 u64 *out_base) {
   u16 limit;
   u64 l, base;
-  l = ComputeAddress(m, DISPATCH_ARGUMENTS);
+  l = ComputeAddress(A);
   if (l + 10 <= GetRealMemorySize(m->system)) {
     limit = Read16(m->system->real.p + l);
     if (Rexw(rde)) {
@@ -75,50 +75,50 @@ static void LoadDescriptorTable(struct Machine *m, DISPATCH_PARAMETERS, u16 *out
   }
 }
 
-static void SgdtMs(struct Machine *m, DISPATCH_PARAMETERS) {
-  StoreDescriptorTable(m, DISPATCH_ARGUMENTS, m->system->gdt_limit, m->system->gdt_base);
+static void SgdtMs(P) {
+  StoreDescriptorTable(A, m->system->gdt_limit, m->system->gdt_base);
 }
 
-static void LgdtMs(struct Machine *m, DISPATCH_PARAMETERS) {
-  LoadDescriptorTable(m, DISPATCH_ARGUMENTS, &m->system->gdt_limit, &m->system->gdt_base);
+static void LgdtMs(P) {
+  LoadDescriptorTable(A, &m->system->gdt_limit, &m->system->gdt_base);
 }
 
-static void SidtMs(struct Machine *m, DISPATCH_PARAMETERS) {
-  StoreDescriptorTable(m, DISPATCH_ARGUMENTS, m->system->idt_limit, m->system->idt_base);
+static void SidtMs(P) {
+  StoreDescriptorTable(A, m->system->idt_limit, m->system->idt_base);
 }
 
-static void LidtMs(struct Machine *m, DISPATCH_PARAMETERS) {
-  LoadDescriptorTable(m, DISPATCH_ARGUMENTS, &m->system->idt_limit, &m->system->idt_base);
+static void LidtMs(P) {
+  LoadDescriptorTable(A, &m->system->idt_limit, &m->system->idt_base);
 }
 
-static void Monitor(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Monitor(P) {
 }
 
-static void Mwait(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Mwait(P) {
 }
 
-static void Swapgs(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Swapgs(P) {
 }
 
-static void Vmcall(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Vmcall(P) {
 }
 
-static void Vmlaunch(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Vmlaunch(P) {
 }
 
-static void Vmresume(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Vmresume(P) {
 }
 
-static void Vmxoff(struct Machine *m, DISPATCH_PARAMETERS) {
+static void Vmxoff(P) {
 }
 
-static void InvlpgM(struct Machine *m, DISPATCH_PARAMETERS) {
+static void InvlpgM(P) {
   ResetTlb(m);
 }
 
-static void Smsw(struct Machine *m, DISPATCH_PARAMETERS, bool ismem) {
+static void Smsw(P, bool ismem) {
   if (ismem) {
-    Store16(GetModrmRegisterWordPointerWrite2(m, DISPATCH_ARGUMENTS), m->system->cr0);
+    Store16(GetModrmRegisterWordPointerWrite2(A), m->system->cr0);
   } else if (Rexw(rde)) {
     Put64(RegRexrReg(m, rde), m->system->cr0);
   } else if (!Osz(rde)) {
@@ -128,30 +128,30 @@ static void Smsw(struct Machine *m, DISPATCH_PARAMETERS, bool ismem) {
   }
 }
 
-static void Lmsw(struct Machine *m, DISPATCH_PARAMETERS) {
-  m->system->cr0 = Read16(GetModrmRegisterWordPointerRead2(m, DISPATCH_ARGUMENTS));
+static void Lmsw(P) {
+  m->system->cr0 = Read16(GetModrmRegisterWordPointerRead2(A));
 }
 
-void Op101(struct Machine *m, DISPATCH_PARAMETERS) {
+void Op101(P) {
   bool ismem;
   ismem = !IsModrmRegister(rde);
   switch (ModrmReg(rde)) {
     case 0:
       if (ismem) {
-        SgdtMs(m, DISPATCH_ARGUMENTS);
+        SgdtMs(A);
       } else {
         switch (ModrmRm(rde)) {
           case 1:
-            Vmcall(m, DISPATCH_ARGUMENTS);
+            Vmcall(A);
             break;
           case 2:
-            Vmlaunch(m, DISPATCH_ARGUMENTS);
+            Vmlaunch(A);
             break;
           case 3:
-            Vmresume(m, DISPATCH_ARGUMENTS);
+            Vmresume(A);
             break;
           case 4:
-            Vmxoff(m, DISPATCH_ARGUMENTS);
+            Vmxoff(A);
             break;
           default:
             OpUdImpl(m);
@@ -160,14 +160,14 @@ void Op101(struct Machine *m, DISPATCH_PARAMETERS) {
       break;
     case 1:
       if (ismem) {
-        SidtMs(m, DISPATCH_ARGUMENTS);
+        SidtMs(A);
       } else {
         switch (ModrmRm(rde)) {
           case 0:
-            Monitor(m, DISPATCH_ARGUMENTS);
+            Monitor(A);
             break;
           case 1:
-            Mwait(m, DISPATCH_ARGUMENTS);
+            Mwait(A);
             break;
           default:
             OpUdImpl(m);
@@ -176,34 +176,34 @@ void Op101(struct Machine *m, DISPATCH_PARAMETERS) {
       break;
     case 2:
       if (ismem) {
-        LgdtMs(m, DISPATCH_ARGUMENTS);
+        LgdtMs(A);
       } else {
         OpUdImpl(m);
       }
       break;
     case 3:
       if (ismem) {
-        LidtMs(m, DISPATCH_ARGUMENTS);
+        LidtMs(A);
       } else {
         OpUdImpl(m);
       }
       break;
     case 4:
-      Smsw(m, DISPATCH_ARGUMENTS, ismem);
+      Smsw(A, ismem);
       break;
     case 6:
-      Lmsw(m, DISPATCH_ARGUMENTS);
+      Lmsw(A);
       break;
     case 7:
       if (ismem) {
-        InvlpgM(m, DISPATCH_ARGUMENTS);
+        InvlpgM(A);
       } else {
         switch (ModrmRm(rde)) {
           case 0:
-            Swapgs(m, DISPATCH_ARGUMENTS);
+            Swapgs(A);
             break;
           case 1:
-            OpRdtscp(m, DISPATCH_ARGUMENTS);
+            OpRdtscp(A);
             break;
           default:
             OpUdImpl(m);

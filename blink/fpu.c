@@ -970,7 +970,7 @@ void OpFinit(struct Machine *m) {
   m->fpu.tw = -1;
 }
 
-void OpFwait(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpFwait(P) {
   int sw, cw;
   sw = m->fpu.sw;
   cw = m->fpu.cw;
@@ -1024,14 +1024,14 @@ double FpuPop(struct Machine *m) {
   return x;
 }
 
-void OpFpu(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpFpu(P) {
   unsigned op;
   bool ismemory;
   op = Opcode(rde) & 7;
   ismemory = ModrmMod(rde) != 3;
   m->fpu.ip = MaskAddress(m->mode, m->ip - Oplength(rde));
   m->fpu.op = op << 8 | ModrmMod(rde) << 6 | ModrmReg(rde) << 3 | ModrmRm(rde);
-  m->fpu.dp = ismemory ? ComputeAddress(m, DISPATCH_ARGUMENTS) : 0;
+  m->fpu.dp = ismemory ? ComputeAddress(A) : 0;
   switch (DISP(op, ismemory, ModrmReg(rde))) {
     CASE(DISP(0xD8, FPUREG, 0), OpFaddStEst(m, rde));
     CASE(DISP(0xD8, FPUREG, 1), OpFmulStEst(m, rde));

@@ -443,7 +443,7 @@ static void CopyMachineState(struct MachineState *ms) {
   ms->ds = m->ds;
   ms->fs = m->fs;
   ms->gs = m->gs;
-  memcpy(ms->reg, m->reg, sizeof(m->reg));
+  memcpy(ms->weg, m->weg, sizeof(m->weg));
   memcpy(ms->xmm, m->xmm, sizeof(m->xmm));
   memcpy(&ms->fpu, &m->fpu, sizeof(m->fpu));
   memcpy(&ms->mxcsr, &m->mxcsr, sizeof(m->mxcsr));
@@ -807,7 +807,7 @@ static bool IsXmmNonZero(i64 start, i64 end) {
 static bool IsSegNonZero(void) {
   unsigned i;
   for (i = 0; i < 6; ++i) {
-    if (*GetSegment(m, DISPATCH_NOTHING, i)) {
+    if (*GetSegment(DISPATCH_NOTHING, i)) {
       return true;
     }
   }
@@ -1123,8 +1123,8 @@ static void DrawFlag(struct Panel *p, i64 i, char name, bool value) {
 static void DrawRegister(struct Panel *p, i64 i, i64 r) {
   char buf[32];
   u64 value, previous;
-  value = Read64(m->reg[r]);
-  previous = Read64(laststate.reg[r]);
+  value = Read64(m->weg[r]);
+  previous = Read64(laststate.weg[r]);
   if (value != previous) AppendPanel(p, i, "\033[7m");
   snprintf(buf, sizeof(buf), "%-3s", kRegisterNames[r]);
   AppendPanel(p, i, buf);
@@ -2863,7 +2863,7 @@ static int OpenDevTty(void) {
 }
 
 int VirtualMachine(int argc, char *argv[]) {
-  dll_element *e;
+  struct Dll *e;
   codepath = argv[optind++];
   do {
     action = 0;
@@ -2954,6 +2954,7 @@ int main(int argc, char *argv[]) {
   unassert(!sigaction(SIGALRM, &sa, 0));
   if (optind == argc) PrintUsage(48, stderr);
   rc = VirtualMachine(argc, argv);
+  KillOtherThreads(s);
   FreeMachine(m);
   FreeSystem(s);
   FreePanels();

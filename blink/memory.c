@@ -136,7 +136,7 @@ void VirtualSet(struct Machine *m, i64 v, char c, u64 n) {
   }
 }
 
-void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
+static void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
   u8 *p;
   u64 k;
   k = 4096 - (v & 4095);
@@ -155,29 +155,29 @@ void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
   }
 }
 
-u8 *VirtualSend(struct Machine *m, void *dst, i64 src, u64 n) {
+u8 *CopyFromUser(struct Machine *m, void *dst, i64 src, u64 n) {
   VirtualCopy(m, src, (char *)dst, n, true);
   return (u8 *)dst;
 }
 
-void VirtualSendRead(struct Machine *m, void *dst, i64 addr, u64 n) {
-  VirtualSend(m, dst, addr, n);
+void CopyFromUserRead(struct Machine *m, void *dst, i64 addr, u64 n) {
+  CopyFromUser(m, dst, addr, n);
   SetReadAddr(m, addr, n);
 }
 
-void VirtualRecv(struct Machine *m, i64 dst, void *src, u64 n) {
+void CopyToUser(struct Machine *m, i64 dst, void *src, u64 n) {
   VirtualCopy(m, dst, (char *)src, n, false);
 }
 
-void VirtualRecvWrite(struct Machine *m, i64 addr, void *src, u64 n) {
-  VirtualRecv(m, addr, src, n);
+void CopyToUserWrite(struct Machine *m, i64 addr, void *src, u64 n) {
+  CopyToUser(m, addr, src, n);
   SetWriteAddr(m, addr, n);
 }
 
 void CommitStash(struct Machine *m) {
   unassert(m->stashaddr);
   if (m->opcache->writable) {
-    VirtualRecv(m, m->stashaddr, m->opcache->stash, m->opcache->stashsize);
+    CopyToUser(m, m->stashaddr, m->opcache->stash, m->opcache->stashsize);
   }
   m->stashaddr = 0;
 }
@@ -192,7 +192,7 @@ u8 *ReserveAddress(struct Machine *m, i64 v, size_t n) {
   m->stashaddr = v;
   m->opcache->stashsize = n;
   r = m->opcache->stash;
-  VirtualSend(m, r, v, n);
+  CopyFromUser(m, r, v, n);
   return r;
 }
 
@@ -257,30 +257,6 @@ void EndStoreNp(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   if (v) EndStore(m, v, n, p, b);
 }
 
-u8 *LoadBuf(struct Machine *m, i64 addr, size_t size) {
-  size_t have, need;
-  u8 *buf, *copy, *page;
-  have = 4096 - (addr & 4095);
-  if (!addr) return NULL;
-  if (!(buf = (u8 *)FindReal(m, addr))) return NULL;
-  if (size > have) {
-    if (!(copy = (u8 *)malloc(size))) return NULL;
-    buf = (u8 *)memcpy(copy, buf, have);
-    do {
-      need = MIN(4096, size - have);
-      if ((page = (u8 *)FindReal(m, addr + have))) {
-        memcpy(copy + have, page, need);
-        have += need;
-      } else {
-        free(copy);
-        return NULL;
-      }
-    } while (have < size);
-  }
-  SetReadAddr(m, addr, size);
-  return buf;
-}
-
 char *LoadStr(struct Machine *m, i64 addr) {
   size_t have;
   char *copy, *page, *p;
@@ -315,7 +291,7 @@ char **LoadStrList(struct Machine *m, i64 addr) {
   char **list;
   for (list = 0, n = 0;;) {
     list = (char **)realloc(list, ++n * sizeof(*list));
-    VirtualSendRead(m, b, addr + n * 8 - 8, 8);
+    CopyFromUserRead(m, b, addr + n * 8 - 8, 8);
     if (Read64(b)) {
       list[n - 1] = (char *)LoadStr(m, Read64(b));
     } else {

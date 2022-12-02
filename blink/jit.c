@@ -59,13 +59,13 @@
 #define MAP_DEMAND 0
 #endif
 
-#define JITSTAGE_CONTAINER(e) DLL_CONTAINER(struct JitStage, list, e)
+#define JITSTAGE_CONTAINER(e) DLL_CONTAINER(struct JitStage, elem, e)
 
 struct JitStage {
   int start;
   int index;
   hook_t *hook;
-  dll_element list;
+  struct Dll elem;
 };
 
 #if defined(__x86_64__)
@@ -104,7 +104,7 @@ static long GetSystemPageSize(void) {
 }
 
 static void DestroyJitPage(struct JitPage *jp) {
-  dll_element *e;
+  struct Dll *e;
   while ((e = dll_first(jp->staged))) {
     jp->staged = dll_remove(jp->staged, e);
     free(JITSTAGE_CONTAINER(e));
@@ -136,7 +136,7 @@ int InitJit(struct Jit *jit) {
  * @return 0 on success
  */
 int DestroyJit(struct Jit *jit) {
-  dll_element *e;
+  struct Dll *e;
   LOCK(&jit->lock);
   while ((e = dll_first(jit->pages))) {
     jit->pages = dll_remove(jit->pages, e);
@@ -178,7 +178,7 @@ bool IsJitDisabled(struct Jit *jit) {
  *     always return NULL
  */
 struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
-  dll_element *e;
+  struct Dll *e;
   intptr_t distance;
   struct JitPage *jp;
   unassert(reserve > 0);
@@ -196,7 +196,7 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
     }
     e = dll_first(jit->pages);
     if (e && (jp = JITPAGE_CONTAINER(e))->index + reserve <= kJitPageSize) {
-      jit->pages = dll_remove(jit->pages, &jp->list);
+      jit->pages = dll_remove(jit->pages, &jp->elem);
     } else if ((jp = (struct JitPage *)calloc(1, sizeof(struct JitPage)))) {
       for (;;) {
         jp->addr = (u8 *)mmap(jit->brk, kJitPageSize, PROT_READ | PROT_WRITE,
@@ -210,7 +210,7 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
                      jp, distance, END_OF_IMAGE));
           }
           jit->brk = jp->addr + kJitPageSize;
-          dll_init(&jp->list);
+          dll_init(&jp->elem);
           break;
         } else if (errno == EEXIST) {
           jit->brk += kJitPageSize;
@@ -276,7 +276,7 @@ bool AppendJit(struct JitPage *jp, const void *data, long size) {
 static int CommitJit(struct JitPage *jp, long pagesize) {
   long pageoff;
   int count = 0;
-  dll_element *e;
+  struct Dll *e;
   struct JitStage *js;
   unassert(jp->start == jp->index);
   unassert(!(jp->committed & (pagesize - 1)));
@@ -308,9 +308,9 @@ static int CommitJit(struct JitPage *jp, long pagesize) {
 static void ReinsertPage(struct Jit *jit, struct JitPage *jp) {
   unassert(jp->start == jp->index);
   if (jp->index < kJitPageSize) {
-    jit->pages = dll_make_first(jit->pages, &jp->list);
+    jit->pages = dll_make_first(jit->pages, &jp->elem);
   } else {
-    jit->pages = dll_make_last(jit->pages, &jp->list);
+    jit->pages = dll_make_last(jit->pages, &jp->elem);
   }
 }
 
@@ -320,7 +320,7 @@ static void ReinsertPage(struct Jit *jit, struct JitPage *jp) {
 int FlushJit(struct Jit *jit) {
   int count = 0;
   long pagesize;
-  dll_element *e;
+  struct Dll *e;
   struct JitPage *jp;
   struct JitStage *js;
   pagesize = GetSystemPageSize();
@@ -364,11 +364,11 @@ intptr_t ReleaseJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
       if (hook) {
         atomic_store_explicit(hook, staging, memory_order_release);
         if ((js = (struct JitStage *)calloc(1, sizeof(struct JitStage)))) {
-          dll_init(&js->list);
+          dll_init(&js->elem);
           js->hook = hook;
           js->start = jp->start;
           js->index = jp->index;
-          jp->staged = dll_make_last(jp->staged, &js->list);
+          jp->staged = dll_make_last(jp->staged, &js->elem);
         }
       }
       if (jp->index + kJitPageFit > kJitPageSize) {

@@ -28,6 +28,7 @@
 #define ModrmSrm(x) ((x & 000000070000) >> 014)
 #define ModrmMod(x) ((x & 000060000000) >> 026)
 #define Modrm(x)    (ModrmMod(x) << 6 | ModrmReg(x) << 3 | ModrmRm(x))
+
 #define SibBase(x)  ((x & 00000000000340000000000) >> 040)
 #define SibIndex(x) ((x & 00000000003400000000000) >> 043)
 #define SibScale(x) ((x & 00000000014000000000000) >> 046)
@@ -38,16 +39,16 @@
 
 #define Bite(x)            (~ModrmSrm(x) & 1)
 #define RexbBase(x)        (Rexb(x) << 3 | SibBase(x))
-#define AddrByteReg(m, k)  ((u8 *)m->reg + kByteReg[k])
-#define ByteRexrReg(m, x)  AddrByteReg(m, (x & 00000000037) >> 0)
-#define ByteRexbRm(m, x)   AddrByteReg(m, (x & 00000007600) >> 7)
-#define ByteRexbSrm(m, x)  AddrByteReg(m, (x & 00000370000) >> 12)
-#define RegSrm(m, x)       m->reg[(x & 00000070000) >> 12]
-#define RegRexbRm(m, x)    m->reg[RexbRm(x)]
-#define RegRexbSrm(m, x)   m->reg[(x & 00000170000) >> 12]
-#define RegRexrReg(m, x)   m->reg[RexrReg(x)]
-#define RegRexbBase(m, x)  m->reg[RexbBase(x)]
-#define RegRexxIndex(m, x) m->reg[Rexx(x) << 3 | SibIndex(x)]
+#define AddrByteReg(m, k)  (m->beg + kByteReg[k])
+#define ByteRexrReg(m, x)  AddrByteReg(m, (x & 00000000037) >> 000)
+#define ByteRexbRm(m, x)   AddrByteReg(m, (x & 00000007600) >> 007)
+#define ByteRexbSrm(m, x)  AddrByteReg(m, (x & 00000370000) >> 014)
+#define RegSrm(m, x)       m->weg[(x & 00000070000) >> 014]
+#define RegRexbRm(m, x)    m->weg[RexbRm(x)]
+#define RegRexbSrm(m, x)   m->weg[(x & 00000170000) >> 014]
+#define RegRexrReg(m, x)   m->weg[RexrReg(x)]
+#define RegRexbBase(m, x)  m->weg[RexbBase(x)]
+#define RegRexxIndex(m, x) m->weg[Rexx(x) << 3 | SibIndex(x)]
 #define MmRm(m, x)         m->xmm[(x & 00000001600) >> 7]
 #define MmReg(m, x)        m->xmm[(x & 00000000007) >> 0]
 #define XmmRexbRm(m, x)    m->xmm[RexbRm(x)]
@@ -67,41 +68,41 @@ struct AddrSeg {
 
 extern const u8 kByteReg[32];
 
-i64 ComputeAddress(struct Machine *, DISPATCH_PARAMETERS);
-struct AddrSeg LoadEffectiveAddress(const struct Machine *, DISPATCH_PARAMETERS);
-u8 *ComputeReserveAddressRead(struct Machine *, DISPATCH_PARAMETERS, size_t);
-u8 *ComputeReserveAddressRead1(struct Machine *, DISPATCH_PARAMETERS);
-u8 *ComputeReserveAddressRead4(struct Machine *, DISPATCH_PARAMETERS);
-u8 *ComputeReserveAddressRead8(struct Machine *, DISPATCH_PARAMETERS);
-u8 *ComputeReserveAddressWrite(struct Machine *, DISPATCH_PARAMETERS, size_t);
-u8 *ComputeReserveAddressWrite1(struct Machine *, DISPATCH_PARAMETERS);
-u8 *ComputeReserveAddressWrite4(struct Machine *, DISPATCH_PARAMETERS);
-u8 *ComputeReserveAddressWrite8(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterBytePointerRead(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterBytePointerWrite(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterMmPointerRead(struct Machine *, DISPATCH_PARAMETERS, size_t);
-u8 *GetModrmRegisterMmPointerRead8(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterMmPointerWrite(struct Machine *, DISPATCH_PARAMETERS, size_t);
-u8 *GetModrmRegisterMmPointerWrite8(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterWordPointerRead(struct Machine *, DISPATCH_PARAMETERS, size_t);
-u8 *GetModrmRegisterWordPointerRead2(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterWordPointerRead4(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterWordPointerRead8(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterWordPointerReadOsz(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterWordPointerReadOszRexw(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterWordPointerWrite(struct Machine *, DISPATCH_PARAMETERS, size_t);
-u8 *GetModrmRegisterWordPointerWrite2(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterWordPointerWrite4(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterWordPointerWrite8(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterWordPointerWriteOsz(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterWordPointerWriteOszRexw(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterXmmPointerRead(struct Machine *, DISPATCH_PARAMETERS, size_t);
-u8 *GetModrmRegisterXmmPointerRead16(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterXmmPointerRead4(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterXmmPointerRead8(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterXmmPointerWrite(struct Machine *, DISPATCH_PARAMETERS, size_t);
-u8 *GetModrmRegisterXmmPointerWrite16(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterXmmPointerWrite4(struct Machine *, DISPATCH_PARAMETERS);
-u8 *GetModrmRegisterXmmPointerWrite8(struct Machine *, DISPATCH_PARAMETERS);
+i64 ComputeAddress(P);
+struct AddrSeg LoadEffectiveAddress(const P);
+u8 *ComputeReserveAddressRead(P, size_t);
+u8 *ComputeReserveAddressRead1(P);
+u8 *ComputeReserveAddressRead4(P);
+u8 *ComputeReserveAddressRead8(P);
+u8 *ComputeReserveAddressWrite(P, size_t);
+u8 *ComputeReserveAddressWrite1(P);
+u8 *ComputeReserveAddressWrite4(P);
+u8 *ComputeReserveAddressWrite8(P);
+u8 *GetModrmRegisterBytePointerRead(P);
+u8 *GetModrmRegisterBytePointerWrite(P);
+u8 *GetModrmRegisterMmPointerRead(P, size_t);
+u8 *GetModrmRegisterMmPointerRead8(P);
+u8 *GetModrmRegisterMmPointerWrite(P, size_t);
+u8 *GetModrmRegisterMmPointerWrite8(P);
+u8 *GetModrmRegisterWordPointerRead(P, size_t);
+u8 *GetModrmRegisterWordPointerRead2(P);
+u8 *GetModrmRegisterWordPointerRead4(P);
+u8 *GetModrmRegisterWordPointerRead8(P);
+u8 *GetModrmRegisterWordPointerReadOsz(P);
+u8 *GetModrmRegisterWordPointerReadOszRexw(P);
+u8 *GetModrmRegisterWordPointerWrite(P, size_t);
+u8 *GetModrmRegisterWordPointerWrite2(P);
+u8 *GetModrmRegisterWordPointerWrite4(P);
+u8 *GetModrmRegisterWordPointerWrite8(P);
+u8 *GetModrmRegisterWordPointerWriteOsz(P);
+u8 *GetModrmRegisterWordPointerWriteOszRexw(P);
+u8 *GetModrmRegisterXmmPointerRead(P, size_t);
+u8 *GetModrmRegisterXmmPointerRead16(P);
+u8 *GetModrmRegisterXmmPointerRead4(P);
+u8 *GetModrmRegisterXmmPointerRead8(P);
+u8 *GetModrmRegisterXmmPointerWrite(P, size_t);
+u8 *GetModrmRegisterXmmPointerWrite16(P);
+u8 *GetModrmRegisterXmmPointerWrite4(P);
+u8 *GetModrmRegisterXmmPointerWrite8(P);
 
 #endif /* BLINK_MODRM_H_ */

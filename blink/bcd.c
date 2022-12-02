@@ -16,73 +16,70 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/builtin.h"
 #include "blink/endian.h"
+#include "blink/flags.h"
 #include "blink/machine.h"
 
-void OpCpuid(P) {
-  u32 ax, bx, cx, dx;
-  ax = 0;
-  bx = 0;
-  cx = 0;
-  dx = 0;
-  switch (Get32(m->ax)) {
-    case 0:
-    case 0x80000000:
-      ax = 7;
-      bx = 'G' | 'e' << 8 | 'n' << 16 | 'u' << 24;
-      dx = 'i' | 'n' << 8 | 'e' << 16 | 'C' << 24;
-      cx = 'o' | 's' << 8 | 'm' << 16 | 'o' << 24;
-      break;
-    case 1:
-      cx |= 1 << 0;  /* sse3 */
-      cx |= 1 << 1;  /* pclmulqdq */
-      cx |= 1 << 9;  /* ssse3 */
-      cx |= 1 << 23; /* popcnt */
-      cx |= 1 << 30; /* rdrnd */
-      cx |= 0 << 25; /* aes */
-      cx |= 1 << 13; /* cmpxchg16b */
-      dx |= 1 << 0;  /* fpu */
-      dx |= 1 << 4;  /* tsc */
-      dx |= 1 << 6;  /* pae */
-      dx |= 1 << 8;  /* cmpxchg8b */
-      dx |= 1 << 15; /* cmov */
-      dx |= 1 << 19; /* clflush */
-      dx |= 1 << 23; /* mmx */
-      dx |= 1 << 24; /* fxsave */
-      dx |= 1 << 25; /* sse */
-      dx |= 1 << 26; /* sse2 */
-      break;
-    case 7:
-      switch (Get32(m->cx)) {
-        case 0:
-          bx |= 1 << 0;  /* fsgsbase */
-          bx |= 1 << 9;  /* erms */
-          bx |= 1 << 18; /* rdseed */
-          cx |= 1 << 22; /* rdpid */
-          break;
-        default:
-          break;
-      }
-      break;
-    case 0x80000001:
-      cx |= 1 << 0;  /* lahf */
-      dx |= 1 << 0;  /* fpu */
-      dx |= 1 << 8;  /* cmpxchg8b */
-      dx |= 1 << 11; /* syscall */
-      dx |= 1 << 15; /* cmov */
-      dx |= 1 << 23; /* mmx */
-      dx |= 1 << 24; /* fxsave */
-      dx |= 1 << 27; /* rdtscp */
-      dx |= 1 << 29; /* long */
-      break;
-    case 0x80000007:
-      dx |= 1 << 8; /* invtsc */
-      break;
-    default:
-      break;
+static dontinline void BcdFlags(struct Machine *m, bool af, bool cf) {
+  m->flags = SetFlag(m->flags, FLAGS_CF, cf);
+  m->flags = SetFlag(m->flags, FLAGS_AF, af);
+  m->flags = SetFlag(m->flags, FLAGS_ZF, !m->al);
+  m->flags = SetFlag(m->flags, FLAGS_SF, (i8)m->al < 0);
+  m->flags = SetLazyParityByte(m->flags, m->al);
+}
+
+void OpDas(P) {
+  u8 al;
+  bool af, cf;
+  al = m->al;
+  af = cf = 0;
+  if ((al & 0x0f) > 9 || GetFlag(m->flags, FLAGS_AF)) {
+    cf = m->al < 6 || GetFlag(m->flags, FLAGS_CF);
+    m->al -= 0x06;
+    af = 1;
   }
-  Put64(m->ax, ax);
-  Put64(m->bx, bx);
-  Put64(m->cx, cx);
-  Put64(m->dx, dx);
+  if (al > 0x99 || GetFlag(m->flags, FLAGS_CF)) {
+    m->al -= 0x60;
+    cf = 1;
+  }
+  BcdFlags(m, af, cf);
+}
+
+void OpAaa(P) {
+  bool af, cf;
+  af = cf = 0;
+  if ((m->al & 0x0f) > 9 || GetFlag(m->flags, FLAGS_AF)) {
+    cf = m->al < 6 || GetFlag(m->flags, FLAGS_CF);
+    Put16(m->ax, Get16(m->ax) + 0x106);
+    af = cf = 1;
+  }
+  m->al &= 0x0f;
+  BcdFlags(m, af, cf);
+}
+
+void OpAas(P) {
+  bool af, cf;
+  af = cf = 0;
+  if ((m->al & 0x0f) > 9 || GetFlag(m->flags, FLAGS_AF)) {
+    cf = m->al < 6 || GetFlag(m->flags, FLAGS_CF);
+    Put16(m->ax, Get16(m->ax) - 0x106);
+    af = cf = 1;
+  }
+  m->al &= 0x0f;
+  BcdFlags(m, af, cf);
+}
+
+void OpAam(P) {
+  u8 imm = m->xedd->op.uimm0;
+  if (!imm) RaiseDivideError(m);
+  m->ah = m->al / imm;
+  m->al = m->al % imm;
+  BcdFlags(m, 0, 0);
+}
+
+void OpAad(P) {
+  u8 imm = m->xedd->op.uimm0;
+  Put16(m->ax, (m->ah * imm + m->al) & 255);
+  BcdFlags(m, 0, 0);
 }

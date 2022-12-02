@@ -119,11 +119,11 @@ static struct Dubble DubbleIdiv(struct Dubble a, u64 b, u64 *r) {
   return q;
 }
 
-void OpDivAlAhAxEbSigned(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpDivAlAhAxEbSigned(P) {
   i8 y, r;
   i16 x, q;
   x = Get16(m->ax);
-  y = Load8(GetModrmRegisterBytePointerRead(m, DISPATCH_ARGUMENTS));
+  y = Load8(GetModrmRegisterBytePointerRead(A));
   if (!y) return RaiseDivideError(m);
   if (x == INT16_MIN) return RaiseDivideError(m);
   q = x / y;
@@ -133,11 +133,11 @@ void OpDivAlAhAxEbSigned(struct Machine *m, DISPATCH_PARAMETERS) {
   m->ah = r & 0xff;
 }
 
-void OpDivAlAhAxEbUnsigned(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpDivAlAhAxEbUnsigned(P) {
   u8 y, r;
   u16 x, q;
   x = Get16(m->ax);
-  y = Load8(GetModrmRegisterBytePointerRead(m, DISPATCH_ARGUMENTS));
+  y = Load8(GetModrmRegisterBytePointerRead(A));
   if (!y) return RaiseDivideError(m);
   q = x / y;
   r = x % y;
@@ -146,8 +146,7 @@ void OpDivAlAhAxEbUnsigned(struct Machine *m, DISPATCH_PARAMETERS) {
   m->ah = r & 0xff;
 }
 
-static void OpDivRdxRaxEvqpSigned64(struct Machine *m, DISPATCH_PARAMETERS,
-                                    u8 *p) {
+static void OpDivRdxRaxEvqpSigned64(P, u8 *p) {
   u64 d, r;
   struct Dubble q;
   q.lo = Get64(m->ax);
@@ -162,8 +161,7 @@ static void OpDivRdxRaxEvqpSigned64(struct Machine *m, DISPATCH_PARAMETERS,
   Put64(m->dx, r);
 }
 
-static void OpDivRdxRaxEvqpSigned32(struct Machine *m, DISPATCH_PARAMETERS,
-                                    u8 *p) {
+static void OpDivRdxRaxEvqpSigned32(P, u8 *p) {
   i32 y, r;
   i64 x, q;
   x = (u64)Get32(m->dx) << 32 | Get32(m->ax);
@@ -177,8 +175,7 @@ static void OpDivRdxRaxEvqpSigned32(struct Machine *m, DISPATCH_PARAMETERS,
   Put64(m->dx, r & 0xffffffff);
 }
 
-static void OpDivRdxRaxEvqpSigned16(struct Machine *m, DISPATCH_PARAMETERS,
-                                    u8 *p) {
+static void OpDivRdxRaxEvqpSigned16(P, u8 *p) {
   i16 y, r;
   i32 x, q;
   x = (u32)Get16(m->dx) << 16 | Get16(m->ax);
@@ -192,8 +189,7 @@ static void OpDivRdxRaxEvqpSigned16(struct Machine *m, DISPATCH_PARAMETERS,
   Put16(m->dx, r);
 }
 
-static void OpDivRdxRaxEvqpUnsigned16(struct Machine *m, DISPATCH_PARAMETERS,
-                                      u8 *p) {
+static void OpDivRdxRaxEvqpUnsigned16(P, u8 *p) {
   u16 y, r;
   u32 x, q;
   x = (u32)Get16(m->dx) << 16 | Get16(m->ax);
@@ -206,8 +202,7 @@ static void OpDivRdxRaxEvqpUnsigned16(struct Machine *m, DISPATCH_PARAMETERS,
   Put16(m->dx, r);
 }
 
-static void OpDivRdxRaxEvqpUnsigned32(struct Machine *m, DISPATCH_PARAMETERS,
-                                      u8 *p) {
+static void OpDivRdxRaxEvqpUnsigned32(P, u8 *p) {
   u32 y, r;
   u64 x, q;
   x = (u64)Get32(m->dx) << 32 | Get32(m->ax);
@@ -220,8 +215,7 @@ static void OpDivRdxRaxEvqpUnsigned32(struct Machine *m, DISPATCH_PARAMETERS,
   Put64(m->dx, r & 0xffffffff);
 }
 
-static void OpDivRdxRaxEvqpUnsigned64(struct Machine *m, DISPATCH_PARAMETERS,
-                                      u8 *p) {
+static void OpDivRdxRaxEvqpUnsigned64(P, u8 *p) {
   u64 d, r;
   struct Dubble q;
   q.lo = Get64(m->ax);
@@ -234,33 +228,33 @@ static void OpDivRdxRaxEvqpUnsigned64(struct Machine *m, DISPATCH_PARAMETERS,
   Put64(m->dx, r);
 }
 
-void OpDivRdxRaxEvqpSigned(struct Machine *m, DISPATCH_PARAMETERS) {
-  u8 *p = GetModrmRegisterWordPointerReadOszRexw(m, DISPATCH_ARGUMENTS);
+void OpDivRdxRaxEvqpSigned(P) {
+  u8 *p = GetModrmRegisterWordPointerReadOszRexw(A);
   if (Rexw(rde)) {
-    OpDivRdxRaxEvqpSigned64(m, DISPATCH_ARGUMENTS, p);
+    OpDivRdxRaxEvqpSigned64(A, p);
   } else if (!Osz(rde)) {
-    OpDivRdxRaxEvqpSigned32(m, DISPATCH_ARGUMENTS, p);
+    OpDivRdxRaxEvqpSigned32(A, p);
   } else {
-    OpDivRdxRaxEvqpSigned16(m, DISPATCH_ARGUMENTS, p);
+    OpDivRdxRaxEvqpSigned16(A, p);
   }
 }
 
-void OpDivRdxRaxEvqpUnsigned(struct Machine *m, DISPATCH_PARAMETERS) {
-  u8 *p = GetModrmRegisterWordPointerReadOszRexw(m, DISPATCH_ARGUMENTS);
+void OpDivRdxRaxEvqpUnsigned(P) {
+  u8 *p = GetModrmRegisterWordPointerReadOszRexw(A);
   if (Rexw(rde)) {
-    OpDivRdxRaxEvqpUnsigned64(m, DISPATCH_ARGUMENTS, p);
+    OpDivRdxRaxEvqpUnsigned64(A, p);
   } else if (!Osz(rde)) {
-    OpDivRdxRaxEvqpUnsigned32(m, DISPATCH_ARGUMENTS, p);
+    OpDivRdxRaxEvqpUnsigned32(A, p);
   } else {
-    OpDivRdxRaxEvqpUnsigned16(m, DISPATCH_ARGUMENTS, p);
+    OpDivRdxRaxEvqpUnsigned16(A, p);
   }
 }
 
-void OpMulAxAlEbSigned(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpMulAxAlEbSigned(P) {
   u8 *p;
   i16 ax;
   unsigned of;
-  p = GetModrmRegisterBytePointerRead(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterBytePointerRead(A);
   ax = (i8)Get8(m->ax) * (i8)Load8(p);
   of = ax != (i8)ax;
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
@@ -268,11 +262,11 @@ void OpMulAxAlEbSigned(struct Machine *m, DISPATCH_PARAMETERS) {
   Put16(m->ax, ax);
 }
 
-void OpMulAxAlEbUnsigned(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpMulAxAlEbUnsigned(P) {
   u8 *p;
   int ax;
   unsigned of;
-  p = GetModrmRegisterBytePointerRead(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterBytePointerRead(A);
   ax = Get8(m->ax) * Load8(p);
   of = ax != (u8)ax;
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
@@ -280,13 +274,13 @@ void OpMulAxAlEbUnsigned(struct Machine *m, DISPATCH_PARAMETERS) {
   Put16(m->ax, ax);
 }
 
-void OpMulRdxRaxEvqpSigned(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpMulRdxRaxEvqpSigned(P) {
   u8 *p;
   i32 dxax;
   i64 edxeax;
   unsigned of;
   struct Dubble rdxrax;
-  p = GetModrmRegisterWordPointerReadOszRexw(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterWordPointerReadOszRexw(A);
   if (Rexw(rde)) {
     rdxrax = DubbleImul(Get64(m->ax), Load64(p));
     of = !!(rdxrax.hi + (rdxrax.lo >> 63));
@@ -307,13 +301,13 @@ void OpMulRdxRaxEvqpSigned(struct Machine *m, DISPATCH_PARAMETERS) {
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
 }
 
-void OpMulRdxRaxEvqpUnsigned(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpMulRdxRaxEvqpUnsigned(P) {
   u8 *p;
   u32 dxax;
   u64 edxeax;
   unsigned of;
   struct Dubble rdxrax;
-  p = GetModrmRegisterWordPointerReadOszRexw(m, DISPATCH_ARGUMENTS);
+  p = GetModrmRegisterWordPointerReadOszRexw(A);
   if (Rexw(rde)) {
     rdxrax = DubbleMul(Get64(m->ax), Load64(p));
     of = !!rdxrax.hi;
@@ -334,7 +328,7 @@ void OpMulRdxRaxEvqpUnsigned(struct Machine *m, DISPATCH_PARAMETERS) {
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
 }
 
-static void AluImul(struct Machine *m, DISPATCH_PARAMETERS, u8 *a, u8 *b) {
+static void AluImul(P, u8 *a, u8 *b) {
   unsigned of;
   if (Rexw(rde)) {
     struct Dubble p;
@@ -356,14 +350,12 @@ static void AluImul(struct Machine *m, DISPATCH_PARAMETERS, u8 *a, u8 *b) {
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
 }
 
-void OpImulGvqpEvqp(struct Machine *m, DISPATCH_PARAMETERS) {
-  AluImul(m, DISPATCH_ARGUMENTS, RegRexrReg(m, rde),
-          GetModrmRegisterWordPointerReadOszRexw(m, DISPATCH_ARGUMENTS));
+void OpImulGvqpEvqp(P) {
+  AluImul(A, RegRexrReg(m, rde), GetModrmRegisterWordPointerReadOszRexw(A));
 }
 
-void OpImulGvqpEvqpImm(struct Machine *m, DISPATCH_PARAMETERS) {
+void OpImulGvqpEvqpImm(P) {
   u8 b[8];
   Put64(b, uimm0);
-  AluImul(m, DISPATCH_ARGUMENTS,
-          GetModrmRegisterWordPointerReadOszRexw(m, DISPATCH_ARGUMENTS), b);
+  AluImul(A, GetModrmRegisterWordPointerReadOszRexw(A), b);
 }
