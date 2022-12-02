@@ -12,6 +12,9 @@
 #define kOplengthMask 00007400000000000000000
 #define Oplength(x)   ((x & kOplengthMask) >> 065)
 
+#define kRegRexbSrmMask  00000170000
+#define RegRexbSrm(m, x) m->weg[(x & kRegRexbSrmMask) >> 014]
+
 #define Rex(x)      ((x & 000000000020) >> 004)
 #define Osz(x)      ((x & 000000000040) >> 005)
 #define Asz(x)      ((x & 000010000000) >> 025)
@@ -46,7 +49,6 @@
 #define ByteRexbSrm(m, x)  AddrByteReg(m, (x & 00000370000) >> 014)
 #define RegSrm(m, x)       m->weg[(x & 00000070000) >> 014]
 #define RegRexbRm(m, x)    m->weg[RexbRm(x)]
-#define RegRexbSrm(m, x)   m->weg[(x & 00000170000) >> 014]
 #define RegRexrReg(m, x)   m->weg[RexrReg(x)]
 #define RegRexbBase(m, x)  m->weg[RexbBase(x)]
 #define RegRexxIndex(m, x) m->weg[Rexx(x) << 3 | SibIndex(x)]
@@ -79,8 +81,8 @@ u8 *ComputeReserveAddressWrite(P, size_t);
 u8 *ComputeReserveAddressWrite1(P);
 u8 *ComputeReserveAddressWrite4(P);
 u8 *ComputeReserveAddressWrite8(P);
-u8 *GetModrmRegisterBytePointerRead(P);
-u8 *GetModrmRegisterBytePointerWrite(P);
+u8 *GetModrmRegisterBytePointerRead1(P);
+u8 *GetModrmRegisterBytePointerWrite1(P);
 u8 *GetModrmRegisterMmPointerRead(P, size_t);
 u8 *GetModrmRegisterMmPointerRead8(P);
 u8 *GetModrmRegisterMmPointerWrite(P, size_t);

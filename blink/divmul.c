@@ -123,7 +123,7 @@ void OpDivAlAhAxEbSigned(P) {
   i8 y, r;
   i16 x, q;
   x = Get16(m->ax);
-  y = Load8(GetModrmRegisterBytePointerRead(A));
+  y = Load8(GetModrmRegisterBytePointerRead1(A));
   if (!y) return RaiseDivideError(m);
   if (x == INT16_MIN) return RaiseDivideError(m);
   q = x / y;
@@ -137,7 +137,7 @@ void OpDivAlAhAxEbUnsigned(P) {
   u8 y, r;
   u16 x, q;
   x = Get16(m->ax);
-  y = Load8(GetModrmRegisterBytePointerRead(A));
+  y = Load8(GetModrmRegisterBytePointerRead1(A));
   if (!y) return RaiseDivideError(m);
   q = x / y;
   r = x % y;
@@ -254,7 +254,7 @@ void OpMulAxAlEbSigned(P) {
   u8 *p;
   i16 ax;
   unsigned of;
-  p = GetModrmRegisterBytePointerRead(A);
+  p = GetModrmRegisterBytePointerRead1(A);
   ax = (i8)Get8(m->ax) * (i8)Load8(p);
   of = ax != (i8)ax;
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
@@ -266,7 +266,7 @@ void OpMulAxAlEbUnsigned(P) {
   u8 *p;
   int ax;
   unsigned of;
-  p = GetModrmRegisterBytePointerRead(A);
+  p = GetModrmRegisterBytePointerRead1(A);
   ax = Get8(m->ax) * Load8(p);
   of = ax != (u8)ax;
   m->flags = SetFlag(m->flags, FLAGS_CF, of);

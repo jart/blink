@@ -177,8 +177,9 @@ struct Machine {                           //
   i64 stashaddr;                           //
   u64 cs;                                  //
   u64 ss;                                  //
-  int mode;                                //
   u32 flags;                               //
+  u8 mode;                                 //
+  _Atomic(char) tlb_invalidated;           //
   union {                                  // GENERAL REGISTER FILE
     u64 align8_;                           //
     u8 beg[128];                           //
@@ -238,7 +239,6 @@ struct Machine {                           //
   u64 ds;                                  // data segment (legacy / real)
   u64 es;                                  // xtra segment (legacy / real)
   struct MachineFpu fpu;                   // FLOATING-POINT REGISTER FILE
-  _Atomic(int) tlb_invalidated;            // 1 if thread should clear tlb
   u32 mxcsr;                               // SIMD status control register
   pthread_t thread;                        // POSIX thread of this machine
   struct FreeList freelist;                // to make system calls simpler
@@ -361,6 +361,7 @@ void OpRdrand(P);
 void OpRdseed(P);
 void OpRet(P);
 void OpRetf(P);
+void OpRetIw(P);
 void OpSsePclmulqdq(P);
 void OpXaddEbGb(P);
 void OpXaddEvqpGvqp(P);

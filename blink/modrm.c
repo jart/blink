@@ -169,7 +169,7 @@ u8 *GetModrmRegisterMmPointerWrite8(P) {
   return GetModrmRegisterMmPointerWrite(A, 8);
 }
 
-u8 *GetModrmRegisterBytePointerRead(P) {
+u8 *GetModrmRegisterBytePointerRead1(P) {
   if (IsModrmRegister(rde)) {
     return ByteRexbRm(m, rde);
   } else {
@@ -177,7 +177,7 @@ u8 *GetModrmRegisterBytePointerRead(P) {
   }
 }
 
-u8 *GetModrmRegisterBytePointerWrite(P) {
+u8 *GetModrmRegisterBytePointerWrite1(P) {
   if (IsModrmRegister(rde)) {
     return ByteRexbRm(m, rde);
   } else {

@@ -31,7 +31,7 @@
 
 static void Alub(P, aluop_f op) {
   u8 *p, *q;
-  p = GetModrmRegisterBytePointerWrite(A);
+  p = GetModrmRegisterBytePointerWrite1(A);
   q = ByteRexrReg(m, rde);
   if (!Lock(rde)) {
     Store8(p, op(Load8(p), Get8(q), &m->flags));
@@ -80,32 +80,32 @@ void OpAlubXor(P) {
 }
 
 static void OpAluwRegAdd64(P) {
-  Store64(RegRexbRm(m, rde), FastAdd64(Get64(RegRexbRm(m, rde)),
-                                       Get64(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastAdd64(Get64(RegRexbRm(m, rde)),
+                                     Get64(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegOr64(P) {
-  Store64(RegRexbRm(m, rde), FastOr64(Get64(RegRexbRm(m, rde)),
-                                      Get64(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastOr64(Get64(RegRexbRm(m, rde)),
+                                    Get64(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegAdc64(P) {
-  Store64(RegRexbRm(m, rde), FastAdc64(Get64(RegRexbRm(m, rde)),
-                                       Get64(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastAdc64(Get64(RegRexbRm(m, rde)),
+                                     Get64(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegSbb64(P) {
-  Store64(RegRexbRm(m, rde), FastSbb64(Get64(RegRexbRm(m, rde)),
-                                       Get64(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastSbb64(Get64(RegRexbRm(m, rde)),
+                                     Get64(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegAnd64(P) {
-  Store64(RegRexbRm(m, rde), FastAnd64(Get64(RegRexbRm(m, rde)),
-                                       Get64(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastAnd64(Get64(RegRexbRm(m, rde)),
+                                     Get64(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegSub64(P) {
-  Store64(RegRexbRm(m, rde), FastSub64(Get64(RegRexbRm(m, rde)),
-                                       Get64(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastSub64(Get64(RegRexbRm(m, rde)),
+                                     Get64(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegXor64(P) {
-  Store64(RegRexbRm(m, rde), FastXor64(Get64(RegRexbRm(m, rde)),
-                                       Get64(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastXor64(Get64(RegRexbRm(m, rde)),
+                                     Get64(RegRexrReg(m, rde)), &m->flags));
 }
 const nexgen32e_f kAluReg64[] = {
     OpAluwRegAdd64,  //
@@ -119,32 +119,32 @@ const nexgen32e_f kAluReg64[] = {
 };
 
 static void OpAluwRegAdd32(P) {
-  Store64(RegRexbRm(m, rde), FastAdd32(Get32(RegRexbRm(m, rde)),
-                                       Get32(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastAdd32(Get32(RegRexbRm(m, rde)),
+                                     Get32(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegOr32(P) {
-  Store64(RegRexbRm(m, rde), FastOr32(Get32(RegRexbRm(m, rde)),
-                                      Get32(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastOr32(Get32(RegRexbRm(m, rde)),
+                                    Get32(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegAdc32(P) {
-  Store64(RegRexbRm(m, rde), FastAdc32(Get32(RegRexbRm(m, rde)),
-                                       Get32(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastAdc32(Get32(RegRexbRm(m, rde)),
+                                     Get32(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegSbb32(P) {
-  Store64(RegRexbRm(m, rde), FastSbb32(Get32(RegRexbRm(m, rde)),
-                                       Get32(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastSbb32(Get32(RegRexbRm(m, rde)),
+                                     Get32(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegAnd32(P) {
-  Store64(RegRexbRm(m, rde), FastAnd32(Get32(RegRexbRm(m, rde)),
-                                       Get32(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastAnd32(Get32(RegRexbRm(m, rde)),
+                                     Get32(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegSub32(P) {
-  Store64(RegRexbRm(m, rde), FastSub32(Get32(RegRexbRm(m, rde)),
-                                       Get32(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastSub32(Get32(RegRexbRm(m, rde)),
+                                     Get32(RegRexrReg(m, rde)), &m->flags));
 }
 static void OpAluwRegXor32(P) {
-  Store64(RegRexbRm(m, rde), FastXor32(Get32(RegRexbRm(m, rde)),
-                                       Get32(RegRexrReg(m, rde)), &m->flags));
+  Put64(RegRexbRm(m, rde), FastXor32(Get32(RegRexbRm(m, rde)),
+                                     Get32(RegRexrReg(m, rde)), &m->flags));
 }
 const nexgen32e_f kAluReg32[] = {
     OpAluwRegAdd32,  //

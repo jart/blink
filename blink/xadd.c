@@ -30,7 +30,7 @@
 
 void OpXaddEbGb(P) {
   u8 x, y, z, *p, *q;
-  p = GetModrmRegisterBytePointerWrite(A);
+  p = GetModrmRegisterBytePointerWrite1(A);
   q = ByteRexrReg(m, rde);
   x = Load8(p);
   y = Get8(q);

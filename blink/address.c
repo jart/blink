@@ -22,12 +22,12 @@
 #include "blink/modrm.h"
 #include "blink/x86.h"
 
-i64 GetIp(struct Machine *m) {
-  return MaskAddress(m->mode, m->ip);
-}
-
 i64 GetPc(struct Machine *m) {
   return m->cs + GetIp(m);
+}
+
+i64 GetIp(struct Machine *m) {
+  return MaskAddress(m->mode, m->ip);
 }
 
 u64 MaskAddress(u32 mode, u64 x) {

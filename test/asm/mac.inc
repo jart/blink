@@ -1,5 +1,11 @@
 // -*- mode: unix-assembly; indent-tabs-mode: t; tab-width: 8; coding: utf-8 -*-
 
+	.macro	.exit
+	mov	$0,%edi
+	mov	$231,%eax
+	syscall
+	.endm
+
 	.macro	.test name:req
 prologue\@:
 	jmp	101f

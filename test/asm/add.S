@@ -51,6 +51,4 @@ _start:
 	.e
 
 "test succeeded":
-	mov	$0,%edi
-	mov	$231,%eax
-	syscall
+	.exit

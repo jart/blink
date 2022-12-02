@@ -263,13 +263,13 @@ char *LoadStr(struct Machine *m, i64 addr) {
   size_t have;
   char *copy, *page, *p;
   have = 4096 - (addr & 4095);
-  if (!addr) return NULL;
-  if (!(page = (char *)FindReal(m, addr))) return NULL;
+  if (!addr) return 0;
+  if (!(page = (char *)FindReal(m, addr))) return 0;
   if ((p = (char *)memchr(page, '\0', have))) {
     SetReadAddr(m, addr, p - page + 1);
     return page;
   }
-  if (!(copy = (char *)malloc(have + 4096))) return NULL;
+  if (!(copy = (char *)malloc(have + 4096))) return 0;
   memcpy(copy, page, have);
   for (;;) {
     if (!(page = (char *)FindReal(m, addr + have))) break;
@@ -284,7 +284,7 @@ char *LoadStr(struct Machine *m, i64 addr) {
     copy = p;
   }
   free(copy);
-  return NULL;
+  return 0;
 }
 
 char **LoadStrList(struct Machine *m, i64 addr) {

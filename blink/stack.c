@@ -24,33 +24,44 @@
 #include "blink/macros.h"
 #include "blink/memory.h"
 #include "blink/modrm.h"
+#include "blink/mop.h"
 #include "blink/tsan.h"
+#include "blink/x86.h"
 
-static const u8 kStackOsz[2][3] = {
-    {
-        2,  // kStackOsz[0][XED_MODE_REAL]
-        4,  // kStackOsz[0][XED_MODE_LEGACY]
-        8,  // kStackOsz[0][XED_MODE_LONG]
-    },
-    {
-        4,  // kStackOsz[1][XED_MODE_REAL]
-        2,  // kStackOsz[1][XED_MODE_LEGACY]
-        2,  // kStackOsz[1][XED_MODE_LONG]
-    },
-};
+static const u8 kStackOsz[2][3] = {{2, 4, 8}, {4, 2, 2}};
+static const u8 kCallOsz[2][3] = {{2, 4, 8}, {4, 2, 8}};
 
-static const u8 kCallOsz[2][3] = {
-    {
-        2,  // kCallOsz[0][XED_MODE_REAL]
-        4,  // kCallOsz[0][XED_MODE_LEGACY]
-        8,  // kCallOsz[0][XED_MODE_LONG]
-    },
-    {
-        4,  // kCallOsz[1][XED_MODE_REAL]
-        2,  // kCallOsz[1][XED_MODE_LEGACY]
-        8,  // kCallOsz[1][XED_MODE_LONG]
-    },
-};
+static void FastPush(P) {
+  u64 v, x = Get64(RegRexbSrm(m, rde));
+  Put64(m->sp, (v = Get64(m->sp) - 8));
+  Store64(ReserveAddress(m, v, 8, true), x);
+}
+
+static void FastPop(P) {
+  u64 v = Get64(m->sp);
+  Put64(m->sp, v + 8);
+  Put64(RegRexbSrm(m, rde), Load64(ReserveAddress(m, v, 8, false)));
+}
+
+static void FastCall(P) {
+  u64 v, x = m->ip + disp;
+  Put64(m->sp, (v = Get64(m->sp) - 8));
+  Store64(ReserveAddress(m, v, 8, true), m->ip);
+  m->ip = x;
+}
+
+static void FastRet(P) {
+  u64 v = Get64(m->sp);
+  Put64(m->sp, v + 8);
+  m->ip = Load64(ReserveAddress(m, v, 8, false));
+}
+
+static void AcceleratePushPop(struct Machine *m, u64 rde, void op(P)) {
+  if (m->path.jp && !Osz(rde) && Mode(rde) == XED_MODE_LONG) {
+    AppendJitSetArg(m->path.jp, kParamRde, rde & kRegRexbSrmMask);
+    AppendJitCall(m->path.jp, (void *)op);
+  }
+}
 
 static void WriteStackWord(u8 *p, u64 rde, u32 osz, u64 x) {
   IGNORE_RACES_START();
@@ -81,8 +92,8 @@ static u64 ReadStackWord(u8 *p, u32 osz) {
 static void PushN(P, u64 x, unsigned mode, unsigned osz) {
   u8 *w;
   u64 v;
-  void *p[2];
   u8 b[8];
+  void *p[2];
   switch (mode) {
     case XED_MODE_REAL:
       v = (Get32(m->sp) - osz) & 0xffff;
@@ -113,8 +124,9 @@ void Push(P, u64 x) {
 }
 
 void OpPushZvq(P) {
-  unsigned osz = kStackOsz[Osz(rde)][Mode(rde)];
+  int osz = kStackOsz[Osz(rde)][Mode(rde)];
   PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Eamode(rde), osz);
+  AcceleratePushPop(m, rde, FastPush);
 }
 
 static u64 PopN(P, u16 extra, unsigned osz) {
@@ -132,7 +144,7 @@ static u64 PopN(P, u16 extra, unsigned osz) {
       v += m->ss;
       break;
     case XED_MODE_REAL:
-      v = Get32(m->sp);
+      v = Get16(m->sp);
       Put16(m->sp, v + osz + extra);
       v += m->ss;
       break;
@@ -148,7 +160,7 @@ u64 Pop(P, u16 extra) {
 
 void OpPopZvq(P) {
   u64 x;
-  unsigned osz;
+  int osz;
   osz = kStackOsz[Osz(rde)][Mode(rde)];
   x = PopN(A, 0, osz);
   switch (osz) {
@@ -162,6 +174,7 @@ void OpPopZvq(P) {
     default:
       __builtin_unreachable();
   }
+  AcceleratePushPop(m, rde, FastPop);
 }
 
 static void OpCall(P, u64 func) {
@@ -171,6 +184,10 @@ static void OpCall(P, u64 func) {
 
 void OpCallJvds(P) {
   OpCall(A, m->ip + disp);
+  if (m->path.jp && !Osz(rde) && Mode(rde) == XED_MODE_LONG) {
+    AppendJitSetArg(m->path.jp, kParamDisp, disp);
+    AppendJitCall(m->path.jp, (void *)FastCall);
+  }
 }
 
 static u64 LoadAddressFromMemory(P) {
@@ -207,18 +224,23 @@ void OpLeave(P) {
 }
 
 void OpRet(P) {
+  m->ip = Pop(A, 0);
+  if (m->path.jp && !Osz(rde) && Mode(rde) == XED_MODE_LONG) {
+    AppendJitCall(m->path.jp, (void *)FastRet);
+  }
+}
+
+relegated void OpRetIw(P) {
   m->ip = Pop(A, uimm0);
 }
 
 void OpPushEvq(P) {
-  unsigned osz;
-  osz = kStackOsz[Osz(rde)][Mode(rde)];
+  unsigned osz = kStackOsz[Osz(rde)][Mode(rde)];
   Push(A, ReadStackWord(GetModrmRegisterWordPointerRead(A, osz), osz));
 }
 
 void OpPopEvq(P) {
-  unsigned osz;
-  osz = kStackOsz[Osz(rde)][Mode(rde)];
+  unsigned osz = kStackOsz[Osz(rde)][Mode(rde)];
   WriteStackWord(GetModrmRegisterWordPointerWrite(A, osz), rde, osz, Pop(A, 0));
 }
 

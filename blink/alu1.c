@@ -29,7 +29,7 @@
 
 static void AluEb(P, aluop_f op) {
   u8 *p;
-  p = GetModrmRegisterBytePointerWrite(A);
+  p = GetModrmRegisterBytePointerWrite1(A);
   if (!Lock(rde)) {
     Store8(p, op(Load8(p), 0, &m->flags));
   } else {
@@ -67,8 +67,7 @@ void Op0fe(P) {
   }
 }
 
-static void AluEvqp(P,
-                    const aluop_f ops[4]) {
+static void AluEvqp(P, const aluop_f ops[4]) {
   u8 *p;
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);

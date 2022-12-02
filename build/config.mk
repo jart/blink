@@ -55,7 +55,7 @@ endif
 
 ifeq ($(MODE), rel)
 CPPFLAGS += -DNDEBUG
-CFLAGS += -std=c11 -O2
+CFLAGS += -std=c11 -O2 -mtune=generic
 endif
 
 ifeq ($(MODE), opt)
@@ -115,7 +115,7 @@ endif
 
 ifeq ($(MODE), tiny)
 CPPFLAGS += -DNDEBUG -DTINY
-CFLAGS += -std=c11 -Os -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-pie
+CFLAGS += -std=c11 -Os -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-pie
 LDFLAGS += -no-pie -Wl,--cref,-Map=$@.map
 endif
 

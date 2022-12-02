@@ -103,11 +103,11 @@ static void OpPopf(P) {
 }
 
 static void OpLahf(P) {
-  Put8(m->ax + 1, ExportFlags(m->flags));
+  m->ah = ExportFlags(m->flags);
 }
 
 static void OpSahf(P) {
-  ImportFlags(m, (m->flags & ~0xff) | m->ax[1]);
+  ImportFlags(m, (m->flags & ~0xff) | m->ah);
 }
 
 static void OpLeaGvqpM(P) {
@@ -232,35 +232,35 @@ static u32 GetEaxAx(P) {
   }
 }
 
-static void OpInAlImm(P) {
+static relegated void OpInAlImm(P) {
   Put8(m->ax, OpIn(m, uimm0));
 }
 
-static void OpInAxImm(P) {
+static relegated void OpInAxImm(P) {
   PutEaxAx(A, OpIn(m, uimm0));
 }
 
-static void OpInAlDx(P) {
+static relegated void OpInAlDx(P) {
   Put8(m->ax, OpIn(m, Get16(m->dx)));
 }
 
-static void OpInAxDx(P) {
+static relegated void OpInAxDx(P) {
   PutEaxAx(A, OpIn(m, Get16(m->dx)));
 }
 
-static void OpOutImmAl(P) {
+static relegated void OpOutImmAl(P) {
   OpOut(m, uimm0, Get8(m->ax));
 }
 
-static void OpOutImmAx(P) {
+static relegated void OpOutImmAx(P) {
   OpOut(m, uimm0, GetEaxAx(A));
 }
 
-static void OpOutDxAl(P) {
+static relegated void OpOutDxAl(P) {
   OpOut(m, Get16(m->dx), Get8(m->ax));
 }
 
-static void OpOutDxAx(P) {
+static relegated void OpOutDxAx(P) {
   OpOut(m, Get16(m->dx), GetEaxAx(A));
 }
 
@@ -396,26 +396,23 @@ static void OpBswapZvqp(P) {
 }
 
 static void OpMovEbIb(P) {
-  Store8(GetModrmRegisterBytePointerWrite(A), uimm0);
+  Store8(GetModrmRegisterBytePointerWrite1(A), uimm0);
 }
 
 static void OpMovAlOb(P) {
-  i64 addr;
-  addr = AddressOb(A);
+  i64 addr = AddressOb(A);
   SetWriteAddr(m, addr, 1);
   Put8(m->ax, Load8(ResolveAddress(m, addr)));
 }
 
 static void OpMovObAl(P) {
-  i64 addr;
-  addr = AddressOb(A);
+  i64 addr = AddressOb(A);
   SetReadAddr(m, addr, 1);
   Store8(ResolveAddress(m, addr), Get8(m->ax));
 }
 
 static void OpMovRaxOvqp(P) {
-  u64 v;
-  v = DataSegment(A, disp);
+  u64 v = DataSegment(A, disp);
   SetReadAddr(m, v, 1 << RegLog2(rde));
   WriteRegister(rde, m->ax, ReadMemory(rde, ResolveAddress(m, v)));
 }
@@ -427,11 +424,11 @@ static void OpMovOvqpRax(P) {
 }
 
 static void OpMovEbGb(P) {
-  Store8(GetModrmRegisterBytePointerWrite(A), Get8(ByteRexrReg(m, rde)));
+  Store8(GetModrmRegisterBytePointerWrite1(A), Get8(ByteRexrReg(m, rde)));
 }
 
 static void OpMovGbEb(P) {
-  Put8(ByteRexrReg(m, rde), Load8(GetModrmRegisterBytePointerRead(A)));
+  Put8(ByteRexrReg(m, rde), Load8(GetModrmRegisterBytePointerRead1(A)));
 }
 
 static void OpMovZbIb(P) {
@@ -442,7 +439,7 @@ static void OpMovZvqpIvqp(P) {
   WriteRegister(rde, RegRexbSrm(m, rde), uimm0);
 }
 
-static void OpIncZv(P) {
+static relegated void OpIncZv(P) {
   if (!Osz(rde)) {
     Put32(RegSrm(m, rde), Inc32(Get32(RegSrm(m, rde)), 0, &m->flags));
   } else {
@@ -450,7 +447,7 @@ static void OpIncZv(P) {
   }
 }
 
-static void OpDecZv(P) {
+static relegated void OpDecZv(P) {
   if (!Osz(rde)) {
     Put32(RegSrm(m, rde), Dec32(Get32(RegSrm(m, rde)), 0, &m->flags));
   } else {
@@ -513,7 +510,7 @@ static void OpMovGvqpEvqp(P) {
 
 static void OpMovzbGvqpEb(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
-                Load8(GetModrmRegisterBytePointerRead(A)));
+                Load8(GetModrmRegisterBytePointerRead1(A)));
 }
 
 static void OpMovzwGvqpEw(P) {
@@ -523,7 +520,7 @@ static void OpMovzwGvqpEw(P) {
 
 static void OpMovsbGvqpEb(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
-                (i8)Load8(GetModrmRegisterBytePointerRead(A)));
+                (i8)Load8(GetModrmRegisterBytePointerRead1(A)));
 }
 
 static void OpMovswGvqpEw(P) {
@@ -536,7 +533,7 @@ static void OpMovsxdGdqpEd(P) {
 }
 
 static void AlubRo(P, aluop_f op) {
-  op(Load8(GetModrmRegisterBytePointerRead(A)), Get8(ByteRexrReg(m, rde)),
+  op(Load8(GetModrmRegisterBytePointerRead1(A)), Get8(ByteRexrReg(m, rde)),
      &m->flags);
 }
 
@@ -550,7 +547,7 @@ static void OpAlubTest(P) {
 
 static void AlubFlip(P, aluop_f op) {
   Put8(ByteRexrReg(m, rde),
-       op(Get8(ByteRexrReg(m, rde)), Load8(GetModrmRegisterBytePointerRead(A)),
+       op(Get8(ByteRexrReg(m, rde)), Load8(GetModrmRegisterBytePointerRead1(A)),
           &m->flags));
 }
 
@@ -583,7 +580,7 @@ static void OpAlubFlipXor(P) {
 }
 
 static void AlubFlipRo(P, aluop_f op) {
-  op(Get8(ByteRexrReg(m, rde)), Load8(GetModrmRegisterBytePointerRead(A)),
+  op(Get8(ByteRexrReg(m, rde)), Load8(GetModrmRegisterBytePointerRead1(A)),
      &m->flags);
 }
 
@@ -592,12 +589,12 @@ static void OpAlubFlipCmp(P) {
 }
 
 static void Alubi(P, aluop_f op) {
-  u8 *a = GetModrmRegisterBytePointerWrite(A);
+  u8 *a = GetModrmRegisterBytePointerWrite1(A);
   Store8(a, op(Load8(a), uimm0, &m->flags));
 }
 
 static void AlubiRo(P, aluop_f op) {
-  op(Load8(GetModrmRegisterBytePointerRead(A)), uimm0, &m->flags);
+  op(Load8(GetModrmRegisterBytePointerRead1(A)), uimm0, &m->flags);
 }
 
 static void OpAlubiTest(P) {
@@ -661,11 +658,94 @@ static void OpAluwFlipCmp(P) {
   AluwFlipRo(A, kAlu[ALU_SUB]);
 }
 
+static void OpAluwiRegAdd64(P) {
+  Put64(RegRexbRm(m, rde),
+        FastAdd64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegOr64(P) {
+  Put64(RegRexbRm(m, rde),
+        FastOr64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegAdc64(P) {
+  Put64(RegRexbRm(m, rde),
+        FastAdc64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegSbb64(P) {
+  Put64(RegRexbRm(m, rde),
+        FastSbb64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegAnd64(P) {
+  Put64(RegRexbRm(m, rde),
+        FastAnd64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegSub64(P) {
+  Put64(RegRexbRm(m, rde),
+        FastSub64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegXor64(P) {
+  Put64(RegRexbRm(m, rde),
+        FastXor64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+
+static void OpAluwiRegAdd32(P) {
+  Put64(RegRexbRm(m, rde),
+        FastAdd32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegOr32(P) {
+  Put64(RegRexbRm(m, rde),
+        FastOr32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegAdc32(P) {
+  Put64(RegRexbRm(m, rde),
+        FastAdc32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegSbb32(P) {
+  Put64(RegRexbRm(m, rde),
+        FastSbb32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegAnd32(P) {
+  Put64(RegRexbRm(m, rde),
+        FastAnd32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegSub32(P) {
+  Put64(RegRexbRm(m, rde),
+        FastSub32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+static void OpAluwiRegXor32(P) {
+  Put64(RegRexbRm(m, rde),
+        FastXor32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+}
+
+const nexgen32e_f kAluwiReg[2][7] = {
+    {
+        OpAluwiRegAdd32,  //
+        OpAluwiRegOr32,   //
+        OpAluwiRegAdc32,  //
+        OpAluwiRegSbb32,  //
+        OpAluwiRegAnd32,  //
+        OpAluwiRegSub32,  //
+        OpAluwiRegXor32,  //
+    },
+    {
+        OpAluwiRegAdd64,  //
+        OpAluwiRegOr64,   //
+        OpAluwiRegAdc64,  //
+        OpAluwiRegSbb64,  //
+        OpAluwiRegAnd64,  //
+        OpAluwiRegSub64,  //
+        OpAluwiRegXor64,  //
+    },
+};
+
 static void Aluwi(P, const aluop_f ops[4]) {
-  u8 *a;
-  a = GetModrmRegisterWordPointerWriteOszRexw(A);
+  u8 *a = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(
       rde, a, ops[RegLog2(rde)](ReadMemory(rde, a), uimm0, &m->flags));
+  if (m->path.jp && IsModrmRegister(rde) && !Osz(rde)) {
+    AppendJitSetArg(m->path.jp, kParamRde, rde & kRexbRmMask);
+    AppendJitSetArg(m->path.jp, kParamUimm0, uimm0);
+    AppendJitCall(m->path.jp, (void *)kAluwiReg[Rexw(rde)][ModrmReg(rde)]);
+  }
 }
 
 static void AluwiRo(P, const aluop_f ops[4]) {
@@ -736,8 +816,7 @@ static void OpTestRaxIvds(P) {
 }
 
 static void Bsuwi(P, u64 y) {
-  u8 *p;
-  p = GetModrmRegisterWordPointerWriteOszRexw(A);
+  u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(
       rde, p,
       kBsu[ModrmReg(rde)][RegLog2(rde)](ReadMemory(rde, p), y, &m->flags));
@@ -756,7 +835,7 @@ static void OpBsuwiImm(P) {
 }
 
 static void Bsubi(P, u64 y) {
-  u8 *a = GetModrmRegisterBytePointerWrite(A);
+  u8 *a = GetModrmRegisterBytePointerWrite1(A);
   Store8(a, kBsu[ModrmReg(rde)][RegLog2(rde)](Load8(a), y, &m->flags));
 }
 
@@ -892,104 +971,82 @@ static void OpJg(P) {
   }
 }
 
-static void OpCmovo(P) {
-  if (GetFlag(m->flags, FLAGS_OF)) {
-    OpMovGvqpEvqp(A);
+static void OpCmov(P, bool taken) {
+  u64 x;
+  if (taken) {
+    x = ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A));
+  } else {
+    x = Get64(RegRexrReg(m, rde));
   }
+  WriteRegister(rde, RegRexrReg(m, rde), x);
+}
+
+static void OpCmovo(P) {
+  OpCmov(A, GetFlag(m->flags, FLAGS_OF));
 }
 
 static void OpCmovno(P) {
-  if (!GetFlag(m->flags, FLAGS_OF)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, !GetFlag(m->flags, FLAGS_OF));
 }
 
 static void OpCmovb(P) {
-  if (GetFlag(m->flags, FLAGS_CF)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, GetFlag(m->flags, FLAGS_CF));
 }
 
 static void OpCmovae(P) {
-  if (!GetFlag(m->flags, FLAGS_CF)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, !GetFlag(m->flags, FLAGS_CF));
 }
 
 static void OpCmove(P) {
-  if (GetFlag(m->flags, FLAGS_ZF)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, GetFlag(m->flags, FLAGS_ZF));
 }
 
 static void OpCmovne(P) {
-  if (!GetFlag(m->flags, FLAGS_ZF)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, !GetFlag(m->flags, FLAGS_ZF));
 }
 
 static void OpCmovbe(P) {
-  if (IsBelowOrEqual(m)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, IsBelowOrEqual(m));
 }
 
 static void OpCmova(P) {
-  if (IsAbove(m)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, IsAbove(m));
 }
 
 static void OpCmovs(P) {
-  if (GetFlag(m->flags, FLAGS_SF)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, GetFlag(m->flags, FLAGS_SF));
 }
 
 static void OpCmovns(P) {
-  if (!GetFlag(m->flags, FLAGS_SF)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, !GetFlag(m->flags, FLAGS_SF));
 }
 
 static void OpCmovp(P) {
-  if (IsParity(m)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, IsParity(m));
 }
 
 static void OpCmovnp(P) {
-  if (!IsParity(m)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, !IsParity(m));
 }
 
 static void OpCmovl(P) {
-  if (IsLess(m)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, IsLess(m));
 }
 
 static void OpCmovge(P) {
-  if (IsGreaterOrEqual(m)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, IsGreaterOrEqual(m));
 }
 
 static void OpCmovle(P) {
-  if (IsLessOrEqual(m)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, IsLessOrEqual(m));
 }
 
 static void OpCmovg(P) {
-  if (IsGreater(m)) {
-    OpMovGvqpEvqp(A);
-  }
+  OpCmov(A, IsGreater(m));
 }
 
 static void SetEb(P, bool x) {
-  Store8(GetModrmRegisterBytePointerWrite(A), x);
+  Store8(GetModrmRegisterBytePointerWrite1(A), x);
 }
 
 static void OpSeto(P) {
@@ -1754,7 +1811,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*0BF*/ OpMovZvqpIvqp,           // #79   (0.008900%)
     /*0C0*/ OpBsubiImm,              // #111  (0.001368%)
     /*0C1*/ OpBsuwiImm,              // #20   (0.536537%)
-    /*0C2*/ OpRet,                   //
+    /*0C2*/ OpRetIw,                 //
     /*0C3*/ OpRet,                   // #24   (0.422698%)
     /*0C4*/ OpLes,                   //
     /*0C5*/ OpLds,                   //
