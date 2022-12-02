@@ -115,10 +115,10 @@ void AddPath_StartOp(struct Machine *m, u64 rde) {
   i8 oldip = offsetof(struct Machine, oldip);
   i8 delta = Oplength(rde);
   u8 code[] = {
-      0x48, 0x8b, 0107, ip,     // mov 8(%rdi),%rax
-      0x48, 0x89, 0107, oldip,  // mov %rax,16(%rdi)
-      0x48, 0x83, 0300, delta,  // add $delta,%rax
-      0x48, 0x89, 0107, ip,     // mov %rax,8(%rdi)
+      0x48, 0x8b, 0107, (u8)ip,     // mov 8(%rdi),%rax
+      0x48, 0x89, 0107, (u8)oldip,  // mov %rax,16(%rdi)
+      0x48, 0x83, 0300, (u8)delta,  // add $delta,%rax
+      0x48, 0x89, 0107, (u8)ip,     // mov %rax,8(%rdi)
   };
   AppendJit(m->path.jp, code, sizeof(code));
 #else
@@ -134,8 +134,8 @@ void AddPath_EndOp(struct Machine *m) {
   AppendJitMovReg(m->path.jp, kAmdDi, kAmdBx);
   i8 stashaddr = offsetof(struct Machine, stashaddr);
   u8 code2[] = {
-      0x48, 0x83, 0177, stashaddr, 0x00,  // cmpq $0x0,0x18(%rdi)
-      0x74, 0x05,                         // jnz +5
+      0x48, 0x83, 0177, (u8)stashaddr, 0x00,  // cmpq $0x0,0x18(%rdi)
+      0x74, 0x05,                             // jnz +5
   };
   AppendJit(m->path.jp, code2, sizeof(code2));
   AppendJitCall(m->path.jp, (void *)CommitStash);
