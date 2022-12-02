@@ -25,6 +25,7 @@
 
 #include "blink/address.h"
 #include "blink/alu.h"
+#include "blink/alu.inc"
 #include "blink/assert.h"
 #include "blink/bitscan.h"
 #include "blink/builtin.h"
@@ -461,9 +462,53 @@ static void OpMovEvqpIvds(P) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A), uimm0);
 }
 
-static void OpMovEvqpGvqp(P) {
+static void AddPath_RegOp(P, void *op64, void *op32, void *op16,
+                          void *general) {
+  if (m->path.jp) {
+    if (IsModrmRegister(rde)) {
+      AppendJitSetArg(m->path.jp, kParamRde,
+                      rde & (kRexbRmMask | kRexrRegMask));
+      if (Rexw(rde)) {
+        AppendJitCall(m->path.jp, op64);
+      } else if (!Osz(rde)) {
+        AppendJitCall(m->path.jp, op32);
+      } else {
+        AppendJitCall(m->path.jp, op16);
+      }
+    } else {
+      AppendJitSetArg(m->path.jp, kParamRde, rde);
+      AppendJitSetArg(m->path.jp, kParamDisp, disp);
+      AppendJitCall(m->path.jp, general);
+    }
+  }
+}
+
+static void OpMovEvqpGvqpReg64(P) {
+  Put64(RegRexbRm(m, rde), Get64(RegRexrReg(m, rde)));
+}
+
+static void OpMovEvqpGvqpReg32(P) {
+  Put64(RegRexbRm(m, rde), Get32(RegRexrReg(m, rde)));
+}
+
+static void OpMovEvqpGvqpReg16(P) {
+  Put16(RegRexbRm(m, rde), Get16(RegRexrReg(m, rde)));
+}
+
+static void OpMovEvqpGvqpGeneral(P) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
-                        ReadMemory(rde, RegRexrReg(m, rde)));
+                        ReadRegister(rde, RegRexrReg(m, rde)));
+}
+
+static void OpMovEvqpGvqp(P) {
+  OpMovEvqpGvqpGeneral(A);
+  AddPath_RegOp(A, (void *)OpMovEvqpGvqpReg64, (void *)OpMovEvqpGvqpReg32,
+                (void *)OpMovEvqpGvqpReg16, (void *)OpMovEvqpGvqpGeneral);
+}
+
+static void OpMovGvqpEvqp(P) {
+  WriteRegister(rde, RegRexrReg(m, rde),
+                ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)));
 }
 
 static void OpMovzbGvqpEb(P) {
@@ -569,11 +614,29 @@ static void OpAlubiReg(P) {
 
 static void AluwRo(P, const aluop_f ops[4]) {
   ops[RegLog2(rde)](ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
-                    Get64(RegRexrReg(m, rde)), &m->flags);
+                    ReadRegister(rde, RegRexrReg(m, rde)), &m->flags);
+}
+
+static void AluwRoCmpReg64(P) {
+  FastSub64(Get64(RegRexbRm(m, rde)), Get64(RegRexrReg(m, rde)), &m->flags);
+}
+
+static void AluwRoCmpReg32(P) {
+  FastSub32(Get32(RegRexbRm(m, rde)), Get32(RegRexrReg(m, rde)), &m->flags);
+}
+
+static void AluwRoCmpReg16(P) {
+  FastSub16(Get16(RegRexbRm(m, rde)), Get16(RegRexrReg(m, rde)), &m->flags);
+}
+
+static void AluwRoCmpGeneral(P) {
+  AluwRo(A, kAlu[ALU_SUB]);
 }
 
 static void OpAluwCmp(P) {
-  AluwRo(A, kAlu[ALU_SUB]);
+  AluwRoCmpGeneral(A);
+  AddPath_RegOp(A, (void *)AluwRoCmpReg64, (void *)AluwRoCmpReg32,
+                (void *)AluwRoCmpReg16, (void *)AluwRoCmpGeneral);
 }
 
 static void OpAluwTest(P) {
@@ -583,13 +646,13 @@ static void OpAluwTest(P) {
 static void OpAluwFlip(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)](
-                    Get64(RegRexrReg(m, rde)),
+                    ReadRegister(rde, RegRexrReg(m, rde)),
                     ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
                     &m->flags));
 }
 
 static void AluwFlipRo(P, const aluop_f ops[4]) {
-  ops[RegLog2(rde)](Get64(RegRexrReg(m, rde)),
+  ops[RegLog2(rde)](ReadRegister(rde, RegRexrReg(m, rde)),
                     ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
                     &m->flags);
 }
@@ -827,11 +890,6 @@ static void OpJg(P) {
   if (IsGreater(m)) {
     OpJmp(A);
   }
-}
-
-static void OpMovGvqpEvqp(P) {
-  WriteRegister(rde, RegRexrReg(m, rde),
-                ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)));
 }
 
 static void OpCmovo(P) {
@@ -1168,11 +1226,24 @@ static void Op0f7(P) {
   kOp0f7[ModrmReg(rde)](A);
 }
 
-static const nexgen32e_f kOp0ff[] = {OpIncEvqp, OpDecEvqp, OpCallEq,  OpUd,
-                                     OpJmpEq,   OpUd,      OpPushEvq, OpUd};
+static const nexgen32e_f kOp0ff[] = {
+    OpIncEvqp,  //
+    OpDecEvqp,  //
+    OpCallEq,   //
+    OpUd,       //
+    OpJmpEq,    //
+    OpUd,       //
+    OpPushEvq,  //
+    OpUd,       //
+};
 
 static void Op0ff(P) {
   kOp0ff[ModrmReg(rde)](A);
+  if (m->path.jp) {
+    AppendJitSetArg(m->path.jp, kParamRde, rde);
+    AppendJitSetArg(m->path.jp, kParamDisp, disp);
+    AppendJitCall(m->path.jp, (void *)kOp0ff[ModrmReg(rde)]);
+  }
 }
 
 static void OpDoubleShift(P) {
@@ -2069,6 +2140,11 @@ void GeneralDispatch(P) {
   uimm0 = m->xedd->op.uimm0;
   opclass = ClassifyOp(rde);
   if (m->path.jp || (opclass == kOpNormal && CanJit(m) && CreatePath(m))) {
+    if (opclass == kOpNormal || opclass == kOpBranching) {
+      ++m->path.elements;
+      STATISTIC(++path_elements);
+      AddPath_StartOp(m, rde);
+    }
     jitpc = GetJitPc(m->path.jp);
   } else {
     jitpc = 0;
@@ -2082,10 +2158,13 @@ void GeneralDispatch(P) {
     if (GetJitPc(m->path.jp) == jitpc) {
       if (opclass == kOpNormal || opclass == kOpBranching) {
         AddPath(A);
+        AddPath_EndOp(m);
       } else {
         JIT_LOGF("won't add [%" PRIx64 " %s] so path started at %" PRIx64,
                  GetPc(m), DescribeOp(m), m->path.start);
       }
+    } else {
+      AddPath_EndOp(m);
     }
     if (opclass == kOpPrecious || opclass == kOpBranching) {
       CommitPath(m, 0);

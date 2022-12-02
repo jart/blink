@@ -711,7 +711,8 @@ STUB(long, GetJitRemaining, (struct JitPage *jp), 0)
 STUB(intptr_t, GetJitPc, (struct JitPage *jp), 0)
 STUB(bool, AppendJit, (struct JitPage *jp, const void *data, long size), 0)
 STUB(intptr_t, ReleaseJit, (struct Jit *jit, struct JitPage *jp, hook_t *hook, intptr_t staging), 0)
-STUB(int, AbandonJit, (struct Jit *jit, struct JitPage *jp), 0);
+STUB(bool, AppendJitMovReg, (struct JitPage *jp, int dst, int src), 0)
+STUB(int, AbandonJit, (struct Jit *jit, struct JitPage *jp), 0)
 STUB(int, FlushJit, (struct Jit *jit), 0);
 STUB(struct JitPage *, StartJit, (struct Jit *jit), 0)
 STUB(intptr_t, FinishJit, (struct Jit *jit, struct JitPage *jp, hook_t *hook, intptr_t staging), 0)

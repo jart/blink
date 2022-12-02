@@ -22,19 +22,29 @@
 #include "blink/machine.h"
 
 const aluop_f kAlu[12][4] = {
-    {Add8, Add16, Add32, Add64}, {Or8, Or16, Or32, Or64},
-    {Adc8, Adc16, Adc32, Adc64}, {Sbb8, Sbb16, Sbb32, Sbb64},
-    {And8, And16, And32, And64}, {Sub8, Sub16, Sub32, Sub64},
-    {Xor8, Xor16, Xor32, Xor64}, {Sub8, Sub16, Sub32, Sub64},
-    {Not8, Not16, Not32, Not64}, {Neg8, Neg16, Neg32, Neg64},
-    {Inc8, Inc16, Inc32, Inc64}, {Dec8, Dec16, Dec32, Dec64},
+    {Add8, Add16, Add32, Add64},  //
+    {Or8, Or16, Or32, Or64},      //
+    {Adc8, Adc16, Adc32, Adc64},  //
+    {Sbb8, Sbb16, Sbb32, Sbb64},  //
+    {And8, And16, And32, And64},  //
+    {Sub8, Sub16, Sub32, Sub64},  //
+    {Xor8, Xor16, Xor32, Xor64},  //
+    {Sub8, Sub16, Sub32, Sub64},  //
+    {Not8, Not16, Not32, Not64},  //
+    {Neg8, Neg16, Neg32, Neg64},  //
+    {Inc8, Inc16, Inc32, Inc64},  //
+    {Dec8, Dec16, Dec32, Dec64},  //
 };
 
 const aluop_f kBsu[8][4] = {
-    {Rol8, Rol16, Rol32, Rol64}, {Ror8, Ror16, Ror32, Ror64},
-    {Rcl8, Rcl16, Rcl32, Rcl64}, {Rcr8, Rcr16, Rcr32, Rcr64},
-    {Shl8, Shl16, Shl32, Shl64}, {Shr8, Shr16, Shr32, Shr64},
-    {Shl8, Shl16, Shl32, Shl64}, {Sar8, Sar16, Sar32, Sar64},
+    {Rol8, Rol16, Rol32, Rol64},  //
+    {Ror8, Ror16, Ror32, Ror64},  //
+    {Rcl8, Rcl16, Rcl32, Rcl64},  //
+    {Rcr8, Rcr16, Rcr32, Rcr64},  //
+    {Shl8, Shl16, Shl32, Shl64},  //
+    {Shr8, Shr16, Shr32, Shr64},  //
+    {Shl8, Shl16, Shl32, Shl64},  //
+    {Sar8, Sar16, Sar32, Sar64},  //
 };
 
 i64 Not8(u64 x, u64 y, u32 *f) {

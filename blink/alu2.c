@@ -20,6 +20,7 @@
 #include <stdatomic.h>
 
 #include "blink/alu.h"
+#include "blink/alu.inc"
 #include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
@@ -78,6 +79,84 @@ void OpAlubXor(P) {
   Alub(A, Xor8);
 }
 
+static void OpAluwRegAdd64(P) {
+  Store64(RegRexbRm(m, rde), FastAdd64(Get64(RegRexbRm(m, rde)),
+                                       Get64(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegOr64(P) {
+  Store64(RegRexbRm(m, rde), FastOr64(Get64(RegRexbRm(m, rde)),
+                                      Get64(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegAdc64(P) {
+  Store64(RegRexbRm(m, rde), FastAdc64(Get64(RegRexbRm(m, rde)),
+                                       Get64(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegSbb64(P) {
+  Store64(RegRexbRm(m, rde), FastSbb64(Get64(RegRexbRm(m, rde)),
+                                       Get64(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegAnd64(P) {
+  Store64(RegRexbRm(m, rde), FastAnd64(Get64(RegRexbRm(m, rde)),
+                                       Get64(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegSub64(P) {
+  Store64(RegRexbRm(m, rde), FastSub64(Get64(RegRexbRm(m, rde)),
+                                       Get64(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegXor64(P) {
+  Store64(RegRexbRm(m, rde), FastXor64(Get64(RegRexbRm(m, rde)),
+                                       Get64(RegRexrReg(m, rde)), &m->flags));
+}
+const nexgen32e_f kAluReg64[] = {
+    OpAluwRegAdd64,  //
+    OpAluwRegOr64,   //
+    OpAluwRegAdc64,  //
+    OpAluwRegSbb64,  //
+    OpAluwRegAnd64,  //
+    OpAluwRegSub64,  //
+    OpAluwRegXor64,  //
+    OpAluwRegSub64,  //
+};
+
+static void OpAluwRegAdd32(P) {
+  Store64(RegRexbRm(m, rde), FastAdd32(Get32(RegRexbRm(m, rde)),
+                                       Get32(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegOr32(P) {
+  Store64(RegRexbRm(m, rde), FastOr32(Get32(RegRexbRm(m, rde)),
+                                      Get32(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegAdc32(P) {
+  Store64(RegRexbRm(m, rde), FastAdc32(Get32(RegRexbRm(m, rde)),
+                                       Get32(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegSbb32(P) {
+  Store64(RegRexbRm(m, rde), FastSbb32(Get32(RegRexbRm(m, rde)),
+                                       Get32(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegAnd32(P) {
+  Store64(RegRexbRm(m, rde), FastAnd32(Get32(RegRexbRm(m, rde)),
+                                       Get32(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegSub32(P) {
+  Store64(RegRexbRm(m, rde), FastSub32(Get32(RegRexbRm(m, rde)),
+                                       Get32(RegRexrReg(m, rde)), &m->flags));
+}
+static void OpAluwRegXor32(P) {
+  Store64(RegRexbRm(m, rde), FastXor32(Get32(RegRexbRm(m, rde)),
+                                       Get32(RegRexrReg(m, rde)), &m->flags));
+}
+const nexgen32e_f kAluReg32[] = {
+    OpAluwRegAdd32,  //
+    OpAluwRegOr32,   //
+    OpAluwRegAdc32,  //
+    OpAluwRegSbb32,  //
+    OpAluwRegAnd32,  //
+    OpAluwRegSub32,  //
+    OpAluwRegXor32,  //
+    OpAluwRegSub32,  //
+};
+
 void OpAluw(P) {
   u8 *p, *q;
   q = RegRexrReg(m, rde);
@@ -110,6 +189,11 @@ void OpAluw(P) {
       y = Get64(q);
       z = kAlu[(Opcode(rde) & 070) >> 3][ALU_INT64](x, y, &m->flags);
       Store64(p, z);
+      if (m->path.jp && IsModrmRegister(rde)) {
+        AppendJitSetArg(m->path.jp, kParamRde,
+                        rde & (kRexbRmMask | kRexrRegMask));
+        AppendJitCall(m->path.jp, (void *)kAluReg64[(Opcode(rde) & 070) >> 3]);
+      }
     }
   } else if (!Osz(rde)) {
     u32 x, y, z;
@@ -137,6 +221,11 @@ void OpAluw(P) {
     }
     if (IsModrmRegister(rde)) {
       Put32(p + 4, 0);
+      if (m->path.jp) {
+        AppendJitSetArg(m->path.jp, kParamRde,
+                        rde & (kRexbRmMask | kRexrRegMask));
+        AppendJitCall(m->path.jp, (void *)kAluReg32[(Opcode(rde) & 070) >> 3]);
+      }
     }
   } else {
     u16 x, y, z;

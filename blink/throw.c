@@ -28,7 +28,7 @@
 #include "blink/log.h"
 #include "blink/signal.h"
 
-static void RestoreIp(struct Machine *m) {
+void RestoreIp(struct Machine *m) {
   if (m->oldip != -1) {
     m->ip = m->oldip;
     m->oldip = -1;

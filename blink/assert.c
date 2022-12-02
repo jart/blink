@@ -42,6 +42,7 @@ void AssertFailed(const char *file, int line, const char *msg) {
   b[sizeof(b) - 1] = 0;
   WriteErrorString(b);
   if (g_machine) {
+    RestoreIp(g_machine);
     WriteErrorString("\t");
     WriteErrorString(GetBacktrace(g_machine));
     WriteErrorString("\n");

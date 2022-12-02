@@ -22,6 +22,7 @@
 
 #include "blink/assert.h"
 #include "blink/endian.h"
+#include "blink/likely.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/memory.h"
@@ -94,8 +95,10 @@ static u64 FindPage(struct Machine *m, u64 page) {
 u8 *FindReal(struct Machine *m, i64 virt) {
   u64 entry, page;
   if (m->mode != XED_MODE_REAL) {
-    if (atomic_load_explicit(&m->tlb_invalidated, memory_order_relaxed)) {
+    if (UNLIKELY(
+            atomic_load_explicit(&m->tlb_invalidated, memory_order_relaxed))) {
       ResetTlb(m);
+      atomic_store_explicit(&m->tlb_invalidated, 0, memory_order_relaxed);
     }
     if ((page = virt & -4096) == m->tlb[0].page &&
         ((entry = m->tlb[0].entry) & PAGE_V)) {

@@ -122,6 +122,7 @@ void AddPath_StartOp(struct Machine *m, u64 rde) {
   };
   AppendJit(m->path.jp, code, sizeof(code));
 #else
+  AppendJitSetArg(m->path.jp, kParamDisp, Oplength(rde));
   AppendJitMovReg(m->path.jp, 0, 19);
   AppendJitCall(m->path.jp, (void *)StartOp);
 #endif
@@ -148,14 +149,9 @@ bool AddPath(P) {
   unassert(m->path.jp);
   JIT_LOGF("adding [%s] from address %" PRIx64 " to path starting at %" PRIx64,
            DescribeOp(m), GetPc(m), m->path.start);
-  ++m->path.elements;
-  STATISTIC(++path_elements);
-  AppendJitSetArg(m->path.jp, kParamDisp, Oplength(rde));
-  AddPath_StartOp(m, rde);
   AppendJitSetArg(m->path.jp, kParamRde, rde);
   AppendJitSetArg(m->path.jp, kParamDisp, disp);
   AppendJitSetArg(m->path.jp, kParamUimm0, uimm0);
   AppendJitCall(m->path.jp, (void *)GetOp(Mopcode(rde)));
-  AddPath_EndOp(m);
   return true;
 }

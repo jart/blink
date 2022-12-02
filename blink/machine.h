@@ -133,7 +133,7 @@ struct System {
   i64 codestart;
   unsigned long codesize;
   pthread_mutex_t real_lock;
-  _Atomic(nexgen32e_f) *fun;
+  _Atomic(nexgen32e_f) * fun;
   struct SystemReal real GUARDED_BY(real_lock);
   pthread_mutex_t realfree_lock;
   struct SystemRealFree *realfree PT_GUARDED_BY(realfree_lock);
@@ -171,7 +171,7 @@ struct MachineTlb {
 };
 
 struct Machine {                           //
-  _Atomic(nexgen32e_f) *fun;               // DISPATCHER
+  _Atomic(nexgen32e_f) * fun;              // DISPATCHER
   u64 ip;                                  //
   u64 oldip;                               //
   i64 stashaddr;                           //
@@ -294,6 +294,7 @@ _Noreturn void OpUdImpl(struct Machine *);
 _Noreturn void OpUd(P);
 _Noreturn void OpHlt(P);
 void JitlessDispatch(P);
+void RestoreIp(struct Machine *);
 
 void Push(P, u64);
 u64 Pop(P, u16);

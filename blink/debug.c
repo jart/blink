@@ -53,7 +53,7 @@ int GetInstruction(struct Machine *m, struct XedDecodedInst *x) {
   u64 pc;
   int i, err;
   u8 copy[15], *toil, *addr;
-  pc = m->cs + MaskAddress(m->mode, m->oldip);
+  pc = m->cs + MaskAddress(m->mode, m->ip);
   if ((addr = FindReal(m, pc))) {
     if ((i = 4096 - (pc & 4095)) >= 15) {
       if (!DecodeInstruction(x, ResolveAddress(m, pc), 15, m->mode)) {
@@ -168,14 +168,14 @@ const char *GetBacktrace(struct Machine *m) {
          "OPS %-16ld "
          "JIT %-16ld\n\t"
          "%s\n\t",
-         m->cs + MaskAddress(m->mode, m->oldip), DescribeOp(m), Get64(m->ax),
+         m->cs + MaskAddress(m->mode, m->ip), DescribeOp(m), Get64(m->ax),
          Get64(m->cx), Get64(m->dx), Get64(m->bx), Get64(m->sp), Get64(m->bp),
          Get64(m->si), Get64(m->di), Get64(m->r8), Get64(m->r9), Get64(m->r10),
          Get64(m->r11), Get64(m->r12), Get64(m->r13), Get64(m->r14),
          Get64(m->r15), m->fs, m->gs, GET_COUNTER(instructions_decoded),
          GET_COUNTER(instructions_jitted), g_progname);
 
-  rp = m->oldip;
+  rp = m->ip;
   bp = Get64(m->bp);
   sp = Get64(m->sp);
   for (i = 0; i < MAX_BACKTRACE_LINES;) {
