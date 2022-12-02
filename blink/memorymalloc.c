@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
@@ -78,6 +79,22 @@ static bool IsPageStillPoisoned(u8 *p) {
   IGNORE_RACES_END();
 #endif
   return true;
+}
+
+static void DumpPage(u8 *p) {
+  IGNORE_RACES_START();
+  for (unsigned i = 0; i < 4096; i += 16) {
+    fprintf(stderr, "%04x:", i);
+    for (unsigned j = 0; j < 16; ++j) {
+      fprintf(stderr, " %02x", p[i + j]);
+    }
+    fprintf(stderr, " ");
+    for (unsigned j = 0; j < 16; ++j) {
+      fprintf(stderr, "%c", isprint(p[i + j]) ? p[i + j] : '.');
+    }
+    fprintf(stderr, "\n");
+  }
+  IGNORE_RACES_END();
 }
 
 static void FreeSystemRealFree(struct System *s) {
@@ -221,7 +238,12 @@ void ResetMem(struct Machine *m) {
 long AllocateLinearPage(struct System *s) {
   long page;
   if ((page = AllocateLinearPageRaw(s)) != -1) {
-    unassert(IsPageStillPoisoned(s->real.p + page));
+#ifndef NDEBUG
+    if (!IsPageStillPoisoned(s->real.p + page)) {
+      DumpPage(s->real.p + page);
+      unassert(!"page should still be poisoned");
+    }
+#endif
     ClearPage(s->real.p + page);
   }
   return page;
@@ -372,6 +394,7 @@ static void AppendRealFree(struct System *s, u64 real) {
 }
 
 int FreeVirtual(struct System *s, i64 base, size_t size) {
+  struct Dll *e;
   u64 i, mi, pt, end, virt;
   for (virt = base, end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
@@ -392,5 +415,11 @@ int FreeVirtual(struct System *s, i64 base, size_t size) {
       }
     }
   }
+  LOCK(&s->machines_lock);
+  for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
+    atomic_store_explicit(&MACHINE_CONTAINER(e)->tlb_invalidated, 1,
+                          memory_order_relaxed);
+  }
+  UNLOCK(&s->machines_lock);
   return 0;
 }

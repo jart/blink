@@ -100,7 +100,6 @@ int main(int argc, char *argv[], char **envp) {
   unassert(!sigaction(SIGPIPE, &sa, 0));
   unassert(!sigaction(SIGALRM, &sa, 0));
   unassert(!sigaction(SIGTERM, &sa, 0));
-  unassert(!sigaction(SIGCHLD, &sa, 0));
   unassert(!sigaction(SIGWINCH, &sa, 0));
   return Exec(argv[1], argv + 1, envp);
 }

@@ -48,6 +48,12 @@
  * to memory at runtime, i.e. a small function that calls the functions.
  */
 
+#ifdef __x86_64__
+#define kJitProximity 0x7fffffff
+#else
+#define kJitProximity (kArmDispMax * 4)
+#endif
+
 #ifdef MAP_FIXED_NOREPLACE
 // The mmap() address parameter without MAP_FIXED is documented by
 // Linux as a hint for locality. However our testing indicates the
@@ -70,14 +76,22 @@ struct JitStage {
 
 #if defined(__x86_64__)
 static const u8 kPrologue[] = {
-    0x55,              // push %rbp
-    0x48, 0x89, 0xe5,  // mov  %rsp,%rbp
-    0x53,              // push %rbx
-    0x53,              // push %rbx
-    0x48, 0x89, 0xfb,  // mov  %rdi,%rbx
+    0x55,                                      // push %rbp
+    0x48, 0x89, 0xe5,                          // mov  %rsp,%rbp
+    0x48, 0x81, 0xec, 0x80, 0x00, 0x00, 0x00,  // sub  $0x80,%rsp
+    0x48, 0x89, 0x5d, 0x80,                    // mov  %rbx,-0x80(%rbp)
+    0x4c, 0x89, 0x65, 0x88,                    // mov  %r12,-0x78(%rbp)
+    0x4c, 0x89, 0x6d, 0x90,                    // mov  %r13,-0x70(%rbp)
+    0x4c, 0x89, 0x75, 0x98,                    // mov  %r14,-0x68(%rbp)
+    0x4c, 0x89, 0x7d, 0xa0,                    // mov  %r15,-0x60(%rbp)
+    0x48, 0x89, 0xfb,                          // mov  %rdi,%rbx
 };
 static const u8 kEpilogue[] = {
-    0x48, 0x8b, 0x5d, 0xf8,  // mov -0x8(%rbp),%rbx
+    0x48, 0x8b, 0x5d, 0x80,  // mov -0x80(%rbp),%rbx
+    0x4c, 0x8b, 0x65, 0x88,  // mov -0x78(%rbp),%r12
+    0x4c, 0x8b, 0x6d, 0x90,  // mov -0x70(%rbp),%r13
+    0x4c, 0x8b, 0x75, 0x98,  // mov -0x68(%rbp),%r14
+    0x4c, 0x8b, 0x7d, 0xa0,  // mov -0x60(%rbp),%r15
     0xc9,                    // leave
     0xc3,                    // ret
 };
@@ -203,7 +217,7 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
                               MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0);
         if (jp->addr != MAP_FAILED) {
           distance = ABS(jp->addr - END_OF_IMAGE);
-          if (distance > kArmDispMax * 4 / 2) {
+          if (distance > kJitProximity - kJitPageSize) {
             LOG_ONCE(
                 LOGF("mmap() returned suboptimal address %p that's %" PRIdPTR
                      " bytes away from our program image which ends near %p",
@@ -468,6 +482,7 @@ intptr_t SpliceJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
 }
 
 bool AppendJitMovReg(struct JitPage *jp, int dst, int src) {
+  if (dst == src) return true;
 #if defined(__x86_64__)
   unassert(!(dst & ~15));
   unassert(!(src & ~15));
@@ -490,20 +505,23 @@ bool AppendJitMovReg(struct JitPage *jp, int dst, int src) {
 }
 
 /**
- * Sets function parameter.
+ * Sets function argument.
  *
- * @param jp is function builder object returned by StartJit()
- * @param param is the 0-indexed function parameter (6 total)
+ * @param jp is function builder object, returned by StartJit
+ * @param arg is your 0-indexed function argument (six total)
  * @param value is the constant value to use as the parameter
  * @return true if room was available, otherwise false
  */
-bool AppendJitSetArg(struct JitPage *jp, int param, u64 value) {
-  unassert(0 <= param && param < 6);
-#if defined(__x86_64__)
-  u8 reg[6] = {kAmdDi, kAmdSi, kAmdDx, kAmdCx, 8, 9};
-  param = reg[param];
+bool AppendJitSetArg(struct JitPage *jp, int arg, u64 value) {
+  int reg;
+  unassert(0 <= arg && arg < 6);
+#ifdef __x86_64__
+  u8 arg2reg[6] = {kAmdDi, kAmdSi, kAmdDx, kAmdCx, 8, 9};
+  reg = arg2reg[arg];
+#else
+  reg = arg;
 #endif
-  return AppendJitSetReg(jp, param, value);
+  return AppendJitSetReg(jp, reg, value);
 }
 
 /**

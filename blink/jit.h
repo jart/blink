@@ -11,28 +11,55 @@
 #define kJitPageFit   600
 #define kJitPageAlign 16
 
-#define kAmdXor      0x31
-#define kAmdJmp      0xe9
-#define kAmdCall     0xe8
-#define kAmdJmpAx    "\377\340"
-#define kAmdCallAx   "\377\320"
-#define kAmdDispMin  INT32_MIN
-#define kAmdDispMax  INT32_MAX
-#define kAmdDispMask 0xffffffffu
-#define kAmdRex      0x40  // turns ah/ch/dh/bh into spl/bpl/sil/dil
-#define kAmdRexb     0x41  // turns 0007 (r/m) of modrm into r8..r15
-#define kAmdRexr     0x44  // turns 0070 (reg) of modrm into r8..r15
-#define kAmdRexw     0x48  // makes instruction 64-bit
-#define kAmdMovImm   0xb8
-#define kAmdAx       0  // first function result
-#define kAmdCx       1  // third function parameter
-#define kAmdDx       2  // fourth function parameter, second function result
-#define kAmdBx       3  // generic saved register
-#define kAmdSp       4  // stack pointer
-#define kAmdBp       5  // backtrace pointer
-#define kAmdSi       6  // second function parameter
-#define kAmdDi       7  // first function parameter
+#ifdef __x86_64__
+#define kJitRes1 kAmdAx
+#define kJitRes2 kAmdDx
+#define kJitArg1 kAmdDi
+#define kJitArg2 kAmdSi
+#define kJitArg3 kAmdDx
+#define kJitArg4 kAmdCx
+#define kJitArg5 8
+#define kJitArg6 9
+#else
+#define kJitRes1 0
+#define kJitRes2 1
+#define kJitArg1 0
+#define kJitArg2 1
+#define kJitArg3 2
+#define kJitArg4 3
+#define kJitArg5 4
+#define kJitArg6 5
+#endif
 
+#ifdef __x86_64__
+#define kAmdXor           0x31
+#define kAmdJmp           0xe9
+#define kAmdCall          0xe8
+#define kAmdJmpAx         "\377\340"
+#define kAmdCallAx        "\377\320"
+#define kAmdDispMin       INT32_MIN
+#define kAmdDispMax       INT32_MAX
+#define kAmdDispMask      0xffffffffu
+#define kAmdRex           0x40  // turns ah/ch/dh/bh into spl/bpl/sil/dil
+#define kAmdRexb          0x41  // turns 0007 (r/m) of modrm into r8..r15
+#define kAmdRexr          0x44  // turns 0070 (reg) of modrm into r8..r15
+#define kAmdRexw          0x48  // makes register 64-bit
+#define kAmdAx            0     // first function result
+#define kAmdCx            1     // third function parameter
+#define kAmdDx            2     // fourth function parameter, second result
+#define kAmdBx            3     // generic saved register
+#define kAmdSp            4     // stack pointer
+#define kAmdBp            5     // backtrace pointer
+#define kAmdSi            6     // second function parameter
+#define kAmdDi            7     // first function parameter
+#define kAmdWord          1     // turns `op Eb,Gb` into `op Evqp,Gvqp`
+#define kAmdFlip          2     // turns `op r/m,r` into `op r,r/m`
+#define kAmdModrmRdiDisp8 0107  // ModR/M [-128,127](%rdi)
+#define kAmdMovImm        0xb8  // or'd with register, imm size is same as reg
+#define kAmdMov           0x88  // may be or'd with kAmdWord, kAmdFlip
+#endif
+
+#ifdef __aarch64__
 #define kArmJmp      0x14000000u  // B
 #define kArmCall     0x94000000u  // BL
 #define kArmMovNex   0xf2800000u  // sets sub-word of register to immediate
@@ -48,6 +75,7 @@
 #define kArmImmMax   0xffffu      // maximum immediate value per instruction
 #define kArmIdxOff   21           // bit offset of u16[4] sub-word index
 #define kArmIdxMask  0x00600000u  // mask of u16[4] sub-word index
+#endif
 
 #define JITPAGE_CONTAINER(e) DLL_CONTAINER(struct JitPage, elem, e)
 

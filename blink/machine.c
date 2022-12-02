@@ -39,6 +39,7 @@
 #include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
+#include "blink/path.h"
 #include "blink/random.h"
 #include "blink/real.h"
 #include "blink/signal.h"
@@ -2014,7 +2015,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*20B*/ OpSsePmulhrsw,           // #205  (0.000027%)
 };
 
-static nexgen32e_f GetOp(long op) {
+nexgen32e_f GetOp(long op) {
   if (op < ARRAYLEN(kNexgen32e)) {
     return kNexgen32e[op];
   } else {
@@ -2030,140 +2031,6 @@ static nexgen32e_f GetOp(long op) {
         return OpUd;
     }
   }
-}
-
-static void StartPath(struct Machine *m) {
-  JIT_LOGF("%" PRIx64 " <path>", m->ip);
-}
-
-void StartOp(P) {
-  JIT_LOGF("%" PRIx64 "   <op>", m->ip);
-  JIT_LOGF("%" PRIx64 "     %s", m->ip, DescribeOp(m));
-  STATISTIC(++instructions_jitted);
-  unassert(!m->path.jp);
-  m->oldip = m->ip;
-  m->ip += disp;
-}
-
-void EndOp(struct Machine *m) {
-  JIT_LOGF("%" PRIx64 "   </op>", m->ip);
-  m->oldip = -1;
-  if (m->stashaddr) {
-    CommitStash(m);
-  }
-}
-
-static void EndPath(struct Machine *m) {
-  JIT_LOGF("%" PRIx64 "   %s", m->ip, DescribeOp(m));
-  JIT_LOGF("%" PRIx64 " </path>", m->ip);
-}
-
-static bool CreatePath(struct Machine *m) {
-  i64 pc;
-  bool res;
-  unassert(!m->path.jp);
-  if ((pc = GetPc(m))) {
-    if ((m->path.jp = StartJit(&m->system->jit))) {
-      JIT_LOGF("starting new path at %" PRIx64, pc);
-      m->path.start = pc;
-      m->path.elements = 0;
-#if LOG_JIT
-      AppendJitCall(m->path.jp, StartPath);
-#endif
-      res = true;
-    } else {
-      LOGF("jit failed: %s", strerror(errno));
-      res = false;
-    }
-  } else {
-    res = false;
-  }
-  return res;
-}
-
-static void CommitPath(struct Machine *m, intptr_t splice) {
-  unassert(m->path.jp);
-#if LOG_JIT
-  AppendJitCall(m->path.jp, EndPath);
-#endif
-  STATISTIC(path_longest_bytes =
-                MAX(path_longest_bytes, m->path.jp->index - m->path.jp->start));
-  STATISTIC(path_longest = MAX(path_longest, m->path.elements));
-  STATISTIC(AVERAGE(path_average_elements, m->path.elements));
-  STATISTIC(AVERAGE(path_average_bytes, m->path.jp->index - m->path.jp->start));
-  if (SpliceJit(&m->system->jit, m->path.jp, (hook_t *)(m->fun + m->path.start),
-                (intptr_t)JitlessDispatch, splice)) {
-    STATISTIC(++path_count);
-    JIT_LOGF("staged path to %" PRIx64, m->path.start);
-  } else {
-    STATISTIC(++path_ooms);
-    JIT_LOGF("path starting at %" PRIx64 " ran out of space", m->path.start);
-  }
-  m->path.jp = 0;
-}
-
-static void AbandonPath(struct Machine *m) {
-  unassert(m->path.jp);
-  STATISTIC(++path_abandoned);
-  AbandonJit(&m->system->jit, m->path.jp);
-  m->path.jp = 0;
-}
-
-static void AddPath_StartOp(P) {
-#if defined(__x86_64__)
-  _Static_assert(offsetof(struct Machine, ip) < 128, "");
-  _Static_assert(offsetof(struct Machine, oldip) < 128, "");
-  AppendJitMovReg(m->path.jp, kAmdDi, kAmdBx);
-  u8 code[] = {
-      0x48, 0x8b, 0107, offsetof(struct Machine, ip),     // mov 8(%rdi),%rax
-      0x48, 0x89, 0107, offsetof(struct Machine, oldip),  // mov %rax,16(%rdi)
-      0x48, 0x83, 0300, (u8)Oplength(rde),                // add $i,%rax
-      0x48, 0x89, 0107, offsetof(struct Machine, ip),     // mov %rax,8(%rdi)
-  };
-  AppendJit(m->path.jp, code, sizeof(code));
-#elif defined(__aarch64__)
-  AppendJitMovReg(m->path.jp, 0, 19);
-  AppendJitCall(m->path.jp, (void *)StartOp);
-#endif
-}
-
-static void AddPath_EndOp(P) {
-#if defined(__x86_64__)
-  _Static_assert(offsetof(struct Machine, stashaddr) < 128, "");
-  AppendJitMovReg(m->path.jp, kAmdDi, kAmdBx);
-  u8 code2[] = {
-      // cmpq $0x0,0x18(%rdi)
-      0x48,
-      0x83,
-      0177,
-      offsetof(struct Machine, stashaddr),
-      0x00,
-      // jnz +5
-      0x74,
-      0x05,
-  };
-  AppendJit(m->path.jp, code2, sizeof(code2));
-  AppendJitCall(m->path.jp, (void *)CommitStash);
-#elif defined(__aarch64__)
-  AppendJitMovReg(m->path.jp, 0, 19);
-  AppendJitCall(m->path.jp, (void *)EndOp);
-#endif
-}
-
-static bool AddPath(P) {
-  unassert(m->path.jp);
-  JIT_LOGF("adding [%s] from address %" PRIx64 " to path starting at %" PRIx64,
-           DescribeOp(m), GetPc(m), m->path.start);
-  ++m->path.elements;
-  STATISTIC(++path_elements);
-  AppendJitSetArg(m->path.jp, kParamDisp, Oplength(rde));
-  AddPath_StartOp(A);
-  AppendJitSetArg(m->path.jp, kParamRde, rde);
-  AppendJitSetArg(m->path.jp, kParamDisp, disp);
-  AppendJitSetArg(m->path.jp, kParamUimm0, uimm0);
-  AppendJitCall(m->path.jp, (void *)GetOp(Mopcode(rde)));
-  AddPath_EndOp(A);
-  return true;
 }
 
 static bool CanJit(struct Machine *m) {

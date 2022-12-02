@@ -57,15 +57,14 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
   }
 }
 
-u64 FindPage(struct Machine *m, i64 virt) {
+static u64 FindPage(struct Machine *m, u64 page) {
   long i;
   i64 table;
   u64 entry, res;
   unsigned level, index;
   struct MachineTlb bubble;
-  virt &= -4096;
   for (i = 1; i < ARRAYLEN(m->tlb); ++i) {
-    if (m->tlb[i].virt == virt && ((res = m->tlb[i].entry) & PAGE_V)) {
+    if (m->tlb[i].page == page && ((res = m->tlb[i].entry) & PAGE_V)) {
       STATISTIC(++tlb_hits_2);
       bubble = m->tlb[i - 1];
       m->tlb[i - 1] = m->tlb[i];
@@ -79,7 +78,7 @@ u64 FindPage(struct Machine *m, i64 virt) {
   do {
     table = entry & PAGE_TA;
     unassert(table < GetRealMemorySize(m->system));
-    index = (virt >> level) & 511;
+    index = (page >> level) & 511;
     entry = Load64(m->system->real.p + table + index * 8);
     if (!(entry & 1)) return 0;
   } while ((level -= 9) >= 12);
@@ -87,32 +86,33 @@ u64 FindPage(struct Machine *m, i64 virt) {
       !(entry = HandlePageFault(m, entry, table, index))) {
     return 0;
   }
-  m->tlbindex = (m->tlbindex + 1) & (ARRAYLEN(m->tlb) - 1);
-  m->tlb[m->tlbindex] = m->tlb[0];
-  m->tlb[0].virt = virt;
-  m->tlb[0].entry = entry;
+  m->tlb[ARRAYLEN(m->tlb) - 1].page = page;
+  m->tlb[ARRAYLEN(m->tlb) - 1].entry = entry;
   return entry;
 }
 
 u8 *FindReal(struct Machine *m, i64 virt) {
-  u64 entry;
+  u64 entry, page;
   if (m->mode != XED_MODE_REAL) {
-    if (m->tlb[0].virt == (virt & -4096) &&
+    if (atomic_load_explicit(&m->tlb_invalidated, memory_order_relaxed)) {
+      ResetTlb(m);
+    }
+    if ((page = virt & -4096) == m->tlb[0].page &&
         ((entry = m->tlb[0].entry) & PAGE_V)) {
       STATISTIC(++tlb_hits_1);
       return m->system->real.p + (entry & PAGE_TA) + (virt & 4095);
     }
     if (-0x800000000000 <= virt && virt < 0x800000000000) {
-      if (!(entry = FindPage(m, virt))) return NULL;
+      if (!(entry = FindPage(m, page))) return 0;
       return m->system->real.p + (entry & PAGE_TA) + (virt & 4095);
     } else {
-      return NULL;
+      return 0;
     }
   } else if (virt >= 0 && virt <= 0xffffffff &&
              (virt & 0xffffffff) + 4095 < GetRealMemorySize(m->system)) {
     return m->system->real.p + virt;
   } else {
-    return NULL;
+    return 0;
   }
 }
 

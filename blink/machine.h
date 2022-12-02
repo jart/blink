@@ -133,7 +133,7 @@ struct System {
   i64 codestart;
   unsigned long codesize;
   pthread_mutex_t real_lock;
-  _Atomic(nexgen32e_f) * fun;
+  _Atomic(nexgen32e_f) *fun;
   struct SystemReal real GUARDED_BY(real_lock);
   pthread_mutex_t realfree_lock;
   struct SystemRealFree *realfree PT_GUARDED_BY(realfree_lock);
@@ -166,12 +166,12 @@ struct Path {
 };
 
 struct MachineTlb {
-  i64 virt;
+  i64 page;
   u64 entry;
 };
 
 struct Machine {                           //
-  _Atomic(nexgen32e_f) * fun;              // DISPATCHER
+  _Atomic(nexgen32e_f) *fun;               // DISPATCHER
   u64 ip;                                  //
   u64 oldip;                               //
   i64 stashaddr;                           //
@@ -238,14 +238,15 @@ struct Machine {                           //
   u64 ds;                                  // data segment (legacy / real)
   u64 es;                                  // xtra segment (legacy / real)
   struct MachineFpu fpu;                   // FLOATING-POINT REGISTER FILE
+  _Atomic(int) tlb_invalidated;            // 1 if thread should clear tlb
   u32 mxcsr;                               // SIMD status control register
   pthread_t thread;                        // POSIX thread of this machine
   struct FreeList freelist;                // to make system calls simpler
   struct Path path;                        // under construction jit route
   i64 bofram[2];                           // helps debug bootloading code
-  i64 faultaddr;                           //
-  u64 signals;                             //
-  u64 sigmask;                             //
+  i64 faultaddr;                           // used for tui error reporting
+  u64 signals;                             // signals waiting for delivery
+  u64 sigmask;                             // signals that've been blocked
   u32 tlbindex;                            //
   int sig;                                 //
   u64 siguc;                               //
@@ -274,6 +275,7 @@ void ResetTlb(struct Machine *);
 void CollectGarbage(struct Machine *);
 void ResetInstructionCache(struct Machine *);
 void GeneralDispatch(P);
+nexgen32e_f GetOp(long);
 void LoadInstruction(struct Machine *);
 void ExecuteInstruction(struct Machine *);
 long AllocateLinearPage(struct System *);

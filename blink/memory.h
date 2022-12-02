@@ -17,7 +17,6 @@
 char **LoadStrList(struct Machine *, i64);
 char *LoadStr(struct Machine *, i64);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
-u64 FindPage(struct Machine *, i64);
 u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *, bool);
 u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStore(struct Machine *, i64, size_t, void *[2], u8 *);
