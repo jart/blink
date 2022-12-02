@@ -117,11 +117,11 @@ struct Elf {
 };
 
 struct OpCache {
-  bool writable;
+  u8 stash[16];   // for memory ops that overlap page
   u64 codevirt;   // current rip page in guest memory
   u8 *codehost;   // current rip page in host memory
   u32 stashsize;  // for writes that overlap page
-  u8 stash[16];   // for writes that overlap page
+  bool writable;
   u64 icache[1024][kInstructionBytes / 8];
 };
 
@@ -172,9 +172,9 @@ struct MachineTlb {
 
 struct Machine {                           //
   _Atomic(nexgen32e_f) * fun;              // DISPATCHER
-  u64 ip;                                  // [abi] 0x08
-  u64 oldip;                               // [abi] 0x10
-  i64 stashaddr;                           // [abi] 0x18
+  u64 ip;                                  //
+  u64 oldip;                               //
+  i64 stashaddr;                           //
   u64 cs;                                  //
   u64 ss;                                  //
   int mode;                                //

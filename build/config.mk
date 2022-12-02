@@ -6,15 +6,11 @@ TAGS ?= /usr/bin/ctags
 CFLAGS +=				\
 	-g				\
 	-O2				\
-	-Wall				\
 	-pthread			\
 	-fno-ident			\
 	-fno-common			\
 	-fstrict-aliasing		\
-	-fstrict-overflow		\
-	-Wno-unused-function		\
-	-Wno-unused-const-variable	\
-	-Wno-unused-function
+	-fstrict-overflow
 
 CPPFLAGS +=				\
 	-iquote.			\
@@ -36,8 +32,25 @@ TAGSFLAGS =				\
 	--langmap=c:.c.h.i		\
 	--line-directives=yes
 
+# some distros like alpine have a file /usr/include/fortify/string.h
+# which wraps functions like memcpy() with inline branch traps which
+# check for things like overlapping parameters and buffer overrun in
+# situations where the array size is known. memcpy() is important in
+# avoiding aliasing memory and proving no aliases exist so that code
+# goes faster and is more portable. for example, here we use it when
+# moving values to/from the cpu register file therefore the size and
+# boundaries are always known, and as such, fortification needlessly
+# causes an explosive growth in object code size in files like sse.c
+CFLAGS +=				\
+	-U_FORTIFY_SOURCE
+
 ifeq ($(USER),jart)
-CFLAGS += -Werror
+CFLAGS +=				\
+	-fno-stack-protector		\
+	-Wall				\
+	-Werror				\
+	-Wno-unused-function		\
+	-Wno-unused-const-variable
 endif
 
 ifeq ($(MODE), rel)

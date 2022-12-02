@@ -34,13 +34,11 @@ static u32 pmovmskb(const u8 p[16]) {
 }
 
 static void MovdquVdqWdq(P) {
-  memcpy(XmmRexrReg(m, rde),
-         GetModrmRegisterXmmPointerRead16(A), 16);
+  memcpy(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead16(A), 16);
 }
 
 static void MovdquWdqVdq(P) {
-  memcpy(GetModrmRegisterXmmPointerWrite16(A),
-         XmmRexrReg(m, rde), 16);
+  memcpy(GetModrmRegisterXmmPointerWrite16(A), XmmRexrReg(m, rde), 16);
 }
 
 static void MovupsVpsWps(P) {
@@ -65,98 +63,60 @@ void OpLddquVdqMdq(P) {
 
 void OpMovntiMdqpGdqp(P) {
   if (Rexw(rde)) {
-    memcpy(ComputeReserveAddressWrite8(A),
-           XmmRexrReg(m, rde), 8);
+    memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde), 8);
   } else {
-    memcpy(ComputeReserveAddressWrite4(A),
-           XmmRexrReg(m, rde), 4);
+    memcpy(ComputeReserveAddressWrite4(A), XmmRexrReg(m, rde), 4);
   }
-}
-
-static void MovdqaVdqMdq(P) {
-  i64 v;
-  u8 *p;
-  v = ComputeAddress(A);
-  SetReadAddr(m, v, 16);
-  if ((v & 15) || !(p = FindReal(m, v))) {
-    ThrowSegmentationFault(m, v);
-  }
-  memcpy(XmmRexrReg(m, rde), p, 16);
-}
-
-static void MovdqaMdqVdq(P) {
-  i64 v;
-  u8 *p;
-  v = ComputeAddress(A);
-  SetWriteAddr(m, v, 16);
-  if ((v & 15) || !(p = FindReal(m, v))) {
-    ThrowSegmentationFault(m, v);
-  }
-  memcpy(p, XmmRexrReg(m, rde), 16);
 }
 
 static void MovdqaVdqWdq(P) {
-  if (IsModrmRegister(rde)) {
-    memcpy(XmmRexrReg(m, rde), XmmRexbRm(m, rde), 16);
-  } else {
-    MovdqaVdqMdq(A);
-  }
+  memcpy(XmmRexrReg(m, rde), GetXmmAddress(A), 16);
 }
 
 static void MovdqaWdqVdq(P) {
-  if (IsModrmRegister(rde)) {
-    memcpy(XmmRexbRm(m, rde), XmmRexrReg(m, rde), 16);
-  } else {
-    MovdqaMdqVdq(A);
-  }
+  memcpy(GetXmmAddress(A), XmmRexrReg(m, rde), 16);
 }
 
 static void MovntdqMdqVdq(P) {
-  MovdqaMdqVdq(A);
+  MovdqaWdqVdq(A);
 }
 
 static void MovntpsMpsVps(P) {
-  MovdqaMdqVdq(A);
+  MovdqaWdqVdq(A);
 }
 
 static void MovntpdMpdVpd(P) {
-  MovdqaMdqVdq(A);
+  MovdqaWdqVdq(A);
 }
 
 void OpMovntdqaVdqMdq(P) {
-  MovdqaVdqMdq(A);
+  MovdqaVdqWdq(A);
 }
 
 static void MovqPqQq(P) {
-  memcpy(MmReg(m, rde), GetModrmRegisterMmPointerRead8(A),
-         8);
+  memcpy(MmReg(m, rde), GetModrmRegisterMmPointerRead8(A), 8);
 }
 
 static void MovqQqPq(P) {
-  memcpy(GetModrmRegisterMmPointerWrite8(A), MmReg(m, rde),
-         8);
+  memcpy(GetModrmRegisterMmPointerWrite8(A), MmReg(m, rde), 8);
 }
 
 static void MovqVdqEqp(P) {
-  memcpy(XmmRexrReg(m, rde),
-         GetModrmRegisterWordPointerRead8(A), 8);
+  memcpy(XmmRexrReg(m, rde), GetModrmRegisterWordPointerRead8(A), 8);
   memset(XmmRexrReg(m, rde) + 8, 0, 8);
 }
 
 static void MovdVdqEd(P) {
   memset(XmmRexrReg(m, rde), 0, 16);
-  memcpy(XmmRexrReg(m, rde),
-         GetModrmRegisterWordPointerRead4(A), 4);
+  memcpy(XmmRexrReg(m, rde), GetModrmRegisterWordPointerRead4(A), 4);
 }
 
 static void MovqPqEqp(P) {
-  memcpy(MmReg(m, rde), GetModrmRegisterWordPointerRead8(A),
-         8);
+  memcpy(MmReg(m, rde), GetModrmRegisterWordPointerRead8(A), 8);
 }
 
 static void MovdPqEd(P) {
-  memcpy(MmReg(m, rde), GetModrmRegisterWordPointerRead4(A),
-         4);
+  memcpy(MmReg(m, rde), GetModrmRegisterWordPointerRead4(A), 4);
   memset(MmReg(m, rde) + 4, 0, 4);
 }
 
@@ -164,28 +124,24 @@ static void MovdEdVdq(P) {
   if (IsModrmRegister(rde)) {
     Put64(RegRexbRm(m, rde), Read32(XmmRexrReg(m, rde)));
   } else {
-    memcpy(ComputeReserveAddressWrite4(A),
-           XmmRexrReg(m, rde), 4);
+    memcpy(ComputeReserveAddressWrite4(A), XmmRexrReg(m, rde), 4);
   }
 }
 
 static void MovqEqpVdq(P) {
-  memcpy(GetModrmRegisterWordPointerWrite8(A),
-         XmmRexrReg(m, rde), 8);
+  memcpy(GetModrmRegisterWordPointerWrite8(A), XmmRexrReg(m, rde), 8);
 }
 
 static void MovdEdPq(P) {
   if (IsModrmRegister(rde)) {
     Put64(RegRexbRm(m, rde), Read32(MmReg(m, rde)));
   } else {
-    memcpy(ComputeReserveAddressWrite4(A), MmReg(m, rde),
-           4);
+    memcpy(ComputeReserveAddressWrite4(A), MmReg(m, rde), 4);
   }
 }
 
 static void MovqEqpPq(P) {
-  memcpy(GetModrmRegisterWordPointerWrite8(A),
-         MmReg(m, rde), 8);
+  memcpy(GetModrmRegisterWordPointerWrite8(A), MmReg(m, rde), 8);
 }
 
 static void MovntqMqPq(P) {
@@ -193,8 +149,7 @@ static void MovntqMqPq(P) {
 }
 
 static void MovqVqWq(P) {
-  memcpy(XmmRexrReg(m, rde),
-         GetModrmRegisterXmmPointerRead8(A), 8);
+  memcpy(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead8(A), 8);
   memset(XmmRexrReg(m, rde) + 8, 0, 8);
 }
 
@@ -202,30 +157,26 @@ static void MovssVpsWps(P) {
   if (IsModrmRegister(rde)) {
     memcpy(XmmRexrReg(m, rde), XmmRexbRm(m, rde), 4);
   } else {
-    memcpy(XmmRexrReg(m, rde),
-           ComputeReserveAddressRead4(A), 4);
+    memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead4(A), 4);
     memset(XmmRexrReg(m, rde) + 4, 0, 12);
   }
 }
 
 static void MovssWpsVps(P) {
-  memcpy(GetModrmRegisterXmmPointerWrite4(A),
-         XmmRexrReg(m, rde), 4);
+  memcpy(GetModrmRegisterXmmPointerWrite4(A), XmmRexrReg(m, rde), 4);
 }
 
 static void MovsdVpsWps(P) {
   if (IsModrmRegister(rde)) {
     memcpy(XmmRexrReg(m, rde), XmmRexbRm(m, rde), 8);
   } else {
-    memcpy(XmmRexrReg(m, rde),
-           ComputeReserveAddressRead8(A), 8);
+    memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(A), 8);
     memset(XmmRexrReg(m, rde) + 8, 0, 8);
   }
 }
 
 static void MovsdWpsVps(P) {
-  memcpy(GetModrmRegisterXmmPointerWrite8(A),
-         XmmRexrReg(m, rde), 8);
+  memcpy(GetModrmRegisterXmmPointerWrite8(A), XmmRexrReg(m, rde), 8);
 }
 
 static void MovhlpsVqUq(P) {
@@ -233,18 +184,15 @@ static void MovhlpsVqUq(P) {
 }
 
 static void MovlpsVqMq(P) {
-  memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(A),
-         8);
+  memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(A), 8);
 }
 
 static void MovlpdVqMq(P) {
-  memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(A),
-         8);
+  memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(A), 8);
 }
 
 static void MovddupVqWq(P) {
-  u8 *src;
-  src = GetModrmRegisterXmmPointerRead8(A);
+  u8 *src = GetModrmRegisterXmmPointerRead8(A);
   memcpy(XmmRexrReg(m, rde) + 0, src, 8);
   memcpy(XmmRexrReg(m, rde) + 8, src, 8);
 }
@@ -260,13 +208,11 @@ static void MovsldupVqWq(P) {
 }
 
 static void MovlpsMqVq(P) {
-  memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde),
-         8);
+  memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde), 8);
 }
 
 static void MovlpdMqVq(P) {
-  memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde),
-         8);
+  memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde), 8);
 }
 
 static void MovlhpsVqUq(P) {
@@ -274,13 +220,11 @@ static void MovlhpsVqUq(P) {
 }
 
 static void MovhpsVqMq(P) {
-  memcpy(XmmRexrReg(m, rde) + 8,
-         ComputeReserveAddressRead8(A), 8);
+  memcpy(XmmRexrReg(m, rde) + 8, ComputeReserveAddressRead8(A), 8);
 }
 
 static void MovhpdVqMq(P) {
-  memcpy(XmmRexrReg(m, rde) + 8,
-         ComputeReserveAddressRead8(A), 8);
+  memcpy(XmmRexrReg(m, rde) + 8, ComputeReserveAddressRead8(A), 8);
 }
 
 static void MovshdupVqWq(P) {
@@ -294,13 +238,11 @@ static void MovshdupVqWq(P) {
 }
 
 static void MovhpsMqVq(P) {
-  memcpy(ComputeReserveAddressWrite8(A),
-         XmmRexrReg(m, rde) + 8, 8);
+  memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde) + 8, 8);
 }
 
 static void MovhpdMqVq(P) {
-  memcpy(ComputeReserveAddressWrite8(A),
-         XmmRexrReg(m, rde) + 8, 8);
+  memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde) + 8, 8);
 }
 
 static void MovqWqVq(P) {
@@ -308,8 +250,7 @@ static void MovqWqVq(P) {
     memcpy(XmmRexbRm(m, rde), XmmRexrReg(m, rde), 8);
     memset(XmmRexbRm(m, rde) + 8, 0, 8);
   } else {
-    memcpy(ComputeReserveAddressWrite8(A),
-           XmmRexrReg(m, rde), 8);
+    memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde), 8);
   }
 }
 

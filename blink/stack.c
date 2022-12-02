@@ -78,8 +78,7 @@ static u64 ReadStackWord(u8 *p, u32 osz) {
   return x;
 }
 
-static void PushN(P, u64 x, unsigned mode,
-                  unsigned osz) {
+static void PushN(P, u64 x, unsigned mode, unsigned osz) {
   u8 *w;
   u64 v;
   void *p[2];
@@ -115,12 +114,10 @@ void Push(P, u64 x) {
 
 void OpPushZvq(P) {
   unsigned osz = kStackOsz[Osz(rde)][Mode(rde)];
-  PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz),
-        Eamode(rde), osz);
+  PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Eamode(rde), osz);
 }
 
-static u64 PopN(P, u16 extra,
-                unsigned osz) {
+static u64 PopN(P, u16 extra, unsigned osz) {
   u64 v;
   void *p[2];
   u8 b[8];
@@ -179,8 +176,7 @@ void OpCallJvds(P) {
 static u64 LoadAddressFromMemory(P) {
   unsigned osz;
   osz = kCallOsz[Osz(rde)][Mode(rde)];
-  return ReadStackWord(
-      GetModrmRegisterWordPointerRead(A, osz), osz);
+  return ReadStackWord(GetModrmRegisterWordPointerRead(A, osz), osz);
 }
 
 void OpCallEq(P) {
@@ -217,19 +213,16 @@ void OpRet(P) {
 void OpPushEvq(P) {
   unsigned osz;
   osz = kStackOsz[Osz(rde)][Mode(rde)];
-  Push(A,
-       ReadStackWord(
-           GetModrmRegisterWordPointerRead(A, osz), osz));
+  Push(A, ReadStackWord(GetModrmRegisterWordPointerRead(A, osz), osz));
 }
 
 void OpPopEvq(P) {
   unsigned osz;
   osz = kStackOsz[Osz(rde)][Mode(rde)];
-  WriteStackWord(GetModrmRegisterWordPointerWrite(A, osz),
-                 rde, osz, Pop(A, 0));
+  WriteStackWord(GetModrmRegisterWordPointerWrite(A, osz), rde, osz, Pop(A, 0));
 }
 
-static void Pushaw(P) {
+static relegated void Pushaw(P) {
   u16 v;
   u8 b[8][2];
   memcpy(b[0], m->di, 2);
@@ -244,7 +237,7 @@ static void Pushaw(P) {
   CopyToUser(m, m->ss + v, b, sizeof(b));
 }
 
-static void Pushad(P) {
+static relegated void Pushad(P) {
   u32 v;
   u8 b[8][4];
   memcpy(b[0], m->di, 4);
@@ -259,7 +252,7 @@ static void Pushad(P) {
   CopyToUser(m, m->ss + v, b, sizeof(b));
 }
 
-static void Popaw(P) {
+static relegated void Popaw(P) {
   u8 b[8][2];
   CopyFromUser(m, b, m->ss + Read16(m->sp), sizeof(b));
   Put16(m->sp, (Get32(m->sp) + sizeof(b)) & 0xffff);
@@ -273,7 +266,7 @@ static void Popaw(P) {
   memcpy(m->ax, b[7], 2);
 }
 
-static void Popad(P) {
+static relegated void Popad(P) {
   u8 b[8][4];
   CopyFromUser(m, b, m->ss + Get32(m->sp), sizeof(b));
   Put64(m->sp, (Get32(m->sp) + sizeof(b)) & 0xffffffff);
@@ -287,7 +280,7 @@ static void Popad(P) {
   memcpy(m->ax, b[7], 4);
 }
 
-void OpPusha(P) {
+relegated void OpPusha(P) {
   switch (Eamode(rde)) {
     case XED_MODE_REAL:
       Pushaw(A);
@@ -302,7 +295,7 @@ void OpPusha(P) {
   }
 }
 
-void OpPopa(P) {
+relegated void OpPopa(P) {
   switch (Eamode(rde)) {
     case XED_MODE_REAL:
       Popaw(A);
@@ -317,7 +310,7 @@ void OpPopa(P) {
   }
 }
 
-void OpCallf(P) {
+relegated void OpCallf(P) {
   Push(A, m->cs >> 4);
   Push(A, m->ip);
   m->cs = uimm0 << 4;
@@ -327,7 +320,7 @@ void OpCallf(P) {
   }
 }
 
-void OpRetf(P) {
+relegated void OpRetf(P) {
   m->ip = Pop(A, 0);
   m->cs = Pop(A, uimm0) << 4;
   if (m->system->onlongbranch) {

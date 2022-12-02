@@ -21,7 +21,7 @@
 #include "blink/flags.h"
 #include "blink/machine.h"
 
-static dontinline void BcdFlags(struct Machine *m, bool af, bool cf) {
+static relegated dontinline void BcdFlags(struct Machine *m, bool af, bool cf) {
   m->flags = SetFlag(m->flags, FLAGS_CF, cf);
   m->flags = SetFlag(m->flags, FLAGS_AF, af);
   m->flags = SetFlag(m->flags, FLAGS_ZF, !m->al);
@@ -29,7 +29,7 @@ static dontinline void BcdFlags(struct Machine *m, bool af, bool cf) {
   m->flags = SetLazyParityByte(m->flags, m->al);
 }
 
-void OpDas(P) {
+relegated void OpDas(P) {
   u8 al;
   bool af, cf;
   al = m->al;
@@ -46,7 +46,7 @@ void OpDas(P) {
   BcdFlags(m, af, cf);
 }
 
-void OpAaa(P) {
+relegated void OpAaa(P) {
   bool af, cf;
   af = cf = 0;
   if ((m->al & 0x0f) > 9 || GetFlag(m->flags, FLAGS_AF)) {
@@ -58,7 +58,7 @@ void OpAaa(P) {
   BcdFlags(m, af, cf);
 }
 
-void OpAas(P) {
+relegated void OpAas(P) {
   bool af, cf;
   af = cf = 0;
   if ((m->al & 0x0f) > 9 || GetFlag(m->flags, FLAGS_AF)) {
@@ -70,7 +70,7 @@ void OpAas(P) {
   BcdFlags(m, af, cf);
 }
 
-void OpAam(P) {
+relegated void OpAam(P) {
   u8 imm = m->xedd->op.uimm0;
   if (!imm) RaiseDivideError(m);
   m->ah = m->al / imm;
@@ -78,7 +78,7 @@ void OpAam(P) {
   BcdFlags(m, 0, 0);
 }
 
-void OpAad(P) {
+relegated void OpAad(P) {
   u8 imm = m->xedd->op.uimm0;
   Put16(m->ax, (m->ah * imm + m->al) & 255);
   BcdFlags(m, 0, 0);

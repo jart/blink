@@ -6,6 +6,25 @@ BLINK_FILES := $(wildcard blink/*)
 BLINK_SRCS = $(filter %.c,$(BLINK_FILES))
 BLINK_HDRS = $(filter %.h,$(BLINK_FILES))
 
+# vectorization makes code smaller
+o/$(MODE)/blink/sse2.o: private CFLAGS += -O3
+o/$(MODE)/x86_64/blink/sse2.o: private CFLAGS += -O3
+o/$(MODE)/aarch64/blink/sse2.o: private CFLAGS += -O3
+
+# these files have big switch statements
+o/tiny/blink/cvt.o: private CFLAGS += -fpie
+o/tiny/x86_64/blink/cvt.o: private CFLAGS += -fpie
+o/tiny/aarch64/blink/cvt.o: private CFLAGS += -fpie
+o/tiny/blink/fpu.o: private CFLAGS += -fpie
+o/tiny/x86_64/blink/fpu.o: private CFLAGS += -fpie
+o/tiny/aarch64/blink/fpu.o: private CFLAGS += -fpie
+o/tiny/blink/x86.o: private CFLAGS += -fpie
+o/tiny/x86_64/blink/x86.o: private CFLAGS += -fpie
+o/tiny/aarch64/blink/x86.o: private CFLAGS += -fpie
+o/tiny/blink/syscall.o: private CFLAGS += -fpie
+o/tiny/x86_64/blink/syscall.o: private CFLAGS += -fpie
+o/tiny/aarch64/blink/syscall.o: private CFLAGS += -fpie
+
 o/$(MODE)/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/%.o)))
 o/$(MODE)/i486/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/i486/%.o)))
 o/$(MODE)/m68k/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/m68k/%.o)))

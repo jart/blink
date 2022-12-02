@@ -61,4 +61,27 @@
 #endif /* !ANSI && GCC >= 3.2 */
 #endif /* __cplusplus */
 
+#if __has_attribute(__cold__) || \
+    (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 403
+#define relegated __attribute__((__cold__))
+#else
+#define relegated
+#endif
+
+#if __has_attribute(__assume_aligned__) || \
+    (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 409
+#define returnsaligned(x) __attribute__((__assume_aligned__ x))
+#else
+#define returnsaligned(x)
+#endif
+
+#if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 407 || \
+    __has_attribute(__optimize__)
+#define optimizesize __attribute__((__optimize__("s")))
+#elif defined(__llvm__) || __has_attribute(__optnone__)
+#define optimizesize __attribute__((__optnone__))
+#else
+#define optimizesize
+#endif
+
 #endif /* BLINK_BUILTIN_H_ */

@@ -47,3 +47,10 @@ o/$(MODE)/powerpc/%.a:
 	o/third_party/gcc/powerpc/bin/powerpc-linux-musl-ar rcsD $@ $^
 o/$(MODE)/powerpc64le/%.a:
 	o/third_party/gcc/powerpc64le/bin/powerpc64le-linux-musl-ar rcsD $@ $^
+
+o/$(MODE)/%-gcc.asm: %.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-stack-protector -iquote. $(CPPFLAGS) $(TARGET_ARCH) -S -g0 $(OUTPUT_OPTION) $<
+o/$(MODE)/%-clang.asm: %.c
+	@mkdir -p $(@D)
+	$(CC) $(CFLAGS) -fno-stack-protector -fno-unwind-tables -fno-asynchronous-unwind-tables -fno-stack-protector -iquote. $(CPPFLAGS) $(TARGET_ARCH) -S -g0 $(OUTPUT_OPTION) $<

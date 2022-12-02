@@ -1,6 +1,7 @@
 # -*- conf -*-
 *.xz
 /o
+/core*
 /HTAGS
 /TAGS
 /perf.data

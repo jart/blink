@@ -27,6 +27,7 @@
 #include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/bitscan.h"
+#include "blink/builtin.h"
 #include "blink/case.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
@@ -111,22 +112,23 @@ static void OpLeaGvqpM(P) {
   WriteRegister(rde, RegRexrReg(m, rde), LoadEffectiveAddress(A).addr);
 }
 
-static void OpPushSeg(P) {
+static relegated void OpPushSeg(P) {
   u8 seg = (Opcode(rde) & 070) >> 3;
   Push(A, *GetSegment(A, seg) >> 4);
 }
 
-static void OpPopSeg(P) {
+static relegated void OpPopSeg(P) {
   u8 seg = (Opcode(rde) & 070) >> 3;
   *GetSegment(A, seg) = Pop(A, 0) << 4;
 }
 
-static void OpMovEvqpSw(P) {
+static relegated void OpMovEvqpSw(P) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
                         *GetSegment(A, ModrmReg(rde)) >> 4);
 }
 
-static int GetDescriptor(struct Machine *m, int selector, u64 *out_descriptor) {
+static relegated int GetDescriptor(struct Machine *m, int selector,
+                                   u64 *out_descriptor) {
   unassert(m->system->gdt_base + m->system->gdt_limit <=
            GetRealMemorySize(m->system));
   selector &= -8;
@@ -140,24 +142,24 @@ static int GetDescriptor(struct Machine *m, int selector, u64 *out_descriptor) {
   }
 }
 
-static u64 GetDescriptorBase(u64 d) {
+static relegated u64 GetDescriptorBase(u64 d) {
   return (d & 0xff00000000000000) >> 32 | (d & 0x000000ffffff0000) >> 16;
 }
 
-static u64 GetDescriptorLimit(u64 d) {
+static relegated u64 GetDescriptorLimit(u64 d) {
   return (d & 0x000f000000000000) >> 32 | (d & 0xffff);
 }
 
-static int GetDescriptorMode(u64 d) {
+static relegated int GetDescriptorMode(u64 d) {
   u8 kMode[] = {XED_MODE_REAL, XED_MODE_LONG, XED_MODE_LEGACY, XED_MODE_LONG};
   return kMode[(d & 0x0060000000000000) >> 53];
 }
 
-static bool IsProtectedMode(struct Machine *m) {
+static relegated bool IsProtectedMode(struct Machine *m) {
   return m->system->cr0 & 1;
 }
 
-static void OpMovSwEvqp(P) {
+static relegated void OpMovSwEvqp(P) {
   u64 x, d;
   x = ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A));
   if (!IsProtectedMode(m)) {
@@ -170,7 +172,7 @@ static void OpMovSwEvqp(P) {
   *GetSegment(A, ModrmReg(rde)) = x;
 }
 
-static void OpLsl(P) {
+static relegated void OpLsl(P) {
   u64 descriptor;
   if (GetDescriptor(m, Load16(GetModrmRegisterWordPointerRead2(A)),
                     &descriptor) != -1) {
@@ -181,13 +183,13 @@ static void OpLsl(P) {
   }
 }
 
-static void ChangeMachineMode(struct Machine *m, int mode) {
+static relegated void ChangeMachineMode(struct Machine *m, int mode) {
   if (mode == m->mode) return;
   ResetInstructionCache(m);
   m->mode = mode;
 }
 
-static void OpJmpf(P) {
+static relegated void OpJmpf(P) {
   u64 descriptor;
   if (!IsProtectedMode(m)) {
     m->cs = uimm0 << 4;
@@ -204,7 +206,7 @@ static void OpJmpf(P) {
   }
 }
 
-static void OpXlatAlBbb(P) {
+static relegated void OpXlatAlBbb(P) {
   u64 v;
   v = MaskAddress(Eamode(rde), Get64(m->bx) + Get8(m->ax));
   v = DataSegment(A, v);
@@ -1102,7 +1104,7 @@ static void OpLds(P) {
   LoadFarPointer(A, &m->ds);
 }
 
-static void Loop(P, bool cond) {
+static relegated void Loop(P, bool cond) {
   u64 cx;
   cx = Get64(m->cx) - 1;
   if (Eamode(rde) != XED_MODE_REAL) {
@@ -1119,15 +1121,15 @@ static void Loop(P, bool cond) {
   }
 }
 
-static void OpLoope(P) {
+static relegated void OpLoope(P) {
   Loop(A, GetFlag(m->flags, FLAGS_ZF));
 }
 
-static void OpLoopne(P) {
+static relegated void OpLoopne(P) {
   Loop(A, !GetFlag(m->flags, FLAGS_ZF));
 }
 
-static void OpLoop1(P) {
+static relegated void OpLoop1(P) {
   Loop(A, true);
 }
 
@@ -1317,7 +1319,7 @@ static void Op1ae(P) {
   }
 }
 
-static void OpSalc(P) {
+static relegated void OpSalc(P) {
   if (GetFlag(m->flags, FLAGS_CF)) {
     m->al = 255;
   } else {
@@ -1325,7 +1327,7 @@ static void OpSalc(P) {
   }
 }
 
-static void OpBofram(P) {
+static relegated void OpBofram(P) {
   if (disp) {
     m->bofram[0] = m->ip;
     m->bofram[1] = m->ip + (disp & 0xff);
@@ -1335,7 +1337,7 @@ static void OpBofram(P) {
   }
 }
 
-static void OpBinbase(P) {
+static relegated void OpBinbase(P) {
   if (m->system->onbinbase) {
     m->system->onbinbase(m);
   }
@@ -1366,7 +1368,7 @@ static void OpNop(P) {
   }
 }
 
-static void OpMovRqCq(P) {
+static relegated void OpMovRqCq(P) {
   switch (ModrmReg(rde)) {
     case 0:
       Put64(RegRexbRm(m, rde), m->system->cr0);
@@ -1385,7 +1387,7 @@ static void OpMovRqCq(P) {
   }
 }
 
-static void OpMovCqRq(P) {
+static relegated void OpMovCqRq(P) {
   i64 cr3;
   switch (ModrmReg(rde)) {
     case 0:
@@ -1410,10 +1412,10 @@ static void OpMovCqRq(P) {
   }
 }
 
-static void OpWrmsr(P) {
+static relegated void OpWrmsr(P) {
 }
 
-static void OpRdmsr(P) {
+static relegated void OpRdmsr(P) {
   Put32(m->dx, 0);
   Put32(m->ax, 0);
 }
@@ -2107,35 +2109,38 @@ static void AbandonPath(struct Machine *m) {
   m->path.jp = 0;
 }
 
-static bool AddPath(P) {
-  unassert(m->path.jp);
-  JIT_LOGF("adding [%s] from address %" PRIx64 " to path starting at %" PRIx64,
-           DescribeOp(m), GetPc(m), m->path.start);
-  ++m->path.elements;
-  STATISTIC(++path_elements);
-  AppendJitSetArg(m->path.jp, kParamDisp, Oplength(rde));
+static void AddPath_StartOp(P) {
 #if defined(__x86_64__)
+  _Static_assert(offsetof(struct Machine, ip) < 128, "");
+  _Static_assert(offsetof(struct Machine, oldip) < 128, "");
   AppendJitMovReg(m->path.jp, kAmdDi, kAmdBx);
   u8 code[] = {
-      0x48, 0x8b, 0107, 0x08,               // mov 8(%rdi),%rax
-      0x48, 0x89, 0107, 0x10,               // mov %rax,16(%rdi)
-      0x48, 0x83, 0300, (u8)Oplength(rde),  // add $i,%rax
-      0x48, 0x89, 0107, 0x08,               // mov %rax,8(%rdi)
+      0x48, 0x8b, 0107, offsetof(struct Machine, ip),     // mov 8(%rdi),%rax
+      0x48, 0x89, 0107, offsetof(struct Machine, oldip),  // mov %rax,16(%rdi)
+      0x48, 0x83, 0300, (u8)Oplength(rde),                // add $i,%rax
+      0x48, 0x89, 0107, offsetof(struct Machine, ip),     // mov %rax,8(%rdi)
   };
   AppendJit(m->path.jp, code, sizeof(code));
 #elif defined(__aarch64__)
   AppendJitMovReg(m->path.jp, 0, 19);
   AppendJitCall(m->path.jp, (void *)StartOp);
 #endif
-  AppendJitSetArg(m->path.jp, kParamRde, rde);
-  AppendJitSetArg(m->path.jp, kParamDisp, disp);
-  AppendJitSetArg(m->path.jp, kParamUimm0, uimm0);
-  AppendJitCall(m->path.jp, (void *)GetOp(Mopcode(rde)));
+}
+
+static void AddPath_EndOp(P) {
 #if defined(__x86_64__)
+  _Static_assert(offsetof(struct Machine, stashaddr) < 128, "");
   AppendJitMovReg(m->path.jp, kAmdDi, kAmdBx);
   u8 code2[] = {
-      0x48, 0x83, 0177, 0030, 0x00,  // cmpq $0x0,0x18(%rdi)
-      0x74, 0x05,                    // jnz +5
+      // cmpq $0x0,0x18(%rdi)
+      0x48,
+      0x83,
+      0177,
+      offsetof(struct Machine, stashaddr),
+      0x00,
+      // jnz +5
+      0x74,
+      0x05,
   };
   AppendJit(m->path.jp, code2, sizeof(code2));
   AppendJitCall(m->path.jp, (void *)CommitStash);
@@ -2143,16 +2148,33 @@ static bool AddPath(P) {
   AppendJitMovReg(m->path.jp, 0, 19);
   AppendJitCall(m->path.jp, (void *)EndOp);
 #endif
+}
+
+static bool AddPath(P) {
+  unassert(m->path.jp);
+  JIT_LOGF("adding [%s] from address %" PRIx64 " to path starting at %" PRIx64,
+           DescribeOp(m), GetPc(m), m->path.start);
+  ++m->path.elements;
+  STATISTIC(++path_elements);
+  AppendJitSetArg(m->path.jp, kParamDisp, Oplength(rde));
+  AddPath_StartOp(A);
+  AppendJitSetArg(m->path.jp, kParamRde, rde);
+  AppendJitSetArg(m->path.jp, kParamDisp, disp);
+  AppendJitSetArg(m->path.jp, kParamUimm0, uimm0);
+  AppendJitCall(m->path.jp, (void *)GetOp(Mopcode(rde)));
+  AddPath_EndOp(A);
   return true;
 }
 
 static bool CanJit(struct Machine *m) {
-  if (m->mode == XED_MODE_LONG) {
-    return !IsJitDisabled(&m->system->jit);
-  } else {
+  if (UNLIKELY(IsJitDisabled(&m->system->jit))) {
+    return false;
+  }
+  if (UNLIKELY(m->mode != XED_MODE_LONG)) {
     LOG_ONCE(LOGF("jit is only supported in long mode"));
     return false;
   }
+  return (u64)m->ip - m->system->codestart < m->system->codesize;
 }
 
 void JitlessDispatch(P) {
@@ -2179,7 +2201,7 @@ void GeneralDispatch(P) {
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
   opclass = ClassifyOp(rde);
-  if (CanJit(m) && (m->path.jp || (opclass == kOpNormal && CreatePath(m)))) {
+  if (m->path.jp || (opclass == kOpNormal && CanJit(m) && CreatePath(m))) {
     jitpc = GetJitPc(m->path.jp);
   } else {
     jitpc = 0;
@@ -2207,9 +2229,9 @@ void GeneralDispatch(P) {
 }
 
 void ExecuteInstruction(struct Machine *m) {
-  STATISTIC(++instructions_dispatched);
   u64 pc;
   nexgen32e_f func;
+  STATISTIC(++instructions_dispatched);
   if ((pc = GetPc(m)) - m->system->codestart < m->system->codesize) {
     func = atomic_load_explicit(m->fun + pc, memory_order_relaxed);
     unassert(func != NULL);

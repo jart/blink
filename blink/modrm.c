@@ -261,7 +261,7 @@ u8 *GetModrmRegisterWordPointerWriteOsz(P) {
   }
 }
 
-u8 *GetModrmRegisterXmmPointerRead(P, size_t n) {
+static u8 *GetModrmRegisterXmmPointerRead(P, size_t n) {
   if (IsModrmRegister(rde)) {
     return XmmRexbRm(m, rde);
   } else {
@@ -281,7 +281,7 @@ u8 *GetModrmRegisterXmmPointerRead16(P) {
   return GetModrmRegisterXmmPointerRead(A, 16);
 }
 
-u8 *GetModrmRegisterXmmPointerWrite(P, size_t n) {
+static u8 *GetModrmRegisterXmmPointerWrite(P, size_t n) {
   if (IsModrmRegister(rde)) {
     return XmmRexbRm(m, rde);
   } else {
@@ -299,4 +299,27 @@ u8 *GetModrmRegisterXmmPointerWrite8(P) {
 
 u8 *GetModrmRegisterXmmPointerWrite16(P) {
   return GetModrmRegisterXmmPointerWrite(A, 16);
+}
+
+static u8 *GetVectorAddress(P, size_t n) {
+  u8 *p;
+  i64 v;
+  if (IsModrmRegister(rde)) {
+    p = XmmRexbRm(m, rde);
+  } else {
+    v = ComputeAddress(A);
+    SetReadAddr(m, v, n);
+    if ((v & (n - 1)) || !(p = FindReal(m, v))) {
+      ThrowSegmentationFault(m, v);
+    }
+  }
+  return p;
+}
+
+u8 *GetMmxAddress(P) {
+  return GetVectorAddress(A, 8);
+}
+
+u8 *GetXmmAddress(P) {
+  return GetVectorAddress(A, 16);
 }
