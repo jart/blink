@@ -60,7 +60,7 @@ int SysCloseRange(struct System *s, u32 first, u32 last, u32 flags) {
   int rc;
   struct Fd *fd;
   struct Dll *e, *e2;
-  if (flags || last > INT_MAX || first > INT_MAX || first > last) {
+  if (flags || first > last) {
     return einval();
   }
   LockFds(&s->fds);

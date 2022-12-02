@@ -563,35 +563,89 @@ static int SysSetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   return rc;
 }
 
-static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
+static i64 SysReadImpl(struct Machine *m, struct Fd *fd, i64 addr, u64 size) {
   i64 rc;
-  struct Fd *fd;
   struct Iovs iv;
-  if (!(fd = GetAndLockFd(m, fildes))) return -1;
   unassert(fd->cb);
   InitIovs(&iv);
   if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1 &&
       (rc = fd->cb->readv(fd->systemfd, iv.p, iv.i)) != -1) {
     SetWriteAddr(m, addr, rc);
   }
-  UnlockFd(fd);
   FreeIovs(&iv);
   return rc;
 }
 
-static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
+static i64 SysWriteImpl(struct Machine *m, struct Fd *fd, i64 addr, u64 size) {
   i64 rc;
-  struct Fd *fd;
   struct Iovs iv;
-  if (!(fd = GetAndLockFd(m, fildes))) return -1;
   unassert(fd->cb);
   InitIovs(&iv);
   if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1 &&
       (rc = fd->cb->writev(fd->systemfd, iv.p, iv.i)) != -1) {
     SetReadAddr(m, addr, rc);
   }
-  UnlockFd(fd);
   FreeIovs(&iv);
+  return rc;
+}
+
+static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
+  i64 rc;
+  struct Fd *fd;
+  if (!(fd = GetAndLockFd(m, fildes))) return -1;
+  rc = SysReadImpl(m, fd, addr, size);
+  UnlockFd(fd);
+  return rc;
+}
+
+static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
+  i64 rc;
+  struct Fd *fd;
+  if (!(fd = GetAndLockFd(m, fildes))) return -1;
+  rc = SysWriteImpl(m, fd, addr, size);
+  UnlockFd(fd);
+  return rc;
+}
+
+static off_t TemporarySeek(struct Fd *fd, u64 offset) {
+  off_t oldpos;
+  if ((oldpos = lseek(fd->systemfd, 0, SEEK_CUR)) != -1 &&
+      lseek(fd->systemfd, offset, SEEK_SET) != -1) {
+    return oldpos;
+  } else {
+    return -1;
+  }
+}
+
+static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
+                    u64 offset) {
+  i64 rc;
+  off_t oldpos;
+  struct Fd *fd;
+  if (!(fd = GetAndLockFd(m, fildes))) return -1;
+  if ((oldpos = TemporarySeek(fd, offset)) != -1) {
+    rc = SysReadImpl(m, fd, addr, size);
+    lseek(fd->systemfd, oldpos, SEEK_SET);
+  } else {
+    rc = -1;
+  }
+  UnlockFd(fd);
+  return rc;
+}
+
+static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
+                     u64 offset) {
+  i64 rc;
+  off_t oldpos;
+  struct Fd *fd;
+  if (!(fd = GetAndLockFd(m, fildes))) return -1;
+  if ((oldpos = TemporarySeek(fd, offset)) != -1) {
+    rc = SysWriteImpl(m, fd, addr, size);
+    lseek(fd->systemfd, oldpos, SEEK_SET);
+  } else {
+    rc = -1;
+  }
+  UnlockFd(fd);
   return rc;
 }
 
@@ -1451,6 +1505,8 @@ void OpSyscall(P) {
     SYSCALL(0x007, SysPoll(m, di, si, dx));
     SYSCALL(0x008, SysLseek(m, di, si, dx));
     SYSCALL(0x009, SysMmap(m, di, si, dx, r0, r8, r9));
+    SYSCALL(0x011, SysPread(m, di, si, dx, r0));
+    SYSCALL(0x012, SysPwrite(m, di, si, dx, r0));
     SYSCALL(0x01A, SysMsync(m, di, si, dx));
     SYSCALL(0x00A, SysMprotect(m, di, si, dx));
     SYSCALL(0x00B, SysMunmap(m, di, si));

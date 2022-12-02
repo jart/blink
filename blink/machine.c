@@ -63,7 +63,7 @@ static void OpHintNopEv(P) {
 }
 
 static void OpCmc(P) {
-  m->flags = SetFlag(m->flags, FLAGS_CF, !GetFlag(m->flags, FLAGS_CF));
+  m->flags ^= 1;
 }
 
 static void OpClc(P) {

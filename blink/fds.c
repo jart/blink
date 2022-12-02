@@ -80,7 +80,7 @@ struct Fd *AllocateFd(struct Fds *fds, int minfd, int oflags) {
 struct Fd *GetFd(struct Fds *fds, int fildes) {
   struct Dll *e;
   if (fildes < 0) {
-    einval();
+    ebadf();
     return 0;
   }
   for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
