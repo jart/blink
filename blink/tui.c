@@ -2465,6 +2465,7 @@ static void ReadKeyboard(void) {
     CASE('T', OnXmmSize());
     CASE('u', OnUp());
     CASE('d', OnDown());
+    CASE('V', ++verbose);
     CASE('B', PopBreakpoint(&breakpoints));
     CASE('M', ToggleMouseTracking());
     CASE('\t', OnTab());

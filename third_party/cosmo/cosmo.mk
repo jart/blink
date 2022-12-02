@@ -55,6 +55,7 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/readansi_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/regex_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/renameat_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/atoi_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/resolvehostsreverse_test.com.ok			\
 		o/$(MODE)/third_party/cosmo/resolvehoststxt_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/reverse_test.com.ok					\
@@ -66,6 +67,9 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/scalevolume_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/secp384r1_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/putenv_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/note_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/once_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/wait_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/servicestxt_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/setitimer_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/setlocale_test.com.ok				\
@@ -82,9 +86,12 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/test_suite_ecp.com.ok				\
 		o/$(MODE)/third_party/cosmo/dll_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/asmdown_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/asin_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/atan2_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/argon2_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/counter_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/pthread_mutex_lock_test.com.ok			\
+		o/$(MODE)/third_party/cosmo/pthread_mutex_lock2_test.com.ok			\
 		o/$(MODE)/third_party/cosmo/pthread_spin_lock_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@

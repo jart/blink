@@ -335,7 +335,7 @@ static void OpBit(P) {
     p = RegRexbRm(m, rde);
   } else {
     v = MaskAddress(Eamode(rde), ComputeAddress(A) + bitdisp);
-    p = ReserveAddress(m, v, 1 << w);
+    p = ReserveAddress(m, v, 1 << w, false);
     if (op == 4) {
       SetReadAddr(m, v, 1 << w);
     } else {
@@ -2151,7 +2151,9 @@ void GeneralDispatch(P) {
   }
   m->ip += Oplength(rde);
   GetOp(Mopcode(rde))(A);
-  if (m->stashaddr) CommitStash(m);
+  if (m->stashaddr) {
+    CommitStash(m);
+  }
   if (jitpc) {
     newip = m->ip;
     m->ip = m->oldip;

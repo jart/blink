@@ -185,16 +185,15 @@ void CommitStash(struct Machine *m) {
   m->stashaddr = 0;
 }
 
-u8 *ReserveAddress(struct Machine *m, i64 v, size_t n) {
-  u8 *r;
-  unassert(n <= sizeof(m->opcache->stash));
+u8 *ReserveAddress(struct Machine *m, i64 v, size_t n, bool writable) {
   if ((v & 4095) + n <= 4096) {
     return ResolveAddress(m, v);
   }
   STATISTIC(++page_overlaps);
   m->stashaddr = v;
   m->opcache->stashsize = n;
-  r = m->opcache->stash;
+  m->opcache->writable = writable;
+  u8 *r = m->opcache->stash;
   CopyFromUser(m, r, v, n);
   return r;
 }
