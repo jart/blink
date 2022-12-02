@@ -32,7 +32,50 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/pshuf_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/popcnt_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/kprintf_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/memmem_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/memcmp_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/memory_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/memrchr_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/parsecidr_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/parsecontentlength_test.com.ok			\
+		o/$(MODE)/third_party/cosmo/parseforwarded_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/parsehoststxt_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/parsehttpdatetime_test.com.ok			\
+		o/$(MODE)/third_party/cosmo/parsehttpmessage_test.com.ok			\
+		o/$(MODE)/third_party/cosmo/parsehttprange_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/parseip_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/parseresolvconf_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/parseurl_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/pascalifydnsname_test.com.ok			\
+		o/$(MODE)/third_party/cosmo/pcmpstr_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/pingpong_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/prototxt_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/rand64_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/qsort_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/readansi_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/regex_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/renameat_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/resolvehostsreverse_test.com.ok			\
+		o/$(MODE)/third_party/cosmo/resolvehoststxt_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/reverse_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/rgb2ansi_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/rngset_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/round_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/roundup2log_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/sad16x8n_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/scalevolume_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/secp384r1_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/putenv_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/servicestxt_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/setitimer_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/setlocale_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/sigsetjmp_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/sin_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/sincos_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/sinh_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/sizetol_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/sleb128_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/snprintf_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/alu_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/bsu_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/divmul_test.com.ok					\
@@ -40,7 +83,8 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/test_suite_ecp.com.ok				\
 		o/$(MODE)/third_party/cosmo/dll_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/note_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/wait_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/asmdown_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/argon2_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/counter_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/pthread_mutex_lock2_test.com.ok			\
 		o/$(MODE)/third_party/cosmo/pthread_mutex_lock_test.com.ok			\

@@ -324,12 +324,12 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
     if (!(flags & MAP_FIXED)) {
       if (!virt) {
         if ((virt = FindVirtual(m->system, m->system->brk, size)) == -1) {
-          return -1;
+          goto Finished;
         }
         m->system->brk = virt + size;
       } else {
         if ((virt = FindVirtual(m->system, virt, size)) == -1) {
-          return -1;
+          goto Finished;
         }
       }
     }
@@ -348,15 +348,16 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
             abort();
           }
         }
-        UnlockFd(fd);
         unassert(size == rc);
         CopyToUserWrite(m, virt, tmp, size);
         free(tmp);
       }
     } else {
       FreeVirtual(m->system, virt, size);
-      return -1;
+      virt = -1;
     }
+  Finished:
+    if (fd) UnlockFd(fd);
     return virt;
   } else {
     return FreeVirtual(m->system, virt, size);
@@ -604,6 +605,7 @@ static i64 SysReadv(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
     rc = fd->cb->readv(fd->systemfd, iv.p, iv.i);
   }
+  UnlockFd(fd);
   FreeIovs(&iv);
   return rc;
 }
@@ -618,6 +620,7 @@ static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
     rc = fd->cb->writev(fd->systemfd, iv.p, iv.i);
   }
+  UnlockFd(fd);
   FreeIovs(&iv);
   return rc;
 }

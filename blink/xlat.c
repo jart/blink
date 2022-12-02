@@ -441,7 +441,7 @@ int XlatWait(int x) {
   if (x & 1) r |= WNOHANG, x &= ~1;
   if (x & 2) r |= WUNTRACED, x &= ~2;
   if (x & 8) r |= WCONTINUED, x &= ~8;
-  LOGF("%s %d not supported yet", "wait", x);
+  if (x) LOGF("%s %d not supported yet", "wait", x);
   return r;
 }
 
