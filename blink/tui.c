@@ -2940,12 +2940,10 @@ int main(int argc, char *argv[]) {
   sa.sa_flags = SA_SIGINFO;
   unassert(!sigaction(SIGHUP, &sa, 0));
   unassert(!sigaction(SIGQUIT, &sa, 0));
-  unassert(!sigaction(SIGABRT, &sa, 0));
   unassert(!sigaction(SIGUSR1, &sa, 0));
   unassert(!sigaction(SIGUSR2, &sa, 0));
   unassert(!sigaction(SIGPIPE, &sa, 0));
   unassert(!sigaction(SIGTERM, &sa, 0));
-  unassert(!sigaction(SIGCHLD, &sa, 0));
   unassert(!sigaction(SIGCONT, &sa, 0));
   sa.sa_sigaction = OnSigInt;
   unassert(!sigaction(SIGINT, &sa, 0));

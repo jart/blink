@@ -32,6 +32,8 @@
 #include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/macros.h"
+#include "blink/map.h"
+#include "blink/util.h"
 
 #if (defined(__x86_64__) || defined(__aarch64__)) && \
     !__has_feature(memory_sanitizer)
@@ -48,21 +50,14 @@
  * to memory at runtime, i.e. a small function that calls the functions.
  */
 
+// the maximum conceivable size of our blink program image
+#define kJitLeeway 1048576
+
+// how closely adjacent jit code needs to be, to our image
 #ifdef __x86_64__
 #define kJitProximity 0x7fffffff
 #else
 #define kJitProximity (kArmDispMax * 4)
-#endif
-
-#ifdef MAP_FIXED_NOREPLACE
-// The mmap() address parameter without MAP_FIXED is documented by
-// Linux as a hint for locality. However our testing indicates the
-// kernel is still likely to assign addresses that're outrageously
-// far away from what was requested. So we're just going to choose
-// something that's past the program break, and hope for the best.
-#define MAP_DEMAND MAP_FIXED_NOREPLACE
-#else
-#define MAP_DEMAND 0
 #endif
 
 #define JITSTAGE_CONTAINER(e) DLL_CONTAINER(struct JitStage, elem, e)
@@ -197,8 +192,8 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
   struct JitPage *jp;
   unassert(reserve > 0);
   unassert(reserve <= kJitPageSize - sizeof(struct JitPage));
-  LOCK(&jit->lock);
-  if (!jit->disabled) {
+  if (!IsJitDisabled(jit)) {
+    LOCK(&jit->lock);
     if (!jit->brk) {
       // we're going to politely ask the kernel for addresses starting
       // arbitrary megabytes past the end of our own executable's .bss
@@ -206,27 +201,40 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
       // away from a brk()-based libc malloc() function which may have
       // already allocated memory in this space. the reason it matters
       // is because the x86 and arm isas impose limits on displacement
-      jit->brk = (u8 *)ROUNDUP((intptr_t)END_OF_IMAGE, kJitPageSize) + 1048576;
+      jit->brk = (u8 *)ROUNDUP((intptr_t)IMAGE_END, kJitPageSize) + kJitLeeway;
     }
     e = dll_first(jit->pages);
     if (e && (jp = JITPAGE_CONTAINER(e))->index + reserve <= kJitPageSize) {
       jit->pages = dll_remove(jit->pages, &jp->elem);
     } else if ((jp = (struct JitPage *)calloc(1, sizeof(struct JitPage)))) {
       for (;;) {
-        jp->addr = (u8 *)mmap(jit->brk, kJitPageSize, PROT_READ | PROT_WRITE,
-                              MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0);
+        jp->addr =
+            (u8 *)Mmap(jit->brk, kJitPageSize, PROT_READ | PROT_WRITE,
+                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0, "jit");
         if (jp->addr != MAP_FAILED) {
-          distance = ABS(jp->addr - END_OF_IMAGE);
-          if (distance > kJitProximity - kJitPageSize) {
-            LOG_ONCE(
-                LOGF("mmap() returned suboptimal address %p that's %" PRIdPTR
-                     " bytes away from our program image which ends near %p",
-                     jp, distance, END_OF_IMAGE));
+          distance = ABS(jp->addr - IMAGE_END);
+          if (distance <= kJitProximity - kJitLeeway) {
+            jit->brk = jp->addr + kJitPageSize;
+            dll_init(&jp->elem);
+            break;
+          } else {
+            // we currently only support jitting when we're able to have
+            // the jit code adjacent to the blink image because our impl
+            // currently makes assumptions such as a call operation will
+            // have a fixed length (so it can be easily hopped over). if
+            // we're unable to acquire jit memory within proximity or if
+            // we run out of jit memory in proximity, then new jit paths
+            // won't be created anymore; and the program will still run.
+            LOGF("mmap() returned address %p that's too far away (%" PRIdPTR
+                 " bytes) from our program image (which ends near %p)",
+                 jp, distance, IMAGE_END);
+            unassert(!munmap(jp->addr, kJitPageSize));
+            DisableJit(jit);
+            free(jp);
+            jp = 0;
+            break;
           }
-          jit->brk = jp->addr + kJitPageSize;
-          dll_init(&jp->elem);
-          break;
-        } else if (errno == EEXIST) {
+        } else if (errno == MAP_DENIED) {
           jit->brk += kJitPageSize;
           continue;
         } else {
@@ -238,10 +246,10 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
         }
       }
     }
+    UNLOCK(&jit->lock);
   } else {
     jp = 0;
   }
-  UNLOCK(&jit->lock);
   if (jp) {
     unassert(!(jp->start & (kJitPageAlign - 1)));
     unassert(jp->start == jp->index);
@@ -297,10 +305,13 @@ static int CommitJit(struct JitPage *jp, long pagesize) {
   pageoff = ROUNDDOWN(jp->start, pagesize);
   if (pageoff > jp->committed) {
     // 1. OpenBSD requires we maintain a W^X invariant.
-    // 2. AARCH64 cache flush is so hard only the kernel knows how.
+    // 2. Aarch64 cache flush is mysterious so let the kernel do it.
     unassert(jp->start == jp->index);
     unassert(!mprotect(jp->addr + jp->committed, pageoff - jp->committed,
                        PROT_READ | PROT_EXEC));
+    MEM_LOGF("activated [%p,%p) w/ %zu kb", jp->addr + jp->committed,
+             jp->addr + jp->committed + (pageoff - jp->committed),
+             (pageoff - jp->committed) / 1024);
     unassert(jp->start == jp->index);
     while ((e = dll_first(jp->staged))) {
       js = JITSTAGE_CONTAINER(e);
@@ -329,7 +340,14 @@ static void ReinsertPage(struct Jit *jit, struct JitPage *jp) {
 }
 
 /**
- * Forces pending hooks to be written out.
+ * Forces activation of committed JIT chunks.
+ *
+ * Normally JIT chunks become active and have their function pointer
+ * hook updated automatically once the system page fills up with jit
+ * code. In some cases, such as unit tests, it's necessary to ensure
+ * that JIT code goes live sooner. The tradeoff of flushing is it'll
+ * lead to wasted memory and less performance, due to the additional
+ * mprotect() system call overhead.
  */
 int FlushJit(struct Jit *jit) {
   int count = 0;
@@ -362,7 +380,12 @@ StartOver:
 /**
  * Finishes writing chunk of code to JIT page.
  *
- * @return pointer to start of chunk, or NULL if an append operation
+ * @param jp is function builder object that was returned by StartJit();
+ *     this function always relinquishes the calling thread's ownership
+ *     of this object, even if this function returns an error
+ * @param hook points to a function pointer where the address of the JIT
+ *     code chunk will be stored, once it becomes active
+ * @return pointer to start of chunk, or zero if an append operation
  *     had previously failed due to lack of space
  */
 intptr_t ReleaseJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
@@ -423,7 +446,7 @@ intptr_t ReleaseJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
  */
 struct JitPage *StartJit(struct Jit *jit) {
   struct JitPage *jp;
-  if ((jp = AcquireJit(jit, 4096))) {
+  if ((jp = AcquireJit(jit, kJitPageFit))) {
     AppendJit(jp, kPrologue, sizeof(kPrologue));
   }
   return jp;
@@ -438,7 +461,9 @@ struct JitPage *StartJit(struct Jit *jit) {
  * @param jp is function builder object that was returned by StartJit();
  *     this function always relinquishes the calling thread's ownership
  *     of this object, even if this function returns an error
- * @return address of generated function, or NULL if an error occurred
+ * @param hook points to a function pointer where the address of the JIT
+ *     code chunk will be stored, once it becomes active
+ * @return address of generated function, or zero if an error occurred
  *     at some point in the function writing process
  */
 intptr_t FinishJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
@@ -481,6 +506,16 @@ intptr_t SpliceJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
   }
 }
 
+/**
+ * Moves one register's value into another register.
+ *
+ * The `src` and `dst` register indices are architecture defined.
+ * Predefined constants such as `kJitArg0` may be used to provide
+ * register indices to this function in a portable way.
+ *
+ * @param dst is the index of the destination register
+ * @param src is the index of the source register
+ */
 bool AppendJitMovReg(struct JitPage *jp, int dst, int src) {
   if (dst == src) return true;
 #if defined(__x86_64__)

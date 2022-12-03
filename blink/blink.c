@@ -89,12 +89,11 @@ int main(int argc, char *argv[], char **envp) {
     return 48;
   }
   sigfillset(&sa.sa_mask);
-  sa.sa_flags |= 0;
+  sa.sa_flags = 0;
   sa.sa_sigaction = OnSignal;
   unassert(!sigaction(SIGHUP, &sa, 0));
   unassert(!sigaction(SIGINT, &sa, 0));
   unassert(!sigaction(SIGQUIT, &sa, 0));
-  unassert(!sigaction(SIGABRT, &sa, 0));
   unassert(!sigaction(SIGUSR1, &sa, 0));
   unassert(!sigaction(SIGUSR2, &sa, 0));
   unassert(!sigaction(SIGPIPE, &sa, 0));

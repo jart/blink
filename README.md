@@ -102,23 +102,4 @@ a sister project sometime soon.
 
 ![Blink Flakes: The Original and Best Unexplained Errors](test/flakes.png)
 
-This very specific flake happens sometimes under heavy system load after
-joining threads when running on qemu-aarch64, qemu-mips, and qemu-s390x:
-
-```
-// this happens on aarch64, mips, and s390x
-error:test/libc/intrin/pthread_mutex_lock2_test.c:95: pthread_mutex_lock_contention(pthread_mutex_lock_recursive) on blink.local pid 22952 tid 22952
-        EXPECT_EQ(THREADS, started)
-                need 16 (or 0x10 or '►') =
-                 got 15 (or 0xf or '☼')
-        EUNKNOWN/0/No error information
-        third_party/cosmo/pthread_mutex_lock2_test.com @ blink.local
-1 / 284 tests failed
-make: *** [test/test.mk:90: o//mips64/third_party/cosmo/pthread_mutex_lock2_test.com.emulates] Error 1
-
-// instructions in question
-  40d1fe:       f0 83 05 8e c2 06 00 01         lock addl $0x1,0x6c28e(%rip)        # 479494 <started>
-...
-  40d3c2:       4c 63 25 cb c0 06 00    movslq 0x6c0cb(%rip),%r12        # 479494 <started>
-
-```
+There aren't any known flakes at this time.

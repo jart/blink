@@ -19,6 +19,7 @@
 #include <poll.h>
 #include <sys/uio.h>
 
+#include "blink/debug.h"
 #include "blink/machine.h"
 #include "blink/syscall.h"
 #include "blink/uart.h"
@@ -28,7 +29,7 @@ static int OpE9Read(struct Machine *m) {
   struct Fd *fd;
   struct iovec t = {&b, 1};
   if (!(fd = GetAndLockFd(m, 0))) return -1;
-  if (fd->cb->readv(fd->systemfd, &t, 1) == 1) {
+  if (IB(fd->cb->readv)(fd->systemfd, &t, 1) == 1) {
     return b;
   } else {
     return -1;
@@ -40,7 +41,7 @@ static int OpE9Write(struct Machine *m, u8 b) {
   struct Fd *fd;
   struct iovec t = {&b, 1};
   if (!(fd = GetAndLockFd(m, 1))) return -1;
-  rc = fd->cb->writev(fd->systemfd, &t, 1);
+  rc = IB(fd->cb->writev)(fd->systemfd, &t, 1);
   UnlockFd(fd);
   return rc;
 }
@@ -52,7 +53,7 @@ static int OpE9Poll(struct Machine *m) {
   if (!(fd = GetAndLockFd(m, 0))) return -1;
   pf.fd = fd->systemfd;
   pf.events = POLLIN | POLLOUT;
-  rc = fd->cb->poll(&pf, 1, 20);
+  rc = IB(fd->cb->poll)(&pf, 1, 20);
   if (rc > 0) rc = pf.revents;
   UnlockFd(fd);
   return rc;

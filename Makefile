@@ -28,18 +28,19 @@ VM = build/bootstrap/blink-darwin-arm64
 endif
 endif
 
-o:	o/$(MODE)/blink			\
+o:	o/$(MODE)/blink
+
+test:	o				\
 	o/$(MODE)/test
 
 check:	o				\
+	test				\
 	o/$(MODE)/third_party/cosmo
 
 emulates:				\
 	o/$(MODE)/test/asm		\
 	o/$(MODE)/test/emulates		\
 	o/$(MODE)/third_party/cosmo/emulates
-
-test: check
 
 tags: TAGS HTAGS
 

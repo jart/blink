@@ -19,7 +19,8 @@ CPPFLAGS +=				\
 	-D_DARWIN_C_SOURCE		\
 	-D_DEFAULT_SOURCE		\
 	-D_BSD_SOURCE			\
-	-D_GNU_SOURCE
+	-D_GNU_SOURCE			\
+	-D__BSD_VISIBLE
 
 LDLIBS +=				\
 	-lm				\
@@ -104,11 +105,10 @@ LDLIBS += -fsanitize=thread
 endif
 
 ifeq ($(MODE), msan)
-CC = clang++
+CC = clang --rtlib=compiler-rt
 AR = llvm-ar
 CPPFLAGS += -DDEBUG
-CFLAGS += -xc++ -Werror -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS += -fuse-ld=lld
+CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 CFLAGS += -fsanitize=memory
 LDLIBS += -fsanitize=memory
 endif

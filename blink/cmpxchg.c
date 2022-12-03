@@ -32,86 +32,78 @@ void OpCmpxchgEbAlGb(P) {
   if (!IsModrmRegister(rde)) {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
     didit = atomic_compare_exchange_strong_explicit(
-        (atomic_uchar *)ComputeReserveAddressWrite1(A),
-        m->ax, *ByteRexrReg(m, rde), memory_order_acq_rel,
-        memory_order_acquire);
+        (atomic_uchar *)ComputeReserveAddressWrite1(A), m->ax,
+        Get8(ByteRexrReg(m, rde)), memory_order_acq_rel, memory_order_acquire);
 #else
     OpUdImpl(m);
 #endif
   } else {
-    u8 *p, *q;
-    u64 x, y, z;
-    p = ByteRexbRm(m, rde);
-    q = ByteRexrReg(m, rde);
-    x = Get64(p);
-    y = Get8(m->ax);
-    z = Get8(q);
-    if ((didit = x == y)) {
-      Put64(p, z);
+    u8 *p = ByteRexbRm(m, rde);
+    u8 x = Get8(p);
+    if ((didit = x == Get8(m->ax))) {
+      Put8(p, Get8(ByteRexrReg(m, rde)));
     } else {
-      Put8(q, z);
+      Put8(m->ax, x);
     }
   }
   m->flags = SetFlag(m->flags, FLAGS_ZF, didit);
 }
 
 void OpCmpxchgEvqpRaxGvqp(P) {
-  bool didit;
   u8 *p, *q;
+  bool didit;
   q = RegRexrReg(m, rde);
   p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
     if (Lock(rde) && !((intptr_t)p & 7)) {
 #if LONG_BIT == 64
-      didit = atomic_compare_exchange_strong_explicit(
-          (atomic_ulong *)p, (unsigned long *)m->ax,
-          atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
-          memory_order_acq_rel, memory_order_acquire);
+      unsigned long ax =
+          atomic_load_explicit((atomic_ulong *)m->ax, memory_order_relaxed);
+      if (!(didit = atomic_compare_exchange_strong_explicit(
+                (atomic_ulong *)p, &ax,
+                atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
+                memory_order_acq_rel, memory_order_acquire))) {
+        atomic_store_explicit((atomic_ulong *)m->ax, ax, memory_order_relaxed);
+      }
 #else
       OpUdImpl(m);
 #endif
     } else {
-      u64 x, y, z;
-      x = Load64(p);
-      y = Get64(m->ax);
-      z = Get64(q);
-      if ((didit = x == y)) {
-        Store64(p, z);
+      u64 x = Load64(p);
+      if ((didit = x == Get64(m->ax))) {
+        Store64(p, Get64(q));
       } else {
-        Put64(q, z);
+        Put64(m->ax, x);
       }
     }
   } else if (!Osz(rde)) {
     if (Lock(rde) && !((intptr_t)p & 3)) {
-      didit = atomic_compare_exchange_strong_explicit(
-          (atomic_uint *)p, (unsigned int *)m->ax,
-          atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
-          memory_order_acq_rel, memory_order_acquire);
+      unsigned int ax =
+          atomic_load_explicit((atomic_uint *)m->ax, memory_order_relaxed);
+      if (!(didit = atomic_compare_exchange_strong_explicit(
+                (atomic_uint *)p, &ax,
+                atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
+                memory_order_acq_rel, memory_order_acquire))) {
+        Put64(m->ax, Little32(ax));
+      }
     } else {
-      u32 x, y, z;
-      x = Load32(p);
-      y = Get32(m->ax);
-      z = Get32(q);
-      if ((didit = x == y)) {
-        Store32(p, z);
+      u32 x = Load32(p);
+      if ((didit = x == Get32(m->ax))) {
+        Store32(p, Get32(q));
       } else {
-        Put32(q, z);
+        Put64(m->ax, x);
       }
     }
-    Put32(m->ax + 4, 0);
     if (IsModrmRegister(rde)) {
       Put32(p + 4, 0);
     }
   } else {
-    u16 x, y, z;
     unassert(!Lock(rde));
-    x = Load16(p);
-    y = Get16(m->ax);
-    z = Get16(q);
-    if ((didit = x == y)) {
-      Store16(p, z);
+    u16 x = Load16(p);
+    if ((didit = x == Get16(m->ax))) {
+      Store16(p, Get16(q));
     } else {
-      Put16(q, z);
+      Put16(m->ax, x);
     }
   }
   m->flags = SetFlag(m->flags, FLAGS_ZF, didit);

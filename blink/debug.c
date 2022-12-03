@@ -30,8 +30,10 @@
 #include "blink/endian.h"
 #include "blink/loader.h"
 #include "blink/log.h"
+#include "blink/map.h"
 #include "blink/memory.h"
 #include "blink/stats.h"
+#include "blink/util.h"
 
 #define MAX_BACKTRACE_LINES 64
 
@@ -115,8 +117,8 @@ void LoadDebugSymbols(struct Elf *elf) {
   snprintf(buf, sizeof(buf), "%s.dbg", elf->prog);
   if ((fd = open(buf, O_RDONLY)) != -1) {
     if (fstat(fd, &st) != -1 &&
-        (elfmap = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0)) !=
-            MAP_FAILED) {
+        (elfmap = Mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0,
+                       "debug")) != MAP_FAILED) {
       elf->ehdr = (Elf64_Ehdr *)elfmap;
       elf->size = st.st_size;
     }

@@ -13,10 +13,12 @@
 #include "blink/tsan.h"
 #include "blink/x86.h"
 
-#define kParamRde   1
-#define kParamDisp  2
-#define kParamUimm0 3
-#define kParamArg   4
+#define kCookie 31337
+
+#define kArgRde   1
+#define kArgDisp  2
+#define kArgUimm0 3
+#define kArgArg   4
 
 #define kOpNormal    0
 #define kOpBranching 1
@@ -133,7 +135,7 @@ struct System {
   i64 codestart;
   unsigned long codesize;
   pthread_mutex_t real_lock;
-  _Atomic(nexgen32e_f) * fun;
+  _Atomic(nexgen32e_f) *fun;
   struct SystemReal real GUARDED_BY(real_lock);
   pthread_mutex_t realfree_lock;
   struct SystemRealFree *realfree PT_GUARDED_BY(realfree_lock);
@@ -171,7 +173,7 @@ struct MachineTlb {
 };
 
 struct Machine {                           //
-  _Atomic(nexgen32e_f) * fun;              // DISPATCHER
+  _Atomic(nexgen32e_f) *fun;               // DISPATCHER
   u64 ip;                                  //
   u64 oldip;                               //
   i64 stashaddr;                           //
@@ -258,6 +260,7 @@ struct Machine {                           //
   sigset_t thread_sigmask;                 //
   struct Dll elem GUARDED_BY(system->machines_lock);
   struct OpCache opcache[1];
+  u32 cookie;
 };
 
 extern _Thread_local struct Machine *g_machine;

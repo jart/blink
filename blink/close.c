@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/debug.h"
 #include "blink/dll.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
@@ -34,7 +35,7 @@ static int CloseFd(struct System *s, struct Fd *fd) {
     if (fd->dirstream) {
       rc = closedir(fd->dirstream);
     } else {
-      rc = fd->cb->close(sf);
+      rc = IB(fd->cb->close)(sf);
     }
     FreeFd(&s->fds, fd);
   } else {

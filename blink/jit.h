@@ -12,23 +12,33 @@
 #define kJitPageAlign 16
 
 #ifdef __x86_64__
-#define kJitRes1 kAmdAx
-#define kJitRes2 kAmdDx
-#define kJitArg1 kAmdDi
-#define kJitArg2 kAmdSi
-#define kJitArg3 kAmdDx
-#define kJitArg4 kAmdCx
-#define kJitArg5 8
-#define kJitArg6 9
+#define kJitRes0 kAmdAx
+#define kJitRes1 kAmdDx
+#define kJitArg0 kAmdDi
+#define kJitArg1 kAmdSi
+#define kJitArg2 kAmdDx
+#define kJitArg3 kAmdCx
+#define kJitArg4 8
+#define kJitArg5 9
+#define kJitSav0 kAmdBx
+#define kJitSav1 12
+#define kJitSav2 13
+#define kJitSav3 14
+#define kJitSav4 15
 #else
-#define kJitRes1 0
-#define kJitRes2 1
-#define kJitArg1 0
-#define kJitArg2 1
-#define kJitArg3 2
-#define kJitArg4 3
-#define kJitArg5 4
-#define kJitArg6 5
+#define kJitRes0 0
+#define kJitRes1 1
+#define kJitArg0 0
+#define kJitArg1 1
+#define kJitArg2 2
+#define kJitArg3 3
+#define kJitArg4 4
+#define kJitArg5 5
+#define kJitSav0 19
+#define kJitSav1 20
+#define kJitSav2 21
+#define kJitSav3 22
+#define kJitSav4 23
 #endif
 
 #ifdef __x86_64__

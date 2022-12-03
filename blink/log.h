@@ -13,6 +13,7 @@
 #define LOG_SIG 0
 #define LOG_ASM 0
 #define LOG_JIT 0
+#define LOG_MEM 0
 
 #if LOG_ENABLED
 #define LOGF(...) Log(__FILE__, __LINE__, __VA_ARGS__)
@@ -42,6 +43,12 @@
 #define JIT_LOGF(...) Log(__FILE__, __LINE__, "(jit) " __VA_ARGS__)
 #else
 #define JIT_LOGF(...) (void)0
+#endif
+
+#if LOG_MEM
+#define MEM_LOGF(...) Log(__FILE__, __LINE__, "(mem) " __VA_ARGS__)
+#else
+#define MEM_LOGF(...) (void)0
 #endif
 
 #if LOG_ENABLED

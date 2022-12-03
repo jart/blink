@@ -52,6 +52,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/map.h"
 #include "blink/memory.h"
 #include "blink/mop.h"
 #include "blink/pml4t.h"
@@ -569,7 +570,7 @@ static i64 SysReadImpl(struct Machine *m, struct Fd *fd, i64 addr, u64 size) {
   unassert(fd->cb);
   InitIovs(&iv);
   if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1 &&
-      (rc = fd->cb->readv(fd->systemfd, iv.p, iv.i)) != -1) {
+      (rc = IB(fd->cb->readv)(fd->systemfd, iv.p, iv.i)) != -1) {
     SetWriteAddr(m, addr, rc);
   }
   FreeIovs(&iv);
@@ -582,7 +583,7 @@ static i64 SysWriteImpl(struct Machine *m, struct Fd *fd, i64 addr, u64 size) {
   unassert(fd->cb);
   InitIovs(&iv);
   if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1 &&
-      (rc = fd->cb->writev(fd->systemfd, iv.p, iv.i)) != -1) {
+      (rc = IB(fd->cb->writev)(fd->systemfd, iv.p, iv.i)) != -1) {
     SetReadAddr(m, addr, rc);
   }
   FreeIovs(&iv);
@@ -657,7 +658,7 @@ static i64 SysReadv(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   unassert(fd->cb);
   InitIovs(&iv);
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
-    rc = fd->cb->readv(fd->systemfd, iv.p, iv.i);
+    rc = IB(fd->cb->readv)(fd->systemfd, iv.p, iv.i);
   }
   UnlockFd(fd);
   FreeIovs(&iv);
@@ -672,7 +673,7 @@ static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   unassert(fd->cb);
   InitIovs(&iv);
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
-    rc = fd->cb->writev(fd->systemfd, iv.p, iv.i);
+    rc = IB(fd->cb->writev)(fd->systemfd, iv.p, iv.i);
   }
   UnlockFd(fd);
   FreeIovs(&iv);
@@ -776,7 +777,7 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
   int (*func)(int, unsigned long, ...);
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
   unassert(fd->cb);
-  func = fd->cb->ioctl;
+  func = IB(fd->cb->ioctl);
   systemfd = atomic_load_explicit(&fd->systemfd, memory_order_relaxed);
   switch (request) {
     case TIOCGWINSZ_LINUX:
@@ -1284,7 +1285,7 @@ static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
             hfds[0].events = (((ev & POLLIN_LINUX) ? POLLIN : 0) |
                               ((ev & POLLOUT_LINUX) ? POLLOUT : 0) |
                               ((ev & POLLPRI_LINUX) ? POLLPRI : 0));
-            switch (fd->cb->poll(hfds, 1, 0)) {
+            switch (IB(fd->cb->poll)(hfds, 1, 0)) {
               case 0:
                 Write16(gfds[i].revents, 0);
                 break;

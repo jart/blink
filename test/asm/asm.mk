@@ -43,5 +43,5 @@ o/$(MODE)/test/asm/%.com:						\
 	echo "echo testing $<" >>$@
 	echo "$(VM) $< || exit" >>$@
 	echo "echo testing o/$(MODE)/blink/blink $<" >>$@
-	echo "$(VM) o/$(MODE)/blink/blink $< || exit" >>$@
+	echo "o/$(MODE)/blink/blink $< || exit" >>$@
 	chmod +x $@

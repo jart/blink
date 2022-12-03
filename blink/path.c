@@ -107,40 +107,56 @@ void AbandonPath(struct Machine *m) {
 }
 
 void AddPath_StartOp(struct Machine *m, u64 rde) {
-#if !LOG_JIT && defined(__x86_64__)
   _Static_assert(offsetof(struct Machine, ip) < 128, "");
   _Static_assert(offsetof(struct Machine, oldip) < 128, "");
-  AppendJitMovReg(m->path.jp, kAmdDi, kAmdBx);
-  i8 ip = offsetof(struct Machine, ip);
-  i8 oldip = offsetof(struct Machine, oldip);
-  i8 delta = Oplength(rde);
+  AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
+  u8 len = Oplength(rde);
+  u8 ip = offsetof(struct Machine, ip);
+  u8 oldip = offsetof(struct Machine, oldip);
+#if !LOG_JIT && defined(__x86_64__)
   u8 code[] = {
-      0x48, 0x8b, 0107, (u8)ip,     // mov 8(%rdi),%rax
-      0x48, 0x89, 0107, (u8)oldip,  // mov %rax,16(%rdi)
-      0x48, 0x83, 0300, (u8)delta,  // add $delta,%rax
-      0x48, 0x89, 0107, (u8)ip,     // mov %rax,8(%rdi)
+      0x48, 0x8b, 0107, ip,     // mov 8(%rdi),%rax
+      0x48, 0x89, 0107, oldip,  // mov %rax,16(%rdi)
+      0x48, 0x83, 0300, len,    // add $len,%rax
+      0x48, 0x89, 0107, ip,     // mov %rax,8(%rdi)
+  };
+  AppendJit(m->path.jp, code, sizeof(code));
+#elif !LOG_JIT && defined(__aarch64__)
+  u32 code[] = {
+      0xf9400001 | (ip / 8) << 10,     // ldr x1, [x0, #ip]
+      0xf9000001 | (oldip / 8) << 10,  // str x1, [x0, #oldip]
+      0x91000021 | len << 10,          // add x1, x1, #len
+      0xf9000001 | (ip / 8) << 10,     // str x1, [x0, #ip]
   };
   AppendJit(m->path.jp, code, sizeof(code));
 #else
-  AppendJitSetArg(m->path.jp, kParamDisp, Oplength(rde));
-  AppendJitMovReg(m->path.jp, 0, 19);
+  (void)ip;
+  (void)oldip;
+  AppendJitSetArg(m->path.jp, kArgDisp, len);
   AppendJitCall(m->path.jp, (void *)StartOp);
 #endif
 }
 
 void AddPath_EndOp(struct Machine *m) {
-#if !LOG_JIT && defined(__x86_64__)
   _Static_assert(offsetof(struct Machine, stashaddr) < 128, "");
-  AppendJitMovReg(m->path.jp, kAmdDi, kAmdBx);
-  i8 stashaddr = offsetof(struct Machine, stashaddr);
-  u8 code2[] = {
-      0x48, 0x83, 0177, (u8)stashaddr, 0x00,  // cmpq $0x0,0x18(%rdi)
-      0x74, 0x05,                             // jnz +5
+  AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
+  u8 stashaddr = offsetof(struct Machine, stashaddr);
+#if !LOG_JIT && defined(__x86_64__)
+  u8 code[] = {
+      0x48, 0x83, 0177, stashaddr, 0x00,  // cmpq $0x0,0x18(%rdi)
+      0x74, 0x05,                         // jnz +5
   };
-  AppendJit(m->path.jp, code2, sizeof(code2));
+  AppendJit(m->path.jp, code, sizeof(code));
   AppendJitCall(m->path.jp, (void *)CommitStash);
-#elif defined(__aarch64__)
-  AppendJitMovReg(m->path.jp, 0, 19);
+#elif !LOG_JIT && defined(__aarch64__)
+  u32 code[] = {
+      0xf9400001 | (stashaddr / 8) << 10,  // ldr x1, [x0, #stashaddr]
+      0xb4000001 | 2 << 5,                 // cbz x1, +2
+  };
+  AppendJit(m->path.jp, code, sizeof(code));
+  AppendJitCall(m->path.jp, (void *)CommitStash);
+#else
+  (void)stashaddr;
   AppendJitCall(m->path.jp, (void *)EndOp);
 #endif
 }
@@ -149,9 +165,9 @@ bool AddPath(P) {
   unassert(m->path.jp);
   JIT_LOGF("adding [%s] from address %" PRIx64 " to path starting at %" PRIx64,
            DescribeOp(m), GetPc(m), m->path.start);
-  AppendJitSetArg(m->path.jp, kParamRde, rde);
-  AppendJitSetArg(m->path.jp, kParamDisp, disp);
-  AppendJitSetArg(m->path.jp, kParamUimm0, uimm0);
+  AppendJitSetArg(m->path.jp, kArgRde, rde);
+  AppendJitSetArg(m->path.jp, kArgDisp, disp);
+  AppendJitSetArg(m->path.jp, kArgUimm0, uimm0);
   AppendJitCall(m->path.jp, (void *)GetOp(Mopcode(rde)));
   return true;
 }

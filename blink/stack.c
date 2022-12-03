@@ -58,34 +58,30 @@ static void FastRet(P) {
 
 static void AcceleratePushPop(struct Machine *m, u64 rde, void op(P)) {
   if (m->path.jp && !Osz(rde) && Mode(rde) == XED_MODE_LONG) {
-    AppendJitSetArg(m->path.jp, kParamRde, rde & kRegRexbSrmMask);
+    AppendJitSetArg(m->path.jp, kArgRde, rde & kRegRexbSrmMask);
     AppendJitCall(m->path.jp, (void *)op);
   }
 }
 
 static void WriteStackWord(u8 *p, u64 rde, u32 osz, u64 x) {
-  IGNORE_RACES_START();
   if (osz == 8) {
-    Write64(p, x);
+    Store64(p, x);
   } else if (osz == 2) {
-    Write16(p, x);
+    Store16(p, x);
   } else {
-    Write32(p, x);
+    Store32(p, x);
   }
-  IGNORE_RACES_END();
 }
 
 static u64 ReadStackWord(u8 *p, u32 osz) {
   u64 x;
-  IGNORE_RACES_START();
   if (osz == 8) {
-    x = Read64(p);
+    x = Load64(p);
   } else if (osz == 2) {
-    x = Read16(p);
+    x = Load16(p);
   } else {
-    x = Read32(p);
+    x = Load32(p);
   }
-  IGNORE_RACES_END();
   return x;
 }
 
@@ -113,10 +109,8 @@ static void PushN(P, u64 x, unsigned mode, unsigned osz) {
       __builtin_unreachable();
   }
   w = AccessRam(m, v, osz, p, b, false);
-  IGNORE_RACES_START();
   WriteStackWord(w, rde, osz, x);
   EndStore(m, v, osz, p, b);
-  IGNORE_RACES_END();
 }
 
 void Push(P, u64 x) {
@@ -185,7 +179,7 @@ static void OpCall(P, u64 func) {
 void OpCallJvds(P) {
   OpCall(A, m->ip + disp);
   if (m->path.jp && !Osz(rde) && Mode(rde) == XED_MODE_LONG) {
-    AppendJitSetArg(m->path.jp, kParamDisp, disp);
+    AppendJitSetArg(m->path.jp, kArgDisp, disp);
     AppendJitCall(m->path.jp, (void *)FastCall);
   }
 }

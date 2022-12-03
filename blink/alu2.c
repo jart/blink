@@ -190,7 +190,7 @@ void OpAluw(P) {
       z = kAlu[(Opcode(rde) & 070) >> 3][ALU_INT64](x, y, &m->flags);
       Store64(p, z);
       if (m->path.jp && IsModrmRegister(rde)) {
-        AppendJitSetArg(m->path.jp, kParamRde,
+        AppendJitSetArg(m->path.jp, kArgRde,
                         rde & (kRexbRmMask | kRexrRegMask));
         AppendJitCall(m->path.jp, (void *)kAluReg64[(Opcode(rde) & 070) >> 3]);
       }
@@ -222,7 +222,7 @@ void OpAluw(P) {
     if (IsModrmRegister(rde)) {
       Put32(p + 4, 0);
       if (m->path.jp) {
-        AppendJitSetArg(m->path.jp, kParamRde,
+        AppendJitSetArg(m->path.jp, kArgRde,
                         rde & (kRexbRmMask | kRexrRegMask));
         AppendJitCall(m->path.jp, (void *)kAluReg32[(Opcode(rde) & 070) >> 3]);
       }

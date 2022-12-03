@@ -33,6 +33,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/map.h"
 #include "blink/memory.h"
 #include "blink/util.h"
 
@@ -229,8 +230,8 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
     exit(201);
   }
   elf->mapsize = st.st_size;
-  elf->map =
-      (char *)mmap(0, elf->mapsize, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
+  elf->map = (char *)Mmap(0, elf->mapsize, PROT_READ | PROT_WRITE, MAP_PRIVATE,
+                          fd, 0, "loader");
   if (elf->map == MAP_FAILED) {
     LOGF("mmap failed: %s", strerror(errno));
     exit(200);

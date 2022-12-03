@@ -38,6 +38,7 @@
 #include "blink/errno.h"
 #include "blink/linux.h"
 #include "blink/log.h"
+#include "blink/map.h"
 #include "blink/sigwinch.h"
 #include "blink/xlat.h"
 

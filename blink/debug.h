@@ -1,7 +1,19 @@
 #ifndef BLINK_DEBUG_H_
 #define BLINK_DEBUG_H_
+#include "blink/assert.h"
 #include "blink/fds.h"
 #include "blink/machine.h"
+
+#if !defined(NDEBUG) && defined(__GNUC__)
+#define IB(x)                      \
+  __extension__({                  \
+    __typeof__(x) x_ = (x);        \
+    unassert((intptr_t)x_ > 4096); \
+    x_;                            \
+  })
+#else
+#define IB(x) (x)
+#endif
 
 #define LOGCPU(M, FMT, ...)                                                   \
   LOGF(FMT " IP %" PRIx64 " AX %" PRIx64 " CX %" PRIx64 " DX %" PRIx64        \

@@ -4,10 +4,10 @@
 #include "blink/mop.h"
 
 #ifdef __APPLE__
-#define END_OF_IMAGE ((u8 *)&AcquireJit)
+#define IMAGE_END ((u8 *)&AcquireJit)
 #else
 extern u8 end[];
-#define END_OF_IMAGE end
+#define IMAGE_END end
 #endif
 
 #endif /* BLINK_END_H_ */

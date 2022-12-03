@@ -37,9 +37,11 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/map.h"
 #include "blink/memory.h"
 #include "blink/pml4t.h"
 #include "blink/real.h"
+#include "blink/util.h"
 
 #define MAX_THREAD_IDS    32768
 #define MINIMUM_THREAD_ID 262144     // our fake tids start here
@@ -47,9 +49,14 @@
 #define MAX_MEMORY        268435456  // 256mb ought to be enough for anyone
 #define JIT_RESERVE       134217728  // 128mb is max branch displacement on arm
 
-#ifndef MAP_NORESERVE
-#define MAP_NORESERVE 0
-#endif
+void *Mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset,
+           const char *owner) {
+  void *res;
+  res = mmap(addr, length, prot, flags, fd, offset);
+  MEM_LOGF("%s allocated [%p,%p) w/ %zu kb", owner, res, res + length,
+           length / 1024);
+  return res;
+}
 
 static void FillPage(u8 *p, int c) {
   IGNORE_RACES_START();
@@ -110,9 +117,9 @@ static void FreeSystemRealFree(struct System *s) {
 struct System *NewSystem(void) {
   void *p;
   struct System *s;
-  if ((p = mmap(END_OF_IMAGE + JIT_RESERVE, MAX_MEMORY, PROT_NONE,
-                MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0)) ==
-      MAP_FAILED) {
+  if ((p = Mmap(IMAGE_END + JIT_RESERVE, MAX_MEMORY, PROT_NONE,
+                MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0,
+                "system")) == MAP_FAILED) {
     LOGF("could not register %zu bytes of memory: %s", MAX_MEMORY,
          strerror(errno));
     return 0;
@@ -138,6 +145,7 @@ void FreeMachineUnlocked(struct Machine *m) {
   }
   CollectGarbage(m);
   free(m->freelist.p);
+  m->cookie = 0;
   free(m);
 }
 
@@ -195,7 +203,9 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
     memset(m, 0, sizeof(*m));
     ResetCpu(m);
   }
+  m->cookie = kCookie;
   m->system = system;
+  m->oldip = -1;
   if (parent) {
     m->tid = (system->next_tid++ & (MAX_THREAD_IDS - 1)) + MINIMUM_THREAD_ID;
   } else {
@@ -257,8 +267,9 @@ int ReserveReal(struct System *s, long n)
     if (n > MAX_MEMORY) {
       return enomem();
     }
-    if (mmap(s->real.p + s->real.n, n - s->real.n, PROT_READ | PROT_WRITE,
-             MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0) != MAP_FAILED) {
+    if (Mmap(s->real.p + s->real.n, n - s->real.n, PROT_READ | PROT_WRITE,
+             MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0,
+             "real") != MAP_FAILED) {
       for (i = 0; i < n - s->real.n; i += 4096) {
         PoisonPage(s->real.p + s->real.n + i);
       }

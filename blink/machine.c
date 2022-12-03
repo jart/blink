@@ -30,6 +30,7 @@
 #include "blink/bitscan.h"
 #include "blink/builtin.h"
 #include "blink/case.h"
+#include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/fpu.h"
@@ -463,8 +464,7 @@ static void AddPath_RegOp(P, void *op64, void *op32, void *op16,
                           void *general) {
   if (m->path.jp) {
     if (IsModrmRegister(rde)) {
-      AppendJitSetArg(m->path.jp, kParamRde,
-                      rde & (kRexbRmMask | kRexrRegMask));
+      AppendJitSetArg(m->path.jp, kArgRde, rde & (kRexbRmMask | kRexrRegMask));
       if (Rexw(rde)) {
         AppendJitCall(m->path.jp, op64);
       } else if (!Osz(rde)) {
@@ -473,8 +473,8 @@ static void AddPath_RegOp(P, void *op64, void *op32, void *op16,
         AppendJitCall(m->path.jp, op16);
       }
     } else {
-      AppendJitSetArg(m->path.jp, kParamRde, rde);
-      AppendJitSetArg(m->path.jp, kParamDisp, disp);
+      AppendJitSetArg(m->path.jp, kArgRde, rde);
+      AppendJitSetArg(m->path.jp, kArgDisp, disp);
       AppendJitCall(m->path.jp, general);
     }
   }
@@ -742,8 +742,8 @@ static void Aluwi(P, const aluop_f ops[4]) {
   WriteRegisterOrMemory(
       rde, a, ops[RegLog2(rde)](ReadMemory(rde, a), uimm0, &m->flags));
   if (m->path.jp && IsModrmRegister(rde) && !Osz(rde)) {
-    AppendJitSetArg(m->path.jp, kParamRde, rde & kRexbRmMask);
-    AppendJitSetArg(m->path.jp, kParamUimm0, uimm0);
+    AppendJitSetArg(m->path.jp, kArgRde, rde & kRexbRmMask);
+    AppendJitSetArg(m->path.jp, kArgUimm0, uimm0);
     AppendJitCall(m->path.jp, (void *)kAluwiReg[Rexw(rde)][ModrmReg(rde)]);
   }
 }
@@ -1297,8 +1297,8 @@ static const nexgen32e_f kOp0ff[] = {
 static void Op0ff(P) {
   kOp0ff[ModrmReg(rde)](A);
   if (m->path.jp) {
-    AppendJitSetArg(m->path.jp, kParamRde, rde);
-    AppendJitSetArg(m->path.jp, kParamDisp, disp);
+    AppendJitSetArg(m->path.jp, kArgRde, rde);
+    AppendJitSetArg(m->path.jp, kArgDisp, disp);
     AppendJitCall(m->path.jp, (void *)kOp0ff[ModrmReg(rde)]);
   }
 }
@@ -2238,8 +2238,7 @@ void ExecuteInstruction(struct Machine *m) {
   nexgen32e_f func;
   STATISTIC(++instructions_dispatched);
   if ((pc = GetPc(m)) - m->system->codestart < m->system->codesize) {
-    func = atomic_load_explicit(m->fun + pc, memory_order_relaxed);
-    unassert(func != NULL);
+    func = IB(atomic_load_explicit(m->fun + pc, memory_order_relaxed));
     if (!m->path.jp) {
       func(DISPATCH_NOTHING);
       return;

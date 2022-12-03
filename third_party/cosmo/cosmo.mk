@@ -69,12 +69,11 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/putenv_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/note_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/once_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/wait_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/mu_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/servicestxt_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/setitimer_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/setlocale_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/sigsetjmp_test.com.ok				\
-		o/$(MODE)/third_party/cosmo/sin_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/sincos_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/sinh_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/sizetol_test.com.ok					\
@@ -141,6 +140,7 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/kprintf_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/snprintf_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/once_test.com.emulates			\
+		o/$(MODE)/aarch64/third_party/cosmo/mu_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/note_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/counter_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/dll_test.com.emulates			\
@@ -191,6 +191,7 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/mips64/third_party/cosmo/kprintf_test.com.emulates			\
 		o/$(MODE)/mips64/third_party/cosmo/snprintf_test.com.emulates			\
 		o/$(MODE)/mips64/third_party/cosmo/once_test.com.emulates			\
+		o/$(MODE)/mips64/third_party/cosmo/mu_test.com.emulates				\
 		o/$(MODE)/mips64/third_party/cosmo/note_test.com.emulates			\
 		o/$(MODE)/mips64/third_party/cosmo/counter_test.com.emulates			\
 		o/$(MODE)/mips64/third_party/cosmo/dll_test.com.emulates			\
@@ -254,6 +255,7 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/s390x/third_party/cosmo/kprintf_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/snprintf_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/once_test.com.emulates			\
+		o/$(MODE)/s390x/third_party/cosmo/mu_test.com.emulates				\
 		o/$(MODE)/s390x/third_party/cosmo/note_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/counter_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/dll_test.com.emulates				\
