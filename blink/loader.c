@@ -67,8 +67,7 @@ static void LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
 
   if (ReserveVirtual(m->system, ROUNDDOWN(vaddr, 4096),
                      ROUNDUP(vaddr + memsz, 4096) - ROUNDDOWN(vaddr, 4096),
-                     PAGE_RSRV | PAGE_U | PAGE_RW | PAGE_V |
-                         (flags & PF_X ? 0 : PAGE_XD)) == -1) {
+                     PAGE_U | PAGE_RW | (flags & PF_X ? 0 : PAGE_XD)) == -1) {
     LOGF("failed to reserve virtual memory for elf program header");
     exit(200);
   }
@@ -236,7 +235,7 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
     Write64(m->sp, sp);
     m->system->cr3 = AllocateLinearPage(m->system);
     if (ReserveVirtual(m->system, sp - kStackSize, kStackSize,
-                       PAGE_RSRV | PAGE_U | PAGE_RW | PAGE_V) == -1) {
+                       PAGE_U | PAGE_RW) == -1) {
       LOGF("ReserveVirtual failed");
       exit(200);
     }

@@ -51,6 +51,7 @@ static int Exec(char *prog, char **argv, char **envp) {
   unassert((g_machine = NewMachine(NewSystem(), 0)));
   // DisableJit(&g_machine->system->jit);
   g_machine->system->exec = Exec;
+  g_machine->system->mode = XED_MODE_LONG;
   g_machine->mode = XED_MODE_LONG;
   if (!old) {
     LoadProgram(g_machine, prog, argv, envp);

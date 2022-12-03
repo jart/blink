@@ -290,7 +290,7 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
   if (addr >= kMinBrk) {
     if (addr > m->system->brk) {
       if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
-                         PAGE_V | PAGE_RW | PAGE_U | PAGE_RSRV) != -1) {
+                         PAGE_RW | PAGE_U) != -1) {
         m->system->brk = addr;
       }
     } else if (addr < m->system->brk) {
@@ -312,12 +312,15 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
   void *tmp;
   ssize_t rc;
   struct Fd *fd;
+  if (!IsValidAddrSize(virt, size)) {
+    return einval();
+  }
   if (flags & MAP_GROWSDOWN_LINUX) {
     errno = ENOTSUP;
     return -1;
   }
   if (prot & PROT_READ) {
-    key = PAGE_RSRV | PAGE_U | PAGE_V;
+    key = PAGE_U;
     if (prot & PROT_WRITE) key |= PAGE_RW;
     if (!(prot & PROT_EXEC)) key |= PAGE_XD;
     flags = XlatMapFlags(flags);
@@ -331,19 +334,24 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
     } else {
       fd = 0;
     }
+    LOCK(&m->system->mmap_lock);
     if (!(flags & MAP_FIXED)) {
       if (!virt) {
         if ((virt = FindVirtual(m->system, m->system->brk, size)) == -1) {
+          UNLOCK(&m->system->mmap_lock);
           goto Finished;
         }
-        m->system->brk = virt + size;
+        m->system->brk = ROUNDUP(virt + size, 4096);
       } else {
         if ((virt = FindVirtual(m->system, virt, size)) == -1) {
+          UNLOCK(&m->system->mmap_lock);
           goto Finished;
         }
       }
     }
-    if (ReserveVirtual(m->system, virt, size, key) != -1) {
+    rc = ReserveVirtual(m->system, virt, size, key);
+    UNLOCK(&m->system->mmap_lock);
+    if (rc != -1) {
       if (fd) {
         // TODO(jart): Raise SIGBUS on i/o error.
         // TODO(jart): Support lazy file mappings.

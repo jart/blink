@@ -3,6 +3,7 @@
 #include <pthread.h>
 #include <setjmp.h>
 #include <signal.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 
 #include "blink/dll.h"
@@ -26,7 +27,7 @@
 
 #define kInstructionBytes 40
 
-#define kStackTop  0x800000000000
+#define kStackTop  0x7f0000000000
 #define kStackSize (8 * 1024 * 1024)
 #define kMinBrk    (2 * 1024 * 1024)
 
@@ -45,6 +46,9 @@
 #define DISPATCH_NOTHING m, 0, 0, 0
 
 #define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, elem, e)
+
+#define IsDevirtualized(x) \
+  (!atomic_load_explicit(&(x)->virtual, memory_order_relaxed))
 
 struct Machine;
 
@@ -134,8 +138,10 @@ struct OpCache {
 struct System {
   u64 cr3;
   i64 brk;
+  u8 mode;
   bool dlab;
   bool isfork;
+  bool virtual;
   i64 codestart;
   unsigned long codesize;
   pthread_mutex_t real_lock;
@@ -152,6 +158,7 @@ struct System {
   struct Elf elf;
   pthread_mutex_t sig_lock;
   struct sigaction_linux hands[32] GUARDED_BY(sig_lock);
+  pthread_mutex_t mmap_lock;
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
   int (*exec)(char *, char **, char **);
@@ -185,7 +192,8 @@ struct Machine {                           //
   u64 ss;                                  //
   u32 flags;                               //
   u8 mode;                                 //
-  _Atomic(char) tlb_invalidated;           //
+  _Atomic(bool) virtual;                   //
+  _Atomic(bool) tlb_invalidated;           //
   union {                                  // GENERAL REGISTER FILE
     u64 align8_;                           //
     u8 beg[128];                           //

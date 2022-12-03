@@ -105,6 +105,7 @@ struct System *NewSystem(void) {
     InitFds(&s->fds);
     pthread_mutex_init(&s->sig_lock, 0);
     pthread_mutex_init(&s->real_lock, 0);
+    pthread_mutex_init(&s->mmap_lock, 0);
     pthread_mutex_init(&s->machines_lock, 0);
     pthread_mutex_init(&s->realfree_lock, 0);
   }
@@ -151,6 +152,7 @@ void FreeSystem(struct System *s) {
   UNLOCK(&s->real_lock);
   unassert(!pthread_mutex_destroy(&s->realfree_lock));
   unassert(!pthread_mutex_destroy(&s->machines_lock));
+  unassert(!pthread_mutex_destroy(&s->mmap_lock));
   unassert(!pthread_mutex_destroy(&s->real_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));
   DestroyFds(&s->fds);
@@ -304,12 +306,12 @@ long AllocateLinearPageRaw(struct System *s) {
   return i;
 }
 
-static u64 SystemRead64(struct System *s, size_t i) {
+static u64 RealRead64(struct System *s, size_t i) {
   unassert(i + 8 <= GetRealMemorySize(s));
   return Get64(s->real.p + i);
 }
 
-static void SystemWrite64(struct System *s, size_t i, u64 x) {
+static void RealWrite64(struct System *s, size_t i, u64 x) {
   unassert(i + 8 <= GetRealMemorySize(s));
   Put64(s->real.p + i, x);
 }
@@ -323,33 +325,130 @@ bool IsValidAddrSize(i64 virt, i64 size) {
          virt + size <= 0x800000000000;
 }
 
-int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 key) {
-  i64 ti, mi, pt, end, level;
+static void InvalidateSystemTlbs(struct System *s) {
+  struct Dll *e;
+  LOCK(&s->machines_lock);
+  for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
+    atomic_store_explicit(&MACHINE_CONTAINER(e)->tlb_invalidated, true,
+                          memory_order_relaxed);
+  }
+  UNLOCK(&s->machines_lock);
+}
+
+static void VirtualizeSystem(struct System *s) {
+  struct Dll *e;
+  LOGF("converting to real virtual memory model");
+  LOCK(&s->machines_lock);
+  s->virtual = true;
+  for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
+    atomic_store_explicit(&MACHINE_CONTAINER(e)->virtual, true,
+                          memory_order_relaxed);
+  }
+  UNLOCK(&s->machines_lock);
+}
+
+static void AppendRealFree(struct System *s, u64 real) {
+  struct SystemRealFree *rf;
+  LOCK(&s->realfree_lock);
+  PoisonPage(s->real.p + real);
+  ++s->memstat.freed;
+  if (s->realfree && real == s->realfree->i + s->realfree->n) {
+    s->realfree->n += 4096;
+  } else if ((rf = (struct SystemRealFree *)malloc(sizeof(*rf)))) {
+    rf->i = real;
+    rf->n = 4096;
+    rf->next = s->realfree;
+    s->realfree = rf;
+  }
+  UNLOCK(&s->realfree_lock);
+}
+
+static void FreePageTableEntry(struct System *s, u64 entry) {
+  unassert(entry & PAGE_V);
+  if (entry & PAGE_RSRV) {
+    --s->memstat.reserved;
+  } else {
+    --s->memstat.committed;
+    if (entry & PAGE_ID) {
+      unassert(!munmap((void *)(intptr_t)(entry & PAGE_TA), 4096));
+    } else {
+      AppendRealFree(s, entry & PAGE_TA);
+    }
+  }
+}
+
+int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags) {
+  i64 ti, mi, pt, key, end, level;
+
+  // we determine these
+  unassert(!(flags & PAGE_TA));
+  unassert(!(flags & PAGE_ID));
+  unassert(!(flags & PAGE_RSRV));
+
+  // ensure requested interval is contained in 48-bit space
+  if (!IsValidAddrSize(virt, size)) return einval();
+
   MEM_LOGF("reserving virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
            virt, (u64)virt + size, size / 1024);
-  if (!IsValidAddrSize(virt, size)) return einval();
+
+  // if all guest memory is identity-mapped to host memory,
+  // then we'll try to maintain the perfect correspondence,
+  // with care taken to not clobber any unrelated mappings.
+  if (!s->virtual) {
+    if (virt > 0 && s->mode == XED_MODE_LONG) {
+      void *idmap =
+          Mmap((void *)virt, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+               MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0, "identity");
+      if (idmap != MAP_FAILED) {
+        if (idmap == (void *)virt) {
+          flags |= PAGE_ID;
+        } else {
+          unassert(!munmap(idmap, size));
+        }
+      }
+    }
+    if (!(flags & PAGE_ID)) {
+      VirtualizeSystem(s);
+    }
+  }
+
+  // update four-level page table ensuring all entries exist
   for (end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       pt = pt & PAGE_TA;
       ti = (virt >> level) & 511;
       mi = (pt & PAGE_TA) + ti * 8;
-      pt = SystemRead64(s, mi);
+      pt = RealRead64(s, mi);
       if (level > 12) {
+        // we're traversing an intermediary page table
         if (!(pt & PAGE_V)) {
+          // if a branch doesn't exist we must create it
           if ((pt = AllocateLinearPage(s)) == -1) return -1;
-          SystemWrite64(s, mi, pt | 7);
+          RealWrite64(s, mi, pt | PAGE_U | PAGE_RW | PAGE_V);
           ++s->memstat.pagetables;
         }
         continue;
       }
+      // iterate innermost table overwriting page entries
       for (;;) {
-        if (!(pt & PAGE_V)) {
-          SystemWrite64(s, mi, key);
-          ++s->memstat.reserved;
+        if (pt & PAGE_V) {
+          FreePageTableEntry(s, pt);
         }
-        if ((virt += 4096) >= end) return 0;
-        if (++ti == 512) break;
-        pt = SystemRead64(s, (mi += 8));
+        if (flags & PAGE_ID) {
+          ++s->memstat.committed;
+          key = virt | flags | PAGE_V;
+        } else {
+          ++s->memstat.reserved;
+          key = flags | PAGE_RSRV | PAGE_V;
+        }
+        RealWrite64(s, mi, key);
+        if ((virt += 4096) >= end) {
+          return 0;
+        }
+        if (++ti == 512) {
+          break;
+        }
+        pt = RealRead64(s, (mi += 8));
       }
     }
   }
@@ -361,7 +460,7 @@ i64 FindVirtual(struct System *s, i64 virt, i64 size) {
   do {
     if (virt >= 0x800000000000) return enomem();
     for (pt = s->cr3, i = 39; i >= 12; i -= 9) {
-      pt = SystemRead64(s, (pt & PAGE_TA) + ((virt >> i) & 511) * 8);
+      pt = RealRead64(s, (pt & PAGE_TA) + ((virt >> i) & 511) * 8);
       if (!(pt & PAGE_V)) break;
     }
     if (i >= 12) {
@@ -374,23 +473,7 @@ i64 FindVirtual(struct System *s, i64 virt, i64 size) {
   return virt;
 }
 
-static void AppendRealFree(struct System *s, u64 real) {
-  struct SystemRealFree *rf;
-  LOCK(&s->realfree_lock);
-  PoisonPage(s->real.p + real);
-  if (s->realfree && real == s->realfree->i + s->realfree->n) {
-    s->realfree->n += 4096;
-  } else if ((rf = (struct SystemRealFree *)malloc(sizeof(*rf)))) {
-    rf->i = real;
-    rf->n = 4096;
-    rf->next = s->realfree;
-    s->realfree = rf;
-  }
-  UNLOCK(&s->realfree_lock);
-}
-
 int FreeVirtual(struct System *s, i64 virt, i64 size) {
-  struct Dll *e;
   u64 i, mi, pt, end;
   MEM_LOGF("freeing virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
            virt, virt + size, size / 1024);
@@ -398,27 +481,16 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
   for (end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
       mi = (pt & PAGE_TA) + ((virt >> i) & 511) * 8;
-      pt = SystemRead64(s, mi);
+      pt = RealRead64(s, mi);
       if (!(pt & PAGE_V)) {
         break;
       } else if (i == 12) {
-        ++s->memstat.freed;
-        if (pt & PAGE_RSRV) {
-          --s->memstat.reserved;
-        } else {
-          --s->memstat.committed;
-          AppendRealFree(s, pt & PAGE_TA);
-        }
-        SystemWrite64(s, mi, 0);
+        FreePageTableEntry(s, pt);
+        RealWrite64(s, mi, 0);
         break;
       }
     }
   }
-  LOCK(&s->machines_lock);
-  for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
-    atomic_store_explicit(&MACHINE_CONTAINER(e)->tlb_invalidated, 1,
-                          memory_order_relaxed);
-  }
-  UNLOCK(&s->machines_lock);
+  InvalidateSystemTlbs(s);
   return 0;
 }

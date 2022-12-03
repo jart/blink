@@ -26,8 +26,7 @@
 #include "blink/real.h"
 #include "blink/time.h"
 
-static void StoreDescriptorTable(P, u16 limit,
-                                 u64 base) {
+static void StoreDescriptorTable(P, u16 limit, u64 base) {
   u64 l;
   l = ComputeAddress(A);
   if (l + 10 <= GetRealMemorySize(m->system)) {
@@ -47,8 +46,7 @@ static void StoreDescriptorTable(P, u16 limit,
   }
 }
 
-static void LoadDescriptorTable(P, u16 *out_limit,
-                                u64 *out_base) {
+static void LoadDescriptorTable(P, u16 *out_limit, u64 *out_base) {
   u16 limit;
   u64 l, base;
   l = ComputeAddress(A);

@@ -3,6 +3,9 @@
 
 TAGS ?= /usr/bin/ctags
 
+IMAGE_BASE_VIRTUAL = 0x23000000
+# IMAGE_BASE_VIRTUAL = 0x7e0000000000
+
 CFLAGS +=				\
 	-g				\
 	-O2				\
@@ -25,6 +28,13 @@ CPPFLAGS +=				\
 LDLIBS +=				\
 	-lm				\
 	-pthread
+
+LDFLAGS_STATIC =			\
+	-static				\
+	-no-pie				\
+	-Wl,-z,norelro			\
+	-Wl,-z,max-page-size=4096	\
+	-Wl,-Ttext-segment=$(IMAGE_BASE_VIRTUAL)
 
 TAGSFLAGS =				\
 	-e				\

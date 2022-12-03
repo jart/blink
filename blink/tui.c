@@ -467,8 +467,8 @@ static bool IsShadow(i64 v) {
  * Returns glyph representing byte at virtual address 𝑣.
  */
 static int VirtualBing(i64 v) {
-  int rc;
   u8 *p;
+  int rc;
   jmp_buf busted;
   onbusted = &busted;
   if ((p = (u8 *)FindReal(m, v))) {
@@ -2821,6 +2821,7 @@ static void GetOpts(int argc, char *argv[]) {
         break;
       case 'r':
         m->mode = XED_MODE_REAL;
+        m->system->mode = XED_MODE_REAL;
         g_disisprog_disable = true;
         break;
       case 's':
@@ -2928,6 +2929,7 @@ int main(int argc, char *argv[]) {
   unassert((s = NewSystem()));
   unassert((m = NewMachine(s, 0)));
   m->mode = XED_MODE_LONG;
+  m->system->mode = XED_MODE_LONG;
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;
   m->system->onlongbranch = OnLongBranch;

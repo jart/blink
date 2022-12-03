@@ -2,13 +2,14 @@
 #define BLINK_MEMORY_H_
 #include "blink/machine.h"
 
-#define PAGE_V    0x01
-#define PAGE_RW   0x02
-#define PAGE_U    0x04
-#define PAGE_4KB  0x80
+#define PAGE_V    0x0001  // valid
+#define PAGE_RW   0x0002  // writeable
+#define PAGE_U    0x0004  // permit user-mode access
+#define PAGE_4KB  0x0080  // IsPage (if PDPTE/PDE) or PAT (if PT)
 #define PAGE_2MB  0x0180
 #define PAGE_1GB  0x0180
-#define PAGE_RSRV 0x0200
+#define PAGE_RSRV 0x0200  // no real memory associated
+#define PAGE_ID   0x0400  // identity mapped
 #define PAGE_IGN1 0x0e00
 #define PAGE_TA   0x00007ffffffff000
 #define PAGE_PA2  0x00007fffffe00000

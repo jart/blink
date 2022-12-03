@@ -21,8 +21,10 @@
 #include <string.h>
 
 #include "blink/assert.h"
+#include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/likely.h"
+#include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/memory.h"
@@ -81,7 +83,7 @@ static u64 FindPage(struct Machine *m, u64 page) {
     unassert(table < GetRealMemorySize(m->system));
     index = (page >> level) & 511;
     entry = Load64(m->system->real.p + table + index * 8);
-    if (!(entry & 1)) return 0;
+    if (!(entry & PAGE_V)) return 0;
   } while ((level -= 9) >= 12);
   if ((entry & PAGE_RSRV) &&
       !(entry = HandlePageFault(m, entry, table, index))) {
@@ -92,22 +94,31 @@ static u64 FindPage(struct Machine *m, u64 page) {
   return entry;
 }
 
+static u8 *ConvertReal(struct Machine *m, u64 entry, int virt) {
+  if (entry & PAGE_ID) {
+    return (u8 *)((intptr_t)(entry & PAGE_TA) + (virt & 4095));
+  } else {
+    return m->system->real.p + (entry & PAGE_TA) + (virt & 4095);
+  }
+}
+
 u8 *FindReal(struct Machine *m, i64 virt) {
   u64 entry, page;
-  if (m->mode != XED_MODE_REAL) {
-    if (UNLIKELY(
-            atomic_load_explicit(&m->tlb_invalidated, memory_order_relaxed))) {
+  if (IsDevirtualized(m)) {
+    return (u8 *)virt;
+  } else if (m->mode != XED_MODE_REAL) {
+    if (atomic_load_explicit(&m->tlb_invalidated, memory_order_relaxed)) {
       ResetTlb(m);
-      atomic_store_explicit(&m->tlb_invalidated, 0, memory_order_relaxed);
+      atomic_store_explicit(&m->tlb_invalidated, false, memory_order_relaxed);
     }
     if ((page = virt & -4096) == m->tlb[0].page &&
         ((entry = m->tlb[0].entry) & PAGE_V)) {
       STATISTIC(++tlb_hits_1);
-      return m->system->real.p + (entry & PAGE_TA) + (virt & 4095);
+      return ConvertReal(m, entry, virt);
     }
     if (-0x800000000000 <= virt && virt < 0x800000000000) {
       if (!(entry = FindPage(m, page))) return 0;
-      return m->system->real.p + (entry & PAGE_TA) + (virt & 4095);
+      return ConvertReal(m, entry, virt);
     } else {
       return 0;
     }

@@ -16,8 +16,12 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
+#include <string.h>
+
 #include "blink/log.h"
 #include "blink/map.h"
+#include "blink/types.h"
 
 void *Mmap(void *addr,     //
            size_t length,  //
@@ -27,7 +31,14 @@ void *Mmap(void *addr,     //
            off_t offset,   //
            const char *owner) {
   void *res = mmap(addr, length, prot, flags, fd, offset);
-  MEM_LOGF("%s mapped [%p,%p) w/ %zu kb", owner, res, res + length,
-           length / 1024);
+#ifndef NDEBUG
+  if (res != MAP_FAILED) {
+    MEM_LOGF("%s mapped [%p,%p) w/ %zu kb", owner, res, res + length,
+             length / 1024);
+  } else {
+    MEM_LOGF("%s failed to map [%p,%p) w/ %zu kb: %s", owner, (u8 *)addr,
+             (u8 *)addr + length, length / 1024, strerror(errno));
+  }
+#endif
   return res;
 }

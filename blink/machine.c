@@ -189,6 +189,7 @@ static relegated void OpLsl(P) {
 static relegated void ChangeMachineMode(struct Machine *m, int mode) {
   if (mode == m->mode) return;
   ResetInstructionCache(m);
+  m->system->mode = mode;
   m->mode = mode;
 }
 

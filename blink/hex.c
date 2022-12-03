@@ -18,27 +18,35 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <ctype.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "blink/debug.h"
+#include "blink/log.h"
 #include "blink/tsan.h"
 
+#define APPEND(...) oi += snprintf(ob + oi, on - oi, __VA_ARGS__)
+
 void DumpHex(u8 *p, size_t n) {
+  int oi = 0;
+  int on = n * 100;
+  char *ob = malloc(on);
   size_t i, j;
   IGNORE_RACES_START();
   for (i = 0; i < n; i += 16) {
-    fprintf(stderr, "%04zx:", i);
+    APPEND("\n\t%04zx:", i);
     for (j = 0; j < 16; ++j) {
       if (i + j < n) {
-        fprintf(stderr, " %02x", p[i + j]);
+        APPEND(" %02x", p[i + j]);
       } else {
-        fprintf(stderr, "   ");
+        APPEND("   ");
       }
     }
-    fprintf(stderr, " ");
+    APPEND(" ");
     for (j = 0; j < 16 && i + j < n; ++j) {
-      fprintf(stderr, "%c", isprint(p[i + j]) ? p[i + j] : '.');
+      APPEND("%c", isprint(p[i + j]) ? p[i + j] : '.');
     }
-    fprintf(stderr, "\n");
   }
   IGNORE_RACES_END();
+  LOGF("hex dump%s", ob);
+  free(ob);
 }
