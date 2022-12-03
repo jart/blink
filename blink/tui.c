@@ -75,36 +75,36 @@
 #include "blink/xmmtype.h"
 
 #define USAGE \
-  " [-?HhrRstv] [ROM] [ARGS...]\r\n\
-\r\n\
-DESCRIPTION\r\n\
-\r\n\
-  blink virtual machine terminal user interface\r\n\
-\r\n\
-FLAGS\r\n\
-\r\n\
-  -h        help\r\n\
-  -z        zoom\r\n\
-  -v        verbosity\r\n\
-  -r        real mode\r\n\
-  -s        statistics\r\n\
-  -H        disable highlight\r\n\
-  -t        disable tui mode\r\n\
-  -R        disable reactive\r\n\
-  -b ADDR   push a breakpoint\r\n\
-  -w ADDR   push a watchpoint\r\n\
-  -L PATH   log file location\r\n\
-\r\n\
-ARGUMENTS\r\n\
-\r\n\
-  ROM files may be ELF, Actually Portable Executable, or flat.\r\n\
-  It should use x86_64 in accordance with the System Five ABI.\r\n\
-  The SYSCALL ABI is defined as it is written in Linux Kernel.\r\n\
-\r\n\
-FEATURES\r\n\
-\r\n\
-  8086, 8087, i386, x86_64, SSE3, SSSE3, POPCNT, MDA, CGA, TTY\r\n\
-  Type ? for keyboard shortcuts and CLI flags inside emulator.\r\n\
+  " [-?HhrRstv] [ROM] [ARGS...]\n\
+\n\
+DESCRIPTION\n\
+\n\
+  blink virtual machine terminal user interface\n\
+\n\
+FLAGS\n\
+\n\
+  -h        help\n\
+  -z        zoom\n\
+  -v        verbosity\n\
+  -r        real mode\n\
+  -s        statistics\n\
+  -H        disable highlight\n\
+  -t        disable tui mode\n\
+  -R        disable reactive\n\
+  -b ADDR   push a breakpoint\n\
+  -w ADDR   push a watchpoint\n\
+  -L PATH   log file location\n\
+\n\
+ARGUMENTS\n\
+\n\
+  ROM files may be ELF, Actually Portable Executable, or flat.\n\
+  It should use x86_64 in accordance with the System Five ABI.\n\
+  The SYSCALL ABI is defined as it is written in Linux Kernel.\n\
+\n\
+FEATURES\n\
+\n\
+  8086, 8087, i386, x86_64, SSE3, SSSE3, POPCNT, MDA, CGA, TTY\n\
+  Type ? for keyboard shortcuts and CLI flags inside emulator.\n\
 \r\n"
 
 #define HELP \
@@ -1571,7 +1571,7 @@ static void DrawStatus(struct Panel *p) {
   rw += AppendStat(s, "fds", CountFds(&m->system->fds), false);
   AppendFmt(&p->lines[0], "\033[7m%-*s%s\033[0m", xn - rw,
             statusmessage && nowl() < statusexpires ? statusmessage
-                                                    : "das blinkenlights",
+                                                    : "blink virtual machine",
             s->p);
   free(s->p);
   free(s);

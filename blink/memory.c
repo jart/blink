@@ -104,9 +104,7 @@ static u8 *ConvertReal(struct Machine *m, u64 entry, int virt) {
 
 u8 *FindReal(struct Machine *m, i64 virt) {
   u64 entry, page;
-  if (IsDevirtualized(m)) {
-    return (u8 *)virt;
-  } else if (m->mode != XED_MODE_REAL) {
+  if (m->mode != XED_MODE_REAL) {
     if (atomic_load_explicit(&m->tlb_invalidated, memory_order_relaxed)) {
       ResetTlb(m);
       atomic_store_explicit(&m->tlb_invalidated, false, memory_order_relaxed);
@@ -132,6 +130,7 @@ u8 *FindReal(struct Machine *m, i64 virt) {
 
 u8 *ResolveAddress(struct Machine *m, i64 v) {
   u8 *r;
+  if (IsDevirtualized(m)) return (u8 *)v;
   if ((r = FindReal(m, v))) return r;
   ThrowSegmentationFault(m, v);
 }
