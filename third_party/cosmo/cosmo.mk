@@ -117,7 +117,9 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/test_suite_ctr_drbg.com.ok				\
 		o/$(MODE)/third_party/cosmo/test_suite_entropy.com.ok				\
 		o/$(MODE)/third_party/cosmo/test_suite_mpi.com.ok				\
-		o/$(MODE)/third_party/cosmo/test_suite_md.com.ok
+		o/$(MODE)/third_party/cosmo/test_suite_md.com.ok				\
+		o/$(MODE)/third_party/cosmo/execve_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/crc32_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@
 
@@ -176,6 +178,7 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/test_suite_ctr_drbg.com.emulates		\
 		o/$(MODE)/aarch64/third_party/cosmo/test_suite_entropy.com.emulates		\
 		o/$(MODE)/aarch64/third_party/cosmo/test_suite_md.com.emulates			\
+		o/$(MODE)/aarch64/third_party/cosmo/execve_test.com.emulates			\
 		o/$(MODE)/mips64/third_party/cosmo/intrin_test.com.emulates			\
 		o/$(MODE)/mips64/third_party/cosmo/palandprintf_test.com.emulates		\
 		o/$(MODE)/mips64/third_party/cosmo/divmul_test.com.emulates			\

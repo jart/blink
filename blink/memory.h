@@ -14,6 +14,7 @@
 #define PAGE_PA2  0x00007fffffe00000
 #define PAGE_XD   0x8000000000000000
 
+bool IsValidAddrSize(i64, i64);
 char **LoadStrList(struct Machine *, i64);
 char *LoadStr(struct Machine *, i64);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
@@ -37,6 +38,5 @@ void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 void ResetRam(struct Machine *);
 void SetReadAddr(struct Machine *, i64, u32);
 void SetWriteAddr(struct Machine *, i64, u32);
-void VirtualSet(struct Machine *, i64, char, u64);
 
 #endif /* BLINK_MEMORY_H_ */

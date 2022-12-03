@@ -10,6 +10,7 @@ long enfile(void);
 long enomem(void);
 long enosys(void);
 long eoverflow(void);
+long eperm(void);
 long esrch(void);
 
 #endif /* BLINK_ERRNO_H_ */

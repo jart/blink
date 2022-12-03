@@ -309,7 +309,7 @@ static int CommitJit(struct JitPage *jp, long pagesize) {
     unassert(jp->start == jp->index);
     unassert(!mprotect(jp->addr + jp->committed, pageoff - jp->committed,
                        PROT_READ | PROT_EXEC));
-    MEM_LOGF("activated [%p,%p) w/ %zu kb", jp->addr + jp->committed,
+    JIT_LOGF("activated [%p,%p) w/ %zu kb", jp->addr + jp->committed,
              jp->addr + jp->committed + (pageoff - jp->committed),
              (pageoff - jp->committed) / 1024);
     unassert(jp->start == jp->index);

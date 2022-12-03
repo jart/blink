@@ -65,3 +65,7 @@ long enfile(void) {
 long esrch(void) {
   return ReturnErrno(ESRCH);
 }
+
+long eperm(void) {
+  return ReturnErrno(EPERM);
+}

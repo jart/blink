@@ -47,7 +47,7 @@ static int Exec(char *prog, char **argv, char **envp) {
   int rc;
   struct System *s;
   struct Machine *old;
-  old = g_machine;
+  if ((old = g_machine)) KillOtherThreads(old->system);
   unassert((g_machine = NewMachine(NewSystem(), 0)));
   // DisableJit(&g_machine->system->jit);
   g_machine->system->exec = Exec;
@@ -58,14 +58,13 @@ static int Exec(char *prog, char **argv, char **envp) {
     AddStdFd(&g_machine->system->fds, 1);
     AddStdFd(&g_machine->system->fds, 2);
   } else {
-    KillOtherThreads(old->system);
     LoadProgram(g_machine, prog, argv, envp);
     LOCK(&old->system->fds.lock);
     g_machine->system->fds.list = old->system->fds.list;
     old->system->fds.list = 0;
     UNLOCK(&old->system->fds.lock);
-    FreeMachine(old);
-    FreeSystem(old->system);
+    // FreeMachine(old);
+    // FreeSystem(old->system);
   }
   if (!(rc = setjmp(g_machine->onhalt))) {
     Actor(g_machine);

@@ -22,6 +22,8 @@
 #define O_ASYNC_LINUX     0x002000
 #define O_NOATIME_LINUX   0x040000
 #define O_DSYNC_LINUX     0x001000
+#define O_PATH_LINUX      0x200000
+#define O_LARGEFILE_LINUX 0x008000
 
 #define F_DUPFD_LINUX         0
 #define F_DUPFD_CLOEXEC_LINUX 0x0406
@@ -58,6 +60,7 @@
 #define CLONE_FS_             0x00000200
 #define CLONE_FILES_          0x00000400
 #define CLONE_SIGHAND_        0x00000800
+#define CLONE_VFORK_          0x00004000
 #define CLONE_SETTLS_         0x00080000
 #define CLONE_PARENT_SETTID_  0x00100000
 #define CLONE_CHILD_CLEARTID_ 0x00200000

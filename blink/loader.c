@@ -40,54 +40,50 @@
 #define READ64(p) Read64((const u8 *)(p))
 #define READ32(p) Read32((const u8 *)(p))
 
-static void LoadElfLoadSegment(struct Machine *m, void *code, size_t codesize,
-                               const Elf64_Phdr *phdr, i64 *out_mincode,
-                               i64 *out_maxcode) {
-  i64 align, bsssize, mincode, maxcode;
-  i64 felf, fstart, fend, vstart, vbss, vend;
-  align = MAX(Read64(phdr->p_align), 4096);
-  unassert(0 == (Read64(phdr->p_vaddr) - Read64(phdr->p_offset)) % align);
-  felf = (i64)(intptr_t)code;
-  vstart = ROUNDDOWN(Read64(phdr->p_vaddr), align);
-  vbss = ROUNDUP(Read64(phdr->p_vaddr) + Read64(phdr->p_filesz), align);
-  vend = ROUNDUP(Read64(phdr->p_vaddr) + Read64(phdr->p_memsz), align);
-  fstart = felf + ROUNDDOWN(Read64(phdr->p_offset), align);
-  fend = felf + Read64(phdr->p_offset) + Read64(phdr->p_filesz);
-  bsssize = vend - vbss;
-  m->system->brk = MAX(m->system->brk, vend);
-  unassert(vend >= vstart);
-  unassert(fend >= fstart);
-  unassert(felf <= fstart);
-  unassert(vstart >= -0x800000000000);
-  unassert(vend <= 0x800000000000);
-  unassert(vend - vstart >= fstart - fend);
-  unassert(Read64(phdr->p_filesz) <= Read64(phdr->p_memsz));
-  unassert(felf + Read64(phdr->p_offset) - fstart ==
-           Read64(phdr->p_vaddr) - vstart);
-  if (ReserveVirtual(m->system, vstart, fend - fstart, 0x0207) == -1) {
-    LOGF("ReserveVirtual failed");
+static void LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
+                               const Elf64_Phdr *phdr, i64 *inout_mincode,
+                               i64 *inout_maxcode, i64 *inout_brk) {
+
+  u32 flags = Read32(phdr->p_flags);
+  i64 vaddr = Read64(phdr->p_vaddr);
+  i64 memsz = Read64(phdr->p_memsz);
+  i64 offset = Read64(phdr->p_offset);
+  i64 filesz = Read64(phdr->p_filesz);
+
+  if (offset > imagesize) {
+    LOGF("bad phdr offset");
     exit(200);
   }
-  CopyToUser(m, vstart, (void *)(uintptr_t)fstart, fend - fstart);
-  if (bsssize) {
-    if (ReserveVirtual(m->system, vbss, bsssize, 0x0207) == -1) {
-      LOGF("ReserveVirtual failed");
-      exit(200);
-    }
+  if (filesz > imagesize) {
+    LOGF("bad phdr filesz");
+    exit(200);
   }
-  if ((i64)(Read64(phdr->p_memsz) - Read64(phdr->p_filesz)) > bsssize) {
-    VirtualSet(m, Read64(phdr->p_vaddr) + Read64(phdr->p_filesz), 0,
-               Read64(phdr->p_memsz) - Read64(phdr->p_filesz) - bsssize);
+  if (offset + filesz > imagesize) {
+    LOGF("corrupt elf program header");
+    exit(200);
   }
-  if (Read32(phdr->p_flags) & PF_X) {
-    mincode = Read64(phdr->p_vaddr);
-    maxcode = Read64(phdr->p_vaddr) + Read64(phdr->p_memsz);
-    if (!*out_mincode) {
-      *out_mincode = mincode;
-      *out_maxcode = maxcode;
+
+  *inout_brk = MAX(*inout_brk, ROUNDUP(vaddr + memsz, 4096));
+
+  if (ReserveVirtual(m->system, ROUNDDOWN(vaddr, 4096),
+                     ROUNDUP(vaddr + memsz, 4096) - ROUNDDOWN(vaddr, 4096),
+                     PAGE_RSRV | PAGE_U | PAGE_RW | PAGE_V |
+                         (flags & PF_X ? 0 : PAGE_XD)) == -1) {
+    LOGF("failed to reserve virtual memory for elf program header");
+    exit(200);
+  }
+
+  CopyToUser(m, vaddr, (u8 *)image + offset, filesz);
+
+  if (flags & PF_X) {
+    i64 mincode = vaddr;
+    i64 maxcode = vaddr + memsz;
+    if (!*inout_mincode) {
+      *inout_mincode = mincode;
+      *inout_maxcode = maxcode;
     } else {
-      *out_mincode = MIN(*out_mincode, mincode);
-      *out_maxcode = MAX(*out_maxcode, maxcode);
+      *inout_mincode = MIN(*inout_mincode, mincode);
+      *inout_maxcode = MAX(*inout_maxcode, maxcode);
     }
   }
 }
@@ -96,28 +92,38 @@ static void LoadElf(struct Machine *m, struct Elf *elf) {
   int i;
   i64 mincode = 0;
   i64 maxcode = 0;
+  i64 brk = kMinBrk;
   Elf64_Phdr *phdr;
+  if (elf->ehdr->e_ident[EI_CLASS] != ELFCLASS64 ||
+      Read16(elf->ehdr->e_type) != ET_EXEC ||
+      Read16(elf->ehdr->e_machine) != EM_NEXGEN32E) {
+    WriteErrorString("error: not a statically-linked x86_64 executable\n");
+    exit(200);
+  }
   m->ip = elf->base = Read64(elf->ehdr->e_entry);
   for (i = 0; i < Read16(elf->ehdr->e_phnum); ++i) {
     phdr = GetElfSegmentHeaderAddress(elf->ehdr, elf->size, i);
     switch (Read32(phdr->p_type)) {
       case PT_LOAD:
         elf->base = MIN(elf->base, (i64)Read64(phdr->p_vaddr));
-        LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, &mincode, &maxcode);
+        LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, &mincode, &maxcode,
+                           &brk);
         break;
       default:
         break;
     }
   }
+  m->system->brk = brk;
   m->system->codestart = mincode;
   m->system->codesize = maxcode - mincode;
 }
 
 static void LoadBin(struct Machine *m, intptr_t base, const char *prog,
                     void *code, size_t codesize) {
+  Elf64_Phdr phdr;
   i64 mincode = 0;
   i64 maxcode = 0;
-  Elf64_Phdr phdr;
+  i64 brk = kMinBrk;
   Write32(phdr.p_type, PT_LOAD);
   Write32(phdr.p_flags, PF_X | PF_R | PF_W);
   Write64(phdr.p_offset, 0);
@@ -126,9 +132,10 @@ static void LoadBin(struct Machine *m, intptr_t base, const char *prog,
   Write64(phdr.p_filesz, codesize);
   Write64(phdr.p_memsz, ROUNDUP(codesize + 4 * 1024 * 1024, 4 * 1024 * 1024));
   Write64(phdr.p_align, 4096);
-  LoadElfLoadSegment(m, code, codesize, &phdr, &mincode, &maxcode);
-  m->system->codestart = mincode;
+  LoadElfLoadSegment(m, code, codesize, &phdr, &mincode, &maxcode, &brk);
   m->system->codesize = maxcode - mincode;
+  m->system->codestart = mincode;
+  m->system->brk = brk;
   m->ip = base;
 }
 
@@ -238,18 +245,19 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
   }
   close(fd);
   ResetCpu(m);
-  if ((m->mode & 3) == XED_MODE_REAL) {
+  if (m->mode == XED_MODE_REAL) {
     BootProgram(m, elf, elf->mapsize);
   } else {
-    sp = 0x800000000000;
+    sp = kStackTop;
     Write64(m->sp, sp);
     m->system->cr3 = AllocateLinearPage(m->system);
-    if (ReserveVirtual(m->system, sp - 0x100000, 0x100000, 0x0207) == -1) {
+    if (ReserveVirtual(m->system, sp - kStackSize, kStackSize,
+                       PAGE_RSRV | PAGE_U | PAGE_RW | PAGE_V) == -1) {
       LOGF("ReserveVirtual failed");
       exit(200);
     }
     LoadArgv(m, prog, args, vars);
-    if (memcmp(elf->map, "\177ELF", 4) == 0) {
+    if (READ32(elf->map) == READ32("\177ELF")) {
       elf->ehdr = (Elf64_Ehdr *)elf->map;
       elf->size = elf->mapsize;
       LoadElf(m, elf);

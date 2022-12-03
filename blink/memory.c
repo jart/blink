@@ -125,20 +125,6 @@ u8 *ResolveAddress(struct Machine *m, i64 v) {
   ThrowSegmentationFault(m, v);
 }
 
-void VirtualSet(struct Machine *m, i64 v, char c, u64 n) {
-  u8 *p;
-  u64 k;
-  k = 4096 - (v & 4095);
-  while (n) {
-    k = MIN(k, n);
-    p = ResolveAddress(m, v);
-    memset(p, c, k);
-    n -= k;
-    v += k;
-    k = 4096;
-  }
-}
-
 static void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
   u8 *p;
   u64 k;

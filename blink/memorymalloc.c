@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <ctype.h>
 #include <errno.h>
 #include <limits.h>
 #include <signal.h>
@@ -28,6 +27,7 @@
 
 #include "blink/assert.h"
 #include "blink/builtin.h"
+#include "blink/debug.h"
 #include "blink/dll.h"
 #include "blink/end.h"
 #include "blink/endian.h"
@@ -48,15 +48,6 @@
 #define GRANULARITY       131072     // how often we check in with the os
 #define MAX_MEMORY        268435456  // 256mb ought to be enough for anyone
 #define JIT_RESERVE       134217728  // 128mb is max branch displacement on arm
-
-void *Mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset,
-           const char *owner) {
-  void *res;
-  res = mmap(addr, length, prot, flags, fd, offset);
-  MEM_LOGF("%s allocated [%p,%p) w/ %zu kb", owner, res, res + length,
-           length / 1024);
-  return res;
-}
 
 static void FillPage(u8 *p, int c) {
   IGNORE_RACES_START();
@@ -86,22 +77,6 @@ static bool IsPageStillPoisoned(u8 *p) {
   IGNORE_RACES_END();
 #endif
   return true;
-}
-
-static void DumpPage(u8 *p) {
-  IGNORE_RACES_START();
-  for (unsigned i = 0; i < 4096; i += 16) {
-    fprintf(stderr, "%04x:", i);
-    for (unsigned j = 0; j < 16; ++j) {
-      fprintf(stderr, " %02x", p[i + j]);
-    }
-    fprintf(stderr, " ");
-    for (unsigned j = 0; j < 16; ++j) {
-      fprintf(stderr, "%c", isprint(p[i + j]) ? p[i + j] : '.');
-    }
-    fprintf(stderr, "\n");
-  }
-  IGNORE_RACES_END();
 }
 
 static void FreeSystemRealFree(struct System *s) {
@@ -250,7 +225,7 @@ long AllocateLinearPage(struct System *s) {
   if ((page = AllocateLinearPageRaw(s)) != -1) {
 #ifndef NDEBUG
     if (!IsPageStillPoisoned(s->real.p + page)) {
-      DumpPage(s->real.p + page);
+      DumpHex(s->real.p + page, 4096);
       unassert(!"page should still be poisoned");
     }
 #endif
@@ -329,18 +304,30 @@ long AllocateLinearPageRaw(struct System *s) {
   return i;
 }
 
-static u64 SystemRead64(struct System *s, u64 i) {
+static u64 SystemRead64(struct System *s, size_t i) {
   unassert(i + 8 <= GetRealMemorySize(s));
-  return Read64(s->real.p + i);
+  return Get64(s->real.p + i);
 }
 
-static void SystemWrite64(struct System *s, u64 i, u64 x) {
+static void SystemWrite64(struct System *s, size_t i, u64 x) {
   unassert(i + 8 <= GetRealMemorySize(s));
-  Write64(s->real.p + i, x);
+  Put64(s->real.p + i, x);
 }
 
-int ReserveVirtual(struct System *s, i64 virt, size_t size, u64 key) {
+bool IsValidAddrSize(i64 virt, i64 size) {
+  return size &&                        //
+         !(virt & 4095) &&              //
+         virt >= -0x800000000000 &&     //
+         virt < 0x800000000000 &&       //
+         size <= 0x1000000000000ull &&  //
+         virt + size <= 0x800000000000;
+}
+
+int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 key) {
   i64 ti, mi, pt, end, level;
+  MEM_LOGF("reserving virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
+           virt, (u64)virt + size, size / 1024);
+  if (!IsValidAddrSize(virt, size)) return einval();
   for (end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       pt = pt & PAGE_TA;
@@ -348,7 +335,7 @@ int ReserveVirtual(struct System *s, i64 virt, size_t size, u64 key) {
       mi = (pt & PAGE_TA) + ti * 8;
       pt = SystemRead64(s, mi);
       if (level > 12) {
-        if (!(pt & 1)) {
+        if (!(pt & PAGE_V)) {
           if ((pt = AllocateLinearPage(s)) == -1) return -1;
           SystemWrite64(s, mi, pt | 7);
           ++s->memstat.pagetables;
@@ -356,7 +343,7 @@ int ReserveVirtual(struct System *s, i64 virt, size_t size, u64 key) {
         continue;
       }
       for (;;) {
-        if (!(pt & 1)) {
+        if (!(pt & PAGE_V)) {
           SystemWrite64(s, mi, key);
           ++s->memstat.reserved;
         }
@@ -368,16 +355,14 @@ int ReserveVirtual(struct System *s, i64 virt, size_t size, u64 key) {
   }
 }
 
-i64 FindVirtual(struct System *s, i64 virt, size_t size) {
-  u64 i, pt, got;
-  got = 0;
+i64 FindVirtual(struct System *s, i64 virt, i64 size) {
+  u64 i, pt, got = 0;
+  if (!IsValidAddrSize(virt, size)) return einval();
   do {
-    if (virt >= 0x800000000000) {
-      return enomem();
-    }
+    if (virt >= 0x800000000000) return enomem();
     for (pt = s->cr3, i = 39; i >= 12; i -= 9) {
       pt = SystemRead64(s, (pt & PAGE_TA) + ((virt >> i) & 511) * 8);
-      if (!(pt & 1)) break;
+      if (!(pt & PAGE_V)) break;
     }
     if (i >= 12) {
       got += 1ull << i;
@@ -404,14 +389,17 @@ static void AppendRealFree(struct System *s, u64 real) {
   UNLOCK(&s->realfree_lock);
 }
 
-int FreeVirtual(struct System *s, i64 base, size_t size) {
+int FreeVirtual(struct System *s, i64 virt, i64 size) {
   struct Dll *e;
-  u64 i, mi, pt, end, virt;
-  for (virt = base, end = virt + size; virt < end; virt += 1ull << i) {
+  u64 i, mi, pt, end;
+  MEM_LOGF("freeing virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
+           virt, virt + size, size / 1024);
+  if (!IsValidAddrSize(virt, size)) return einval();
+  for (end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
       mi = (pt & PAGE_TA) + ((virt >> i) & 511) * 8;
       pt = SystemRead64(s, mi);
-      if (!(pt & 1)) {
+      if (!(pt & PAGE_V)) {
         break;
       } else if (i == 12) {
         ++s->memstat.freed;

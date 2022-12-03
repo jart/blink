@@ -16,53 +16,29 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
-#include <fcntl.h>
-#include <stdatomic.h>
-#include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#include <ctype.h>
+#include <stdio.h>
 
-#include "blink/errno.h"
-#include "blink/fds.h"
-#include "blink/log.h"
-#include "blink/memory.h"
-#include "blink/syscall.h"
-#include "blink/xlat.h"
+#include "blink/debug.h"
+#include "blink/tsan.h"
 
-int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
-              i32 mode) {
-  const char *path;
-  struct Fd *fd, *dirfd;
-  int rc, sf, fildes, sysdirfd;
-  if (!(path = LoadStr(m, pathaddr))) return efault();
-  if ((oflags = XlatOpenFlags(oflags)) == -1) return -1;
-  LockFds(&m->system->fds);
-  if ((rc = GetAfd(m, dirfildes, &dirfd)) != -1) {
-    if (dirfd) LockFd(dirfd);
-    fd = AllocateFd(&m->system->fds, 0, oflags);
-  } else {
-    dirfd = 0;
-    fd = 0;
-  }
-  UnlockFds(&m->system->fds);
-  if (fd && rc != -1) {
-    if (dirfd) {
-      sysdirfd = atomic_load_explicit(&dirfd->systemfd, memory_order_relaxed);
-    } else {
-      sysdirfd = AT_FDCWD;
+void DumpHex(u8 *p, size_t n) {
+  size_t i, j;
+  IGNORE_RACES_START();
+  for (i = 0; i < n; i += 16) {
+    fprintf(stderr, "%04zx:", i);
+    for (j = 0; j < 16; ++j) {
+      if (i + j < n) {
+        fprintf(stderr, " %02x", p[i + j]);
+      } else {
+        fprintf(stderr, "   ");
+      }
     }
-    if ((sf = openat(sysdirfd, path, oflags, mode)) != -1) {
-      atomic_store_explicit(&fd->systemfd, sf, memory_order_release);
-      fildes = fd->fildes;
-    } else {
-      SYS_LOGF("%s(%s) failed: %s", "openat", path, strerror(errno));
-      fildes = -1;
+    fprintf(stderr, " ");
+    for (j = 0; j < 16 && i + j < n; ++j) {
+      fprintf(stderr, "%c", isprint(p[i + j]) ? p[i + j] : '.');
     }
-  } else {
-    fildes = -1;
+    fprintf(stderr, "\n");
   }
-  if (dirfd) UnlockFd(dirfd);
-  if (fildes == -1 && fd) DropFd(m, fd);
-  return fildes;
+  IGNORE_RACES_END();
 }

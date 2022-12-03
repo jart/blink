@@ -26,6 +26,10 @@
 
 #define kInstructionBytes 40
 
+#define kStackTop  0x800000000000
+#define kStackSize (8 * 1024 * 1024)
+#define kMinBrk    (2 * 1024 * 1024)
+
 #define kMachineExit                 256
 #define kMachineHalt                 -1
 #define kMachineDecodeError          -2
@@ -52,9 +56,9 @@ struct FreeList {
 };
 
 struct SystemReal {
-  long i;
-  long n;  // monotonic
-  u8 *p;   // never relocates
+  size_t i;
+  size_t n;  // monotonic
+  u8 *p;     // never relocates
 };
 
 struct SystemRealFree {
@@ -284,10 +288,10 @@ void ExecuteInstruction(struct Machine *);
 long AllocateLinearPage(struct System *);
 long AllocateLinearPageRaw(struct System *);
 int ReserveReal(struct System *, long);
-int ReserveVirtual(struct System *, i64, size_t, u64);
+int ReserveVirtual(struct System *, i64, i64, u64);
 char *FormatPml4t(struct Machine *);
-i64 FindVirtual(struct System *, i64, size_t);
-int FreeVirtual(struct System *, i64, size_t);
+i64 FindVirtual(struct System *, i64, i64);
+int FreeVirtual(struct System *, i64, i64);
 void LoadArgv(struct Machine *, char *, char **, char **);
 _Noreturn void HaltMachine(struct Machine *, int);
 void RaiseDivideError(struct Machine *);

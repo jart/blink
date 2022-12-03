@@ -180,6 +180,10 @@ static int SysFork(struct Machine *m) {
   return pid;
 }
 
+static int SysVfork(struct Machine *m) {
+  return SysFork(m);
+}
+
 static void *OnSpawn(void *arg) {
   int rc;
   atomic_int *ctid;
@@ -237,8 +241,10 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
 
 static int SysClone(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
                     u64 tls, u64 func) {
-  if (flags == 17 && !stack) {
+  if (flags == SIGCHLD_LINUX && !stack) {
     return SysFork(m);
+  } else if (flags == (CLONE_VM_ | CLONE_VFORK_ | SIGCHLD_LINUX) && !stack) {
+    return SysVfork(m);
   } else {
     return SysSpawn(m, flags, stack, ptid, ctid, tls, func);
   }
@@ -279,15 +285,18 @@ static int SysMadvise(struct Machine *m, i64 addr, size_t len, int advice) {
 }
 
 static i64 SysBrk(struct Machine *m, i64 addr) {
+  MEM_LOGF("brk(%#" PRIx64 ") currently %#" PRIx64, addr, m->system->brk);
   addr = ROUNDUP(addr, 4096);
-  if (addr > m->system->brk) {
-    if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
-                       PAGE_V | PAGE_RW | PAGE_U | PAGE_RSRV) != -1) {
-      m->system->brk = addr;
-    }
-  } else if (addr < m->system->brk) {
-    if (FreeVirtual(m->system, addr, m->system->brk - addr) != -1) {
-      m->system->brk = addr;
+  if (addr >= kMinBrk) {
+    if (addr > m->system->brk) {
+      if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
+                         PAGE_V | PAGE_RW | PAGE_U | PAGE_RSRV) != -1) {
+        m->system->brk = addr;
+      }
+    } else if (addr < m->system->brk) {
+      if (FreeVirtual(m->system, addr, m->system->brk - addr) != -1) {
+        m->system->brk = addr;
+      }
     }
   }
   return m->system->brk;
@@ -608,7 +617,7 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   return rc;
 }
 
-static off_t TemporarySeek(struct Fd *fd, u64 offset) {
+static off_t TellAndSeek(struct Fd *fd, u64 offset) {
   off_t oldpos;
   if ((oldpos = lseek(fd->systemfd, 0, SEEK_CUR)) != -1 &&
       lseek(fd->systemfd, offset, SEEK_SET) != -1) {
@@ -624,7 +633,7 @@ static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
   off_t oldpos;
   struct Fd *fd;
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
-  if ((oldpos = TemporarySeek(fd, offset)) != -1) {
+  if ((oldpos = TellAndSeek(fd, offset)) != -1) {
     rc = SysReadImpl(m, fd, addr, size);
     lseek(fd->systemfd, oldpos, SEEK_SET);
   } else {
@@ -640,7 +649,7 @@ static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
   off_t oldpos;
   struct Fd *fd;
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
-  if ((oldpos = TemporarySeek(fd, offset)) != -1) {
+  if ((oldpos = TellAndSeek(fd, offset)) != -1) {
     rc = SysWriteImpl(m, fd, addr, size);
     lseek(fd->systemfd, oldpos, SEEK_SET);
   } else {
@@ -935,6 +944,21 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
   return rc;
 }
 
+static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
+                             i64 bufaddr, i64 size) {
+  char *buf;
+  ssize_t rc;
+  if (size < 0) return einval();
+  if (size > PATH_MAX) return enomem();
+  if (!(buf = (char *)malloc(size))) return -1;
+  if ((rc = readlinkat(GetDirFildes(m, dirfd), LoadStr(m, path), buf, size)) !=
+      -1) {
+    CopyToUserWrite(m, bufaddr, buf, rc);
+  }
+  free(buf);
+  return rc;
+}
+
 static int SysRmdir(struct Machine *m, i64 path) {
   return rmdir(LoadStr(m, path));
 }
@@ -957,6 +981,10 @@ static int SysTruncate(struct Machine *m, i64 path, u64 length) {
 
 static int SysSymlink(struct Machine *m, i64 targetpath, i64 linkpath) {
   return symlink(LoadStr(m, targetpath), LoadStr(m, linkpath));
+}
+
+static int SysReadlink(struct Machine *m, i64 path, i64 bufaddr, u64 size) {
+  return SysReadlinkat(m, AT_FDCWD_LINUX, path, bufaddr, size);
 }
 
 static int SysMkdirat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
@@ -1039,18 +1067,21 @@ static int SysSetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
   return setrlimit(XlatResource(resource), &rlim);
 }
 
-static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
-                             i64 bufaddr, i64 size) {
-  char *buf;
-  ssize_t rc;
-  if (size < 0) return einval();
-  if (size > PATH_MAX) return enomem();
-  if (!(buf = (char *)malloc(size))) return -1;
-  if ((rc = readlinkat(GetDirFildes(m, dirfd), LoadStr(m, path), buf, size)) !=
-      -1) {
-    CopyToUserWrite(m, bufaddr, buf, rc);
+static int SysPrlimit(struct Machine *m, i32 pid, i32 resource,
+                      i64 new_rlimit_addr, i64 old_rlimit_addr) {
+  int rc;
+  struct rlimit old;
+  struct rlimit_linux lux;
+  if (pid && pid != getpid()) return eperm();
+  if ((rc = getrlimit(XlatResource(resource), &old)) != -1) {
+    if (new_rlimit_addr) {
+      rc = SysSetrlimit(m, XlatResource(resource), new_rlimit_addr);
+    }
+    if (rc != -1 && old_rlimit_addr) {
+      XlatRlimitToLinux(&lux, &old);
+      CopyToUserWrite(m, old_rlimit_addr, &lux, sizeof(lux));
+    }
   }
-  free(buf);
   return rc;
 }
 
@@ -1543,6 +1574,7 @@ void OpSyscall(P) {
     SYSCALL(0x036, SysSetsockopt(m, di, si, dx, r0, r8));
     SYSCALL(0x038, SysClone(m, di, si, dx, r0, r8, r9));
     SYSCALL(0x039, SysFork(m));
+    SYSCALL(0x03A, SysVfork(m));
     SYSCALL(0x03B, SysExecve(m, di, si, dx));
     SYSCALL(0x03D, SysWait4(m, di, si, dx, r0));
     SYSCALL(0x03E, SysKill(m, di, si));
@@ -1562,6 +1594,7 @@ void OpSyscall(P) {
     SYSCALL(0x056, SysLink(m, di, si));
     SYSCALL(0x057, SysUnlink(m, di));
     SYSCALL(0x058, SysSymlink(m, di, si));
+    SYSCALL(0x059, SysReadlink(m, di, si, dx));
     SYSCALL(0x05A, SysChmod(m, di, si));
     SYSCALL(0x05B, SysFchmod(m, di, si));
     SYSCALL(0x05F, SysUmask(m, di));
@@ -1599,6 +1632,7 @@ void OpSyscall(P) {
     SYSCALL(0x10B, SysReadlinkat(m, di, si, dx, r0));
     SYSCALL(0x10D, SysFaccessat(m, di, si, dx, r0));
     SYSCALL(0x120, SysAccept4(m, di, si, dx, r0));
+    SYSCALL(0x12E, SysPrlimit(m, di, si, dx, r0));
     SYSCALL(0x13E, SysGetrandom(m, di, si, dx));
     SYSCALL(0x1B4, SysCloseRange(m->system, di, si, dx));
     case 0x3C:
@@ -1609,7 +1643,7 @@ void OpSyscall(P) {
       SigRestore(m);
       return;
     default:
-      LOGF("missing syscall 0x%03" PRIx64, ax);
+      SYS_LOGF("missing syscall 0x%03" PRIx64, ax);
       ax = enosys();
       break;
   }

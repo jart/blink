@@ -17,7 +17,6 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <fcntl.h>
-#include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -33,6 +32,7 @@
 #include "blink/map.h"
 #include "blink/memory.h"
 #include "blink/stats.h"
+#include "blink/tsan.h"
 #include "blink/util.h"
 
 #define MAX_BACKTRACE_LINES 64

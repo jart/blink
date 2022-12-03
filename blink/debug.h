@@ -3,6 +3,7 @@
 #include "blink/assert.h"
 #include "blink/fds.h"
 #include "blink/machine.h"
+#include "blink/types.h"
 
 #if !defined(NDEBUG) && defined(__GNUC__)
 #define IB(x)                      \
@@ -26,6 +27,7 @@
        Read64(M->r8), Read64(M->r9), Read64(M->r10), Read64(M->r11),          \
        Read64(M->r12), Read64(M->r13), Read64(M->r14), Read64(M->r15));
 
+void DumpHex(u8 *, size_t);
 void PrintFds(struct Fds *);
 const char *DescribeOp(struct Machine *);
 const char *GetBacktrace(struct Machine *);

@@ -534,6 +534,16 @@ int XlatOpenFlags(int x) {
   if (x & O_CREAT_LINUX) res |= O_CREAT, x &= ~O_CREAT_LINUX;
   if (x & O_EXCL_LINUX) res |= O_EXCL, x &= ~O_EXCL_LINUX;
   if (x & O_TRUNC_LINUX) res |= O_TRUNC, x &= ~O_TRUNC_LINUX;
+#ifdef O_PATH
+  if (x & O_PATH_LINUX) res |= O_PATH, x &= ~O_PATH_LINUX;
+#else
+  if (x & O_PATH_LINUX) res |= O_EXEC, x &= ~O_PATH_LINUX;
+#endif
+#ifdef O_LARGEFILE
+  if (x & O_LARGEFILE_LINUX) res |= O_LARGEFILE, x &= ~O_LARGEFILE_LINUX;
+#elif LONG_BIT > 32
+  x &= ~O_LARGEFILE_LINUX;
+#endif
 #ifdef O_NDELAY
   if (x & O_NDELAY_LINUX) res |= O_NDELAY, x &= ~O_NDELAY_LINUX;
 #endif
@@ -559,7 +569,7 @@ int XlatOpenFlags(int x) {
   if (x & O_DSYNC_LINUX) res |= O_DSYNC, x &= ~O_DSYNC_LINUX;
 #endif
   if (x) {
-    LOGF("%s %d not supported yet", "open flags", x);
+    LOGF("%s %#x not supported", "open flags", x);
     return einval();
   }
   return res;
@@ -568,30 +578,38 @@ int XlatOpenFlags(int x) {
 int UnXlatOpenFlags(int x) {
   int res;
   res = UnXlatAccMode(x);
-  if (x & O_APPEND) res |= 0x00400;
-  if (x & O_CREAT) res |= 0x00040;
-  if (x & O_EXCL) res |= 0x00080;
-  if (x & O_TRUNC) res |= 0x00200;
+  if (x & O_APPEND) res |= O_APPEND_LINUX;
+  if (x & O_CREAT) res |= O_CREAT_LINUX;
+  if (x & O_EXCL) res |= O_EXCL_LINUX;
+  if (x & O_TRUNC) res |= O_TRUNC_LINUX;
+#ifdef O_PATH
+  if (x & O_PATH) res |= O_PATH_LINUX;
+#else
+  if (x & O_EXEC) res |= O_PATH_LINUX;
+#endif
+#ifdef O_LARGEFILE
+  if (x & O_LARGEFILE) res |= O_LARGEFILE_LINUX;
+#endif
 #ifdef O_NDELAY
-  if (x & O_NDELAY) res |= 0x00800;
+  if (x & O_NDELAY) res |= O_NDELAY_LINUX;
 #endif
 #ifdef O_DIRECT
-  if (x & O_DIRECT) res |= 0x04000;
+  if (x & O_DIRECT) res |= O_DIRECT_LINUX;
 #endif
-  if (x & O_DIRECTORY) res |= 0x10000;
+  if (x & O_DIRECTORY) res |= O_DIRECTORY_LINUX;
 #ifdef O_NOFOLLOW
-  if (x & O_NOFOLLOW) res |= 0x20000;
+  if (x & O_NOFOLLOW) res |= O_NOFOLLOW_LINUX;
 #endif
-  if (x & O_CLOEXEC) res |= 0x80000;
-  if (x & O_NOCTTY) res |= 0x00100;
+  if (x & O_CLOEXEC) res |= O_CLOEXEC_LINUX;
+  if (x & O_NOCTTY) res |= O_NOCTTY_LINUX;
 #ifdef O_ASYNC
-  if (x & O_ASYNC) res |= 0x02000;
+  if (x & O_ASYNC) res |= O_ASYNC_LINUX;
 #endif
 #ifdef O_NOATIME
-  if (x & O_NOATIME) res |= 0x40000;
+  if (x & O_NOATIME) res |= O_NOATIME_LINUX;
 #endif
 #ifdef O_DSYNC
-  if (x & O_DSYNC) res |= 0x000001000;
+  if (x & O_DSYNC) res |= O_DSYNC_LINUX;
 #endif
   return res;
 }
