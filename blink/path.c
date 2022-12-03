@@ -21,6 +21,7 @@
 
 #include "blink/address.h"
 #include "blink/assert.h"
+#include "blink/debug.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -65,6 +66,7 @@ bool CreatePath(struct Machine *m) {
       m->path.start = pc;
       m->path.elements = 0;
 #if LOG_JIT
+      AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
       AppendJitCall(m->path.jp, StartPath);
 #endif
       res = true;
@@ -81,6 +83,7 @@ bool CreatePath(struct Machine *m) {
 void CommitPath(struct Machine *m, intptr_t splice) {
   unassert(m->path.jp);
 #if LOG_JIT
+  AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
   AppendJitCall(m->path.jp, EndPath);
 #endif
   STATISTIC(path_longest_bytes =

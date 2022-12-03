@@ -536,8 +536,10 @@ int XlatOpenFlags(int x) {
   if (x & O_TRUNC_LINUX) res |= O_TRUNC, x &= ~O_TRUNC_LINUX;
 #ifdef O_PATH
   if (x & O_PATH_LINUX) res |= O_PATH, x &= ~O_PATH_LINUX;
-#else
+#elif defined(O_EXEC)
   if (x & O_PATH_LINUX) res |= O_EXEC, x &= ~O_PATH_LINUX;
+#else
+  x &= ~O_PATH_LINUX;
 #endif
 #ifdef O_LARGEFILE
   if (x & O_LARGEFILE_LINUX) res |= O_LARGEFILE, x &= ~O_LARGEFILE_LINUX;
@@ -584,7 +586,7 @@ int UnXlatOpenFlags(int x) {
   if (x & O_TRUNC) res |= O_TRUNC_LINUX;
 #ifdef O_PATH
   if (x & O_PATH) res |= O_PATH_LINUX;
-#else
+#elif defined(O_EXEC)
   if (x & O_EXEC) res |= O_PATH_LINUX;
 #endif
 #ifdef O_LARGEFILE

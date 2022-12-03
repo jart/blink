@@ -41,8 +41,7 @@
 #define READ32(p) Read32((const u8 *)(p))
 
 static void LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
-                               const Elf64_Phdr *phdr, i64 *inout_mincode,
-                               i64 *inout_maxcode, i64 *inout_brk) {
+                               const Elf64_Phdr *phdr) {
 
   u32 flags = Read32(phdr->p_flags);
   i64 vaddr = Read64(phdr->p_vaddr);
@@ -50,6 +49,9 @@ static void LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
   i64 offset = Read64(phdr->p_offset);
   i64 filesz = Read64(phdr->p_filesz);
 
+  if (!memsz) {
+    return;
+  }
   if (offset > imagesize) {
     LOGF("bad phdr offset");
     exit(200);
@@ -63,8 +65,6 @@ static void LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
     exit(200);
   }
 
-  *inout_brk = MAX(*inout_brk, ROUNDUP(vaddr + memsz, 4096));
-
   if (ReserveVirtual(m->system, ROUNDDOWN(vaddr, 4096),
                      ROUNDUP(vaddr + memsz, 4096) - ROUNDDOWN(vaddr, 4096),
                      PAGE_RSRV | PAGE_U | PAGE_RW | PAGE_V |
@@ -75,29 +75,20 @@ static void LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
 
   CopyToUser(m, vaddr, (u8 *)image + offset, filesz);
 
-  if (flags & PF_X) {
-    i64 mincode = vaddr;
-    i64 maxcode = vaddr + memsz;
-    if (!*inout_mincode) {
-      *inout_mincode = mincode;
-      *inout_maxcode = maxcode;
-    } else {
-      *inout_mincode = MIN(*inout_mincode, mincode);
-      *inout_maxcode = MAX(*inout_maxcode, maxcode);
-    }
+  m->system->brk = MAX(m->system->brk, ROUNDUP(vaddr + memsz, 4096));
+  if ((flags & PF_X) && !m->system->codesize) {
+    m->system->codestart = vaddr;
+    m->system->codesize = memsz;
   }
 }
 
 static void LoadElf(struct Machine *m, struct Elf *elf) {
   int i;
-  i64 mincode = 0;
-  i64 maxcode = 0;
-  i64 brk = kMinBrk;
   Elf64_Phdr *phdr;
   if (elf->ehdr->e_ident[EI_CLASS] != ELFCLASS64 ||
       Read16(elf->ehdr->e_type) != ET_EXEC ||
       Read16(elf->ehdr->e_machine) != EM_NEXGEN32E) {
-    WriteErrorString("error: not a statically-linked x86_64 executable\n");
+    WriteErrorString("not a statically-linked x86_64 executable\n");
     exit(200);
   }
   m->ip = elf->base = Read64(elf->ehdr->e_entry);
@@ -106,24 +97,17 @@ static void LoadElf(struct Machine *m, struct Elf *elf) {
     switch (Read32(phdr->p_type)) {
       case PT_LOAD:
         elf->base = MIN(elf->base, (i64)Read64(phdr->p_vaddr));
-        LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, &mincode, &maxcode,
-                           &brk);
+        LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr);
         break;
       default:
         break;
     }
   }
-  m->system->brk = brk;
-  m->system->codestart = mincode;
-  m->system->codesize = maxcode - mincode;
 }
 
 static void LoadBin(struct Machine *m, intptr_t base, const char *prog,
                     void *code, size_t codesize) {
   Elf64_Phdr phdr;
-  i64 mincode = 0;
-  i64 maxcode = 0;
-  i64 brk = kMinBrk;
   Write32(phdr.p_type, PT_LOAD);
   Write32(phdr.p_flags, PF_X | PF_R | PF_W);
   Write64(phdr.p_offset, 0);
@@ -132,10 +116,7 @@ static void LoadBin(struct Machine *m, intptr_t base, const char *prog,
   Write64(phdr.p_filesz, codesize);
   Write64(phdr.p_memsz, ROUNDUP(codesize + 4 * 1024 * 1024, 4 * 1024 * 1024));
   Write64(phdr.p_align, 4096);
-  LoadElfLoadSegment(m, code, codesize, &phdr, &mincode, &maxcode, &brk);
-  m->system->codesize = maxcode - mincode;
-  m->system->codestart = mincode;
-  m->system->brk = brk;
+  LoadElfLoadSegment(m, code, codesize, &phdr);
   m->ip = base;
 }
 
@@ -245,6 +226,9 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
   }
   close(fd);
   ResetCpu(m);
+  m->system->codesize = 0;
+  m->system->codestart = 0;
+  m->system->brk = kMinBrk;
   if (m->mode == XED_MODE_REAL) {
     BootProgram(m, elf, elf->mapsize);
   } else {

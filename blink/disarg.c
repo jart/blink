@@ -450,7 +450,7 @@ static char *DisJb(struct Dis *d, u64 rde, char *p) {
 
 static char *DisJvds(struct Dis *d, u64 rde, char *p) {
   return DisSym(d, p, RipRelative(d, d->xedd->op.disp),
-                RipRelative(d, d->xedd->op.disp) - d->m->cs);
+                RipRelative(d, d->xedd->op.disp) - (d->m ? d->m->cs : 0));
 }
 
 static char *DisAbs(struct Dis *d, u64 rde, char *p) {

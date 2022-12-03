@@ -45,13 +45,14 @@ TAGSFLAGS =				\
 CFLAGS +=				\
 	-U_FORTIFY_SOURCE
 
-ifeq ($(USER),jart)
+ifeq ($(USER), jart)
 CFLAGS +=				\
 	-fno-stack-protector		\
 	-Wall				\
 	-Werror				\
 	-Wno-unused-function		\
-	-Wno-unused-const-variable
+	-Wno-unused-const-variable	\
+	-Wno-tautological-constant-out-of-range-compare
 endif
 
 ifeq ($(MODE), rel)

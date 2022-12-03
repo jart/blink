@@ -111,8 +111,7 @@ TEST(jit, func) {
   ASSERT_NOTNULL((jp = StartJit(&jit)));
   ASSERT_TRUE(AppendJit(jp, code, sizeof(code)));
   ASSERT_NE(0, FinishJit(&jit, jp, (hook_t *)&add, (intptr_t)staging));
-  ASSERT_EQ(666, add(2, 2));
-  ASSERT_EQ(1, FlushJit(&jit));
+  FlushJit(&jit);
   ASSERT_EQ(4, add(2, 2));
   ASSERT_EQ(23, add(20, 3));
 }
@@ -124,7 +123,7 @@ TEST(jit, call) {
   ASSERT_NOTNULL((jp = StartJit(&jit)));
   ASSERT_TRUE(AppendJitCall(jp, (void *)&CallMe));
   ASSERT_NE(0, FinishJit(&jit, jp, (hook_t *)&fun, 0));
-  ASSERT_EQ(1, FlushJit(&jit));
+  FlushJit(&jit);
   r0 = fun(1, 2, 3, 4, 5, 6);
   ASSERT_EQ(g_r0, r0);
   ASSERT_EQ(1, g_p0);
@@ -150,7 +149,7 @@ TEST(jit, param) {
     ASSERT_TRUE(AppendJitSetArg(jp, 5, (p5 = i - 500)));
     ASSERT_TRUE(AppendJitCall(jp, (void *)&CallMe));
     ASSERT_NE(0, FinishJit(&jit, jp, (hook_t *)&fun, 0));
-    ASSERT_EQ(1, FlushJit(&jit));
+    FlushJit(&jit);
     r0 = fun();
     ASSERT_EQ(g_r0, r0);
     ASSERT_EQ(p0, g_p0);

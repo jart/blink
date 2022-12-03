@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -34,13 +35,13 @@
 static u64 ReadInt(u8 p[8], unsigned long w) {
   switch (w) {
     case 0:
-      return Load8(p);
+      return Read8(p);
     case 1:
-      return Load16(p);
+      return Read16(p);
     case 2:
-      return Load32(p);
+      return Read32(p);
     case 3:
-      return Load64(p);
+      return Read64(p);
     default:
       __builtin_unreachable();
   }
@@ -49,52 +50,56 @@ static u64 ReadInt(u8 p[8], unsigned long w) {
 static void WriteInt(u8 p[8], u64 x, unsigned long w) {
   switch (w) {
     case 0:
-      Store8(p, x);
+      Write8(p, x);
       break;
     case 1:
-      Store16(p, x);
+      Write16(p, x);
       break;
     case 2:
-      Store32(p, x);
+      Write32(p, x);
       break;
     case 3:
-      Store64(p, x);
+      Write64(p, x);
       break;
     default:
       __builtin_unreachable();
   }
 }
 
-static void AddDi(P, u64 x) {
+static u64 AddDi(P, u64 x) {
+  u64 res;
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
-      Put64(m->di, Get64(m->di) + x);
-      return;
+      Put64(m->di, (res = Get64(m->di) + x));
+      break;
     case XED_MODE_LEGACY:
-      Put64(m->di, (Get32(m->di) + x) & 0xffffffff);
-      return;
+      Put64(m->di, (res = (Get32(m->di) + x) & 0xffffffff));
+      break;
     case XED_MODE_REAL:
-      Put16(m->di, Get16(m->di) + x);
-      return;
+      Put16(m->di, (res = Get16(m->di) + x));
+      break;
     default:
       __builtin_unreachable();
   }
+  return res;
 }
 
-static void AddSi(P, u64 x) {
+static u64 AddSi(P, u64 x) {
+  u64 res;
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
-      Put64(m->si, Get64(m->si) + x);
-      return;
+      Put64(m->si, (res = Get64(m->si) + x));
+      break;
     case XED_MODE_LEGACY:
-      Put64(m->si, (Get32(m->si) + x) & 0xffffffff);
-      return;
+      Put64(m->si, ((res = Get32(m->si) + x) & 0xffffffff));
+      break;
     case XED_MODE_REAL:
-      Put16(m->si, Get16(m->si) + x);
-      return;
+      Put16(m->si, (res = Get16(m->si) + x));
+      break;
     default:
       __builtin_unreachable();
   }
+  return res;
 }
 
 static u64 ReadCx(P) {
@@ -134,14 +139,14 @@ static void StringOp(P, int op) {
   stop = false;
   n = 1 << RegLog2(rde);
   sgn = GetFlag(m->flags, FLAGS_DF) ? -1 : 1;
+  atomic_thread_fence(memory_order_acquire);
   do {
     if (Rep(rde) && !ReadCx(A)) break;
     switch (op) {
       case STRING_CMPS:
         kAlu[ALU_SUB][RegLog2(rde)](
             ReadInt(Load(m, AddressSi(A), n, s[2]), RegLog2(rde)),
-            ReadInt(Load(m, AddressDi(A), n, s[1]), RegLog2(rde)),
-            &m->flags);
+            ReadInt(Load(m, AddressDi(A), n, s[1]), RegLog2(rde)), &m->flags);
         AddDi(A, sgn * n);
         AddSi(A, sgn * n);
         stop = (Rep(rde) == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
@@ -191,6 +196,7 @@ static void StringOp(P, int op) {
       break;
     }
   } while (!stop);
+  atomic_thread_fence(memory_order_release);
 }
 
 static void RepMovsbEnhanced(P) {
@@ -198,37 +204,42 @@ static void RepMovsbEnhanced(P) {
   u64 diactual, siactual, cx;
   unsigned diremain, siremain, i, n;
   if ((cx = ReadCx(A))) {
+    diactual = AddressDi(A);
+    siactual = AddressSi(A);
+    SetWriteAddr(m, diactual, cx);
+    SetReadAddr(m, siactual, cx);
+    atomic_thread_fence(memory_order_acquire);
     do {
-      diactual = AddressDi(A);
-      siactual = AddressSi(A);
-      SetWriteAddr(m, diactual, cx);
-      SetReadAddr(m, siactual, cx);
       direal = ResolveAddress(m, diactual);
       sireal = ResolveAddress(m, siactual);
       diremain = 4096 - (diactual & 4095);
       siremain = 4096 - (siactual & 4095);
       n = MIN(cx, MIN(diremain, siremain));
-      for (i = 0; i < n; ++i) direal[i] = sireal[i];
-      AddDi(A, n);
-      AddSi(A, n);
+      for (i = 0; i < n; ++i) {
+        direal[i] = sireal[i];
+      }
+      diactual = AddDi(A, n);
+      siactual = AddSi(A, n);
     } while ((cx = SubtractCx(A, n)));
+    atomic_thread_fence(memory_order_release);
   }
 }
 
 static void RepStosbEnhanced(P) {
   u8 *direal;
-  unsigned diremain, n;
   u64 diactual, cx;
+  unsigned diremain, n;
   if ((cx = ReadCx(A))) {
+    diactual = AddressDi(A);
+    SetWriteAddr(m, diactual, cx);
     do {
-      diactual = AddressDi(A);
-      SetWriteAddr(m, diactual, cx);
       direal = ResolveAddress(m, diactual);
       diremain = 4096 - (diactual & 4095);
       n = MIN(cx, diremain);
-      memset(direal, Get8(m->ax), n);
-      AddDi(A, n);
+      memset(direal, m->al, n);
+      diactual = AddDi(A, n);
     } while ((cx = SubtractCx(A, n)));
+    atomic_thread_fence(memory_order_release);
   }
 }
 

@@ -1183,7 +1183,7 @@ static int SysClockNanosleep(struct Machine *m, int clock, int flags,
   CopyFromUserRead(m, &gtimespec, reqaddr, sizeof(gtimespec));
   req.tv_sec = Read64(gtimespec.tv_sec);
   req.tv_nsec = Read64(gtimespec.tv_nsec);
-#ifdef TIMER_ABSTIME
+#if defined(TIMER_ABSTIME) && !defined(__OpenBSD__)
   flags = flags & TIMER_ABSTIME_LINUX ? TIMER_ABSTIME : 0;
   if ((rc = clock_nanosleep(clock, flags, &req, &rem))) {
     errno = rc;

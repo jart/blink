@@ -7,9 +7,9 @@
 #include "blink/dll.h"
 #include "blink/types.h"
 
-#define kJitPageSize  65536
-#define kJitPageFit   600
-#define kJitPageAlign 16
+#define kJitPageSize 65536
+#define kJitPageFit  600
+#define kJitAlign    16
 
 #ifdef __x86_64__
 #define kJitRes0 kAmdAx
@@ -93,17 +93,14 @@ struct JitPage {
   u8 *addr;
   int start;
   int index;
-  int saved;
-  int setargs;
   int committed;
   struct Dll *staged;
   struct Dll elem;
 };
 
 struct Jit {
-  u8 *brk;
-  pthread_mutex_t lock;
   _Atomic(int) disabled;
+  pthread_mutex_t lock;
   struct Dll *pages;
 };
 

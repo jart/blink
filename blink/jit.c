@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/end.h"
 #include "blink/endian.h"
@@ -33,6 +34,7 @@
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/map.h"
+#include "blink/tsan.h"
 #include "blink/util.h"
 
 #if (defined(__x86_64__) || defined(__aarch64__)) && \
@@ -104,6 +106,22 @@ static const u32 kEpilogue[] = {
 };
 #endif
 
+static struct JitGlobals {
+  pthread_mutex_t lock;
+  _Atomic(int) prot;
+  _Atomic(u8 *) brk;
+  struct Dll *freepages GUARDED_BY(lock);
+} g_jit = {
+    PTHREAD_MUTEX_INITIALIZER,
+#if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 403 || \
+    __has_builtin(__builtin___clear_cache)
+    PROT_READ | PROT_WRITE | PROT_EXEC,
+#else
+#define __builtin___clear_cache(x, y) (void)0
+    PROT_READ | PROT_WRITE,
+#endif
+};
+
 static long GetSystemPageSize(void) {
   long pagesize;
   unassert((pagesize = sysconf(_SC_PAGESIZE)) > 0);
@@ -112,14 +130,45 @@ static long GetSystemPageSize(void) {
   return pagesize;
 }
 
-static void DestroyJitPage(struct JitPage *jp) {
+static bool CanJitForImmediateEffect(void) {
+  return atomic_load_explicit(&g_jit.prot, memory_order_relaxed) & PROT_EXEC;
+}
+
+static void RelinquishJitPage(struct JitPage *jp) {
   struct Dll *e;
   while ((e = dll_first(jp->staged))) {
     jp->staged = dll_remove(jp->staged, e);
     free(JITSTAGE_CONTAINER(e));
   }
-  unassert(!munmap(jp->addr, kJitPageSize));
-  free(jp);
+  jp->start = 0;
+  jp->index = 0;
+  jp->committed = 0;
+  unassert(mmap(jp->addr, kJitPageSize, PROT_NONE,
+                MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED | MAP_NORESERVE, -1,
+                0) == (void *)jp->addr);
+  LOCK(&g_jit.lock);
+  g_jit.freepages = dll_make_first(g_jit.freepages, &jp->elem);
+  UNLOCK(&g_jit.lock);
+}
+
+static struct JitPage *ReclaimJitPage(void) {
+  struct Dll *e;
+  struct JitPage *jp;
+  LOCK(&g_jit.lock);
+  if ((e = dll_first(g_jit.freepages))) {
+    g_jit.freepages = dll_remove(g_jit.freepages, e);
+    jp = JITPAGE_CONTAINER(e);
+  } else {
+    jp = 0;
+  }
+  UNLOCK(&g_jit.lock);
+  if (jp) {
+    unassert(mmap(jp->addr, kJitPageSize,
+                  atomic_load_explicit(&g_jit.prot, memory_order_relaxed),
+                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1,
+                  0) == (void *)jp->addr);
+  }
+  return jp;
 }
 
 /**
@@ -132,8 +181,21 @@ static void DestroyJitPage(struct JitPage *jp) {
  * @return 0 on success
  */
 int InitJit(struct Jit *jit) {
+  u8 *brk;
   memset(jit, 0, sizeof(*jit));
   pthread_mutex_init(&jit->lock, 0);
+  if (!(brk = atomic_load_explicit(&g_jit.brk, memory_order_relaxed))) {
+    // we're going to politely ask the kernel for addresses starting
+    // arbitrary megabytes past the end of our own executable's .bss
+    // section. we'll cross our fingers, and hope that gives us room
+    // away from a brk()-based libc malloc() function which may have
+    // already allocated memory in this space. the reason it matters
+    // is because the x86 and arm isas impose limits on displacement
+    atomic_compare_exchange_strong_explicit(
+        &g_jit.brk, &brk,
+        (u8 *)ROUNDUP((intptr_t)IMAGE_END, kJitPageSize) + kJitLeeway,
+        memory_order_relaxed, memory_order_relaxed);
+  }
   return 0;
 }
 
@@ -149,7 +211,7 @@ int DestroyJit(struct Jit *jit) {
   LOCK(&jit->lock);
   while ((e = dll_first(jit->pages))) {
     jit->pages = dll_remove(jit->pages, e);
-    DestroyJitPage(JITPAGE_CONTAINER(e));
+    RelinquishJitPage(JITPAGE_CONTAINER(e));
   }
   UNLOCK(&jit->lock);
   unassert(!pthread_mutex_destroy(&jit->lock));
@@ -187,6 +249,8 @@ bool IsJitDisabled(struct Jit *jit) {
  *     always return NULL
  */
 struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
+  u8 *brk;
+  int prot;
   struct Dll *e;
   intptr_t distance;
   struct JitPage *jp;
@@ -194,27 +258,25 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
   unassert(reserve <= kJitPageSize - sizeof(struct JitPage));
   if (!IsJitDisabled(jit)) {
     LOCK(&jit->lock);
-    if (!jit->brk) {
-      // we're going to politely ask the kernel for addresses starting
-      // arbitrary megabytes past the end of our own executable's .bss
-      // section. we'll cross our fingers, and hope that gives us room
-      // away from a brk()-based libc malloc() function which may have
-      // already allocated memory in this space. the reason it matters
-      // is because the x86 and arm isas impose limits on displacement
-      jit->brk = (u8 *)ROUNDUP((intptr_t)IMAGE_END, kJitPageSize) + kJitLeeway;
-    }
     e = dll_first(jit->pages);
     if (e && (jp = JITPAGE_CONTAINER(e))->index + reserve <= kJitPageSize) {
       jit->pages = dll_remove(jit->pages, &jp->elem);
-    } else if ((jp = (struct JitPage *)calloc(1, sizeof(struct JitPage)))) {
+    } else if (!(jp = ReclaimJitPage()) &&
+               (jp = (struct JitPage *)calloc(1, sizeof(struct JitPage)))) {
       for (;;) {
-        jp->addr =
-            (u8 *)Mmap(jit->brk, kJitPageSize, PROT_READ | PROT_WRITE,
-                       MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0, "jit");
+        brk = atomic_fetch_add_explicit(&g_jit.brk, kJitPageSize,
+                                        memory_order_relaxed);
+        jp->addr = (u8 *)Mmap(
+            brk, kJitPageSize,
+            (prot = atomic_load_explicit(&g_jit.prot, memory_order_relaxed)),
+            MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0, "jit");
         if (jp->addr != MAP_FAILED) {
           distance = ABS(jp->addr - IMAGE_END);
           if (distance <= kJitProximity - kJitLeeway) {
-            jit->brk = jp->addr + kJitPageSize;
+            if (jp->addr != brk) {
+              atomic_store_explicit(&g_jit.brk, jp->addr + kJitPageSize,
+                                    memory_order_relaxed);
+            }
             dll_init(&jp->elem);
             break;
           } else {
@@ -235,10 +297,19 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
             break;
           }
         } else if (errno == MAP_DENIED) {
-          jit->brk += kJitPageSize;
+          // our fixed noreplace mmap request probably overlapped some
+          // dso library, so let's try again with a different address.
+          continue;
+        } else if (prot & PROT_EXEC) {
+          // OpenBSD imposes a R^X invariant and raises ENOTSUP if RWX
+          // memory is requested. Since other OSes might exist, having
+          // this same requirement, and possible a different errno, we
+          // shall just clear the exec flag and try again.
+          atomic_store_explicit(&g_jit.prot, prot & ~PROT_EXEC,
+                                memory_order_relaxed);
           continue;
         } else {
-          LOGF("mmap() error at %p is %s", jit->brk, strerror(errno));
+          LOGF("mmap() error at %p is %s", brk, strerror(errno));
           DisableJit(jit);
           free(jp);
           jp = 0;
@@ -251,7 +322,7 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
     jp = 0;
   }
   if (jp) {
-    unassert(!(jp->start & (kJitPageAlign - 1)));
+    unassert(!(jp->start & (kJitAlign - 1)));
     unassert(jp->start == jp->index);
   }
   return jp;
@@ -304,12 +375,10 @@ static int CommitJit(struct JitPage *jp, long pagesize) {
   unassert(!(jp->committed & (pagesize - 1)));
   pageoff = ROUNDDOWN(jp->start, pagesize);
   if (pageoff > jp->committed) {
-    // 1. OpenBSD requires we maintain a W^X invariant.
-    // 2. Aarch64 cache flush is mysterious so let the kernel do it.
     unassert(jp->start == jp->index);
     unassert(!mprotect(jp->addr + jp->committed, pageoff - jp->committed,
                        PROT_READ | PROT_EXEC));
-    JIT_LOGF("activated [%p,%p) w/ %zu kb", jp->addr + jp->committed,
+    MEM_LOGF("activated [%p,%p) w/ %zu kb", jp->addr + jp->committed,
              jp->addr + jp->committed + (pageoff - jp->committed),
              (pageoff - jp->committed) / 1024);
     unassert(jp->start == jp->index);
@@ -397,15 +466,21 @@ intptr_t ReleaseJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
   if (jp->index > jp->start) {
     if (jp->index <= kJitPageSize) {
       addr = jp->addr + jp->start;
-      jp->index = ROUNDUP(jp->index, kJitPageAlign);
+      jp->index = ROUNDUP(jp->index, kJitAlign);
       if (hook) {
-        atomic_store_explicit(hook, staging, memory_order_release);
-        if ((js = (struct JitStage *)calloc(1, sizeof(struct JitStage)))) {
-          dll_init(&js->elem);
-          js->hook = hook;
-          js->start = jp->start;
-          js->index = jp->index;
-          jp->staged = dll_make_last(jp->staged, &js->elem);
+        if (CanJitForImmediateEffect()) {
+          __builtin___clear_cache((char *)addr,
+                                  (char *)addr + (jp->index - jp->start));
+          atomic_store_explicit(hook, (intptr_t)addr, memory_order_release);
+        } else {
+          atomic_store_explicit(hook, staging, memory_order_release);
+          if ((js = (struct JitStage *)calloc(1, sizeof(struct JitStage)))) {
+            dll_init(&js->elem);
+            js->hook = hook;
+            js->start = jp->start;
+            js->index = jp->index;
+            jp->staged = dll_make_last(jp->staged, &js->elem);
+          }
         }
       }
       if (jp->index + kJitPageFit > kJitPageSize) {
@@ -423,7 +498,6 @@ intptr_t ReleaseJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
     jp->start = jp->index;
     unassert(jp->start == jp->index);
     CommitJit(jp, GetSystemPageSize());
-    unassert(jp->start == jp->index);
   } else {
     addr = 0;
   }
@@ -589,7 +663,6 @@ bool AppendJitCall(struct JitPage *jp, void *func) {
   }
 #elif defined(__aarch64__)
   uint32_t buf[1];
-  jp->setargs = 0;
   // ARM function calls are encoded as:
   //
   //       BL          displacement
