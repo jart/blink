@@ -281,10 +281,12 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 len, int prot) {
 }
 
 static int SysMadvise(struct Machine *m, i64 addr, size_t len, int advice) {
-  return enosys();
+  return 0;
 }
 
 static i64 SysBrk(struct Machine *m, i64 addr) {
+  i64 rc;
+  LOCK(&m->system->mmap_lock);
   MEM_LOGF("brk(%#" PRIx64 ") currently %#" PRIx64, addr, m->system->brk);
   addr = ROUNDUP(addr, 4096);
   if (addr >= kMinBrk) {
@@ -299,11 +301,18 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
       }
     }
   }
-  return m->system->brk;
+  rc = m->system->brk;
+  UNLOCK(&m->system->mmap_lock);
+  return rc;
 }
 
 static int SysMunmap(struct Machine *m, i64 virt, u64 size) {
-  return FreeVirtual(m->system, virt, size);
+  int rc;
+  if (!IsValidAddrSize(virt, size)) return einval();
+  LOCK(&m->system->mmap_lock);
+  rc = FreeVirtual(m->system, virt, size);
+  UNLOCK(&m->system->mmap_lock);
+  return rc;
 }
 
 static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,

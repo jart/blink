@@ -25,23 +25,26 @@
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/swap.h"
 
-static void Alub(P, aluop_f op) {
+void OpAlub(P) {
   u8 *p, *q;
+  aluop_f f;
+  f = kAlu[(Opcode(rde) & 070) >> 3][0];
   p = GetModrmRegisterBytePointerWrite1(A);
   q = ByteRexrReg(m, rde);
   if (!Lock(rde)) {
-    Store8(p, op(Load8(p), Get8(q), &m->flags));
+    Store8(p, f(m, Load8(p), Get8(q)));
   } else {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
     u8 x, y, z;
     x = Load8(p);
     y = Get8(q);
     do {
-      z = op(x, y, &m->flags);
+      z = f(m, x, y);
     } while (!atomic_compare_exchange_weak_explicit(
         (atomic_uchar *)p, &x, z, memory_order_release, memory_order_relaxed));
 #else
@@ -51,63 +54,36 @@ static void Alub(P, aluop_f op) {
   }
 }
 
-void OpAlubAdd(P) {
-  Alub(A, Add8);
+static void OpAluwRegAdd64(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastAdd64(Get64(m->weg[rexb]), Get64(m->weg[rexr]), &m->flags));
 }
-
-void OpAlubOr(P) {
-  Alub(A, Or8);
+static void OpAluwRegOr64(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastOr64(Get64(m->weg[rexb]), Get64(m->weg[rexr]), &m->flags));
 }
-
-void OpAlubAdc(P) {
-  Alub(A, Adc8);
+static void OpAluwRegAdc64(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastAdc64(Get64(m->weg[rexb]), Get64(m->weg[rexr]), &m->flags));
 }
-
-void OpAlubSbb(P) {
-  Alub(A, Sbb8);
+static void OpAluwRegSbb64(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastSbb64(Get64(m->weg[rexb]), Get64(m->weg[rexr]), &m->flags));
 }
-
-void OpAlubAnd(P) {
-  Alub(A, And8);
+static void OpAluwRegAnd64(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastAnd64(Get64(m->weg[rexb]), Get64(m->weg[rexr]), &m->flags));
 }
-
-void OpAlubSub(P) {
-  Alub(A, Sub8);
+static void OpAluwRegSub64(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastSub64(Get64(m->weg[rexb]), Get64(m->weg[rexr]), &m->flags));
 }
-
-void OpAlubXor(P) {
-  Alub(A, Xor8);
+static void OpAluwRegXor64(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastXor64(Get64(m->weg[rexb]), Get64(m->weg[rexr]), &m->flags));
 }
-
-static void OpAluwRegAdd64(P) {
-  Put64(RegRexbRm(m, rde), FastAdd64(Get64(RegRexbRm(m, rde)),
-                                     Get64(RegRexrReg(m, rde)), &m->flags));
-}
-static void OpAluwRegOr64(P) {
-  Put64(RegRexbRm(m, rde), FastOr64(Get64(RegRexbRm(m, rde)),
-                                    Get64(RegRexrReg(m, rde)), &m->flags));
-}
-static void OpAluwRegAdc64(P) {
-  Put64(RegRexbRm(m, rde), FastAdc64(Get64(RegRexbRm(m, rde)),
-                                     Get64(RegRexrReg(m, rde)), &m->flags));
-}
-static void OpAluwRegSbb64(P) {
-  Put64(RegRexbRm(m, rde), FastSbb64(Get64(RegRexbRm(m, rde)),
-                                     Get64(RegRexrReg(m, rde)), &m->flags));
-}
-static void OpAluwRegAnd64(P) {
-  Put64(RegRexbRm(m, rde), FastAnd64(Get64(RegRexbRm(m, rde)),
-                                     Get64(RegRexrReg(m, rde)), &m->flags));
-}
-static void OpAluwRegSub64(P) {
-  Put64(RegRexbRm(m, rde), FastSub64(Get64(RegRexbRm(m, rde)),
-                                     Get64(RegRexrReg(m, rde)), &m->flags));
-}
-static void OpAluwRegXor64(P) {
-  Put64(RegRexbRm(m, rde), FastXor64(Get64(RegRexbRm(m, rde)),
-                                     Get64(RegRexrReg(m, rde)), &m->flags));
-}
-const nexgen32e_f kAluReg64[] = {
+typedef void (*alureg_f)(struct Machine *, long, long);
+const alureg_f kAluReg64[] = {
     OpAluwRegAdd64,  //
     OpAluwRegOr64,   //
     OpAluwRegAdc64,  //
@@ -118,35 +94,35 @@ const nexgen32e_f kAluReg64[] = {
     OpAluwRegSub64,  //
 };
 
-static void OpAluwRegAdd32(P) {
-  Put64(RegRexbRm(m, rde), FastAdd32(Get32(RegRexbRm(m, rde)),
-                                     Get32(RegRexrReg(m, rde)), &m->flags));
+static void OpAluwRegAdd32(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastAdd32(Get32(m->weg[rexb]), Get32(m->weg[rexr]), &m->flags));
 }
-static void OpAluwRegOr32(P) {
-  Put64(RegRexbRm(m, rde), FastOr32(Get32(RegRexbRm(m, rde)),
-                                    Get32(RegRexrReg(m, rde)), &m->flags));
+static void OpAluwRegOr32(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastOr32(Get32(m->weg[rexb]), Get32(m->weg[rexr]), &m->flags));
 }
-static void OpAluwRegAdc32(P) {
-  Put64(RegRexbRm(m, rde), FastAdc32(Get32(RegRexbRm(m, rde)),
-                                     Get32(RegRexrReg(m, rde)), &m->flags));
+static void OpAluwRegAdc32(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastAdc32(Get32(m->weg[rexb]), Get32(m->weg[rexr]), &m->flags));
 }
-static void OpAluwRegSbb32(P) {
-  Put64(RegRexbRm(m, rde), FastSbb32(Get32(RegRexbRm(m, rde)),
-                                     Get32(RegRexrReg(m, rde)), &m->flags));
+static void OpAluwRegSbb32(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastSbb32(Get32(m->weg[rexb]), Get32(m->weg[rexr]), &m->flags));
 }
-static void OpAluwRegAnd32(P) {
-  Put64(RegRexbRm(m, rde), FastAnd32(Get32(RegRexbRm(m, rde)),
-                                     Get32(RegRexrReg(m, rde)), &m->flags));
+static void OpAluwRegAnd32(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastAnd32(Get32(m->weg[rexb]), Get32(m->weg[rexr]), &m->flags));
 }
-static void OpAluwRegSub32(P) {
-  Put64(RegRexbRm(m, rde), FastSub32(Get32(RegRexbRm(m, rde)),
-                                     Get32(RegRexrReg(m, rde)), &m->flags));
+static void OpAluwRegSub32(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastSub32(Get32(m->weg[rexb]), Get32(m->weg[rexr]), &m->flags));
 }
-static void OpAluwRegXor32(P) {
-  Put64(RegRexbRm(m, rde), FastXor32(Get32(RegRexbRm(m, rde)),
-                                     Get32(RegRexrReg(m, rde)), &m->flags));
+static void OpAluwRegXor32(struct Machine *m, long rexb, long rexr) {
+  Put64(m->weg[rexb],
+        FastXor32(Get32(m->weg[rexb]), Get32(m->weg[rexr]), &m->flags));
 }
-const nexgen32e_f kAluReg32[] = {
+const alureg_f kAluReg32[] = {
     OpAluwRegAdd32,  //
     OpAluwRegOr32,   //
     OpAluwRegAdc32,  //
@@ -157,9 +133,27 @@ const nexgen32e_f kAluReg32[] = {
     OpAluwRegSub32,  //
 };
 
+static void OpAluwRegClear(struct Machine *m, long i) {
+  m->flags &= ~(1 << FLAGS_CF | 1 << FLAGS_SF | 1 << FLAGS_OF | 0xFF000000u);
+  m->flags |= 1 << FLAGS_ZF;
+  Put64(m->weg[i], 0);
+}
+
 void OpAluw(P) {
   u8 *p, *q;
+  aluop_f f;
   q = RegRexrReg(m, rde);
+  f = kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)];
+
+  // test for clear register idiom
+  if (IsModrmRegister(rde) &&        //
+      (f == Xor32 || f == Xor64) &&  //
+      RegRexbRm(m, rde) == RegRexrReg(m, rde)) {
+    OpAluwRegClear(m, RexbRm(rde));
+    Jitter(A, "a1i c", RexbRm(rde), OpAluwRegClear);
+    return;
+  }
+
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
     if (Lock(rde)) {
@@ -170,8 +164,7 @@ void OpAluw(P) {
         y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);
         y = Little64(y);
         do {
-          z = Little64(kAlu[(Opcode(rde) & 070) >> 3][ALU_INT64](Little64(x), y,
-                                                                 &m->flags));
+          z = Little64(f(m, Little64(x), y));
         } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x,
                                                         z, memory_order_release,
                                                         memory_order_relaxed));
@@ -183,16 +176,17 @@ void OpAluw(P) {
       LOGF("can't %s on this platform", "lock aluq");
       OpUdImpl(m);
 #endif
+      return;  // can't jit lock
     } else {
       u64 x, y, z;
       x = Load64(p);
       y = Get64(q);
-      z = kAlu[(Opcode(rde) & 070) >> 3][ALU_INT64](x, y, &m->flags);
+      z = f(m, x, y);
       Store64(p, z);
-      if (m->path.jp && IsModrmRegister(rde)) {
-        AppendJitSetArg(m->path.jp, kArgRde,
-                        rde & (kRexbRmMask | kRexrRegMask));
-        AppendJitCall(m->path.jp, (void *)kAluReg64[(Opcode(rde) & 070) >> 3]);
+      if (IsModrmRegister(rde)) {
+        Jitter(A, "a1i a2i s0a0= c", RexbRm(rde), RexrReg(rde),
+               kAluReg64[(Opcode(rde) & 070) >> 3]);
+        return;
       }
     }
   } else if (!Osz(rde)) {
@@ -204,8 +198,7 @@ void OpAluw(P) {
         y = atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed);
         y = Little32(y);
         do {
-          z = Little32(kAlu[(Opcode(rde) & 070) >> 3][ALU_INT32](Little32(x), y,
-                                                                 &m->flags));
+          z = Little32(f(m, Little32(x), y));
         } while (!atomic_compare_exchange_weak_explicit((_Atomic(u32) *)p, &x,
                                                         z, memory_order_release,
                                                         memory_order_relaxed));
@@ -213,19 +206,20 @@ void OpAluw(P) {
         LOGF("can't %s misaligned address", "lock alul");
         OpUdImpl(m);
       }
+      return;  // can't jit lock
     } else {
       x = Load32(p);
       y = Get32(q);
-      z = kAlu[(Opcode(rde) & 070) >> 3][ALU_INT32](x, y, &m->flags);
+      z = f(m, x, y);
       Store32(p, z);
     }
     if (IsModrmRegister(rde)) {
       Put32(p + 4, 0);
-      if (m->path.jp) {
-        AppendJitSetArg(m->path.jp, kArgRde,
-                        rde & (kRexbRmMask | kRexrRegMask));
-        AppendJitCall(m->path.jp, (void *)kAluReg32[(Opcode(rde) & 070) >> 3]);
+      if (IsModrmRegister(rde)) {
+        Jitter(A, "a1i a2i c", RexbRm(rde), RexrReg(rde),
+               kAluReg32[(Opcode(rde) & 070) >> 3]);
       }
+      return;
     }
   } else {
     u16 x, y, z;
@@ -233,7 +227,8 @@ void OpAluw(P) {
     p = GetModrmRegisterWordPointerWrite2(A);
     x = Load16(p);
     y = Get16(q);
-    z = kAlu[(Opcode(rde) & 070) >> 3][ALU_INT16](x, y, &m->flags);
+    z = f(m, x, y);
     Store16(p, z);
   }
+  Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c r0 D", f);
 }

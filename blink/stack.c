@@ -31,36 +31,29 @@
 static const u8 kStackOsz[2][3] = {{2, 4, 8}, {4, 2, 2}};
 static const u8 kCallOsz[2][3] = {{2, 4, 8}, {4, 2, 8}};
 
-static void FastPush(P) {
-  u64 v, x = Get64(RegRexbSrm(m, rde));
+static void FastPush(struct Machine *m, long rexbsrm) {
+  u64 v, x = Get64(m->weg[rexbsrm]);
   Put64(m->sp, (v = Get64(m->sp) - 8));
-  Store64(ReserveAddress(m, v, 8, true), x);
+  Store64((u8 *)(intptr_t)v, x);
 }
 
-static void FastPop(P) {
+static void FastPop(struct Machine *m, long rexbsrm) {
   u64 v = Get64(m->sp);
   Put64(m->sp, v + 8);
-  Put64(RegRexbSrm(m, rde), Load64(ReserveAddress(m, v, 8, false)));
+  Put64(m->weg[rexbsrm], Load64((u8 *)(intptr_t)v));
 }
 
-static void FastCall(P) {
+static void FastCall(struct Machine *m, u64 disp) {
   u64 v, x = m->ip + disp;
   Put64(m->sp, (v = Get64(m->sp) - 8));
-  Store64(ReserveAddress(m, v, 8, true), m->ip);
+  Store64((u8 *)(intptr_t)v, m->ip);
   m->ip = x;
 }
 
-static void FastRet(P) {
+static void FastRet(struct Machine *m) {
   u64 v = Get64(m->sp);
   Put64(m->sp, v + 8);
-  m->ip = Load64(ReserveAddress(m, v, 8, false));
-}
-
-static void AcceleratePushPop(struct Machine *m, u64 rde, void op(P)) {
-  if (m->path.jp && !Osz(rde) && Mode(rde) == XED_MODE_LONG) {
-    AppendJitSetArg(m->path.jp, kArgRde, rde & kRegRexbSrmMask);
-    AppendJitCall(m->path.jp, (void *)op);
-  }
+  m->ip = Load64((u8 *)(intptr_t)v);
 }
 
 static void WriteStackWord(u8 *p, u64 rde, u32 osz, u64 x) {
@@ -120,7 +113,9 @@ void Push(P, u64 x) {
 void OpPushZvq(P) {
   int osz = kStackOsz[Osz(rde)][Mode(rde)];
   PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Eamode(rde), osz);
-  AcceleratePushPop(m, rde, FastPush);
+  if (IsDevirtualized(m) && !Osz(rde)) {
+    Jitter(A, "a1i c", RexbSrm(rde), FastPush);
+  }
 }
 
 static u64 PopN(P, u16 extra, unsigned osz) {
@@ -168,7 +163,9 @@ void OpPopZvq(P) {
     default:
       __builtin_unreachable();
   }
-  AcceleratePushPop(m, rde, FastPop);
+  if (IsDevirtualized(m) && !Osz(rde)) {
+    Jitter(A, "a1i c", RexbSrm(rde), FastPop);
+  }
 }
 
 static void OpCall(P, u64 func) {
@@ -178,15 +175,13 @@ static void OpCall(P, u64 func) {
 
 void OpCallJvds(P) {
   OpCall(A, m->ip + disp);
-  if (m->path.jp && !Osz(rde) && Mode(rde) == XED_MODE_LONG) {
-    AppendJitSetArg(m->path.jp, kArgDisp, disp);
-    AppendJitCall(m->path.jp, (void *)FastCall);
+  if (IsDevirtualized(m) && !Osz(rde)) {
+    Jitter(A, "a1i c", disp, FastCall);
   }
 }
 
 static u64 LoadAddressFromMemory(P) {
-  unsigned osz;
-  osz = kCallOsz[Osz(rde)][Mode(rde)];
+  unsigned osz = kCallOsz[Osz(rde)][Mode(rde)];
   return ReadStackWord(GetModrmRegisterWordPointerRead(A, osz), osz);
 }
 
@@ -219,8 +214,8 @@ void OpLeave(P) {
 
 void OpRet(P) {
   m->ip = Pop(A, 0);
-  if (m->path.jp && !Osz(rde) && Mode(rde) == XED_MODE_LONG) {
-    AppendJitCall(m->path.jp, (void *)FastRet);
+  if (IsDevirtualized(m) && !Osz(rde)) {
+    Jitter(A, "c", FastRet);
   }
 }
 

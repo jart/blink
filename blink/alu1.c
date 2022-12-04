@@ -31,13 +31,13 @@ static void AluEb(P, aluop_f op) {
   u8 *p;
   p = GetModrmRegisterBytePointerWrite1(A);
   if (!Lock(rde)) {
-    Store8(p, op(Load8(p), 0, &m->flags));
+    Store8(p, op(m, Load8(p), 0));
   } else {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
     u8 x, z;
     x = Load8(p);
     do {
-      z = op(x, 0, &m->flags);
+      z = op(m, x, 0);
     } while (!atomic_compare_exchange_weak_explicit(
         (atomic_uchar *)p, &x, z, memory_order_release, memory_order_relaxed));
 #else
@@ -76,7 +76,7 @@ static void AluEvqp(P, const aluop_f ops[4]) {
       unsigned long x, z;
       x = atomic_load_explicit((atomic_ulong *)p, memory_order_acquire);
       do {
-        z = Little64(ops[ALU_INT64](Little64(x), 0, &m->flags));
+        z = Little64(ops[ALU_INT64](m, Little64(x), 0));
       } while (!atomic_compare_exchange_weak_explicit((atomic_ulong *)p, &x, z,
                                                       memory_order_release,
                                                       memory_order_relaxed));
@@ -84,7 +84,7 @@ static void AluEvqp(P, const aluop_f ops[4]) {
       OpUdImpl(m);
 #endif
     } else {
-      Store64(p, ops[ALU_INT64](Load64(p), 0, &m->flags));
+      Store64(p, ops[ALU_INT64](m, Load64(p), 0));
     }
   } else if (!Osz(rde)) {
     unsigned int x, z;
@@ -92,11 +92,11 @@ static void AluEvqp(P, const aluop_f ops[4]) {
     if (Lock(rde) && !((intptr_t)p & 3)) {
       x = atomic_load_explicit((atomic_uint *)p, memory_order_acquire);
       do {
-        z = Little32(ops[ALU_INT32](Little32(x), 0, &m->flags));
+        z = Little32(ops[ALU_INT32](m, Little32(x), 0));
       } while (!atomic_compare_exchange_weak_explicit(
           (atomic_uint *)p, &x, z, memory_order_release, memory_order_relaxed));
     } else {
-      Store32(p, ops[ALU_INT32](Load32(p), 0, &m->flags));
+      Store32(p, ops[ALU_INT32](m, Load32(p), 0));
     }
     if (IsModrmRegister(rde)) {
       Write32(p + 4, 0);
@@ -104,7 +104,7 @@ static void AluEvqp(P, const aluop_f ops[4]) {
   } else {
     unassert(!Lock(rde));
     p = GetModrmRegisterWordPointerWrite2(A);
-    Store16(p, ops[ALU_INT16](Load16(p), 0, &m->flags));
+    Store16(p, ops[ALU_INT16](m, Load16(p), 0));
   }
 }
 

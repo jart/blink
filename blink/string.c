@@ -145,8 +145,8 @@ static void StringOp(P, int op) {
     switch (op) {
       case STRING_CMPS:
         kAlu[ALU_SUB][RegLog2(rde)](
-            ReadInt(Load(m, AddressSi(A), n, s[2]), RegLog2(rde)),
-            ReadInt(Load(m, AddressDi(A), n, s[1]), RegLog2(rde)), &m->flags);
+            m, ReadInt(Load(m, AddressSi(A), n, s[2]), RegLog2(rde)),
+            ReadInt(Load(m, AddressDi(A), n, s[1]), RegLog2(rde)));
         AddDi(A, sgn * n);
         AddSi(A, sgn * n);
         stop = (Rep(rde) == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
@@ -170,8 +170,8 @@ static void StringOp(P, int op) {
         break;
       case STRING_SCAS:
         kAlu[ALU_SUB][RegLog2(rde)](
-            ReadInt(Load(m, AddressDi(A), n, s[1]), RegLog2(rde)),
-            ReadInt(m->ax, RegLog2(rde)), &m->flags);
+            m, ReadInt(Load(m, AddressDi(A), n, s[1]), RegLog2(rde)),
+            ReadInt(m->ax, RegLog2(rde)));
         AddDi(A, sgn * n);
         stop = (Rep(rde) == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
                (Rep(rde) == 3 && !GetFlag(m->flags, FLAGS_ZF));

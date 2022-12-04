@@ -1,5 +1,6 @@
 #ifndef BLINK_MACHINE_H_
 #define BLINK_MACHINE_H_
+#include <limits.h>
 #include <pthread.h>
 #include <setjmp.h>
 #include <signal.h>
@@ -27,10 +28,6 @@
 
 #define kInstructionBytes 40
 
-#define kStackTop  0x7f0000000000
-#define kStackSize (8 * 1024 * 1024)
-#define kMinBrk    (2 * 1024 * 1024)
-
 #define kMachineExit                 256
 #define kMachineHalt                 -1
 #define kMachineDecodeError          -2
@@ -41,6 +38,21 @@
 #define kMachineProtectionFault      -8
 #define kMachineSimdException        -9
 
+#if LONG_BIT == 64
+// lowball b/c CONFIG_ARM64_VA_BITS_39 is possible.
+// there's also CONFIG_ARM64_VA_BITS_48 which makes
+// addresses larger than what's possible on x86_64.
+#define kStackTop  0x003e00000000
+#define kRealStart 0x003100000000
+//#define kStackTop  0x7e0000000000
+//#define kRealStart 0x7d0000000000
+#else
+#define kStackTop  0xf8000000
+#define kRealStart 0xe8000000
+#endif
+#define kStackSize (8 * 1024 * 1024)
+#define kMinBrk    (2 * 1024 * 1024)
+
 #define P                struct Machine *m, u64 rde, i64 disp, u64 uimm0
 #define A                m, rde, disp, uimm0
 #define DISPATCH_NOTHING m, 0, 0, 0
@@ -48,7 +60,7 @@
 #define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, elem, e)
 
 #define IsDevirtualized(x) \
-  (!atomic_load_explicit(&(x)->virtual, memory_order_relaxed))
+  (!atomic_load_explicit(&(x)->virtualized, memory_order_relaxed))
 
 struct Machine;
 
@@ -141,7 +153,7 @@ struct System {
   u8 mode;
   bool dlab;
   bool isfork;
-  bool virtual;
+  bool virtualized;
   i64 codestart;
   unsigned long codesize;
   pthread_mutex_t real_lock;
@@ -192,8 +204,11 @@ struct Machine {                           //
   u64 ss;                                  //
   u32 flags;                               //
   u8 mode;                                 //
-  _Atomic(bool) virtual;                   //
+  bool reserving;                          //
+  _Atomic(bool) virtualized;               //
   _Atomic(bool) tlb_invalidated;           //
+  unsigned long codesize;                  //
+  i64 codestart;                           //
   union {                                  // GENERAL REGISTER FILE
     u64 align8_;                           //
     u8 beg[128];                           //
@@ -281,6 +296,7 @@ struct System *NewSystem(void);
 void FreeSystem(struct System *);
 _Noreturn void Actor(struct Machine *);
 struct Machine *NewMachine(struct System *, struct Machine *);
+void Jitter(P, const char *, ...);
 void FreeMachine(struct Machine *);
 void FreeMachineUnlocked(struct Machine *);
 void KillOtherThreads(struct System *);
@@ -327,13 +343,7 @@ void OpAaa(P);
 void OpAad(P);
 void OpAam(P);
 void OpAas(P);
-void OpAlubAdc(P);
-void OpAlubAdd(P);
-void OpAlubAnd(P);
-void OpAlubOr(P);
-void OpAlubSbb(P);
-void OpAlubSub(P);
-void OpAlubXor(P);
+void OpAlub(P);
 void OpAluw(P);
 void OpCallEq(P);
 void OpCallJvds(P);

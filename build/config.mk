@@ -13,7 +13,8 @@ CFLAGS +=				\
 	-fno-ident			\
 	-fno-common			\
 	-fstrict-aliasing		\
-	-fstrict-overflow
+	-fstrict-overflow		\
+	-fno-omit-frame-pointer
 
 CPPFLAGS +=				\
 	-iquote.			\
@@ -31,7 +32,6 @@ LDLIBS +=				\
 
 LDFLAGS_STATIC =			\
 	-static				\
-	-no-pie				\
 	-Wl,-z,norelro			\
 	-Wl,-z,max-page-size=4096	\
 	-Wl,-Ttext-segment=$(IMAGE_BASE_VIRTUAL)
@@ -116,7 +116,7 @@ LDLIBS += -fsanitize=thread
 endif
 
 ifeq ($(MODE), msan)
-CC = clang --rtlib=compiler-rt
+CC = clang
 AR = llvm-ar
 CPPFLAGS += -DDEBUG
 CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers

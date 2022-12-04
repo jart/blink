@@ -3,6 +3,14 @@
 #include <errno.h>
 #include <sys/mman.h>
 
+#ifndef MAP_JIT
+#define MAP_JIT 0
+#endif
+
+#ifndef MAP_32BIT
+#define MAP_32BIT 0
+#endif
+
 #ifndef MAP_NORESERVE
 #define MAP_NORESERVE 0
 #endif
@@ -29,7 +37,7 @@
 #define MAP_DENIED EINVAL
 #else
 #define MAP_DEMAND 0
-#define MAP_DENIED 0x100000000  // will prune errno compare branch
+#define MAP_DENIED 0
 #endif
 
 void *Mmap(void *, size_t, int, int, int, off_t, const char *);

@@ -130,7 +130,7 @@ u8 *FindReal(struct Machine *m, i64 virt) {
 
 u8 *ResolveAddress(struct Machine *m, i64 v) {
   u8 *r;
-  if (IsDevirtualized(m)) return (u8 *)v;
+  if (IsDevirtualized(m)) return (u8 *)(intptr_t)v;
   if ((r = FindReal(m, v))) return r;
   ThrowSegmentationFault(m, v);
 }
@@ -182,6 +182,7 @@ void CommitStash(struct Machine *m) {
 }
 
 u8 *ReserveAddress(struct Machine *m, i64 v, size_t n, bool writable) {
+  m->reserving = true;
   if ((v & 4095) + n <= 4096) {
     return ResolveAddress(m, v);
   }

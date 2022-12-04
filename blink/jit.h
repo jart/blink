@@ -118,6 +118,7 @@ intptr_t ReleaseJit(struct Jit *, struct JitPage *, hook_t *, intptr_t);
 int AbandonJit(struct Jit *, struct JitPage *);
 int FlushJit(struct Jit *);
 struct JitPage *StartJit(struct Jit *);
+bool AppendJitTrap(struct JitPage *);
 bool AppendJitJmp(struct JitPage *, void *);
 bool AppendJitCall(struct JitPage *, void *);
 bool AppendJitSetReg(struct JitPage *, int, u64);

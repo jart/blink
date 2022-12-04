@@ -427,10 +427,13 @@ static void OpMovOvqpRax(P) {
 
 static void OpMovEbGb(P) {
   Store8(GetModrmRegisterBytePointerWrite1(A), Get8(ByteRexrReg(m, rde)));
+  Jitter(A, "A r0 D");
 }
 
 static void OpMovGbEb(P) {
   Put8(ByteRexrReg(m, rde), Load8(GetModrmRegisterBytePointerRead1(A)));
+  unassert(!RegLog2(rde));
+  Jitter(A, "B r0 C");
 }
 
 static void OpMovZbIb(P) {
@@ -443,70 +446,35 @@ static void OpMovZvqpIvqp(P) {
 
 static relegated void OpIncZv(P) {
   if (!Osz(rde)) {
-    Put32(RegSrm(m, rde), Inc32(Get32(RegSrm(m, rde)), 0, &m->flags));
+    Put32(RegSrm(m, rde), Inc32(m, Get32(RegSrm(m, rde)), 0));
   } else {
-    Put16(RegSrm(m, rde), Inc16(Get16(RegSrm(m, rde)), 0, &m->flags));
+    Put16(RegSrm(m, rde), Inc16(m, Get16(RegSrm(m, rde)), 0));
   }
 }
 
 static relegated void OpDecZv(P) {
   if (!Osz(rde)) {
-    Put32(RegSrm(m, rde), Dec32(Get32(RegSrm(m, rde)), 0, &m->flags));
+    Put32(RegSrm(m, rde), Dec32(m, Get32(RegSrm(m, rde)), 0));
   } else {
-    Put16(RegSrm(m, rde), Dec16(Get16(RegSrm(m, rde)), 0, &m->flags));
+    Put16(RegSrm(m, rde), Dec16(m, Get16(RegSrm(m, rde)), 0));
   }
 }
 
 static void OpMovEvqpIvds(P) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A), uimm0);
-}
-
-static void AddPath_RegOp(P, void *op64, void *op32, void *op16,
-                          void *general) {
-  if (m->path.jp) {
-    if (IsModrmRegister(rde)) {
-      AppendJitSetArg(m->path.jp, kArgRde, rde & (kRexbRmMask | kRexrRegMask));
-      if (Rexw(rde)) {
-        AppendJitCall(m->path.jp, op64);
-      } else if (!Osz(rde)) {
-        AppendJitCall(m->path.jp, op32);
-      } else {
-        AppendJitCall(m->path.jp, op16);
-      }
-    } else {
-      AppendJitSetArg(m->path.jp, kArgRde, rde);
-      AppendJitSetArg(m->path.jp, kArgDisp, disp);
-      AppendJitCall(m->path.jp, general);
-    }
-  }
-}
-
-static void OpMovEvqpGvqpReg64(P) {
-  Put64(RegRexbRm(m, rde), Get64(RegRexrReg(m, rde)));
-}
-
-static void OpMovEvqpGvqpReg32(P) {
-  Put64(RegRexbRm(m, rde), Get32(RegRexrReg(m, rde)));
-}
-
-static void OpMovEvqpGvqpReg16(P) {
-  Put16(RegRexbRm(m, rde), Get16(RegRexrReg(m, rde)));
-}
-
-static void OpMovEvqpGvqpGeneral(P) {
-  WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
-                        ReadRegister(rde, RegRexrReg(m, rde)));
+  Jitter(A, "a3iu D", uimm0);
 }
 
 static void OpMovEvqpGvqp(P) {
-  OpMovEvqpGvqpGeneral(A);
-  AddPath_RegOp(A, (void *)OpMovEvqpGvqpReg64, (void *)OpMovEvqpGvqpReg32,
-                (void *)OpMovEvqpGvqpReg16, (void *)OpMovEvqpGvqpGeneral);
+  WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
+                        ReadRegister(rde, RegRexrReg(m, rde)));
+  Jitter(A, "A r0 D");
 }
 
 static void OpMovGvqpEvqp(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)));
+  Jitter(A, "B r0 C");
 }
 
 static void OpMovzbGvqpEb(P) {
@@ -534,8 +502,8 @@ static void OpMovsxdGdqpEd(P) {
 }
 
 static void AlubRo(P, aluop_f op) {
-  op(Load8(GetModrmRegisterBytePointerRead1(A)), Get8(ByteRexrReg(m, rde)),
-     &m->flags);
+  op(m, Load8(GetModrmRegisterBytePointerRead1(A)), Get8(ByteRexrReg(m, rde)));
+  Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
 }
 
 static void OpAlubCmp(P) {
@@ -546,56 +514,26 @@ static void OpAlubTest(P) {
   AlubRo(A, And8);
 }
 
-static void AlubFlip(P, aluop_f op) {
-  Put8(ByteRexrReg(m, rde),
-       op(Get8(ByteRexrReg(m, rde)), Load8(GetModrmRegisterBytePointerRead1(A)),
-          &m->flags));
-}
-
-static void OpAlubFlipAdd(P) {
-  AlubFlip(A, Add8);
-}
-
-static void OpAlubFlipOr(P) {
-  AlubFlip(A, Or8);
-}
-
-static void OpAlubFlipAdc(P) {
-  AlubFlip(A, Adc8);
-}
-
-static void OpAlubFlipSbb(P) {
-  AlubFlip(A, Sbb8);
-}
-
-static void OpAlubFlipAnd(P) {
-  AlubFlip(A, And8);
-}
-
-static void OpAlubFlipSub(P) {
-  AlubFlip(A, Sub8);
-}
-
-static void OpAlubFlipXor(P) {
-  AlubFlip(A, Xor8);
-}
-
-static void AlubFlipRo(P, aluop_f op) {
-  op(Get8(ByteRexrReg(m, rde)), Load8(GetModrmRegisterBytePointerRead1(A)),
-     &m->flags);
+static void OpAlubFlip(P) {
+  aluop_f op = kAlu[(Opcode(rde) & 070) >> 3][0];
+  Put8(ByteRexrReg(m, rde), op(m, Get8(ByteRexrReg(m, rde)),
+                               Load8(GetModrmRegisterBytePointerRead1(A))));
+  Jitter(A, "A r0s1= B r0a2= s1a1= s0a0= c r0 C", op);
 }
 
 static void OpAlubFlipCmp(P) {
-  AlubFlipRo(A, Sub8);
+  Sub8(m, Get8(ByteRexrReg(m, rde)),
+       Load8(GetModrmRegisterBytePointerRead1(A)));
+  Jitter(A, "A r0s1= B r0a2= s1a1= s0a0= c", Sub8);
 }
 
 static void Alubi(P, aluop_f op) {
   u8 *a = GetModrmRegisterBytePointerWrite1(A);
-  Store8(a, op(Load8(a), uimm0, &m->flags));
+  Store8(a, op(m, Load8(a), uimm0));
 }
 
 static void AlubiRo(P, aluop_f op) {
-  op(Load8(GetModrmRegisterBytePointerRead1(A)), uimm0, &m->flags);
+  op(m, Load8(GetModrmRegisterBytePointerRead1(A)), uimm0);
 }
 
 static void OpAlubiTest(P) {
@@ -610,31 +548,23 @@ static void OpAlubiReg(P) {
   }
 }
 
+static void OpAluwCmpReg64(struct Machine *m, long rexb, long rexr) {
+  FastSub64(Get64(m->weg[rexb]), Get64(m->weg[rexr]), &m->flags);
+}
+
 static void AluwRo(P, const aluop_f ops[4]) {
-  ops[RegLog2(rde)](ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
-                    ReadRegister(rde, RegRexrReg(m, rde)), &m->flags);
-}
-
-static void AluwRoCmpReg64(P) {
-  FastSub64(Get64(RegRexbRm(m, rde)), Get64(RegRexrReg(m, rde)), &m->flags);
-}
-
-static void AluwRoCmpReg32(P) {
-  FastSub32(Get32(RegRexbRm(m, rde)), Get32(RegRexrReg(m, rde)), &m->flags);
-}
-
-static void AluwRoCmpReg16(P) {
-  FastSub16(Get16(RegRexbRm(m, rde)), Get16(RegRexrReg(m, rde)), &m->flags);
-}
-
-static void AluwRoCmpGeneral(P) {
-  AluwRo(A, kAlu[ALU_SUB]);
+  aluop_f op = ops[RegLog2(rde)];
+  op(m, ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
+     ReadRegister(rde, RegRexrReg(m, rde)));
+  if (op == Sub64 && IsModrmRegister(rde)) {
+    Jitter(A, "a1i a2i c", RexbRm(rde), RexrReg(rde), OpAluwCmpReg64);
+  } else {
+    Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
+  }
 }
 
 static void OpAluwCmp(P) {
-  AluwRoCmpGeneral(A);
-  AddPath_RegOp(A, (void *)AluwRoCmpReg64, (void *)AluwRoCmpReg32,
-                (void *)AluwRoCmpReg16, (void *)AluwRoCmpGeneral);
+  AluwRo(A, kAlu[ALU_SUB]);
 }
 
 static void OpAluwTest(P) {
@@ -642,82 +572,70 @@ static void OpAluwTest(P) {
 }
 
 static void OpAluwFlip(P) {
+  aluop_f op = kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)];
   WriteRegister(rde, RegRexrReg(m, rde),
-                kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)](
-                    ReadRegister(rde, RegRexrReg(m, rde)),
-                    ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
-                    &m->flags));
+                op(m, ReadRegister(rde, RegRexrReg(m, rde)),
+                   ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A))));
+  Jitter(A, "B r0s1= A r0a1= s1a2= s0a0= c r0 C", op);
 }
 
 static void AluwFlipRo(P, const aluop_f ops[4]) {
-  ops[RegLog2(rde)](ReadRegister(rde, RegRexrReg(m, rde)),
-                    ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
-                    &m->flags);
+  aluop_f op = ops[RegLog2(rde)];
+  op(m, ReadRegister(rde, RegRexrReg(m, rde)),
+     ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)));
+  Jitter(A, "B r0s1= A r0a1= s1a2= s0a0= c", op);
 }
 
 static void OpAluwFlipCmp(P) {
   AluwFlipRo(A, kAlu[ALU_SUB]);
 }
 
-static void OpAluwiRegAdd64(P) {
-  Put64(RegRexbRm(m, rde),
-        FastAdd64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegAdd64(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastAdd64(Get64(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegOr64(P) {
-  Put64(RegRexbRm(m, rde),
-        FastOr64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegOr64(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastOr64(Get64(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegAdc64(P) {
-  Put64(RegRexbRm(m, rde),
-        FastAdc64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegAdc64(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastAdc64(Get64(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegSbb64(P) {
-  Put64(RegRexbRm(m, rde),
-        FastSbb64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegSbb64(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastSbb64(Get64(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegAnd64(P) {
-  Put64(RegRexbRm(m, rde),
-        FastAnd64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegAnd64(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastAnd64(Get64(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegSub64(P) {
-  Put64(RegRexbRm(m, rde),
-        FastSub64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegSub64(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastSub64(Get64(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegXor64(P) {
-  Put64(RegRexbRm(m, rde),
-        FastXor64(Get64(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegXor64(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastXor64(Get64(m->weg[rexb]), uimm0, &m->flags));
 }
 
-static void OpAluwiRegAdd32(P) {
-  Put64(RegRexbRm(m, rde),
-        FastAdd32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegAdd32(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastAdd32(Get32(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegOr32(P) {
-  Put64(RegRexbRm(m, rde),
-        FastOr32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegOr32(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastOr32(Get32(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegAdc32(P) {
-  Put64(RegRexbRm(m, rde),
-        FastAdc32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegAdc32(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastAdc32(Get32(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegSbb32(P) {
-  Put64(RegRexbRm(m, rde),
-        FastSbb32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegSbb32(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastSbb32(Get32(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegAnd32(P) {
-  Put64(RegRexbRm(m, rde),
-        FastAnd32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegAnd32(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastAnd32(Get32(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegSub32(P) {
-  Put64(RegRexbRm(m, rde),
-        FastSub32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegSub32(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastSub32(Get32(m->weg[rexb]), uimm0, &m->flags));
 }
-static void OpAluwiRegXor32(P) {
-  Put64(RegRexbRm(m, rde),
-        FastXor32(Get32(RegRexbRm(m, rde)), uimm0, &m->flags));
+static void OpAluwiRegXor32(struct Machine *m, long rexb, u64 uimm0) {
+  Put64(m->weg[rexb], FastXor32(Get32(m->weg[rexb]), uimm0, &m->flags));
 }
 
-const nexgen32e_f kAluwiReg[2][7] = {
+typedef void (*aluwireg_f)(struct Machine *m, long rexb, u64 uimm0);
+const aluwireg_f kAluwiReg[2][7] = {
     {
         OpAluwiRegAdd32,  //
         OpAluwiRegOr32,   //
@@ -738,32 +656,34 @@ const nexgen32e_f kAluwiReg[2][7] = {
     },
 };
 
-static void Aluwi(P, const aluop_f ops[4]) {
+static void Aluwi(P) {
+  aluop_f op = kAlu[ModrmReg(rde)][RegLog2(rde)];
   u8 *a = GetModrmRegisterWordPointerWriteOszRexw(A);
-  WriteRegisterOrMemory(
-      rde, a, ops[RegLog2(rde)](ReadMemory(rde, a), uimm0, &m->flags));
-  if (m->path.jp && IsModrmRegister(rde) && !Osz(rde)) {
-    AppendJitSetArg(m->path.jp, kArgRde, rde & kRexbRmMask);
-    AppendJitSetArg(m->path.jp, kArgUimm0, uimm0);
-    AppendJitCall(m->path.jp, (void *)kAluwiReg[Rexw(rde)][ModrmReg(rde)]);
+  WriteRegisterOrMemory(rde, a, op(m, ReadMemory(rde, a), uimm0));
+  if (IsModrmRegister(rde) && !Osz(rde)) {
+    Jitter(A, "a2i a1i c", uimm0, RexbRm(rde),
+           kAluwiReg[Rexw(rde)][ModrmReg(rde)]);
+  } else {
+    Jitter(A, "B r0a1= s0a0= a2i c r0 D", uimm0, op);
   }
 }
 
 static void AluwiRo(P, const aluop_f ops[4]) {
-  ops[RegLog2(rde)](ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
-                    uimm0, &m->flags);
+  aluop_f op = ops[RegLog2(rde)];
+  op(m, ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)), uimm0);
+  Jitter(A, "B r0a1= a2i s0a0= c", uimm0, op);
 }
 
 static void OpAluwiReg(P) {
   if (ModrmReg(rde) == ALU_CMP) {
     AluwiRo(A, kAlu[ModrmReg(rde)]);
   } else {
-    Aluwi(A, kAlu[ModrmReg(rde)]);
+    Aluwi(A);
   }
 }
 
 static void AluAlIb(P, aluop_f op) {
-  Put8(m->ax, op(Get8(m->ax), uimm0, &m->flags));
+  Put8(m->ax, op(m, Get8(m->ax), uimm0));
 }
 
 static void OpAluAlIbAdd(P) {
@@ -797,59 +717,69 @@ static void OpAluAlIbXor(P) {
 static void OpAluRaxIvds(P) {
   WriteRegister(rde, m->ax,
                 kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)](
-                    ReadRegister(rde, m->ax), uimm0, &m->flags));
+                    m, ReadRegister(rde, m->ax), uimm0));
 }
 
 static void OpCmpAlIb(P) {
-  Sub8(Get8(m->ax), uimm0, &m->flags);
+  Sub8(m, Get8(m->ax), uimm0);
 }
 
 static void OpCmpRaxIvds(P) {
-  kAlu[ALU_SUB][RegLog2(rde)](ReadRegister(rde, m->ax), uimm0, &m->flags);
+  kAlu[ALU_SUB][RegLog2(rde)](m, ReadRegister(rde, m->ax), uimm0);
 }
 
 static void OpTestAlIb(P) {
-  And8(Get8(m->ax), uimm0, &m->flags);
+  And8(m, Get8(m->ax), uimm0);
 }
 
 static void OpTestRaxIvds(P) {
-  kAlu[ALU_AND][RegLog2(rde)](ReadRegister(rde, m->ax), uimm0, &m->flags);
+  kAlu[ALU_AND][RegLog2(rde)](m, ReadRegister(rde, m->ax), uimm0);
 }
 
-static void Bsuwi(P, u64 y) {
+static aluop_f Bsuwi(P, u64 y) {
+  aluop_f op = kBsu[ModrmReg(rde)][RegLog2(rde)];
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
-  WriteRegisterOrMemory(
-      rde, p,
-      kBsu[ModrmReg(rde)][RegLog2(rde)](ReadMemory(rde, p), y, &m->flags));
-}
-
-static void OpBsuwi1(P) {
-  Bsuwi(A, 1);
+  WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), y));
+  return op;
 }
 
 static void OpBsuwiCl(P) {
-  Bsuwi(A, Get8(m->cx));
+  Jitter(A, "B r0s1= $ r0a2= s1a1= s0a0= c r0 D", Bsuwi(A, m->cl));
+}
+
+static void BsuwiConstant(P, u64 y) {
+  Jitter(A, "B r0a1= s0a0= a2i c r0 D", y, Bsuwi(A, y));
+}
+
+static void OpBsuwi1(P) {
+  BsuwiConstant(A, 1);
 }
 
 static void OpBsuwiImm(P) {
-  Bsuwi(A, uimm0);
+  BsuwiConstant(A, uimm0);
 }
 
-static void Bsubi(P, u64 y) {
+static aluop_f Bsubi(P, u64 y) {
+  aluop_f op = kBsu[ModrmReg(rde)][RegLog2(rde)];
   u8 *a = GetModrmRegisterBytePointerWrite1(A);
-  Store8(a, kBsu[ModrmReg(rde)][RegLog2(rde)](Load8(a), y, &m->flags));
-}
-
-static void OpBsubi1(P) {
-  Bsubi(A, 1);
+  Store8(a, op(m, Load8(a), y));
+  return op;
 }
 
 static void OpBsubiCl(P) {
-  Bsubi(A, Get8(m->cx));
+  Jitter(A, "B r0s1= $ r0a2= s1a1= s0a0= c r0 D", Bsubi(A, m->cl));
+}
+
+static void BsubiConstant(P, u64 y) {
+  Jitter(A, "B r0a1= s0a0= a2i c r0 D", y, Bsubi(A, y));
+}
+
+static void OpBsubi1(P) {
+  BsubiConstant(A, 1);
 }
 
 static void OpBsubiImm(P) {
-  Bsubi(A, uimm0);
+  BsubiConstant(A, uimm0);
 }
 
 static void OpPushImm(P) {
@@ -872,103 +802,118 @@ static void OpInterrupt3(P) {
   Interrupt(A, 3);
 }
 
+static void FastJmp(struct Machine *m, i32 disp) {
+  m->ip += disp;
+}
+
+static void FastJae(struct Machine *m, i32 disp) {
+  if (!GetFlag(m->flags, FLAGS_CF)) {
+    FastJmp(m, disp);
+  }
+}
+
+static void FastJne(struct Machine *m, i32 disp) {
+  if (!GetFlag(m->flags, FLAGS_ZF)) {
+    FastJmp(m, disp);
+  }
+}
+
 static void OpJmp(P) {
   m->ip += disp;
+  Jitter(A, "a1i c", disp, FastJmp);
+}
+
+static void OpJae(P) {
+  FastJae(m, disp);
+  Jitter(A, "a1i c", disp, FastJae);
+}
+
+static void OpJne(P) {
+  FastJne(m, disp);
+  Jitter(A, "a1i c", disp, FastJne);
 }
 
 static void OpJe(P) {
   if (GetFlag(m->flags, FLAGS_ZF)) {
-    OpJmp(A);
-  }
-}
-
-static void OpJne(P) {
-  if (!GetFlag(m->flags, FLAGS_ZF)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJb(P) {
   if (GetFlag(m->flags, FLAGS_CF)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJbe(P) {
   if (IsBelowOrEqual(m)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJo(P) {
   if (GetFlag(m->flags, FLAGS_OF)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJno(P) {
   if (!GetFlag(m->flags, FLAGS_OF)) {
-    OpJmp(A);
-  }
-}
-
-static void OpJae(P) {
-  if (!GetFlag(m->flags, FLAGS_CF)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJa(P) {
   if (IsAbove(m)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJs(P) {
   if (GetFlag(m->flags, FLAGS_SF)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJns(P) {
   if (!GetFlag(m->flags, FLAGS_SF)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJp(P) {
   if (IsParity(m)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJnp(P) {
   if (!IsParity(m)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJl(P) {
   if (IsLess(m)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJge(P) {
   if (IsGreaterOrEqual(m)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJle(P) {
   if (IsLessOrEqual(m)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
 static void OpJg(P) {
   if (IsGreater(m)) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
@@ -1116,7 +1061,7 @@ static void OpSetg(P) {
 
 static void OpJcxz(P) {
   if (!MaskAddress(Eamode(rde), Get64(m->cx))) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
@@ -1207,17 +1152,17 @@ static void Op1b8(P) {
   }
 }
 
-static void LoadFarPointer(P, u64 *seg) {
+static relegated void LoadFarPointer(P, u64 *seg) {
   u32 fp = Load32(ComputeReserveAddressRead4(A));
   *seg = (fp & 0x0000ffff) << 4;
   Put16(RegRexrReg(m, rde), fp >> 16);
 }
 
-static void OpLes(P) {
+static relegated void OpLes(P) {
   LoadFarPointer(A, &m->es);
 }
 
-static void OpLds(P) {
+static relegated void OpLds(P) {
   LoadFarPointer(A, &m->ds);
 }
 
@@ -1234,7 +1179,7 @@ static relegated void Loop(P, bool cond) {
     Put16(m->cx, cx);
   }
   if (cx && cond) {
-    OpJmp(A);
+    FastJmp(m, disp);
   }
 }
 
@@ -1310,10 +1255,9 @@ static void OpDoubleShift(P) {
   p = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(
       rde, p,
-      BsuDoubleShift(W[Osz(rde)][Rexw(rde)], ReadMemory(rde, p),
+      BsuDoubleShift(m, W[Osz(rde)][Rexw(rde)], ReadMemory(rde, p),
                      ReadRegister(rde, RegRexrReg(m, rde)),
-                     Opcode(rde) & 1 ? Get8(m->cx) : uimm0, Opcode(rde) & 8,
-                     &m->flags));
+                     Opcode(rde) & 1 ? m->cl : uimm0, Opcode(rde) & 8));
 }
 
 static void OpFxsave(P) {
@@ -1671,57 +1615,57 @@ static int ClassifyOp(struct Machine *m, u64 rde) {
 }
 
 static const nexgen32e_f kNexgen32e[] = {
-    /*000*/ OpAlubAdd,               //
+    /*000*/ OpAlub,                  //
     /*001*/ OpAluw,                  // #8    (5.653689%)
-    /*002*/ OpAlubFlipAdd,           // #180  (0.000087%)
+    /*002*/ OpAlubFlip,              // #180  (0.000087%)
     /*003*/ OpAluwFlip,              // #7    (5.840835%)
     /*004*/ OpAluAlIbAdd,            //
     /*005*/ OpAluRaxIvds,            // #166  (0.000114%)
     /*006*/ OpPushSeg,               //
     /*007*/ OpPopSeg,                //
-    /*008*/ OpAlubOr,                // #154  (0.000207%)
+    /*008*/ OpAlub,                  // #154  (0.000207%)
     /*009*/ OpAluw,                  // #21   (0.520082%)
-    /*00A*/ OpAlubFlipOr,            // #120  (0.001072%)
+    /*00A*/ OpAlubFlip,              // #120  (0.001072%)
     /*00B*/ OpAluwFlip,              // #114  (0.001252%)
     /*00C*/ OpAluAlIbOr,             //
     /*00D*/ OpAluRaxIvds,            // #282  (0.000001%)
     /*00E*/ OpPushSeg,               //
     /*00F*/ OpPopSeg,                //
-    /*010*/ OpAlubAdc,               //
+    /*010*/ OpAlub,                  //
     /*011*/ OpAluw,                  // #11   (5.307809%)
-    /*012*/ OpAlubFlipAdc,           //
+    /*012*/ OpAlubFlip,              //
     /*013*/ OpAluwFlip,              // #108  (0.001526%)
     /*014*/ OpAluAlIbAdc,            // #97   (0.002566%)
     /*015*/ OpAluRaxIvds,            //
     /*016*/ OpPushSeg,               //
     /*017*/ OpPopSeg,                //
-    /*018*/ OpAlubSbb,               //
+    /*018*/ OpAlub,                  //
     /*019*/ OpAluw,                  // #65   (0.015300%)
-    /*01A*/ OpAlubFlipSbb,           //
+    /*01A*/ OpAlubFlip,              //
     /*01B*/ OpAluwFlip,              // #44   (0.241806%)
     /*01C*/ OpAluAlIbSbb,            // #96   (0.002566%)
     /*01D*/ OpAluRaxIvds,            //
     /*01E*/ OpPushSeg,               //
     /*01F*/ OpPopSeg,                //
-    /*020*/ OpAlubAnd,               // #165  (0.000130%)
+    /*020*/ OpAlub,                  // #165  (0.000130%)
     /*021*/ OpAluw,                  // #59   (0.019691%)
-    /*022*/ OpAlubFlipAnd,           //
+    /*022*/ OpAlubFlip,              //
     /*023*/ OpAluwFlip,              // #41   (0.279852%)
     /*024*/ OpAluAlIbAnd,            // #279  (0.000001%)
     /*025*/ OpAluRaxIvds,            // #43   (0.275823%)
     /*026*/ OpPushSeg,               //
     /*027*/ OpPopSeg,                //
-    /*028*/ OpAlubSub,               //
+    /*028*/ OpAlub,                  //
     /*029*/ OpAluw,                  // #29   (0.334693%)
-    /*02A*/ OpAlubFlipSub,           // #179  (0.000087%)
+    /*02A*/ OpAlubFlip,              // #179  (0.000087%)
     /*02B*/ OpAluwFlip,              // #71   (0.012465%)
     /*02C*/ OpAluAlIbSub,            //
     /*02D*/ OpAluRaxIvds,            // #112  (0.001317%)
     /*02E*/ OpUd,                    //
     /*02F*/ OpDas,                   //
-    /*030*/ OpAlubXor,               // #140  (0.000397%)
+    /*030*/ OpAlub,                  // #140  (0.000397%)
     /*031*/ OpAluw,                  // #3    (6.612252%)
-    /*032*/ OpAlubFlipXor,           // #81   (0.007453%)
+    /*032*/ OpAlubFlip,              // #81   (0.007453%)
     /*033*/ OpAluwFlip,              // #47   (0.138021%)
     /*034*/ OpAluAlIbXor,            //
     /*035*/ OpAluRaxIvds,            // #295  (0.000000%)
@@ -2223,7 +2167,7 @@ static bool CanJit(struct Machine *m) {
     LOG_ONCE(LOGF("jit is only supported in long mode"));
     return false;
   }
-  return (u64)m->ip - m->system->codestart < m->system->codesize;
+  return (u64)m->ip - m->codestart < m->codesize;
 }
 
 void JitlessDispatch(P) {
@@ -2287,46 +2231,73 @@ void GeneralDispatch(P) {
   m->oldip = -1;
 }
 
+static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
+  if (func == JitlessDispatch) {
+    JIT_LOGF("abandoning path starting at %" PRIx64
+             " due to running into staged path",
+             m->path.start);
+    AbandonPath(m);
+    func(DISPATCH_NOTHING);
+    return;
+  } else if (func != GeneralDispatch) {
+    JIT_LOGF("splicing path starting at %" PRIx64
+             " into previously created function %p",
+             m->path.start, func);
+    CommitPath(m, (intptr_t)func);
+    func(DISPATCH_NOTHING);
+    return;
+  } else {
+    GeneralDispatch(DISPATCH_NOTHING);
+  }
+}
+
 void ExecuteInstruction(struct Machine *m) {
   u64 pc;
   nexgen32e_f func;
   STATISTIC(++instructions_dispatched);
-  if ((pc = GetPc(m)) - m->system->codestart < m->system->codesize) {
+  if ((pc = GetPc(m)) - m->codestart < m->codesize) {
     func = IB(atomic_load_explicit(m->fun + pc, memory_order_relaxed));
     if (!m->path.jp) {
       func(DISPATCH_NOTHING);
-      return;
-    } else if (func == JitlessDispatch) {
-      JIT_LOGF("abandoning path starting at %" PRIx64
-               " due to running into staged path",
-               m->path.start);
-      AbandonPath(m);
-      func(DISPATCH_NOTHING);
-      return;
-    } else if (func != GeneralDispatch) {
-      JIT_LOGF("splicing path starting at %" PRIx64
-               " into previously created function %p",
-               m->path.start, func);
-      CommitPath(m, (intptr_t)func);
-      func(DISPATCH_NOTHING);
-      return;
+    } else {
+      ExploreInstruction(m, func);
     }
+  } else {
+    JitlessDispatch(DISPATCH_NOTHING);
   }
-  GeneralDispatch(DISPATCH_NOTHING);
+}
+
+static void ExecuteInstructionLong(struct Machine *m) {
+  nexgen32e_f func;
+  STATISTIC(++instructions_dispatched);
+  if ((u64)m->ip - m->codestart < m->codesize) {
+    func = IB(atomic_load_explicit(m->fun + m->ip, memory_order_relaxed));
+    if (!m->path.jp) {
+      func(DISPATCH_NOTHING);
+    } else {
+      ExploreInstruction(m, func);
+    }
+  } else {
+    JitlessDispatch(DISPATCH_NOTHING);
+  }
+}
+
+static void CheckForSignals(struct Machine *m) {
+  int sig;
+  if (UNLIKELY(m->signals) && (sig = ConsumeSignal(m))) {
+    TerminateSignal(m, sig);
+  }
 }
 
 void Actor(struct Machine *m) {
-  int sig;
+  unassert(m->mode == XED_MODE_LONG);
   // Put some distance between ourselves and the calling function,
   // because it calls setjmp(). Another thread could theoretically
   // longjmp() into this allocation. We must try something better.
   void *volatile lol = alloca(256);
   (void)lol;
-  // main exception loop
   for (g_machine = m;;) {
-    ExecuteInstruction(m);
-    if (UNLIKELY(m->signals) && (sig = ConsumeSignal(m))) {
-      TerminateSignal(m, sig);
-    }
+    ExecuteInstructionLong(m);
+    CheckForSignals(m);
   }
 }

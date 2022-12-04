@@ -36,7 +36,7 @@ void OpXaddEbGb(P) {
   y = Get8(q);
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
   do {
-    z = Add8(x, y, &m->flags);
+    z = Add8(m, x, y);
     Put8(q, x);
     if (!Lock(rde)) {
       *p = z;
@@ -46,7 +46,7 @@ void OpXaddEbGb(P) {
       (atomic_uchar *)p, &x, *q, memory_order_release, memory_order_relaxed));
 #else
   if (!Lock(rde)) {
-    z = Add8(x, y, &m->flags);
+    z = Add8(m, x, y);
     Put8(q, x);
     Store8(p, z);
   } else {
@@ -70,10 +70,10 @@ void OpXaddEvqpGvqp(P) {
         y = Little64(y);
         do {
           atomic_store_explicit((_Atomic(u64) *)q, x, memory_order_relaxed);
-          z = Little64(kAlu[ALU_ADD][ALU_INT64](Little64(x), y, &m->flags));
+          z = Little64(kAlu[ALU_ADD][ALU_INT64](m, Little64(x), y));
         } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x,
                                                         z, memory_order_release,
-                                                        memory_order_relaxed));
+                                                        memory_order_acquire));
       } else {
         LOGF("can't %s misaligned address", "lock xaddq");
         OpUdImpl(m);
@@ -85,7 +85,7 @@ void OpXaddEvqpGvqp(P) {
     } else {
       x = Load64(p);
       y = Get64(q);
-      z = kAlu[ALU_ADD][ALU_INT64](x, y, &m->flags);
+      z = kAlu[ALU_ADD][ALU_INT64](m, x, y);
       Put64(q, x);
       Store64(p, z);
     }
@@ -98,10 +98,10 @@ void OpXaddEvqpGvqp(P) {
         y = Little32(y);
         do {
           atomic_store_explicit((_Atomic(u32) *)q, x, memory_order_relaxed);
-          z = Little32(kAlu[ALU_ADD][ALU_INT32](Little32(x), y, &m->flags));
+          z = Little32(kAlu[ALU_ADD][ALU_INT32](m, Little32(x), y));
         } while (!atomic_compare_exchange_weak_explicit((_Atomic(u32) *)p, &x,
                                                         z, memory_order_release,
-                                                        memory_order_relaxed));
+                                                        memory_order_acquire));
       } else {
         LOGF("can't %s misaligned address", "lock xaddq");
         OpUdImpl(m);
@@ -109,7 +109,7 @@ void OpXaddEvqpGvqp(P) {
     } else {
       x = Load32(p);
       y = Get32(q);
-      z = kAlu[ALU_ADD][ALU_INT32](x, y, &m->flags);
+      z = kAlu[ALU_ADD][ALU_INT32](m, x, y);
       Put32(q, x);
       Store32(p, z);
     }
@@ -122,7 +122,7 @@ void OpXaddEvqpGvqp(P) {
     unassert(!Lock(rde));
     x = Load16(p);
     y = Get16(q);
-    z = kAlu[ALU_ADD][ALU_INT16](x, y, &m->flags);
+    z = kAlu[ALU_ADD][ALU_INT16](m, x, y);
     Put16(q, x);
     Store16(p, z);
   }

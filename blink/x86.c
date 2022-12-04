@@ -634,9 +634,9 @@ int DecodeInstruction(struct XedDecodedInst *x, const void *itext, size_t bytes,
   }
   rc = xed_decode_instruction_length(x);
   rde = x->op.rde;
-  rde |= (Opcode(rde) & 7) << 12;
+  rde |= (Opcode(rde) & 7) << 12;            // srm
   rde ^= (Mode(rde) == XED_MODE_REAL) << 5;  // osz ^= real
-  rde |= kWordLog2[~Opcode(rde) & 1][Osz(rde)][Rexw(rde)] << 28;
+  rde |= kWordLog2[IsByteOp(rde)][Osz(rde)][Rexw(rde)] << 28;
   rde |= kXed.eamode[Asz(rde)][Mode(rde)] << 24;
   rde |= (u64)x->length << 53;
   x->op.rde = rde;

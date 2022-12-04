@@ -49,10 +49,13 @@
 #define MAX_MEMORY        268435456  // 256mb ought to be enough for anyone
 #define JIT_RESERVE       134217728  // 128mb is max branch displacement on arm
 
+static struct RealGlobals {
+  _Atomic(u8 *) brk;  //
+} g_real;
+
 static void FillPage(u8 *p, int c) {
-  IGNORE_RACES_START();
   memset(p, c, 4096);
-  IGNORE_RACES_END();
+  atomic_thread_fence(memory_order_release);
 }
 
 static void ClearPage(u8 *p) {
@@ -90,14 +93,29 @@ static void FreeSystemRealFree(struct System *s) {
 }
 
 struct System *NewSystem(void) {
+  u8 *brk;
   void *p;
   struct System *s;
-  if ((p = Mmap(IMAGE_END + JIT_RESERVE, MAX_MEMORY, PROT_NONE,
-                MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE, -1, 0,
-                "system")) == MAP_FAILED) {
-    LOGF("could not register %zu bytes of memory: %s", MAX_MEMORY,
-         strerror(errno));
-    return 0;
+  // TODO: system->real.p needn't be contiguous past 1mb
+  //       so we don't need this big limited reservation
+  //       all we need to do is ensure it's not >47 bits
+  if (!(brk = atomic_load_explicit(&g_real.brk, memory_order_relaxed))) {
+    atomic_compare_exchange_strong_explicit(&g_real.brk, &brk, (u8 *)kRealStart,
+                                            memory_order_relaxed,
+                                            memory_order_relaxed);
+  }
+  for (;;) {
+    brk = atomic_fetch_add_explicit(&g_real.brk, MAX_MEMORY,
+                                    memory_order_relaxed);
+    if ((p = Mmap(brk, MAX_MEMORY, PROT_NONE,
+                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_DEMAND, -1,
+                  0, "system")) != MAP_FAILED) {
+      break;
+    } else if (errno != MAP_DENIED) {
+      LOGF("could not register %zu bytes of memory at %p: %s", MAX_MEMORY, brk,
+           strerror(errno));
+      return 0;
+    }
   }
   if ((s = (struct System *)calloc(1, sizeof(*s)))) {
     s->real.p = (u8 *)p;
@@ -264,7 +282,6 @@ int ReserveReal(struct System *s, long n)
 long AllocateLinearPageRaw(struct System *s) {
   size_t i, n;
   struct SystemRealFree *rf;
-  ReserveReal(s, 0);
   LOCK(&s->realfree_lock);
   if ((rf = s->realfree)) {
     unassert(rf->n);
@@ -335,16 +352,26 @@ static void InvalidateSystemTlbs(struct System *s) {
   UNLOCK(&s->machines_lock);
 }
 
+// so far tsan is the only thing we've seen that dominates the virtual
+// memory space heavily enough that cosmo can't have identity mappings
+// TODO: We'd likely need some kind of GIL to make this actually work!
 static void VirtualizeSystem(struct System *s) {
   struct Dll *e;
-  LOGF("converting to real virtual memory model");
+  for (long i = 0; i < s->codesize; ++i) {
+    atomic_store_explicit(s->fun + i, JitlessDispatch, memory_order_relaxed);
+  }
+  LOCK(&s->real_lock);
   LOCK(&s->machines_lock);
-  s->virtual = true;
+  s->virtualized = true;
   for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
-    atomic_store_explicit(&MACHINE_CONTAINER(e)->virtual, true,
+    atomic_store_explicit(&MACHINE_CONTAINER(e)->virtualized, true,
                           memory_order_relaxed);
   }
   UNLOCK(&s->machines_lock);
+  UNLOCK(&s->real_lock);
+  for (long i = 0; i < s->codesize; ++i) {
+    atomic_store_explicit(s->fun + i, GeneralDispatch, memory_order_relaxed);
+  }
 }
 
 static void AppendRealFree(struct System *s, u64 real) {
@@ -385,7 +412,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags) {
   unassert(!(flags & PAGE_ID));
   unassert(!(flags & PAGE_RSRV));
 
-  // ensure requested interval is contained in 48-bit space
+  // ensure requested interval is in 48-bit space
   if (!IsValidAddrSize(virt, size)) return einval();
 
   MEM_LOGF("reserving virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
@@ -394,17 +421,22 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags) {
   // if all guest memory is identity-mapped to host memory,
   // then we'll try to maintain the perfect correspondence,
   // with care taken to not clobber any unrelated mappings.
-  if (!s->virtual) {
+  if (!s->virtualized) {
     if (virt > 0 && s->mode == XED_MODE_LONG) {
       void *idmap =
-          Mmap((void *)virt, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+          Mmap((void *)(intptr_t)virt, size, PROT_READ | PROT_WRITE,
                MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0, "identity");
       if (idmap != MAP_FAILED) {
-        if (idmap == (void *)virt) {
+        if (idmap == (void *)(intptr_t)virt) {
           flags |= PAGE_ID;
         } else {
           unassert(!munmap(idmap, size));
         }
+      }
+      if (!(flags & PAGE_ID)) {
+        LOGF("identity map conflict: wanted %p but got %p (%s)",
+             (void *)(intptr_t)virt, idmap, strerror(errno));
+        LOGF("will attempt to fall back to virtual memory model");
       }
     }
     if (!(flags & PAGE_ID)) {

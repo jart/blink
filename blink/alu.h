@@ -2,6 +2,7 @@
 #define BLINK_ALU_H_
 #include <stdbool.h>
 
+#include "blink/machine.h"
 #include "blink/types.h"
 
 #define ALU_ADD 0
@@ -31,85 +32,85 @@
 #define ALU_INT32 2
 #define ALU_INT64 3
 
-typedef i64 (*aluop_f)(u64, u64, u32 *);
+typedef i64 (*aluop_f)(struct Machine *, u64, u64);
 
 extern const aluop_f kAlu[12][4];
 extern const aluop_f kBsu[8][4];
 
-i64 Xor8(u64, u64, u32 *);
-i64 Xor16(u64, u64, u32 *);
-i64 Xor32(u64, u64, u32 *);
-i64 Xor64(u64, u64, u32 *);
-i64 Or8(u64, u64, u32 *);
-i64 Or16(u64, u64, u32 *);
-i64 Or32(u64, u64, u32 *);
-i64 Or64(u64, u64, u32 *);
-i64 And8(u64, u64, u32 *);
-i64 And16(u64, u64, u32 *);
-i64 And32(u64, u64, u32 *);
-i64 And64(u64, u64, u32 *);
-i64 Sub8(u64, u64, u32 *);
-i64 Sbb8(u64, u64, u32 *);
-i64 Sub16(u64, u64, u32 *);
-i64 Sbb16(u64, u64, u32 *);
-i64 Sub32(u64, u64, u32 *);
-i64 Sbb32(u64, u64, u32 *);
-i64 Sub64(u64, u64, u32 *);
-i64 Sbb64(u64, u64, u32 *);
-i64 Add8(u64, u64, u32 *);
-i64 Adc8(u64, u64, u32 *);
-i64 Add16(u64, u64, u32 *);
-i64 Adc16(u64, u64, u32 *);
-i64 Add32(u64, u64, u32 *);
-i64 Adc32(u64, u64, u32 *);
-i64 Add64(u64, u64, u32 *);
-i64 Adc64(u64, u64, u32 *);
-i64 Not8(u64, u64, u32 *);
-i64 Not16(u64, u64, u32 *);
-i64 Not32(u64, u64, u32 *);
-i64 Not64(u64, u64, u32 *);
-i64 Neg8(u64, u64, u32 *);
-i64 Neg16(u64, u64, u32 *);
-i64 Neg32(u64, u64, u32 *);
-i64 Neg64(u64, u64, u32 *);
-i64 Inc8(u64, u64, u32 *);
-i64 Inc16(u64, u64, u32 *);
-i64 Inc32(u64, u64, u32 *);
-i64 Inc64(u64, u64, u32 *);
-i64 Dec8(u64, u64, u32 *);
-i64 Dec16(u64, u64, u32 *);
-i64 Dec32(u64, u64, u32 *);
-i64 Dec64(u64, u64, u32 *);
+i64 Xor8(struct Machine *, u64, u64);
+i64 Xor16(struct Machine *, u64, u64);
+i64 Xor32(struct Machine *, u64, u64);
+i64 Xor64(struct Machine *, u64, u64);
+i64 Or8(struct Machine *, u64, u64);
+i64 Or16(struct Machine *, u64, u64);
+i64 Or32(struct Machine *, u64, u64);
+i64 Or64(struct Machine *, u64, u64);
+i64 And8(struct Machine *, u64, u64);
+i64 And16(struct Machine *, u64, u64);
+i64 And32(struct Machine *, u64, u64);
+i64 And64(struct Machine *, u64, u64);
+i64 Sub8(struct Machine *, u64, u64);
+i64 Sbb8(struct Machine *, u64, u64);
+i64 Sub16(struct Machine *, u64, u64);
+i64 Sbb16(struct Machine *, u64, u64);
+i64 Sub32(struct Machine *, u64, u64);
+i64 Sbb32(struct Machine *, u64, u64);
+i64 Sub64(struct Machine *, u64, u64);
+i64 Sbb64(struct Machine *, u64, u64);
+i64 Add8(struct Machine *, u64, u64);
+i64 Adc8(struct Machine *, u64, u64);
+i64 Add16(struct Machine *, u64, u64);
+i64 Adc16(struct Machine *, u64, u64);
+i64 Add32(struct Machine *, u64, u64);
+i64 Adc32(struct Machine *, u64, u64);
+i64 Add64(struct Machine *, u64, u64);
+i64 Adc64(struct Machine *, u64, u64);
+i64 Not8(struct Machine *, u64, u64);
+i64 Not16(struct Machine *, u64, u64);
+i64 Not32(struct Machine *, u64, u64);
+i64 Not64(struct Machine *, u64, u64);
+i64 Neg8(struct Machine *, u64, u64);
+i64 Neg16(struct Machine *, u64, u64);
+i64 Neg32(struct Machine *, u64, u64);
+i64 Neg64(struct Machine *, u64, u64);
+i64 Inc8(struct Machine *, u64, u64);
+i64 Inc16(struct Machine *, u64, u64);
+i64 Inc32(struct Machine *, u64, u64);
+i64 Inc64(struct Machine *, u64, u64);
+i64 Dec8(struct Machine *, u64, u64);
+i64 Dec16(struct Machine *, u64, u64);
+i64 Dec32(struct Machine *, u64, u64);
+i64 Dec64(struct Machine *, u64, u64);
 
-i64 Shr8(u64, u64, u32 *);
-i64 Shr16(u64, u64, u32 *);
-i64 Shr32(u64, u64, u32 *);
-i64 Shr64(u64, u64, u32 *);
-i64 Shl8(u64, u64, u32 *);
-i64 Shl16(u64, u64, u32 *);
-i64 Shl32(u64, u64, u32 *);
-i64 Shl64(u64, u64, u32 *);
-i64 Sar8(u64, u64, u32 *);
-i64 Sar16(u64, u64, u32 *);
-i64 Sar32(u64, u64, u32 *);
-i64 Sar64(u64, u64, u32 *);
-i64 Rol8(u64, u64, u32 *);
-i64 Rol16(u64, u64, u32 *);
-i64 Rol32(u64, u64, u32 *);
-i64 Rol64(u64, u64, u32 *);
-i64 Ror8(u64, u64, u32 *);
-i64 Ror16(u64, u64, u32 *);
-i64 Ror32(u64, u64, u32 *);
-i64 Ror64(u64, u64, u32 *);
-i64 Rcr8(u64, u64, u32 *);
-i64 Rcr16(u64, u64, u32 *);
-i64 Rcr32(u64, u64, u32 *);
-i64 Rcr64(u64, u64, u32 *);
-i64 Rcl8(u64, u64, u32 *);
-i64 Rcl16(u64, u64, u32 *);
-i64 Rcl32(u64, u64, u32 *);
-i64 Rcl64(u64, u64, u32 *);
+i64 Shr8(struct Machine *, u64, u64);
+i64 Shr16(struct Machine *, u64, u64);
+i64 Shr32(struct Machine *, u64, u64);
+i64 Shr64(struct Machine *, u64, u64);
+i64 Shl8(struct Machine *, u64, u64);
+i64 Shl16(struct Machine *, u64, u64);
+i64 Shl32(struct Machine *, u64, u64);
+i64 Shl64(struct Machine *, u64, u64);
+i64 Sar8(struct Machine *, u64, u64);
+i64 Sar16(struct Machine *, u64, u64);
+i64 Sar32(struct Machine *, u64, u64);
+i64 Sar64(struct Machine *, u64, u64);
+i64 Rol8(struct Machine *, u64, u64);
+i64 Rol16(struct Machine *, u64, u64);
+i64 Rol32(struct Machine *, u64, u64);
+i64 Rol64(struct Machine *, u64, u64);
+i64 Ror8(struct Machine *, u64, u64);
+i64 Ror16(struct Machine *, u64, u64);
+i64 Ror32(struct Machine *, u64, u64);
+i64 Ror64(struct Machine *, u64, u64);
+i64 Rcr8(struct Machine *, u64, u64);
+i64 Rcr16(struct Machine *, u64, u64);
+i64 Rcr32(struct Machine *, u64, u64);
+i64 Rcr64(struct Machine *, u64, u64);
+i64 Rcl8(struct Machine *, u64, u64);
+i64 Rcl16(struct Machine *, u64, u64);
+i64 Rcl32(struct Machine *, u64, u64);
+i64 Rcl64(struct Machine *, u64, u64);
 
-u64 BsuDoubleShift(int, u64, u64, u8, bool, u32 *);
+u64 BsuDoubleShift(struct Machine *, int, u64, u64, u8, bool);
 
 #endif /* BLINK_ALU_H_ */

@@ -118,7 +118,6 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/test_suite_entropy.com.ok				\
 		o/$(MODE)/third_party/cosmo/test_suite_mpi.com.ok				\
 		o/$(MODE)/third_party/cosmo/test_suite_md.com.ok				\
-		o/$(MODE)/third_party/cosmo/execve_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/crc32_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@

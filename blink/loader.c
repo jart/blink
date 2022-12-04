@@ -187,18 +187,26 @@ static int GetElfHeader(char ehdr[64], const char *prog, const char *image) {
 }
 
 static void SetupDispatch(struct Machine *m) {
-  size_t n;
-  unsigned long i;
+  size_t i, n;
   free(m->system->fun);
   if ((n = m->system->codesize)) {
-    unassert((m->system->fun =
-                  (_Atomic(nexgen32e_f) *)calloc(n, sizeof(nexgen32e_f))));
-    m->fun = m->system->fun - m->system->codestart;
-    for (i = 0; i < n; ++i) {
-      atomic_store_explicit(m->system->fun + i, GeneralDispatch,
-                            memory_order_relaxed);
+    if ((m->system->fun =
+             (_Atomic(nexgen32e_f) *)calloc(n, sizeof(nexgen32e_f)))) {
+      for (i = 0; i < n; ++i) {
+        atomic_store_explicit(m->system->fun + i, GeneralDispatch,
+                              memory_order_relaxed);
+      }
+    } else {
+      m->system->codestart = 0;
+      m->system->codesize = 0;
     }
+  } else {
+    m->system->codestart = 0;
+    m->system->fun = 0;
   }
+  m->fun = m->system->fun - m->system->codestart;
+  m->codestart = m->system->codestart;
+  m->codesize = m->system->codesize;
 }
 
 void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
@@ -232,7 +240,7 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
     BootProgram(m, elf, elf->mapsize);
   } else {
     sp = kStackTop;
-    Write64(m->sp, sp);
+    Put64(m->sp, sp);
     m->system->cr3 = AllocateLinearPage(m->system);
     if (ReserveVirtual(m->system, sp - kStackSize, kStackSize,
                        PAGE_U | PAGE_RW) == -1) {

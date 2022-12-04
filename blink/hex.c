@@ -29,7 +29,7 @@
 void DumpHex(u8 *p, size_t n) {
   int oi = 0;
   int on = n * 100;
-  char *ob = malloc(on);
+  char *ob = (char *)malloc(on);
   size_t i, j;
   IGNORE_RACES_START();
   for (i = 0; i < n; i += 16) {

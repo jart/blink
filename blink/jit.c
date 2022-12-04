@@ -94,14 +94,18 @@ static const u8 kEpilogue[] = {
 };
 #elif defined(__aarch64__)
 static const u32 kPrologue[] = {
-    0xa9be7bfd,  // stp x29, x30, [sp, #-32]!
+    0xa9bc7bfd,  // stp x29, x30, [sp, #-64]!
     0x910003fd,  // mov x29, sp
-    0xf9000bf3,  // str x19, [sp, #16]
+    0xa90153f3,  // stp x19, x20, [sp, #16]
+    0xa9025bf5,  // stp x21, x22, [sp, #32]
+    0xa90363f7,  // stp x23, x24, [sp, #48]
     0xaa0003f3,  // mov x19, x0
 };
 static const u32 kEpilogue[] = {
-    0xf9400bf3,  // ldr x19, [sp, #16]
-    0xa8c27bfd,  // ldp x29, x30, [sp], #32
+    0xa94153f3,  // ldp x19, x20, [sp, #16]
+    0xa9425bf5,  // ldp x21, x22, [sp, #32]
+    0xa94363f7,  // ldp x23, x24, [sp, #48]
+    0xa8c47bfd,  // ldp x29, x30, [sp], #64
     0xd65f03c0,  // ret
 };
 #endif
@@ -115,7 +119,7 @@ static struct JitGlobals {
     PTHREAD_MUTEX_INITIALIZER,
 #if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 403 || \
     __has_builtin(__builtin___clear_cache)
-    PROT_READ | PROT_WRITE | PROT_EXEC,
+    PROT_READ | PROT_WRITE | PROT_EXEC | MAP_JIT,
 #else
 #define __builtin___clear_cache(x, y) (void)0
     PROT_READ | PROT_WRITE,
@@ -465,8 +469,11 @@ intptr_t ReleaseJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
   unassert(jp->start >= jp->committed);
   if (jp->index > jp->start) {
     if (jp->index <= kJitPageSize) {
+      while (jp->index & (kJitAlign - 1)) {
+        unassert(AppendJitTrap(jp));
+        unassert(jp->index <= kJitPageSize);
+      }
       addr = jp->addr + jp->start;
-      jp->index = ROUNDUP(jp->index, kJitAlign);
       if (hook) {
         if (CanJitForImmediateEffect()) {
           __builtin___clear_cache((char *)addr,
@@ -596,7 +603,7 @@ bool AppendJitMovReg(struct JitPage *jp, int dst, int src) {
   unassert(!(dst & ~15));
   unassert(!(src & ~15));
   u8 buf[3];
-  buf[0] = kAmdRexw | (dst & 8 ? kAmdRexr : 0) | (dst & 8 ? kAmdRexb : 0);
+  buf[0] = kAmdRexw | (src & 8 ? kAmdRexr : 0) | (dst & 8 ? kAmdRexb : 0);
   buf[1] = 0x89;
   buf[2] = 0300 | (src & 7) << 3 | (dst & 7);
 #elif defined(__aarch64__)
@@ -804,6 +811,18 @@ bool AppendJitSetReg(struct JitPage *jp, int reg, u64 value) {
   return AppendJit(jp, buf, n);
 }
 
+/**
+ * Appends debugger breakpoint.
+ */
+bool AppendJitTrap(struct JitPage *jp) {
+#if defined(__x86_64__)
+  u8 buf[1] = {0xcc};  // int3
+#elif defined(__aarch64__)
+  u32 buf[1] = {0xd4207d00};  // brk #0x3e8
+#endif
+  return AppendJit(jp, buf, sizeof(buf));
+}
+
 #else
 // clang-format off
 #define STUB(RETURN, NAME, PARAMS, RESULT) \
@@ -828,5 +847,6 @@ STUB(bool, AppendJitJmp, (struct JitPage *jp, void *code), 0)
 STUB(bool, AppendJitCall, (struct JitPage *jp, void *func), 0)
 STUB(bool, AppendJitSetReg, (struct JitPage *jp, int reg, u64 value), 0)
 STUB(bool, AppendJitSetArg, (struct JitPage *jp, int param, u64 value), 0)
-STUB(intptr_t, SpliceJit, (struct Jit *jit, struct JitPage *jp, hook_t *hook, intptr_t staging, intptr_t chunk), 0);
+STUB(intptr_t, SpliceJit, (struct Jit *jit, struct JitPage *jp, hook_t *hook, intptr_t staging, intptr_t chunk), 0)
+STUB(bool, AppendJitTrap, (struct JitPage *jp), 0)
 #endif
