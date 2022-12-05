@@ -1,11 +1,10 @@
 #ifndef BLINK_MAP_H_
 #define BLINK_MAP_H_
 #include <errno.h>
+#include <pthread.h>
 #include <sys/mman.h>
 
-#ifndef MAP_JIT
-#define MAP_JIT 0
-#endif
+#include "blink/builtin.h"
 
 #ifndef MAP_32BIT
 #define MAP_32BIT 0
@@ -13,6 +12,16 @@
 
 #ifndef MAP_NORESERVE
 #define MAP_NORESERVE 0
+#endif
+
+#ifndef MAP_JIT
+#define MAP_JIT                                  0
+#define pthread_jit_write_protect_supported_np() 0
+#define pthread_jit_write_protect_np(x)          (void)(x)
+#define sys_icache_invalidate(addr, size) \
+  __builtin___clear_cache((char *)(addr), (char *)(addr) + (size));
+#else
+#include <libkern/OSCacheControl.h>
 #endif
 
 #ifndef MAP_ANONYMOUS

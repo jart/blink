@@ -75,9 +75,16 @@ static void LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
   CopyToUser(m, vaddr, (u8 *)image + offset, filesz);
 
   m->system->brk = MAX(m->system->brk, ROUNDUP(vaddr + memsz, 4096));
-  if ((flags & PF_X) && !m->system->codesize) {
-    m->system->codestart = vaddr;
-    m->system->codesize = memsz;
+  if (flags & PF_X) {
+    if (!m->system->codesize) {
+      m->system->codestart = vaddr;
+      m->system->codesize = memsz;
+    } else if (vaddr == m->system->codestart + m->system->codesize) {
+      m->system->codesize += memsz;
+    } else {
+      LOGF("elf has multiple executable program headers at noncontiguous "
+           "addresses; only the first region will benefit from jitting");
+    }
   }
 }
 

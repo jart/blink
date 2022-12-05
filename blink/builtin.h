@@ -49,9 +49,9 @@
   static __inline __attribute__((__always_inline__, __gnu_inline__, \
                                  __no_instrument_function__, __unused__))
 #else
-#define forceinline              \
-  static __inline __attribute__( \
-      (__always_inline__, __no_instrument_function__, __unused__))
+#define forceinline                                 \
+  static __inline __attribute__((__always_inline__, \
+                                 __no_instrument_function__, __unused__))
 #endif /* __GNUC_STDC_INLINE__ */
 #endif /* GCC >= 4.3 */
 #elif defined(_MSC_VER)
@@ -82,6 +82,11 @@
 #define optimizesize __attribute__((__optnone__))
 #else
 #define optimizesize
+#endif
+
+#if !__has_builtin(__builtin___clear_cache) && \
+    (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) < 403
+#define __builtin___clear_cache(x, y) (void)0
 #endif
 
 #endif /* BLINK_BUILTIN_H_ */

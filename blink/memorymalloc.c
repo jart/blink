@@ -434,10 +434,14 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags) {
         }
       }
       if (!(flags & PAGE_ID)) {
-        LOGF("identity map conflict: wanted %p but got %p (%s)",
-             (void *)(intptr_t)virt, idmap, strerror(errno));
-        LOGF("will attempt to fall back to virtual memory model");
+        LOGF("identity map conflict: wanted %p but got %p (%s) %s",
+             (void *)(intptr_t)virt, idmap, strerror(errno),
+             "will attempt to fall back to virtual memory model");
       }
+    } else {
+      LOGF("negative or null mapping requested at %#" PRIx64
+           " with size %#" PRIx64 " %s",
+           virt, size, "will attempt to fall back to virtual memory model");
     }
     if (!(flags & PAGE_ID)) {
       VirtualizeSystem(s);

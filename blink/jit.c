@@ -25,7 +25,6 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
-#include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/end.h"
 #include "blink/endian.h"
@@ -71,8 +70,18 @@ struct JitStage {
   struct Dll elem;
 };
 
+static struct JitGlobals {
+  pthread_mutex_t lock;
+  _Atomic(int) prot;
+  _Atomic(u8 *) brk;
+  struct Dll *freepages GUARDED_BY(lock);
+} g_jit = {
+    PTHREAD_MUTEX_INITIALIZER,
+    PROT_READ | PROT_WRITE | PROT_EXEC,
+};
+
 #if defined(__x86_64__)
-static const u8 kPrologue[] = {
+static const u8 kJitPrologue[] = {
     0x55,                                      // push %rbp
     0x48, 0x89, 0xe5,                          // mov  %rsp,%rbp
     0x48, 0x81, 0xec, 0x80, 0x00, 0x00, 0x00,  // sub  $0x80,%rsp
@@ -83,7 +92,7 @@ static const u8 kPrologue[] = {
     0x4c, 0x89, 0x7d, 0xa0,                    // mov  %r15,-0x60(%rbp)
     0x48, 0x89, 0xfb,                          // mov  %rdi,%rbx
 };
-static const u8 kEpilogue[] = {
+static const u8 kJitEpilogue[] = {
     0x48, 0x8b, 0x5d, 0x80,  // mov -0x80(%rbp),%rbx
     0x4c, 0x8b, 0x65, 0x88,  // mov -0x78(%rbp),%r12
     0x4c, 0x8b, 0x6d, 0x90,  // mov -0x70(%rbp),%r13
@@ -93,7 +102,7 @@ static const u8 kEpilogue[] = {
     0xc3,                    // ret
 };
 #elif defined(__aarch64__)
-static const u32 kPrologue[] = {
+static const u32 kJitPrologue[] = {
     0xa9bc7bfd,  // stp x29, x30, [sp, #-64]!
     0x910003fd,  // mov x29, sp
     0xa90153f3,  // stp x19, x20, [sp, #16]
@@ -101,7 +110,7 @@ static const u32 kPrologue[] = {
     0xa90363f7,  // stp x23, x24, [sp, #48]
     0xaa0003f3,  // mov x19, x0
 };
-static const u32 kEpilogue[] = {
+static const u32 kJitEpilogue[] = {
     0xa94153f3,  // ldp x19, x20, [sp, #16]
     0xa9425bf5,  // ldp x21, x22, [sp, #32]
     0xa94363f7,  // ldp x23, x24, [sp, #48]
@@ -109,22 +118,6 @@ static const u32 kEpilogue[] = {
     0xd65f03c0,  // ret
 };
 #endif
-
-static struct JitGlobals {
-  pthread_mutex_t lock;
-  _Atomic(int) prot;
-  _Atomic(u8 *) brk;
-  struct Dll *freepages GUARDED_BY(lock);
-} g_jit = {
-    PTHREAD_MUTEX_INITIALIZER,
-#if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 403 || \
-    __has_builtin(__builtin___clear_cache)
-    PROT_READ | PROT_WRITE | PROT_EXEC | MAP_JIT,
-#else
-#define __builtin___clear_cache(x, y) (void)0
-    PROT_READ | PROT_WRITE,
-#endif
-};
 
 static long GetSystemPageSize(void) {
   long pagesize;
@@ -169,7 +162,7 @@ static struct JitPage *ReclaimJitPage(void) {
   if (jp) {
     unassert(mmap(jp->addr, kJitPageSize,
                   atomic_load_explicit(&g_jit.prot, memory_order_relaxed),
-                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1,
+                  MAP_JIT | MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1,
                   0) == (void *)jp->addr);
   }
   return jp;
@@ -273,7 +266,7 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
         jp->addr = (u8 *)Mmap(
             brk, kJitPageSize,
             (prot = atomic_load_explicit(&g_jit.prot, memory_order_relaxed)),
-            MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0, "jit");
+            MAP_JIT | MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0, "jit");
         if (jp->addr != MAP_FAILED) {
           distance = ABS(jp->addr - IMAGE_END);
           if (distance <= kJitProximity - kJitLeeway) {
@@ -291,7 +284,8 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
             // we're unable to acquire jit memory within proximity or if
             // we run out of jit memory in proximity, then new jit paths
             // won't be created anymore; and the program will still run.
-            LOGF("mmap() returned address %p that's too far away (%" PRIdPTR
+            LOGF("jit isn't supported in this environment because mmap()"
+                 " yielded an address %p that's too far away (%" PRIdPTR
                  " bytes) from our program image (which ends near %p)",
                  jp, distance, IMAGE_END);
             unassert(!munmap(jp->addr, kJitPageSize));
@@ -309,6 +303,8 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
           // memory is requested. Since other OSes might exist, having
           // this same requirement, and possible a different errno, we
           // shall just clear the exec flag and try again.
+          MEM_LOGF("operating system doesn't permit rwx memory; your"
+                   " jit will have less predictable behavior");
           atomic_store_explicit(&g_jit.prot, prot & ~PROT_EXEC,
                                 memory_order_relaxed);
           continue;
@@ -328,6 +324,9 @@ struct JitPage *AcquireJit(struct Jit *jit, long reserve) {
   if (jp) {
     unassert(!(jp->start & (kJitAlign - 1)));
     unassert(jp->start == jp->index);
+    if (pthread_jit_write_protect_supported_np()) {
+      pthread_jit_write_protect_np(false);
+    }
   }
   return jp;
 }
@@ -380,17 +379,21 @@ static int CommitJit(struct JitPage *jp, long pagesize) {
   pageoff = ROUNDDOWN(jp->start, pagesize);
   if (pageoff > jp->committed) {
     unassert(jp->start == jp->index);
-    unassert(!mprotect(jp->addr + jp->committed, pageoff - jp->committed,
-                       PROT_READ | PROT_EXEC));
-    MEM_LOGF("activated [%p,%p) w/ %zu kb", jp->addr + jp->committed,
-             jp->addr + jp->committed + (pageoff - jp->committed),
-             (pageoff - jp->committed) / 1024);
+    if (!pthread_jit_write_protect_supported_np()) {
+      unassert(!mprotect(jp->addr + jp->committed, pageoff - jp->committed,
+                         PROT_READ | PROT_EXEC));
+      MEM_LOGF("jit %s [%p,%p) w/ %zu kb",
+               CanJitForImmediateEffect() ? "finalized" : "activated",
+               jp->addr + jp->committed,
+               jp->addr + jp->committed + (pageoff - jp->committed),
+               (pageoff - jp->committed) / 1024);
+    }
     unassert(jp->start == jp->index);
     while ((e = dll_first(jp->staged))) {
       js = JITSTAGE_CONTAINER(e);
       if (js->index <= pageoff) {
         atomic_store_explicit(js->hook, (intptr_t)jp->addr + js->start,
-                              memory_order_relaxed);
+                              memory_order_release);
         jp->staged = dll_remove(jp->staged, e);
         free(js);
         ++count;
@@ -467,20 +470,22 @@ intptr_t ReleaseJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
   struct JitStage *js;
   unassert(jp->index >= jp->start);
   unassert(jp->start >= jp->committed);
+  while (jp->index <= kJitPageSize && (jp->index & (kJitAlign - 1))) {
+    unassert(AppendJitTrap(jp));
+    unassert(jp->index <= kJitPageSize);
+  }
+  if (pthread_jit_write_protect_supported_np()) {
+    pthread_jit_write_protect_np(true);
+  }
   if (jp->index > jp->start) {
     if (jp->index <= kJitPageSize) {
-      while (jp->index & (kJitAlign - 1)) {
-        unassert(AppendJitTrap(jp));
-        unassert(jp->index <= kJitPageSize);
-      }
       addr = jp->addr + jp->start;
       if (hook) {
         if (CanJitForImmediateEffect()) {
-          __builtin___clear_cache((char *)addr,
-                                  (char *)addr + (jp->index - jp->start));
+          sys_icache_invalidate(addr, jp->index - jp->start);
           atomic_store_explicit(hook, (intptr_t)addr, memory_order_release);
         } else {
-          atomic_store_explicit(hook, staging, memory_order_release);
+          atomic_store_explicit(hook, staging, memory_order_relaxed);
           if ((js = (struct JitStage *)calloc(1, sizeof(struct JitStage)))) {
             dll_init(&js->elem);
             js->hook = hook;
@@ -528,7 +533,7 @@ intptr_t ReleaseJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
 struct JitPage *StartJit(struct Jit *jit) {
   struct JitPage *jp;
   if ((jp = AcquireJit(jit, kJitPageFit))) {
-    AppendJit(jp, kPrologue, sizeof(kPrologue));
+    AppendJit(jp, kJitPrologue, sizeof(kJitPrologue));
   }
   return jp;
 }
@@ -549,7 +554,7 @@ struct JitPage *StartJit(struct Jit *jit) {
  */
 intptr_t FinishJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
                    intptr_t staging) {
-  AppendJit(jp, kEpilogue, sizeof(kEpilogue));
+  AppendJit(jp, kJitEpilogue, sizeof(kJitEpilogue));
   return ReleaseJit(jit, jp, hook, staging);
 }
 
@@ -578,9 +583,9 @@ int AbandonJit(struct Jit *jit, struct JitPage *jp) {
  */
 intptr_t SpliceJit(struct Jit *jit, struct JitPage *jp, hook_t *hook,
                    intptr_t staging, intptr_t chunk) {
-  unassert(!chunk || !memcmp((u8 *)chunk, kPrologue, sizeof(kPrologue)));
+  unassert(!chunk || !memcmp((u8 *)chunk, kJitPrologue, sizeof(kJitPrologue)));
   if (chunk) {
-    AppendJitJmp(jp, (u8 *)chunk + sizeof(kPrologue));
+    AppendJitJmp(jp, (u8 *)chunk + sizeof(kJitPrologue));
     return ReleaseJit(jit, jp, hook, staging);
   } else {
     return FinishJit(jit, jp, hook, staging);

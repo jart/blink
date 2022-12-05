@@ -39,13 +39,8 @@
 #define kMachineSimdException        -9
 
 #if LONG_BIT == 64
-// lowball b/c CONFIG_ARM64_VA_BITS_39 is possible.
-// there's also CONFIG_ARM64_VA_BITS_48 which makes
-// addresses larger than what's possible on x86_64.
-#define kStackTop  0x003e00000000
-#define kRealStart 0x003100000000
-//#define kStackTop  0x7e0000000000
-//#define kRealStart 0x7d0000000000
+#define kStackTop  0x7e0000000000
+#define kRealStart 0x7d0000000000
 #else
 #define kStackTop  0xf8000000
 #define kRealStart 0xe8000000

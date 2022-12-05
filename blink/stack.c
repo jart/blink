@@ -120,8 +120,8 @@ void OpPushZvq(P) {
 
 static u64 PopN(P, u16 extra, unsigned osz) {
   u64 v;
-  void *p[2];
   u8 b[8];
+  void *p[2];
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       v = Get64(m->sp);

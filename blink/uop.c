@@ -267,7 +267,7 @@ static void ClobberEverythingExceptResult(struct Machine *m) {
   AppendJitSetReg(m->path.jp, 9, 0x666);
   AppendJitSetReg(m->path.jp, 10, 0x666);
   AppendJitSetReg(m->path.jp, 11, 0x666);
-#elif __aarch64__
+#elif defined(__aarch64__)
   AppendJitSetReg(m->path.jp, 2, 0x666);
   AppendJitSetReg(m->path.jp, 3, 0x666);
   AppendJitSetReg(m->path.jp, 4, 0x666);
