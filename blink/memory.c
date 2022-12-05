@@ -96,7 +96,7 @@ static u64 FindPage(struct Machine *m, u64 page) {
 
 static u8 *ConvertReal(struct Machine *m, u64 entry, int virt) {
   if (entry & PAGE_ID) {
-    return (u8 *)((intptr_t)(entry & PAGE_TA) + (virt & 4095));
+    return ToHost(entry & PAGE_TA) + (virt & 4095);
   } else {
     return m->system->real.p + (entry & PAGE_TA) + (virt & 4095);
   }
@@ -130,7 +130,7 @@ u8 *FindReal(struct Machine *m, i64 virt) {
 
 u8 *ResolveAddress(struct Machine *m, i64 v) {
   u8 *r;
-  if (IsDevirtualized(m)) return (u8 *)(intptr_t)v;
+  if (IsLinear(m)) return ToHost(v);
   if ((r = FindReal(m, v))) return r;
   ThrowSegmentationFault(m, v);
 }

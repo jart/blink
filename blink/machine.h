@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
+#include "blink/assert.h"
 #include "blink/dll.h"
 #include "blink/elf.h"
 #include "blink/fds.h"
@@ -39,9 +40,11 @@
 #define kMachineSimdException        -9
 
 #if LONG_BIT == 64
-#define kStackTop  0x7e0000000000
-#define kRealStart 0x7d0000000000
+#define kSkew      0x000200000000
+#define kStackTop  0x7d0000000000
+#define kRealStart 0x7c0000000000
 #else
+#define kSkew      0x00000000
 #define kStackTop  0xf8000000
 #define kRealStart 0xe8000000
 #endif
@@ -54,8 +57,18 @@
 
 #define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, elem, e)
 
-#define IsDevirtualized(x) \
+#define IsLinear(x) \
   (!atomic_load_explicit(&(x)->virtualized, memory_order_relaxed))
+
+static inline u8 *ToHost(i64 v) {
+  return (u8 *)(intptr_t)(v + kSkew);
+}
+
+static inline i64 ToGuest(u8 *r) {
+  intptr_t v = (intptr_t)r - kSkew;
+  unassert(0 < v && v < 0x800000000000);
+  return v;
+}
 
 struct Machine;
 

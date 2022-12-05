@@ -99,16 +99,16 @@ static void PutRegOrMem(P) {
 // DEVIRTUALIZED LOADING OF ABSOLUTE MEMORY PARAMETER
 
 static u64 GetDemAbs8(u64 abs) {
-  return Load8((u8 *)(intptr_t)abs);
+  return Load8(ToHost(abs));
 }
 static u64 GetDemAbs16(u64 abs) {
-  return Load16((u8 *)(intptr_t)abs);
+  return Load16(ToHost(abs));
 }
 static u64 GetDemAbs32(u64 abs) {
-  return Load32((u8 *)(intptr_t)abs);
+  return Load32(ToHost(abs));
 }
 static u64 GetDemAbs64(u64 abs) {
-  return Load64((u8 *)(intptr_t)abs);
+  return Load64(ToHost(abs));
 }
 typedef u64 (*getdemabs_f)(u64);
 static const getdemabs_f kGetDemAbs[] = {GetDemAbs8, GetDemAbs16,  //
@@ -118,16 +118,16 @@ static const getdemabs_f kGetDemAbs[] = {GetDemAbs8, GetDemAbs16,  //
 // DEVIRTUALIZED STORING TO ABSOLUTE MEMORY PARAMETER
 
 static void PutDemAbs8(u64 abs, u64 x) {
-  Store8((u8 *)(intptr_t)abs, x);
+  Store8(ToHost(abs), x);
 }
 static void PutDemAbs16(u64 abs, u64 x) {
-  Store16((u8 *)(intptr_t)abs, x);
+  Store16(ToHost(abs), x);
 }
 static void PutDemAbs32(u64 abs, u64 x) {
-  Store32((u8 *)(intptr_t)abs, x);
+  Store32(ToHost(abs), x);
 }
 static void PutDemAbs64(u64 abs, u64 x) {
-  Store64((u8 *)(intptr_t)abs, x);
+  Store64(ToHost(abs), x);
 }
 typedef void (*putdemabs_f)(u64, u64);
 static const putdemabs_f kPutDemAbs[] = {PutDemAbs8, PutDemAbs16,  //
@@ -137,16 +137,16 @@ static const putdemabs_f kPutDemAbs[] = {PutDemAbs8, PutDemAbs16,  //
 // DEVIRTUALIZED LOADING OF ±DISP(%BASE) MEMORY PARAMETER
 
 static u64 GetDem8(struct Machine *m, u64 disp, long i) {
-  return Load8((u8 *)(intptr_t)(disp + Get64(m->weg[i])));
+  return Load8(ToHost(disp + Get64(m->weg[i])));
 }
 static u64 GetDem16(struct Machine *m, u64 disp, long i) {
-  return Load16((u8 *)(intptr_t)(disp + Get64(m->weg[i])));
+  return Load16(ToHost(disp + Get64(m->weg[i])));
 }
 static u64 GetDem32(struct Machine *m, u64 disp, long i) {
-  return Load32((u8 *)(intptr_t)(disp + Get64(m->weg[i])));
+  return Load32(ToHost(disp + Get64(m->weg[i])));
 }
 static u64 GetDem64(struct Machine *m, u64 disp, long i) {
-  return Load64((u8 *)(intptr_t)(disp + Get64(m->weg[i])));
+  return Load64(ToHost(disp + Get64(m->weg[i])));
 }
 typedef u64 (*getdem_f)(struct Machine *, u64, long);
 static const getdem_f kGetDem[] = {GetDem8, GetDem16, GetDem32, GetDem64};
@@ -155,16 +155,16 @@ static const getdem_f kGetDem[] = {GetDem8, GetDem16, GetDem32, GetDem64};
 // DEVIRTUALIZED STORING TO ±DISP(%BASE) MEMORY PARAMETER
 
 static void PutDem8(struct Machine *m, u64 disp, long i, u64 x) {
-  Store8((u8 *)(intptr_t)(disp + Get64(m->weg[i])), x);
+  Store8(ToHost(disp + Get64(m->weg[i])), x);
 }
 static void PutDem16(struct Machine *m, u64 disp, long i, u64 x) {
-  Store16((u8 *)(intptr_t)(disp + Get64(m->weg[i])), x);
+  Store16(ToHost(disp + Get64(m->weg[i])), x);
 }
 static void PutDem32(struct Machine *m, u64 disp, long i, u64 x) {
-  Store32((u8 *)(intptr_t)(disp + Get64(m->weg[i])), x);
+  Store32(ToHost(disp + Get64(m->weg[i])), x);
 }
 static void PutDem64(struct Machine *m, u64 disp, long i, u64 x) {
-  Store64((u8 *)(intptr_t)(disp + Get64(m->weg[i])), x);
+  Store64(ToHost(disp + Get64(m->weg[i])), x);
 }
 typedef void (*putdem_f)(struct Machine *, u64, long, u64);
 static const putdem_f kPutDem[] = {PutDem8, PutDem16, PutDem32, PutDem64};
@@ -173,16 +173,16 @@ static const putdem_f kPutDem[] = {PutDem8, PutDem16, PutDem32, PutDem64};
 // DEVIRTUALIZED LOADING OF ±DISP(,%INDEX,SCALE) MEMORY PARAMETER
 
 static u64 GetDemIndex8(struct Machine *m, u64 disp, long index, int scale) {
-  return Load8((u8 *)(intptr_t)(disp + (Get64(m->weg[index]) << scale)));
+  return Load8(ToHost(disp + (Get64(m->weg[index]) << scale)));
 }
 static u64 GetDemIndex16(struct Machine *m, u64 disp, long index, int scale) {
-  return Load16((u8 *)(intptr_t)(disp + (Get64(m->weg[index]) << scale)));
+  return Load16(ToHost(disp + (Get64(m->weg[index]) << scale)));
 }
 static u64 GetDemIndex32(struct Machine *m, u64 disp, long index, int scale) {
-  return Load32((u8 *)(intptr_t)(disp + (Get64(m->weg[index]) << scale)));
+  return Load32(ToHost(disp + (Get64(m->weg[index]) << scale)));
 }
 static u64 GetDemIndex64(struct Machine *m, u64 disp, long index, int scale) {
-  return Load64((u8 *)(intptr_t)(disp + (Get64(m->weg[index]) << scale)));
+  return Load64(ToHost(disp + (Get64(m->weg[index]) << scale)));
 }
 typedef u64 (*getdemindex_f)(struct Machine *, u64, long, int);
 static const getdemindex_f kGetDemIndex[] = {GetDemIndex8, GetDemIndex16,
@@ -192,16 +192,16 @@ static const getdemindex_f kGetDemIndex[] = {GetDemIndex8, GetDemIndex16,
 // DEVIRTUALIZED STORING TO ±DISP(,%INDEX,SCALE) MEMORY PARAMETER
 
 static void PutDemIndex8(struct Machine *m, u64 disp, long i, int z, u64 x) {
-  Store8((u8 *)(intptr_t)(disp + (Get64(m->weg[i]) << z)), x);
+  Store8(ToHost(disp + (Get64(m->weg[i]) << z)), x);
 }
 static void PutDemIndex16(struct Machine *m, u64 disp, long i, int z, u64 x) {
-  Store16((u8 *)(intptr_t)(disp + (Get64(m->weg[i]) << z)), x);
+  Store16(ToHost(disp + (Get64(m->weg[i]) << z)), x);
 }
 static void PutDemIndex32(struct Machine *m, u64 disp, long i, int z, u64 x) {
-  Store32((u8 *)(intptr_t)(disp + (Get64(m->weg[i]) << z)), x);
+  Store32(ToHost(disp + (Get64(m->weg[i]) << z)), x);
 }
 static void PutDemIndex64(struct Machine *m, u64 disp, long i, int z, u64 x) {
-  Store64((u8 *)(intptr_t)(disp + (Get64(m->weg[i]) << z)), x);
+  Store64(ToHost(disp + (Get64(m->weg[i]) << z)), x);
 }
 typedef void (*putdemindex_f)(struct Machine *, u64, long, int, u64);
 static const putdemindex_f kPutDemIndex[] = {PutDemIndex8, PutDemIndex16,
@@ -211,20 +211,16 @@ static const putdemindex_f kPutDemIndex[] = {PutDemIndex8, PutDemIndex16,
 // DEVIRTUALIZED LOADING OF ±DISP(%BASE,%INDEX,SCALE) MEMORY PARAMETER
 
 static u64 GetDemBaseIndex8(struct Machine *m, u64 d, long b, long i, int z) {
-  return Load8(
-      (u8 *)(intptr_t)(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
+  return Load8(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
 }
 static u64 GetDemBaseIndex16(struct Machine *m, u64 d, long b, long i, int z) {
-  return Load16(
-      (u8 *)(intptr_t)(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
+  return Load16(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
 }
 static u64 GetDemBaseIndex32(struct Machine *m, u64 d, long b, long i, int z) {
-  return Load32(
-      (u8 *)(intptr_t)(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
+  return Load32(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
 }
 static u64 GetDemBaseIndex64(struct Machine *m, u64 d, long b, long i, int z) {
-  return Load64(
-      (u8 *)(intptr_t)(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
+  return Load64(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
 }
 typedef u64 (*getdembaseindex_f)(struct Machine *, u64, long, long, int);
 static const getdembaseindex_f kGetDemBaseIndex[] = {
@@ -235,19 +231,19 @@ static const getdembaseindex_f kGetDemBaseIndex[] = {
 
 static void PutDemBaseIndex8(struct Machine *m, u64 d, long b, long i, int z,
                              u64 x) {
-  Store8((u8 *)(intptr_t)(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
+  Store8(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
 }
 static void PutDemBaseIndex16(struct Machine *m, u64 d, long b, long i, int z,
                               u64 x) {
-  Store16((u8 *)(intptr_t)(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
+  Store16(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
 }
 static void PutDemBaseIndex32(struct Machine *m, u64 d, long b, long i, int z,
                               u64 x) {
-  Store32((u8 *)(intptr_t)(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
+  Store32(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
 }
 static void PutDemBaseIndex64(struct Machine *m, u64 d, long b, long i, int z,
                               u64 x) {
-  Store64((u8 *)(intptr_t)(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
+  Store64(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
 }
 typedef void (*putdembaseindex_f)(struct Machine *, u64, long, long, int, u64);
 static const putdembaseindex_f kPutDemBaseIndex[] = {
@@ -296,7 +292,7 @@ static inline int CheckBelow(int x, unsigned n) {
 }
 
 static bool CanUseFastMemoryOps(struct Machine *m, u64 rde) {
-  return IsDevirtualized(m) && !Sego(rde);
+  return IsLinear(m) && !Sego(rde);
 }
 
 /**

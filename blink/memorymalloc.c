@@ -397,7 +397,7 @@ static void FreePageTableEntry(struct System *s, u64 entry) {
   } else {
     --s->memstat.committed;
     if (entry & PAGE_ID) {
-      unassert(!munmap((void *)(intptr_t)(entry & PAGE_TA), 4096));
+      // unassert(!munmap(ToHost(entry & PAGE_TA), 4096));
     } else {
       AppendRealFree(s, entry & PAGE_TA);
     }
@@ -416,7 +416,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags) {
   if (!IsValidAddrSize(virt, size)) return einval();
 
   MEM_LOGF("reserving virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
-           virt, (u64)virt + size, size / 1024);
+           virt, virt + size, size / 1024);
 
   // if all guest memory is identity-mapped to host memory,
   // then we'll try to maintain the perfect correspondence,
@@ -424,18 +424,18 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags) {
   if (!s->virtualized) {
     if (virt > 0 && s->mode == XED_MODE_LONG) {
       void *idmap =
-          Mmap((void *)(intptr_t)virt, size, PROT_READ | PROT_WRITE,
-               MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0, "identity");
+          Mmap(ToHost(virt), size, PROT_READ | PROT_WRITE,
+               MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0, "identity");
       if (idmap != MAP_FAILED) {
-        if (idmap == (void *)(intptr_t)virt) {
+        if (idmap == ToHost(virt)) {
           flags |= PAGE_ID;
         } else {
           unassert(!munmap(idmap, size));
         }
       }
       if (!(flags & PAGE_ID)) {
-        LOGF("identity map conflict: wanted %p but got %p (%s) %s",
-             (void *)(intptr_t)virt, idmap, strerror(errno),
+        LOGF("mapping crisis: wanted %p but got %p (%s) %s", ToHost(virt),
+             idmap, strerror(errno),
              "will attempt to fall back to virtual memory model");
       }
     } else {

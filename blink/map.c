@@ -30,9 +30,6 @@ void *Mmap(void *addr,     //
            int fd,         //
            off_t offset,   //
            const char *owner) {
-  if ((intptr_t)addr > 0 && (intptr_t)addr < 0x100000000) {
-    flags |= MAP_32BIT;
-  }
   void *res = mmap(addr, length, prot, flags, fd, offset);
 #ifndef NDEBUG
   if (res != MAP_FAILED) {

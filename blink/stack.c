@@ -34,26 +34,26 @@ static const u8 kCallOsz[2][3] = {{2, 4, 8}, {4, 2, 8}};
 static void FastPush(struct Machine *m, long rexbsrm) {
   u64 v, x = Get64(m->weg[rexbsrm]);
   Put64(m->sp, (v = Get64(m->sp) - 8));
-  Store64((u8 *)(intptr_t)v, x);
+  Store64(ToHost(v), x);
 }
 
 static void FastPop(struct Machine *m, long rexbsrm) {
   u64 v = Get64(m->sp);
   Put64(m->sp, v + 8);
-  Put64(m->weg[rexbsrm], Load64((u8 *)(intptr_t)v));
+  Put64(m->weg[rexbsrm], Load64(ToHost(v)));
 }
 
 static void FastCall(struct Machine *m, u64 disp) {
   u64 v, x = m->ip + disp;
   Put64(m->sp, (v = Get64(m->sp) - 8));
-  Store64((u8 *)(intptr_t)v, m->ip);
+  Store64(ToHost(v), m->ip);
   m->ip = x;
 }
 
 static void FastRet(struct Machine *m) {
   u64 v = Get64(m->sp);
   Put64(m->sp, v + 8);
-  m->ip = Load64((u8 *)(intptr_t)v);
+  m->ip = Load64(ToHost(v));
 }
 
 static void WriteStackWord(u8 *p, u64 rde, u32 osz, u64 x) {
@@ -113,7 +113,7 @@ void Push(P, u64 x) {
 void OpPushZvq(P) {
   int osz = kStackOsz[Osz(rde)][Mode(rde)];
   PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Eamode(rde), osz);
-  if (IsDevirtualized(m) && !Osz(rde)) {
+  if (IsLinear(m) && !Osz(rde)) {
     Jitter(A, "a1i c", RexbSrm(rde), FastPush);
   }
 }
@@ -163,7 +163,7 @@ void OpPopZvq(P) {
     default:
       __builtin_unreachable();
   }
-  if (IsDevirtualized(m) && !Osz(rde)) {
+  if (IsLinear(m) && !Osz(rde)) {
     Jitter(A, "a1i c", RexbSrm(rde), FastPop);
   }
 }
@@ -175,7 +175,7 @@ static void OpCall(P, u64 func) {
 
 void OpCallJvds(P) {
   OpCall(A, m->ip + disp);
-  if (IsDevirtualized(m) && !Osz(rde)) {
+  if (IsLinear(m) && !Osz(rde)) {
     Jitter(A, "a1i c", disp, FastCall);
   }
 }
@@ -214,7 +214,7 @@ void OpLeave(P) {
 
 void OpRet(P) {
   m->ip = Pop(A, 0);
-  if (IsDevirtualized(m) && !Osz(rde)) {
+  if (IsLinear(m) && !Osz(rde)) {
     Jitter(A, "c", FastRet);
   }
 }
