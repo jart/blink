@@ -26,7 +26,6 @@
 #include "blink/errno.h"
 #include "blink/fds.h"
 #include "blink/log.h"
-#include "blink/memory.h"
 #include "blink/syscall.h"
 #include "blink/xlat.h"
 

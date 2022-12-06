@@ -37,7 +37,20 @@
 #include "blink/sigwinch.h"
 #include "blink/stats.h"
 #include "blink/syscall.h"
+#include "blink/util.h"
 #include "blink/xlat.h"
+
+#define OPTS "hjls"
+#define USAGE \
+  " [-" OPTS "] PROG [ARGS...]\n\
+  -h        help\n\
+  -j        disable jit\n\
+  -l        disable linear memory\n\
+  -s        print statistics on exit\n"
+
+static bool FLAG_nojit;
+static bool FLAG_nolinear;
+static bool FLAG_statistics;
 
 static void OnSignal(int sig, siginfo_t *si, void *uc) {
   EnqueueSignal(g_machine, sig);
@@ -49,10 +62,11 @@ static int Exec(char *prog, char **argv, char **envp) {
   struct Machine *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
   unassert((g_machine = NewMachine(NewSystem(), 0)));
-  // DisableJit(&g_machine->system->jit);
+  if (FLAG_nojit) DisableJit(&g_machine->system->jit);
+  SetMachineMode(g_machine, XED_MODE_LONG);
   g_machine->system->exec = Exec;
-  g_machine->system->mode = XED_MODE_LONG;
-  g_machine->mode = XED_MODE_LONG;
+  g_machine->nolinear = FLAG_nolinear;
+  g_machine->system->nolinear = FLAG_nolinear;
   if (!old) {
     LoadProgram(g_machine, prog, argv, envp);
     AddStdFd(&g_machine->system->fds, 0);
@@ -74,20 +88,53 @@ static int Exec(char *prog, char **argv, char **envp) {
     KillOtherThreads(s);
     FreeMachine(g_machine);
     FreeSystem(s);
-    // PrintStats();
+#ifndef NDEBUG
+    if (FLAG_statistics) {
+      PrintStats();
+    }
+#endif
     return rc;
+  }
+}
+
+static void Print(int fd, const char *s) {
+  write(fd, s, strlen(s));
+}
+
+_Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {
+  Print(fd, "Usage: ");
+  Print(fd, argc > 0 && argv[0] ? argv[0] : "blink");
+  Print(fd, USAGE);
+  exit(rc);
+}
+
+static void GetOpts(int argc, char *argv[]) {
+  int opt;
+  FLAG_nolinear = !CanHaveLinearMemory();
+  while ((opt = getopt_(argc, argv, OPTS)) != -1) {
+    switch (opt) {
+      case 'j':
+        FLAG_nojit = true;
+        break;
+      case 'l':
+        FLAG_nolinear = true;
+        break;
+      case 's':
+        FLAG_statistics = true;
+        break;
+      case 'h':
+        PrintUsage(argc, argv, 0, 1);
+      default:
+        PrintUsage(argc, argv, 48, 2);
+    }
   }
 }
 
 int main(int argc, char *argv[], char **envp) {
   struct sigaction sa;
+  GetOpts(argc, argv);
+  if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
   WriteErrorInit();
-  if (argc < 2) {
-    WriteErrorString("Usage: ");
-    WriteErrorString(argv[0]);
-    WriteErrorString(" PROG [ARGS...]\n");
-    return 48;
-  }
   sigfillset(&sa.sa_mask);
   sa.sa_flags = 0;
   sa.sa_sigaction = OnSignal;
@@ -100,5 +147,5 @@ int main(int argc, char *argv[], char **envp) {
   unassert(!sigaction(SIGALRM, &sa, 0));
   unassert(!sigaction(SIGTERM, &sa, 0));
   unassert(!sigaction(SIGWINCH, &sa, 0));
-  return Exec(argv[1], argv + 1, envp);
+  return Exec(argv[optind_], argv + optind_, envp);
 }

@@ -22,6 +22,7 @@
 #include "blink/log.h"
 #include "blink/map.h"
 #include "blink/types.h"
+#include "blink/util.h"
 
 void *Mmap(void *addr,     //
            size_t length,  //
@@ -31,13 +32,32 @@ void *Mmap(void *addr,     //
            off_t offset,   //
            const char *owner) {
   void *res = mmap(addr, length, prot, flags, fd, offset);
-#ifndef NDEBUG
+#if LOG_MEM
+  char szbuf[16];
+  FormatSize(szbuf, length, 1024);
   if (res != MAP_FAILED) {
-    MEM_LOGF("%s mapped [%p,%p) w/ %zu kb", owner, res, res + length,
-             length / 1024);
+    MEM_LOGF("%s created %s map [%p,%p)", owner, szbuf, res, res + length);
   } else {
-    MEM_LOGF("%s failed to map [%p,%p) w/ %zu kb: %s", owner, (u8 *)addr,
-             (u8 *)addr + length, length / 1024, strerror(errno));
+    MEM_LOGF("%s failed to create %s map [%p,%p): %s", owner, szbuf, (u8 *)addr,
+             (u8 *)addr + length, strerror(errno));
+  }
+#endif
+  return res;
+}
+
+int Mprotect(void *addr,     //
+             size_t length,  //
+             int prot,       //
+             const char *owner) {
+  int res = mprotect(addr, length, prot);
+#if LOG_MEM
+  char szbuf[16];
+  FormatSize(szbuf, length, 1024);
+  if (res != -1) {
+    MEM_LOGF("%s protected %s map [%p,%p)", owner, szbuf, res, res + length);
+  } else {
+    MEM_LOGF("%s failed to protect %s map [%p,%p): %s", owner, szbuf,
+             (u8 *)addr, (u8 *)addr + length, strerror(errno));
   }
 #endif
   return res;

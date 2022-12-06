@@ -38,12 +38,10 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/path.h"
 #include "blink/random.h"
-#include "blink/real.h"
 #include "blink/signal.h"
 #include "blink/sse.h"
 #include "blink/ssefloat.h"
@@ -132,13 +130,11 @@ static relegated void OpMovEvqpSw(P) {
 
 static relegated int GetDescriptor(struct Machine *m, int selector,
                                    u64 *out_descriptor) {
-  unassert(m->system->gdt_base + m->system->gdt_limit <=
-           GetRealMemorySize(m->system));
+  unassert(m->system->gdt_base + m->system->gdt_limit <= kRealSize);
   selector &= -8;
   if (8 <= selector && selector + 8 <= m->system->gdt_limit) {
     SetReadAddr(m, m->system->gdt_base + selector, 8);
-    *out_descriptor =
-        Load64(m->system->real.p + m->system->gdt_base + selector);
+    *out_descriptor = Load64(m->system->real + m->system->gdt_base + selector);
     return 0;
   } else {
     return -1;
@@ -186,11 +182,15 @@ static relegated void OpLsl(P) {
   }
 }
 
-static relegated void ChangeMachineMode(struct Machine *m, int mode) {
+void SetMachineMode(struct Machine *m, int mode) {
+  m->mode = mode;
+  m->system->mode = mode;
+}
+
+void ChangeMachineMode(struct Machine *m, int mode) {
   if (mode == m->mode) return;
   ResetInstructionCache(m);
-  m->system->mode = mode;
-  m->mode = mode;
+  SetMachineMode(m, mode);
 }
 
 static relegated void OpJmpf(P) {
@@ -211,7 +211,7 @@ static relegated void OpJmpf(P) {
 }
 
 static relegated void OpXlatAlBbb(P) {
-  u64 v;
+  i64 v;
   v = MaskAddress(Eamode(rde), Get64(m->bx) + Get8(m->ax));
   v = DataSegment(A, v);
   SetReadAddr(m, v, 1);
@@ -414,13 +414,13 @@ static void OpMovObAl(P) {
 }
 
 static void OpMovRaxOvqp(P) {
-  u64 v = DataSegment(A, disp);
+  i64 v = DataSegment(A, disp);
   SetReadAddr(m, v, 1 << RegLog2(rde));
   WriteRegister(rde, m->ax, ReadMemory(rde, ResolveAddress(m, v)));
 }
 
 static void OpMovOvqpRax(P) {
-  u64 v = DataSegment(A, disp);
+  i64 v = DataSegment(A, disp);
   SetWriteAddr(m, v, 1 << RegLog2(rde));
   WriteMemory(rde, ResolveAddress(m, v), Get64(m->ax));
 }
@@ -1242,11 +1242,14 @@ static const nexgen32e_f kOp0ff[] = {
 
 static void Op0ff(P) {
   kOp0ff[ModrmReg(rde)](A);
-  if (m->path.jp) {
-    AppendJitSetArg(m->path.jp, kArgRde, rde);
-    AppendJitSetArg(m->path.jp, kArgDisp, disp);
-    AppendJitCall(m->path.jp, (void *)kOp0ff[ModrmReg(rde)]);
+#if 0
+  // TODO(jart): jitter me
+  if (m->path.jb) {
+    AppendJitSetArg(m->path.jb, kArgRde, rde);
+    AppendJitSetArg(m->path.jb, kArgDisp, disp);
+    AppendJitCall(m->path.jb, (void *)kOp0ff[ModrmReg(rde)]);
   }
+#endif
 }
 
 static void OpDoubleShift(P) {
@@ -1462,7 +1465,6 @@ static relegated void OpMovRqCq(P) {
 }
 
 static relegated void OpMovCqRq(P) {
-  i64 cr3;
   switch (ModrmReg(rde)) {
     case 0:
       m->system->cr0 = Get64(RegRexbRm(m, rde));
@@ -1471,12 +1473,7 @@ static relegated void OpMovCqRq(P) {
       m->system->cr2 = Get64(RegRexbRm(m, rde));
       break;
     case 3:
-      cr3 = Get64(RegRexbRm(m, rde));
-      if (0 <= cr3 && cr3 + 512 * 8 <= GetRealMemorySize(m->system)) {
-        m->system->cr3 = cr3;
-      } else {
-        ThrowProtectionFault(m);
-      }
+      m->system->cr3 = Get64(RegRexbRm(m, rde));
       break;
     case 4:
       m->system->cr4 = Get64(RegRexbRm(m, rde));
@@ -2160,13 +2157,8 @@ nexgen32e_f GetOp(long op) {
 }
 
 static bool CanJit(struct Machine *m) {
-  if (UNLIKELY(IsJitDisabled(&m->system->jit))) {
-    return false;
-  }
-  if (UNLIKELY(m->mode != XED_MODE_LONG)) {
-    LOG_ONCE(LOGF("jit is only supported in long mode"));
-    return false;
-  }
+  if (IsJitDisabled(&m->system->jit)) return false;
+  if (m->mode != XED_MODE_LONG) return false;
   return (u64)m->ip - m->codestart < m->codesize;
 }
 
@@ -2194,13 +2186,13 @@ void GeneralDispatch(P) {
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
   opclass = ClassifyOp(m, rde);
-  if (m->path.jp || (opclass == kOpNormal && CanJit(m) && CreatePath(m))) {
+  if (m->path.jb || (opclass == kOpNormal && CanJit(m) && CreatePath(m))) {
     if (opclass == kOpNormal || opclass == kOpBranching) {
       ++m->path.elements;
       STATISTIC(++path_elements);
-      AddPath_StartOp(m, rde);
+      AddPath_StartOp(A);
     }
-    jitpc = GetJitPc(m->path.jp);
+    jitpc = GetJitPc(m->path.jb);
   } else {
     jitpc = 0;
   }
@@ -2212,16 +2204,16 @@ void GeneralDispatch(P) {
   if (jitpc) {
     newip = m->ip;
     m->ip = m->oldip;
-    if (GetJitPc(m->path.jp) == jitpc) {
+    if (GetJitPc(m->path.jb) == jitpc) {
       if (opclass == kOpNormal || opclass == kOpBranching) {
         AddPath(A);
-        AddPath_EndOp(m);
+        AddPath_EndOp(A);
       } else {
         JIT_LOGF("won't add [%" PRIx64 " %s] so path started at %" PRIx64,
                  GetPc(m), DescribeOp(m), m->path.start);
       }
     } else {
-      AddPath_EndOp(m);
+      AddPath_EndOp(A);
     }
     if (opclass == kOpPrecious || opclass == kOpBranching) {
       CommitPath(m, 0);
@@ -2257,7 +2249,7 @@ void ExecuteInstruction(struct Machine *m) {
   STATISTIC(++instructions_dispatched);
   if ((pc = GetPc(m)) - m->codestart < m->codesize) {
     func = IB(atomic_load_explicit(m->fun + pc, memory_order_relaxed));
-    if (!m->path.jp) {
+    if (!m->path.jb) {
       func(DISPATCH_NOTHING);
     } else {
       ExploreInstruction(m, func);
@@ -2272,7 +2264,7 @@ static void ExecuteInstructionLong(struct Machine *m) {
   STATISTIC(++instructions_dispatched);
   if ((u64)m->ip - m->codestart < m->codesize) {
     func = IB(atomic_load_explicit(m->fun + m->ip, memory_order_relaxed));
-    if (!m->path.jp) {
+    if (!m->path.jb) {
       func(DISPATCH_NOTHING);
     } else {
       ExploreInstruction(m, func);

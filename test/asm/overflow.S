@@ -3,8 +3,8 @@
 _start:	mov	$3,%r15
 "test jit too":
 
-//	make -j8 o//blink o//x86_64/test/asm/overflow.elf
-//	o//blink/tui o//x86_64/test/asm/overflow.elf
+//	make -j8 o//blink o//test/asm/overflow.elf
+//	o//blink/tui o//test/asm/overflow.elf
 
 ////////////////////////////////////////////////////////////////////////////////
 // ADD INSTRUCTION

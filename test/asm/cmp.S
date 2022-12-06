@@ -3,8 +3,8 @@
 _start:
 
 //	cmp compares registers and memory
-//	make -j8 o//blink o//x86_64/test/asm/cmp.elf
-//	o//blink/tui -j o//x86_64/test/asm/cmp.elf
+//	make -j8 o//blink o//test/asm/cmp.elf
+//	o//blink/tui -j o//test/asm/cmp.elf
 
 	.test	"cmp jit test"
 	mov	$3,%ecx

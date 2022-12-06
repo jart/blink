@@ -21,7 +21,6 @@
 #include "blink/address.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/ssemov.h"
 

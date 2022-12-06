@@ -2,10 +2,12 @@
 #define BLINK_PATH_H_
 #include "blink/machine.h"
 
+extern void (*AddPath_StartOp_Hook)(P);
+
 bool CreatePath(struct Machine *);
 bool AddPath(P);
-void AddPath_EndOp(struct Machine *);
-void AddPath_StartOp(struct Machine *, u64);
+void AddPath_EndOp(P);
+void AddPath_StartOp(P);
 void AbandonPath(struct Machine *);
 void CommitPath(struct Machine *, intptr_t);
 

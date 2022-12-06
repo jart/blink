@@ -1,5 +1,5 @@
 #!/bin/sh
-m=${1:-tiny}
+m=${1:-}
 
 F="
 o/$m/blink/blink

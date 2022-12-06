@@ -27,7 +27,6 @@
 #include "blink/flags.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/string.h"
@@ -116,8 +115,7 @@ static u64 ReadCx(P) {
 }
 
 static u64 SubtractCx(P, u64 x) {
-  u64 cx;
-  cx = Get64(m->cx) - x;
+  u64 cx = Get64(m->cx) - x;
   if (Eamode(rde) != XED_MODE_REAL) {
     if (Eamode(rde) == XED_MODE_LEGACY) {
       cx &= 0xffffffff;
@@ -132,9 +130,9 @@ static u64 SubtractCx(P, u64 x) {
 
 static void StringOp(P, int op) {
   bool stop;
-  void *p[2];
   unsigned n;
   i64 sgn, v;
+  void *p[2];
   u8 s[3][8];
   stop = false;
   n = 1 << RegLog2(rde);

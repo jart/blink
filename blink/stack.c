@@ -22,7 +22,6 @@
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/tsan.h"
@@ -113,7 +112,7 @@ void Push(P, u64 x) {
 void OpPushZvq(P) {
   int osz = kStackOsz[Osz(rde)][Mode(rde)];
   PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Eamode(rde), osz);
-  if (IsLinear(m) && !Osz(rde)) {
+  if (HasLinearMapping(m) && !Osz(rde)) {
     Jitter(A, "a1i c", RexbSrm(rde), FastPush);
   }
 }
@@ -163,7 +162,7 @@ void OpPopZvq(P) {
     default:
       __builtin_unreachable();
   }
-  if (IsLinear(m) && !Osz(rde)) {
+  if (HasLinearMapping(m) && !Osz(rde)) {
     Jitter(A, "a1i c", RexbSrm(rde), FastPop);
   }
 }
@@ -175,7 +174,7 @@ static void OpCall(P, u64 func) {
 
 void OpCallJvds(P) {
   OpCall(A, m->ip + disp);
-  if (IsLinear(m) && !Osz(rde)) {
+  if (HasLinearMapping(m) && !Osz(rde)) {
     Jitter(A, "a1i c", disp, FastCall);
   }
 }
@@ -214,7 +213,7 @@ void OpLeave(P) {
 
 void OpRet(P) {
   m->ip = Pop(A, 0);
-  if (IsLinear(m) && !Osz(rde)) {
+  if (HasLinearMapping(m) && !Osz(rde)) {
     Jitter(A, "c", FastRet);
   }
 }

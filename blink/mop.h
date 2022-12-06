@@ -3,6 +3,7 @@
 #include <limits.h>
 #include <stdatomic.h>
 
+#include "blink/builtin.h"
 #include "blink/endian.h"
 
 /**
@@ -21,74 +22,46 @@
  * previously performed by the same thread, as seen by other threads.
  */
 
-static inline u8 Load8(const u8 p[1]) {
-  return atomic_load_explicit((_Atomic(u8) *)p, memory_order_acquire);
-}
-
-static inline u16 Load16(const u8 p[2]) {
-  u16 w;
-  if (!((intptr_t)p & 1)) {
-    return Little16(
-        atomic_load_explicit((_Atomic(u16) *)p, memory_order_acquire));
-  }
-  w = Read16(p);
+MICRO_OP_SAFE u8 Load8(const u8 p[1]) {
+  u8 w = Read8(p);
   atomic_thread_fence(memory_order_acquire);
   return w;
 }
 
-static inline u32 Load32(const u8 p[4]) {
-  u32 w;
-  if (!((intptr_t)p & 3)) {
-    return Little32(
-        atomic_load_explicit((_Atomic(u32) *)p, memory_order_acquire));
-  }
-  w = Read32(p);
+MICRO_OP_SAFE u16 Load16(const u8 p[2]) {
+  u16 w = Read16(p);
   atomic_thread_fence(memory_order_acquire);
   return w;
 }
 
-static inline u64 Load64(const u8 p[8]) {
-  u64 w;
-#if LONG_BIT == 64
-  if (!((intptr_t)p & 7)) {
-    return Little64(
-        atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire));
-  }
-#endif
-  w = Read64(p);
+MICRO_OP_SAFE u32 Load32(const u8 p[4]) {
+  u32 w = Read32(p);
   atomic_thread_fence(memory_order_acquire);
   return w;
 }
 
-static inline void Store8(u8 p[1], u8 x) {
-  atomic_store_explicit((_Atomic(u8) *)p, x, memory_order_release);
+MICRO_OP_SAFE u64 Load64(const u8 p[8]) {
+  u64 w = Read64(p);
+  atomic_thread_fence(memory_order_acquire);
+  return w;
 }
 
-static inline void Store16(u8 p[2], u16 x) {
-  if (!((intptr_t)p & 1)) {
-    atomic_store_explicit((_Atomic(u16) *)p, Little16(x), memory_order_release);
-  } else {
-    atomic_thread_fence(memory_order_release);
-    Write16(p, x);
-  }
+MICRO_OP_SAFE void Store8(u8 p[1], u8 x) {
+  atomic_thread_fence(memory_order_release);
+  Write8(p, x);
 }
 
-static inline void Store32(u8 p[4], u32 x) {
-  if (!((intptr_t)p & 3)) {
-    atomic_store_explicit((_Atomic(u32) *)p, Little32(x), memory_order_release);
-  } else {
-    atomic_thread_fence(memory_order_release);
-    Write32(p, x);
-  }
+MICRO_OP_SAFE void Store16(u8 p[2], u16 x) {
+  atomic_thread_fence(memory_order_release);
+  Write16(p, x);
 }
 
-static inline void Store64(u8 p[8], u64 x) {
-#if LONG_BIT == 64
-  if (!((intptr_t)p & 7)) {
-    atomic_store_explicit((_Atomic(u64) *)p, Little64(x), memory_order_release);
-    return;
-  }
-#endif
+MICRO_OP_SAFE void Store32(u8 p[4], u32 x) {
+  atomic_thread_fence(memory_order_release);
+  Write32(p, x);
+}
+
+MICRO_OP_SAFE void Store64(u8 p[8], u64 x) {
   atomic_thread_fence(memory_order_release);
   Write64(p, x);
 }

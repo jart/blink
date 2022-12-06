@@ -89,4 +89,10 @@
 #define __builtin___clear_cache(x, y) (void)0
 #endif
 
+#if defined(__x86_64__) || defined(__aarch64__)
+#define MICRO_OP_SAFE forceinline
+#else
+#define MICRO_OP_SAFE static inline
+#endif
+
 #endif /* BLINK_BUILTIN_H_ */

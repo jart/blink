@@ -98,7 +98,7 @@ int staging(int x, int y) {
 
 TEST(jit, func) {
   add_f add;
-  struct JitPage *jp;
+  struct JitBlock *jb;
 #if defined(__x86_64__)
   u8 code[] = {
       0x8d, 0x04, 0x37,  // lea (%rdi,%rsi,1),%eax
@@ -108,9 +108,9 @@ TEST(jit, func) {
       0x0b000020,  // add w0,w1,w0
   };
 #endif
-  ASSERT_NOTNULL((jp = StartJit(&jit)));
-  ASSERT_TRUE(AppendJit(jp, code, sizeof(code)));
-  ASSERT_NE(0, FinishJit(&jit, jp, (hook_t *)&add, (intptr_t)staging));
+  ASSERT_NOTNULL((jb = StartJit(&jit)));
+  ASSERT_TRUE(AppendJit(jb, code, sizeof(code)));
+  ASSERT_NE(0, FinishJit(&jit, jb, (hook_t *)&add, (intptr_t)staging));
   FlushJit(&jit);
   ASSERT_EQ(4, add(2, 2));
   ASSERT_EQ(23, add(20, 3));
@@ -119,10 +119,10 @@ TEST(jit, func) {
 TEST(jit, call) {
   u64 r0;
   dispatch_f fun;
-  struct JitPage *jp;
-  ASSERT_NOTNULL((jp = StartJit(&jit)));
-  ASSERT_TRUE(AppendJitCall(jp, (void *)&CallMe));
-  ASSERT_NE(0, FinishJit(&jit, jp, (hook_t *)&fun, 0));
+  struct JitBlock *jb;
+  ASSERT_NOTNULL((jb = StartJit(&jit)));
+  ASSERT_TRUE(AppendJitCall(jb, (void *)&CallMe));
+  ASSERT_NE(0, FinishJit(&jit, jb, (hook_t *)&fun, 0));
   FlushJit(&jit);
   r0 = fun(1, 2, 3, 4, 5, 6);
   ASSERT_EQ(g_r0, r0);
@@ -137,18 +137,18 @@ TEST(jit, call) {
 TEST(jit, param) {
   int i;
   noparam_f fun;
-  struct JitPage *jp;
+  struct JitBlock *jb;
   u64 r0, p0, p1, p2, p3, p4, p5;
   for (i = 0; i < 2000; ++i) {
-    ASSERT_NOTNULL((jp = StartJit(&jit)));
-    ASSERT_TRUE(AppendJitSetArg(jp, 0, (p0 = Rando())));
-    ASSERT_TRUE(AppendJitSetArg(jp, 1, (p1 = Rando())));
-    ASSERT_TRUE(AppendJitSetArg(jp, 2, (p2 = (i - 1000) * 2)));
-    ASSERT_TRUE(AppendJitSetArg(jp, 3, (p3 = Rando())));
-    ASSERT_TRUE(AppendJitSetArg(jp, 4, (p4 = Rando())));
-    ASSERT_TRUE(AppendJitSetArg(jp, 5, (p5 = i - 500)));
-    ASSERT_TRUE(AppendJitCall(jp, (void *)&CallMe));
-    ASSERT_NE(0, FinishJit(&jit, jp, (hook_t *)&fun, 0));
+    ASSERT_NOTNULL((jb = StartJit(&jit)));
+    ASSERT_TRUE(AppendJitSetReg(jb, kJitArg0, (p0 = Rando())));
+    ASSERT_TRUE(AppendJitSetReg(jb, kJitArg1, (p1 = Rando())));
+    ASSERT_TRUE(AppendJitSetReg(jb, kJitArg2, (p2 = (i - 1000) * 2)));
+    ASSERT_TRUE(AppendJitSetReg(jb, kJitArg3, (p3 = Rando())));
+    ASSERT_TRUE(AppendJitSetReg(jb, kJitArg4, (p4 = Rando())));
+    ASSERT_TRUE(AppendJitSetReg(jb, kJitArg5, (p5 = i - 500)));
+    ASSERT_TRUE(AppendJitCall(jb, (void *)&CallMe));
+    ASSERT_NE(0, FinishJit(&jit, jb, (hook_t *)&fun, 0));
     FlushJit(&jit);
     r0 = fun();
     ASSERT_EQ(g_r0, r0);

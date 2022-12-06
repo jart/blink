@@ -2,8 +2,8 @@
 .globl	_start
 _start:
 
-//	make -j8 o//blink o//x86_64/test/asm/add.elf
-//	o//blink/tui o//x86_64/test/asm/add.elf
+//	make -j8 o//blink o//test/asm/add.elf
+//	o//blink/tui o//test/asm/add.elf
 
 	.test	"add64"
 	mov	$0x1234567812345678,%rax

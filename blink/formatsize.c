@@ -16,59 +16,38 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdlib.h>
-#include <string.h>
+#include "blink/macros.h"
+#include "blink/util.h"
 
-#include "blink/endian.h"
-#include "blink/machine.h"
-
-#define STACKALIGN      16
-#define LINUX_AT_EXECFN 31
-
-static size_t GetArgListLen(char **p) {
-  size_t n;
-  for (n = 0; *p; ++p) ++n;
-  return n;
-}
-
-static i64 PushString(struct Machine *m, char *s) {
-  size_t n;
-  i64 sp;
-  n = strlen(s) + 1;
-  sp = Read64(m->sp);
-  sp -= n;
-  Write64(m->sp, sp);
-  CopyToUser(m, sp, s, n);
-  return sp;
-}
-
-void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
-  u8 *bytes;
-  i64 sp, *p, *bloc;
-  size_t i, narg, nenv, naux, nall;
-  naux = 1;
-  nenv = GetArgListLen(vars);
-  narg = GetArgListLen(args);
-  nall = 1 + narg + 1 + nenv + 1 + (naux + 1) * 2;
-  bloc = (i64 *)malloc(sizeof(i64) * nall);
-  p = bloc + nall;
-  *--p = 0;
-  *--p = 0;
-  *--p = PushString(m, prog);
-  *--p = LINUX_AT_EXECFN;
-  for (*--p = 0, i = nenv; i--;) *--p = PushString(m, vars[i]);
-  for (*--p = 0, i = narg; i--;) *--p = PushString(m, args[i]);
-  *--p = narg;
-  sp = Read64(m->sp);
-  while ((sp - nall * sizeof(i64)) & (STACKALIGN - 1)) --sp;
-  sp -= nall * sizeof(i64);
-  Write64(m->sp, sp);
-  Write64(m->di, 0); /* or ape detects freebsd */
-  bytes = (u8 *)malloc(nall * 8);
-  for (i = 0; i < nall; ++i) {
-    Write64(bytes + i * 8, bloc[i]);
+/**
+ * Represents size as readable string.
+ *
+ * @param p is output buffer
+ * @param b should be 1024 or 1000
+ * @return pointer to nul byte
+ */
+char *FormatSize(char *p, uint64_t x, uint64_t b) {
+  int i, suffix;
+  struct {
+    char suffix;
+    uint64_t size;
+  } kUnits[] = {
+      {'e', b * b * b * b * b * b},
+      {'p', b * b * b * b * b},
+      {'t', b * b * b * b},
+      {'g', b * b * b},
+      {'m', b * b},
+      {'k', b},
+  };
+  for (suffix = i = 0; i < ARRAYLEN(kUnits); ++i) {
+    if (x >= kUnits[i].size * 9) {
+      x = (x + kUnits[i].size / 2) / kUnits[i].size;
+      suffix = kUnits[i].suffix;
+      break;
+    }
   }
-  CopyToUser(m, sp, bytes, nall * 8);
-  free(bytes);
-  free(bloc);
+  p = FormatUint64(p, x);
+  if (suffix) *p++ = suffix;
+  *p = 0;
+  return p;
 }

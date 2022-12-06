@@ -5,5 +5,6 @@
 
 void LoadProgram(struct Machine *, char *, char **, char **);
 void LoadDebugSymbols(struct Elf *);
+bool IsSupportedExecutable(const char *, void *);
 
 #endif /* BLINK_LOADER_H_ */

@@ -77,8 +77,7 @@ endif
 
 # ifeq ($(MODE), opt)
 # CC = clang
-# AR = llvm-ar
-# CPPFLAGS += -DNDEBUG
+# # CPPFLAGS += -DNDEBUG
 # CFLAGS += -std=c11 -O3
 # TARGET_ARCH = -march=native
 # endif
@@ -96,28 +95,23 @@ LDLIBS += -fsanitize=address
 endif
 
 ifeq ($(MODE), ubsan)
-CC = clang++
-AR = llvm-ar
+CC = clang
 CPPFLAGS += -DDEBUG
-CFLAGS += -xc++ -Werror -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS += -fuse-ld=lld
+CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 CFLAGS += -fsanitize=undefined
 LDLIBS += -fsanitize=undefined
 endif
 
 ifeq ($(MODE), tsan)
 CC = clang++
-AR = llvm-ar
 CPPFLAGS +=
 CFLAGS += -xc++ -Werror -Wno-unused-parameter -Wno-missing-field-initializers
-LDFLAGS += -fuse-ld=lld
 CFLAGS += -fsanitize=thread
 LDLIBS += -fsanitize=thread
 endif
 
 ifeq ($(MODE), msan)
 CC = clang
-AR = llvm-ar
 CPPFLAGS += -DDEBUG
 CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 CFLAGS += -fsanitize=memory
@@ -132,16 +126,13 @@ endif
 
 # ifeq ($(MODE), tiny)
 # CC = clang
-# AR = llvm-ar
 # CPPFLAGS += -DNDEBUG -DTINY
-# LDFLAGS += -fuse-ld=lld
 # CFLAGS += -std=c11 -Oz -fno-pie
 # LDFLAGS += -no-pie -Wl,--cref,-Map=$@.map
 # endif
 
 ifeq ($(MODE), llvm)
 CC = clang
-AR = llvm-ar
 CPPFLAGS += -DDEBUG
 CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS += --rtlib=compiler-rt
@@ -149,7 +140,6 @@ endif
 
 ifeq ($(MODE), llvm++)
 CC = clang++
-AR = llvm-ar
 CPPFLAGS += -DDEBUG
 CFLAGS += -xc++ -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS += --rtlib=compiler-rt

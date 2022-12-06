@@ -25,22 +25,23 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/path.h"
 #include "blink/stats.h"
+
+void (*AddPath_StartOp_Hook)(P);
 
 static void StartPath(struct Machine *m) {
   JIT_LOGF("%" PRIx64 " <path>", m->ip);
 }
 
-static void StartOp(P) {
+static void StartOp(struct Machine *m, long len) {
   JIT_LOGF("%" PRIx64 "   <op>", m->ip);
   JIT_LOGF("%" PRIx64 "     %s", m->ip, DescribeOp(m));
   STATISTIC(++instructions_jitted);
-  unassert(!m->path.jp);
+  unassert(!m->path.jb);
   m->oldip = m->ip;
-  m->ip += disp;
+  m->ip += len;
 }
 
 static void EndOp(struct Machine *m) {
@@ -59,16 +60,15 @@ static void EndPath(struct Machine *m) {
 bool CreatePath(struct Machine *m) {
   i64 pc;
   bool res;
-  unassert(!m->path.jp);
+  unassert(!m->path.jb);
   if ((pc = GetPc(m))) {
-    if ((m->path.jp = StartJit(&m->system->jit))) {
+    if ((m->path.jb = StartJit(&m->system->jit))) {
+#if LOG_JIT
       JIT_LOGF("starting new path at %" PRIx64, pc);
+      Jitter(A, "s0a0= c", len, StartPath);
+#endif
       m->path.start = pc;
       m->path.elements = 0;
-#if LOG_JIT
-      AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
-      AppendJitCall(m->path.jp, StartPath);
-#endif
       res = true;
     } else {
       LOGF("jit failed: %s", strerror(errno));
@@ -81,17 +81,16 @@ bool CreatePath(struct Machine *m) {
 }
 
 void CommitPath(struct Machine *m, intptr_t splice) {
-  unassert(m->path.jp);
+  unassert(m->path.jb);
 #if LOG_JIT
-  AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
-  AppendJitCall(m->path.jp, EndPath);
+  Jitter(A, "s0a0= c", len, EndPath);
 #endif
   STATISTIC(path_longest_bytes =
-                MAX(path_longest_bytes, m->path.jp->index - m->path.jp->start));
+                MAX(path_longest_bytes, m->path.jb->index - m->path.jb->start));
   STATISTIC(path_longest = MAX(path_longest, m->path.elements));
   STATISTIC(AVERAGE(path_average_elements, m->path.elements));
-  STATISTIC(AVERAGE(path_average_bytes, m->path.jp->index - m->path.jp->start));
-  if (SpliceJit(&m->system->jit, m->path.jp, (hook_t *)(m->fun + m->path.start),
+  STATISTIC(AVERAGE(path_average_bytes, m->path.jb->index - m->path.jb->start));
+  if (SpliceJit(&m->system->jit, m->path.jb, (hook_t *)(m->fun + m->path.start),
                 (intptr_t)JitlessDispatch, splice)) {
     STATISTIC(++path_count);
     JIT_LOGF("staged path to %" PRIx64, m->path.start);
@@ -99,22 +98,25 @@ void CommitPath(struct Machine *m, intptr_t splice) {
     STATISTIC(++path_ooms);
     JIT_LOGF("path starting at %" PRIx64 " ran out of space", m->path.start);
   }
-  m->path.jp = 0;
+  m->path.jb = 0;
 }
 
 void AbandonPath(struct Machine *m) {
-  unassert(m->path.jp);
+  unassert(m->path.jb);
   STATISTIC(++path_abandoned);
-  AbandonJit(&m->system->jit, m->path.jp);
-  m->path.jp = 0;
+  AbandonJit(&m->system->jit, m->path.jb);
+  m->path.jb = 0;
 }
 
-void AddPath_StartOp(struct Machine *m, u64 rde) {
+void AddPath_StartOp(P) {
   _Static_assert(offsetof(struct Machine, ip) < 128, "");
   _Static_assert(offsetof(struct Machine, oldip) < 128, "");
+  if (AddPath_StartOp_Hook) {
+    AddPath_StartOp_Hook(A);
+  }
   u8 len = Oplength(rde);
 #if !LOG_JIT && defined(__x86_64__)
-  AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
+  AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
   u8 ip = offsetof(struct Machine, ip);
   u8 oldip = offsetof(struct Machine, oldip);
   u8 code[] = {
@@ -123,10 +125,10 @@ void AddPath_StartOp(struct Machine *m, u64 rde) {
       0x48, 0x83, 0300, len,    // add $len,%rax
       0x48, 0x89, 0107, ip,     // mov %rax,8(%rdi)
   };
-  AppendJit(m->path.jp, code, sizeof(code));
+  AppendJit(m->path.jb, code, sizeof(code));
   m->reserving = false;
 #elif !LOG_JIT && defined(__aarch64__)
-  AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
+  AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
   u8 ip = offsetof(struct Machine, ip);
   u8 oldip = offsetof(struct Machine, oldip);
   u32 code[] = {
@@ -135,51 +137,49 @@ void AddPath_StartOp(struct Machine *m, u64 rde) {
       0x91000021 | len << 10,          // add x1, x1, #len
       0xf9000001 | (ip / 8) << 10,     // str x1, [x0, #ip]
   };
-  AppendJit(m->path.jp, code, sizeof(code));
+  AppendJit(m->path.jb, code, sizeof(code));
   m->reserving = false;
 #else
-  AppendJitSetArg(m->path.jp, kArgDisp, len);
-  AppendJitCall(m->path.jp, (void *)StartOp);
+  Jitter(A, "a1i s0a0= c", len, StartOp);
 #endif
 }
 
-void AddPath_EndOp(struct Machine *m) {
+void AddPath_EndOp(P) {
   _Static_assert(offsetof(struct Machine, stashaddr) < 128, "");
 #if !LOG_JIT && defined(__x86_64__)
   if (m->reserving) {
-    AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
+    AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
     u8 sa = offsetof(struct Machine, stashaddr);
     u8 code[] = {
         0x48, 0x83, 0177, sa, 0x00,  // cmpq $0x0,0x18(%rdi)
         0x74, 0x05,                  // jnz +5
     };
-    AppendJit(m->path.jp, code, sizeof(code));
-    AppendJitCall(m->path.jp, (void *)CommitStash);
+    AppendJit(m->path.jb, code, sizeof(code));
+    AppendJitCall(m->path.jb, (void *)CommitStash);
   }
 #elif !LOG_JIT && defined(__aarch64__)
   if (m->reserving) {
-    AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
+    AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
     u32 sa = offsetof(struct Machine, stashaddr);
     u32 code[] = {
         0xf9400001 | (sa / 8) << 10,  // ldr x1, [x0, #stashaddr]
         0xb4000001 | 2 << 5,          // cbz x1, +2
     };
-    AppendJit(m->path.jp, code, sizeof(code));
-    AppendJitCall(m->path.jp, (void *)CommitStash);
+    AppendJit(m->path.jb, code, sizeof(code));
+    AppendJitCall(m->path.jb, (void *)CommitStash);
   }
 #else
-  AppendJitMovReg(m->path.jp, kJitArg0, kJitSav0);
-  AppendJitCall(m->path.jp, (void *)EndOp);
+  Jitter(A, "s0a0= c", EndOp);
 #endif
 }
 
 bool AddPath(P) {
-  unassert(m->path.jp);
+  unassert(m->path.jb);
   JIT_LOGF("adding [%s] from address %" PRIx64 " to path starting at %" PRIx64,
            DescribeOp(m), GetPc(m), m->path.start);
-  AppendJitSetArg(m->path.jp, kArgRde, rde);
-  AppendJitSetArg(m->path.jp, kArgDisp, disp);
-  AppendJitSetArg(m->path.jp, kArgUimm0, uimm0);
-  AppendJitCall(m->path.jp, (void *)GetOp(Mopcode(rde)));
+  AppendJitSetReg(m->path.jb, kJitArg[kArgRde], rde);
+  AppendJitSetReg(m->path.jb, kJitArg[kArgDisp], disp);
+  AppendJitSetReg(m->path.jb, kJitArg[kArgUimm0], uimm0);
+  AppendJitCall(m->path.jb, (void *)GetOp(Mopcode(rde)));
   return true;
 }

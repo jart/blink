@@ -27,7 +27,6 @@
 #include "blink/linux.h"
 #include "blink/log.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/signal.h"
 #include "blink/xlat.h"
 

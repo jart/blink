@@ -24,13 +24,10 @@
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/likely.h"
-#include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/mop.h"
 #include "blink/pml4t.h"
-#include "blink/real.h"
 #include "blink/stats.h"
 
 void SetReadAddr(struct Machine *m, i64 addr, u32 size) {
@@ -47,20 +44,34 @@ void SetWriteAddr(struct Machine *m, i64 addr, u32 size) {
   }
 }
 
+u8 *GetPageAddress(struct System *s, u64 entry) {
+  unassert(entry & PAGE_V);
+  unassert(~entry & PAGE_RSRV);
+  if (entry & PAGE_HOST) {
+    return ToHost(entry & PAGE_TA);
+  } else if ((entry & PAGE_TA) + 4096 <= kRealSize) {
+    return s->real + (entry & PAGE_TA);
+  } else {
+    return 0;
+  }
+}
+
 u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
-  long page;
   u64 x;
-  if ((page = AllocateLinearPage(m->system)) != -1) {
+  u64 page;
+  if ((page = AllocatePage(m->system)) != -1) {
     --m->system->memstat.reserved;
-    x = page | (entry & ~(PAGE_TA | PAGE_IGN1));
-    Store64(m->system->real.p + table + index * 8, x);
+    ++m->system->memstat.committed;
+    x = (page & (PAGE_TA | PAGE_HOST | PAGE_MAP)) |
+        (entry & ~(PAGE_TA | PAGE_RSRV));
+    Store64(GetPageAddress(m->system, table) + index * 8, x);
     return x;
   } else {
     return 0;
   }
 }
 
-static u64 FindPage(struct Machine *m, u64 page) {
+static u64 FindPageTableEntry(struct Machine *m, u64 page) {
   long i;
   i64 table;
   u64 entry, res;
@@ -76,13 +87,12 @@ static u64 FindPage(struct Machine *m, u64 page) {
     }
   }
   STATISTIC(++tlb_misses);
+  unassert((entry = m->system->cr3));
   level = 39;
-  entry = m->system->cr3;
   do {
-    table = entry & PAGE_TA;
-    unassert(table < GetRealMemorySize(m->system));
+    table = entry;
     index = (page >> level) & 511;
-    entry = Load64(m->system->real.p + table + index * 8);
+    entry = Load64(GetPageAddress(m->system, table) + index * 8);
     if (!(entry & PAGE_V)) return 0;
   } while ((level -= 9) >= 12);
   if ((entry & PAGE_RSRV) &&
@@ -94,35 +104,30 @@ static u64 FindPage(struct Machine *m, u64 page) {
   return entry;
 }
 
-static u8 *ConvertReal(struct Machine *m, u64 entry, int virt) {
-  if (entry & PAGE_ID) {
-    return ToHost(entry & PAGE_TA) + (virt & 4095);
-  } else {
-    return m->system->real.p + (entry & PAGE_TA) + (virt & 4095);
-  }
-}
-
-u8 *FindReal(struct Machine *m, i64 virt) {
+u8 *LookupAddress(struct Machine *m, i64 virt) {
+  u8 *host;
   u64 entry, page;
   if (m->mode != XED_MODE_REAL) {
-    if (atomic_load_explicit(&m->tlb_invalidated, memory_order_relaxed)) {
+    if (atomic_load_explicit(&m->invalidated, memory_order_relaxed)) {
       ResetTlb(m);
-      atomic_store_explicit(&m->tlb_invalidated, false, memory_order_relaxed);
+      atomic_store_explicit(&m->invalidated, false, memory_order_relaxed);
     }
     if ((page = virt & -4096) == m->tlb[0].page &&
         ((entry = m->tlb[0].entry) & PAGE_V)) {
       STATISTIC(++tlb_hits_1);
-      return ConvertReal(m, entry, virt);
-    }
-    if (-0x800000000000 <= virt && virt < 0x800000000000) {
-      if (!(entry = FindPage(m, page))) return 0;
-      return ConvertReal(m, entry, virt);
+    } else if (-0x800000000000 <= virt && virt < 0x800000000000) {
+      if (!(entry = FindPageTableEntry(m, page))) return 0;
     } else {
       return 0;
     }
   } else if (virt >= 0 && virt <= 0xffffffff &&
-             (virt & 0xffffffff) + 4095 < GetRealMemorySize(m->system)) {
-    return m->system->real.p + virt;
+             (virt & 0xffffffff) + 4095 < kRealSize) {
+    return m->system->real + virt;
+  } else {
+    return 0;
+  }
+  if ((host = GetPageAddress(m->system, entry))) {
+    return host + (virt & 4095);
   } else {
     return 0;
   }
@@ -130,12 +135,12 @@ u8 *FindReal(struct Machine *m, i64 virt) {
 
 u8 *ResolveAddress(struct Machine *m, i64 v) {
   u8 *r;
-  if (IsLinear(m)) return ToHost(v);
-  if ((r = FindReal(m, v))) return r;
+  if (HasLinearMapping(m)) return ToHost(v);
+  if ((r = LookupAddress(m, v))) return r;
   ThrowSegmentationFault(m, v);
 }
 
-static void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
+void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
   u8 *p;
   u64 k;
   k = 4096 - (v & 4095);
@@ -261,7 +266,7 @@ char *LoadStr(struct Machine *m, i64 addr) {
   char *copy, *page, *p;
   have = 4096 - (addr & 4095);
   if (!addr) return 0;
-  if (!(page = (char *)FindReal(m, addr))) return 0;
+  if (!(page = (char *)LookupAddress(m, addr))) return 0;
   if ((p = (char *)memchr(page, '\0', have))) {
     SetReadAddr(m, addr, p - page + 1);
     return page;
@@ -269,7 +274,7 @@ char *LoadStr(struct Machine *m, i64 addr) {
   if (!(copy = (char *)malloc(have + 4096))) return 0;
   memcpy(copy, page, have);
   for (;;) {
-    if (!(page = (char *)FindReal(m, addr + have))) break;
+    if (!(page = (char *)LookupAddress(m, addr + have))) break;
     if ((p = (char *)memccpy(copy + have, page, '\0', 4096))) {
       SetReadAddr(m, addr, have + (p - (copy + have)) + 1);
       m->freelist.p = (void **)realloc(

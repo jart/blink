@@ -256,27 +256,27 @@ static void ClobberEverythingExceptResult(struct Machine *m) {
 #ifdef DEBUG
   // clobber everything except result registers
 #ifdef __x86_64__
-  AppendJitSetReg(m->path.jp, kAmdDi, 0x666);
-  AppendJitSetReg(m->path.jp, kAmdSi, 0x666);
-  AppendJitSetReg(m->path.jp, kAmdCx, 0x666);
-  AppendJitSetReg(m->path.jp, 8, 0x666);
-  AppendJitSetReg(m->path.jp, 9, 0x666);
-  AppendJitSetReg(m->path.jp, 10, 0x666);
-  AppendJitSetReg(m->path.jp, 11, 0x666);
+  AppendJitSetReg(m->path.jb, kAmdDi, 0x666);
+  AppendJitSetReg(m->path.jb, kAmdSi, 0x666);
+  AppendJitSetReg(m->path.jb, kAmdCx, 0x666);
+  AppendJitSetReg(m->path.jb, 8, 0x666);
+  AppendJitSetReg(m->path.jb, 9, 0x666);
+  AppendJitSetReg(m->path.jb, 10, 0x666);
+  AppendJitSetReg(m->path.jb, 11, 0x666);
 #elif defined(__aarch64__)
-  AppendJitSetReg(m->path.jp, 2, 0x666);
-  AppendJitSetReg(m->path.jp, 3, 0x666);
-  AppendJitSetReg(m->path.jp, 4, 0x666);
-  AppendJitSetReg(m->path.jp, 5, 0x666);
-  AppendJitSetReg(m->path.jp, 6, 0x666);
-  AppendJitSetReg(m->path.jp, 7, 0x666);
-  AppendJitSetReg(m->path.jp, 9, 0x666);
-  AppendJitSetReg(m->path.jp, 10, 0x666);
-  AppendJitSetReg(m->path.jp, 11, 0x666);
-  AppendJitSetReg(m->path.jp, 12, 0x666);
-  AppendJitSetReg(m->path.jp, 13, 0x666);
-  AppendJitSetReg(m->path.jp, 14, 0x666);
-  AppendJitSetReg(m->path.jp, 15, 0x666);
+  AppendJitSetReg(m->path.jb, 2, 0x666);
+  AppendJitSetReg(m->path.jb, 3, 0x666);
+  AppendJitSetReg(m->path.jb, 4, 0x666);
+  AppendJitSetReg(m->path.jb, 5, 0x666);
+  AppendJitSetReg(m->path.jb, 6, 0x666);
+  AppendJitSetReg(m->path.jb, 7, 0x666);
+  AppendJitSetReg(m->path.jb, 9, 0x666);
+  AppendJitSetReg(m->path.jb, 10, 0x666);
+  AppendJitSetReg(m->path.jb, 11, 0x666);
+  AppendJitSetReg(m->path.jb, 12, 0x666);
+  AppendJitSetReg(m->path.jb, 13, 0x666);
+  AppendJitSetReg(m->path.jb, 14, 0x666);
+  AppendJitSetReg(m->path.jb, 15, 0x666);
 #endif
 #endif
 }
@@ -291,26 +291,17 @@ static inline int CheckBelow(int x, unsigned n) {
   return x;
 }
 
-static bool CanUseFastMemoryOps(struct Machine *m, u64 rde) {
-  return IsLinear(m) && !Sego(rde);
-}
-
 /**
  * Generates JIT code that implements x86 instructions.
  */
 void Jitter(P, const char *fmt, ...) {
+  if (!m->path.jb) return;
   va_list va;
-  bool fastmem;
   unsigned c, k, log2sz;
   static _Thread_local int i;
   static _Thread_local u8 stack[8];
-  u8 kRes[] = {kJitRes0, kJitRes1};
-  u8 kSav[] = {kJitSav0, kJitSav1, kJitSav2, kJitSav3, kJitSav4};
-  u8 kArg[] = {kJitArg0, kJitArg1, kJitArg2, kJitArg3, kJitArg4, kJitArg5};
-  if (!m->path.jp) return;
   va_start(va, fmt);
   log2sz = RegLog2(rde);
-  fastmem = CanUseFastMemoryOps(m, rde);
   for (k = 0; (c = fmt[k++]);) {
     switch (c) {
 
@@ -322,7 +313,7 @@ void Jitter(P, const char *fmt, ...) {
         break;
 
       case '!':  // trap
-        AppendJitTrap(m->path.jp);
+        AppendJitTrap(m->path.jb);
         break;
 
       case '$':  // cl
@@ -330,7 +321,7 @@ void Jitter(P, const char *fmt, ...) {
         break;
 
       case 'c':  // call
-        AppendJitCall(m->path.jp, va_arg(va, void *));
+        AppendJitCall(m->path.jb, va_arg(va, void *));
         ClobberEverythingExceptResult(m);
         break;
 
@@ -339,25 +330,25 @@ void Jitter(P, const char *fmt, ...) {
         continue;
 
       case 'r':  // push res reg
-        stack[i++] = kRes[CheckBelow(fmt[k++] - '0', 2)];
+        stack[i++] = kJitRes[CheckBelow(fmt[k++] - '0', ARRAYLEN(kJitRes))];
         break;
 
       case 'a':  // push arg reg
-        stack[i++] = kArg[CheckBelow(fmt[k++] - '0', 6)];
+        stack[i++] = kJitArg[CheckBelow(fmt[k++] - '0', ARRAYLEN(kJitArg))];
         break;
 
       case 's':  // push sav reg
-        stack[i++] = kSav[CheckBelow(fmt[k++] - '0', 5)];
+        stack[i++] = kJitSav[CheckBelow(fmt[k++] - '0', ARRAYLEN(kJitSav))];
         break;
 
       case 'i':  // set reg imm, e.g. ("a1i", 123) [mov $123,%rsi]
         ItemsRequired(1);
-        AppendJitSetReg(m->path.jp, stack[--i], va_arg(va, u64));
+        AppendJitSetReg(m->path.jb, stack[--i], va_arg(va, u64));
         break;
 
       case '=':  // <src><dst>= mov reg, e.g. s0a0= [mov %rbx,%rdi]
         ItemsRequired(2);
-        AppendJitMovReg(m->path.jp, stack[i - 1], stack[i - 2]);
+        AppendJitMovReg(m->path.jb, stack[i - 1], stack[i - 2]);
         i -= 2;
         break;
 
@@ -379,37 +370,28 @@ void Jitter(P, const char *fmt, ...) {
           Jitter(A, "a1i s0a0= c",
                  log2sz ? RexbRm(rde) : kByteReg[ByteRexb(rde)],
                  kGetReg[log2sz]);
-        } else if (fastmem &&          //
-                   !SibExists(rde) &&  //
-                   IsRipRelative(rde)) {
-          Jitter(A, "a0i c", disp + m->ip, kGetDemAbs[log2sz]);
-        } else if (fastmem &&          //
-                   !SibExists(rde) &&  //
-                   !IsRipRelative(rde)) {
-          Jitter(A, "a2i a1i s0a0= c", RexbRm(rde), disp, kGetDem[log2sz]);
-        } else if (fastmem &&           //
-                   SibExists(rde) &&    //
-                   !SibHasBase(rde) &&  //
-                   !SibHasIndex(rde)) {
-          Jitter(A, "a0i c", disp, kGetDemAbs[log2sz]);
-        } else if (fastmem &&          //
-                   SibExists(rde) &&   //
-                   SibHasBase(rde) &&  //
-                   !SibHasIndex(rde)) {
-          Jitter(A, "a2i a1i s0a0= c", RexbBase(rde), disp, kGetDem[log2sz]);
-        } else if (fastmem &&           //
-                   SibExists(rde) &&    //
-                   !SibHasBase(rde) &&  //
-                   SibHasIndex(rde)) {
-          Jitter(A, "a3i a2i a1i s0a0= c", SibScale(rde),
-                 Rexx(rde) << 3 | SibIndex(rde), disp, kGetDemIndex[log2sz]);
-        } else if (fastmem &&          //
-                   SibExists(rde) &&   //
-                   SibHasBase(rde) &&  //
-                   SibHasIndex(rde)) {
-          Jitter(A, "a4i a3i a2i a1i s0a0= c", SibScale(rde),
-                 Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
-                 kGetDemBaseIndex[log2sz]);
+        } else if (HasLinearMapping(m) && !Sego(rde)) {
+          if (!SibExists(rde)) {
+            if (IsRipRelative(rde)) {
+              Jitter(A, "a0i c", disp + m->ip, kGetDemAbs[log2sz]);
+            } else {
+              Jitter(A, "a2i a1i s0a0= c", RexbRm(rde), disp, kGetDem[log2sz]);
+            }
+          } else if (!SibHasBase(rde) &&  //
+                     !SibHasIndex(rde)) {
+            Jitter(A, "a0i c", disp, kGetDemAbs[log2sz]);
+          } else if (SibHasBase(rde) &&  //
+                     !SibHasIndex(rde)) {
+            Jitter(A, "a2i a1i s0a0= c", RexbBase(rde), disp, kGetDem[log2sz]);
+          } else if (!SibHasBase(rde) &&  //
+                     SibHasIndex(rde)) {
+            Jitter(A, "a3i a2i a1i s0a0= c", SibScale(rde),
+                   Rexx(rde) << 3 | SibIndex(rde), disp, kGetDemIndex[log2sz]);
+          } else {
+            Jitter(A, "a4i a3i a2i a1i s0a0= c", SibScale(rde),
+                   Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
+                   kGetDemBaseIndex[log2sz]);
+          }
         } else {
           Jitter(A, "a2i a1i s0a0= c", disp, rde, GetRegOrMem);
         }
@@ -421,38 +403,30 @@ void Jitter(P, const char *fmt, ...) {
           Jitter(A, "a2= a1i s0a0= c",
                  log2sz ? RexbRm(rde) : kByteReg[ByteRexb(rde)],
                  kPutReg[log2sz]);
-        } else if (fastmem &&          //
-                   !SibExists(rde) &&  //
-                   IsRipRelative(rde)) {
-          Jitter(A, "a1= a0i c", disp + m->ip, kPutDemAbs[log2sz]);
-        } else if (fastmem &&          //
-                   !SibExists(rde) &&  //
-                   !IsRipRelative(rde)) {
-          Jitter(A, "a3= a2i a1i s0a0= c", RexbRm(rde), disp, kPutDem[log2sz]);
-        } else if (fastmem &&          //
-                   SibExists(rde) &&   //
-                   SibHasBase(rde) &&  //
-                   !SibHasIndex(rde)) {
-          Jitter(A, "a3= a2i a1i s0a0= c", RexbBase(rde), disp,
-                 kPutDem[log2sz]);
-        } else if (fastmem &&           //
-                   SibExists(rde) &&    //
-                   !SibHasBase(rde) &&  //
-                   !SibHasIndex(rde)) {
-          Jitter(A, "a1= a0i c", disp, kPutDemAbs[log2sz]);
-        } else if (fastmem &&           //
-                   SibExists(rde) &&    //
-                   !SibHasBase(rde) &&  //
-                   SibHasIndex(rde)) {
-          Jitter(A, "a4= a3i a2i a1i s0a0= c", SibScale(rde),
-                 Rexx(rde) << 3 | SibIndex(rde), disp, kPutDemIndex[log2sz]);
-        } else if (fastmem &&          //
-                   SibExists(rde) &&   //
-                   SibHasBase(rde) &&  //
-                   SibHasIndex(rde)) {
-          Jitter(A, "a5= a4i a3i a2i a1i s0a0= c", SibScale(rde),
-                 Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
-                 kPutDemBaseIndex[log2sz]);
+        } else if (HasLinearMapping(m) && !Sego(rde)) {
+          if (!SibExists(rde)) {
+            if (IsRipRelative(rde)) {
+              Jitter(A, "a1= a0i c", disp + m->ip, kPutDemAbs[log2sz]);
+            } else {
+              Jitter(A, "a3= a2i a1i s0a0= c", RexbRm(rde), disp,
+                     kPutDem[log2sz]);
+            }
+          } else if (!SibHasBase(rde) &&  //
+                     !SibHasIndex(rde)) {
+            Jitter(A, "a1= a0i c", disp, kPutDemAbs[log2sz]);
+          } else if (SibHasBase(rde) &&  //
+                     !SibHasIndex(rde)) {
+            Jitter(A, "a3= a2i a1i s0a0= c", RexbBase(rde), disp,
+                   kPutDem[log2sz]);
+          } else if (!SibHasBase(rde) &&  //
+                     SibHasIndex(rde)) {
+            Jitter(A, "a4= a3i a2i a1i s0a0= c", SibScale(rde),
+                   Rexx(rde) << 3 | SibIndex(rde), disp, kPutDemIndex[log2sz]);
+          } else {
+            Jitter(A, "a5= a4i a3i a2i a1i s0a0= c", SibScale(rde),
+                   Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
+                   kPutDemBaseIndex[log2sz]);
+          }
         } else {
           Jitter(A, "s0a0= a1i a2i a3= c", rde, disp, PutRegOrMem);
         }

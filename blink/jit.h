@@ -7,9 +7,9 @@
 #include "blink/dll.h"
 #include "blink/types.h"
 
-#define kJitPageSize 65536
-#define kJitPageFit  600
-#define kJitAlign    16
+#define kJitFit          800
+#define kJitAlign        16
+#define kJitMinBlockSize 65536
 
 #ifdef __x86_64__
 #define kJitRes0 kAmdAx
@@ -87,45 +87,60 @@
 #define kArmIdxMask  0x00600000u  // mask of u16[4] sub-word index
 #endif
 
-#define JITPAGE_CONTAINER(e) DLL_CONTAINER(struct JitPage, elem, e)
+#define JITSTAGE_CONTAINER(e) DLL_CONTAINER(struct JitStage, elem, e)
+#define JITBLOCK_CONTAINER(e) DLL_CONTAINER(struct JitBlock, elem, e)
 
-struct JitPage {
+typedef _Atomic(intptr_t) hook_t;
+
+struct JitStage {
+  int start;
+  int index;
+  hook_t *hook;
+  struct Dll elem;
+};
+
+struct JitBlock {
   u8 *addr;
   int start;
   int index;
   int committed;
+  int blocksize;
   struct Dll *staged;
   struct Dll elem;
 };
 
 struct Jit {
+  int pagesize;
   _Atomic(int) disabled;
+  _Atomic(int) blocksize;
   pthread_mutex_t lock;
-  struct Dll *pages;
+  struct Dll *blocks;
 };
 
-typedef _Atomic(intptr_t) hook_t;
+extern const u8 kJitRes[2];
+extern const u8 kJitSav[5];
+extern const u8 kJitArg[6];
 
 int InitJit(struct Jit *);
 int DestroyJit(struct Jit *);
 int DisableJit(struct Jit *);
 bool IsJitDisabled(struct Jit *);
-struct JitPage *AcquireJit(struct Jit *, long);
-intptr_t GetJitPc(struct JitPage *);
-long GetJitRemaining(struct JitPage *);
-bool AppendJit(struct JitPage *, const void *, long);
-intptr_t ReleaseJit(struct Jit *, struct JitPage *, hook_t *, intptr_t);
-int AbandonJit(struct Jit *, struct JitPage *);
+intptr_t GetJitPc(struct JitBlock *);
+long GetJitRemaining(struct JitBlock *);
+bool AppendJit(struct JitBlock *, const void *, long);
+int AbandonJit(struct Jit *, struct JitBlock *);
 int FlushJit(struct Jit *);
-struct JitPage *StartJit(struct Jit *);
-bool AppendJitTrap(struct JitPage *);
-bool AppendJitJmp(struct JitPage *, void *);
-bool AppendJitCall(struct JitPage *, void *);
-bool AppendJitSetReg(struct JitPage *, int, u64);
-bool AppendJitSetArg(struct JitPage *, int, u64);
-bool AppendJitMovReg(struct JitPage *, int, int);
-intptr_t FinishJit(struct Jit *, struct JitPage *, hook_t *, intptr_t);
-intptr_t SpliceJit(struct Jit *, struct JitPage *, hook_t *, intptr_t,
-                   intptr_t);
+bool CanJitForImmediateEffect(void);
+struct JitBlock *StartJit(struct Jit *);
+bool AppendJitTrap(struct JitBlock *);
+bool AppendJitJmp(struct JitBlock *, void *);
+bool AppendJitCall(struct JitBlock *, void *);
+bool AppendJitSetReg(struct JitBlock *, int, u64);
+bool AppendJitMovReg(struct JitBlock *, int, int);
+bool FinishJit(struct Jit *, struct JitBlock *, hook_t *, intptr_t);
+bool SpliceJit(struct Jit *, struct JitBlock *, hook_t *, intptr_t, intptr_t);
+
+int CommitJit_(struct Jit *, struct JitBlock *);
+void ReinsertJitBlock_(struct Jit *, struct JitBlock *);
 
 #endif /* BLINK_JIT_H_ */

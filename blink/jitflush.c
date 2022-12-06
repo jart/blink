@@ -16,59 +16,49 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdlib.h>
-#include <string.h>
+#include <unistd.h>
 
-#include "blink/endian.h"
-#include "blink/machine.h"
+#include "blink/dll.h"
+#include "blink/jit.h"
+#include "blink/lock.h"
+#include "blink/macros.h"
 
-#define STACKALIGN      16
-#define LINUX_AT_EXECFN 31
-
-static size_t GetArgListLen(char **p) {
-  size_t n;
-  for (n = 0; *p; ++p) ++n;
-  return n;
-}
-
-static i64 PushString(struct Machine *m, char *s) {
-  size_t n;
-  i64 sp;
-  n = strlen(s) + 1;
-  sp = Read64(m->sp);
-  sp -= n;
-  Write64(m->sp, sp);
-  CopyToUser(m, sp, s, n);
-  return sp;
-}
-
-void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
-  u8 *bytes;
-  i64 sp, *p, *bloc;
-  size_t i, narg, nenv, naux, nall;
-  naux = 1;
-  nenv = GetArgListLen(vars);
-  narg = GetArgListLen(args);
-  nall = 1 + narg + 1 + nenv + 1 + (naux + 1) * 2;
-  bloc = (i64 *)malloc(sizeof(i64) * nall);
-  p = bloc + nall;
-  *--p = 0;
-  *--p = 0;
-  *--p = PushString(m, prog);
-  *--p = LINUX_AT_EXECFN;
-  for (*--p = 0, i = nenv; i--;) *--p = PushString(m, vars[i]);
-  for (*--p = 0, i = narg; i--;) *--p = PushString(m, args[i]);
-  *--p = narg;
-  sp = Read64(m->sp);
-  while ((sp - nall * sizeof(i64)) & (STACKALIGN - 1)) --sp;
-  sp -= nall * sizeof(i64);
-  Write64(m->sp, sp);
-  Write64(m->di, 0); /* or ape detects freebsd */
-  bytes = (u8 *)malloc(nall * 8);
-  for (i = 0; i < nall; ++i) {
-    Write64(bytes + i * 8, bloc[i]);
+/**
+ * Forces activation of committed JIT chunks.
+ *
+ * Normally JIT chunks become active and have their function pointer
+ * hook updated automatically once the system block fills up with jit
+ * code. In some cases, such as unit tests, it's necessary to ensure
+ * that JIT code goes live sooner. The tradeoff of flushing is it'll
+ * lead to wasted memory and less performance, due to the additional
+ * mprotect() system call overhead.
+ */
+int FlushJit(struct Jit *jit) {
+  int count = 0;
+  long pagesize;
+  struct Dll *e;
+  struct JitBlock *jb;
+  struct JitStage *js;
+  if (!CanJitForImmediateEffect()) {
+    pagesize = sysconf(_SC_PAGESIZE);
+    LOCK(&jit->lock);
+  StartOver:
+    for (e = dll_first(jit->blocks); e; e = dll_next(jit->blocks, e)) {
+      jb = JITBLOCK_CONTAINER(e);
+      if (jb->start >= jit->blocksize) break;
+      if (!dll_is_empty(jb->staged)) {
+        jit->blocks = dll_remove(jit->blocks, e);
+        UNLOCK(&jit->lock);
+        js = JITSTAGE_CONTAINER(dll_last(jb->staged));
+        jb->start = ROUNDUP(js->index, pagesize);
+        jb->index = jb->start;
+        count += CommitJit_(jit, jb);
+        LOCK(&jit->lock);
+        ReinsertJitBlock_(jit, jb);
+        goto StartOver;
+      }
+    }
+    UNLOCK(&jit->lock);
   }
-  CopyToUser(m, sp, bytes, nall * 8);
-  free(bytes);
-  free(bloc);
+  return count;
 }

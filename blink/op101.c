@@ -20,25 +20,23 @@
 
 #include "blink/endian.h"
 #include "blink/machine.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
-#include "blink/real.h"
 #include "blink/time.h"
 
 static void StoreDescriptorTable(P, u16 limit, u64 base) {
   u64 l;
   l = ComputeAddress(A);
-  if (l + 10 <= GetRealMemorySize(m->system)) {
-    Write16(m->system->real.p + l, limit);
+  if (l + 10 <= kRealSize) {
+    Write16(m->system->real + l, limit);
     if (Rexw(rde)) {
-      Write64(m->system->real.p + l + 2, base);
+      Write64(m->system->real + l + 2, base);
       SetWriteAddr(m, l, 10);
     } else if (!Osz(rde)) {
-      Write32(m->system->real.p + l + 2, base);
+      Write32(m->system->real + l + 2, base);
       SetWriteAddr(m, l, 6);
     } else {
-      Write16(m->system->real.p + l + 2, base);
+      Write16(m->system->real + l + 2, base);
       SetWriteAddr(m, l, 4);
     }
   } else {
@@ -50,19 +48,19 @@ static void LoadDescriptorTable(P, u16 *out_limit, u64 *out_base) {
   u16 limit;
   u64 l, base;
   l = ComputeAddress(A);
-  if (l + 10 <= GetRealMemorySize(m->system)) {
-    limit = Read16(m->system->real.p + l);
+  if (l + 10 <= kRealSize) {
+    limit = Read16(m->system->real + l);
     if (Rexw(rde)) {
-      base = Read64(m->system->real.p + l + 2) & 0x00ffffff;
+      base = Read64(m->system->real + l + 2) & 0x00ffffff;
       SetReadAddr(m, l, 10);
     } else if (!Osz(rde)) {
-      base = Read32(m->system->real.p + l + 2);
+      base = Read32(m->system->real + l + 2);
       SetReadAddr(m, l, 6);
     } else {
-      base = Read16(m->system->real.p + l + 2);
+      base = Read16(m->system->real + l + 2);
       SetReadAddr(m, l, 4);
     }
-    if (base + limit <= GetRealMemorySize(m->system)) {
+    if (base + limit <= kRealSize) {
       *out_limit = limit;
       *out_base = base;
     } else {

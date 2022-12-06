@@ -21,7 +21,6 @@
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/x86.h"
 
@@ -102,8 +101,7 @@ struct AddrSeg LoadEffectiveAddress(const P) {
 }
 
 i64 ComputeAddress(P) {
-  struct AddrSeg ea;
-  ea = LoadEffectiveAddress(A);
+  struct AddrSeg ea = LoadEffectiveAddress(A);
   return AddSegment(A, ea.addr, ea.seg);
 }
 
@@ -309,7 +307,7 @@ static u8 *GetVectorAddress(P, size_t n) {
   } else {
     v = ComputeAddress(A);
     SetReadAddr(m, v, n);
-    if ((v & (n - 1)) || !(p = FindReal(m, v))) {
+    if ((v & (n - 1)) || !(p = LookupAddress(m, v))) {
       ThrowSegmentationFault(m, v);
     }
   }

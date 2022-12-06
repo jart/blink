@@ -2,8 +2,8 @@
 .globl	_start
 _start:
 
-//	make -j8 o//blink o//x86_64/test/asm/push.elf
-//	o//blink/tui o//x86_64/test/asm/push.elf
+//	make -j8 o//blink o//test/asm/push.elf
+//	o//blink/tui o//test/asm/push.elf
 
 	sub	$1,%rsp
 

@@ -23,7 +23,6 @@
 #include "blink/likely.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/sse.h"
 

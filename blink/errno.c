@@ -69,3 +69,7 @@ long esrch(void) {
 long eperm(void) {
   return ReturnErrno(EPERM);
 }
+
+long enotsup(void) {
+  return ReturnErrno(ENOTSUP);
+}

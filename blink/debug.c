@@ -30,7 +30,6 @@
 #include "blink/loader.h"
 #include "blink/log.h"
 #include "blink/map.h"
-#include "blink/memory.h"
 #include "blink/stats.h"
 #include "blink/tsan.h"
 #include "blink/util.h"
@@ -56,14 +55,14 @@ int GetInstruction(struct Machine *m, struct XedDecodedInst *x) {
   int i, err;
   u8 copy[15], *toil, *addr;
   pc = m->cs + MaskAddress(m->mode, m->ip);
-  if ((addr = FindReal(m, pc))) {
+  if ((addr = LookupAddress(m, pc))) {
     if ((i = 4096 - (pc & 4095)) >= 15) {
       if (!DecodeInstruction(x, ResolveAddress(m, pc), 15, m->mode)) {
         return 0;
       } else {
         return kMachineDecodeError;
       }
-    } else if ((toil = FindReal(m, pc + i))) {
+    } else if ((toil = LookupAddress(m, pc + i))) {
       memcpy(copy, addr, i);
       memcpy(copy + i, toil, 15 - i);
       if (!DecodeInstruction(x, copy, 15, m->mode)) {
@@ -199,7 +198,7 @@ const char *GetBacktrace(struct Machine *m) {
     }
     ++i;
     if (((m->ss + bp) & 0xfff) > 0xff0) break;
-    if (!(r = FindReal(m, m->ss + bp))) {
+    if (!(r = LookupAddress(m, m->ss + bp))) {
       APPEND(" [CORRUPT FRAME POINTER]");
       break;
     }

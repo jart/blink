@@ -2,8 +2,8 @@
 .globl	_start
 _start:
 
-//	make -j8 o//blink o//x86_64/test/asm/lahf.elf
-//	o//blink/tui o//x86_64/test/asm/lahf.elf
+//	make -j8 o//blink o//test/asm/lahf.elf
+//	o//blink/tui o//test/asm/lahf.elf
 
 	.test	"LAHF stores flags into AH"
 	mov	$0x7fffffff,%eax

@@ -24,7 +24,6 @@
 #include "blink/fpu.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/pun.h"

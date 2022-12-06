@@ -1,7 +1,7 @@
 /*-*- mode:c;indent-tabs-mode:nil;c-basic-offset:2;tab-width:8;coding:utf-8 -*-│
 │vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2022 Justine Alexandra Roberts Tunney                              │
+│ Copyright 2021 Justine Alexandra Roberts Tunney                              │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -16,32 +16,39 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/timespec.h"
+#include "blink/builtin.h"
+#include "blink/util.h"
 
-int timespec_cmp(struct timespec a, struct timespec b) {
-  int cmp;
-  if (!(cmp = (a.tv_sec > b.tv_sec) - (a.tv_sec < b.tv_sec))) {
-    cmp = (a.tv_nsec > b.tv_nsec) - (a.tv_nsec < b.tv_nsec);
+/**
+ * Converts unsigned 64-bit integer to string w/ commas.
+ *
+ * @param p needs at least 27 bytes
+ * @return pointer to nul byte
+ */
+dontinline char *FormatUint64Thousands(char p[27], uint64_t x) {
+  size_t i;
+  char m[26];
+  i = 0;
+  do {
+    m[i++] = x % 10 + '0';
+    x = x / 10;
+  } while (x);
+  for (;;) {
+    *p++ = m[--i];
+    if (!i) break;
+    if (!(i % 3)) *p++ = ',';
   }
-  return cmp;
+  *p = '\0';
+  return p;
 }
 
-struct timespec timespec_add(struct timespec x, struct timespec y) {
-  x.tv_sec += y.tv_sec;
-  x.tv_nsec += y.tv_nsec;
-  if (x.tv_nsec >= 1000000000) {
-    x.tv_nsec -= 1000000000;
-    x.tv_sec += 1;
-  }
-  return x;
-}
-
-struct timespec timespec_sub(struct timespec a, struct timespec b) {
-  a.tv_sec -= b.tv_sec;
-  if (a.tv_nsec < b.tv_nsec) {
-    a.tv_nsec += 1000000000;
-    a.tv_sec--;
-  }
-  a.tv_nsec -= b.tv_nsec;
-  return a;
+/**
+ * Converts 64-bit integer to string w/ commas.
+ *
+ * @param p needs at least 27 bytes
+ * @return pointer to nul byte
+ */
+char *FormatInt64Thousands(char p[27], int64_t x) {
+  if (x < 0) *p++ = '-', x = -(uint64_t)x;
+  return FormatUint64Thousands(p, x);
 }

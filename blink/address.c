@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/address.h"
+#include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/modrm.h"
@@ -41,11 +42,11 @@ u64 MaskAddress(u32 mode, u64 x) {
   return x;
 }
 
-u64 AddSegment(P, u64 i, u64 s) {
+i64 AddSegment(P, u64 i, u64 s) {
   if (!Sego(rde)) {
     return i + s;
   } else {
-    return i + *GetSegment(A, Sego(rde) - 1);
+    return i + m->seg[Sego(rde) - 1];
   }
 }
 
@@ -53,33 +54,19 @@ u64 AddressOb(P) {
   return AddSegment(A, disp, m->ds);
 }
 
-u64 *GetSegment(P, int s) {
-  switch (s & 7) {
-    case 0:
-      return &m->es;
-    case 1:
-      return &m->cs;
-    case 2:
-      return &m->ss;
-    case 3:
-      return &m->ds;
-    case 4:
-      return &m->fs;
-    case 5:
-      return &m->gs;
-    case 6:
-    case 7:
-      OpUdImpl(m);
-    default:
-      __builtin_unreachable();
+u64 *GetSegment(P, unsigned s) {
+  if (s < 6) {
+    return m->seg + s;
+  } else {
+    OpUdImpl(m);
   }
 }
 
-u64 DataSegment(P, u64 i) {
+i64 DataSegment(P, u64 i) {
   return AddSegment(A, i, m->ds);
 }
 
-u64 AddressSi(P) {
+i64 AddressSi(P) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       return DataSegment(A, Get64(m->si));

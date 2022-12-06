@@ -50,5 +50,6 @@
 #endif
 
 void *Mmap(void *, size_t, int, int, int, off_t, const char *);
+int Mprotect(void *, size_t, int, const char *);
 
 #endif /* BLINK_MAP_H_ */

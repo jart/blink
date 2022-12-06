@@ -3,8 +3,8 @@
 _start:
 
 //	memory page tests
-//	make -j8 o//blink o//x86_64/test/asm/page.elf
-//	o//blink/tui o//x86_64/test/asm/page.elf
+//	make -j8 o//blink o//test/asm/page.elf
+//	o//blink/tui o//test/asm/page.elf
 
 	sub	$8,%rsp
 	and	$-4096,%rsp

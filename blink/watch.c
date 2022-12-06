@@ -21,7 +21,6 @@
 
 #include "blink/endian.h"
 #include "blink/machine.h"
-#include "blink/memory.h"
 #include "blink/watch.h"
 
 void PopWatchpoint(struct Watchpoints *wps) {
@@ -52,7 +51,7 @@ ssize_t IsAtWatchpoint(struct Watchpoints *wps, struct Machine *m) {
     if (wps->p[i].disable) continue;
     // TODO(jart): Handle case of overlapping page boundary.
     // TODO(jart): Possibly track munmap() type cases.
-    if ((r = FindReal(m, wps->p[i].addr))) {
+    if ((r = LookupAddress(m, wps->p[i].addr))) {
       u64 w = Read64(r);
       if (!wps->p[i].initialized) {
         wps->p[i].oldvalue = w;

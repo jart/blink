@@ -1,7 +1,7 @@
 /*-*- mode:c;indent-tabs-mode:nil;c-basic-offset:2;tab-width:8;coding:utf-8 -*-│
 │vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2022 Justine Alexandra Roberts Tunney                              │
+│ Copyright 2021 Justine Alexandra Roberts Tunney                              │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -16,59 +16,41 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdlib.h>
-#include <string.h>
+#include "blink/builtin.h"
+#include "blink/util.h"
 
-#include "blink/endian.h"
-#include "blink/machine.h"
-
-#define STACKALIGN      16
-#define LINUX_AT_EXECFN 31
-
-static size_t GetArgListLen(char **p) {
-  size_t n;
-  for (n = 0; *p; ++p) ++n;
-  return n;
-}
-
-static i64 PushString(struct Machine *m, char *s) {
-  size_t n;
-  i64 sp;
-  n = strlen(s) + 1;
-  sp = Read64(m->sp);
-  sp -= n;
-  Write64(m->sp, sp);
-  CopyToUser(m, sp, s, n);
-  return sp;
-}
-
-void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
-  u8 *bytes;
-  i64 sp, *p, *bloc;
-  size_t i, narg, nenv, naux, nall;
-  naux = 1;
-  nenv = GetArgListLen(vars);
-  narg = GetArgListLen(args);
-  nall = 1 + narg + 1 + nenv + 1 + (naux + 1) * 2;
-  bloc = (i64 *)malloc(sizeof(i64) * nall);
-  p = bloc + nall;
-  *--p = 0;
-  *--p = 0;
-  *--p = PushString(m, prog);
-  *--p = LINUX_AT_EXECFN;
-  for (*--p = 0, i = nenv; i--;) *--p = PushString(m, vars[i]);
-  for (*--p = 0, i = narg; i--;) *--p = PushString(m, args[i]);
-  *--p = narg;
-  sp = Read64(m->sp);
-  while ((sp - nall * sizeof(i64)) & (STACKALIGN - 1)) --sp;
-  sp -= nall * sizeof(i64);
-  Write64(m->sp, sp);
-  Write64(m->di, 0); /* or ape detects freebsd */
-  bytes = (u8 *)malloc(nall * 8);
-  for (i = 0; i < nall; ++i) {
-    Write64(bytes + i * 8, bloc[i]);
+/**
+ * Converts unsigned 64-bit integer to string.
+ *
+ * @param p needs at least 21 bytes
+ * @return pointer to nul byte
+ */
+dontinline char *FormatUint64(char p[21], uint64_t x) {
+  char t;
+  size_t i, a, b;
+  i = 0;
+  do {
+    p[i++] = x % 10 + '0';
+    x = x / 10;
+  } while (x > 0);
+  p[i] = '\0';
+  if (i) {
+    for (a = 0, b = i - 1; a < b; ++a, --b) {
+      t = p[a];
+      p[a] = p[b];
+      p[b] = t;
+    }
   }
-  CopyToUser(m, sp, bytes, nall * 8);
-  free(bytes);
-  free(bloc);
+  return p + i;
+}
+
+/**
+ * Converts signed 64-bit integer to string.
+ *
+ * @param p needs at least 21 bytes
+ * @return pointer to nul byte
+ */
+char *FormatInt64(char p[21], int64_t x) {
+  if (x < 0) *p++ = '-', x = -(uint64_t)x;
+  return FormatUint64(p, x);
 }

@@ -24,7 +24,6 @@
 
 #include "blink/endian.h"
 #include "blink/fds.h"
-#include "blink/memory.h"
 #include "blink/syscall.h"
 
 int SysPipe(struct Machine *m, i64 pipefds_addr, i32 flags) {

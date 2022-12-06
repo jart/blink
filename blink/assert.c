@@ -37,11 +37,13 @@ static void PrintBacktraceUsingAsan(void) {
 }
 
 void AssertFailed(const char *file, int line, const char *msg) {
+  _Thread_local static bool noreentry;
   char b[512];
   snprintf(b, sizeof(b), "%s:%d: assertion failed: %s\n", file, line, msg);
   b[sizeof(b) - 1] = 0;
   WriteErrorString(b);
-  if (g_machine) {
+  if (g_machine && !noreentry) {
+    noreentry = true;
     RestoreIp(g_machine);
     WriteErrorString("\t");
     WriteErrorString(GetBacktrace(g_machine));

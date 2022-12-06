@@ -24,7 +24,6 @@
 #include "blink/iovs.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/types.h"
 #include "blink/util.h"
 
@@ -78,7 +77,7 @@ int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr, u64 size) {
   unsigned got;
   u64 have;
   while (size) {
-    if (!(real = FindReal(m, addr))) return efault();
+    if (!(real = LookupAddress(m, addr))) return efault();
     have = 4096 - (addr & 4095);
     got = MIN(size, have);
     if (AppendIovs(ib, real, got) == -1) return -1;

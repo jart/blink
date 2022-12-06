@@ -54,19 +54,19 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/mda.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/panel.h"
+#include "blink/path.h"
 #include "blink/pml4t.h"
 #include "blink/pty.h"
-#include "blink/real.h"
 #include "blink/signal.h"
 #include "blink/sigwinch.h"
 #include "blink/strwidth.h"
 #include "blink/syscall.h"
 #include "blink/termios.h"
 #include "blink/thompike.h"
+#include "blink/timespec.h"
 #include "blink/tpenc.h"
 #include "blink/types.h"
 #include "blink/util.h"
@@ -105,7 +105,7 @@ FEATURES\n\
 \n\
   8086, 8087, i386, x86_64, SSE3, SSSE3, POPCNT, MDA, CGA, TTY\n\
   Type ? for keyboard shortcuts and CLI flags inside emulator.\n\
-\r\n"
+\n"
 
 #define HELP \
   "\033[1mBLINK v1.o\033[22m\
@@ -123,8 +123,8 @@ f       finish                    -R       reactive tui mode\n\
 R       restart                   -H       disable highlighting\n\
 x       hex                       -v       increase verbosity\n\
 ?       help                      -j       enables jit\n\
-t       sse type                  -?       help\n\
-w       sse width\n\
+t       sse type                  -l       enables linear memory\n\
+w       sse width                 -?       help\n\
 B       pop breakpoint\n\
 ctrl-t  turbo\n\
 alt-t   slowmo"
@@ -254,8 +254,10 @@ static int verbose;
 static int exitcode;
 
 static long ips;
+static long jips;
 static i64 oldlen;
 static i64 opstart;
+static int lastfds;
 static u64 readaddr;
 static u64 readsize;
 static u64 writeaddr;
@@ -264,12 +266,14 @@ static i64 mapsstart;
 static char *codepath;
 static i64 framesstart;
 static struct Pty *pty;
-static u64 last_opcount;
 static jmp_buf *onbusted;
 static const char *dialog;
 static char *statusmessage;
-static unsigned long opcount;
 static i64 breakpointsstart;
+static unsigned long opcount;
+static unsigned long jitcount;
+static unsigned long last_opcount;
+static unsigned long last_jitcount;
 
 static struct Panels pan;
 static struct Breakpoints breakpoints;
@@ -283,8 +287,8 @@ static struct MachineMemstat lastmemstat;
 static struct XmmType xmmtype;
 static struct Dis dis[1];
 
-static long double last_seconds;
-static long double statusexpires;
+static struct timespec last_draw;
+static struct timespec statusexpires;
 static struct termios oldterm;
 static char systemfailure[128];
 static struct sigaction oldsig[4];
@@ -317,7 +321,12 @@ bad evex ll\0\
 unimplemented\0\
 ";
 
-static char *FormatDouble(char buf[32], long double x) {
+static char *FormatDouble(char buf[32], double x) {
+  snprintf(buf, 32, "%g", x);
+  return buf;
+}
+
+static char *FormatLongDouble(char buf[32], long double x) {
   snprintf(buf, 32, "%Lg", x);
   return buf;
 }
@@ -471,7 +480,7 @@ static int VirtualBing(i64 v) {
   int rc;
   jmp_buf busted;
   onbusted = &busted;
-  if ((p = (u8 *)FindReal(m, v))) {
+  if ((p = (u8 *)LookupAddress(m, v))) {
     if (!setjmp(busted)) {
       rc = kCp437[p[0] & 255];
     } else {
@@ -493,7 +502,7 @@ static int VirtualShadow(i64 v) {
   jmp_buf busted;
   if (IsShadow(v)) return -2;
   onbusted = &busted;
-  if ((p = (char *)FindReal(m, (v >> 3) + 0x7fff8000))) {
+  if ((p = (char *)LookupAddress(m, (v >> 3) + 0x7fff8000))) {
     if (!setjmp(busted)) {
       rc = p[0] & 0xff;
     } else {
@@ -1099,13 +1108,11 @@ static void DrawDisplay(struct Panel *p) {
   switch (vidya) {
     case 7:
       DrawHr(&pan.displayhr, "MONOCHROME DISPLAY ADAPTER");
-      if (0xb0000 + 25 * 80 * 2 > GetRealMemorySize(m->system)) return;
-      DrawMda(p, (u8(*)[80][2])(m->system->real.p + 0xb0000));
+      DrawMda(p, (u8(*)[80][2])(m->system->real + 0xb0000));
       break;
     case 3:
       DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
-      if (0xb8000 + 25 * 80 * 2 > GetRealMemorySize(m->system)) return;
-      DrawCga(p, (u8(*)[80][2])(m->system->real.p + 0xb8000));
+      DrawCga(p, (u8(*)[80][2])(m->system->real + 0xb8000));
       break;
     default:
       DrawTerminalHr(&pan.displayhr);
@@ -1159,7 +1166,7 @@ static void DrawSt(struct Panel *p, i64 i, i64 r) {
   if (!isempty && chg) AppendPanel(p, i, "\033[7m");
   snprintf(buf, sizeof(buf), "ST%" PRId64 " ", r);
   AppendPanel(p, i, buf);
-  AppendPanel(p, i, FormatDouble(buf, value));
+  AppendPanel(p, i, FormatLongDouble(buf, value));
   if (chg) AppendPanel(p, i, "\033[27m");
   AppendPanel(p, i, "  ");
   if (isempty) AppendPanel(p, i, "\033[39m");
@@ -1471,7 +1478,7 @@ static void DrawFrames(struct Panel *p) {
     }
     ++i;
     if (((m->ss + bp) & 0xfff) > 0xff0) break;
-    if (!(r = FindReal(m, m->ss + bp))) {
+    if (!(r = LookupAddress(m, m->ss + bp))) {
       AppendPanel(p, i - framesstart, "CORRUPT FRAME POINTER");
       break;
     }
@@ -1490,7 +1497,7 @@ static void CheckFramePointerImpl(void) {
   lastbp = bp;
   rp = m->ip;
   while (bp) {
-    if (!(r = FindReal(m, m->ss + bp))) {
+    if (!(r = LookupAddress(m, m->ss + bp))) {
       LOGF("corrupt frame: %012" PRIx64 "", bp);
       ThrowProtectionFault(m);
     }
@@ -1514,24 +1521,15 @@ static bool IsExecuting(void) {
   return (action & (CONTINUE | STEP | NEXT | FINISH)) && !(action & FAILURE);
 }
 
-static int AppendStat(struct Buffer *b, const char *name, i64 value,
+static int AppendStat(struct Buffer *b, int width, const char *name, i64 value,
                       bool changed) {
-  int width;
+  char valbuf[27];
   AppendChar(b, ' ');
   if (changed) AppendStr(b, "\033[31m");
-  width = AppendFmt(b, "%8" PRId64 " %s", value, name);
+  FormatInt64Thousands(valbuf, value);
+  width = AppendFmt(b, "%*s %s", width, valbuf, name);
   if (changed) AppendStr(b, "\033[39m");
   return 1 + width;
-}
-
-static long double nowl(void) {
-  long double secs;
-  struct timespec tv;
-  clock_gettime(CLOCK_REALTIME, &tv);
-  secs = tv.tv_nsec;
-  secs *= 1 / 1e9;
-  secs += tv.tv_sec;
-  return secs;
 }
 
 static long double dsleep(long double secs) {
@@ -1551,46 +1549,53 @@ static long double dsleep(long double secs) {
 }
 
 static void DrawStatus(struct Panel *p) {
-  int yn, xn, rw;
+#define MEMSTAT(f) m->system->memstat.f, m->system->memstat.f != lastmemstat.f
+  long toto;
   struct Buffer *s;
-  struct MachineMemstat *a, *b;
+  int yn, xn, rw, fds;
+  rw = 0;
   yn = p->top - p->bottom;
   xn = p->right - p->left;
   if (!yn || !xn) return;
-  rw = 0;
-  a = &m->system->memstat;
-  b = &lastmemstat;
+  fds = CountFds(&m->system->fds);
   s = (struct Buffer *)malloc(sizeof(*s));
   memset(s, 0, sizeof(*s));
-  if (ips > 0) rw += AppendStat(s, "ips", ips, false);
-  rw += AppendStat(s, "kb", GetRealMemorySize(m->system) / 1024, false);
-  rw += AppendStat(s, "reserve", a->reserved, a->reserved != b->reserved);
-  rw += AppendStat(s, "commit", a->committed, a->committed != b->committed);
-  rw += AppendStat(s, "freed", a->freed, a->freed != b->freed);
-  rw += AppendStat(s, "tables", a->pagetables, a->pagetables != b->pagetables);
-  rw += AppendStat(s, "fds", CountFds(&m->system->fds), false);
+  if (jips > 0) rw += AppendStat(s, 12, "jips", jips, false);
+  rw += AppendStat(s, 12, "ips", ips, false);
+  toto = kRealSize + (long)m->system->memstat.allocated * 4096;
+  rw += AppendStat(s, 10, "kb", toto / 1024, false);
+  if (m->nolinear) rw += AppendStat(s, 8, "reserve", MEMSTAT(reserved));
+  if (m->nolinear) rw += AppendStat(s, 8, "commit", MEMSTAT(committed));
+  if (m->nolinear) rw += AppendStat(s, 5, "freed", MEMSTAT(freed));
+  rw += AppendStat(s, 5, "tables", MEMSTAT(pagetables));
+  rw += AppendStat(s, 3, "fds", fds, fds != lastfds);
   AppendFmt(&p->lines[0], "\033[7m%-*s%s\033[0m", xn - rw,
-            statusmessage && nowl() < statusexpires ? statusmessage
-                                                    : "blink virtual machine",
+            statusmessage && CompareTime(GetTime(), statusexpires) < 0
+                ? statusmessage
+                : "blink virtual machine",
             s->p);
   free(s->p);
   free(s);
-  memcpy(b, a, sizeof(*a));
+  lastmemstat = m->system->memstat;
+  lastfds = fds;
+#undef MEMSTAT
 }
 
-static void PreventBufferbloat(void) {
-  long double now, rate;
-  static long double last;
-  now = nowl();
-  rate = 1. / 60;
-  if (now - last < rate) {
-    dsleep(rate - (now - last));
+void PreventBufferbloat(void) {
+  struct timespec time, rate;
+  static struct timespec last;
+  time = GetTime();
+  rate = FromMicroseconds(1. / 60 * 1e6);
+  if (CompareTime(SubtractTime(time, last), rate) < 0) {
+    SleepTime(SubtractTime(rate, SubtractTime(time, last)));
   }
-  last = now;
+  last = time;
 }
 
 static void Redraw(void) {
   int i, j;
+  double execsecs;
+  execsecs = ToNanoseconds(SubtractTime(GetTime(), last_draw)) * 1e-9;
   oldlen = m->xedd->length;
   if (!IsShadow(m->readaddr) && !IsShadow(m->readaddr + m->readsize)) {
     readaddr = m->readaddr;
@@ -1601,9 +1606,8 @@ static void Redraw(void) {
     writesize = m->writesize;
   }
   ScrollOp(&pan.disassembly, GetDisIndex());
-  if (last_opcount) {
-    ips = (opcount - last_opcount) / (nowl() - last_seconds);
-  }
+  ips = last_opcount ? (opcount - last_opcount) / execsecs : 0;
+  jips = last_jitcount ? (jitcount - last_jitcount) / execsecs : 0;
   SetupDraw();
   for (i = 0; i < ARRAYLEN(pan.p); ++i) {
     for (j = 0; j < pan.p[i].bottom - pan.p[i].top; ++j) {
@@ -1632,8 +1636,9 @@ static void Redraw(void) {
   DrawStatus(&pan.status);
   PreventBufferbloat();
   PrintPanels(ttyout, ARRAYLEN(pan.p), pan.p, tyn, txn);
+  last_jitcount = jitcount;
   last_opcount = opcount;
-  last_seconds = nowl();
+  last_draw = GetTime();
 }
 
 static void ReactiveDraw(void) {
@@ -1912,9 +1917,9 @@ static void OnDiskServiceReadSectors(void) {
        sectors, sector, cylinder, head, drive, offset);
   if (0 <= sector && offset + size <= m->system->elf.mapsize) {
     addr = m->es + Get16(m->bx);
-    if (addr + size <= GetRealMemorySize(m->system)) {
+    if (addr + size <= kRealSize) {
       SetWriteAddr(m, addr, size);
-      memcpy(m->system->real.p + addr, m->system->elf.map + offset, size);
+      memcpy(m->system->real + addr, m->system->elf.map + offset, size);
       m->ah = 0x00;
       SetCarry(false);
     } else {
@@ -1950,7 +1955,7 @@ static void OnDiskService(void) {
 }
 
 static void OnVidyaServiceSetMode(void) {
-  if (FindReal(m, 0xB0000)) {
+  if (LookupAddress(m, 0xB0000)) {
     vidya = m->al;
   } else {
     LOGF("maybe you forgot -r flag");
@@ -2096,12 +2101,12 @@ static void OnE820(void) {
   u8 p[20];
   addr = m->es + Get16(m->di);
   if (Get32(m->dx) == 0x534D4150 && Get32(m->cx) == 24 &&
-      addr + (int)sizeof(p) <= GetRealMemorySize(m->system)) {
+      addr + (int)sizeof(p) <= kRealSize) {
     if (!Get32(m->bx)) {
       Store64(p + 0, 0);
-      Store64(p + 8, GetRealMemorySize(m->system));
+      Store64(p + 8, kRealSize);
       Store32(p + 16, 1);
-      memcpy(m->system->real.p + addr, p, sizeof(p));
+      memcpy(m->system->real + addr, p, sizeof(p));
       SetWriteAddr(m, addr, sizeof(p));
       Put32(m->cx, sizeof(p));
       Put32(m->bx, 1);
@@ -2207,7 +2212,7 @@ static void SetStatus(const char *fmt, ...) {
   va_end(va);
   free(statusmessage);
   statusmessage = s;
-  statusexpires = nowl() + 1;
+  statusexpires = AddTime(GetTime(), FromSeconds(1));
   it.it_interval.tv_sec = 0;
   it.it_interval.tv_usec = 0;
   it.it_value.tv_sec = 1;
@@ -2534,7 +2539,7 @@ static void HandleBreakpointFlag(const char *s) {
   if (isdigit(*s)) {
     b.addr = ParseHexValue(s);
   } else {
-    b.symbol = optarg;
+    b.symbol = optarg_;
   }
   PushBreakpoint(&breakpoints, &b);
 }
@@ -2545,7 +2550,7 @@ static void HandleWatchpointFlag(const char *s) {
   if (isdigit(*s)) {
     b.addr = ParseHexValue(s);
   } else {
-    b.symbol = optarg;
+    b.symbol = optarg_;
   }
   PushWatchpoint(&watchpoints, &b);
 }
@@ -2807,8 +2812,9 @@ static void Tui(void) {
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   bool wantjit = false;
+  bool wantlinear = false;
   const char *logpath = 0;
-  while ((opt = getopt(argc, argv, "hjvtrzRsb:HL:")) != -1) {
+  while ((opt = getopt_(argc, argv, "hjlvtrzRsb:HL:")) != -1) {
     switch (opt) {
       case 'j':
         wantjit = true;
@@ -2816,22 +2822,31 @@ static void GetOpts(int argc, char *argv[]) {
       case 't':
         tuimode = false;
         break;
+      case 'l':
+        wantlinear = true;
+        if (!CanHaveLinearMemory()) {
+          fprintf(
+              stderr,
+              "linearization not possible on this system, page size is %ld\n",
+              sysconf(_SC_PAGESIZE));
+          exit(1);
+        }
+        break;
       case 'R':
         react = false;
         break;
       case 'r':
-        m->mode = XED_MODE_REAL;
-        m->system->mode = XED_MODE_REAL;
+        SetMachineMode(m, XED_MODE_REAL);
         g_disisprog_disable = true;
         break;
       case 's':
         printstats = true;
         break;
       case 'b':
-        HandleBreakpointFlag(optarg);
+        HandleBreakpointFlag(optarg_);
         break;
       case 'w':
-        HandleWatchpointFlag(optarg);
+        HandleWatchpointFlag(optarg_);
         break;
       case 'H':
         memset(&g_high, 0, sizeof(g_high));
@@ -2840,7 +2855,7 @@ static void GetOpts(int argc, char *argv[]) {
         ++verbose;
         break;
       case 'L':
-        logpath = optarg;
+        logpath = optarg_;
         break;
       case 'z':
         ++codeview.zoom;
@@ -2858,18 +2873,28 @@ static void GetOpts(int argc, char *argv[]) {
   if (!wantjit) {
     DisableJit(&m->system->jit);
   }
+  m->nolinear = !wantlinear;
+  m->system->nolinear = !wantlinear;
 }
 
 static int OpenDevTty(void) {
   return open("/dev/tty", O_RDWR | O_NOCTTY);
 }
 
+static void StartOp_Tui(P) {
+  ++jitcount;
+}
+
+static void AddPath_StartOp_Tui(P) {
+  Jitter(m, rde, 0, 0, "s0a0= c", StartOp_Tui);
+}
+
 int VirtualMachine(int argc, char *argv[]) {
   struct Dll *e;
-  codepath = argv[optind++];
+  codepath = argv[optind_++];
   do {
     action = 0;
-    LoadProgram(m, codepath, argv + optind - 1, environ);
+    LoadProgram(m, codepath, argv + optind_ - 1, environ);
     ScrollMemoryViews();
     AddStdFd(&m->system->fds, 0);
     AddStdFd(&m->system->fds, 1);
@@ -2925,11 +2950,11 @@ int main(int argc, char *argv[]) {
   react = true;
   tuimode = true;
   WriteErrorInit();
+  AddPath_StartOp_Hook = AddPath_StartOp_Tui;
   unassert((pty = NewPty()));
   unassert((s = NewSystem()));
   unassert((m = NewMachine(s, 0)));
-  m->mode = XED_MODE_LONG;
-  m->system->mode = XED_MODE_LONG;
+  SetMachineMode(m, XED_MODE_LONG);
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;
   m->system->onlongbranch = OnLongBranch;
@@ -2953,7 +2978,7 @@ int main(int argc, char *argv[]) {
   unassert(!sigaction(SIGWINCH, &sa, 0));
   sa.sa_sigaction = OnSigAlrm;
   unassert(!sigaction(SIGALRM, &sa, 0));
-  if (optind == argc) PrintUsage(48, stderr);
+  if (optind_ == argc) PrintUsage(48, stderr);
   rc = VirtualMachine(argc, argv);
   KillOtherThreads(s);
   FreeMachine(m);

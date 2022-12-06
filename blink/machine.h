@@ -8,6 +8,7 @@
 #include <stdbool.h>
 
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/elf.h"
 #include "blink/fds.h"
@@ -15,8 +16,6 @@
 #include "blink/linux.h"
 #include "blink/tsan.h"
 #include "blink/x86.h"
-
-#define kCookie 31337
 
 #define kArgRde   1
 #define kArgDisp  2
@@ -40,38 +39,55 @@
 #define kMachineSimdException        -9
 
 #if LONG_BIT == 64
-#define kSkew      0x000200000000
-#define kStackTop  0x7d0000000000
-#define kRealStart 0x7c0000000000
+#define kSkew          0x088800000000
+#define kPreciousStart 0x444000000000  // 1 tb
+#define kPreciousEnd   0x454000000000
+#define kStackTop      0x500000000000
 #else
-#define kSkew      0x00000000
-#define kStackTop  0xf8000000
-#define kRealStart 0xe8000000
+#define kSkew          0x00000000
+#define kStackTop      0xf8000000
+#define kPreciousStart 0x44000000  // 192 mb
+#define kPreciousEnd   0x50000000
 #endif
+#define kRealSize  (16 * 1024 * 1024)
 #define kStackSize (8 * 1024 * 1024)
 #define kMinBrk    (2 * 1024 * 1024)
+
+#define PAGE_V    0x0001  // valid
+#define PAGE_RW   0x0002  // writeable
+#define PAGE_U    0x0004  // permit user-mode access
+#define PAGE_4KB  0x0080  // IsPage (if PDPTE/PDE) or PAT (if PT)
+#define PAGE_2MB  0x0180
+#define PAGE_1GB  0x0180
+#define PAGE_RSRV 0x0200  // no actual memory associated
+#define PAGE_HOST 0x0400  // PAGE_TA bits point to host memory
+#define PAGE_MAP  0x0800  // PAGE_TA bits were mmmap()'d
+#define PAGE_EOF  0x0010000000000000
+#define PAGE_XD   0x8000000000000000
+#define PAGE_TA   0x00007ffffffff000
 
 #define P                struct Machine *m, u64 rde, i64 disp, u64 uimm0
 #define A                m, rde, disp, uimm0
 #define DISPATCH_NOTHING m, 0, 0, 0
 
-#define MACHINE_CONTAINER(e) DLL_CONTAINER(struct Machine, elem, e)
+#define MACHINE_CONTAINER(e)  DLL_CONTAINER(struct Machine, elem, e)
+#define HOSTPAGE_CONTAINER(e) DLL_CONTAINER(struct HostPage, elem, e)
 
-#define IsLinear(x) \
-  (!atomic_load_explicit(&(x)->virtualized, memory_order_relaxed))
+#define CanHaveLinearMemory() (LONG_BIT == 64)
+#define HasLinearMapping(x) \
+  (!atomic_load_explicit(&(x)->nolinear, memory_order_relaxed))
 
-static inline u8 *ToHost(i64 v) {
+MICRO_OP_SAFE u8 *ToHost(i64 v) {
   return (u8 *)(intptr_t)(v + kSkew);
 }
 
-static inline i64 ToGuest(u8 *r) {
-  intptr_t v = (intptr_t)r - kSkew;
-  unassert(0 < v && v < 0x800000000000);
+static inline i64 ToGuest(void *r) {
+  i64 v = (intptr_t)r - kSkew;
+  unassert(!(v & ~PAGE_TA));
   return v;
 }
 
 struct Machine;
-
 typedef void (*nexgen32e_f)(P);
 
 struct FreeList {
@@ -79,16 +95,9 @@ struct FreeList {
   void **p;
 };
 
-struct SystemReal {
-  size_t i;
-  size_t n;  // monotonic
-  u8 *p;     // never relocates
-};
-
-struct SystemRealFree {
-  long i;
-  long n;
-  struct SystemRealFree *next;
+struct HostPage {
+  u8 *page;
+  struct HostPage *next;
 };
 
 struct MachineFpu {
@@ -101,24 +110,19 @@ struct MachineFpu {
   i64 dp;
 };
 
-struct MachineMemstat {
 #if !defined(__m68k__) && !defined(__mips__)
-  _Atomic(int) freed;
-  _Atomic(int) resizes;
-  _Atomic(int) reserved;
-  _Atomic(int) committed;
-  _Atomic(int) allocated;
-  _Atomic(int) reclaimed;
-  _Atomic(int) pagetables;
+typedef atomic_uint memstat_t;
 #else
-  int freed;
-  int resizes;
-  int reserved;
-  int committed;
-  int allocated;
-  int reclaimed;
-  int pagetables;
+typedef unsigned memstat_t;
 #endif
+
+struct MachineMemstat {
+  memstat_t freed;
+  memstat_t reserved;
+  memstat_t committed;
+  memstat_t allocated;
+  memstat_t reclaimed;
+  memstat_t pagetables;
 };
 
 struct MachineState {
@@ -156,19 +160,23 @@ struct OpCache {
 };
 
 struct System {
-  u64 cr3;
-  i64 brk;
   u8 mode;
   bool dlab;
   bool isfork;
-  bool virtualized;
+  bool nolinear;
+  u16 gdt_limit;
+  u16 idt_limit;
+  int pid;
+  u64 gdt_base;
+  u64 idt_base;
+  u64 cr0;
+  u64 cr2;
+  u64 cr3;
+  u64 cr4;
+  i64 brk;
   i64 codestart;
   unsigned long codesize;
-  pthread_mutex_t real_lock;
   _Atomic(nexgen32e_f) *fun;
-  struct SystemReal real GUARDED_BY(real_lock);
-  pthread_mutex_t realfree_lock;
-  struct SystemRealFree *realfree PT_GUARDED_BY(realfree_lock);
   struct MachineMemstat memstat;
   pthread_mutex_t machines_lock;
   struct Dll *machines GUARDED_BY(machines_lock);
@@ -183,19 +191,13 @@ struct System {
   void (*onlongbranch)(struct Machine *);
   int (*exec)(char *, char **, char **);
   void (*redraw)(void);
-  u64 gdt_base;
-  u64 idt_base;
-  u16 gdt_limit;
-  u16 idt_limit;
-  u64 cr0;
-  u64 cr2;
-  u64 cr4;
+  _Alignas(4096) u8 real[kRealSize];
 };
 
 struct Path {
   i64 start;
   int elements;
-  struct JitPage *jp;
+  struct JitBlock *jb;
 };
 
 struct MachineTlb {
@@ -204,19 +206,17 @@ struct MachineTlb {
 };
 
 struct Machine {                           //
-  _Atomic(nexgen32e_f) *fun;               // DISPATCHER
-  u64 ip;                                  //
-  u64 oldip;                               //
-  i64 stashaddr;                           //
-  u64 cs;                                  //
-  u64 ss;                                  //
-  u32 flags;                               //
-  u8 mode;                                 //
-  bool reserving;                          //
-  _Atomic(bool) virtualized;               //
-  _Atomic(bool) tlb_invalidated;           //
-  unsigned long codesize;                  //
-  i64 codestart;                           //
+  u64 ip;                                  // instruction pointer
+  u64 oldip;                               // ip saved at start of op, or -1
+  i64 stashaddr;                           // page overlap buffer
+  u32 flags;                               // x86 eflags register
+  bool reserving;                          // did it call ReserveAddress?
+  _Atomic(bool) invalidated;               // the tlb must be flushed
+  _Atomic(bool) nolinear;                  // [dup] no linear address resolution
+  u8 mode;                                 // [dup] XED_MODE_{REAL,LEGACY,LONG}
+  _Atomic(nexgen32e_f) *fun;               // [dup] jit hooks for code bytes
+  unsigned long codesize;                  // [dup] size of exe code section
+  i64 codestart;                           // [dup] virt of exe code section
   union {                                  // GENERAL REGISTER FILE
     u64 align8_;                           //
     u8 beg[128];                           //
@@ -225,29 +225,29 @@ struct Machine {                           //
       union {                              //
         u8 ax[8];                          // [vol] accumulator, result:1/2
         struct {                           //
-          u8 al;                           //
-          u8 ah;                           //
+          u8 al;                           // lo byte of ax
+          u8 ah;                           // hi byte of ax
         };                                 //
       };                                   //
       union {                              //
         u8 cx[8];                          // [vol] param:4/6
         struct {                           //
-          u8 cl;                           //
-          u8 ch;                           //
+          u8 cl;                           // lo byte of cx
+          u8 ch;                           // hi byte of cx
         };                                 //
       };                                   //
       union {                              //
         u8 dx[8];                          // [vol] param:3/6, result:2/2
         struct {                           //
-          u8 dl;                           //
-          u8 dh;                           //
+          u8 dl;                           // lo byte of dx
+          u8 dh;                           // hi byte of dx
         };                                 //
       };                                   //
       union {                              //
         u8 bx[8];                          // [sav] base index
         struct {                           //
-          u8 bl;                           //
-          u8 bh;                           //
+          u8 bl;                           // lo byte of bx
+          u8 bh;                           // hi byte of bx
         };                                 //
       };                                   //
       u8 sp[8];                            // [sav] stack pointer
@@ -271,10 +271,17 @@ struct Machine {                           //
   i64 writeaddr;                           // so tui can show memory write
   u32 readsize;                            // bytes length of last read op
   u32 writesize;                           // byte length of last write op
-  u64 fs;                                  // thred-local segment register
-  u64 gs;                                  // winple thread-local register
-  u64 ds;                                  // data segment (legacy / real)
-  u64 es;                                  // xtra segment (legacy / real)
+  union {                                  //
+    u64 seg[8];                            //
+    struct {                               //
+      u64 es;                              // xtra segment (legacy / real)
+      u64 cs;                              // code segment (legacy / real)
+      u64 ss;                              // stak segment (legacy / real)
+      u64 ds;                              // data segment (legacy / real)
+      u64 fs;                              // thred-local segment register
+      u64 gs;                              // winple thread-local register
+    };                                     //
+  };                                       //
   struct MachineFpu fpu;                   // FLOATING-POINT REGISTER FILE
   u32 mxcsr;                               // SIMD status control register
   pthread_t thread;                        // POSIX thread of this machine
@@ -295,7 +302,6 @@ struct Machine {                           //
   sigset_t thread_sigmask;                 //
   struct Dll elem GUARDED_BY(system->machines_lock);
   struct OpCache opcache[1];
-  u32 cookie;
 };
 
 extern _Thread_local struct Machine *g_machine;
@@ -303,12 +309,14 @@ extern _Thread_local struct Machine *g_machine;
 struct System *NewSystem(void);
 void FreeSystem(struct System *);
 _Noreturn void Actor(struct Machine *);
+void SetMachineMode(struct Machine *, int);
+void ChangeMachineMode(struct Machine *, int);
 struct Machine *NewMachine(struct System *, struct Machine *);
 void Jitter(P, const char *, ...);
 void FreeMachine(struct Machine *);
 void FreeMachineUnlocked(struct Machine *);
+void InvalidateSystem(struct System *);
 void KillOtherThreads(struct System *);
-void ResetMem(struct Machine *);
 void ResetCpu(struct Machine *);
 void ResetTlb(struct Machine *);
 void CollectGarbage(struct Machine *);
@@ -317,10 +325,9 @@ void GeneralDispatch(P);
 nexgen32e_f GetOp(long);
 void LoadInstruction(struct Machine *);
 void ExecuteInstruction(struct Machine *);
-long AllocateLinearPage(struct System *);
-long AllocateLinearPageRaw(struct System *);
-int ReserveReal(struct System *, long);
-int ReserveVirtual(struct System *, i64, i64, u64);
+u64 AllocatePage(struct System *);
+u64 AllocatePageTable(struct System *);
+int ReserveVirtual(struct System *, i64, i64, u64, int, bool);
 char *FormatPml4t(struct Machine *);
 i64 FindVirtual(struct System *, i64, i64);
 int FreeVirtual(struct System *, i64, i64);
@@ -334,6 +341,35 @@ _Noreturn void OpUd(P);
 _Noreturn void OpHlt(P);
 void JitlessDispatch(P);
 void RestoreIp(struct Machine *);
+
+bool IsValidAddrSize(i64, i64);
+bool OverlapsPrecious(i64, i64);
+char **LoadStrList(struct Machine *, i64);
+char *LoadStr(struct Machine *, i64);
+int RegisterMemory(struct Machine *, i64, void *, size_t);
+u8 *GetPageAddress(struct System *, u64);
+u8 *GetHostAddress(struct Machine *, u64, long);
+u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *, bool);
+u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2], u8 *);
+u8 *BeginStore(struct Machine *, i64, size_t, void *[2], u8 *);
+u8 *BeginStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
+u8 *CopyFromUser(struct Machine *, void *, i64, u64);
+u8 *LookupAddress(struct Machine *, i64);
+u8 *Load(struct Machine *, i64, size_t, u8 *);
+u8 *MallocPage(void);
+u8 *RealAddress(struct Machine *, i64);
+u8 *ReserveAddress(struct Machine *, i64, size_t, bool);
+u8 *ResolveAddress(struct Machine *, i64);
+void CommitStash(struct Machine *);
+void CopyFromUserRead(struct Machine *, void *, i64, u64);
+void CopyToUser(struct Machine *, i64, void *, u64);
+void CopyToUserWrite(struct Machine *, i64, void *, u64);
+void EndStore(struct Machine *, i64, size_t, void *[2], u8 *);
+void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
+void ResetRam(struct Machine *);
+void SetReadAddr(struct Machine *, i64, u32);
+void SetWriteAddr(struct Machine *, i64, u32);
+long GetSystemPageSize(void);
 
 void Push(P, u64);
 u64 Pop(P, u16);

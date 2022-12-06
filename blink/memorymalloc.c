@@ -38,94 +38,83 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
-#include "blink/memory.h"
 #include "blink/pml4t.h"
-#include "blink/real.h"
 #include "blink/util.h"
 
 #define MAX_THREAD_IDS    32768
-#define MINIMUM_THREAD_ID 262144     // our fake tids start here
-#define GRANULARITY       131072     // how often we check in with the os
-#define MAX_MEMORY        268435456  // 256mb ought to be enough for anyone
-#define JIT_RESERVE       134217728  // 128mb is max branch displacement on arm
+#define MINIMUM_THREAD_ID 262144
 
-static struct RealGlobals {
-  _Atomic(u8 *) brk;  //
-} g_real;
+struct Allocator {
+  pthread_mutex_t lock;
+  _Atomic(u8 *) brk;
+  struct HostPage *pages GUARDED_BY(lock);
+} g_allocator = {
+    PTHREAD_MUTEX_INITIALIZER,
+};
 
-static void FillPage(u8 *p, int c) {
+static void FillPage(void *p, int c) {
   memset(p, c, 4096);
   atomic_thread_fence(memory_order_release);
 }
 
-static void ClearPage(u8 *p) {
+static void ClearPage(void *p) {
   FillPage(p, 0);
 }
 
-static void PoisonPage(u8 *p) {
-#ifndef NDEBUG
-  FillPage(p, 0x55);
-#endif
+long GetSystemPageSize(void) {
+  long z;
+  unassert((z = sysconf(_SC_PAGESIZE)) > 0);
+  unassert(IS2POW(z));
+  return MAX(4096, z);
 }
 
-static bool IsPageStillPoisoned(u8 *p) {
-#ifndef NDEBUG
-  long i;
-  IGNORE_RACES_START();
-  for (i = 0; i < 4096; ++i) {
-    if (p[i] != 0x55) {
-      return false;
-    }
-  }
-  IGNORE_RACES_END();
-#endif
-  return true;
+static size_t GetBigSize(size_t n) {
+  long z = GetSystemPageSize();
+  return ROUNDUP(n, z);
 }
 
-static void FreeSystemRealFree(struct System *s) {
-  struct SystemRealFree *rf;
-  LOCK(&s->realfree_lock);
-  while ((rf = s->realfree)) {
-    s->realfree = rf->next;
-    free(rf);
+static void FreeBig(void *p, size_t n) {
+  unassert(!munmap(p, GetBigSize(n)));
+}
+
+static void *AllocateBig(size_t n) {
+  void *p;
+  u8 *brk;
+  if (!(brk = atomic_load_explicit(&g_allocator.brk, memory_order_relaxed))) {
+    // we're going to politely ask the kernel for addresses starting
+    // arbitrary megabytes past the end of our own executable's .bss
+    // section. we'll cross our fingers, and hope that gives us room
+    // away from a brk()-based libc malloc() function which may have
+    // already allocated memory in this space. the reason it matters
+    // is because the x86 and arm isas impose limits on displacement
+    atomic_compare_exchange_strong_explicit(
+        &g_allocator.brk, &brk, (u8 *)kPreciousStart, memory_order_relaxed,
+        memory_order_relaxed);
   }
-  UNLOCK(&s->realfree_lock);
+  n = GetBigSize(n);
+  brk = atomic_fetch_add_explicit(&g_allocator.brk, n, memory_order_relaxed);
+  if (brk + n > (u8 *)kPreciousEnd) {
+    enomem();
+    return 0;
+  }
+  p = Mmap(brk, n, PROT_READ | PROT_WRITE,
+           MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0, "big");
+  return p != MAP_FAILED ? p : 0;
+}
+
+static void FreeHostPages(struct System *s) {
+  // TODO(jart): Iterate the PML4T to find host pages.
 }
 
 struct System *NewSystem(void) {
-  u8 *brk;
-  void *p;
   struct System *s;
-  // TODO: system->real.p needn't be contiguous past 1mb
-  //       so we don't need this big limited reservation
-  //       all we need to do is ensure it's not >47 bits
-  if (!(brk = atomic_load_explicit(&g_real.brk, memory_order_relaxed))) {
-    atomic_compare_exchange_strong_explicit(&g_real.brk, &brk, (u8 *)kRealStart,
-                                            memory_order_relaxed,
-                                            memory_order_relaxed);
-  }
-  for (;;) {
-    brk = atomic_fetch_add_explicit(&g_real.brk, MAX_MEMORY,
-                                    memory_order_relaxed);
-    if ((p = Mmap(brk, MAX_MEMORY, PROT_NONE,
-                  MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE | MAP_DEMAND, -1,
-                  0, "system")) != MAP_FAILED) {
-      break;
-    } else if (errno != MAP_DENIED) {
-      LOGF("could not register %zu bytes of memory at %p: %s", MAX_MEMORY, brk,
-           strerror(errno));
-      return 0;
-    }
-  }
-  if ((s = (struct System *)calloc(1, sizeof(*s)))) {
-    s->real.p = (u8 *)p;
+  if ((s = (struct System *)AllocateBig(sizeof(struct System)))) {
     InitJit(&s->jit);
     InitFds(&s->fds);
     pthread_mutex_init(&s->sig_lock, 0);
-    pthread_mutex_init(&s->real_lock, 0);
     pthread_mutex_init(&s->mmap_lock, 0);
     pthread_mutex_init(&s->machines_lock, 0);
-    pthread_mutex_init(&s->realfree_lock, 0);
+    s->pid = getpid();
   }
   return s;
 }
@@ -134,12 +123,11 @@ void FreeMachineUnlocked(struct Machine *m) {
   if (g_machine == m) {
     g_machine = 0;
   }
-  if (m->path.jp) {
-    AbandonJit(&m->system->jit, m->path.jp);
+  if (m->path.jb) {
+    AbandonJit(&m->system->jit, m->path.jb);
   }
   CollectGarbage(m);
   free(m->freelist.p);
-  m->cookie = 0;
   free(m);
 }
 
@@ -164,19 +152,14 @@ StartOver:
 
 void FreeSystem(struct System *s) {
   unassert(dll_is_empty(s->machines));  // Use KillOtherThreads & FreeMachine
-  FreeSystemRealFree(s);
-  LOCK(&s->real_lock);
-  unassert(!munmap(s->real.p, MAX_MEMORY));
-  UNLOCK(&s->real_lock);
-  unassert(!pthread_mutex_destroy(&s->realfree_lock));
+  FreeHostPages(s);
   unassert(!pthread_mutex_destroy(&s->machines_lock));
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
-  unassert(!pthread_mutex_destroy(&s->real_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));
   DestroyFds(&s->fds);
   DestroyJit(&s->jit);
   free(s->fun);
-  free(s);
+  FreeBig(s, sizeof(struct System));
 }
 
 struct Machine *NewMachine(struct System *system, struct Machine *parent) {
@@ -198,14 +181,18 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
     memset(m, 0, sizeof(*m));
     ResetCpu(m);
   }
-  m->cookie = kCookie;
-  m->system = system;
   m->oldip = -1;
+  m->system = system;
+  m->mode = system->mode;
+  m->nolinear = system->nolinear;
+  m->codesize = system->codesize;
+  m->codestart = system->codestart;
+  m->fun = system->fun ? system->fun - system->codestart : 0;
   if (parent) {
     m->tid = (system->next_tid++ & (MAX_THREAD_IDS - 1)) + MINIMUM_THREAD_ID;
   } else {
     // TODO(jart): We shouldn't be doing system calls in an allocator.
-    m->tid = getpid();
+    m->tid = m->system->pid;
   }
   dll_init(&m->elem);
   // TODO(jart): Child thread should add itself to system.
@@ -232,105 +219,58 @@ void FreeMachine(struct Machine *m) {
   }
 }
 
-void ResetMem(struct Machine *m) {
-  FreeSystemRealFree(m->system);
-  ResetTlb(m);
-  memset(&m->system->memstat, 0, sizeof(m->system->memstat));
-  m->system->real.i = 0;
-  m->system->cr3 = 0;
-}
-
-long AllocateLinearPage(struct System *s) {
-  long page;
-  if ((page = AllocateLinearPageRaw(s)) != -1) {
-#ifndef NDEBUG
-    if (!IsPageStillPoisoned(s->real.p + page)) {
-      DumpHex(s->real.p + page, 4096);
-      unassert(!"page should still be poisoned");
-    }
-#endif
-    ClearPage(s->real.p + page);
-  }
-  return page;
-}
-
-int ReserveReal(struct System *s, long n)
-    EXCLUSIVE_LOCKS_REQUIRED(s->real_lock) {
-  long i;
-  unassert(!(n & 4095));
-  if (s->real.n < n) {
-    if (n > MAX_MEMORY) {
-      return enomem();
-    }
-    if (Mmap(s->real.p + s->real.n, n - s->real.n, PROT_READ | PROT_WRITE,
-             MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0,
-             "real") != MAP_FAILED) {
-      for (i = 0; i < n - s->real.n; i += 4096) {
-        PoisonPage(s->real.p + s->real.n + i);
-      }
-      s->real.n = n;
-      ++s->memstat.resizes;
-    } else {
-      LOGF("could not grow memory from %zu to %zu bytes: %s", s->real.n, n,
-           strerror(errno));
-      return -1;
-    }
-  }
-  return 0;
-}
-
-long AllocateLinearPageRaw(struct System *s) {
+u64 AllocatePage(struct System *s) {
+  u8 *page;
   size_t i, n;
-  struct SystemRealFree *rf;
-  LOCK(&s->realfree_lock);
-  if ((rf = s->realfree)) {
-    unassert(rf->n);
-    unassert(!(rf->i & 4095));
-    unassert(!(rf->n & 4095));
-    unassert(rf->i + rf->n <= s->real.i);
-    i = rf->i;
-    rf->i += 4096;
-    if (!(rf->n -= 4096)) {
-      s->realfree = rf->next;
-      UNLOCK(&s->realfree_lock);
-      free(rf);
-    } else {
-      UNLOCK(&s->realfree_lock);
-    }
+  struct HostPage *h;
+  LOCK(&g_allocator.lock);
+  if ((h = g_allocator.pages)) {
+    g_allocator.pages = h->next;
+    UNLOCK(&g_allocator.lock);
+    page = h->page;
+    free(h);
+    ClearPage(page);
     --s->memstat.freed;
+    ++s->memstat.committed;
     ++s->memstat.reclaimed;
+    goto Finished;
   } else {
-    UNLOCK(&s->realfree_lock);
-    LOCK(&s->real_lock);
-    i = s->real.i;
-    n = s->real.n;
-    if (i == n) {
-      n += GRANULARITY;
-      n = ROUNDUP(n, 4096);
-      if (ReserveReal(s, n) == -1) {
-        UNLOCK(&s->real_lock);
-        return -1;
-      }
-    }
-    unassert(!(i & 4095));
-    unassert(!(n & 4095));
-    unassert(i + 4096 <= n);
-    s->real.i += 4096;
-    UNLOCK(&s->real_lock);
-    ++s->memstat.allocated;
+    UNLOCK(&g_allocator.lock);
   }
-  ++s->memstat.committed;
-  return i;
+  n = 64;
+  if (!(page = (u8 *)AllocateBig(n * 4096))) return -1;
+  s->memstat.allocated += n;
+  s->memstat.committed += 1;
+  s->memstat.freed += n - 1;
+  LOCK(&g_allocator.lock);
+  for (i = 0; i + 1 < n; ++i, page += 4096) {
+    unassert((h = (struct HostPage *)malloc(sizeof(struct HostPage))));
+    h->page = page;
+    h->next = g_allocator.pages;
+    g_allocator.pages = h;
+  }
+  UNLOCK(&g_allocator.lock);
+Finished:
+  return ToGuest(page) | PAGE_HOST | PAGE_U | PAGE_RW | PAGE_V;
 }
 
-static u64 RealRead64(struct System *s, size_t i) {
-  unassert(i + 8 <= GetRealMemorySize(s));
-  return Get64(s->real.p + i);
+u64 AllocatePageTable(struct System *s) {
+  u64 res;
+  if ((res = AllocatePage(s)) != -1) {
+    res &= ~PAGE_U;
+    ++s->memstat.pagetables;
+  }
+  return res;
 }
 
-static void RealWrite64(struct System *s, size_t i, u64 x) {
-  unassert(i + 8 <= GetRealMemorySize(s));
-  Put64(s->real.p + i, x);
+bool OverlapsPrecious(i64 virt, i64 size) {
+  uint64_t BegA, EndA, BegB, EndB;
+  if (size <= 0) return false;
+  BegA = virt + kSkew;
+  EndA = virt + kSkew + (size - 1);
+  BegB = kPreciousStart;
+  EndB = kPreciousEnd - 1;
+  return MAX(BegA, BegB) < MIN(EndA, EndB);
 }
 
 bool IsValidAddrSize(i64 virt, i64 size) {
@@ -342,149 +282,150 @@ bool IsValidAddrSize(i64 virt, i64 size) {
          virt + size <= 0x800000000000;
 }
 
-static void InvalidateSystemTlbs(struct System *s) {
+void InvalidateSystem(struct System *s) {
   struct Dll *e;
   LOCK(&s->machines_lock);
   for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
-    atomic_store_explicit(&MACHINE_CONTAINER(e)->tlb_invalidated, true,
+    atomic_store_explicit(&MACHINE_CONTAINER(e)->invalidated, true,
                           memory_order_relaxed);
   }
   UNLOCK(&s->machines_lock);
 }
 
-// so far tsan is the only thing we've seen that dominates the virtual
-// memory space heavily enough that cosmo can't have identity mappings
-// TODO: We'd likely need some kind of GIL to make this actually work!
-static void VirtualizeSystem(struct System *s) {
-  struct Dll *e;
-  for (long i = 0; i < s->codesize; ++i) {
-    atomic_store_explicit(s->fun + i, JitlessDispatch, memory_order_relaxed);
-  }
-  LOCK(&s->real_lock);
-  LOCK(&s->machines_lock);
-  s->virtualized = true;
-  for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
-    atomic_store_explicit(&MACHINE_CONTAINER(e)->virtualized, true,
-                          memory_order_relaxed);
-  }
-  UNLOCK(&s->machines_lock);
-  UNLOCK(&s->real_lock);
-  for (long i = 0; i < s->codesize; ++i) {
-    atomic_store_explicit(s->fun + i, GeneralDispatch, memory_order_relaxed);
-  }
-}
-
-static void AppendRealFree(struct System *s, u64 real) {
-  struct SystemRealFree *rf;
-  LOCK(&s->realfree_lock);
-  PoisonPage(s->real.p + real);
-  ++s->memstat.freed;
-  if (s->realfree && real == s->realfree->i + s->realfree->n) {
-    s->realfree->n += 4096;
-  } else if ((rf = (struct SystemRealFree *)malloc(sizeof(*rf)))) {
-    rf->i = real;
-    rf->n = 4096;
-    rf->next = s->realfree;
-    s->realfree = rf;
-  }
-  UNLOCK(&s->realfree_lock);
-}
-
-static void FreePageTableEntry(struct System *s, u64 entry) {
+static bool FreePage(struct System *s, u64 entry) {
+  struct HostPage *h;
   unassert(entry & PAGE_V);
   if (entry & PAGE_RSRV) {
     --s->memstat.reserved;
-  } else {
+    return false;
+  } else if ((entry & (PAGE_HOST | PAGE_MAP)) == PAGE_HOST) {
+    ++s->memstat.freed;
     --s->memstat.committed;
-    if (entry & PAGE_ID) {
-      // unassert(!munmap(ToHost(entry & PAGE_TA), 4096));
-    } else {
-      AppendRealFree(s, entry & PAGE_TA);
-    }
+    unassert((h = (struct HostPage *)malloc(sizeof(struct HostPage))));
+    LOCK(&g_allocator.lock);
+    h->page = ToHost(entry & PAGE_TA);
+    h->next = g_allocator.pages;
+    g_allocator.pages = h;
+    UNLOCK(&g_allocator.lock);
+    return false;
+  } else if ((entry & (PAGE_HOST | PAGE_MAP)) == (PAGE_HOST | PAGE_MAP)) {
+    --s->memstat.allocated;
+    --s->memstat.committed;
+    return true;
+  } else {
+    unassert((entry & PAGE_TA) < kRealSize);
+    return false;
   }
 }
 
-int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags) {
-  i64 ti, mi, pt, key, end, level;
+static bool ClearVirtual(struct System *s, i64 virt, i64 size) {
+  u8 *mi;
+  u64 i, pt, end;
+  bool has_maps = false;
+  for (end = virt + size; virt < end; virt += 1ull << i) {
+    for (pt = s->cr3, i = 39;; i -= 9) {
+      mi = GetPageAddress(s, pt) + ((virt >> i) & 511) * 8;
+      pt = Load64(mi);
+      if (!(pt & PAGE_V)) {
+        break;
+      } else if (i == 12) {
+        has_maps |= FreePage(s, pt);
+        Store64(mi, 0);
+        break;
+      }
+    }
+  }
+  return has_maps;
+}
+
+int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
+                   bool shared) {
+  u8 *mi;
+  long pagesize;
+  i64 ti, pt, end, level, entry;
 
   // we determine these
   unassert(!(flags & PAGE_TA));
-  unassert(!(flags & PAGE_ID));
+  unassert(!(flags & PAGE_MAP));
+  unassert(!(flags & PAGE_HOST));
   unassert(!(flags & PAGE_RSRV));
+  unassert(s->mode == XED_MODE_LONG);
 
-  // ensure requested interval is in 48-bit space
-  if (!IsValidAddrSize(virt, size)) return einval();
+  if (!IsValidAddrSize(virt, size)) {
+    LOGF("app attempted to map memory outside 48-bit pml4t space");
+    return einval();
+  }
+
+  if (OverlapsPrecious(virt, size)) {
+    LOGF("app attempted to map memory that blink reserves for itself");
+    return enomem();
+  }
+
+  if (!s->nolinear) {
+    if (virt <= 0) {
+      LOGF("app attempted to map null or negative in linear mode");
+      return enotsup();
+    }
+    pagesize = GetSystemPageSize();
+    if (virt & (pagesize - 1)) {
+      LOGF("app chose mmap addr (%#" PRIx64 ") that's not aligned "
+           "to the platform page size (%#lx) while using linear mode",
+           virt, pagesize);
+      return einval();
+    }
+  }
 
   MEM_LOGF("reserving virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
            virt, virt + size, size / 1024);
 
-  // if all guest memory is identity-mapped to host memory,
-  // then we'll try to maintain the perfect correspondence,
-  // with care taken to not clobber any unrelated mappings.
-  if (!s->virtualized) {
-    if (virt > 0 && s->mode == XED_MODE_LONG) {
-      void *idmap =
-          Mmap(ToHost(virt), size, PROT_READ | PROT_WRITE,
-               MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0, "identity");
-      if (idmap != MAP_FAILED) {
-        if (idmap == ToHost(virt)) {
-          flags |= PAGE_ID;
-        } else {
-          unassert(!munmap(idmap, size));
-        }
-      }
-      if (!(flags & PAGE_ID)) {
-        LOGF("mapping crisis: wanted %p but got %p (%s) %s", ToHost(virt),
-             idmap, strerror(errno),
-             "will attempt to fall back to virtual memory model");
-      }
-    } else {
-      LOGF("negative or null mapping requested at %#" PRIx64
-           " with size %#" PRIx64 " %s",
-           virt, size, "will attempt to fall back to virtual memory model");
+  ClearVirtual(s, virt, size);
+
+  if (!s->nolinear) {
+    if (Mmap(ToHost(virt), size,                     //
+             ((flags & PAGE_U ? PROT_READ : 0) |     //
+              (flags & PAGE_RW ? PROT_WRITE : 0)),   //
+             (MAP_FIXED |                            //
+              (fd == -1 ? MAP_ANONYMOUS : 0) |       //
+              (shared ? MAP_SHARED : MAP_PRIVATE)),  //
+             fd, 0, "linear") == MAP_FAILED) {
+      LOGF("mmap(%p) crisis: %s", ToHost(virt), strerror(errno));
+      WriteErrorString("system mmap() crisis\n");
+      exit(250);
     }
-    if (!(flags & PAGE_ID)) {
-      VirtualizeSystem(s);
-    }
+    s->memstat.allocated += size / 4096;
+    s->memstat.committed += size / 4096;
+    flags |= PAGE_HOST | PAGE_MAP;
+  } else {
+    s->memstat.reserved += size / 4096;
   }
 
-  // update four-level page table ensuring all entries exist
+  // add pml4t entries ensuring intermediary tables exist
   for (end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
-      pt = pt & PAGE_TA;
       ti = (virt >> level) & 511;
-      mi = (pt & PAGE_TA) + ti * 8;
-      pt = RealRead64(s, mi);
+      mi = GetPageAddress(s, pt) + ti * 8;
+      pt = Load64(mi);
       if (level > 12) {
-        // we're traversing an intermediary page table
         if (!(pt & PAGE_V)) {
-          // if a branch doesn't exist we must create it
-          if ((pt = AllocateLinearPage(s)) == -1) return -1;
-          RealWrite64(s, mi, pt | PAGE_U | PAGE_RW | PAGE_V);
-          ++s->memstat.pagetables;
+          if ((pt = AllocatePageTable(s)) == -1) return -1;
+          Store64(mi, pt);
         }
         continue;
       }
-      // iterate innermost table overwriting page entries
       for (;;) {
-        if (pt & PAGE_V) {
-          FreePageTableEntry(s, pt);
-        }
-        if (flags & PAGE_ID) {
-          ++s->memstat.committed;
-          key = virt | flags | PAGE_V;
+        unassert(~pt & PAGE_V);
+        if (flags & PAGE_MAP) {
+          entry = virt | flags | PAGE_V;
         } else {
-          ++s->memstat.reserved;
-          key = flags | PAGE_RSRV | PAGE_V;
+          entry = flags | PAGE_RSRV | PAGE_V;
         }
-        RealWrite64(s, mi, key);
-        if ((virt += 4096) >= end) {
-          return 0;
+        if (fd != -1 && virt + 4096 >= end) {
+          entry |= PAGE_EOF;
         }
-        if (++ti == 512) {
-          break;
-        }
-        pt = RealRead64(s, (mi += 8));
+        Store64(mi, entry);
+        if ((virt += 4096) >= end) return 0;
+        if (++ti == 512) break;
+        pt = Load64((mi += 8));
       }
     }
   }
@@ -493,10 +434,11 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags) {
 i64 FindVirtual(struct System *s, i64 virt, i64 size) {
   u64 i, pt, got = 0;
   if (!IsValidAddrSize(virt, size)) return einval();
+  if (OverlapsPrecious(virt, size)) virt = kPreciousEnd + kSkew;
   do {
     if (virt >= 0x800000000000) return enomem();
     for (pt = s->cr3, i = 39; i >= 12; i -= 9) {
-      pt = RealRead64(s, (pt & PAGE_TA) + ((virt >> i) & 511) * 8);
+      pt = Load64(GetPageAddress(s, pt) + ((virt >> i) & 511) * 8);
       if (!(pt & PAGE_V)) break;
     }
     if (i >= 12) {
@@ -510,23 +452,26 @@ i64 FindVirtual(struct System *s, i64 virt, i64 size) {
 }
 
 int FreeVirtual(struct System *s, i64 virt, i64 size) {
-  u64 i, mi, pt, end;
-  MEM_LOGF("freeing virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
-           virt, virt + size, size / 1024);
-  if (!IsValidAddrSize(virt, size)) return einval();
-  for (end = virt + size; virt < end; virt += 1ull << i) {
-    for (pt = s->cr3, i = 39;; i -= 9) {
-      mi = (pt & PAGE_TA) + ((virt >> i) & 511) * 8;
-      pt = RealRead64(s, mi);
-      if (!(pt & PAGE_V)) {
-        break;
-      } else if (i == 12) {
-        FreePageTableEntry(s, pt);
-        RealWrite64(s, mi, 0);
-        break;
-      }
+  long pagesize;
+  if (!IsValidAddrSize(virt, size)) {
+    return einval();
+  }
+  if (!s->nolinear) {
+    pagesize = GetSystemPageSize();
+    if (virt & (pagesize - 1)) {
+      LOGF("app chose munmap addr (%#" PRIx64 ") that's not aligned "
+           "to the platform page size (%#lx) while using linear mode",
+           virt, pagesize);
+      return einval();
     }
   }
-  InvalidateSystemTlbs(s);
+  MEM_LOGF("freeing virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
+           virt, virt + size, size / 1024);
+  // TODO(jart): We should probably validate a PAGE_EOF exists at the
+  //             end when size isn't a multiple of platform page size
+  if (ClearVirtual(s, virt, size)) {
+    unassert(!munmap(ToHost(virt & PAGE_TA), size));
+  }
+  InvalidateSystem(s);
   return 0;
 }

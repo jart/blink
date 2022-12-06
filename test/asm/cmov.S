@@ -2,8 +2,8 @@
 .globl	_start
 _start:
 
-//	make -j8 o//blink o//x86_64/test/asm/cmov.elf
-//	o//blink/tui o//x86_64/test/asm/cmov.elf
+//	make -j8 o//blink o//test/asm/cmov.elf
+//	o//blink/tui o//test/asm/cmov.elf
 
 	.test	"cmovq taken"
 	mov	$0x1234567812345678,%rax

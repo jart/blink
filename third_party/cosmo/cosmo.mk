@@ -73,7 +73,6 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/servicestxt_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/setitimer_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/setlocale_test.com.ok				\
-		o/$(MODE)/third_party/cosmo/sigsetjmp_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/sincos_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/sinh_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/sizetol_test.com.ok					\

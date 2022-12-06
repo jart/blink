@@ -23,7 +23,6 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/stats.h"
 #include "blink/x86.h"
@@ -60,7 +59,7 @@ static void LoadInstructionSlow(struct Machine *m, u64 ip) {
   STATISTIC(page_overlaps++);
   i = 4096 - (ip & 4095);
   addr = ResolveAddress(m, ip);
-  if ((toil = FindReal(m, ip + i))) {
+  if ((toil = LookupAddress(m, ip + i))) {
     memcpy(copy, addr, i);
     memcpy(copy + i, toil, 15 - i);
     ReadInstruction(m, copy, 15);

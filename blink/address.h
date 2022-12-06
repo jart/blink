@@ -9,9 +9,9 @@ i64 GetIp(struct Machine *);
 i64 GetPc(struct Machine *);
 u64 AddressOb(P);
 u64 AddressDi(P);
-u64 AddressSi(P);
-u64 *GetSegment(P, int);
-u64 DataSegment(P, u64);
-u64 AddSegment(P, u64, u64);
+i64 AddressSi(P);
+u64 *GetSegment(P, unsigned);
+i64 DataSegment(P, u64);
+i64 AddSegment(P, u64, u64);
 
 #endif /* BLINK_ADDRESS_H_ */

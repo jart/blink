@@ -26,7 +26,6 @@
 #include "blink/endian.h"
 #include "blink/high.h"
 #include "blink/macros.h"
-#include "blink/memory.h"
 #include "blink/modrm.h"
 #include "blink/tpenc.h"
 #include "blink/types.h"
@@ -192,14 +191,14 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
     }
   }
   n = MAX(1, MIN(15, n));
-  if (!(r = FindReal(m, addr))) return -1;
+  if (!(r = LookupAddress(m, addr))) return -1;
   k = 0x1000 - (addr & 0xfff);
   if (n <= k) {
     p = (u8 *)r;
   } else {
     p = b;
     memcpy(b, r, k);
-    if ((r = FindReal(m, addr + k))) {
+    if ((r = LookupAddress(m, addr + k))) {
       memcpy(b + k, r, n - k);
     } else {
       n = k;

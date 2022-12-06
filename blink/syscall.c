@@ -53,7 +53,6 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
-#include "blink/memory.h"
 #include "blink/mop.h"
 #include "blink/pml4t.h"
 #include "blink/random.h"
@@ -154,7 +153,7 @@ static bool IsOrphan(struct Machine *m) {
 
 _Noreturn static void SysExit(struct Machine *m, int rc) {
   atomic_int *ctid;
-  if (m->ctid && (ctid = (atomic_int *)FindReal(m, m->ctid))) {
+  if (m->ctid && (ctid = (atomic_int *)LookupAddress(m, m->ctid))) {
     atomic_store_explicit(ctid, 0, memory_order_seq_cst);
   }
   if (IsOrphan(m)) {
@@ -191,7 +190,7 @@ static void *OnSpawn(void *arg) {
   g_machine = m;
   if (!(rc = setjmp(m->onhalt))) {
     unassert(!pthread_sigmask(SIG_SETMASK, &m->thread_sigmask, 0));
-    if (m->ctid && (ctid = (atomic_int *)FindReal(m, m->ctid))) {
+    if (m->ctid && (ctid = (atomic_int *)LookupAddress(m, m->ctid))) {
       atomic_store_explicit(ctid, Little32(m->tid), memory_order_seq_cst);
     }
     Actor(m);
@@ -286,13 +285,15 @@ static int SysMadvise(struct Machine *m, i64 addr, size_t len, int advice) {
 
 static i64 SysBrk(struct Machine *m, i64 addr) {
   i64 rc;
+  long pagesize;
   LOCK(&m->system->mmap_lock);
   MEM_LOGF("brk(%#" PRIx64 ") currently %#" PRIx64, addr, m->system->brk);
-  addr = ROUNDUP(addr, 4096);
+  pagesize = GetSystemPageSize();
+  addr = ROUNDUP(addr, pagesize);
   if (addr >= kMinBrk) {
     if (addr > m->system->brk) {
       if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
-                         PAGE_RW | PAGE_U) != -1) {
+                         PAGE_RW | PAGE_U, -1, false) != -1) {
         m->system->brk = addr;
       }
     } else if (addr < m->system->brk) {
@@ -320,27 +321,28 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
   u64 key;
   void *tmp;
   ssize_t rc;
+  int systemfd;
+  long pagesize;
   struct Fd *fd;
-  if (!IsValidAddrSize(virt, size)) {
-    return einval();
-  }
-  if (flags & MAP_GROWSDOWN_LINUX) {
-    errno = ENOTSUP;
-    return -1;
-  }
+  if (!IsValidAddrSize(virt, size)) return einval();
+  if (flags & MAP_GROWSDOWN_LINUX) return enotsup();
   if (prot & PROT_READ) {
-    key = PAGE_U;
+    key = 0;
+    if (prot & PROT_READ) key |= PAGE_U;
     if (prot & PROT_WRITE) key |= PAGE_RW;
-    if (!(prot & PROT_EXEC)) key |= PAGE_XD;
+    if (~prot & PROT_EXEC) key |= PAGE_XD;
     flags = XlatMapFlags(flags);
     if (fildes != -1) {
       if (flags & MAP_ANONYMOUS) {
         return einval();
       }
-      if (!(fd = GetAndLockFd(m, fildes))) {
+      if ((fd = GetAndLockFd(m, fildes))) {
+        systemfd = atomic_load_explicit(&fd->systemfd, memory_order_relaxed);
+      } else {
         return -1;
       }
     } else {
+      systemfd = -1;
       fd = 0;
     }
     LOCK(&m->system->mmap_lock);
@@ -350,7 +352,8 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
           UNLOCK(&m->system->mmap_lock);
           goto Finished;
         }
-        m->system->brk = ROUNDUP(virt + size, 4096);
+        pagesize = GetSystemPageSize();
+        m->system->brk = ROUNDUP(virt + size, pagesize);
       } else {
         if ((virt = FindVirtual(m->system, virt, size)) == -1) {
           UNLOCK(&m->system->mmap_lock);
@@ -358,20 +361,21 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
         }
       }
     }
-    rc = ReserveVirtual(m->system, virt, size, key);
+    rc = ReserveVirtual(m->system, virt, size, key, systemfd,
+                        !!(flags & MAP_SHARED));
     UNLOCK(&m->system->mmap_lock);
     if (rc != -1) {
-      if (fd) {
+      if (fd && m->system->nolinear) {
         // TODO(jart): Raise SIGBUS on i/o error.
         // TODO(jart): Support lazy file mappings.
         unassert((tmp = malloc(size)));
         for (;;) {
-          rc = pread(fd->systemfd, tmp, size, offset);
+          rc = pread(systemfd, tmp, size, offset);
           if (rc != -1) break;
           if (errno != EINTR) {
             LOGF("failed to read %zu bytes at offset %" PRId64
                  " from fd %d into memory map: %s",
-                 size, offset, fd->systemfd, strerror(errno));
+                 size, offset, systemfd, strerror(errno));
             abort();
           }
         }
@@ -1089,7 +1093,7 @@ static int SysPrlimit(struct Machine *m, i32 pid, i32 resource,
   int rc;
   struct rlimit old;
   struct rlimit_linux lux;
-  if (pid && pid != getpid()) return eperm();
+  if (pid && pid != m->system->pid) return eperm();
   if ((rc = getrlimit(XlatResource(resource), &old)) != -1) {
     if (new_rlimit_addr) {
       rc = SysSetrlimit(m, XlatResource(resource), new_rlimit_addr);
@@ -1215,8 +1219,8 @@ static int SysClockNanosleep(struct Machine *m, int clock, int flags,
       rc = einval();
     }
   } else if (!(rc = clock_gettime(clock, &now))) {
-    if (timespec_cmp(now, req) < 0) {
-      req = timespec_sub(req, now);
+    if (CompareTime(now, req) < 0) {
+      req = SubtractTime(req, now);
       rc = nanosleep(&req, &rem);
     } else {
       rc = 0;
@@ -1419,7 +1423,7 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
 }
 
 static int SysKill(struct Machine *m, int pid, int sig) {
-  if (pid == getpid()) {
+  if (pid == m->system->pid) {
     // TODO(jart): Enqueue signal instead.
     ThrowProtectionFault(m);
   } else {
@@ -1454,7 +1458,7 @@ static int SysSetsid(struct Machine *m) {
 }
 
 static int SysGetpid(struct Machine *m) {
-  return getpid();
+  return m->system->pid;
 }
 
 static int SysGettid(struct Machine *m) {

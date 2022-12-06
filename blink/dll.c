@@ -18,6 +18,27 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/dll.h"
 
+/**
+ * Makes `succ` and its successors come after `elem`.
+ *
+ * It's required that `elem` and `succ` aren't part of the same list.
+ */
+void dll_splice_after(struct Dll *elem, struct Dll *succ) {
+  struct Dll *tmp1, *tmp2;
+  tmp1 = elem->next;
+  tmp2 = succ->prev;
+  elem->next = succ;
+  succ->prev = elem;
+  tmp2->next = tmp1;
+  tmp1->prev = tmp2;
+}
+
+/**
+ * Removes item from doubly-linked list.
+ *
+ * @param list is a doubly-linked list, or null if empty
+ * @return new value for `list`
+ */
 struct Dll *dll_remove(struct Dll *list, struct Dll *elem) {
   if (list == elem) {
     if (list->prev == list) {
@@ -33,16 +54,13 @@ struct Dll *dll_remove(struct Dll *list, struct Dll *elem) {
   return list;
 }
 
-void dll_splice_after(struct Dll *elem, struct Dll *succ) {
-  struct Dll *tmp1, *tmp2;
-  tmp1 = elem->next;
-  tmp2 = succ->prev;
-  elem->next = succ;
-  succ->prev = elem;
-  tmp2->next = tmp1;
-  tmp1->prev = tmp2;
-}
-
+/**
+ * Inserts item into doubly-linked list, at the beginning.
+ *
+ * @param list is a doubly-linked list, or null if empty
+ * @param elem must not be a member of `list`, or null for no-op
+ * @return new value for `list`
+ */
 struct Dll *dll_make_first(struct Dll *list, struct Dll *elem) {
   if (elem) {
     if (!list) {
@@ -54,6 +72,13 @@ struct Dll *dll_make_first(struct Dll *list, struct Dll *elem) {
   return list;
 }
 
+/**
+ * Inserts item into doubly-linked list, at the end.
+ *
+ * @param list is a doubly-linked list, or null if empty
+ * @param elem must not be a member of `list`, or null for no-op
+ * @return new value for `list`
+ */
 struct Dll *dll_make_last(struct Dll *list, struct Dll *elem) {
   if (elem) {
     dll_make_first(list, elem->next);
