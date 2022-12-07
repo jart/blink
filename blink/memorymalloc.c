@@ -282,12 +282,19 @@ bool IsValidAddrSize(i64 virt, i64 size) {
          virt + size <= 0x800000000000;
 }
 
-void InvalidateSystem(struct System *s) {
+void InvalidateSystem(struct System *s, bool tlb, bool icache) {
   struct Dll *e;
+  struct Machine *m;
   LOCK(&s->machines_lock);
   for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
-    atomic_store_explicit(&MACHINE_CONTAINER(e)->invalidated, true,
-                          memory_order_relaxed);
+    m = MACHINE_CONTAINER(e);
+    if (tlb) {
+      atomic_store_explicit(&m->invalidated, true, memory_order_relaxed);
+    }
+    if (icache) {
+      atomic_store_explicit(&m->opcache->invalidated, true,
+                            memory_order_relaxed);
+    }
   }
   UNLOCK(&s->machines_lock);
 }
@@ -472,6 +479,6 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
   if (ClearVirtual(s, virt, size)) {
     unassert(!munmap(ToHost(virt & PAGE_TA), size));
   }
-  InvalidateSystem(s);
+  InvalidateSystem(s, true, false);
   return 0;
 }

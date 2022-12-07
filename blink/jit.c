@@ -377,6 +377,13 @@ intptr_t GetJitPc(struct JitBlock *jb) {
 }
 
 /**
+ * Returns byte length of JIT function prologue.
+ */
+size_t GetSizeOfJitPrologue(void) {
+  return sizeof(kJitPrologue);
+}
+
+/**
  * Appends bytes to JIT block.
  *
  * Errors here safely propagate to FinishJit().
@@ -779,6 +786,18 @@ bool AppendJitSetReg(struct JitBlock *jb, int reg, u64 value) {
 }
 
 /**
+ * Appends no-op instruction.
+ */
+bool AppendJitNop(struct JitBlock *jb) {
+#if defined(__x86_64__)
+  u8 buf[1] = {0x90};  // nop
+#elif defined(__aarch64__)
+  u32 buf[1] = {0xd503201f};  // nop
+#endif
+  return AppendJit(jb, buf, sizeof(buf));
+}
+
+/**
  * Appends debugger breakpoint.
  */
 bool AppendJitTrap(struct JitBlock *jb) {
@@ -812,6 +831,8 @@ STUB(bool, AppendJitJmp, (struct JitBlock *jb, void *code), 0)
 STUB(bool, AppendJitCall, (struct JitBlock *jb, void *func), 0)
 STUB(bool, AppendJitSetReg, (struct JitBlock *jb, int reg, u64 value), 0)
 STUB(bool, SpliceJit, (struct Jit *jit, struct JitBlock *jb, hook_t *hook, intptr_t staging, intptr_t chunk), 0)
+STUB(bool, AppendJitNop, (struct JitBlock *jb), 0);
 STUB(bool, AppendJitTrap, (struct JitBlock *jb), 0)
 STUB(bool, CanJitForImmediateEffect, (void), 0)
+STUB(size_t, GetSizeOfJitPrologue, (void), 0)
 #endif

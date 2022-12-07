@@ -38,8 +38,7 @@
 #ifdef __cplusplus
 #define forceinline inline
 #else
-#if !defined(__STRICT_ANSI__) && \
-    (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 302
+#if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 302
 #if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 403 || \
     !defined(__cplusplus) ||                              \
     (defined(__clang__) &&                                \

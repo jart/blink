@@ -72,6 +72,9 @@ void LoadInstruction(struct Machine *m) {
   u64 ip;
   u8 *addr;
   unsigned key;
+  if (atomic_load_explicit(&m->opcache->invalidated, memory_order_relaxed)) {
+    ResetInstructionCache(m);
+  }
   ip = m->cs + MaskAddress(m->mode, m->ip);
   key = ip & (ARRAYLEN(m->opcache->icache) - 1);
   m->xedd = (struct XedDecodedInst *)m->opcache->icache[key];

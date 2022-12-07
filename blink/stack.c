@@ -113,7 +113,7 @@ void OpPushZvq(P) {
   int osz = kStackOsz[Osz(rde)][Mode(rde)];
   PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Eamode(rde), osz);
   if (HasLinearMapping(m) && !Osz(rde)) {
-    Jitter(A, "a1i c", RexbSrm(rde), FastPush);
+    Jitter(A, "a1i m", RexbSrm(rde), FastPush);
   }
 }
 
@@ -163,7 +163,7 @@ void OpPopZvq(P) {
       __builtin_unreachable();
   }
   if (HasLinearMapping(m) && !Osz(rde)) {
-    Jitter(A, "a1i c", RexbSrm(rde), FastPop);
+    Jitter(A, "a1i m", RexbSrm(rde), FastPop);
   }
 }
 
@@ -175,7 +175,7 @@ static void OpCall(P, u64 func) {
 void OpCallJvds(P) {
   OpCall(A, m->ip + disp);
   if (HasLinearMapping(m) && !Osz(rde)) {
-    Jitter(A, "a1i c", disp, FastCall);
+    Jitter(A, "a1i m", disp, FastCall);
   }
 }
 
@@ -214,7 +214,7 @@ void OpLeave(P) {
 void OpRet(P) {
   m->ip = Pop(A, 0);
   if (HasLinearMapping(m) && !Osz(rde)) {
-    Jitter(A, "c", FastRet);
+    Jitter(A, "m", FastRet);
   }
 }
 

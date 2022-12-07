@@ -22,12 +22,14 @@
 
 #include "blink/assert.h"
 #include "blink/endian.h"
+#include "blink/jit.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/types.h"
+#include "blink/x86.h"
 
 /**
  * @fileoverview X86 Micro-Operations w/ Printf RPN Glue-Generating DSL.
@@ -94,6 +96,21 @@ static void PutRegOrMem(P) {
                           uimm0);
   }
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// SIGN EXTENDING
+
+static u64 Sex8(u64 x) {
+  return (i8)x;
+}
+static u64 Sex16(u64 x) {
+  return (i16)x;
+}
+static u64 Sex32(u64 x) {
+  return (i32)x;
+}
+typedef u64 (*sex_f)(u64);
+static const sex_f kSex[] = {Sex8, Sex16, Sex32};
 
 ////////////////////////////////////////////////////////////////////////////////
 // DEVIRTUALIZED LOADING OF ABSOLUTE MEMORY PARAMETER
@@ -254,7 +271,7 @@ static const putdembaseindex_f kPutDemBaseIndex[] = {
 
 static void ClobberEverythingExceptResult(struct Machine *m) {
 #ifdef DEBUG
-  // clobber everything except result registers
+// clobber everything except result registers
 #ifdef __x86_64__
   AppendJitSetReg(m->path.jb, kAmdDi, 0x666);
   AppendJitSetReg(m->path.jb, kAmdSi, 0x666);
@@ -282,27 +299,56 @@ static void ClobberEverythingExceptResult(struct Machine *m) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// FUNCTION BODY EXTRACTOR
+
+static bool IsRet(u8 *p) {
+#ifdef __aarch64__
+  return Get32(p) == 0xd65f03c0;
+#elif defined(__x86_64__)
+  return *p == 0xc3;
+#else
+  __builtin_unreachable();
+#endif
+}
+
+static long GetInstructionLength(u8 *p) {
+#ifdef __aarch64__
+  return 4;
+#elif defined(__x86_64__)
+  struct XedDecodedInst x;
+  unassert(!DecodeInstruction(&x, p, 15, XED_MODE_LONG));
+  return x.length;
+#else
+  __builtin_unreachable();
+#endif
+}
+
+static long GetLengthOfFunctionBody(void *p) {
+  long n = 0;
+  for (;;) {
+    if (IsRet((u8 *)p + n)) return n;
+    n += GetInstructionLength((u8 *)p + n);
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // PRINTF-STYLE X86 MICROCODING WITH POSTFIX NOTATION
 
 #define ItemsRequired(n) unassert(i >= n)
+
+static _Thread_local int i;
+static _Thread_local u8 stack[8];
 
 static inline int CheckBelow(int x, unsigned n) {
   unassert(x < n);
   return x;
 }
 
-/**
- * Generates JIT code that implements x86 instructions.
- */
-void Jitter(P, const char *fmt, ...) {
-  if (!m->path.jb) return;
-  va_list va;
-  unsigned c, k, log2sz;
-  static _Thread_local int i;
-  static _Thread_local u8 stack[8];
-  va_start(va, fmt);
+static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
+                           unsigned depth) {
+  unsigned c, log2sz;
   log2sz = RegLog2(rde);
-  for (k = 0; (c = fmt[k++]);) {
+  while ((c = fmt[k++])) {
     switch (c) {
 
       case ' ':  // nop
@@ -317,7 +363,7 @@ void Jitter(P, const char *fmt, ...) {
         break;
 
       case '$':  // cl
-        Jitter(A, "s0a0= c", GetCl);
+        Jitter(A, "s0a0= m", GetCl);
         break;
 
       case 'c':  // call
@@ -325,9 +371,16 @@ void Jitter(P, const char *fmt, ...) {
         ClobberEverythingExceptResult(m);
         break;
 
-      case 'z':  // force size
-        log2sz = CheckBelow(fmt[k++] - '0', 4);
-        continue;
+      case 'm': {  // inline micro-op
+        void *uop = va_arg(va, void *);
+        AppendJit(m->path.jb, uop, GetLengthOfFunctionBody(uop));
+        break;
+      }
+
+      case 'x':  // sign extend
+        ItemsRequired(1);
+        Jitter(A, "a0= m", kSex[CheckBelow(fmt[k++] - '0', 3)]);
+        break;
 
       case 'r':  // push res reg
         stack[i++] = kJitRes[CheckBelow(fmt[k++] - '0', ARRAYLEN(kJitRes))];
@@ -353,42 +406,42 @@ void Jitter(P, const char *fmt, ...) {
         break;
 
       case 'A':  // r0 = ReadReg(RexrReg)
-        Jitter(A, "s0a0= a1i c",
+        Jitter(A, "s0a0= a1i m",
                log2sz ? RexrReg(rde) : kByteReg[ByteRexr(rde)],
                kGetReg[log2sz]);
         break;
 
       case 'C':  // PutReg(RexrReg, <pop>)
         ItemsRequired(1);
-        Jitter(A, "a2= a1i s0a0= c",
+        Jitter(A, "a2= a1i s0a0= m",
                log2sz ? RexrReg(rde) : kByteReg[ByteRexr(rde)],
                kPutReg[log2sz]);
         break;
 
       case 'B':  // r0 = ReadRegOrMem(RexbRm)
         if (IsModrmRegister(rde)) {
-          Jitter(A, "a1i s0a0= c",
+          Jitter(A, "a1i s0a0= m",
                  log2sz ? RexbRm(rde) : kByteReg[ByteRexb(rde)],
                  kGetReg[log2sz]);
         } else if (HasLinearMapping(m) && !Sego(rde)) {
           if (!SibExists(rde)) {
             if (IsRipRelative(rde)) {
-              Jitter(A, "a0i c", disp + m->ip, kGetDemAbs[log2sz]);
+              Jitter(A, "a0i m", disp + m->ip, kGetDemAbs[log2sz]);
             } else {
-              Jitter(A, "a2i a1i s0a0= c", RexbRm(rde), disp, kGetDem[log2sz]);
+              Jitter(A, "a2i a1i s0a0= m", RexbRm(rde), disp, kGetDem[log2sz]);
             }
           } else if (!SibHasBase(rde) &&  //
                      !SibHasIndex(rde)) {
-            Jitter(A, "a0i c", disp, kGetDemAbs[log2sz]);
+            Jitter(A, "a0i m", disp, kGetDemAbs[log2sz]);
           } else if (SibHasBase(rde) &&  //
                      !SibHasIndex(rde)) {
-            Jitter(A, "a2i a1i s0a0= c", RexbBase(rde), disp, kGetDem[log2sz]);
+            Jitter(A, "a2i a1i s0a0= m", RexbBase(rde), disp, kGetDem[log2sz]);
           } else if (!SibHasBase(rde) &&  //
                      SibHasIndex(rde)) {
-            Jitter(A, "a3i a2i a1i s0a0= c", SibScale(rde),
+            Jitter(A, "a3i a2i a1i s0a0= m", SibScale(rde),
                    Rexx(rde) << 3 | SibIndex(rde), disp, kGetDemIndex[log2sz]);
           } else {
-            Jitter(A, "a4i a3i a2i a1i s0a0= c", SibScale(rde),
+            Jitter(A, "a4i a3i a2i a1i s0a0= m", SibScale(rde),
                    Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
                    kGetDemBaseIndex[log2sz]);
           }
@@ -400,30 +453,30 @@ void Jitter(P, const char *fmt, ...) {
       case 'D':  // PutRegOrMem(RexbRm, <pop>), e.g. c r0 D
         ItemsRequired(1);
         if (IsModrmRegister(rde)) {
-          Jitter(A, "a2= a1i s0a0= c",
+          Jitter(A, "a2= a1i s0a0= m",
                  log2sz ? RexbRm(rde) : kByteReg[ByteRexb(rde)],
                  kPutReg[log2sz]);
         } else if (HasLinearMapping(m) && !Sego(rde)) {
           if (!SibExists(rde)) {
             if (IsRipRelative(rde)) {
-              Jitter(A, "a1= a0i c", disp + m->ip, kPutDemAbs[log2sz]);
+              Jitter(A, "a1= a0i m", disp + m->ip, kPutDemAbs[log2sz]);
             } else {
-              Jitter(A, "a3= a2i a1i s0a0= c", RexbRm(rde), disp,
+              Jitter(A, "a3= a2i a1i s0a0= m", RexbRm(rde), disp,
                      kPutDem[log2sz]);
             }
           } else if (!SibHasBase(rde) &&  //
                      !SibHasIndex(rde)) {
-            Jitter(A, "a1= a0i c", disp, kPutDemAbs[log2sz]);
+            Jitter(A, "a1= a0i m", disp, kPutDemAbs[log2sz]);
           } else if (SibHasBase(rde) &&  //
                      !SibHasIndex(rde)) {
-            Jitter(A, "a3= a2i a1i s0a0= c", RexbBase(rde), disp,
+            Jitter(A, "a3= a2i a1i s0a0= m", RexbBase(rde), disp,
                    kPutDem[log2sz]);
           } else if (!SibHasBase(rde) &&  //
                      SibHasIndex(rde)) {
-            Jitter(A, "a4= a3i a2i a1i s0a0= c", SibScale(rde),
+            Jitter(A, "a4= a3i a2i a1i s0a0= m", SibScale(rde),
                    Rexx(rde) << 3 | SibIndex(rde), disp, kPutDemIndex[log2sz]);
           } else {
-            Jitter(A, "a5= a4i a3i a2i a1i s0a0= c", SibScale(rde),
+            Jitter(A, "a5= a4i a3i a2i a1i s0a0= m", SibScale(rde),
                    Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
                    kPutDemBaseIndex[log2sz]);
           }
@@ -432,6 +485,39 @@ void Jitter(P, const char *fmt, ...) {
         }
         break;
 
+      case 'E':  // r0 = ReadReg(RexbSrm)
+        Jitter(A, "s0a0= a1i m", RexbSrm(rde), kGetReg[WordLog2(rde)]);
+        break;
+
+      case 'F':  // PutReg(RexbSrm, <pop>)
+        ItemsRequired(1);
+        Jitter(A, "a2= a1i s0a0= m", RexbSrm(rde), kPutReg[WordLog2(rde)]);
+        break;
+
+      case '+':  // save state
+        k = JitterImpl(A, fmt, va, k, depth + 1);
+        break;
+
+      case 'z':  // force size
+        switch ((c = fmt[k++])) {
+          case '-':
+            log2sz = RegLog2(rde);
+            break;
+          case '+':
+            log2sz = WordLog2(rde);
+            break;
+          default:
+            log2sz = CheckBelow(c - '0', 4);
+            break;
+        }
+        rde &= ~006000000000;  // RegLog2
+        rde |= log2sz << 034;
+        continue;
+
+      case '-':  // restore state
+        unassert(depth);
+        return k;
+
       default:
         LOGF("%s %c index %d of '%s'", "bad jitter directive", c, k - 1, fmt);
         unassert(!"bad jitter directive");
@@ -439,6 +525,17 @@ void Jitter(P, const char *fmt, ...) {
     unassert(i <= ARRAYLEN(stack));
     log2sz = RegLog2(rde);
   }
-  va_end(va);
+  return k;
+}
+
+/**
+ * Generates JIT code that implements x86 instructions.
+ */
+void Jitter(P, const char *fmt, ...) {
+  va_list va;
+  if (!m->path.jb) return;
+  va_start(va, fmt);
+  JitterImpl(A, fmt, va, 0, 0);
   unassert(!i);
+  va_end(va);
 }

@@ -275,7 +275,23 @@ static int SysArchPrctl(struct Machine *m, int code, i64 addr) {
   }
 }
 
-static int SysMprotect(struct Machine *m, i64 addr, u64 len, int prot) {
+static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
+  size_t i;
+  long gotsome = 0;
+  if (prot & PROT_EXEC) {
+    for (i = 0; i < m->system->codesize; ++i) {
+      if (m->system->codestart + i >= addr &&
+          m->system->codestart + i < addr + size) {
+        atomic_store_explicit(m->system->fun + i, GeneralDispatch,
+                              memory_order_relaxed);
+        ++gotsome;
+      }
+    }
+    if (gotsome) {
+      MEM_LOGF("mprotect(PROT_EXEC) reset %ld JIT hooks", gotsome);
+      InvalidateSystem(m->system, false, true);
+    }
+  }
   return 0;
 }
 

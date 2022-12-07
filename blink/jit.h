@@ -132,6 +132,7 @@ int AbandonJit(struct Jit *, struct JitBlock *);
 int FlushJit(struct Jit *);
 bool CanJitForImmediateEffect(void);
 struct JitBlock *StartJit(struct Jit *);
+bool AppendJitNop(struct JitBlock *);
 bool AppendJitTrap(struct JitBlock *);
 bool AppendJitJmp(struct JitBlock *, void *);
 bool AppendJitCall(struct JitBlock *, void *);
@@ -139,6 +140,7 @@ bool AppendJitSetReg(struct JitBlock *, int, u64);
 bool AppendJitMovReg(struct JitBlock *, int, int);
 bool FinishJit(struct Jit *, struct JitBlock *, hook_t *, intptr_t);
 bool SpliceJit(struct Jit *, struct JitBlock *, hook_t *, intptr_t, intptr_t);
+size_t GetSizeOfJitPrologue(void);
 
 int CommitJit_(struct Jit *, struct JitBlock *);
 void ReinsertJitBlock_(struct Jit *, struct JitBlock *);

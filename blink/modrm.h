@@ -44,6 +44,7 @@
 #define Opmap(x)    ((x & 00000070000000000000000) >> 060)
 #define Mopcode(x)  ((x & 00000077760000000000000) >> 050)
 #define Rep(x)      ((x & 00000300000000000000000) >> 063)
+#define WordLog2(x) ((x & 00030000000000000000000) >> 071)
 
 #define Bite(x)            (~ModrmSrm(x) & 1)
 #define RexbBase(x)        (Rexb(x) << 3 | SibBase(x))

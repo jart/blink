@@ -73,6 +73,9 @@
 #define MACHINE_CONTAINER(e)  DLL_CONTAINER(struct Machine, elem, e)
 #define HOSTPAGE_CONTAINER(e) DLL_CONTAINER(struct HostPage, elem, e)
 
+#define HasHook(m, pc) (((u64)(pc)) - m->codestart < m->codesize)
+#define GetHook(m, pc) (m->fun + (pc))
+
 #define CanHaveLinearMemory() (LONG_BIT == 64)
 #define HasLinearMapping(x) \
   (!atomic_load_explicit(&(x)->nolinear, memory_order_relaxed))
@@ -156,6 +159,7 @@ struct OpCache {
   u8 *codehost;   // current rip page in host memory
   u32 stashsize;  // for writes that overlap page
   bool writable;
+  _Atomic(bool) invalidated;
   u64 icache[1024][kInstructionBytes / 8];
 };
 
@@ -315,7 +319,7 @@ struct Machine *NewMachine(struct System *, struct Machine *);
 void Jitter(P, const char *, ...);
 void FreeMachine(struct Machine *);
 void FreeMachineUnlocked(struct Machine *);
-void InvalidateSystem(struct System *);
+void InvalidateSystem(struct System *, bool, bool);
 void KillOtherThreads(struct System *);
 void ResetCpu(struct Machine *);
 void ResetTlb(struct Machine *);

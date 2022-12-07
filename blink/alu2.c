@@ -150,7 +150,7 @@ void OpAluw(P) {
       (f == Xor32 || f == Xor64) &&  //
       RegRexbRm(m, rde) == RegRexrReg(m, rde)) {
     OpAluwRegClear(m, RexbRm(rde));
-    Jitter(A, "a1i c", RexbRm(rde), OpAluwRegClear);
+    Jitter(A, "a1i m", RexbRm(rde), OpAluwRegClear);
     return;
   }
 

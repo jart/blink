@@ -616,7 +616,7 @@ int DecodeInstruction(struct XedDecodedInst *x, const void *itext, size_t bytes,
                       u64 mode) {
   int rc;
   u64 rde;
-  u8 kWordLog2[2][2][2] = {{{2, 3}, {1, 3}}};
+  u8 kLog2[2][2][2] = {{{2, 3}, {1, 3}}};
   unassert(mode == XED_MODE_LONG ||    //
            mode == XED_MODE_LEGACY ||  //
            mode == XED_MODE_REAL);
@@ -636,7 +636,8 @@ int DecodeInstruction(struct XedDecodedInst *x, const void *itext, size_t bytes,
   rde = x->op.rde;
   rde |= (Opcode(rde) & 7) << 12;            // srm
   rde ^= (Mode(rde) == XED_MODE_REAL) << 5;  // osz ^= real
-  rde |= kWordLog2[IsByteOp(rde)][Osz(rde)][Rexw(rde)] << 28;
+  rde |= kLog2[IsByteOp(rde)][Osz(rde)][Rexw(rde)] << 28;
+  rde |= (u64)kLog2[0][Osz(rde)][Rexw(rde)] << 57;  // wordlog2
   rde |= kXed.eamode[Asz(rde)][Mode(rde)] << 24;
   rde |= (u64)x->length << 53;
   x->op.rde = rde;

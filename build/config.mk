@@ -61,8 +61,7 @@ CFLAGS +=				\
 	-Wall				\
 	-Werror				\
 	-Wno-unused-function		\
-	-Wno-unused-const-variable	\
-	-Wno-tautological-constant-out-of-range-compare
+	-Wno-unused-const-variable
 endif
 
 ifeq ($(MODE), rel)

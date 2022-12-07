@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/builtin.h"
 #include "blink/flags.h"
 #include "blink/mop.h"
 
@@ -27,23 +28,23 @@
  * costly legacy auxiliary flag, since x86-64 defines away BCD support.
  */
 
-static inline i64 FastNot8(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastNot8(u64 x, u64 y, u32 *f) {
   return ~x & 0xFF;
 }
 
-static inline i64 FastNot16(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastNot16(u64 x, u64 y, u32 *f) {
   return ~x & 0xFFFF;
 }
 
-static inline i64 FastNot32(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastNot32(u64 x, u64 y, u32 *f) {
   return ~x & 0xFFFFFFFF;
 }
 
-static inline i64 FastNot64(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastNot64(u64 x, u64 y, u32 *f) {
   return ~x & 0xFFFFFFFFFFFFFFFF;
 }
 
-static inline i64 FastFlags(u64 x, u32 *f, u32 of, u32 cf, u32 sf) {
+MICRO_OP_SAFE i64 FastFlags(u64 x, u32 *f, u32 of, u32 cf, u32 sf) {
   *f &= ~(1 << FLAGS_CF |  //
           1 << FLAGS_ZF |  //
           1 << FLAGS_SF |  //
@@ -57,23 +58,23 @@ static inline i64 FastFlags(u64 x, u32 *f, u32 of, u32 cf, u32 sf) {
   return x;
 }
 
-static inline i64 FastFlags8(u8 z, u32 *f, u32 of, u32 cf) {
+MICRO_OP_SAFE i64 FastFlags8(u8 z, u32 *f, u32 of, u32 cf) {
   return FastFlags(z, f, of, cf, z >> 7);
 }
 
-static inline i64 FastXor8(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastXor8(u64 x, u64 y, u32 *f) {
   return FastFlags8(x ^ y, f, 0, 0);
 }
 
-static inline i64 FastOr8(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastOr8(u64 x, u64 y, u32 *f) {
   return FastFlags8(x | y, f, 0, 0);
 }
 
-static inline i64 FastAnd8(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastAnd8(u64 x, u64 y, u32 *f) {
   return FastFlags8(x & y, f, 0, 0);
 }
 
-static inline i64 FastSub8(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastSub8(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u8 x, y, z;
   x = x64;
@@ -84,7 +85,7 @@ static inline i64 FastSub8(u64 x64, u64 y64, u32 *f) {
   return FastFlags8(z, f, of, cf);
 }
 
-static inline i64 FastAdd8(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastAdd8(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u8 x, y, z;
   x = x64;
@@ -95,23 +96,23 @@ static inline i64 FastAdd8(u64 x64, u64 y64, u32 *f) {
   return FastFlags8(z, f, of, cf);
 }
 
-static inline i64 FastFlags32(u32 z, u32 *f, u32 of, u32 cf) {
+MICRO_OP_SAFE i64 FastFlags32(u32 z, u32 *f, u32 of, u32 cf) {
   return FastFlags(z, f, of, cf, z >> 31);
 }
 
-static inline i64 FastXor32(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastXor32(u64 x, u64 y, u32 *f) {
   return FastFlags32(x ^ y, f, 0, 0);
 }
 
-static inline i64 FastOr32(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastOr32(u64 x, u64 y, u32 *f) {
   return FastFlags32(x | y, f, 0, 0);
 }
 
-static inline i64 FastAnd32(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastAnd32(u64 x, u64 y, u32 *f) {
   return FastFlags32(x & y, f, 0, 0);
 }
 
-static inline i64 FastSub32(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastSub32(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u32 x, y, z;
   x = x64;
@@ -122,7 +123,7 @@ static inline i64 FastSub32(u64 x64, u64 y64, u32 *f) {
   return FastFlags32(z, f, of, cf);
 }
 
-static inline i64 FastAdd32(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastAdd32(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u32 x, y, z;
   x = x64;
@@ -133,23 +134,23 @@ static inline i64 FastAdd32(u64 x64, u64 y64, u32 *f) {
   return FastFlags32(z, f, of, cf);
 }
 
-static inline i64 FastFlags64(u64 z, u32 *f, u32 of, u32 cf) {
+MICRO_OP_SAFE i64 FastFlags64(u64 z, u32 *f, u32 of, u32 cf) {
   return FastFlags(z, f, of, cf, z >> 63);
 }
 
-static inline i64 FastXor64(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastXor64(u64 x, u64 y, u32 *f) {
   return FastFlags64(x ^ y, f, 0, 0);
 }
 
-static inline i64 FastOr64(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastOr64(u64 x, u64 y, u32 *f) {
   return FastFlags64(x | y, f, 0, 0);
 }
 
-static inline i64 FastAnd64(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastAnd64(u64 x, u64 y, u32 *f) {
   return FastFlags64(x & y, f, 0, 0);
 }
 
-static inline i64 FastSub64(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastSub64(u64 x, u64 y, u32 *f) {
   u64 z;
   bool cf, of;
   z = x - y;
@@ -158,7 +159,7 @@ static inline i64 FastSub64(u64 x, u64 y, u32 *f) {
   return FastFlags64(z, f, of, cf);
 }
 
-static inline i64 FastAdd64(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastAdd64(u64 x, u64 y, u32 *f) {
   u64 z;
   bool cf, of;
   z = x + y;
@@ -167,7 +168,7 @@ static inline i64 FastAdd64(u64 x, u64 y, u32 *f) {
   return FastFlags64(z, f, of, cf);
 }
 
-static inline i64 FastAdc8(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastAdc8(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u8 x, y, z, t;
   x = x64;
@@ -179,7 +180,7 @@ static inline i64 FastAdc8(u64 x64, u64 y64, u32 *f) {
   return FastFlags8(z, f, of, cf);
 }
 
-static inline i64 FastAdc32(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastAdc32(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u32 x, y, z, t;
   x = x64;
@@ -191,7 +192,7 @@ static inline i64 FastAdc32(u64 x64, u64 y64, u32 *f) {
   return FastFlags32(z, f, of, cf);
 }
 
-static inline i64 FastAdc64(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastAdc64(u64 x, u64 y, u32 *f) {
   u64 z, t;
   bool cf, of;
   t = x + GetFlag(*f, FLAGS_CF);
@@ -201,7 +202,7 @@ static inline i64 FastAdc64(u64 x, u64 y, u32 *f) {
   return FastFlags64(z, f, of, cf);
 }
 
-static inline i64 FastSbb8(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastSbb8(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u8 x, y, z, t;
   x = x64;
@@ -213,7 +214,7 @@ static inline i64 FastSbb8(u64 x64, u64 y64, u32 *f) {
   return FastFlags8(z, f, of, cf);
 }
 
-static inline i64 FastSbb32(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastSbb32(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u32 x, y, z, t;
   x = x64;
@@ -225,7 +226,7 @@ static inline i64 FastSbb32(u64 x64, u64 y64, u32 *f) {
   return FastFlags32(z, f, of, cf);
 }
 
-static inline i64 FastSbb64(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastSbb64(u64 x, u64 y, u32 *f) {
   u64 z, t;
   bool cf, of;
   t = x - GetFlag(*f, FLAGS_CF);
@@ -235,7 +236,7 @@ static inline i64 FastSbb64(u64 x, u64 y, u32 *f) {
   return FastFlags64(z, f, of, cf);
 }
 
-static inline i64 FastNeg8(u64 x64, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastNeg8(u64 x64, u64 y, u32 *f) {
   u8 x;
   bool cf, of;
   x = x64;
@@ -245,7 +246,7 @@ static inline i64 FastNeg8(u64 x64, u64 y, u32 *f) {
   return FastFlags8(x, f, of, cf);
 }
 
-static inline i64 FastNeg32(u64 x64, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastNeg32(u64 x64, u64 y, u32 *f) {
   u32 x;
   bool cf, of;
   x = x64;
@@ -255,7 +256,7 @@ static inline i64 FastNeg32(u64 x64, u64 y, u32 *f) {
   return FastFlags32(x, f, of, cf);
 }
 
-static inline i64 FastNeg64(u64 x64, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastNeg64(u64 x64, u64 y, u32 *f) {
   u64 x;
   bool cf, of;
   x = x64;
@@ -265,11 +266,11 @@ static inline i64 FastNeg64(u64 x64, u64 y, u32 *f) {
   return FastFlags64(x, f, of, cf);
 }
 
-static inline i64 BumpFlags(u64 x, u32 *f, u32 of, u32 sf) {
+MICRO_OP_SAFE i64 BumpFlags(u64 x, u32 *f, u32 of, u32 sf) {
   return FastFlags(x, f, of, GetFlag(*f, FLAGS_CF), sf);
 }
 
-static inline i64 FastDec32(u64 x64, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastDec32(u64 x64, u64 y, u32 *f) {
   u32 x, z, of, sf;
   x = x64;
   z = x - 1;
@@ -278,7 +279,7 @@ static inline i64 FastDec32(u64 x64, u64 y, u32 *f) {
   return BumpFlags(z, f, of, sf);
 }
 
-static inline i64 FastInc32(u64 x64, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastInc32(u64 x64, u64 y, u32 *f) {
   u32 x, z, of, sf;
   x = x64;
   z = x + 1;
@@ -287,7 +288,7 @@ static inline i64 FastInc32(u64 x64, u64 y, u32 *f) {
   return BumpFlags(z, f, of, sf);
 }
 
-static inline i64 FastInc64(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastInc64(u64 x, u64 y, u32 *f) {
   u64 z;
   u32 of, sf;
   z = x + 1;
@@ -296,7 +297,7 @@ static inline i64 FastInc64(u64 x, u64 y, u32 *f) {
   return BumpFlags(z, f, of, sf);
 }
 
-static inline i64 FastDec64(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastDec64(u64 x, u64 y, u32 *f) {
   u64 z;
   u32 of, sf;
   z = x - 1;
@@ -305,7 +306,7 @@ static inline i64 FastDec64(u64 x, u64 y, u32 *f) {
   return BumpFlags(z, f, of, sf);
 }
 
-static inline i64 FastInc8(u64 x64, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastInc8(u64 x64, u64 y, u32 *f) {
   u8 x, z;
   u32 of, sf;
   x = x64;
@@ -315,7 +316,7 @@ static inline i64 FastInc8(u64 x64, u64 y, u32 *f) {
   return BumpFlags(z, f, of, sf);
 }
 
-static inline i64 FastDec8(u64 x64, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastDec8(u64 x64, u64 y, u32 *f) {
   u8 x, z;
   u32 of, sf;
   x = x64;
@@ -491,23 +492,23 @@ static inline i64 FastRor8(u64 x64, u64 y, u32 *f) {
   }
 }
 
-static inline i64 FastFlags16(u16 z, u32 *f, u32 of, u32 cf) {
+MICRO_OP_SAFE i64 FastFlags16(u16 z, u32 *f, u32 of, u32 cf) {
   return FastFlags(z, f, of, cf, z >> 15);
 }
 
-static inline i64 FastXor16(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastXor16(u64 x, u64 y, u32 *f) {
   return FastFlags16(x ^ y, f, 0, 0);
 }
 
-static inline i64 FastOr16(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastOr16(u64 x, u64 y, u32 *f) {
   return FastFlags16(x | y, f, 0, 0);
 }
 
-static inline i64 FastAnd16(u64 x, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastAnd16(u64 x, u64 y, u32 *f) {
   return FastFlags16(x & y, f, 0, 0);
 }
 
-static inline i64 FastSub16(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastSub16(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u16 x, y, z;
   x = x64;
@@ -518,7 +519,7 @@ static inline i64 FastSub16(u64 x64, u64 y64, u32 *f) {
   return FastFlags16(z, f, of, cf);
 }
 
-static inline i64 FastAdd16(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastAdd16(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u16 x, y, z;
   x = x64;
@@ -529,7 +530,7 @@ static inline i64 FastAdd16(u64 x64, u64 y64, u32 *f) {
   return FastFlags16(z, f, of, cf);
 }
 
-static inline i64 FastAdc16(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastAdc16(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u16 x, y, z, t;
   x = x64;
@@ -541,7 +542,7 @@ static inline i64 FastAdc16(u64 x64, u64 y64, u32 *f) {
   return FastFlags16(z, f, of, cf);
 }
 
-static inline i64 FastSbb16(u64 x64, u64 y64, u32 *f) {
+MICRO_OP_SAFE i64 FastSbb16(u64 x64, u64 y64, u32 *f) {
   bool cf, of;
   u16 x, y, z, t;
   x = x64;
@@ -553,7 +554,7 @@ static inline i64 FastSbb16(u64 x64, u64 y64, u32 *f) {
   return FastFlags16(z, f, of, cf);
 }
 
-static inline i64 FastNeg16(u64 x64, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastNeg16(u64 x64, u64 y, u32 *f) {
   u16 x;
   bool cf, of;
   x = x64;
@@ -563,7 +564,7 @@ static inline i64 FastNeg16(u64 x64, u64 y, u32 *f) {
   return FastFlags16(x, f, of, cf);
 }
 
-static inline i64 FastInc16(u64 x64, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastInc16(u64 x64, u64 y, u32 *f) {
   u16 x, z;
   u32 of, sf;
   x = x64;
@@ -573,7 +574,7 @@ static inline i64 FastInc16(u64 x64, u64 y, u32 *f) {
   return BumpFlags(z, f, of, sf);
 }
 
-static inline i64 FastDec16(u64 x64, u64 y, u32 *f) {
+MICRO_OP_SAFE i64 FastDec16(u64 x64, u64 y, u32 *f) {
   u16 x, z;
   u32 of, sf;
   x = x64;

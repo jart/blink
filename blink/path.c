@@ -35,10 +35,13 @@ static void StartPath(struct Machine *m) {
   JIT_LOGF("%" PRIx64 " <path>", m->ip);
 }
 
+static void CountOp(long *instructions_jitted_ptr) {
+  STATISTIC(++*instructions_jitted_ptr);
+}
+
 static void StartOp(struct Machine *m, long len) {
   JIT_LOGF("%" PRIx64 "   <op>", m->ip);
   JIT_LOGF("%" PRIx64 "     %s", m->ip, DescribeOp(m));
-  STATISTIC(++instructions_jitted);
   unassert(!m->path.jb);
   m->oldip = m->ip;
   m->ip += len;
@@ -111,6 +114,9 @@ void AbandonPath(struct Machine *m) {
 void AddPath_StartOp(P) {
   _Static_assert(offsetof(struct Machine, ip) < 128, "");
   _Static_assert(offsetof(struct Machine, oldip) < 128, "");
+#ifndef NDEBUG
+  Jitter(A, "a0i m", &instructions_jitted, CountOp);
+#endif
   if (AddPath_StartOp_Hook) {
     AddPath_StartOp_Hook(A);
   }
