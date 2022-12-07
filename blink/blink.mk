@@ -6,6 +6,10 @@ BLINK_FILES := $(wildcard blink/*)
 BLINK_SRCS = $(filter %.c,$(BLINK_FILES))
 BLINK_HDRS = $(filter %.h,$(BLINK_FILES))
 
+# avoid junk being placed in micro-operations
+# TODO(jart): separate out uops into disjoint files
+o/$(MODE)/blink/uop.o: private CFLAGS += -fno-stack-protector -fomit-frame-pointer
+
 # vectorization makes code smaller
 o/$(MODE)/blink/sse2.o: private CFLAGS += -O3
 o/$(MODE)/x86_64/blink/sse2.o: private CFLAGS += -O3

@@ -105,7 +105,7 @@ const u8 kJitArg[6] = {kJitArg0, kJitArg1, kJitArg2,
                        kJitArg3, kJitArg4, kJitArg5};
 
 #if (defined(__x86_64__) || defined(__aarch64__)) && \
-    !__has_feature(memory_sanitizer)
+    !defined(__SANITIZE_MEMORY__) && !defined(__SANITIZE_THREAD__)
 
 // the maximum conceivable size of our blink program image
 #define kJitLeeway 1048576
@@ -216,9 +216,7 @@ int InitJit(struct Jit *jit) {
   u8 *brk;
   int blocksize;
   memset(jit, 0, sizeof(*jit));
-  unassert((jit->pagesize = sysconf(_SC_PAGESIZE)) > 0);
-  unassert(!(jit->pagesize & (kJitAlign - 1)));
-  unassert(IS2POW(jit->pagesize));
+  jit->pagesize = GetSystemPageSize();
   jit->blocksize = blocksize = ROUNDUP(kJitMinBlockSize, jit->pagesize);
   pthread_mutex_init(&jit->lock, 0);
   if (!(brk = atomic_load_explicit(&g_jit.brk, memory_order_relaxed))) {
@@ -266,7 +264,7 @@ int DisableJit(struct Jit *jit) {
 /**
  * Returns true if DisableJit() was called or AcquireJit() had failed.
  */
-bool IsJitDisabled(struct Jit *jit) {
+bool IsJitDisabled(const struct Jit *jit) {
   return atomic_load_explicit(&jit->disabled, memory_order_acquire);
 }
 
@@ -363,7 +361,7 @@ static struct JitBlock *AcquireJit(struct Jit *jit) {
  * @return number of bytes of space that can be appended into, or -1 if
  *     if an append operation previously failed due to lack of space
  */
-long GetJitRemaining(struct JitBlock *jb) {
+long GetJitRemaining(const struct JitBlock *jb) {
   return jb->blocksize - jb->index;
 }
 
@@ -372,7 +370,7 @@ long GetJitRemaining(struct JitBlock *jb) {
  *
  * @return absolute instruction pointer memory address in bytes
  */
-intptr_t GetJitPc(struct JitBlock *jb) {
+intptr_t GetJitPc(const struct JitBlock *jb) {
   return (intptr_t)jb->addr + jb->index;
 }
 
@@ -818,9 +816,9 @@ bool AppendJitTrap(struct JitBlock *jb) {
 STUB(int, InitJit, (struct Jit *jit), 0)
 STUB(int, DestroyJit, (struct Jit *jit), 0)
 STUB(int, DisableJit, (struct Jit *jit), 0)
-STUB(bool, IsJitDisabled, (struct Jit *jit), 1)
-STUB(long, GetJitRemaining, (struct JitBlock *jb), 0)
-STUB(intptr_t, GetJitPc, (struct JitBlock *jb), 0)
+STUB(bool, IsJitDisabled, (const struct Jit *jit), 1)
+STUB(intptr_t, GetJitPc, (const struct JitBlock *jb), 0)
+STUB(long, GetJitRemaining, (const struct JitBlock *jb), 0)
 STUB(bool, AppendJit, (struct JitBlock *jb, const void *data, long size), 0)
 STUB(bool, AppendJitMovReg, (struct JitBlock *jb, int dst, int src), 0)
 STUB(int, AbandonJit, (struct Jit *jit, struct JitBlock *jb), 0)

@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "blink/address.h"
+#include "blink/assert.h"
 #include "blink/bitscan.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
@@ -31,6 +32,7 @@ static bool IsOpcodeEqual(struct XedDecodedInst *xedd, u8 *a) {
   int n;
   u64 w;
   if ((n = xedd->length)) {
+    unassert(n <= 15);
     if (n <= 7) {
       w = Read64(a) ^ Read64(xedd->bytes);
       return !w || (bsf(w) >> 3) >= n;
@@ -44,7 +46,7 @@ static bool IsOpcodeEqual(struct XedDecodedInst *xedd, u8 *a) {
 
 static void ReadInstruction(struct Machine *m, u8 *p, unsigned n) {
   struct XedDecodedInst xedd[1];
-  STATISTIC(instructions_decoded++);
+  STATISTIC(++instructions_decoded);
   if (!DecodeInstruction(xedd, p, n, m->mode)) {
     memcpy(m->xedd, xedd, kInstructionBytes);
   } else {
@@ -53,11 +55,11 @@ static void ReadInstruction(struct Machine *m, u8 *p, unsigned n) {
 }
 
 static void LoadInstructionSlow(struct Machine *m, u64 ip) {
-  unsigned i;
   u8 *addr;
+  unsigned i;
   u8 copy[15], *toil;
-  STATISTIC(page_overlaps++);
   i = 4096 - (ip & 4095);
+  STATISTIC(++page_overlaps);
   addr = ResolveAddress(m, ip);
   if ((toil = LookupAddress(m, ip + i))) {
     memcpy(copy, addr, i);
@@ -69,29 +71,29 @@ static void LoadInstructionSlow(struct Machine *m, u64 ip) {
 }
 
 void LoadInstruction(struct Machine *m) {
-  u64 ip;
+  u64 pc;
   u8 *addr;
   unsigned key;
   if (atomic_load_explicit(&m->opcache->invalidated, memory_order_relaxed)) {
     ResetInstructionCache(m);
   }
-  ip = m->cs + MaskAddress(m->mode, m->ip);
-  key = ip & (ARRAYLEN(m->opcache->icache) - 1);
+  pc = GetPc(m);
+  key = pc & (ARRAYLEN(m->opcache->icache) - 1);
   m->xedd = (struct XedDecodedInst *)m->opcache->icache[key];
-  if ((ip & 4095) < 4096 - 15) {
-    if (ip - (ip & 4095) == m->opcache->codevirt && m->opcache->codehost) {
-      addr = m->opcache->codehost + (ip & 4095);
+  if ((pc & 4095) < 4096 - 15) {
+    if (pc - (pc & 4095) == m->opcache->codevirt && m->opcache->codehost) {
+      addr = m->opcache->codehost + (pc & 4095);
     } else {
-      m->opcache->codevirt = ip - (ip & 4095);
+      m->opcache->codevirt = pc - (pc & 4095);
       m->opcache->codehost = ResolveAddress(m, m->opcache->codevirt);
-      addr = m->opcache->codehost + (ip & 4095);
+      addr = m->opcache->codehost + (pc & 4095);
     }
     if (IsOpcodeEqual(m->xedd, addr)) {
-      STATISTIC(instructions_cached++);
+      STATISTIC(++instructions_cached);
     } else {
       ReadInstruction(m, addr, 15);
     }
   } else {
-    LoadInstructionSlow(m, ip);
+    LoadInstructionSlow(m, pc);
   }
 }

@@ -101,7 +101,7 @@ static void getopt_print_badch(int argc, char *const argv[], int optopt,
  */
 int getopt_(int nargc, char *const nargv[], const char *ostr) {
   int optopt;
-  char *oli; /* option letter list index */
+  const char *oli; /* option letter list index */
   if (!optind_) optind_ = 1;
   if (!getopt_place) getopt_place = getopt_emsg;
   if (!*getopt_place) { /* update scanning pointer */

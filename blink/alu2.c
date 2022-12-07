@@ -133,12 +133,6 @@ const alureg_f kAluReg32[] = {
     OpAluwRegSub32,  //
 };
 
-static void OpAluwRegClear(struct Machine *m, long i) {
-  m->flags &= ~(1 << FLAGS_CF | 1 << FLAGS_SF | 1 << FLAGS_OF | 0xFF000000u);
-  m->flags |= 1 << FLAGS_ZF;
-  Put64(m->weg[i], 0);
-}
-
 void OpAluw(P) {
   u8 *p, *q;
   aluop_f f;
@@ -149,8 +143,8 @@ void OpAluw(P) {
   if (IsModrmRegister(rde) &&        //
       (f == Xor32 || f == Xor64) &&  //
       RegRexbRm(m, rde) == RegRexrReg(m, rde)) {
-    OpAluwRegClear(m, RexbRm(rde));
-    Jitter(A, "a1i m", RexbRm(rde), OpAluwRegClear);
+    FastZeroify(m, RexbRm(rde));
+    Jitter(A, "a1i m", RexbRm(rde), FastZeroify);
     return;
   }
 

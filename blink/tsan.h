@@ -1,6 +1,7 @@
 #ifndef TSAN_H_
 #define TSAN_H_
 // Thread Safety Analysis, complements of Google
+#include "blink/builtin.h"
 
 #if defined(__cplusplus) && defined(__clang__)
 #define THREAD_ANNOTATION_ATTRIBUTE__(x) __attribute__((x))
@@ -154,12 +155,7 @@
 #define NO_THREAD_SAFETY_ANALYSIS \
   THREAD_ANNOTATION_ATTRIBUTE__(no_thread_safety_analysis)
 
-#if defined(__has_feature) && !defined(__SANITIZE_THREAD__)
-#if __has_feature(thread_sanitizer)
-#define __SANITIZE_THREAD__ 1
-#endif
-#endif
-#if defined(__SANITIZE_THREAD__)
+#ifdef __SANITIZE_THREAD__
 #ifdef __cplusplus
 extern "C" {
 #endif

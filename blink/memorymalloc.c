@@ -16,9 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
-#include <limits.h>
-#include <signal.h>
+#include <pthread.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
@@ -26,20 +24,14 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
-#include "blink/builtin.h"
-#include "blink/debug.h"
-#include "blink/dll.h"
-#include "blink/end.h"
-#include "blink/endian.h"
 #include "blink/errno.h"
-#include "blink/jit.h"
 #include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
-#include "blink/pml4t.h"
-#include "blink/util.h"
+#include "blink/mop.h"
+#include "blink/types.h"
 
 #define MAX_THREAD_IDS    32768
 #define MINIMUM_THREAD_ID 262144
@@ -59,13 +51,6 @@ static void FillPage(void *p, int c) {
 
 static void ClearPage(void *p) {
   FillPage(p, 0);
-}
-
-long GetSystemPageSize(void) {
-  long z;
-  unassert((z = sysconf(_SC_PAGESIZE)) > 0);
-  unassert(IS2POW(z));
-  return MAX(4096, z);
 }
 
 static size_t GetBigSize(size_t n) {
@@ -92,13 +77,15 @@ static void *AllocateBig(size_t n) {
         memory_order_relaxed);
   }
   n = GetBigSize(n);
-  brk = atomic_fetch_add_explicit(&g_allocator.brk, n, memory_order_relaxed);
-  if (brk + n > (u8 *)kPreciousEnd) {
-    enomem();
-    return 0;
-  }
-  p = Mmap(brk, n, PROT_READ | PROT_WRITE,
-           MAP_FIXED | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0, "big");
+  do {
+    brk = atomic_fetch_add_explicit(&g_allocator.brk, n, memory_order_relaxed);
+    if (brk + n > (u8 *)kPreciousEnd) {
+      enomem();
+      return 0;
+    }
+    p = Mmap(brk, n, PROT_READ | PROT_WRITE,
+             MAP_DEMAND | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0, "big");
+  } while (p == MAP_FAILED && errno == MAP_DENIED);
   return p != MAP_FAILED ? p : 0;
 }
 
@@ -177,6 +164,7 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
     memcpy(m, parent, sizeof(*m));
     memset(&m->path, 0, sizeof(m->path));
     memset(&m->freelist, 0, sizeof(m->freelist));
+    ResetInstructionCache(m);
   } else {
     memset(m, 0, sizeof(*m));
     ResetCpu(m);

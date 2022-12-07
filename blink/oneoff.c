@@ -21,5 +21,6 @@
 #include "blink/machine.h"
 
 int main(int argc, char *argv[]) {
+  printf("%zu\n", sizeof(struct System));
   printf("%zu\n", sizeof(struct Machine));
 }

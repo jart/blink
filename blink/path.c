@@ -35,10 +35,6 @@ static void StartPath(struct Machine *m) {
   JIT_LOGF("%" PRIx64 " <path>", m->ip);
 }
 
-static void CountOp(long *instructions_jitted_ptr) {
-  STATISTIC(++*instructions_jitted_ptr);
-}
-
 static void StartOp(struct Machine *m, long len) {
   JIT_LOGF("%" PRIx64 "   <op>", m->ip);
   JIT_LOGF("%" PRIx64 "     %s", m->ip, DescribeOp(m));

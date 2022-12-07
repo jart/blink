@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 
+#include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/types.h"
 
@@ -43,6 +44,7 @@
 
 #ifdef __x86_64__
 #define kAmdXor           0x31
+#define kAmdRet           0xc3
 #define kAmdJmp           0xe9
 #define kAmdCall          0xe8
 #define kAmdJmpAx         "\377\340"
@@ -72,12 +74,13 @@
 #ifdef __aarch64__
 #define kArmJmp      0x14000000u  // B
 #define kArmCall     0x94000000u  // BL
+#define kArmRet      0xd65f03c0u  // RET
 #define kArmMovNex   0xf2800000u  // sets sub-word of register to immediate
 #define kArmMovZex   0xd2800000u  // load immediate into reg w/ zero-extend
 #define kArmMovSex   0x92800000u  // load 1's complement imm w/ sign-extend
 #define kArmDispMin  -33554432    // can jump -2**25 ints backward
 #define kArmDispMax  +33554431    // can jump +2**25-1 ints forward
-#define kArmDispMask 0x03ffffff   // mask of branch displacement
+#define kArmDispMask 0x03ffffffu  // mask of branch displacement
 #define kArmRegOff   0            // bit offset of destination register
 #define kArmRegMask  0x0000001fu  // mask of destination register
 #define kArmImmOff   5            // bit offset of mov immediate value
@@ -124,13 +127,14 @@ extern const u8 kJitArg[6];
 int InitJit(struct Jit *);
 int DestroyJit(struct Jit *);
 int DisableJit(struct Jit *);
-bool IsJitDisabled(struct Jit *);
-intptr_t GetJitPc(struct JitBlock *);
-long GetJitRemaining(struct JitBlock *);
+size_t GetSizeOfJitPrologue(void) pureconst;
+bool CanJitForImmediateEffect(void) nosideeffect;
+bool IsJitDisabled(const struct Jit *) nosideeffect;
+intptr_t GetJitPc(const struct JitBlock *) nosideeffect;
+long GetJitRemaining(const struct JitBlock *) nosideeffect;
 bool AppendJit(struct JitBlock *, const void *, long);
 int AbandonJit(struct Jit *, struct JitBlock *);
 int FlushJit(struct Jit *);
-bool CanJitForImmediateEffect(void);
 struct JitBlock *StartJit(struct Jit *);
 bool AppendJitNop(struct JitBlock *);
 bool AppendJitTrap(struct JitBlock *);
@@ -140,7 +144,6 @@ bool AppendJitSetReg(struct JitBlock *, int, u64);
 bool AppendJitMovReg(struct JitBlock *, int, int);
 bool FinishJit(struct Jit *, struct JitBlock *, hook_t *, intptr_t);
 bool SpliceJit(struct Jit *, struct JitBlock *, hook_t *, intptr_t, intptr_t);
-size_t GetSizeOfJitPrologue(void);
 
 int CommitJit_(struct Jit *, struct JitBlock *);
 void ReinsertJitBlock_(struct Jit *, struct JitBlock *);

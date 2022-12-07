@@ -32,7 +32,7 @@
 #endif
 #endif
 
-#ifdef MAP_FIXED_NOREPLACE
+#if defined(MAP_FIXED_NOREPLACE) && !defined(__SANITIZE_THREAD__)
 // The mmap() address parameter without MAP_FIXED is documented by
 // Linux as a hint for locality. However our testing indicates the
 // kernel is still likely to assign addresses that're outrageously
@@ -51,5 +51,6 @@
 
 void *Mmap(void *, size_t, int, int, int, off_t, const char *);
 int Mprotect(void *, size_t, int, const char *);
+long GetSystemPageSize(void) pureconst;
 
 #endif /* BLINK_MAP_H_ */

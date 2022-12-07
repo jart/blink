@@ -75,10 +75,6 @@ static void ResetSse(struct Machine *m) {
   memset(m->xmm, 0, sizeof(m->xmm));
 }
 
-void ResetInstructionCache(struct Machine *m) {
-  memset(m->opcache->icache, -1, sizeof(m->opcache->icache));
-}
-
 void ResetCpu(struct Machine *m) {
   m->faultaddr = 0;
   m->opcache->stashsize = 0;
@@ -101,6 +97,12 @@ void ResetCpu(struct Machine *m) {
 void ResetTlb(struct Machine *m) {
   m->tlbindex = 0;
   memset(m->tlb, 0, sizeof(m->tlb));
+  m->opcache->codevirt = 0;
+  m->opcache->codehost = 0;
+}
+
+void ResetInstructionCache(struct Machine *m) {
+  memset(m->opcache->icache, 0, sizeof(m->opcache->icache));
   m->opcache->codevirt = 0;
   m->opcache->codehost = 0;
 }

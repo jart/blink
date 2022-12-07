@@ -39,7 +39,11 @@
 #define kMachineSimdException        -9
 
 #if LONG_BIT == 64
-#define kSkew          0x088800000000
+#ifndef __SANITIZE_ADDRESS__
+#define kSkew 0x088800000000
+#else
+#define kSkew 0x000000000000
+#endif
 #define kPreciousStart 0x444000000000  // 1 tb
 #define kPreciousEnd   0x454000000000
 #define kStackTop      0x500000000000
@@ -76,9 +80,15 @@
 #define HasHook(m, pc) (((u64)(pc)) - m->codestart < m->codesize)
 #define GetHook(m, pc) (m->fun + (pc))
 
+#ifdef __SANITIZE_THREAD__
+#define CanHaveLinearMemory() false
+#else
 #define CanHaveLinearMemory() (LONG_BIT == 64)
+#endif
+
 #define HasLinearMapping(x) \
-  (!atomic_load_explicit(&(x)->nolinear, memory_order_relaxed))
+  (CanHaveLinearMemory() && \
+   !atomic_load_explicit(&(x)->nolinear, memory_order_relaxed))
 
 MICRO_OP_SAFE u8 *ToHost(i64 v) {
   return (u8 *)(intptr_t)(v + kSkew);
@@ -198,7 +208,7 @@ struct System {
   _Alignas(4096) u8 real[kRealSize];
 };
 
-struct Path {
+struct JitPath {
   i64 start;
   int elements;
   struct JitBlock *jb;
@@ -290,7 +300,7 @@ struct Machine {                           //
   u32 mxcsr;                               // SIMD status control register
   pthread_t thread;                        // POSIX thread of this machine
   struct FreeList freelist;                // to make system calls simpler
-  struct Path path;                        // under construction jit route
+  struct JitPath path;                     // under construction jit route
   i64 bofram[2];                           // helps debug bootloading code
   i64 faultaddr;                           // used for tui error reporting
   u64 signals;                             // signals waiting for delivery
@@ -346,8 +356,8 @@ _Noreturn void OpHlt(P);
 void JitlessDispatch(P);
 void RestoreIp(struct Machine *);
 
-bool IsValidAddrSize(i64, i64);
-bool OverlapsPrecious(i64, i64);
+bool IsValidAddrSize(i64, i64) pureconst;
+bool OverlapsPrecious(i64, i64) pureconst;
 char **LoadStrList(struct Machine *, i64);
 char *LoadStr(struct Machine *, i64);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
@@ -373,7 +383,16 @@ void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 void ResetRam(struct Machine *);
 void SetReadAddr(struct Machine *, i64, u32);
 void SetWriteAddr(struct Machine *, i64, u32);
-long GetSystemPageSize(void);
+int GetClobbers(u64) pureconst;
+int ClassifyOp(u64) pureconst;
+
+void CountOp(long *);
+void FastZeroify(struct Machine *, long);
+void FastJmp(struct Machine *, i32);
+void FastPush(struct Machine *, long);
+void FastPop(struct Machine *, long);
+void FastCall(struct Machine *, u64);
+void FastRet(struct Machine *);
 
 void Push(P, u64);
 u64 Pop(P, u16);

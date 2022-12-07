@@ -18,11 +18,21 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 
+#include "blink/assert.h"
 #include "blink/log.h"
+#include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/types.h"
 #include "blink/util.h"
+
+long GetSystemPageSize(void) {
+  long z;
+  unassert((z = sysconf(_SC_PAGESIZE)) > 0);
+  unassert(IS2POW(z));
+  return MAX(4096, z);
+}
 
 void *Mmap(void *addr,     //
            size_t length,  //
@@ -36,10 +46,13 @@ void *Mmap(void *addr,     //
   char szbuf[16];
   FormatSize(szbuf, length, 1024);
   if (res != MAP_FAILED) {
-    MEM_LOGF("%s created %s map [%p,%p)", owner, szbuf, res, res + length);
+    MEM_LOGF("%s created %s map [%p,%p)", owner, szbuf, res,
+             (u8 *)res + length);
   } else {
-    MEM_LOGF("%s failed to create %s map [%p,%p): %s", owner, szbuf, (u8 *)addr,
-             (u8 *)addr + length, strerror(errno));
+    MEM_LOGF("%s failed to create %s map [%p,%p) prot %#x flags %#x: %s "
+             "(system page size is %d)",
+             owner, szbuf, (u8 *)addr, (u8 *)addr + length, prot, flags,
+             strerror(errno), GetSystemPageSize());
   }
 #endif
   return res;
@@ -54,7 +67,8 @@ int Mprotect(void *addr,     //
   char szbuf[16];
   FormatSize(szbuf, length, 1024);
   if (res != -1) {
-    MEM_LOGF("%s protected %s map [%p,%p)", owner, szbuf, res, res + length);
+    MEM_LOGF("%s protected %s map [%p,%p)", owner, szbuf, addr,
+             (u8 *)addr + length);
   } else {
     MEM_LOGF("%s failed to protect %s map [%p,%p): %s", owner, szbuf,
              (u8 *)addr, (u8 *)addr + length, strerror(errno));

@@ -805,13 +805,9 @@ static void OpInterrupt3(P) {
   Interrupt(A, 3);
 }
 
-static void FastJmp(struct Machine *m, i32 disp) {
-  m->ip += disp;
-}
-
 static void FastJne(struct Machine *m, i32 disp) {
   if (!GetFlag(m->flags, FLAGS_ZF)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
@@ -837,85 +833,85 @@ static void OpJne(P) {
 
 static void OpJe(P) {
   if (GetFlag(m->flags, FLAGS_ZF)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJb(P) {
   if (GetFlag(m->flags, FLAGS_CF)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJbe(P) {
   if (IsBelowOrEqual(m)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJo(P) {
   if (GetFlag(m->flags, FLAGS_OF)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJno(P) {
   if (!GetFlag(m->flags, FLAGS_OF)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJa(P) {
   if (IsAbove(m)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJs(P) {
   if (GetFlag(m->flags, FLAGS_SF)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJns(P) {
   if (!GetFlag(m->flags, FLAGS_SF)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJp(P) {
   if (IsParity(m)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJnp(P) {
   if (!IsParity(m)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJl(P) {
   if (IsLess(m)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJge(P) {
   if (IsGreaterOrEqual(m)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJle(P) {
   if (IsLessOrEqual(m)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
 static void OpJg(P) {
   if (IsGreater(m)) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
@@ -1063,7 +1059,7 @@ static void OpSetg(P) {
 
 static void OpJcxz(P) {
   if (!MaskAddress(Eamode(rde), Get64(m->cx))) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
@@ -1181,7 +1177,7 @@ static relegated void Loop(P, bool cond) {
     Put16(m->cx, cx);
   }
   if (cx && cond) {
-    FastJmp(m, disp);
+    m->ip += disp;
   }
 }
 
@@ -1503,9 +1499,8 @@ static void OpEmms(P) {
   m->fpu.tw = -1;
 }
 
-static int ClassifyOp(struct Machine *m, u64 rde) {
-  int op = Mopcode(rde);
-  switch (op) {
+int ClassifyOp(u64 rde) {
+  switch (Mopcode(rde)) {
     default:
       return kOpNormal;
     case 0x070:  // OpJo
@@ -2140,7 +2135,7 @@ void GeneralDispatch(P) {
   rde = m->xedd->op.rde;
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
-  opclass = ClassifyOp(m, rde);
+  opclass = ClassifyOp(rde);
   if (m->path.jb || (opclass == kOpNormal && CanJit(m) && CreatePath(m))) {
     if (opclass == kOpNormal || opclass == kOpBranching) {
       ++m->path.elements;

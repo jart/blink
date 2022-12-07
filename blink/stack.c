@@ -30,31 +30,6 @@
 static const u8 kStackOsz[2][3] = {{2, 4, 8}, {4, 2, 2}};
 static const u8 kCallOsz[2][3] = {{2, 4, 8}, {4, 2, 8}};
 
-static void FastPush(struct Machine *m, long rexbsrm) {
-  u64 v, x = Get64(m->weg[rexbsrm]);
-  Put64(m->sp, (v = Get64(m->sp) - 8));
-  Store64(ToHost(v), x);
-}
-
-static void FastPop(struct Machine *m, long rexbsrm) {
-  u64 v = Get64(m->sp);
-  Put64(m->sp, v + 8);
-  Put64(m->weg[rexbsrm], Load64(ToHost(v)));
-}
-
-static void FastCall(struct Machine *m, u64 disp) {
-  u64 v, x = m->ip + disp;
-  Put64(m->sp, (v = Get64(m->sp) - 8));
-  Store64(ToHost(v), m->ip);
-  m->ip = x;
-}
-
-static void FastRet(struct Machine *m) {
-  u64 v = Get64(m->sp);
-  Put64(m->sp, v + 8);
-  m->ip = Load64(ToHost(v));
-}
-
 static void WriteStackWord(u8 *p, u64 rde, u32 osz, u64 x) {
   if (osz == 8) {
     Store64(p, x);

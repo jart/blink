@@ -743,7 +743,7 @@ static int UnXlatDt(int x) {
 
 static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
   int type;
-  long off;
+  off_t off;
   int reclen;
   i64 i, dlz;
   size_t len;

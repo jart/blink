@@ -22,12 +22,14 @@
 
 #include "blink/assert.h"
 #include "blink/endian.h"
+#include "blink/flags.h"
 #include "blink/jit.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
+#include "blink/stats.h"
 #include "blink/types.h"
 #include "blink/x86.h"
 
@@ -36,21 +38,28 @@
  */
 
 ////////////////////////////////////////////////////////////////////////////////
+// ACCOUNTING
+
+MICRO_OP void CountOp(long *instructions_jitted_ptr) {
+  STATISTIC(++*instructions_jitted_ptr);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // READING FROM REGISTER FILE
 
-static u64 GetCl(struct Machine *m) {
+MICRO_OP static u64 GetCl(struct Machine *m) {
   return m->cl;
 }
-static u64 GetReg8(struct Machine *m, long b) {
+MICRO_OP static u64 GetReg8(struct Machine *m, long b) {
   return Get8(m->beg + b);
 }
-static u64 GetReg16(struct Machine *m, long i) {
+MICRO_OP static u64 GetReg16(struct Machine *m, long i) {
   return Get16(m->weg[i]);
 }
-static u64 GetReg32(struct Machine *m, long i) {
+MICRO_OP static u64 GetReg32(struct Machine *m, long i) {
   return Get32(m->weg[i]);
 }
-static u64 GetReg64(struct Machine *m, long i) {
+MICRO_OP static u64 GetReg64(struct Machine *m, long i) {
   return Get64(m->weg[i]);
 }
 typedef u64 (*getreg_f)(struct Machine *, long);
@@ -59,25 +68,66 @@ static const getreg_f kGetReg[] = {GetReg8, GetReg16, GetReg32, GetReg64};
 ////////////////////////////////////////////////////////////////////////////////
 // WRITING TO REGISTER FILE
 
-static void PutReg8(struct Machine *m, long b, u64 x) {
+MICRO_OP static void PutReg8(struct Machine *m, long b, u64 x) {
   Put8(m->beg + b, x);
 }
-static void PutReg16(struct Machine *m, long i, u64 x) {
+MICRO_OP static void PutReg16(struct Machine *m, long i, u64 x) {
   Put16(m->weg[i], x);
 }
-static void PutReg32(struct Machine *m, long i, u64 x) {
+MICRO_OP static void PutReg32(struct Machine *m, long i, u64 x) {
   Put64(m->weg[i], x & 0xffffffff);
 }
-static void PutReg64(struct Machine *m, long i, u64 x) {
+MICRO_OP static void PutReg64(struct Machine *m, long i, u64 x) {
   Put64(m->weg[i], x);
 }
 typedef void (*putreg_f)(struct Machine *, long, u64);
 static const putreg_f kPutReg[] = {PutReg8, PutReg16, PutReg32, PutReg64};
 
+MICRO_OP void FastZeroify(struct Machine *m, long i) {
+  m->flags &= ~(1 << FLAGS_CF | 1 << FLAGS_SF | 1 << FLAGS_OF | 0xFF000000u);
+  m->flags |= 1 << FLAGS_ZF;
+  Put64(m->weg[i], 0);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// STACK
+
+MICRO_OP void FastPush(struct Machine *m, long rexbsrm) {
+  u64 v, x = Get64(m->weg[rexbsrm]);
+  Put64(m->sp, (v = Get64(m->sp) - 8));
+  Store64(ToHost(v), x);
+}
+
+MICRO_OP void FastPop(struct Machine *m, long rexbsrm) {
+  u64 v = Get64(m->sp);
+  Put64(m->sp, v + 8);
+  Put64(m->weg[rexbsrm], Load64(ToHost(v)));
+}
+
+MICRO_OP void FastCall(struct Machine *m, u64 disp) {
+  u64 v, x = m->ip + disp;
+  Put64(m->sp, (v = Get64(m->sp) - 8));
+  Store64(ToHost(v), m->ip);
+  m->ip = x;
+}
+
+MICRO_OP void FastRet(struct Machine *m) {
+  u64 v = Get64(m->sp);
+  Put64(m->sp, v + 8);
+  m->ip = Load64(ToHost(v));
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// BRANCHING
+
+MICRO_OP void FastJmp(struct Machine *m, i32 disp) {
+  m->ip += disp;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // GENERALIZED FALLBACK FOR LOADING OF MODRM PARAMETER
 
-static u64 GetRegOrMem(P) {
+MICRO_OP static u64 GetRegOrMem(P) {
   if (IsByteOp(rde)) {
     return Load8(GetModrmRegisterBytePointerRead1(A));
   } else {
@@ -88,7 +138,7 @@ static u64 GetRegOrMem(P) {
 ////////////////////////////////////////////////////////////////////////////////
 // GENERALIZED FALLBACK FOR STORING TO MODRM PARAMETER
 
-static void PutRegOrMem(P) {
+MICRO_OP static void PutRegOrMem(P) {
   if (IsByteOp(rde)) {
     Store8(GetModrmRegisterBytePointerWrite1(A), uimm0);
   } else {
@@ -100,13 +150,13 @@ static void PutRegOrMem(P) {
 ////////////////////////////////////////////////////////////////////////////////
 // SIGN EXTENDING
 
-static u64 Sex8(u64 x) {
+MICRO_OP static u64 Sex8(u64 x) {
   return (i8)x;
 }
-static u64 Sex16(u64 x) {
+MICRO_OP static u64 Sex16(u64 x) {
   return (i16)x;
 }
-static u64 Sex32(u64 x) {
+MICRO_OP static u64 Sex32(u64 x) {
   return (i32)x;
 }
 typedef u64 (*sex_f)(u64);
@@ -115,16 +165,16 @@ static const sex_f kSex[] = {Sex8, Sex16, Sex32};
 ////////////////////////////////////////////////////////////////////////////////
 // DEVIRTUALIZED LOADING OF ABSOLUTE MEMORY PARAMETER
 
-static u64 GetDemAbs8(u64 abs) {
+MICRO_OP static u64 GetDemAbs8(u64 abs) {
   return Load8(ToHost(abs));
 }
-static u64 GetDemAbs16(u64 abs) {
+MICRO_OP static u64 GetDemAbs16(u64 abs) {
   return Load16(ToHost(abs));
 }
-static u64 GetDemAbs32(u64 abs) {
+MICRO_OP static u64 GetDemAbs32(u64 abs) {
   return Load32(ToHost(abs));
 }
-static u64 GetDemAbs64(u64 abs) {
+MICRO_OP static u64 GetDemAbs64(u64 abs) {
   return Load64(ToHost(abs));
 }
 typedef u64 (*getdemabs_f)(u64);
@@ -134,16 +184,16 @@ static const getdemabs_f kGetDemAbs[] = {GetDemAbs8, GetDemAbs16,  //
 ////////////////////////////////////////////////////////////////////////////////
 // DEVIRTUALIZED STORING TO ABSOLUTE MEMORY PARAMETER
 
-static void PutDemAbs8(u64 abs, u64 x) {
+MICRO_OP static void PutDemAbs8(u64 abs, u64 x) {
   Store8(ToHost(abs), x);
 }
-static void PutDemAbs16(u64 abs, u64 x) {
+MICRO_OP static void PutDemAbs16(u64 abs, u64 x) {
   Store16(ToHost(abs), x);
 }
-static void PutDemAbs32(u64 abs, u64 x) {
+MICRO_OP static void PutDemAbs32(u64 abs, u64 x) {
   Store32(ToHost(abs), x);
 }
-static void PutDemAbs64(u64 abs, u64 x) {
+MICRO_OP static void PutDemAbs64(u64 abs, u64 x) {
   Store64(ToHost(abs), x);
 }
 typedef void (*putdemabs_f)(u64, u64);
@@ -153,16 +203,16 @@ static const putdemabs_f kPutDemAbs[] = {PutDemAbs8, PutDemAbs16,  //
 ////////////////////////////////////////////////////////////////////////////////
 // DEVIRTUALIZED LOADING OF ±DISP(%BASE) MEMORY PARAMETER
 
-static u64 GetDem8(struct Machine *m, u64 disp, long i) {
+MICRO_OP static u64 GetDem8(struct Machine *m, u64 disp, long i) {
   return Load8(ToHost(disp + Get64(m->weg[i])));
 }
-static u64 GetDem16(struct Machine *m, u64 disp, long i) {
+MICRO_OP static u64 GetDem16(struct Machine *m, u64 disp, long i) {
   return Load16(ToHost(disp + Get64(m->weg[i])));
 }
-static u64 GetDem32(struct Machine *m, u64 disp, long i) {
+MICRO_OP static u64 GetDem32(struct Machine *m, u64 disp, long i) {
   return Load32(ToHost(disp + Get64(m->weg[i])));
 }
-static u64 GetDem64(struct Machine *m, u64 disp, long i) {
+MICRO_OP static u64 GetDem64(struct Machine *m, u64 disp, long i) {
   return Load64(ToHost(disp + Get64(m->weg[i])));
 }
 typedef u64 (*getdem_f)(struct Machine *, u64, long);
@@ -171,16 +221,16 @@ static const getdem_f kGetDem[] = {GetDem8, GetDem16, GetDem32, GetDem64};
 ////////////////////////////////////////////////////////////////////////////////
 // DEVIRTUALIZED STORING TO ±DISP(%BASE) MEMORY PARAMETER
 
-static void PutDem8(struct Machine *m, u64 disp, long i, u64 x) {
+MICRO_OP static void PutDem8(struct Machine *m, u64 disp, long i, u64 x) {
   Store8(ToHost(disp + Get64(m->weg[i])), x);
 }
-static void PutDem16(struct Machine *m, u64 disp, long i, u64 x) {
+MICRO_OP static void PutDem16(struct Machine *m, u64 disp, long i, u64 x) {
   Store16(ToHost(disp + Get64(m->weg[i])), x);
 }
-static void PutDem32(struct Machine *m, u64 disp, long i, u64 x) {
+MICRO_OP static void PutDem32(struct Machine *m, u64 disp, long i, u64 x) {
   Store32(ToHost(disp + Get64(m->weg[i])), x);
 }
-static void PutDem64(struct Machine *m, u64 disp, long i, u64 x) {
+MICRO_OP static void PutDem64(struct Machine *m, u64 disp, long i, u64 x) {
   Store64(ToHost(disp + Get64(m->weg[i])), x);
 }
 typedef void (*putdem_f)(struct Machine *, u64, long, u64);
@@ -189,16 +239,20 @@ static const putdem_f kPutDem[] = {PutDem8, PutDem16, PutDem32, PutDem64};
 ////////////////////////////////////////////////////////////////////////////////
 // DEVIRTUALIZED LOADING OF ±DISP(,%INDEX,SCALE) MEMORY PARAMETER
 
-static u64 GetDemIndex8(struct Machine *m, u64 disp, long index, int scale) {
+MICRO_OP static u64 GetDemIndex8(struct Machine *m, u64 disp, long index,
+                                 int scale) {
   return Load8(ToHost(disp + (Get64(m->weg[index]) << scale)));
 }
-static u64 GetDemIndex16(struct Machine *m, u64 disp, long index, int scale) {
+MICRO_OP static u64 GetDemIndex16(struct Machine *m, u64 disp, long index,
+                                  int scale) {
   return Load16(ToHost(disp + (Get64(m->weg[index]) << scale)));
 }
-static u64 GetDemIndex32(struct Machine *m, u64 disp, long index, int scale) {
+MICRO_OP static u64 GetDemIndex32(struct Machine *m, u64 disp, long index,
+                                  int scale) {
   return Load32(ToHost(disp + (Get64(m->weg[index]) << scale)));
 }
-static u64 GetDemIndex64(struct Machine *m, u64 disp, long index, int scale) {
+MICRO_OP static u64 GetDemIndex64(struct Machine *m, u64 disp, long index,
+                                  int scale) {
   return Load64(ToHost(disp + (Get64(m->weg[index]) << scale)));
 }
 typedef u64 (*getdemindex_f)(struct Machine *, u64, long, int);
@@ -206,18 +260,23 @@ static const getdemindex_f kGetDemIndex[] = {GetDemIndex8, GetDemIndex16,
                                              GetDemIndex32, GetDemIndex64};
 
 ////////////////////////////////////////////////////////////////////////////////
+
 // DEVIRTUALIZED STORING TO ±DISP(,%INDEX,SCALE) MEMORY PARAMETER
 
-static void PutDemIndex8(struct Machine *m, u64 disp, long i, int z, u64 x) {
+MICRO_OP static void PutDemIndex8(struct Machine *m, u64 disp, long i, int z,
+                                  u64 x) {
   Store8(ToHost(disp + (Get64(m->weg[i]) << z)), x);
 }
-static void PutDemIndex16(struct Machine *m, u64 disp, long i, int z, u64 x) {
+MICRO_OP static void PutDemIndex16(struct Machine *m, u64 disp, long i, int z,
+                                   u64 x) {
   Store16(ToHost(disp + (Get64(m->weg[i]) << z)), x);
 }
-static void PutDemIndex32(struct Machine *m, u64 disp, long i, int z, u64 x) {
+MICRO_OP static void PutDemIndex32(struct Machine *m, u64 disp, long i, int z,
+                                   u64 x) {
   Store32(ToHost(disp + (Get64(m->weg[i]) << z)), x);
 }
-static void PutDemIndex64(struct Machine *m, u64 disp, long i, int z, u64 x) {
+MICRO_OP static void PutDemIndex64(struct Machine *m, u64 disp, long i, int z,
+                                   u64 x) {
   Store64(ToHost(disp + (Get64(m->weg[i]) << z)), x);
 }
 typedef void (*putdemindex_f)(struct Machine *, u64, long, int, u64);
@@ -227,16 +286,20 @@ static const putdemindex_f kPutDemIndex[] = {PutDemIndex8, PutDemIndex16,
 ////////////////////////////////////////////////////////////////////////////////
 // DEVIRTUALIZED LOADING OF ±DISP(%BASE,%INDEX,SCALE) MEMORY PARAMETER
 
-static u64 GetDemBaseIndex8(struct Machine *m, u64 d, long b, long i, int z) {
+MICRO_OP static u64 GetDemBaseIndex8(struct Machine *m, u64 d, long b, long i,
+                                     int z) {
   return Load8(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
 }
-static u64 GetDemBaseIndex16(struct Machine *m, u64 d, long b, long i, int z) {
+MICRO_OP static u64 GetDemBaseIndex16(struct Machine *m, u64 d, long b, long i,
+                                      int z) {
   return Load16(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
 }
-static u64 GetDemBaseIndex32(struct Machine *m, u64 d, long b, long i, int z) {
+MICRO_OP static u64 GetDemBaseIndex32(struct Machine *m, u64 d, long b, long i,
+                                      int z) {
   return Load32(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
 }
-static u64 GetDemBaseIndex64(struct Machine *m, u64 d, long b, long i, int z) {
+MICRO_OP static u64 GetDemBaseIndex64(struct Machine *m, u64 d, long b, long i,
+                                      int z) {
   return Load64(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
 }
 typedef u64 (*getdembaseindex_f)(struct Machine *, u64, long, long, int);
@@ -246,20 +309,20 @@ static const getdembaseindex_f kGetDemBaseIndex[] = {
 ////////////////////////////////////////////////////////////////////////////////
 // DEVIRTUALIZED STORING TO ±DISP(%BASE,%INDEX,SCALE) MEMORY PARAMETER
 
-static void PutDemBaseIndex8(struct Machine *m, u64 d, long b, long i, int z,
-                             u64 x) {
+MICRO_OP static void PutDemBaseIndex8(struct Machine *m, u64 d, long b, long i,
+                                      int z, u64 x) {
   Store8(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
 }
-static void PutDemBaseIndex16(struct Machine *m, u64 d, long b, long i, int z,
-                              u64 x) {
+MICRO_OP static void PutDemBaseIndex16(struct Machine *m, u64 d, long b, long i,
+                                       int z, u64 x) {
   Store16(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
 }
-static void PutDemBaseIndex32(struct Machine *m, u64 d, long b, long i, int z,
-                              u64 x) {
+MICRO_OP static void PutDemBaseIndex32(struct Machine *m, u64 d, long b, long i,
+                                       int z, u64 x) {
   Store32(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
 }
-static void PutDemBaseIndex64(struct Machine *m, u64 d, long b, long i, int z,
-                              u64 x) {
+MICRO_OP static void PutDemBaseIndex64(struct Machine *m, u64 d, long b, long i,
+                                       int z, u64 x) {
   Store64(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
 }
 typedef void (*putdembaseindex_f)(struct Machine *, u64, long, long, int, u64);
@@ -269,10 +332,16 @@ static const putdembaseindex_f kPutDemBaseIndex[] = {
 ////////////////////////////////////////////////////////////////////////////////
 // JIT DEBUGGING UTILITIES
 
+static pureconst bool UsesStaticMemory(u64 rde) {
+  return !IsModrmRegister(rde) &&  //
+         !SibExists(rde) &&        //
+         IsRipRelative(rde);       //
+}
+
 static void ClobberEverythingExceptResult(struct Machine *m) {
 #ifdef DEBUG
 // clobber everything except result registers
-#ifdef __x86_64__
+#if defined(__x86_64__)
   AppendJitSetReg(m->path.jb, kAmdDi, 0x666);
   AppendJitSetReg(m->path.jb, kAmdSi, 0x666);
   AppendJitSetReg(m->path.jb, kAmdCx, 0x666);
@@ -302,28 +371,32 @@ static void ClobberEverythingExceptResult(struct Machine *m) {
 // FUNCTION BODY EXTRACTOR
 
 static bool IsRet(u8 *p) {
-#ifdef __aarch64__
-  return Get32(p) == 0xd65f03c0;
+#if defined(__aarch64__)
+  return Get32(p) == kArmRet;
 #elif defined(__x86_64__)
-  return *p == 0xc3;
+  return *p == kAmdRet;
 #else
   __builtin_unreachable();
 #endif
 }
 
 static long GetInstructionLength(u8 *p) {
-#ifdef __aarch64__
+#if defined(__aarch64__)
+  unassert((Get32(p) & ~kArmDispMask) != kArmJmp);
+  unassert((Get32(p) & ~kArmDispMask) != kArmCall);
   return 4;
 #elif defined(__x86_64__)
   struct XedDecodedInst x;
   unassert(!DecodeInstruction(&x, p, 15, XED_MODE_LONG));
+  unassert(ClassifyOp(x.op.rde) != kOpBranching);
+  unassert(!UsesStaticMemory(x.op.rde));
   return x.length;
 #else
   __builtin_unreachable();
 #endif
 }
 
-static long GetLengthOfFunctionBody(void *p) {
+static long GetMicroOpLength(void *p) {
   long n = 0;
   for (;;) {
     if (IsRet((u8 *)p + n)) return n;
@@ -366,16 +439,19 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         Jitter(A, "s0a0= m", GetCl);
         break;
 
+#ifdef TRIVIALLY_RELOCATABLE
+      case 'm': {  // micro-op
+        void *uop = va_arg(va, void *);
+        AppendJit(m->path.jb, uop, GetMicroOpLength(uop));
+        break;
+      }
+#else
+      case 'm':  // micro-op
+#endif
       case 'c':  // call
         AppendJitCall(m->path.jb, va_arg(va, void *));
         ClobberEverythingExceptResult(m);
         break;
-
-      case 'm': {  // inline micro-op
-        void *uop = va_arg(va, void *);
-        AppendJit(m->path.jb, uop, GetLengthOfFunctionBody(uop));
-        break;
-      }
 
       case 'x':  // sign extend
         ItemsRequired(1);
@@ -532,10 +608,12 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
  * Generates JIT code that implements x86 instructions.
  */
 void Jitter(P, const char *fmt, ...) {
+#if defined(__aarch64__) || defined(__x86_64__)
   va_list va;
   if (!m->path.jb) return;
   va_start(va, fmt);
   JitterImpl(A, fmt, va, 0, 0);
   unassert(!i);
   va_end(va);
+#endif
 }

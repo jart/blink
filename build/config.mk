@@ -13,8 +13,7 @@ CFLAGS +=				\
 	-fno-ident			\
 	-fno-common			\
 	-fstrict-aliasing		\
-	-fstrict-overflow		\
-	-fno-omit-frame-pointer
+	-fstrict-overflow
 
 CPPFLAGS +=				\
 	-iquote.			\
@@ -66,28 +65,28 @@ endif
 
 ifeq ($(MODE), rel)
 CPPFLAGS += -DNDEBUG
-CFLAGS += -std=c11 -O2 -mtune=generic
+CFLAGS += -O2 -mtune=generic
 endif
 
 ifeq ($(MODE), opt)
 CPPFLAGS += -DNDEBUG
-CFLAGS += -std=c11 -O3 -march=native
+CFLAGS += -O3 -march=native
 endif
 
 # ifeq ($(MODE), opt)
 # CC = clang
 # # CPPFLAGS += -DNDEBUG
-# CFLAGS += -std=c11 -O3
+# CFLAGS += -O3
 # TARGET_ARCH = -march=native
 # endif
 
 ifeq ($(MODE), dbg)
-CFLAGS += -std=c11 -O0
+CFLAGS += -O0
 CPPFLAGS += -DDEBUG
 endif
 
 ifeq ($(MODE), asan)
-CFLAGS += -std=c11 -O0
+CFLAGS += -O0
 CPPFLAGS += -DDEBUG
 CPPFLAGS += -fsanitize=address
 LDLIBS += -fsanitize=address
@@ -119,14 +118,14 @@ endif
 
 ifeq ($(MODE), tiny)
 CPPFLAGS += -DNDEBUG -DTINY
-CFLAGS += -std=c11 -Os -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-pie
+CFLAGS += -Os -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-pie
 LDFLAGS += -no-pie -Wl,--cref,-Map=$@.map
 endif
 
 # ifeq ($(MODE), tiny)
 # CC = clang
 # CPPFLAGS += -DNDEBUG -DTINY
-# CFLAGS += -std=c11 -Oz -fno-pie
+# CFLAGS += -Oz -fno-pie
 # LDFLAGS += -no-pie -Wl,--cref,-Map=$@.map
 # endif
 
