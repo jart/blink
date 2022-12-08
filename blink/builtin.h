@@ -214,7 +214,7 @@
 
 #if defined(__GNUC__) && (defined(__x86_64__) || defined(__aarch64__)) && \
     !defined(__SANITIZE_ADDRESS__) && !defined(__SANITIZE_THREAD__) &&    \
-    !defined(__SANITIZE_MEMORY__)
+    !defined(__SANITIZE_MEMORY__) && !defined(NOJIT)
 #define TRIVIALLY_RELOCATABLE noinstrument dontclone noubsan smashmystack
 #define MICRO_OP_SAFE         TRIVIALLY_RELOCATABLE forceinline
 #define MICRO_OP              TRIVIALLY_RELOCATABLE

@@ -25,7 +25,7 @@
  * @param p needs at least 21 bytes
  * @return pointer to nul byte
  */
-dontinline char *FormatUint64(char p[21], uint64_t x) {
+dontinline char *FormatUint64(char *p, uint64_t x) {
   char t;
   size_t i, a, b;
   i = 0;
@@ -50,7 +50,7 @@ dontinline char *FormatUint64(char p[21], uint64_t x) {
  * @param p needs at least 21 bytes
  * @return pointer to nul byte
  */
-char *FormatInt64(char p[21], int64_t x) {
+char *FormatInt64(char *p, int64_t x) {
   if (x < 0) *p++ = '-', x = -(uint64_t)x;
   return FormatUint64(p, x);
 }

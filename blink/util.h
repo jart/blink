@@ -19,10 +19,10 @@ const char *doublenul(const char *, unsigned);
 int popcount(u64);
 ssize_t readansi(int, char *, size_t);
 int vasprintf_(char **, const char *, va_list);
-char *FormatInt64(char[21], int64_t);
-char *FormatUint64(char[21], uint64_t);
-char *FormatInt64Thousands(char[27], int64_t);
-char *FormatUint64Thousands(char[27], uint64_t);
+char *FormatInt64(char *, int64_t);
+char *FormatUint64(char *, uint64_t);
+char *FormatInt64Thousands(char *, int64_t);
+char *FormatUint64Thousands(char *, uint64_t);
 char *FormatSize(char *, uint64_t, uint64_t);
 
 #endif /* BLINK_UTIL_H_ */

@@ -25,7 +25,7 @@
  * @param p needs at least 27 bytes
  * @return pointer to nul byte
  */
-dontinline char *FormatUint64Thousands(char p[27], uint64_t x) {
+dontinline char *FormatUint64Thousands(char *p, uint64_t x) {
   size_t i;
   char m[26];
   i = 0;
@@ -48,7 +48,7 @@ dontinline char *FormatUint64Thousands(char p[27], uint64_t x) {
  * @param p needs at least 27 bytes
  * @return pointer to nul byte
  */
-char *FormatInt64Thousands(char p[27], int64_t x) {
+char *FormatInt64Thousands(char *p, int64_t x) {
   if (x < 0) *p++ = '-', x = -(uint64_t)x;
   return FormatUint64Thousands(p, x);
 }

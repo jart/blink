@@ -25,12 +25,23 @@
 #define FLAGS_ID   21  // id flag
 #define FLAGS_LP   24  // [24,31] low bits of last alu result (supposed to be 0)
 
+#define CF (1 << FLAGS_CF)
+#define PF (1 << FLAGS_PF)
+#define AF (1 << FLAGS_AF)
+#define ZF (1 << FLAGS_ZF)
+#define SF (1 << FLAGS_SF)
+#define OF (1 << FLAGS_OF)
+#define DF (1 << FLAGS_DF)
+
 #define GetLazyParityBool(f)    GetParity((0xff000000 & (f)) >> FLAGS_LP)
 #define SetLazyParityByte(f, x) ((0x00ffffff & (f)) | (255 & (x)) << FLAGS_LP)
 
-bool GetParity(u8);
 u64 ExportFlags(u64);
+bool GetParity(u8) pureconst;
 void ImportFlags(struct Machine *, u64);
+int GetFlagDeps(u64) pureconst;
+int GetFlagClobbers(u64) pureconst;
+bool CanSkipFlags(struct Machine *, int);
 
 static inline bool GetFlag(u32 f, int b) {
   switch (b) {

@@ -19,6 +19,7 @@
 #include <limits.h>
 #include <stdatomic.h>
 
+#include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
@@ -31,22 +32,26 @@ void OpCmpxchgEbAlGb(P) {
   bool didit;
   if (!IsModrmRegister(rde)) {
 #if !defined(__riscv) && !defined(__MICROBLAZE__)
-    didit = atomic_compare_exchange_strong_explicit(
-        (atomic_uchar *)ComputeReserveAddressWrite1(A), m->ax,
+    unsigned char ax =
+        atomic_load_explicit((atomic_uchar *)m->ax, memory_order_relaxed);
+    atomic_compare_exchange_strong_explicit(
+        (atomic_uchar *)ComputeReserveAddressWrite1(A), &ax,
         Get8(ByteRexrReg(m, rde)), memory_order_acq_rel, memory_order_acquire);
+    Sub8(m, Get8(m->ax), Little8(ax));
+    atomic_store_explicit((atomic_uchar *)m->ax, ax, memory_order_relaxed);
 #else
     OpUdImpl(m);
 #endif
   } else {
     u8 *p = ByteRexbRm(m, rde);
     u8 x = Get8(p);
+    Sub8(m, Get8(m->ax), x);
     if ((didit = x == Get8(m->ax))) {
       Put8(p, Get8(ByteRexrReg(m, rde)));
     } else {
       Put8(m->ax, x);
     }
   }
-  m->flags = SetFlag(m->flags, FLAGS_ZF, didit);
 }
 
 void OpCmpxchgEvqpRaxGvqp(P) {
@@ -59,17 +64,19 @@ void OpCmpxchgEvqpRaxGvqp(P) {
 #if LONG_BIT == 64
       unsigned long ax =
           atomic_load_explicit((atomic_ulong *)m->ax, memory_order_relaxed);
-      if (!(didit = atomic_compare_exchange_strong_explicit(
-                (atomic_ulong *)p, &ax,
-                atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
-                memory_order_acq_rel, memory_order_acquire))) {
-        atomic_store_explicit((atomic_ulong *)m->ax, ax, memory_order_relaxed);
-      }
+      atomic_compare_exchange_strong_explicit(
+          (atomic_ulong *)p, &ax,
+          atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
+          memory_order_acq_rel, memory_order_acquire);
+      Sub64(m, Get64(m->ax), Little64(ax));
+      atomic_store_explicit((atomic_ulong *)m->ax, ax, memory_order_relaxed);
+      return;
 #else
       OpUdImpl(m);
 #endif
     } else {
       u64 x = Load64(p);
+      Sub64(m, Get64(m->ax), x);
       if ((didit = x == Get64(m->ax))) {
         Store64(p, Get64(q));
       } else {
@@ -80,14 +87,15 @@ void OpCmpxchgEvqpRaxGvqp(P) {
     if (Lock(rde) && !((intptr_t)p & 3)) {
       unsigned int ax =
           atomic_load_explicit((atomic_uint *)m->ax, memory_order_relaxed);
-      if (!(didit = atomic_compare_exchange_strong_explicit(
-                (atomic_uint *)p, &ax,
-                atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
-                memory_order_acq_rel, memory_order_acquire))) {
-        Put64(m->ax, Little32(ax));
-      }
+      didit = atomic_compare_exchange_strong_explicit(
+          (atomic_uint *)p, &ax,
+          atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
+          memory_order_acq_rel, memory_order_acquire);
+      Sub32(m, Get32(m->ax), Little32(ax));
+      if (!didit) Put64(m->ax, Little32(ax));
     } else {
       u32 x = Load32(p);
+      Sub32(m, Get32(m->ax), x);
       if ((didit = x == Get32(m->ax))) {
         Store32(p, Get32(q));
       } else {
@@ -100,11 +108,11 @@ void OpCmpxchgEvqpRaxGvqp(P) {
   } else {
     unassert(!Lock(rde));
     u16 x = Load16(p);
+    Sub16(m, Get16(m->ax), x);
     if ((didit = x == Get16(m->ax))) {
       Store16(p, Get16(q));
     } else {
       Put16(m->ax, x);
     }
   }
-  m->flags = SetFlag(m->flags, FLAGS_ZF, didit);
 }

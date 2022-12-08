@@ -85,6 +85,15 @@ CFLAGS += -O0
 CPPFLAGS += -DDEBUG
 endif
 
+# make m=cov check
+# gcov -ukqjo o/cov/blink blink/*.c
+# less alu.c.gcov
+ifeq ($(MODE), cov)
+CPPFLAGS += -DNOJIT
+CFLAGS += -fprofile-arcs -ftest-coverage
+LDFLAGS += -fprofile-arcs -ftest-coverage
+endif
+
 ifeq ($(MODE), asan)
 CFLAGS += -O0
 CPPFLAGS += -DDEBUG

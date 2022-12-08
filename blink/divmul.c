@@ -24,6 +24,12 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 
+#if LONG_BIT == 64
+#if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 406 || defined(__llvm__)
+#define HAVE_INT128
+#endif
+#endif
+
 struct Dubble {
   u64 lo;
   u64 hi;
@@ -147,6 +153,21 @@ void OpDivAlAhAxEbUnsigned(P) {
 }
 
 static void OpDivRdxRaxEvqpSigned64(P, u8 *p) {
+#ifdef HAVE_INT128
+  i64 y, r;
+  __int128 x, q;
+  x = (unsigned __int128)Get64(m->dx) << 64 | Get64(m->ax);
+  y = Load64(p);
+  if (!y) return RaiseDivideError(m);
+  if (x == (unsigned __int128)0x8000000000000000ull << 64) {
+    return RaiseDivideError(m);
+  }
+  q = x / y;
+  r = x % y;
+  if (q != (i64)q) return RaiseDivideError(m);
+  Put64(m->ax, q);
+  Put64(m->dx, r);
+#else
   u64 d, r;
   struct Dubble q;
   q.lo = Get64(m->ax);
@@ -159,6 +180,7 @@ static void OpDivRdxRaxEvqpSigned64(P, u8 *p) {
   if ((i64)q.lo >= 0 && q.hi) return RaiseDivideError(m);
   Put64(m->ax, q.lo);
   Put64(m->dx, r);
+#endif
 }
 
 static void OpDivRdxRaxEvqpSigned32(P, u8 *p) {
@@ -216,6 +238,18 @@ static void OpDivRdxRaxEvqpUnsigned32(P, u8 *p) {
 }
 
 static void OpDivRdxRaxEvqpUnsigned64(P, u8 *p) {
+#ifdef HAVE_INT128
+  u64 y, r;
+  unsigned __int128 x, q;
+  x = (unsigned __int128)Get64(m->dx) << 64 | Get64(m->ax);
+  y = Load64(p);
+  if (!y) return RaiseDivideError(m);
+  q = x / y;
+  r = x % y;
+  if (q > UINT64_MAX) return RaiseDivideError(m);
+  Put64(m->ax, q);
+  Put64(m->dx, r);
+#else
   u64 d, r;
   struct Dubble q;
   q.lo = Get64(m->ax);
@@ -226,6 +260,7 @@ static void OpDivRdxRaxEvqpUnsigned64(P, u8 *p) {
   if (q.hi) return RaiseDivideError(m);
   Put64(m->ax, q.lo);
   Put64(m->dx, r);
+#endif
 }
 
 void OpDivRdxRaxEvqpSigned(P) {
@@ -274,40 +309,56 @@ void OpMulAxAlEbUnsigned(P) {
   Put16(m->ax, ax);
 }
 
-void OpMulRdxRaxEvqpSigned(P) {
-  u8 *p;
-  i32 dxax;
-  i64 edxeax;
-  unsigned of;
-  struct Dubble rdxrax;
-  p = GetModrmRegisterWordPointerReadOszRexw(A);
-  if (Rexw(rde)) {
-    rdxrax = DubbleImul(Get64(m->ax), Load64(p));
-    of = !!(rdxrax.hi + (rdxrax.lo >> 63));
-    Put64(m->ax, rdxrax.lo);
-    Put64(m->dx, rdxrax.hi);
-  } else if (!Osz(rde)) {
-    edxeax = (i64)(i32)Get32(m->ax) * (i32)Load32(p);
-    of = edxeax != (i32)edxeax;
-    Put64(m->ax, edxeax);
-    Put64(m->dx, edxeax >> 32);
-  } else {
-    dxax = (i32)(i16)Get16(m->ax) * (i16)Load16(p);
-    of = dxax != (i16)dxax;
-    Put16(m->ax, dxax);
-    Put16(m->dx, dxax >> 16);
-  }
+static void OpMulRdxRaxEvqpSigned64(struct Machine *m, i64 x) {
+#ifdef HAVE_INT128
+  __int128 rdxrax = (__int128)(i64)Get64(m->ax) * x;
+  unsigned of = rdxrax != (i64)rdxrax;
+  Put64(m->ax, rdxrax);
+  Put64(m->dx, rdxrax >> 64);
+#else
+  struct Dubble rdxrax = DubbleImul(Get64(m->ax), x);
+  unsigned of = !!(rdxrax.hi + (rdxrax.lo >> 63));
+  Put64(m->ax, rdxrax.lo);
+  Put64(m->dx, rdxrax.hi);
+#endif
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
 }
 
+void OpMulRdxRaxEvqpSigned(P) {
+  u8 *p = GetModrmRegisterWordPointerReadOszRexw(A);
+  if (Rexw(rde)) {
+    OpMulRdxRaxEvqpSigned64(m, Load64(p));
+    Jitter(A, "B r0a1= s0a0= c", OpMulRdxRaxEvqpSigned64);
+  } else if (!Osz(rde)) {
+    i64 edxeax = (i64)(i32)Get32(m->ax) * (i32)Load32(p);
+    unsigned of = edxeax != (i32)edxeax;
+    Put64(m->ax, edxeax);
+    Put64(m->dx, edxeax >> 32);
+    m->flags = SetFlag(m->flags, FLAGS_CF, of);
+    m->flags = SetFlag(m->flags, FLAGS_OF, of);
+  } else {
+    i32 dxax = (i32)(i16)Get16(m->ax) * (i16)Load16(p);
+    unsigned of = dxax != (i16)dxax;
+    Put16(m->ax, dxax);
+    Put16(m->dx, dxax >> 16);
+    m->flags = SetFlag(m->flags, FLAGS_CF, of);
+    m->flags = SetFlag(m->flags, FLAGS_OF, of);
+  }
+}
+
 static void OpMulRdxRaxEvqpUnsigned64(struct Machine *m, u64 x) {
-  unsigned of;
-  struct Dubble rdxrax;
-  rdxrax = DubbleMul(Get64(m->ax), x);
-  of = !!rdxrax.hi;
+#ifdef HAVE_INT128
+  unsigned __int128 rdxrax = (unsigned __int128)Get64(m->ax) * x;
+  unsigned of = (u64)rdxrax != rdxrax;
+  Put64(m->ax, rdxrax);
+  Put64(m->dx, rdxrax >> 64);
+#else
+  struct Dubble rdxrax = DubbleMul(Get64(m->ax), x);
+  unsigned of = !!rdxrax.hi;
   Put64(m->ax, rdxrax.lo);
   Put64(m->dx, rdxrax.hi);
+#endif
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
 }
@@ -347,10 +398,17 @@ void OpMulRdxRaxEvqpUnsigned(P) {
 static void AluImul(P, u8 *a, u8 *b) {
   unsigned of;
   if (Rexw(rde)) {
+#ifdef HAVE_INT128
+    __int128 z;
+    z = (__int128)(i64)Get64(a) * (i64)Load64(b);
+    of = z != (i64)z;
+    Put64(RegRexrReg(m, rde), z);
+#else
     struct Dubble p;
     p = DubbleImul(Get64(a), Load64(b));
     of = !!(p.hi + (p.lo >> 63));
     Put64(RegRexrReg(m, rde), p.lo);
+#endif
   } else if (!Osz(rde)) {
     i64 z;
     z = (i64)(i32)Get32(a) * (i32)Load32(b);

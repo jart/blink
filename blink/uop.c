@@ -20,6 +20,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+#include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
@@ -49,6 +50,9 @@ MICRO_OP void CountOp(long *instructions_jitted_ptr) {
 
 MICRO_OP static u64 GetCl(struct Machine *m) {
   return m->cl;
+}
+MICRO_OP static u64 GetIp(struct Machine *m) {
+  return m->ip;
 }
 MICRO_OP static u64 GetReg8(struct Machine *m, long b) {
   return Get8(m->beg + b);
@@ -83,11 +87,72 @@ MICRO_OP static void PutReg64(struct Machine *m, long i, u64 x) {
 typedef void (*putreg_f)(struct Machine *, long, u64);
 static const putreg_f kPutReg[] = {PutReg8, PutReg16, PutReg32, PutReg64};
 
+////////////////////////////////////////////////////////////////////////////////
+// ALU MICRO-OPS
+
 MICRO_OP void FastZeroify(struct Machine *m, long i) {
   m->flags &= ~(1 << FLAGS_CF | 1 << FLAGS_SF | 1 << FLAGS_OF | 0xFF000000u);
   m->flags |= 1 << FLAGS_ZF;
   Put64(m->weg[i], 0);
 }
+
+MICRO_OP i64 JustAdd(struct Machine *m, u64 x, u64 y) {
+  return x + y;
+}
+MICRO_OP i64 JustOr(struct Machine *m, u64 x, u64 y) {
+  return x | y;
+}
+MICRO_OP i64 JustAdc(struct Machine *m, u64 x, u64 y) {
+  return x + y + (m->flags & 1);
+}
+MICRO_OP i64 JustSbb(struct Machine *m, u64 x, u64 y) {
+  return x - y - (m->flags & 1);
+}
+MICRO_OP i64 JustAnd(struct Machine *m, u64 x, u64 y) {
+  return x & y;
+}
+MICRO_OP i64 JustSub(struct Machine *m, u64 x, u64 y) {
+  return x - y;
+}
+MICRO_OP i64 JustXor(struct Machine *m, u64 x, u64 y) {
+  return x ^ y;
+}
+const aluop_f kJustAlu[8] = {
+    JustAdd,  //
+    JustOr,   //
+    JustAdc,  //
+    JustSbb,  //
+    JustAnd,  //
+    JustSub,  //
+    JustXor,  //
+    JustSub,  //
+};
+
+MICRO_OP i64 JustRol(struct Machine *m, u64 x, u64 y) {
+  return x << y | x >> (64 - y);
+}
+MICRO_OP i64 JustRor(struct Machine *m, u64 x, u64 y) {
+  return x >> y | x << (64 - y);
+}
+MICRO_OP i64 JustShl(struct Machine *m, u64 x, u64 y) {
+  return x << y;
+}
+MICRO_OP i64 JustShr(struct Machine *m, u64 x, u64 y) {
+  return x >> y;
+}
+MICRO_OP i64 JustSar(struct Machine *m, u64 x, u64 y) {
+  return (i64)x >> y;
+}
+const aluop_f kJustBsu[8] = {
+    JustRol,  //
+    JustRor,  //
+    0,        //
+    0,        //
+    JustShl,  //
+    JustShr,  //
+    JustShl,  //
+    JustSar,  //
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // STACK
@@ -382,14 +447,18 @@ static bool IsRet(u8 *p) {
 
 static long GetInstructionLength(u8 *p) {
 #if defined(__aarch64__)
-  unassert((Get32(p) & ~kArmDispMask) != kArmJmp);
-  unassert((Get32(p) & ~kArmDispMask) != kArmCall);
+#ifndef NDEBUG
+  if ((Get32(p) & ~kArmDispMask) == kArmJmp) return -1;
+  if ((Get32(p) & ~kArmDispMask) == kArmCall) return -1;
+#endif
   return 4;
 #elif defined(__x86_64__)
   struct XedDecodedInst x;
   unassert(!DecodeInstruction(&x, p, 15, XED_MODE_LONG));
-  unassert(ClassifyOp(x.op.rde) != kOpBranching);
-  unassert(!UsesStaticMemory(x.op.rde));
+#ifndef NDEBUG
+  if (ClassifyOp(x.op.rde) == kOpBranching) return -1;
+  if (UsesStaticMemory(x.op.rde)) return -1;
+#endif
   return x.length;
 #else
   __builtin_unreachable();
@@ -397,10 +466,12 @@ static long GetInstructionLength(u8 *p) {
 }
 
 static long GetMicroOpLength(void *p) {
-  long n = 0;
+  long k, n = 0;
   for (;;) {
     if (IsRet((u8 *)p + n)) return n;
-    n += GetInstructionLength((u8 *)p + n);
+    k = GetInstructionLength((u8 *)p + n);
+    if (k == -1) return -1;
+    n += k;
   }
 }
 
@@ -435,19 +506,42 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         AppendJitTrap(m->path.jb);
         break;
 
-      case '$':  // cl
-        Jitter(A, "s0a0= m", GetCl);
+      case '$':  // ip
+        Jitter(A, "s0a0= m", GetIp);
         break;
 
-#ifdef TRIVIALLY_RELOCATABLE
-      case 'm': {  // micro-op
-        void *uop = va_arg(va, void *);
-        AppendJit(m->path.jb, uop, GetMicroOpLength(uop));
+      case '%':  // register
+        switch ((c = fmt[k++])) {
+          case 'c':
+            switch ((c = fmt[k++])) {
+              case 'l':
+                Jitter(A, "s0a0= m", GetCl);
+                break;
+              default:
+                unassert(!"bad register");
+            }
+            break;
+          default:
+            unassert(!"bad register");
+        }
         break;
-      }
-#else
+
       case 'm':  // micro-op
+#ifdef TRIVIALLY_RELOCATABLE
+      {
+        void *fun = va_arg(va, void *);
+        long len = GetMicroOpLength(fun);
+        if (len > 0) {
+          AppendJit(m->path.jb, fun, len);
+          break;
+        }
+        LOG_ONCE(LOGF("jit micro-operation at address %" PRIxPTR
+                      " has branches or static memory references",
+                      (intptr_t)fun));
+        // fallthrough
+      }
 #endif
+
       case 'c':  // call
         AppendJitCall(m->path.jb, va_arg(va, void *));
         ClobberEverythingExceptResult(m);
@@ -570,7 +664,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         Jitter(A, "a2= a1i s0a0= m", RexbSrm(rde), kPutReg[WordLog2(rde)]);
         break;
 
-      case '+':  // save state
+      case '{':  // save state
         k = JitterImpl(A, fmt, va, k, depth + 1);
         break;
 
@@ -590,7 +684,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         rde |= log2sz << 034;
         continue;
 
-      case '-':  // restore state
+      case '}':  // restore state
         unassert(depth);
         return k;
 

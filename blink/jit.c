@@ -104,8 +104,9 @@ const u8 kJitSav[5] = {kJitSav0, kJitSav1, kJitSav2, kJitSav3, kJitSav4};
 const u8 kJitArg[6] = {kJitArg0, kJitArg1, kJitArg2,
                        kJitArg3, kJitArg4, kJitArg5};
 
-#if (defined(__x86_64__) || defined(__aarch64__)) && \
-    !defined(__SANITIZE_MEMORY__) && !defined(__SANITIZE_THREAD__)
+#if (defined(__x86_64__) || defined(__aarch64__)) &&                  \
+    !defined(__SANITIZE_MEMORY__) && !defined(__SANITIZE_THREAD__) && \
+    !defined(NOJIT)
 
 // the maximum conceivable size of our blink program image
 #define kJitLeeway 1048576

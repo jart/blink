@@ -80,7 +80,7 @@
 #define HasHook(m, pc) (((u64)(pc)) - m->codestart < m->codesize)
 #define GetHook(m, pc) (m->fun + (pc))
 
-#ifdef __SANITIZE_THREAD__
+#if defined(NOLINEAR) || defined(__SANITIZE_THREAD__)
 #define CanHaveLinearMemory() false
 #else
 #define CanHaveLinearMemory() (LONG_BIT == 64)
@@ -383,7 +383,6 @@ void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 void ResetRam(struct Machine *);
 void SetReadAddr(struct Machine *, i64, u32);
 void SetWriteAddr(struct Machine *, i64, u32);
-int GetClobbers(u64) pureconst;
 int ClassifyOp(u64) pureconst;
 
 void CountOp(long *);

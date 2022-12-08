@@ -36,6 +36,16 @@ typedef i64 (*aluop_f)(struct Machine *, u64, u64);
 
 extern const aluop_f kAlu[12][4];
 extern const aluop_f kBsu[8][4];
+extern const aluop_f kJustAlu[8];
+extern const aluop_f kJustBsu[8];
+
+i64 JustAdd(struct Machine *, u64, u64);
+i64 JustOr(struct Machine *, u64, u64);
+i64 JustAdc(struct Machine *, u64, u64);
+i64 JustSbb(struct Machine *, u64, u64);
+i64 JustAnd(struct Machine *, u64, u64);
+i64 JustSub(struct Machine *, u64, u64);
+i64 JustXor(struct Machine *, u64, u64);
 
 i64 Xor8(struct Machine *, u64, u64);
 i64 Xor16(struct Machine *, u64, u64);

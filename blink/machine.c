@@ -25,7 +25,6 @@
 
 #include "blink/address.h"
 #include "blink/alu.h"
-#include "blink/alu.inc"
 #include "blink/assert.h"
 #include "blink/bitscan.h"
 #include "blink/builtin.h"
@@ -552,7 +551,7 @@ static void OpAlubiReg(P) {
 }
 
 static void OpAluwCmpReg64(struct Machine *m, long rexb, long rexr) {
-  FastSub64(Get64(m->weg[rexb]), Get64(m->weg[rexr]), &m->flags);
+  Sub64(m, Get64(m->weg[rexb]), Get64(m->weg[rexr]));
 }
 
 static void AluwRo(P, const aluop_f ops[4]) {
@@ -593,81 +592,16 @@ static void OpAluwFlipCmp(P) {
   AluwFlipRo(A, kAlu[ALU_SUB]);
 }
 
-static void OpAluwiRegAdd64(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastAdd64(Get64(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegOr64(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastOr64(Get64(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegAdc64(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastAdc64(Get64(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegSbb64(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastSbb64(Get64(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegAnd64(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastAnd64(Get64(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegSub64(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastSub64(Get64(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegXor64(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastXor64(Get64(m->weg[rexb]), uimm0, &m->flags));
-}
-
-static void OpAluwiRegAdd32(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastAdd32(Get32(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegOr32(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastOr32(Get32(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegAdc32(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastAdc32(Get32(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegSbb32(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastSbb32(Get32(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegAnd32(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastAnd32(Get32(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegSub32(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastSub32(Get32(m->weg[rexb]), uimm0, &m->flags));
-}
-static void OpAluwiRegXor32(struct Machine *m, long rexb, u64 uimm0) {
-  Put64(m->weg[rexb], FastXor32(Get32(m->weg[rexb]), uimm0, &m->flags));
-}
-
-typedef void (*aluwireg_f)(struct Machine *m, long rexb, u64 uimm0);
-const aluwireg_f kAluwiReg[2][7] = {
-    {
-        OpAluwiRegAdd32,  //
-        OpAluwiRegOr32,   //
-        OpAluwiRegAdc32,  //
-        OpAluwiRegSbb32,  //
-        OpAluwiRegAnd32,  //
-        OpAluwiRegSub32,  //
-        OpAluwiRegXor32,  //
-    },
-    {
-        OpAluwiRegAdd64,  //
-        OpAluwiRegOr64,   //
-        OpAluwiRegAdc64,  //
-        OpAluwiRegSbb64,  //
-        OpAluwiRegAnd64,  //
-        OpAluwiRegSub64,  //
-        OpAluwiRegXor64,  //
-    },
-};
-
 static void Aluwi(P) {
   aluop_f op = kAlu[ModrmReg(rde)][RegLog2(rde)];
   u8 *a = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(rde, a, op(m, ReadMemory(rde, a), uimm0));
-  if (IsModrmRegister(rde) && !Osz(rde)) {
-    Jitter(A, "a2i a1i c", uimm0, RexbRm(rde),
-           kAluwiReg[Rexw(rde)][ModrmReg(rde)]);
+  Jitter(A, "B r0a1= a2i", uimm0);
+  if (CanSkipFlags(m, CF | ZF | SF | OF | AF | PF)) {
+    if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
+    Jitter(A, "m r0 D", kJustAlu[ModrmReg(rde)]);
   } else {
-    Jitter(A, "B r0a1= s0a0= a2i c r0 D", uimm0, op);
+    Jitter(A, "s0a0= c r0 D", op);
   }
 }
 
@@ -739,19 +673,34 @@ static void OpTestRaxIvds(P) {
   kAlu[ALU_AND][RegLog2(rde)](m, ReadRegister(rde, m->ax), uimm0);
 }
 
-static aluop_f Bsuwi(P, u64 y) {
+static void OpBsuwiCl(P) {
   aluop_f op = kBsu[ModrmReg(rde)][RegLog2(rde)];
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
-  WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), y));
-  return op;
-}
-
-static void OpBsuwiCl(P) {
-  Jitter(A, "B r0s1= $ r0a2= s1a1= s0a0= c r0 D", Bsuwi(A, m->cl));
+  WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), m->cl));
+  Jitter(A, "B r0s1= %cl r0a2= s1a1= s0a0= c r0 D", op);
 }
 
 static void BsuwiConstant(P, u64 y) {
-  Jitter(A, "B r0a1= s0a0= a2i c r0 D", y, Bsuwi(A, y));
+  aluop_f op = kBsu[ModrmReg(rde)][RegLog2(rde)];
+  u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
+  WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), y));
+  Jitter(A, "B r0a1= s0a0=");
+  switch (ModrmReg(rde)) {
+    case BSU_ROL:
+    case BSU_ROR:
+    case BSU_SHL:
+    case BSU_SHR:
+    case BSU_SAL:
+    case BSU_SAR:
+      if (Rexw(rde) && (y &= 63) && CanSkipFlags(m, GetFlagClobbers(rde))) {
+        Jitter(A, "a2i m r0 D", y, kJustBsu[ModrmReg(rde)]);
+        return;
+      }
+      break;
+    default:
+      break;
+  }
+  Jitter(A, "a2i c r0 D", y, op);
 }
 
 static void OpBsuwi1(P) {
@@ -770,7 +719,7 @@ static aluop_f Bsubi(P, u64 y) {
 }
 
 static void OpBsubiCl(P) {
-  Jitter(A, "B r0s1= $ r0a2= s1a1= s0a0= c r0 D", Bsubi(A, m->cl));
+  Jitter(A, "B r0s1= %cl r0a2= s1a1= s0a0= c r0 D", Bsubi(A, m->cl));
 }
 
 static void BsubiConstant(P, u64 y) {
@@ -2227,7 +2176,7 @@ static void ExecuteInstructionLong(struct Machine *m) {
 
 static void CheckForSignals(struct Machine *m) {
   int sig;
-  if (UNLIKELY(m->signals) && (sig = ConsumeSignal(m))) {
+  if (VERY_UNLIKELY(m->signals) && (sig = ConsumeSignal(m))) {
     TerminateSignal(m, sig);
   }
 }
