@@ -479,30 +479,25 @@ static void OpMovGvqpEvqp(P) {
 static void OpMovzbGvqpEb(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 Load8(GetModrmRegisterBytePointerRead1(A)));
-  Jitter(A, "z0 B r0 z+ C");
 }
 
 static void OpMovzwGvqpEw(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 Load16(GetModrmRegisterWordPointerRead2(A)));
-  Jitter(A, "z1 B r0 z+ C");
 }
 
 static void OpMovsbGvqpEb(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 (i8)Load8(GetModrmRegisterBytePointerRead1(A)));
-  Jitter(A, "z0 B r0 x0 r0 z+ C");
 }
 
 static void OpMovswGvqpEw(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 (i16)Load16(GetModrmRegisterWordPointerRead2(A)));
-  Jitter(A, "z1 B r0 x1 r0 z+ C");
 }
 
 static void OpMovsxdGdqpEd(P) {
   Put64(RegRexrReg(m, rde), (i32)Load32(GetModrmRegisterWordPointerRead4(A)));
-  Jitter(A, "z2 B r0 x2 r0 z+ C");
 }
 
 static void AlubRo(P, aluop_f op) {

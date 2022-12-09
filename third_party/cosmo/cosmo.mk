@@ -177,57 +177,6 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/test_suite_entropy.com.emulates		\
 		o/$(MODE)/aarch64/third_party/cosmo/test_suite_md.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/execve_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/intrin_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/palandprintf_test.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/divmul_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/test_suite_ecp.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/lockscale_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/palignr_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/pmulhrsw_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/pshuf_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/pthread_mutex_lock2_test.com.emulates	\
-		o/$(MODE)/mips64/third_party/cosmo/pthread_mutex_lock_test.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/pthread_spin_lock_test.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/sincos_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/kprintf_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/snprintf_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/once_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/mu_test.com.emulates				\
-		o/$(MODE)/mips64/third_party/cosmo/note_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/counter_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/dll_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/secp384r1_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/parsehttpmessage_test.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/parseurl_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/parseip_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/parsehttprange_test.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/pcmpstr_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/rand64_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/cescapec_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/clock_gettime_test.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/cas_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/bilinearscale_test.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/access_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/a64l_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/_timespec_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/zleb64_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/xslurp_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/chdir_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/mkdir_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/unlinkat_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/makedirs_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/dirstream_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/bitscan_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/commandv_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/closefrom_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/ecvt_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/dtoa_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/division_test.com.emulates			\
-		o/$(MODE)/mips64/third_party/cosmo/test_suite_aes.cbc.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/test_suite_cipher.gcm.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/test_suite_ctr_drbg.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/test_suite_entropy.com.emulates		\
-		o/$(MODE)/mips64/third_party/cosmo/test_suite_md.com.emulates			\
 		o/$(MODE)/mips64el/third_party/cosmo/intrin_test.com.emulates			\
 		o/$(MODE)/mips64el/third_party/cosmo/palandprintf_test.com.emulates		\
 		o/$(MODE)/mips64el/third_party/cosmo/divmul_test.com.emulates			\
@@ -247,7 +196,6 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/s390x/third_party/cosmo/palignr_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/pmulhrsw_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/pshuf_test.com.emulates			\
-		o/$(MODE)/s390x/third_party/cosmo/alu_test.com.emulates				\
 		o/$(MODE)/s390x/third_party/cosmo/pthread_mutex_lock2_test.com.emulates		\
 		o/$(MODE)/s390x/third_party/cosmo/pthread_mutex_lock_test.com.emulates		\
 		o/$(MODE)/s390x/third_party/cosmo/pthread_spin_lock_test.com.emulates		\

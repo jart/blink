@@ -664,30 +664,6 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         Jitter(A, "a2= a1i s0a0= m", RexbSrm(rde), kPutReg[WordLog2(rde)]);
         break;
 
-      case '{':  // save state
-        k = JitterImpl(A, fmt, va, k, depth + 1);
-        break;
-
-      case 'z':  // force size
-        switch ((c = fmt[k++])) {
-          case '-':
-            log2sz = RegLog2(rde);
-            break;
-          case '+':
-            log2sz = WordLog2(rde);
-            break;
-          default:
-            log2sz = CheckBelow(c - '0', 4);
-            break;
-        }
-        rde &= ~006000000000;  // RegLog2
-        rde |= log2sz << 034;
-        continue;
-
-      case '}':  // restore state
-        unassert(depth);
-        return k;
-
       default:
         LOGF("%s %c index %d of '%s'", "bad jitter directive", c, k - 1, fmt);
         unassert(!"bad jitter directive");
