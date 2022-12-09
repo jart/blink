@@ -3,11 +3,12 @@
 
 SHELL = /bin/sh
 MAKEFLAGS += --no-builtin-rules
+ARCHITECTURES = x86_64 i486 aarch64 arm mips s390x mipsel mips64 mips64el powerpc powerpc64le
 
 .SUFFIXES:
 .DELETE_ON_ERROR:
 .FEATURES: output-sync
-.PHONY: o all clean check test tags
+.PHONY: o all clean check check2 test tags
 
 ifneq ($(m),)
 ifeq ($(MODE),)
@@ -33,9 +34,13 @@ o:	o/$(MODE)/blink
 test:	o				\
 	o/$(MODE)/test
 
-check:	o				\
-	test				\
+check:	test				\
 	o/$(MODE)/third_party/cosmo
+
+check2:	o/$(MODE)/test/sse		\
+	o/$(MODE)/test/lib		\
+	o/$(MODE)/test/asm		\
+	o/$(MODE)/test/asm/emulates
 
 emulates:				\
 	o/$(MODE)/test/asm		\

@@ -64,9 +64,8 @@ static void getopt_print_badch(int argc, char *const argv[], int optopt,
   char b[256], *t;
   if (argc > 0 && (t = argv[0])) {
     while (*t && i < sizeof(b) - 64) b[i++] = *t++;
-    b[0] = ':';
-    b[1] = ' ';
-    i += 2;
+    b[i++] = ':';
+    b[i++] = ' ';
   }
   while (*s) b[i++] = *s++;
   b[i + 0] = ' ';

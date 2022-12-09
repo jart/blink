@@ -191,6 +191,7 @@ struct System {
   i64 codestart;
   unsigned long codesize;
   _Atomic(nexgen32e_f) *fun;
+  pthread_mutex_t lock_lock;
   struct MachineMemstat memstat;
   pthread_mutex_t machines_lock;
   struct Dll *machines GUARDED_BY(machines_lock);

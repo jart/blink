@@ -29,13 +29,9 @@ void OpXchgGbEb(P) {
   u8 *q;
   q = ByteRexrReg(m, rde);
   if (!IsModrmRegister(rde)) {
-#if !defined(__riscv) && !defined(__MICROBLAZE__)
-    *q = atomic_exchange_explicit(
-        (atomic_uchar *)ComputeReserveAddressWrite1(A), *q,
-        memory_order_acq_rel);
-#else
-    OpUdImpl(m);
-#endif
+    *q =
+        atomic_exchange_explicit((atomic_uchar *)ComputeReserveAddressWrite1(A),
+                                 *q, memory_order_acq_rel);
   } else {
     u8 *p;
     u8 x, y;
@@ -52,7 +48,6 @@ void OpXchgGvqpEvqp(P) {
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
     if (!IsModrmRegister(rde) && !((intptr_t)p & 7)) {
-#if LONG_BIT == 64
       atomic_store_explicit(
           (atomic_ulong *)q,
           atomic_exchange_explicit(
@@ -60,9 +55,6 @@ void OpXchgGvqpEvqp(P) {
               atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
               memory_order_acq_rel),
           memory_order_relaxed);
-#else
-      OpUdImpl(m);
-#endif
     } else {
       u64 x, y;
       x = Read64(q);

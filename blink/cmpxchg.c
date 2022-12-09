@@ -29,29 +29,17 @@
 #include "blink/mop.h"
 
 void OpCmpxchgEbAlGb(P) {
-  bool didit;
-  if (!IsModrmRegister(rde)) {
-#if !defined(__riscv) && !defined(__MICROBLAZE__)
-    unsigned char ax =
-        atomic_load_explicit((atomic_uchar *)m->ax, memory_order_relaxed);
-    atomic_compare_exchange_strong_explicit(
-        (atomic_uchar *)ComputeReserveAddressWrite1(A), &ax,
-        Get8(ByteRexrReg(m, rde)), memory_order_acq_rel, memory_order_acquire);
-    Sub8(m, Get8(m->ax), Little8(ax));
-    atomic_store_explicit((atomic_uchar *)m->ax, ax, memory_order_relaxed);
-#else
-    OpUdImpl(m);
-#endif
+  u8 *p, x;
+  unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+  p = GetModrmRegisterBytePointerWrite1(A);
+  x = Get8(p);
+  Sub8(m, Get8(m->ax), x);
+  if ((x == Get8(m->ax))) {
+    Put8(p, Get8(ByteRexrReg(m, rde)));
   } else {
-    u8 *p = ByteRexbRm(m, rde);
-    u8 x = Get8(p);
-    Sub8(m, Get8(m->ax), x);
-    if ((didit = x == Get8(m->ax))) {
-      Put8(p, Get8(ByteRexrReg(m, rde)));
-    } else {
-      Put8(m->ax, x);
-    }
+    Put8(m->ax, x);
   }
+  unassert(!pthread_mutex_unlock(&m->system->lock_lock));
 }
 
 void OpCmpxchgEvqpRaxGvqp(P) {
@@ -60,8 +48,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
   q = RegRexrReg(m, rde);
   p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
-    if (Lock(rde) && !((intptr_t)p & 7)) {
-#if LONG_BIT == 64
+    if (LONG_BIT == 64 && Lock(rde) && !((intptr_t)p & 7)) {
       unsigned long ax =
           atomic_load_explicit((atomic_ulong *)m->ax, memory_order_relaxed);
       atomic_compare_exchange_strong_explicit(
@@ -70,11 +57,8 @@ void OpCmpxchgEvqpRaxGvqp(P) {
           memory_order_acq_rel, memory_order_acquire);
       Sub64(m, Get64(m->ax), Little64(ax));
       atomic_store_explicit((atomic_ulong *)m->ax, ax, memory_order_relaxed);
-      return;
-#else
-      OpUdImpl(m);
-#endif
     } else {
+      unassert(!pthread_mutex_lock(&m->system->lock_lock));
       u64 x = Load64(p);
       Sub64(m, Get64(m->ax), x);
       if ((didit = x == Get64(m->ax))) {
@@ -82,6 +66,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       } else {
         Put64(m->ax, x);
       }
+      unassert(!pthread_mutex_unlock(&m->system->lock_lock));
     }
   } else if (!Osz(rde)) {
     if (Lock(rde) && !((intptr_t)p & 3)) {
@@ -106,13 +91,14 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       Put32(p + 4, 0);
     }
   } else {
-    unassert(!Lock(rde));
+    if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
     u16 x = Load16(p);
     Sub16(m, Get16(m->ax), x);
     if ((didit = x == Get16(m->ax))) {
-      Store16(p, Get16(q));
+      Store16(p, Read16(q));
     } else {
       Put16(m->ax, x);
     }
+    if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
   }
 }

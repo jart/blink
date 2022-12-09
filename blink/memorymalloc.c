@@ -100,6 +100,7 @@ struct System *NewSystem(void) {
     InitFds(&s->fds);
     pthread_mutex_init(&s->sig_lock, 0);
     pthread_mutex_init(&s->mmap_lock, 0);
+    pthread_mutex_init(&s->lock_lock, 0);
     pthread_mutex_init(&s->machines_lock, 0);
     s->pid = getpid();
   }
@@ -142,6 +143,7 @@ void FreeSystem(struct System *s) {
   FreeHostPages(s);
   unassert(!pthread_mutex_destroy(&s->machines_lock));
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
+  unassert(!pthread_mutex_destroy(&s->lock_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));
   DestroyFds(&s->fds);
   DestroyJit(&s->jit);

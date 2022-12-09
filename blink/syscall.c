@@ -500,8 +500,8 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
   struct utsname_linux uts = {
       .sysname = "blink",
       .nodename = "blink.local",
-      .release = "1.0",
-      .version = "blink 1.0",
+      .release = "4.0",        // or glibc whines
+      .version = "blink 4.0",  // or glibc whines
       .machine = "x86_64",
   };
   strcpy(uts.sysname, "unknown");

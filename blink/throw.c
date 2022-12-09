@@ -65,6 +65,7 @@ void ThrowProtectionFault(struct Machine *m) {
 }
 
 void OpUdImpl(struct Machine *m) {
+  RestoreIp(m);
   LOGF("UNDEFINED INSTRUCTION\n\t%s", GetBacktrace(m));
   HaltMachine(m, kMachineUndefinedInstruction);
 }

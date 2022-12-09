@@ -3,8 +3,8 @@
 _start:
 
 //	compare and exchange tests
-//	make -j8 o//blink o//test/asm/page.elf
-//	o//blink/tui o//test/asm/page.elf
+//	make -j8 o//blink o//test/asm/cmpxchg.elf
+//	o//blink/tui o//test/asm/cmpxchg.elf
 
 	xor	%ebp,%ebp
 	and	$-16,%rsp

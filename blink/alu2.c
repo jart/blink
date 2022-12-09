@@ -35,22 +35,9 @@ void OpAlub(P) {
   f = kAlu[(Opcode(rde) & 070) >> 3][0];
   p = GetModrmRegisterBytePointerWrite1(A);
   q = ByteRexrReg(m, rde);
-  if (!Lock(rde)) {
-    Store8(p, f(m, Load8(p), Get8(q)));
-  } else {
-#if !defined(__riscv) && !defined(__MICROBLAZE__)
-    u8 x, y, z;
-    x = Load8(p);
-    y = Get8(q);
-    do {
-      z = f(m, x, y);
-    } while (!atomic_compare_exchange_weak_explicit(
-        (atomic_uchar *)p, &x, z, memory_order_release, memory_order_relaxed));
-#else
-    LOGF("can't %s on this platform", "lock alub");
-    OpUdImpl(m);
-#endif
-  }
+  if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
+  Write8(p, f(m, Load8(p), Get8(q)));
+  if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
 }
 
 void OpAluw(P) {
@@ -59,38 +46,18 @@ void OpAluw(P) {
   q = RegRexrReg(m, rde);
   f = kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)];
 
-  // test for clear register idiom
-  if (IsModrmRegister(rde) &&        //
-      (f == Xor32 || f == Xor64) &&  //
-      RegRexbRm(m, rde) == RegRexrReg(m, rde)) {
-    FastZeroify(m, RexbRm(rde));
-    Jitter(A, "a1i m", RexbRm(rde), FastZeroify);
-    return;
-  }
-
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
-    if (Lock(rde)) {
-#if LONG_BIT == 64
-      if (!((intptr_t)p & 7)) {
-        u64 x, y, z;
-        x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
-        y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);
-        y = Little64(y);
-        do {
-          z = Little64(f(m, Little64(x), y));
-        } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x,
-                                                        z, memory_order_release,
-                                                        memory_order_relaxed));
-      } else {
-        LOGF("can't %s misaligned address", "lock aluq");
-        OpUdImpl(m);
-      }
-#else
-      LOGF("can't %s on this platform", "lock aluq");
-      OpUdImpl(m);
-#endif
-      return;  // can't jit lock
+    if (LONG_BIT == 64 && Lock(rde) && !((intptr_t)p & 7)) {
+      u64 x, y, z;
+      x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
+      y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);
+      y = Little64(y);
+      do {
+        z = Little64(f(m, Little64(x), y));
+      } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x, z,
+                                                      memory_order_release,
+                                                      memory_order_relaxed));
     } else {
       u64 x, y, z;
       x = Load64(p);
@@ -104,21 +71,15 @@ void OpAluw(P) {
     if (IsModrmRegister(rde)) {
       Put32(p + 4, 0);
     }
-    if (Lock(rde)) {
-      if (!((intptr_t)p & 3)) {
-        x = atomic_load_explicit((_Atomic(u32) *)p, memory_order_acquire);
-        y = atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed);
-        y = Little32(y);
-        do {
-          z = Little32(f(m, Little32(x), y));
-        } while (!atomic_compare_exchange_weak_explicit((_Atomic(u32) *)p, &x,
-                                                        z, memory_order_release,
-                                                        memory_order_relaxed));
-      } else {
-        LOGF("can't %s misaligned address", "lock alul");
-        OpUdImpl(m);
-      }
-      return;  // can't jit lock
+    if (Lock(rde) && !((intptr_t)p & 3)) {
+      x = atomic_load_explicit((_Atomic(u32) *)p, memory_order_acquire);
+      y = atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed);
+      y = Little32(y);
+      do {
+        z = Little32(f(m, Little32(x), y));
+      } while (!atomic_compare_exchange_weak_explicit((_Atomic(u32) *)p, &x, z,
+                                                      memory_order_release,
+                                                      memory_order_relaxed));
     } else {
       x = Load32(p);
       y = Get32(q);
@@ -127,19 +88,22 @@ void OpAluw(P) {
     }
   } else {
     u16 x, y, z;
-    unassert(!Lock(rde));
+    if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
     p = GetModrmRegisterWordPointerWrite2(A);
     x = Load16(p);
     y = Get16(q);
     z = f(m, x, y);
     Store16(p, z);
+    if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
   }
 
-  Jitter(A, "B r0s1= A r0a2= s1a1=");
-  if (CanSkipFlags(m, CF | ZF | SF | OF | AF | PF)) {
-    if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
-    Jitter(A, "m r0 D", kJustAlu[(Opcode(rde) & 070) >> 3]);
-  } else {
-    Jitter(A, "s0a0= c r0 D", f);
+  if (m->path.jb && !Lock(rde)) {
+    Jitter(A, "B r0s1= A r0a2= s1a1=");
+    if (CanSkipFlags(m, CF | ZF | SF | OF | AF | PF)) {
+      if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
+      Jitter(A, "m r0 D", kJustAlu[(Opcode(rde) & 070) >> 3]);
+    } else {
+      Jitter(A, "s0a0= c r0 D", f);
+    }
   }
 }
