@@ -283,6 +283,133 @@ static int SysClone(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   }
 }
 
+static struct Futex *NewFutex(i64 addr) {
+  struct Futex *f;
+  if ((f = calloc(1, sizeof(struct Futex)))) {
+    pthread_cond_init(&f->cond, 0);
+    pthread_mutex_init(&f->lock, 0);
+    dll_init(&f->elem);
+    f->addr = addr;
+  }
+  return f;
+}
+
+static struct Futex *FindFutex(struct Machine *m, i64 addr) {
+  struct Dll *e;
+  for (e = dll_first(m->system->futexes); e;
+       e = dll_next(m->system->futexes, e)) {
+    if (FUTEX_CONTAINER(e)->addr == addr) {
+      return FUTEX_CONTAINER(e);
+    }
+  }
+  return 0;
+}
+
+static int SysFutexWait(struct Machine *m,  //
+                        i64 uaddr,          //
+                        i32 op,             //
+                        u32 expect,         //
+                        i64 timeout_addr) {
+  int rc;
+  u8 *mem;
+  struct Futex *f;
+  struct timespec timeout;
+  struct timespec_linux gtimeout;
+  if (timeout_addr) {
+    CopyFromUserRead(m, &gtimeout, timeout_addr, sizeof(gtimeout));
+    timeout.tv_sec = Read64(gtimeout.tv_sec);
+    timeout.tv_nsec = Read64(gtimeout.tv_nsec);
+    if (timeout.tv_nsec >= 1000000000) return einval();
+    timeout = AddTime(GetTime(), timeout);
+  } else {
+    timeout = GetMaxTime();
+  }
+  if (!(mem = LookupAddress(m, uaddr))) return efault();
+  LOCK(&m->system->futex_lock);
+  if (Load32(mem) != expect) {
+    UNLOCK(&m->system->futex_lock);
+    return eagain();
+  }
+  if ((f = FindFutex(m, uaddr))) {
+    LOCK(&f->lock);
+  }
+  if (!f) {
+    if ((f = NewFutex(uaddr))) {
+      m->system->futexes = dll_make_first(m->system->futexes, &f->elem);
+      LOCK(&f->lock);
+    } else {
+      UNLOCK(&m->system->futex_lock);
+      return -1;
+    }
+  }
+  ++f->waiters;
+  UNLOCK(&m->system->futex_lock);
+  rc = pthread_cond_timedwait(&f->cond, &f->lock, &timeout);
+  if (--f->waiters) {
+    UNLOCK(&f->lock);
+  } else {
+    LOCK(&m->system->futex_lock);
+    m->system->futexes = dll_remove(m->system->futexes, &f->elem);
+    UNLOCK(&m->system->futex_lock);
+    UNLOCK(&f->lock);
+    free(f);
+  }
+  if (rc) {
+    errno = rc;
+    rc = -1;
+  }
+  return rc;
+}
+
+static int SysFutexWake(struct Machine *m,  //
+                        i64 uaddr,          //
+                        i32 op,             //
+                        u32 count) {
+  int rc;
+  struct Futex *f;
+  if (!count) return 0;
+  LOCK(&m->system->futex_lock);
+  if ((f = FindFutex(m, uaddr))) {
+    LOCK(&f->lock);
+  }
+  UNLOCK(&m->system->futex_lock);
+  if (f) {
+    unassert(f->waiters);
+    if (count == 1) {
+      unassert(!pthread_cond_signal(&f->cond));
+      rc = 1;
+    } else {
+      unassert(!pthread_cond_broadcast(&f->cond));
+      rc = f->waiters;
+    }
+    UNLOCK(&f->lock);
+  } else {
+    rc = 0;
+  }
+  return rc;
+}
+
+static int SysFutex(struct Machine *m,  //
+                    i64 uaddr,          //
+                    i32 op,             //
+                    u32 val,            //
+                    i64 timeout_addr,   //
+                    i64 uaddr2,         //
+                    u32 val3) {
+  if (uaddr & 3) return efault();
+  switch (op) {
+    case FUTEX_WAIT_LINUX:
+    case FUTEX_WAIT_LINUX | FUTEX_PRIVATE_FLAG_LINUX:
+      return SysFutexWait(m, uaddr, op, val, timeout_addr);
+      break;
+    case FUTEX_WAKE_LINUX:
+    case FUTEX_WAKE_LINUX | FUTEX_PRIVATE_FLAG_LINUX:
+      return SysFutexWake(m, uaddr, op, val);
+    default:
+      return einval();
+  }
+}
+
 static int SysPrctl(struct Machine *m, int op, i64 a, i64 b, i64 c, i64 d) {
   return einval();
 }
@@ -1699,6 +1826,7 @@ void OpSyscall(P) {
     SYSCALL(0x09E, SysArchPrctl, (m, di, si));
     SYSCALL(0x0A0, SysSetrlimit, (m, di, si));
     SYSCALL(0x0C8, SysTkill, (m, di, si));
+    SYSCALL(0x0CA, SysFutex, (m, di, si, dx, r0, r8, r9));
     SYSCALL(0x0D9, SysGetdents, (m, di, si, dx));
     SYSCALL(0x0DA, SysSetTidAddress, (m, di));
     SYSCALL(0x0E4, SysClockGettime, (m, di, si));

@@ -74,6 +74,7 @@
 #define A                m, rde, disp, uimm0
 #define DISPATCH_NOTHING m, 0, 0, 0
 
+#define FUTEX_CONTAINER(e)    DLL_CONTAINER(struct Futex, elem, e)
 #define MACHINE_CONTAINER(e)  DLL_CONTAINER(struct Machine, elem, e)
 #define HOSTPAGE_CONTAINER(e) DLL_CONTAINER(struct HostPage, elem, e)
 
@@ -173,6 +174,14 @@ struct OpCache {
   u64 icache[1024][kInstructionBytes / 8];
 };
 
+struct Futex {
+  i64 addr;
+  int waiters;
+  struct Dll elem;
+  pthread_cond_t cond;
+  pthread_mutex_t lock;
+};
+
 struct System {
   u8 mode;
   bool dlab;
@@ -199,6 +208,8 @@ struct System {
   struct Jit jit;
   struct Fds fds;
   struct Elf elf;
+  struct Dll *futexes;
+  pthread_mutex_t futex_lock;
   pthread_mutex_t sig_lock;
   struct sigaction_linux hands[64] GUARDED_BY(sig_lock);
   pthread_mutex_t mmap_lock;

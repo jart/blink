@@ -101,6 +101,7 @@ struct System *NewSystem(void) {
     pthread_mutex_init(&s->sig_lock, 0);
     pthread_mutex_init(&s->mmap_lock, 0);
     pthread_mutex_init(&s->lock_lock, 0);
+    pthread_mutex_init(&s->futex_lock, 0);
     pthread_mutex_init(&s->machines_lock, 0);
     s->pid = getpid();
   }
@@ -142,6 +143,7 @@ void FreeSystem(struct System *s) {
   unassert(dll_is_empty(s->machines));  // Use KillOtherThreads & FreeMachine
   FreeHostPages(s);
   unassert(!pthread_mutex_destroy(&s->machines_lock));
+  unassert(!pthread_mutex_destroy(&s->futex_lock));
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
   unassert(!pthread_mutex_destroy(&s->lock_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));
