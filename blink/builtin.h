@@ -218,7 +218,7 @@
 #define HAVE_JIT
 #endif
 
-#if defined(HAVE_JIT) && defined(__GNUC__)
+#if defined(HAVE_JIT) && defined(__GNUC__) && !defined(__SANITIZE_ADDRESS__)
 #define TRIVIALLY_RELOCATABLE noinstrument dontclone noubsan smashmystack
 #define MICRO_OP_SAFE         TRIVIALLY_RELOCATABLE forceinline
 #define MICRO_OP              TRIVIALLY_RELOCATABLE

@@ -311,6 +311,7 @@ struct Machine {                           //
   u64 siguc;                               //
   u64 sigfp;                               //
   struct System *system;                   //
+  bool canhalt;                            //
   jmp_buf onhalt;                          //
   i64 ctid;                                //
   int tid;                                 //

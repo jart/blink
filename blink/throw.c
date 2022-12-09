@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include "blink/address.h"
+#include "blink/assert.h"
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/log.h"
@@ -35,15 +36,9 @@ void RestoreIp(struct Machine *m) {
   }
 }
 
-static bool IsHaltingInitialized(struct Machine *m) {
-  jmp_buf zb;
-  memset(zb, 0, sizeof(zb));
-  return memcmp(m->onhalt, zb, sizeof(m->onhalt)) != 0;
-}
-
 void HaltMachine(struct Machine *m, int code) {
   RestoreIp(m);
-  if (!IsHaltingInitialized(m)) abort();
+  unassert(m->canhalt);
   longjmp(m->onhalt, code);
 }
 

@@ -40,12 +40,12 @@
 #include "blink/util.h"
 #include "blink/xlat.h"
 
-#define OPTS "hjls"
+#define OPTS "hjms"
 #define USAGE \
   " [-" OPTS "] PROG [ARGS...]\n\
   -h        help\n\
   -j        disable jit\n\
-  -l        disable linear memory\n\
+  -m        enable memory safety\n\
   -s        print statistics on exit\n"
 
 static bool FLAG_nojit;
@@ -82,8 +82,10 @@ static int Exec(char *prog, char **argv, char **envp) {
     // FreeSystem(old->system);
   }
   if (!(rc = setjmp(g_machine->onhalt))) {
+    g_machine->canhalt = true;
     Actor(g_machine);
   } else {
+    g_machine->canhalt = false;
     s = g_machine->system;
     KillOtherThreads(s);
     FreeMachine(g_machine);
@@ -116,7 +118,7 @@ static void GetOpts(int argc, char *argv[]) {
       case 'j':
         FLAG_nojit = true;
         break;
-      case 'l':
+      case 'm':
         FLAG_nolinear = true;
         break;
       case 's':

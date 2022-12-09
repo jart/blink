@@ -19,8 +19,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "blink/address.h"
+#include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
+#include "blink/modrm.h"
 #include "blink/watch.h"
 
 void PopWatchpoint(struct Watchpoints *wps) {
@@ -47,8 +50,20 @@ ssize_t PushWatchpoint(struct Watchpoints *wps, struct Watchpoint *b) {
 
 ssize_t IsAtWatchpoint(struct Watchpoints *wps, struct Machine *m) {
   u8 *r;
+  i64 oldip;
+  bool hasop;
+  struct XedDecodedInst x;
+  if (!wps->i) return -1;
+  hasop = !GetInstruction(m, GetPc(m), &x) && x.op.has_modrm;
   for (int i = wps->i; i--;) {
     if (wps->p[i].disable) continue;
+    oldip = m->ip;
+    m->ip += Oplength(x.op.rde);
+    if (hasop && !IsModrmRegister(x.op.rde) &&
+        ComputeAddress(m, x.op.rde, x.op.disp, x.op.uimm0) == wps->p[i].addr) {
+      return i;
+    }
+    m->ip = oldip;
     // TODO(jart): Handle case of overlapping page boundary.
     // TODO(jart): Possibly track munmap() type cases.
     if ((r = LookupAddress(m, wps->p[i].addr))) {

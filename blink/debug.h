@@ -31,6 +31,6 @@ void DumpHex(u8 *, size_t);
 void PrintFds(struct Fds *);
 const char *DescribeOp(struct Machine *);
 const char *GetBacktrace(struct Machine *);
-int GetInstruction(struct Machine *, struct XedDecodedInst *);
+int GetInstruction(struct Machine *, i64, struct XedDecodedInst *);
 
 #endif /* BLINK_DEBUG_H_ */

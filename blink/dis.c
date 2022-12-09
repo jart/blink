@@ -22,6 +22,7 @@
 
 #include "blink/assert.h"
 #include "blink/cp437.h"
+#include "blink/debug.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
 #include "blink/high.h"
@@ -80,7 +81,7 @@ static char *DisError(struct Dis *d, char *p, int err) {
   p = HighStart(p, g_high.comment);
   *p++ = '#';
   *p++ = ' ';
-  p = stpcpy(p, doublenul(kXedErrorNames, err));
+  p = stpcpy(p, "error");
   p = HighEnd(p);
   *p = '\0';
   return p;
@@ -236,14 +237,10 @@ long Dis(struct Dis *d, struct Machine *m, i64 addr, i64 ip, int lines) {
 
 const char *DisGetLine(struct Dis *d, struct Machine *m, int i) {
   int err;
-  u8 b[15];
-  void *r[2];
   if (i >= d->ops.i) return "";
   if (d->ops.p[i].s) return d->ops.p[i].s;
   unassert(d->ops.p[i].size <= 15);
-  err = DecodeInstruction(
-      d->xedd, AccessRam(m, d->ops.p[i].addr, d->ops.p[i].size, r, b, true),
-      d->ops.p[i].size, m->mode);
+  err = GetInstruction(m, d->ops.p[i].addr, d->xedd);
   d->m = m;
   d->addr = d->ops.p[i].addr;
   if (DisLineCode(d, d->buf, err) - d->buf >= (int)sizeof(d->buf)) abort();

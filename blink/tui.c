@@ -123,7 +123,7 @@ f       finish                    -R       reactive tui mode\n\
 R       restart                   -H       disable highlighting\n\
 x       hex                       -v       increase verbosity\n\
 ?       help                      -j       enables jit\n\
-t       sse type                  -l       enables linear memory\n\
+t       sse type                  -m       disables memory safety\n\
 w       sse width                 -?       help\n\
 B       pop breakpoint\n\
 ctrl-t  turbo\n\
@@ -678,6 +678,22 @@ static void ResolveBreakpoints(void) {
   }
 }
 
+static void ResolveWatchpoints(void) {
+  long i, sym;
+  for (i = 0; i < watchpoints.i; ++i) {
+    if (watchpoints.p[i].symbol && !watchpoints.p[i].addr) {
+      if ((sym = DisFindSymByName(dis, watchpoints.p[i].symbol)) != -1) {
+        watchpoints.p[i].addr = dis->syms.p[sym].addr;
+      } else {
+        fprintf(stderr,
+                "error: watchpoint not found: %s (out of %d loaded symbols)\n",
+                watchpoints.p[i].symbol, dis->syms.i);
+        exit(1);
+      }
+    }
+  }
+}
+
 static void BreakAtNextInstruction(void) {
   struct Breakpoint b;
   memset(&b, 0, sizeof(b));
@@ -731,9 +747,10 @@ static int GetCursorPosition(int *out_y, int *out_x) {
 void CommonSetup(void) {
   static bool once;
   if (!once) {
-    if (tuimode || breakpoints.i) {
+    if (tuimode || breakpoints.i || watchpoints.i) {
       LoadSyms();
       ResolveBreakpoints();
+      ResolveWatchpoints();
     }
     once = true;
   }
@@ -1026,10 +1043,15 @@ static i64 Disassemble(void) {
 
 static i64 GetDisIndex(void) {
   i64 i;
-  if ((i = DisFind(dis, GetPc(m))) == -1) {
-    i = Disassemble();
+  if ((i = DisFind(dis, GetPc(m))) != -1 || (i = Disassemble()) != -1) {
+    while (i + 1 < dis->ops.i) {
+      if (!dis->ops.p[i].size) {
+        ++i;
+      } else {
+        break;
+      }
+    }
   }
-  while (i + 1 < dis->ops.i && !dis->ops.p[i].size) ++i;
   return i;
 }
 
@@ -1410,9 +1432,25 @@ static void DrawBreakpoints(struct Panel *p) {
   i64 addr;
   const char *name;
   char *s, buf[256];
-  i64 i, line, sym;
+  i64 i, sym, line = 0;
   if (p->top == p->bottom) return;
-  for (line = 0, i = breakpoints.i; i--;) {
+  for (i = watchpoints.i; i--;) {
+    if (watchpoints.p[i].disable) continue;
+    if (line >= breakpointsstart) {
+      addr = watchpoints.p[i].addr;
+      sym = DisFindSym(dis, addr);
+      name = sym != -1 ? dis->syms.stab + dis->syms.p[sym].name : "UNKNOWN";
+      snprintf(buf, sizeof(buf), "%012" PRIx64 " %s [%#" PRIx64 "]", addr, name,
+               watchpoints.p[i].oldvalue);
+      AppendPanel(p, line - breakpointsstart, buf);
+      if (sym != -1 && addr != dis->syms.p[sym].addr) {
+        snprintf(buf, sizeof(buf), "+%#" PRIx64, addr - dis->syms.p[sym].addr);
+        AppendPanel(p, line, buf);
+      }
+    }
+    ++line;
+  }
+  for (i = breakpoints.i; i--;) {
     if (breakpoints.p[i].disable) continue;
     if (line >= breakpointsstart) {
       addr = breakpoints.p[i].addr;
@@ -1548,6 +1586,25 @@ static long double dsleep(long double secs) {
   }
 }
 
+static const char *DescribeAction(void) {
+  static char buf[128];
+  char *p = buf;
+  buf[0] = 0;
+  if (action & RESTART) p = stpcpy(buf, "|RESTART");
+  if (action & REDRAW) p = stpcpy(p, "|REDRAW");
+  if (action & CONTINUE) p = stpcpy(p, "|CONTINUE");
+  if (action & STEP) p = stpcpy(p, "|STEP");
+  if (action & NEXT) p = stpcpy(p, "|NEXT");
+  if (action & FINISH) p = stpcpy(p, "|FINISH");
+  if (action & FAILURE) p = stpcpy(p, "|FAILURE");
+  if (action & WINCHED) p = stpcpy(p, "|WINCHED");
+  if (action & INT) p = stpcpy(p, "|INT");
+  if (action & QUIT) p = stpcpy(p, "|QUIT");
+  if (action & EXIT) p = stpcpy(p, "|EXIT");
+  if (action & ALARM) p = stpcpy(p, "|ALARM");
+  return buf + !!buf[0];
+}
+
 static void DrawStatus(struct Panel *p) {
 #define MEMSTAT(f) m->system->memstat.f, m->system->memstat.f != lastmemstat.f
   long toto;
@@ -1560,6 +1617,7 @@ static void DrawStatus(struct Panel *p) {
   fds = CountFds(&m->system->fds);
   s = (struct Buffer *)malloc(sizeof(*s));
   memset(s, 0, sizeof(*s));
+  AppendStr(s, DescribeAction());
   if (jips > 0) rw += AppendStat(s, 12, "jips", jips, false);
   rw += AppendStat(s, 12, "ips", ips, false);
   toto = kRealSize + (long)m->system->memstat.allocated * 4096;
@@ -1804,6 +1862,7 @@ static const struct FdCb kFdCbPty = {
 };
 
 static void LaunchDebuggerReactively(void) {
+  LOGF("LaunchDebuggerReactively");
   LOGF("%s", systemfailure);
   if (tuimode) {
     action |= FAILURE;
@@ -2132,6 +2191,7 @@ static void OnInt15h(void) {
 }
 
 static bool OnHalt(int interrupt) {
+  LOGF("OnHalt(%d)", interrupt);
   ReactiveDraw();
   switch (interrupt) {
     case 1:
@@ -2593,6 +2653,7 @@ static void Exec(void) {
   int interrupt;
   ExecSetup();
   if (!(interrupt = setjmp(m->onhalt))) {
+    m->canhalt = true;
     if (!(action & CONTINUE) &&
         (bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
       LOGF("BREAK1 %012" PRIx64 "", breakpoints.p[bp].addr);
@@ -2664,6 +2725,7 @@ static void Exec(void) {
       goto KeepGoing;
     }
   }
+  m->canhalt = false;
 }
 
 static void Tui(void) {
@@ -2675,6 +2737,7 @@ static void Tui(void) {
   SetupDraw();
   ScrollOp(&pan.disassembly, GetDisIndex());
   if (!(interrupt = setjmp(m->onhalt))) {
+    m->canhalt = true;
     do {
       if (!(action & FAILURE)) {
         LoadInstruction(m);
@@ -2682,10 +2745,12 @@ static void Tui(void) {
             (bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
           action &= ~(FINISH | NEXT | CONTINUE);
           LOGF("BREAK %012" PRIx64 "", breakpoints.p[bp].addr);
+        } else if ((action & (FINISH | NEXT | CONTINUE)) &&
+                   (bp = IsAtWatchpoint(&watchpoints, m)) != -1) {
+          action &= ~(FINISH | NEXT | CONTINUE);
+          LOGF("WATCH %012" PRIx64 " AT PC %" PRIx64, watchpoints.p[bp].addr,
+               GetPc(m));
         }
-      } else if ((action & (FINISH | NEXT | CONTINUE)) &&
-                 (bp = IsAtWatchpoint(&watchpoints, m)) != -1) {
-        EnterWatchpoint(bp);
       } else {
         m->xedd = (struct XedDecodedInst *)m->opcache->icache[0];
         m->xedd->length = 1;
@@ -2766,7 +2831,7 @@ static void Tui(void) {
             }
           }
         }
-        if (!IsDebugBreak()) {
+        if (!IsDebugBreak() && IsAtWatchpoint(&watchpoints, m) == -1) {
           UpdateXmmType(m->xedd->op.rde, &xmmtype);
           if (verbose) LogInstruction();
           ExecuteInstruction(m);
@@ -2781,6 +2846,7 @@ static void Tui(void) {
             ScrollMemoryViews();
           }
         } else {
+          ReactiveDraw();
           m->ip += m->xedd->length;
           action &= ~NEXT;
           action &= ~FINISH;
@@ -2806,15 +2872,16 @@ static void Tui(void) {
     ReactiveDraw();
     ScrollOp(&pan.disassembly, GetDisIndex());
   }
+  m->canhalt = false;
   TuiCleanup();
 }
 
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   bool wantjit = false;
-  bool wantlinear = false;
+  bool wantunsafe = false;
   const char *logpath = 0;
-  while ((opt = getopt_(argc, argv, "hjlvtrzRsb:HL:")) != -1) {
+  while ((opt = getopt_(argc, argv, "hjmvtrzRsb:Hw:L:")) != -1) {
     switch (opt) {
       case 'j':
         wantjit = true;
@@ -2822,8 +2889,8 @@ static void GetOpts(int argc, char *argv[]) {
       case 't':
         tuimode = false;
         break;
-      case 'l':
-        wantlinear = true;
+      case 'm':
+        wantunsafe = true;
         if (!CanHaveLinearMemory()) {
           fprintf(
               stderr,
@@ -2873,8 +2940,8 @@ static void GetOpts(int argc, char *argv[]) {
   if (!wantjit) {
     DisableJit(&m->system->jit);
   }
-  m->nolinear = !wantlinear;
-  m->system->nolinear = !wantlinear;
+  m->nolinear = !wantunsafe;
+  m->system->nolinear = !wantunsafe;
 }
 
 static int OpenDevTty(void) {
@@ -2947,10 +3014,10 @@ int main(int argc, char *argv[]) {
   int rc;
   struct System *s;
   static struct sigaction sa;
+  g_blink_path = argc > 0 ? argv[0] : 0;
   react = true;
   tuimode = true;
   WriteErrorInit();
-  g_blink_path = argc > 0 ? argv[0] : 0;
   AddPath_StartOp_Hook = AddPath_StartOp_Tui;
   unassert((pty = NewPty()));
   unassert((s = NewSystem()));

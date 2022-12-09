@@ -50,14 +50,12 @@ static i64 ReadWord(struct Machine *m, u8 *p) {
   }
 }
 
-int GetInstruction(struct Machine *m, struct XedDecodedInst *x) {
-  u64 pc;
+int GetInstruction(struct Machine *m, i64 pc, struct XedDecodedInst *x) {
   int i, err;
   u8 copy[15], *toil, *addr;
-  pc = m->cs + MaskAddress(m->mode, m->ip);
   if ((addr = LookupAddress(m, pc))) {
     if ((i = 4096 - (pc & 4095)) >= 15) {
-      if (!DecodeInstruction(x, ResolveAddress(m, pc), 15, m->mode)) {
+      if (!DecodeInstruction(x, addr, 15, m->mode)) {
         return 0;
       } else {
         return kMachineDecodeError;
@@ -88,7 +86,7 @@ const char *DescribeOp(struct Machine *m) {
   int i, o = 0, n = sizeof(b);
   struct Dis d = {true};
   char spec[64];
-  if (!GetInstruction(m, d.xedd)) {
+  if (!GetInstruction(m, GetPc(m), d.xedd)) {
     DisInst(&d, b + o, DisSpec(d.xedd, spec));
   } else if (d.xedd->length) {
     for (i = 0; i < d.xedd->length; ++i) {
