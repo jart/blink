@@ -93,6 +93,9 @@
 #define SIGURG_LINUX   23
 #define SIGWINCH_LINUX 28
 
+#define AT_RANDOM_LINUX 25
+#define AT_EXECFN_LINUX 31
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];

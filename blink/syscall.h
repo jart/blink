@@ -4,6 +4,8 @@
 #include "blink/machine.h"
 #include "blink/types.h"
 
+extern char *g_blink_path;
+
 void OpSyscall(P);
 
 int SysClose(struct System *, i32);

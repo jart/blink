@@ -34,6 +34,7 @@
 #include "blink/flags.h"
 #include "blink/fpu.h"
 #include "blink/likely.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -316,7 +317,7 @@ static void OpBit(P) {
   unsigned bit;
   u64 v, x, y, z;
   u8 w, W[2][2] = {{2, 3}, {1, 3}};
-  unassert(!Lock(rde));
+  if (Lock(rde)) LOCK(&m->system->lock_lock);
   w = W[Osz(rde)][Rexw(rde)];
   if (Opcode(rde) == 0xBA) {
     op = ModrmReg(rde);
@@ -360,6 +361,7 @@ static void OpBit(P) {
       OpUdImpl(m);
   }
   WriteRegisterOrMemory(rde, p, z);
+  if (Lock(rde)) UNLOCK(&m->system->lock_lock);
 }
 
 static void OpSax(P) {
@@ -2063,6 +2065,7 @@ static bool CanJit(struct Machine *m) {
 
 void JitlessDispatch(P) {
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m), GetPc(m));
+  STATISTIC(++instructions_dispatched);
   LoadInstruction(m);
   m->oldip = m->ip;
   rde = m->xedd->op.rde;
@@ -2075,6 +2078,7 @@ void JitlessDispatch(P) {
 }
 
 void GeneralDispatch(P) {
+#ifdef HAVE_JIT
   i64 newip;
   int opclass;
   intptr_t jitpc;
@@ -2121,6 +2125,7 @@ void GeneralDispatch(P) {
     m->ip = newip;
   }
   m->oldip = -1;
+#endif
 }
 
 static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
@@ -2129,6 +2134,7 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
              " due to running into staged path",
              m->path.start);
     AbandonPath(m);
+    STATISTIC(++instructions_dispatched);
     func(DISPATCH_NOTHING);
     return;
   } else if (func != GeneralDispatch) {
@@ -2136,6 +2142,7 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
              " into previously created function %p",
              m->path.start, func);
     CommitPath(m, (intptr_t)func);
+    STATISTIC(++instructions_dispatched);
     func(DISPATCH_NOTHING);
     return;
   } else {
@@ -2144,12 +2151,13 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
 }
 
 void ExecuteInstruction(struct Machine *m) {
+#ifdef HAVE_JIT
   u64 pc;
   nexgen32e_f func;
-  STATISTIC(++instructions_dispatched);
   if (HasHook(m, (pc = GetPc(m)))) {
     func = IB(atomic_load_explicit(GetHook(m, pc), memory_order_relaxed));
     if (!m->path.jb) {
+      STATISTIC(++instructions_dispatched);
       func(DISPATCH_NOTHING);
     } else {
       ExploreInstruction(m, func);
@@ -2157,21 +2165,9 @@ void ExecuteInstruction(struct Machine *m) {
   } else {
     JitlessDispatch(DISPATCH_NOTHING);
   }
-}
-
-static void ExecuteInstructionLong(struct Machine *m) {
-  nexgen32e_f func;
-  STATISTIC(++instructions_dispatched);
-  if (HasHook(m, m->ip)) {
-    func = IB(atomic_load_explicit(GetHook(m, m->ip), memory_order_relaxed));
-    if (!m->path.jb) {
-      func(DISPATCH_NOTHING);
-    } else {
-      ExploreInstruction(m, func);
-    }
-  } else {
-    JitlessDispatch(DISPATCH_NOTHING);
-  }
+#else
+  JitlessDispatch(DISPATCH_NOTHING);
+#endif
 }
 
 static void CheckForSignals(struct Machine *m) {
@@ -2182,14 +2178,10 @@ static void CheckForSignals(struct Machine *m) {
 }
 
 void Actor(struct Machine *m) {
-  unassert(m->mode == XED_MODE_LONG);
-  // Put some distance between ourselves and the calling function,
-  // because it calls setjmp(). Another thread could theoretically
-  // longjmp() into this allocation. We must try something better.
-  void *volatile lol = alloca(256);
-  (void)lol;
-  for (g_machine = m;;) {
-    ExecuteInstructionLong(m);
-    CheckForSignals(m);
+  for (;;) {
+    for (g_machine = m;;) {
+      ExecuteInstruction(m);
+      CheckForSignals(m);
+    }
   }
 }

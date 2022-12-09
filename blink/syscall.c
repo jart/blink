@@ -69,6 +69,8 @@
 #define SYSCALL(x, y) CASE(x, SYS_LOGF("%s", #y); ax = y)
 #define ASSIGN(D, S)  memcpy(&D, &S, MIN(sizeof(S), sizeof(D)))
 
+char *g_blink_path;
+
 // delegate to work around function pointer errors, b/c
 // old musl toolchains using `int ioctl(int, int, ...)`
 static int SystemIoctl(int fd, unsigned long request, ...) {

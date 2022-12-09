@@ -23,15 +23,16 @@
 #include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
+#include "blink/lock.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/swap.h"
 
 static void AluEb(P, aluop_f op) {
   u8 *p = GetModrmRegisterBytePointerWrite1(A);
-  if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
+  if (Lock(rde)) LOCK(&m->system->lock_lock);
   Store8(p, op(m, Load8(p), 0));
-  if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+  if (Lock(rde)) UNLOCK(&m->system->lock_lock);
 }
 
 void OpNotEb(P) {
@@ -68,9 +69,9 @@ static void AluEvqp(P, const aluop_f ops[4]) {
                                                       memory_order_release,
                                                       memory_order_relaxed));
     } else {
-      if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
+      if (Lock(rde)) LOCK(&m->system->lock_lock);
       Store64(p, ops[ALU_INT64](m, Load64(p), 0));
-      if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+      if (Lock(rde)) UNLOCK(&m->system->lock_lock);
     }
   } else if (!Osz(rde)) {
     unsigned int x, z;
@@ -88,10 +89,10 @@ static void AluEvqp(P, const aluop_f ops[4]) {
       Write32(p + 4, 0);
     }
   } else {
-    if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
+    if (Lock(rde)) LOCK(&m->system->lock_lock);
     p = GetModrmRegisterWordPointerWrite2(A);
     Store16(p, ops[ALU_INT16](m, Load16(p), 0));
-    if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
   }
 }
 

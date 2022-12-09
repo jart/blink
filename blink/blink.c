@@ -132,6 +132,7 @@ static void GetOpts(int argc, char *argv[]) {
 
 int main(int argc, char *argv[], char **envp) {
   struct sigaction sa;
+  g_blink_path = argc > 0 ? argv[0] : 0;
   GetOpts(argc, argv);
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
   WriteErrorInit();

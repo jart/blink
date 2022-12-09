@@ -23,6 +23,7 @@
 #include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
@@ -30,7 +31,7 @@
 
 void OpCmpxchgEbAlGb(P) {
   u8 *p, x;
-  unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+  UNLOCK(&m->system->lock_lock);
   p = GetModrmRegisterBytePointerWrite1(A);
   x = Get8(p);
   Sub8(m, Get8(m->ax), x);
@@ -39,7 +40,7 @@ void OpCmpxchgEbAlGb(P) {
   } else {
     Put8(m->ax, x);
   }
-  unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+  UNLOCK(&m->system->lock_lock);
 }
 
 void OpCmpxchgEvqpRaxGvqp(P) {
@@ -58,7 +59,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       Sub64(m, Get64(m->ax), Little64(ax));
       atomic_store_explicit((atomic_ulong *)m->ax, ax, memory_order_relaxed);
     } else {
-      unassert(!pthread_mutex_lock(&m->system->lock_lock));
+      LOCK(&m->system->lock_lock);
       u64 x = Load64(p);
       Sub64(m, Get64(m->ax), x);
       if ((didit = x == Get64(m->ax))) {
@@ -66,7 +67,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       } else {
         Put64(m->ax, x);
       }
-      unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+      UNLOCK(&m->system->lock_lock);
     }
   } else if (!Osz(rde)) {
     if (Lock(rde) && !((intptr_t)p & 3)) {
@@ -91,7 +92,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       Put32(p + 4, 0);
     }
   } else {
-    if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
+    if (Lock(rde)) LOCK(&m->system->lock_lock);
     u16 x = Load16(p);
     Sub16(m, Get16(m->ax), x);
     if ((didit = x == Get16(m->ax))) {
@@ -99,6 +100,6 @@ void OpCmpxchgEvqpRaxGvqp(P) {
     } else {
       Put16(m->ax, x);
     }
-    if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
   }
 }

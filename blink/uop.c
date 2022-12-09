@@ -702,7 +702,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
  * Generates JIT code that implements x86 instructions.
  */
 void Jitter(P, const char *fmt, ...) {
-#if defined(__aarch64__) || defined(__x86_64__)
+#ifdef HAVE_JIT
   va_list va;
   if (!m->path.jb) return;
   va_start(va, fmt);

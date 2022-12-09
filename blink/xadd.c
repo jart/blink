@@ -22,6 +22,7 @@
 #include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/endian.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
@@ -32,13 +33,13 @@ void OpXaddEbGb(P) {
   u8 x, y, z, *p, *q;
   p = GetModrmRegisterBytePointerWrite1(A);
   q = ByteRexrReg(m, rde);
-  if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
+  LOCK(&m->system->lock_lock);
   x = Load8(p);
   y = Get8(q);
   z = Add8(m, x, y);
   Put8(q, x);
   Store8(p, z);
-  if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+  UNLOCK(&m->system->lock_lock);
 }
 
 void OpXaddEvqpGvqp(P) {
@@ -58,13 +59,13 @@ void OpXaddEvqpGvqp(P) {
                                                       memory_order_release,
                                                       memory_order_acquire));
     } else {
-      if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
+      LOCK(&m->system->lock_lock);
       x = Load64(p);
       y = Get64(q);
       z = kAlu[ALU_ADD][ALU_INT64](m, x, y);
       Put64(q, x);
       Store64(p, z);
-      if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+      UNLOCK(&m->system->lock_lock);
     }
   } else if (!Osz(rde)) {
     u32 x, y, z;
@@ -91,12 +92,12 @@ void OpXaddEvqpGvqp(P) {
     }
   } else {
     u16 x, y, z;
-    if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
+    LOCK(&m->system->lock_lock);
     x = Load16(p);
     y = Get16(q);
     z = kAlu[ALU_ADD][ALU_INT16](m, x, y);
     Put16(q, x);
     Store16(p, z);
-    if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+    UNLOCK(&m->system->lock_lock);
   }
 }

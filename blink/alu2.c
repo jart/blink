@@ -23,6 +23,7 @@
 #include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
@@ -35,9 +36,9 @@ void OpAlub(P) {
   f = kAlu[(Opcode(rde) & 070) >> 3][0];
   p = GetModrmRegisterBytePointerWrite1(A);
   q = ByteRexrReg(m, rde);
-  if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
+  if (Lock(rde)) LOCK(&m->system->lock_lock);
   Write8(p, f(m, Load8(p), Get8(q)));
-  if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+  if (Lock(rde)) UNLOCK(&m->system->lock_lock);
 }
 
 void OpAluw(P) {
@@ -88,13 +89,13 @@ void OpAluw(P) {
     }
   } else {
     u16 x, y, z;
-    if (Lock(rde)) unassert(!pthread_mutex_lock(&m->system->lock_lock));
+    if (Lock(rde)) LOCK(&m->system->lock_lock);
     p = GetModrmRegisterWordPointerWrite2(A);
     x = Load16(p);
     y = Get16(q);
     z = f(m, x, y);
     Store16(p, z);
-    if (Lock(rde)) unassert(!pthread_mutex_unlock(&m->system->lock_lock));
+    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
   }
 
   if (m->path.jb && !Lock(rde)) {

@@ -26,8 +26,7 @@
 #include "blink/jit.h"
 #include "test/test.h"
 
-#if (defined(__x86_64__) || defined(__aarch64__)) && \
-    !__has_feature(memory_sanitizer)
+#ifdef HAVE_JIT
 
 typedef int (*add_f)(int, int);
 typedef u64 (*noparam_f)(void);
