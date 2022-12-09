@@ -216,8 +216,11 @@ int XlatSignal(int x) {
     XLAT(20, SIGTSTP);
     XLAT(23, SIGURG);
     default:
-      LOGF("signal %d not supported yet", x);
-      return einval();
+      if (x > 0 && x <= 64) {
+        return x;
+      } else {
+        return einval();
+      }
   }
 }
 
@@ -300,9 +303,9 @@ int UnXlatSignal(int x) {
 
 int XlatSig(int x) {
   switch (x) {
-    XLAT(0, SIG_BLOCK);
-    XLAT(1, SIG_UNBLOCK);
-    XLAT(2, SIG_SETMASK);
+    XLAT(SIG_BLOCK_LINUX, SIG_BLOCK);
+    XLAT(SIG_UNBLOCK_LINUX, SIG_UNBLOCK);
+    XLAT(SIG_SETMASK_LINUX, SIG_SETMASK);
     default:
       return einval();
   }
@@ -443,15 +446,6 @@ int XlatWait(int x) {
   if (x & 2) r |= WUNTRACED, x &= ~2;
   if (x & 8) r |= WCONTINUED, x &= ~8;
   if (x) LOGF("%s %d not supported yet", "wait", x);
-  return r;
-}
-
-int XlatMapFlags(int x) {
-  int r = 0;
-  if (x & 1) r |= MAP_SHARED;
-  if (x & 2) r |= MAP_PRIVATE;
-  if (x & 16) r |= MAP_FIXED;
-  if (x & 32) r |= MAP_ANONYMOUS;
   return r;
 }
 

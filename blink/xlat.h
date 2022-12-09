@@ -18,7 +18,6 @@ int XlatAtf(int);
 int XlatClock(int);
 int XlatErrno(int);
 int XlatLock(int);
-int XlatMapFlags(int);
 int XlatOpenFlags(int);
 int XlatAccMode(int);
 int XlatResource(int);

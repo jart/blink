@@ -83,8 +83,10 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
   }
 
   if (ReserveVirtual(m->system, start, end - start,
-                     PAGE_U | PAGE_RW | (flags & PF_X ? 0 : PAGE_XD), -1,
-                     false) == -1) {
+                     (flags & PF_R ? PAGE_U : 0) |
+                         (flags & PF_W ? PAGE_RW : 0) |
+                         (flags & PF_X ? 0 : PAGE_XD),
+                     -1, false) == -1) {
     LOGF("failed to reserve virtual memory for elf program header");
     exit(127);
   }

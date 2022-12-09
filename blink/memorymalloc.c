@@ -171,6 +171,7 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
     memset(m, 0, sizeof(*m));
     ResetCpu(m);
   }
+  m->ctid = 0;
   m->oldip = -1;
   m->system = system;
   m->mode = system->mode;
@@ -315,9 +316,10 @@ static bool FreePage(struct System *s, u64 entry) {
   }
 }
 
-static bool ClearVirtual(struct System *s, i64 virt, i64 size) {
+static bool RemoveVirtual(struct System *s, i64 virt, i64 size) {
   u8 *mi;
-  u64 i, pt, end;
+  i64 end;
+  u64 i, pt;
   bool has_maps = false;
   for (end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
@@ -375,15 +377,15 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   MEM_LOGF("reserving virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
            virt, virt + size, size / 1024);
 
-  ClearVirtual(s, virt, size);
+  RemoveVirtual(s, virt, size);
 
   if (!s->nolinear) {
-    if (Mmap(ToHost(virt), size,                     //
-             ((flags & PAGE_U ? PROT_READ : 0) |     //
-              (flags & PAGE_RW ? PROT_WRITE : 0)),   //
-             (MAP_FIXED |                            //
-              (fd == -1 ? MAP_ANONYMOUS : 0) |       //
-              (shared ? MAP_SHARED : MAP_PRIVATE)),  //
+    if (Mmap(ToHost(virt), size,                                  //
+             ((flags & PAGE_U ? PROT_READ : 0) |                  //
+              ((flags & PAGE_RW) || fd == -1 ? PROT_WRITE : 0)),  //
+             (MAP_FIXED |                                         //
+              (fd == -1 ? MAP_ANONYMOUS : 0) |                    //
+              (shared ? MAP_SHARED : MAP_PRIVATE)),               //
              fd, 0, "linear") == MAP_FAILED) {
       LOGF("mmap(%p) crisis: %s", ToHost(virt), strerror(errno));
       WriteErrorString("system mmap() crisis\n");
@@ -466,9 +468,27 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
            virt, virt + size, size / 1024);
   // TODO(jart): We should probably validate a PAGE_EOF exists at the
   //             end when size isn't a multiple of platform page size
-  if (ClearVirtual(s, virt, size)) {
+  if (RemoveVirtual(s, virt, size)) {
     unassert(!munmap(ToHost(virt & PAGE_TA), size));
   }
   InvalidateSystem(s, true, false);
   return 0;
+}
+
+void ProtectVirtual(struct System *s, i64 virt, i64 size, u64 mask, u64 flags) {
+  u8 *mi;
+  i64 end;
+  u64 i, pt;
+  for (end = virt + size; virt < end; virt += 1ull << i) {
+    for (pt = s->cr3, i = 39;; i -= 9) {
+      mi = GetPageAddress(s, pt) + ((virt >> i) & 511) * 8;
+      pt = Load64(mi);
+      if (!(pt & PAGE_V)) {
+        break;
+      } else if (i == 12) {
+        Store64(mi, (pt & mask) | flags);
+        break;
+      }
+    }
+  }
 }

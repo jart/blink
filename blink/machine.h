@@ -200,7 +200,7 @@ struct System {
   struct Fds fds;
   struct Elf elf;
   pthread_mutex_t sig_lock;
-  struct sigaction_linux hands[32] GUARDED_BY(sig_lock);
+  struct sigaction_linux hands[64] GUARDED_BY(sig_lock);
   pthread_mutex_t mmap_lock;
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
@@ -385,6 +385,7 @@ void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 void ResetRam(struct Machine *);
 void SetReadAddr(struct Machine *, i64, u32);
 void SetWriteAddr(struct Machine *, i64, u32);
+void ProtectVirtual(struct System *, i64, i64, u64, u64);
 int ClassifyOp(u64) pureconst;
 
 void CountOp(long *);

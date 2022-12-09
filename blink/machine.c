@@ -59,7 +59,7 @@ static void OpHintNopEv(P) {
 }
 
 static void OpCmc(P) {
-  m->flags ^= 1;
+  m->flags ^= CF;
 }
 
 static void OpClc(P) {
@@ -2173,10 +2173,8 @@ static void CheckForSignals(struct Machine *m) {
 }
 
 void Actor(struct Machine *m) {
-  for (;;) {
-    for (g_machine = m;;) {
-      ExecuteInstruction(m);
-      CheckForSignals(m);
-    }
+  for (g_machine = m;;) {
+    ExecuteInstruction(m);
+    CheckForSignals(m);
   }
 }
