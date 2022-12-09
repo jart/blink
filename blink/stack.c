@@ -21,14 +21,15 @@
 #include "blink/address.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
+#include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/tsan.h"
 #include "blink/x86.h"
 
-static const u8 kStackOsz[2][3] = {{2, 4, 8}, {4, 2, 2}};
-static const u8 kCallOsz[2][3] = {{2, 4, 8}, {4, 2, 8}};
+static const u8 kStackOsz[2][3] = {{4, 4, 8}, {2, 2, 2}};
+static const u8 kCallOsz[2][3] = {{4, 4, 8}, {2, 2, 8}};
 
 static void WriteStackWord(u8 *p, u64 rde, u32 osz, u64 x) {
   if (osz == 8) {
