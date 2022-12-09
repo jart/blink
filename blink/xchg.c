@@ -16,34 +16,78 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <limits.h>
+#include <stdatomic.h>
+
+#include "blink/assert.h"
 #include "blink/endian.h"
-#include "blink/lock.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 
 void OpXchgGbEb(P) {
-  u64 x, y;
-  u8 *p, *q;
+  u8 *q;
   q = ByteRexrReg(m, rde);
-  p = GetModrmRegisterBytePointerWrite1(A);
-  if (!IsModrmRegister(rde)) LOCK(&m->system->lock_lock);
-  x = Get8(q);
-  y = Load8(p);
-  Put8(q, y);
-  Store8(p, x);
-  if (!IsModrmRegister(rde)) UNLOCK(&m->system->lock_lock);
+  if (!IsModrmRegister(rde)) {
+    *q =
+        atomic_exchange_explicit((atomic_uchar *)ComputeReserveAddressWrite1(A),
+                                 *q, memory_order_acq_rel);
+  } else {
+    u8 *p;
+    u8 x, y;
+    p = ByteRexbRm(m, rde);
+    x = Get8(q);
+    y = Load8(p);
+    Put8(q, y);
+    Store8(p, x);
+  }
 }
 
 void OpXchgGvqpEvqp(P) {
-  u64 x, y;
-  u8 *p, *q;
-  q = RegRexrReg(m, rde);
-  p = GetModrmRegisterWordPointerWriteOszRexw(A);
-  if (!IsModrmRegister(rde)) LOCK(&m->system->lock_lock);
-  x = Get64(q);
-  y = ReadMemory(rde, p);
-  WriteRegister(rde, q, y);
-  WriteRegisterOrMemory(rde, p, x);
-  if (!IsModrmRegister(rde)) UNLOCK(&m->system->lock_lock);
+  u8 *q = RegRexrReg(m, rde);
+  u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
+  if (Rexw(rde)) {
+    if (!IsModrmRegister(rde) && !((intptr_t)p & 7)) {
+      atomic_store_explicit(
+          (atomic_ulong *)q,
+          atomic_exchange_explicit(
+              (atomic_ulong *)p,
+              atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
+              memory_order_acq_rel),
+          memory_order_relaxed);
+    } else {
+      u64 x, y;
+      x = Read64(q);
+      y = Read64(p);
+      Write64(q, y);
+      Write64(p, x);
+    }
+  } else if (!Osz(rde)) {
+    if (!IsModrmRegister(rde) && !((intptr_t)p & 3)) {
+      atomic_store_explicit(
+          (atomic_uint *)q,
+          atomic_exchange_explicit(
+              (atomic_uint *)p,
+              atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
+              memory_order_acq_rel),
+          memory_order_relaxed);
+    } else {
+      u32 x, y;
+      x = Read32(q);
+      y = Read32(p);
+      Write32(q, y);
+      Write32(p, x);
+    }
+    Write32(q + 4, 0);
+    if (IsModrmRegister(rde)) {
+      Write32(p + 4, 0);
+    }
+  } else {
+    u16 x, y;
+    unassert(IsModrmRegister(rde));
+    x = Read16(q);
+    y = Read16(p);
+    Write16(q, y);
+    Write16(p, x);
+  }
 }

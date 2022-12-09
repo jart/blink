@@ -1,10 +1,14 @@
 # blink
 
-blink is a virtual machine for running x86-64-linux programs on different
-operating systems and hardware architectures. It's designed to do the
-same thing as the `qemu-x86_64` command, except rather than being a 10mb
-binary, blink only has a ~154kb footprint. For further details on the
-motivations for this tool, please read <https://justine.lol/ape.html>.
+blink is a virtual machine for running statically-compiled x86-64-linux
+programs on different operating systems and hardware architectures. It's
+designed to do the same thing as the `qemu-x86_64` command, except
+rather than being a 4mb binary, blink only has a ~154kb footprint. The
+tradeoff is Blink goes half as fast as Qemu and doesn't have as many
+systems integrations. Blink is a great fit when you want a virtual
+machine that's embeddable, readable, hackable, and easy to compile. For
+further details on the motivations for this tool, please read
+<https://justine.lol/ape.html>.
 
 ## Caveat Emptor
 
@@ -82,10 +86,33 @@ hello world
 
 blink is an x86-64 interpreter for POSIX platforms that's written in
 ANSI C11 that's compatible with C++ compilers. Instruction decoding is
-done using our trimmed-down version of Intel's disassembler Xed. Blink
-does *some* code generation at runtime, using a just-in-time approach,
-where functions are generated that thread statically-compiled operation
-functions together.
+done using our trimmed-down version of Intel's disassembler Xed.
+
+Blink uses just-in-time compilation, which is supported on x86_64 and
+aarch64. Blink takes the appropriate steps to work around restrictions
+relating to JIT, on platforms like Apple and OpenBSD. We generate JIT
+code using a printf-style domain-specific language. The JIT works by
+generating functions at runtime which call the micro-op functions the
+compiler created. Blink decode micro-ops at runtime by scanning their
+memory for a RET instruction. This works in most cases, but some tools
+can present problems, such as OpenBSD retguard which inserts static
+memory relocations into every function. The Makefile config and headers
+do a good job preventing tools from generating additional magic, but in
+the event that fails, Blink has a runtime check for obvious problems in
+the compiler output, and then falls back to using a CALL instruction.
+
+Blink virtualizes memory using the same PML4T approach as the hardware
+itself, where memory lookups are indirected through a four-level radix
+tree and a translation lookaside buffer. On systems with a huge address
+space, Blink can avoid the TLB and PML4T entirely in most circumstances
+by identity-mapping memory for the guest program. This goes very fast
+but it doesn't work if the upstream tools (like TSAN) have already laid
+claim to the virtual addresses that the guest program wants. For example
+on Apple platforms it isn't possible to allocate 32-bit addresses, so
+the solution Blink uses is to just perform a simple addition whenever a
+memory address is translated. This goes fast, but if it doesn't work on
+your platform, then it's possible to pass the `blink -m` flag to enable
+full portable memory safety.
 
 The prime directive of this project is to act as a virtual machine for
 userspace binaries compiled by Cosmopolitan Libc. Much of the surface
@@ -95,11 +122,4 @@ are supported. x87 currently only supports double (64-bit) precision.
 
 Blink supports 32-bit and 16-bit BIOS programs, plus just enough ring0
 instructions to test an operating system bootloader. Plus IBM PC Serial
-UART, CGA, and MDA. However these legacy features might get sprung into
-a sister project sometime soon.
-
-## Flakes
-
-![Blink Flakes: The Original and Best Unexplained Errors](test/flakes.png)
-
-There aren't any known flakes at this time.
+UART, CGA, and MDA.

@@ -97,7 +97,9 @@ static size_t uint64toarray_fixed16(u64 x, char b[17], u8 k) {
 
 static char *DisAddr(struct Dis *d, char *p) {
   i64 x = d->addr;
-  if (INT_MIN <= x && x <= INT_MAX) {
+  if (0 <= x && x < 0x10fff0) {
+    return p + uint64toarray_fixed16(x, p, 24);
+  } else if (INT_MIN <= x && x <= INT_MAX) {
     return p + uint64toarray_fixed16(x, p, 32);
   } else {
     return p + uint64toarray_fixed16(x, p, 48);
@@ -106,7 +108,13 @@ static char *DisAddr(struct Dis *d, char *p) {
 
 static char *DisRaw(struct Dis *d, char *p) {
   long i;
-  for (i = 0; i < PFIXLEN - MIN(PFIXLEN, d->xedd->op.PIVOTOP); ++i) {
+  int plen;
+  if (0 <= d->addr && d->addr < 0x10fff0) {
+    plen = 2;
+  } else {
+    plen = PFIXLEN;
+  }
+  for (i = 0; i < plen - MIN(plen, d->xedd->op.PIVOTOP); ++i) {
     *p++ = ' ';
     *p++ = ' ';
   }
@@ -129,8 +137,16 @@ static char *DisCode(struct Dis *d, char *p, int err) {
 }
 
 static char *DisLineCode(struct Dis *d, char *p, int err) {
+  int blen, plen;
+  if (0 <= d->addr && d->addr < 0x10fff0) {
+    plen = 2;
+    blen = 6;
+  } else {
+    blen = BYTELEN;
+    plen = PFIXLEN;
+  }
   p = DisColumn(DisAddr(d, p), p, ADDRLEN);
-  p = DisColumn(DisRaw(d, p), p, PFIXLEN * 2 + 1 + BYTELEN * 2);
+  p = DisColumn(DisRaw(d, p), p, plen * 2 + 1 + blen * 2);
   p = DisCode(d, p, err);
   return p;
 }
@@ -166,9 +182,9 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
   u8 *r;
   i64 ip;
   unsigned k;
-  struct DisOp op;
-  long n, symbol;
   u8 *p, b[15];
+  long n, symbol;
+  struct DisOp op;
   n = 15;
   ip = addr - m->cs;
   if ((symbol = DisFindSym(d, ip)) != -1) {

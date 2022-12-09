@@ -35,7 +35,7 @@ void OpCmpxchgEbAlGb(P) {
   p = GetModrmRegisterBytePointerWrite1(A);
   x = Get8(p);
   Sub8(m, Get8(m->ax), x);
-  if ((x == Get8(m->ax))) {
+  if (x == Get8(m->ax)) {
     Put8(p, Get8(ByteRexrReg(m, rde)));
   } else {
     Put8(m->ax, x);

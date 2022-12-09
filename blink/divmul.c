@@ -24,7 +24,7 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 
-#if LONG_BIT == 64
+#if LONG_BIT == 64 && !defined(TINY)
 #if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 406 || defined(__llvm__)
 #define HAVE_INT128
 #endif

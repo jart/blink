@@ -222,8 +222,6 @@ o/$(MODE)/mips64el/test/blink/disinst_test.com: o/$(MODE)/mips64el/test/blink/di
 	o/third_party/gcc/mips64el/bin/mips64el-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/s390x/test/blink/disinst_test.com: o/$(MODE)/s390x/test/blink/disinst_test.o o/$(MODE)/s390x/blink/blink.a
 	o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/microblaze/test/blink/disinst_test.com: o/$(MODE)/microblaze/test/blink/disinst_test.o o/$(MODE)/microblaze/blink/blink.a
-	o/third_party/gcc/microblaze/bin/microblaze-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc/test/blink/disinst_test.com: o/$(MODE)/powerpc/test/blink/disinst_test.o o/$(MODE)/powerpc/blink/blink.a
 	o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc64le/test/blink/disinst_test.com: o/$(MODE)/powerpc64le/test/blink/disinst_test.o o/$(MODE)/powerpc64le/blink/blink.a
@@ -253,8 +251,6 @@ o/$(MODE)/mips64el/test/blink/jit_test.com: o/$(MODE)/mips64el/test/blink/jit_te
 	o/third_party/gcc/mips64el/bin/mips64el-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/s390x/test/blink/jit_test.com: o/$(MODE)/s390x/test/blink/jit_test.o o/$(MODE)/s390x/blink/blink.a
 	o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
-o/$(MODE)/microblaze/test/blink/jit_test.com: o/$(MODE)/microblaze/test/blink/jit_test.o o/$(MODE)/microblaze/blink/blink.a
-	o/third_party/gcc/microblaze/bin/microblaze-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc/test/blink/jit_test.com: o/$(MODE)/powerpc/test/blink/jit_test.o o/$(MODE)/powerpc/blink/blink.a
 	o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/powerpc64le/test/blink/jit_test.com: o/$(MODE)/powerpc64le/test/blink/jit_test.o o/$(MODE)/powerpc64le/blink/blink.a
@@ -389,7 +385,6 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/mips64/test/blink/disinst_test.com.runs	\
 		o/$(MODE)/mips64el/test/blink/disinst_test.com.runs	\
 		o/$(MODE)/s390x/test/blink/disinst_test.com.runs	\
-		o/$(MODE)/microblaze/test/blink/disinst_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/disinst_test.com.runs	\
 		o/$(MODE)/powerpc64le/test/blink/disinst_test.com.runs	\
 		o/$(MODE)/i486/test/blink/jit_test.com.runs		\
@@ -403,6 +398,5 @@ o/$(MODE)/test/blink/emulates:						\
 		o/$(MODE)/mips64/test/blink/jit_test.com.runs		\
 		o/$(MODE)/mips64el/test/blink/jit_test.com.runs		\
 		o/$(MODE)/s390x/test/blink/jit_test.com.runs		\
-		o/$(MODE)/microblaze/test/blink/jit_test.com.runs	\
 		o/$(MODE)/powerpc/test/blink/jit_test.com.runs		\
 		o/$(MODE)/powerpc64le/test/blink/jit_test.com.runs

@@ -158,8 +158,9 @@ long DisFindSym(struct Dis *d, i64 addr) {
         l = m + 1;
       }
     }
-    if (r && d->syms.p[r - 1].addr < 256) {
-      /* XXX: prevent skewed binbase from doing weirdness */
+    // TODO(jart): This was <256 but that broke SectorLISP debugging
+    //             Why did the Cosmo binbase bootloader need this?
+    if (r && d->syms.p[r - 1].addr < 32) {
       return -1;
     }
     if (r && (addr == d->syms.p[r - 1].addr ||
@@ -187,5 +188,4 @@ void DisLoadElf(struct Dis *d, struct Elf *elf) {
   DisLoadElfLoads(d, elf);
   DisLoadElfSyms(d, elf);
   DisSortSyms(d);
-  /* DisCanonizeSyms(d); */
 }
