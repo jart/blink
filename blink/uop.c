@@ -88,6 +88,76 @@ typedef void (*putreg_f)(struct Machine *, long, u64);
 static const putreg_f kPutReg[] = {PutReg8, PutReg16, PutReg32, PutReg64};
 
 ////////////////////////////////////////////////////////////////////////////////
+// READING FROM MEMORY
+
+MICRO_OP static i64 LoadLinear8(i64 v) {
+  return Load8(ToHost(v));
+}
+MICRO_OP static i64 LoadLinear16(i64 v) {
+  return Load16(ToHost(v));
+}
+MICRO_OP static i64 LoadLinear32(i64 v) {
+  return Load32(ToHost(v));
+}
+MICRO_OP static i64 LoadLinear64(i64 v) {
+  return Load64(ToHost(v));
+}
+typedef i64 (*loadmem_f)(i64);
+static const loadmem_f kLoadLinear[] = {LoadLinear8, LoadLinear16,  //
+                                        LoadLinear32, LoadLinear64};
+
+static i64 LoadReserve8(struct Machine *m, i64 v) {
+  return Load8(ReserveAddress(m, v, 1, false));
+}
+static i64 LoadReserve16(struct Machine *m, i64 v) {
+  return Load16(ReserveAddress(m, v, 2, false));
+}
+static i64 LoadReserve32(struct Machine *m, i64 v) {
+  return Load32(ReserveAddress(m, v, 4, false));
+}
+static i64 LoadReserve64(struct Machine *m, i64 v) {
+  return Load64(ReserveAddress(m, v, 8, false));
+}
+typedef i64 (*loadreserve_f)(struct Machine *, i64);
+static const loadreserve_f kLoadReserve[] = {LoadReserve8, LoadReserve16,  //
+                                             LoadReserve32, LoadReserve64};
+
+////////////////////////////////////////////////////////////////////////////////
+// WRITING TO MEMORY
+
+MICRO_OP static void StoreLinear8(i64 v, u64 x) {
+  Store8(ToHost(v), x);
+}
+MICRO_OP static void StoreLinear16(i64 v, u64 x) {
+  Store16(ToHost(v), x);
+}
+MICRO_OP static void StoreLinear32(i64 v, u64 x) {
+  Store32(ToHost(v), x);
+}
+MICRO_OP static void StoreLinear64(i64 v, u64 x) {
+  Store64(ToHost(v), x);
+}
+typedef void (*storemem_f)(i64, u64);
+static const storemem_f kStoreLinear[] = {StoreLinear8, StoreLinear16,
+                                          StoreLinear32, StoreLinear64};
+
+static void StoreReserve8(struct Machine *m, i64 v, u64 x) {
+  Store8(ReserveAddress(m, v, 1, true), x);
+}
+static void StoreReserve16(struct Machine *m, i64 v, u64 x) {
+  Store16(ReserveAddress(m, v, 2, true), x);
+}
+static void StoreReserve32(struct Machine *m, i64 v, u64 x) {
+  Store32(ReserveAddress(m, v, 4, true), x);
+}
+static void StoreReserve64(struct Machine *m, i64 v, u64 x) {
+  Store64(ReserveAddress(m, v, 8, true), x);
+}
+typedef void (*storereserve_f)(struct Machine *, i64, u64);
+static const storereserve_f kStoreReserve[] = {StoreReserve8, StoreReserve16,
+                                               StoreReserve32, StoreReserve64};
+
+////////////////////////////////////////////////////////////////////////////////
 // ALU MICRO-OPS
 
 MICRO_OP void FastZeroify(struct Machine *m, long i) {
@@ -228,171 +298,20 @@ typedef u64 (*sex_f)(u64);
 static const sex_f kSex[] = {Sex8, Sex16, Sex32};
 
 ////////////////////////////////////////////////////////////////////////////////
-// DEVIRTUALIZED LOADING OF ABSOLUTE MEMORY PARAMETER
+// ADDRESSING
 
-MICRO_OP static u64 GetDemAbs8(u64 abs) {
-  return Load8(ToHost(abs));
+MICRO_OP static i64 Seg(struct Machine *m, u64 d, long s) {
+  return d + m->seg[s];
 }
-MICRO_OP static u64 GetDemAbs16(u64 abs) {
-  return Load16(ToHost(abs));
+MICRO_OP static i64 Base(struct Machine *m, u64 d, long i) {
+  return d + Get64(m->weg[i]);
 }
-MICRO_OP static u64 GetDemAbs32(u64 abs) {
-  return Load32(ToHost(abs));
+MICRO_OP static i64 Index(struct Machine *m, u64 d, long i, int z) {
+  return d + (Get64(m->weg[i]) << z);
 }
-MICRO_OP static u64 GetDemAbs64(u64 abs) {
-  return Load64(ToHost(abs));
+MICRO_OP static i64 BaseIndex(struct Machine *m, u64 d, long b, long i, int z) {
+  return d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z);
 }
-typedef u64 (*getdemabs_f)(u64);
-static const getdemabs_f kGetDemAbs[] = {GetDemAbs8, GetDemAbs16,  //
-                                         GetDemAbs32, GetDemAbs64};
-
-////////////////////////////////////////////////////////////////////////////////
-// DEVIRTUALIZED STORING TO ABSOLUTE MEMORY PARAMETER
-
-MICRO_OP static void PutDemAbs8(u64 abs, u64 x) {
-  Store8(ToHost(abs), x);
-}
-MICRO_OP static void PutDemAbs16(u64 abs, u64 x) {
-  Store16(ToHost(abs), x);
-}
-MICRO_OP static void PutDemAbs32(u64 abs, u64 x) {
-  Store32(ToHost(abs), x);
-}
-MICRO_OP static void PutDemAbs64(u64 abs, u64 x) {
-  Store64(ToHost(abs), x);
-}
-typedef void (*putdemabs_f)(u64, u64);
-static const putdemabs_f kPutDemAbs[] = {PutDemAbs8, PutDemAbs16,  //
-                                         PutDemAbs32, PutDemAbs64};
-
-////////////////////////////////////////////////////////////////////////////////
-// DEVIRTUALIZED LOADING OF ±DISP(%BASE) MEMORY PARAMETER
-
-MICRO_OP static u64 GetDem8(struct Machine *m, u64 disp, long i) {
-  return Load8(ToHost(disp + Get64(m->weg[i])));
-}
-MICRO_OP static u64 GetDem16(struct Machine *m, u64 disp, long i) {
-  return Load16(ToHost(disp + Get64(m->weg[i])));
-}
-MICRO_OP static u64 GetDem32(struct Machine *m, u64 disp, long i) {
-  return Load32(ToHost(disp + Get64(m->weg[i])));
-}
-MICRO_OP static u64 GetDem64(struct Machine *m, u64 disp, long i) {
-  return Load64(ToHost(disp + Get64(m->weg[i])));
-}
-typedef u64 (*getdem_f)(struct Machine *, u64, long);
-static const getdem_f kGetDem[] = {GetDem8, GetDem16, GetDem32, GetDem64};
-
-////////////////////////////////////////////////////////////////////////////////
-// DEVIRTUALIZED STORING TO ±DISP(%BASE) MEMORY PARAMETER
-
-MICRO_OP static void PutDem8(struct Machine *m, u64 disp, long i, u64 x) {
-  Store8(ToHost(disp + Get64(m->weg[i])), x);
-}
-MICRO_OP static void PutDem16(struct Machine *m, u64 disp, long i, u64 x) {
-  Store16(ToHost(disp + Get64(m->weg[i])), x);
-}
-MICRO_OP static void PutDem32(struct Machine *m, u64 disp, long i, u64 x) {
-  Store32(ToHost(disp + Get64(m->weg[i])), x);
-}
-MICRO_OP static void PutDem64(struct Machine *m, u64 disp, long i, u64 x) {
-  Store64(ToHost(disp + Get64(m->weg[i])), x);
-}
-typedef void (*putdem_f)(struct Machine *, u64, long, u64);
-static const putdem_f kPutDem[] = {PutDem8, PutDem16, PutDem32, PutDem64};
-
-////////////////////////////////////////////////////////////////////////////////
-// DEVIRTUALIZED LOADING OF ±DISP(,%INDEX,SCALE) MEMORY PARAMETER
-
-MICRO_OP static u64 GetDemIndex8(struct Machine *m, u64 disp, long index,
-                                 int scale) {
-  return Load8(ToHost(disp + (Get64(m->weg[index]) << scale)));
-}
-MICRO_OP static u64 GetDemIndex16(struct Machine *m, u64 disp, long index,
-                                  int scale) {
-  return Load16(ToHost(disp + (Get64(m->weg[index]) << scale)));
-}
-MICRO_OP static u64 GetDemIndex32(struct Machine *m, u64 disp, long index,
-                                  int scale) {
-  return Load32(ToHost(disp + (Get64(m->weg[index]) << scale)));
-}
-MICRO_OP static u64 GetDemIndex64(struct Machine *m, u64 disp, long index,
-                                  int scale) {
-  return Load64(ToHost(disp + (Get64(m->weg[index]) << scale)));
-}
-typedef u64 (*getdemindex_f)(struct Machine *, u64, long, int);
-static const getdemindex_f kGetDemIndex[] = {GetDemIndex8, GetDemIndex16,
-                                             GetDemIndex32, GetDemIndex64};
-
-////////////////////////////////////////////////////////////////////////////////
-
-// DEVIRTUALIZED STORING TO ±DISP(,%INDEX,SCALE) MEMORY PARAMETER
-
-MICRO_OP static void PutDemIndex8(struct Machine *m, u64 disp, long i, int z,
-                                  u64 x) {
-  Store8(ToHost(disp + (Get64(m->weg[i]) << z)), x);
-}
-MICRO_OP static void PutDemIndex16(struct Machine *m, u64 disp, long i, int z,
-                                   u64 x) {
-  Store16(ToHost(disp + (Get64(m->weg[i]) << z)), x);
-}
-MICRO_OP static void PutDemIndex32(struct Machine *m, u64 disp, long i, int z,
-                                   u64 x) {
-  Store32(ToHost(disp + (Get64(m->weg[i]) << z)), x);
-}
-MICRO_OP static void PutDemIndex64(struct Machine *m, u64 disp, long i, int z,
-                                   u64 x) {
-  Store64(ToHost(disp + (Get64(m->weg[i]) << z)), x);
-}
-typedef void (*putdemindex_f)(struct Machine *, u64, long, int, u64);
-static const putdemindex_f kPutDemIndex[] = {PutDemIndex8, PutDemIndex16,
-                                             PutDemIndex32, PutDemIndex64};
-
-////////////////////////////////////////////////////////////////////////////////
-// DEVIRTUALIZED LOADING OF ±DISP(%BASE,%INDEX,SCALE) MEMORY PARAMETER
-
-MICRO_OP static u64 GetDemBaseIndex8(struct Machine *m, u64 d, long b, long i,
-                                     int z) {
-  return Load8(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
-}
-MICRO_OP static u64 GetDemBaseIndex16(struct Machine *m, u64 d, long b, long i,
-                                      int z) {
-  return Load16(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
-}
-MICRO_OP static u64 GetDemBaseIndex32(struct Machine *m, u64 d, long b, long i,
-                                      int z) {
-  return Load32(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
-}
-MICRO_OP static u64 GetDemBaseIndex64(struct Machine *m, u64 d, long b, long i,
-                                      int z) {
-  return Load64(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)));
-}
-typedef u64 (*getdembaseindex_f)(struct Machine *, u64, long, long, int);
-static const getdembaseindex_f kGetDemBaseIndex[] = {
-    GetDemBaseIndex8, GetDemBaseIndex16, GetDemBaseIndex32, GetDemBaseIndex64};
-
-////////////////////////////////////////////////////////////////////////////////
-// DEVIRTUALIZED STORING TO ±DISP(%BASE,%INDEX,SCALE) MEMORY PARAMETER
-
-MICRO_OP static void PutDemBaseIndex8(struct Machine *m, u64 d, long b, long i,
-                                      int z, u64 x) {
-  Store8(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
-}
-MICRO_OP static void PutDemBaseIndex16(struct Machine *m, u64 d, long b, long i,
-                                       int z, u64 x) {
-  Store16(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
-}
-MICRO_OP static void PutDemBaseIndex32(struct Machine *m, u64 d, long b, long i,
-                                       int z, u64 x) {
-  Store32(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
-}
-MICRO_OP static void PutDemBaseIndex64(struct Machine *m, u64 d, long b, long i,
-                                       int z, u64 x) {
-  Store64(ToHost(d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z)), x);
-}
-typedef void (*putdembaseindex_f)(struct Machine *, u64, long, long, int, u64);
-static const putdembaseindex_f kPutDemBaseIndex[] = {
-    PutDemBaseIndex8, PutDemBaseIndex16, PutDemBaseIndex32, PutDemBaseIndex64};
 
 ////////////////////////////////////////////////////////////////////////////////
 // JIT DEBUGGING UTILITIES
@@ -594,29 +513,9 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  log2sz ? RexbRm(rde) : kByteReg[ByteRexb(rde)],
                  kGetReg[log2sz]);
         } else if (HasLinearMapping(m) && !Sego(rde)) {
-          if (!SibExists(rde)) {
-            if (IsRipRelative(rde)) {
-              Jitter(A, "a0i m", disp + m->ip, kGetDemAbs[log2sz]);
-            } else {
-              Jitter(A, "a2i a1i s0a0= m", RexbRm(rde), disp, kGetDem[log2sz]);
-            }
-          } else if (!SibHasBase(rde) &&  //
-                     !SibHasIndex(rde)) {
-            Jitter(A, "a0i m", disp, kGetDemAbs[log2sz]);
-          } else if (SibHasBase(rde) &&  //
-                     !SibHasIndex(rde)) {
-            Jitter(A, "a2i a1i s0a0= m", RexbBase(rde), disp, kGetDem[log2sz]);
-          } else if (!SibHasBase(rde) &&  //
-                     SibHasIndex(rde)) {
-            Jitter(A, "a3i a2i a1i s0a0= m", SibScale(rde),
-                   Rexx(rde) << 3 | SibIndex(rde), disp, kGetDemIndex[log2sz]);
-          } else {
-            Jitter(A, "a4i a3i a2i a1i s0a0= m", SibScale(rde),
-                   Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
-                   kGetDemBaseIndex[log2sz]);
-          }
+          Jitter(A, "L r0a0= m", kLoadLinear[log2sz]);
         } else {
-          Jitter(A, "a2i a1i s0a0= c", disp, rde, GetRegOrMem);
+          Jitter(A, "L r0a1= s0a0= c", kLoadReserve[log2sz]);
         }
         break;
 
@@ -626,32 +525,35 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
           Jitter(A, "a2= a1i s0a0= m",
                  log2sz ? RexbRm(rde) : kByteReg[ByteRexb(rde)],
                  kPutReg[log2sz]);
-        } else if (HasLinearMapping(m) && !Sego(rde)) {
-          if (!SibExists(rde)) {
-            if (IsRipRelative(rde)) {
-              Jitter(A, "a1= a0i m", disp + m->ip, kPutDemAbs[log2sz]);
-            } else {
-              Jitter(A, "a3= a2i a1i s0a0= m", RexbRm(rde), disp,
-                     kPutDem[log2sz]);
-            }
-          } else if (!SibHasBase(rde) &&  //
-                     !SibHasIndex(rde)) {
-            Jitter(A, "a1= a0i m", disp, kPutDemAbs[log2sz]);
-          } else if (SibHasBase(rde) &&  //
-                     !SibHasIndex(rde)) {
-            Jitter(A, "a3= a2i a1i s0a0= m", RexbBase(rde), disp,
-                   kPutDem[log2sz]);
-          } else if (!SibHasBase(rde) &&  //
-                     SibHasIndex(rde)) {
-            Jitter(A, "a4= a3i a2i a1i s0a0= m", SibScale(rde),
-                   Rexx(rde) << 3 | SibIndex(rde), disp, kPutDemIndex[log2sz]);
-          } else {
-            Jitter(A, "a5= a4i a3i a2i a1i s0a0= m", SibScale(rde),
-                   Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
-                   kPutDemBaseIndex[log2sz]);
-          }
+        } else if (HasLinearMapping(m)) {
+          Jitter(A, "s1= L s1a1= r0a0= m", kStoreLinear[log2sz]);
         } else {
-          Jitter(A, "s0a0= a1i a2i a3= c", rde, disp, PutRegOrMem);
+          Jitter(A, "s1= L s1a2= r0a1= s0a0= c", kStoreReserve[log2sz]);
+        }
+        break;
+
+      case 'L':  // load effective address
+        if (!SibExists(rde) && IsRipRelative(rde)) {
+          Jitter(A, "r0i", disp + m->ip);
+        } else if (!SibExists(rde)) {
+          Jitter(A, "a2i a1i s0a0= m", RexbRm(rde), disp, Base);
+        } else if (!SibHasBase(rde) &&  //
+                   !SibHasIndex(rde)) {
+          Jitter(A, "r0i", disp);
+        } else if (SibHasBase(rde) &&  //
+                   !SibHasIndex(rde)) {
+          Jitter(A, "a2i a1i s0a0= m", RexbBase(rde), disp, Base);
+        } else if (!SibHasBase(rde) &&  //
+                   SibHasIndex(rde)) {
+          Jitter(A, "a3i a2i a1i s0a0= m", SibScale(rde),
+                 Rexx(rde) << 3 | SibIndex(rde), disp, Index);
+        } else {
+          Jitter(A, "a4i a3i a2i a1i s0a0= m", SibScale(rde),
+                 Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
+                 BaseIndex);
+        }
+        if (Sego(rde)) {
+          Jitter(A, "a2i r0a1= s0a0= m", Sego(rde) - 1, Seg);
         }
         break;
 

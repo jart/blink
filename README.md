@@ -88,12 +88,18 @@ blink is an x86-64 interpreter for POSIX platforms that's written in
 ANSI C11 that's compatible with C++ compilers. Instruction decoding is
 done using our trimmed-down version of Intel's disassembler Xed.
 
+The prime directive of this project is to act as a virtual machine for
+userspace binaries compiled by Cosmopolitan Libc. Blink implements more
+than a hundred Linux system call ABIs, including fork() and clone(). The
+SSE2, SSE3, SSSE3, POPCNT, CLMUL, RDTSCP, and RDRND hardware ISAs are
+supported. x87 currently only supports double (64-bit) precision.
+
 Blink uses just-in-time compilation, which is supported on x86_64 and
 aarch64. Blink takes the appropriate steps to work around restrictions
 relating to JIT, on platforms like Apple and OpenBSD. We generate JIT
 code using a printf-style domain-specific language. The JIT works by
 generating functions at runtime which call the micro-op functions the
-compiler created. Blink decode micro-ops at runtime by scanning their
+compiler created. Blink decodes micro-ops at runtime by scanning their
 memory for a RET instruction. This works in most cases, but some tools
 can present problems, such as OpenBSD retguard which inserts static
 memory relocations into every function. The Makefile config and headers
@@ -113,12 +119,6 @@ the solution Blink uses is to just perform a simple addition whenever a
 memory address is translated. This goes fast, but if it doesn't work on
 your platform, then it's possible to pass the `blink -m` flag to enable
 full portable memory safety.
-
-The prime directive of this project is to act as a virtual machine for
-userspace binaries compiled by Cosmopolitan Libc. Much of the surface
-area of the Linux SYSCALL ABI is supported, including fork() and
-clone(). The SSE2, SSE3, SSSE3, POPCNT, CLMUL, RDTSCP, and RDRND ISAs
-are supported. x87 currently only supports double (64-bit) precision.
 
 Blink supports 32-bit and 16-bit BIOS programs, plus just enough ring0
 instructions to test an operating system bootloader. Plus IBM PC Serial

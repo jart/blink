@@ -108,6 +108,7 @@ static void OpSahf(P) {
 
 static void OpLeaGvqpM(P) {
   WriteRegister(rde, RegRexrReg(m, rde), LoadEffectiveAddress(A).addr);
+  Jitter(A, "L r0 C");
 }
 
 static relegated void OpPushSeg(P) {
