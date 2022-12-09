@@ -70,25 +70,27 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
     LOGF("program headers aren't ordered");
     exit(127);
   }
-
-  if (memsz > 0 && start < last_end) {
-    // TODO(jart): What's the right thing to do here for Apple M1?
-    // unassert(!Mprotect(ToHost(start), last_end - start,
-    //                   PROT_READ | PROT_WRITE | PROT_EXEC, "elf"));
-    start += last_end - start;
-    memsz = end - start;
-  }
   if (memsz <= 0) {
     return last_end;
   }
 
-  if (ReserveVirtual(m->system, start, end - start,
-                     (flags & PF_R ? PAGE_U : 0) |
-                         (flags & PF_W ? PAGE_RW : 0) |
-                         (flags & PF_X ? 0 : PAGE_XD),
-                     -1, false) == -1) {
-    LOGF("failed to reserve virtual memory for elf program header");
-    exit(127);
+  // on systems with a page size greater than the elf executable (e.g.
+  // apple m1) it's possible for the second program header load to end
+  // up overlapping the previous one.
+  if (memsz > 0 && start < last_end) {
+    start += last_end - start;
+    memsz = end - start;
+  }
+
+  if (memsz > 0) {
+    if (ReserveVirtual(m->system, start, end - start,
+                       (flags & PF_R ? PAGE_U : 0) |
+                           (flags & PF_W ? PAGE_RW : 0) |
+                           (flags & PF_X ? 0 : PAGE_XD),
+                       -1, false) == -1) {
+      LOGF("failed to reserve virtual memory for elf program header");
+      exit(127);
+    }
   }
 
   CopyToUser(m, vaddr, (u8 *)image + offset, filesz);

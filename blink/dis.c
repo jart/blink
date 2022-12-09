@@ -146,7 +146,12 @@ static char *DisLineCode(struct Dis *d, char *p, int err) {
     plen = PFIXLEN;
   }
   p = DisColumn(DisAddr(d, p), p, ADDRLEN);
-  p = DisColumn(DisRaw(d, p), p, plen * 2 + 1 + blen * 2);
+  if (!d->noraw) {
+    p = DisColumn(DisRaw(d, p), p, plen * 2 + 1 + blen * 2);
+  } else {
+    *p++ = ' ';
+    *p++ = ' ';
+  }
   p = DisCode(d, p, err);
   return p;
 }

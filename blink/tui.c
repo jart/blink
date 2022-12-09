@@ -130,8 +130,9 @@ ctrl-t  turbo\n\
 alt-t   slowmo"
 
 #define MAXZOOM    16
+#define ASMWIDTH   65
+#define DISPWIDTH  80
 #define DUMPWIDTH  64
-#define DISPWIDTH  (m->mode == XED_MODE_REAL ? 50 : 80)
 #define WHEELDELTA 1
 
 #define RESTART  0x001
@@ -896,23 +897,47 @@ static int GetAddrHexWidth(void) {
 }
 
 void SetupDraw(void) {
-  int i, j, n, a, b, c, yn, cpuy, ssey, dx[2], c2y[3], c3y[5];
+  int i, j, n, a, b, yn, fit, cpuy, ssey, dx[2], c2y[3], c3y[5];
 
   cpuy = 9;
   if (IsSegNonZero()) cpuy += 2;
   ssey = PickNumberOfXmmRegistersToShow();
   if (ssey) ++ssey;
 
-  a = GetAddrHexWidth() + 1 + DUMPWIDTH;
-  b = DISPWIDTH + 1;
-  c = txn - a - b;
-  if (c > DISPWIDTH) c = DISPWIDTH;
-  if (c > 0) {
-    dx[1] = txn >= a + b ? txn - a : txn;
-  } else {
-    dx[1] = txn - a;
+  int column[3] = {
+      GetAddrHexWidth() + 1 + ASMWIDTH,
+      DISPWIDTH,
+      GetAddrHexWidth() + 1 + DUMPWIDTH,
+  };
+  bool growable[3] = {
+      true,
+      false,
+      false,
+  };
+  bool shrinkable[3] = {
+      true,
+      true,
+      false,
+  };
+  for (i = 0;; ++i) {
+    for (fit = j = 0; j < ARRAYLEN(column); ++j) {
+      fit += column[j];
+    }
+    if (fit > txn) {
+      if (shrinkable[i % ARRAYLEN(column)]) {
+        --column[i % ARRAYLEN(column)];
+      }
+    } else if (fit < txn) {
+      if (growable[i % ARRAYLEN(column)]) {
+        ++column[i % ARRAYLEN(column)];
+      }
+    } else {
+      break;
+    }
   }
-  dx[0] = txn >= a + c ? txn - a - c : dx[1];
+  dis->noraw = column[0] < 60;
+  dx[0] = column[0];
+  dx[1] = column[0] + column[1];
 
   yn = tyn - 1;
   a = 1 / 8. * yn;
@@ -1483,13 +1508,15 @@ static void DrawBreakpoints(struct Panel *p) {
       addr = watchpoints.p[i].addr;
       sym = DisFindSym(dis, addr);
       name = sym != -1 ? dis->syms.stab + dis->syms.p[sym].name : "UNKNOWN";
-      snprintf(buf, sizeof(buf), "%0*" PRIx64 " %s [%#" PRIx64 "]",
-               GetAddrHexWidth(), addr, name, watchpoints.p[i].oldvalue);
+      snprintf(buf, sizeof(buf), "%0*" PRIx64 " %s", GetAddrHexWidth(), addr,
+               name);
       AppendPanel(p, line - breakpointsstart, buf);
       if (sym != -1 && addr != dis->syms.p[sym].addr) {
         snprintf(buf, sizeof(buf), "+%#" PRIx64, addr - dis->syms.p[sym].addr);
-        AppendPanel(p, line, buf);
+        AppendPanel(p, line - breakpointsstart, buf);
       }
+      snprintf(buf, sizeof(buf), " [%#" PRIx64 "]", watchpoints.p[i].oldvalue);
+      AppendPanel(p, line - breakpointsstart, buf);
     }
     ++line;
   }
@@ -2159,16 +2186,26 @@ static void OnVidyaService(void) {
 
 static void OnKeyboardServiceReadKeyPress(void) {
   uint8_t b;
+  ssize_t rc;
   static char buf[32];
   static size_t pending;
   pty->conf |= kPtyBlinkcursor;
-  if (!pending && !(pending = readansi(ttyin, buf, sizeof(buf)))) {
-    exitcode = 0;
-    action |= EXIT;
-    return;
+  if (!pending) {
+    rc = readansi(ttyin, buf, sizeof(buf));
+    if (rc > 0) {
+      pending = rc;
+    } else if (rc == -1 && errno == EINTR) {
+      return;
+    } else {
+      exitcode = 0;
+      action |= EXIT;
+      return;
+    }
   }
   b = buf[0];
-  memmove(buf, buf + 1, pending - 1);
+  if (pending > 1) {
+    memmove(buf, buf + 1, pending - 1);
+  }
   --pending;
   pty->conf &= ~kPtyBlinkcursor;
   ReactiveDraw();

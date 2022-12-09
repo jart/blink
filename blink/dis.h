@@ -60,6 +60,7 @@ struct DisEdges {
 
 struct Dis {
   bool notab;
+  bool noraw;
   struct DisOps ops;
   struct DisLoads loads;
   struct DisSyms syms;

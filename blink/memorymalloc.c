@@ -491,4 +491,5 @@ void ProtectVirtual(struct System *s, i64 virt, i64 size, u64 mask, u64 flags) {
       }
     }
   }
+  InvalidateSystem(s, true, false);
 }
