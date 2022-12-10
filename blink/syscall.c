@@ -1011,6 +1011,7 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       rc = IoctlTcsets(m, systemfd, TCSETSF, addr, func);
       break;
     default:
+      LOGF("missing ioctl %#" PRIx64, request);
       rc = einval();
       break;
   }
@@ -1320,14 +1321,14 @@ static ssize_t SysGetrandom(struct Machine *m, i64 a, size_t n, int f) {
 
 static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
                         u64 sigsetsize) {
-  if ((sig = XlatSignal(sig) - 1) != -1 &&
+  if ((sig = XlatSignal(sig)) != -1 &&
       (1 <= sig && sig <= ARRAYLEN(m->system->hands)) && sigsetsize == 8) {
     if (old) {
-      CopyToUserWrite(m, old, &m->system->hands[sig],
+      CopyToUserWrite(m, old, &m->system->hands[sig - 1],
                       sizeof(m->system->hands[0]));
     }
     if (act) {
-      CopyFromUserRead(m, &m->system->hands[sig], act,
+      CopyFromUserRead(m, &m->system->hands[sig - 1], act,
                        sizeof(m->system->hands[0]));
     }
     return 0;
@@ -1852,10 +1853,11 @@ void OpSyscall(P) {
       SigRestore(m);
       return;
     default:
-      SYS_LOGF("missing syscall 0x%03" PRIx64, ax);
+      LOGF("missing syscall 0x%03" PRIx64, ax);
       ax = enosys();
       break;
   }
+  SYS_LOGF("system call returned %d %s", ax, ax == -1 ? strerror(errno) : "");
   Put64(m->ax, ax != -1 ? ax : -(XlatErrno(errno) & 0xfff));
   CollectGarbage(m);
 }

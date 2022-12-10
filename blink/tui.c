@@ -1991,7 +1991,7 @@ static ssize_t OnPtyFdReadv(int fd, const struct iovec *iov, int iovlen) {
   }
 }
 
-static int OnPtyFdPoll(struct pollfd *fds, size_t nfds, int ms) {
+static int OnPtyFdPoll(struct pollfd *fds, nfds_t nfds, int ms) {
   bool once;
   int i, t, re;
   struct pollfd p2;
@@ -2039,7 +2039,7 @@ static void DrawDisplayOnly(struct Panel *p) {
     p->lines[i].i = 0;
   }
   DrawDisplay(p);
-  bzero(&b, sizeof(b));
+  memset(&b, 0, sizeof(b));
   tly = tyn / 2 - yn / 2;
   tlx = txn / 2 - xn / 2;
   AppendStr(&b, "\e[0m\e[H");
@@ -2859,7 +2859,7 @@ static void HandleKeyboard(const char *k) {
 
 static void ReadKeyboard(void) {
   char buf[64];
-  bzero(buf, sizeof(buf));
+  memset(buf, 0, sizeof(buf));
   dialog = NULL;
   if (readansi(ttyin, buf, sizeof(buf)) == -1) {
     if (errno == EINTR) {
