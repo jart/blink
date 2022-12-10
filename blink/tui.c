@@ -130,7 +130,8 @@ ctrl-t  turbo\n\
 alt-t   slowmo"
 
 #define MAXZOOM    16
-#define ASMWIDTH   65
+#define ASMRAWMIN  (m->mode == XED_MODE_REAL ? 50 : 65)
+#define ASMWIDTH   40
 #define DISPWIDTH  80
 #define DUMPWIDTH  64
 #define WHEELDELTA 1
@@ -187,14 +188,28 @@ alt-t   slowmo"
 #define m g_machine
 
 #ifdef IUTF8
-#define HR L'─'
+#define HR   L'─'
+#define BULB "◎"
 #else
-#define HR '-'
+#define HR   '-'
+#define BULB "@"
 #endif
+
+struct Mouse {
+  short y;
+  short x;
+  int e;
+};
 
 struct MemoryView {
   i64 start;
   int zoom;
+};
+
+struct Keystrokes {
+  unsigned i;
+  char p[4][32];
+  struct timespec s[4];
 };
 
 struct Panels {
@@ -237,12 +252,14 @@ static const char kRegisterNames[3][16][4] = {
 
 extern char **environ;
 
+static bool belay;
 static bool react;
 static bool tuimode;
 static bool alarmed;
 static bool mousemode;
 static bool printstats;
 static bool showhighsse;
+static bool readingteletype;
 
 static int tyn;
 static int txn;
@@ -281,6 +298,7 @@ static unsigned long last_opcount;
 static unsigned long last_jitcount;
 
 static struct Panels pan;
+static struct Keystrokes keystrokes;
 static struct Breakpoints breakpoints;
 static struct Watchpoints watchpoints;
 static struct MemoryView codeview;
@@ -300,6 +318,7 @@ static struct sigaction oldsig[4];
 
 static void SetupDraw(void);
 static void Redraw(void);
+static void HandleKeyboard(const char *);
 
 const char kXedErrorNames[] = "\
 none\0\
@@ -935,7 +954,7 @@ void SetupDraw(void) {
       break;
     }
   }
-  dis->noraw = column[0] < 60;
+  dis->noraw = column[0] < ASMRAWMIN;
   dx[0] = column[0];
   dx[1] = column[0] + column[1];
 
@@ -1165,19 +1184,12 @@ static void DrawTerminalHr(struct Panel *p) {
   ws = 8;
   wl = wp / 4 - ws / 2;
   for (i = 0; i < wl; ++i) AppendWide(&p->lines[0], HR);
-#ifdef IUTF8
-  AppendFmt(&p->lines[0], "TELETYPEWRITER──%s──%s──%s──%s",
-            (pty->conf & kPtyLed1) ? "\033[1;31m◎\033[0m" : "○",
-            (pty->conf & kPtyLed2) ? "\033[1;32m◎\033[0m" : "○",
-            (pty->conf & kPtyLed3) ? "\033[1;33m◎\033[0m" : "○",
-            (pty->conf & kPtyLed4) ? "\033[1;34m◎\033[0m" : "○");
-#else
-  AppendFmt(&p->lines[0], "TELETYPEWRITER--%s--%s--%s--%s",
-            (pty->conf & kPtyLed1) ? "\033[1;31m@\033[0m" : "o",
-            (pty->conf & kPtyLed2) ? "\033[1;32m@\033[0m" : "o",
-            (pty->conf & kPtyLed3) ? "\033[1;33m@\033[0m" : "o",
-            (pty->conf & kPtyLed4) ? "\033[1;34m@\033[0m" : "o");
-#endif
+  AppendFmt(&p->lines[0], "%sTELETYPEWRITER%s──%s──%s──%s──%s",
+            readingteletype ? "\033[1m" : "", readingteletype ? "\033[22m" : "",
+            (pty->conf & kPtyLed1) ? "\033[1;31m" BULB "\033[0m" : "○",
+            (pty->conf & kPtyLed2) ? "\033[1;32m" BULB "\033[0m" : "○",
+            (pty->conf & kPtyLed3) ? "\033[1;33m" BULB "\033[0m" : "○",
+            (pty->conf & kPtyLed4) ? "\033[1;34m" BULB "\033[0m" : "○");
   for (i = 26 + wl; i < p->right - p->left; ++i) {
     AppendWide(&p->lines[0], HR);
   }
@@ -1677,9 +1689,41 @@ static const char *DescribeAction(void) {
   return buf + !!buf[0];
 }
 
+static char *GetStatus(int m) {
+  bool first;
+  unsigned i, n;
+  struct timespec t;
+  struct Buffer s = {0};
+  if (statusmessage && CompareTime(GetTime(), statusexpires)) {
+    AppendStr(&s, statusmessage);
+  } else {
+    AppendStr(&s, "blink virtual machine");
+  }
+  n = ARRAYLEN(keystrokes.p);
+  for (first = true, t = GetTime(), i = 1; i <= n; --i) {
+    if (!keystrokes.p[(keystrokes.i - i) % n][0]) continue;
+    if (CompareTime(SubtractTime(t, keystrokes.s[(keystrokes.i - i) % n]),
+                    FromSeconds(1)) > 0) {
+      continue;
+    }
+    if (first) {
+      first = false;
+      AppendStr(&s, " (keystroke: ");
+    } else {
+      AppendChar(&s, ' ');
+    }
+    AppendStr(&s, keystrokes.p[(keystrokes.i - i) % n]);
+  }
+  if (!first) {
+    AppendChar(&s, ')');
+  }
+  return s.p;
+}
+
 static void DrawStatus(struct Panel *p) {
 #define MEMSTAT(f) m->system->memstat.f, m->system->memstat.f != lastmemstat.f
   long toto;
+  char *status;
   struct Buffer *s;
   int yn, xn, rw, fds;
   rw = 0;
@@ -1699,11 +1743,9 @@ static void DrawStatus(struct Panel *p) {
   if (m->nolinear) rw += AppendStat(s, 5, "freed", MEMSTAT(freed));
   rw += AppendStat(s, 5, "tables", MEMSTAT(pagetables));
   rw += AppendStat(s, 3, "fds", fds, fds != lastfds);
-  AppendFmt(&p->lines[0], "\033[7m%-*s%s\033[0m", xn - rw,
-            statusmessage && CompareTime(GetTime(), statusexpires) < 0
-                ? statusmessage
-                : "blink virtual machine",
-            s->p);
+  status = GetStatus(xn - rw);
+  AppendFmt(&p->lines[0], "\033[7m%-*s%s\033[0m", xn - rw, status, s->p);
+  free(status);
   free(s->p);
   free(s);
   lastmemstat = m->system->memstat;
@@ -1778,6 +1820,29 @@ static void ReactiveDraw(void) {
   }
 }
 
+static void DescribeKeystroke(char *b, const char *p) {
+  int c;
+  do {
+    c = *p++ & 255;
+    if (c == '\e') {
+      b = stpcpy(b, "ALT-");
+      c = *p++ & 255;
+    }
+    if (c <= 32) {
+      b = stpcpy(b, "CTRL-");
+      c = Ctrl(c);
+    }
+    *b++ = c;
+    *b = 0;
+  } while (*p);
+}
+
+static void RecordKeystroke(const char *k) {
+  keystrokes.s[keystrokes.i] = GetTime();
+  DescribeKeystroke(keystrokes.p[keystrokes.i], k);
+  keystrokes.i = (keystrokes.i + 1) % ARRAYLEN(keystrokes.p);
+}
+
 static void HandleAlarm(void) {
   alarmed = false;
   action &= ~ALARM;
@@ -1787,6 +1852,7 @@ static void HandleAlarm(void) {
 }
 
 static void HandleAppReadInterrupt(void) {
+  LOGF("HandleAppReadInterrupt");
   if (action & ALARM) {
     HandleAlarm();
   }
@@ -1796,6 +1862,8 @@ static void HandleAppReadInterrupt(void) {
   }
   if (action & INT) {
     action &= ~INT;
+    RecordKeystroke("\3");
+    ReactiveDraw();
     if (action & CONTINUE) {
       action &= ~CONTINUE;
     } else {
@@ -1821,26 +1889,79 @@ static bool HasPendingInput(int fd) {
   return fds[0].revents & (POLLIN | POLLERR);
 }
 
-static ssize_t ReadPtyFdDirect(int fd, void *data, size_t size) {
-  char *buf;
-  ssize_t rc;
-  buf = (char *)malloc(4096);
-  pty->conf |= kPtyBlinkcursor;
-  if (tuimode) DisableMouseTracking();
-  for (;;) {
-    ReactiveDraw();
-    if ((rc = read(fd, buf, 4096)) != -1) break;
-    /* CHECK_EQ(EINTR, errno); */
-    HandleAppReadInterrupt();
+static struct Panel *LocatePanel(int y, int x) {
+  int i;
+  for (i = 0; i < ARRAYLEN(pan.p); ++i) {
+    if ((pan.p[i].left <= x && x < pan.p[i].right) &&
+        (pan.p[i].top <= y && y < pan.p[i].bottom)) {
+      return &pan.p[i];
+    }
   }
-  if (tuimode) EnableMouseTracking();
+  return NULL;
+}
+
+static struct Mouse ParseMouse(char *p) {
+  int e, x, y;
+  struct Mouse m;
+  e = strtol(p, &p, 10);
+  if (*p == ';') ++p;
+  x = strtol(p, &p, 10);
+  x = MIN(txn, MAX(1, x)) - 1;
+  if (*p == ';') ++p;
+  y = strtol(p, &p, 10);
+  y = MIN(tyn, MAX(1, y)) - 1;
+  e |= (*p == 'm') << 2;
+  m.y = y;
+  m.x = x;
+  m.e = e;
+  return m;
+}
+
+static ssize_t ReadAnsi(int fd, char *p, size_t n) {
+  ssize_t rc;
+  struct Mouse m;
+  for (;;) {
+    readingteletype = true;
+    ReactiveDraw();
+    rc = readansi(fd, p, n);
+    readingteletype = false;
+    if (rc != -1) {
+      if (tuimode && rc > 3 && p[0] == '\e' && p[1] == '[') {
+        if (p[2] == '2' && p[3] == '0' && p[4] == '0' && p[5] == '~') {
+          belay = true;
+          continue;
+        }
+        if (p[2] == '2' && p[3] == '0' && p[4] == '1' && p[5] == '~') {
+          belay = false;
+          continue;
+        }
+        if (p[2] == '<') {
+          m = ParseMouse(p + 3);
+          if (LocatePanel(m.y, m.x) != &pan.display) {
+            HandleKeyboard(p);
+            continue;
+          }
+        }
+      }
+      return rc;
+    } else {
+      unassert(errno == EINTR);
+      HandleAppReadInterrupt();
+    }
+  }
+}
+
+static ssize_t ReadPtyFdDirect(int fd) {
+  ssize_t rc;
+  char buf[32];
+  pty->conf |= kPtyBlinkcursor;
+  rc = ReadAnsi(fd, buf, sizeof(buf));
   pty->conf &= ~kPtyBlinkcursor;
   if (rc > 0) {
     PtyWriteInput(pty, buf, rc);
     ReactiveDraw();
-    rc = PtyRead(pty, data, size);
+    rc = 0;
   }
-  free(buf);
   return rc;
 }
 
@@ -1857,13 +1978,83 @@ static ssize_t OnPtyFdReadv(int fd, const struct iovec *iov, int iovlen) {
     }
   }
   if (size) {
-    if (!(rc = PtyRead(pty, data, size))) {
-      rc = ReadPtyFdDirect(fd, data, size);
+    for (;;) {
+      if ((rc = PtyRead(pty, data, size))) {
+        return rc;
+      }
+      if (ReadPtyFdDirect(fd) == -1) {
+        return -1;
+      }
     }
-    return rc;
   } else {
     return 0;
   }
+}
+
+static int OnPtyFdPoll(struct pollfd *fds, size_t nfds, int ms) {
+  bool once;
+  int i, t, re;
+  struct pollfd p2;
+  ms &= INT_MAX;
+  for (once = false, t = i = 0; i < nfds; ++i) {
+    re = 0;
+    if (fds[i].fd >= 0) {
+      if (pty->input.i) {
+        re = POLLIN | POLLOUT;
+        ++t;
+      } else {
+        if (!once) {
+          ReactiveDraw();
+          once = true;
+        }
+        p2.fd = fds[i].fd;
+        p2.events = fds[i].events;
+        switch (poll(&p2, 1, ms)) {
+          case -1:
+            re = POLLERR;
+            ++t;
+            break;
+          case 0:
+            break;
+          case 1:
+            re = p2.revents;
+            ++t;
+            break;
+          default:
+            __builtin_unreachable();
+        }
+      }
+    }
+    fds[i].revents = re;
+  }
+  return t;
+}
+
+static void DrawDisplayOnly(struct Panel *p) {
+  struct Buffer b;
+  int i, y, yn, xn, tly, tlx;
+  yn = MIN(tyn, p->bottom - p->top);
+  xn = MIN(txn, p->right - p->left);
+  for (i = 0; i < yn; ++i) {
+    p->lines[i].i = 0;
+  }
+  DrawDisplay(p);
+  bzero(&b, sizeof(b));
+  tly = tyn / 2 - yn / 2;
+  tlx = txn / 2 - xn / 2;
+  AppendStr(&b, "\e[0m\e[H");
+  for (y = 0; y < tyn; ++y) {
+    if (y) AppendStr(&b, "\r\n");
+    if (tly <= y && y <= tly + yn) {
+      for (i = 0; i < tlx; ++i) {
+        AppendChar(&b, ' ');
+      }
+      AppendData(&b, p->lines[y - tly].p, p->lines[y - tly].i);
+    }
+    AppendStr(&b, "\e[0m\e[K");
+  }
+  write(ttyout, b.p, b.i);
+  free(b.p);
 }
 
 static ssize_t OnPtyFdWritev(int fd, const struct iovec *iov, int iovlen) {
@@ -1931,6 +2122,7 @@ static const struct FdCb kFdCbPty = {
     .readv = OnPtyFdReadv,
     .writev = OnPtyFdWritev,
     .ioctl = OnPtyFdIoctl,
+    .poll = OnPtyFdPoll,
 };
 
 static void LaunchDebuggerReactively(void) {
@@ -2113,7 +2305,16 @@ static void OnVidyaServiceGetCursorPosition(void) {
 
 static int GetVidyaByte(unsigned char b) {
   if (0x20 <= b && b <= 0x7F) return b;
+#if 0
+  /*
+   * The original hardware displayed 0x00, 0x20, and 0xff as space. It
+   * made sense for viewing sparse binary data that 0x00 be blank. But
+   * it doesn't make sense for dense data too, and we don't need three
+   * space characters. So we diverge in our implementation and display
+   * 0xff as lambda.
+   */
   if (b == 0xFF) b = 0x00;
+#endif
   return kCp437[b];
 }
 
@@ -2151,7 +2352,7 @@ static void OnVidyaServiceTeletypeOutput(void) {
   int n;
   u64 w;
   char buf[12];
-  n = FormatCga(m->bl, buf);
+  n = 0 /* FormatCga(m->bl, buf) */;
   w = tpenc(VidyaServiceXlatTeletype(m->al));
   do {
     buf[n++] = w;
@@ -2189,9 +2390,11 @@ static void OnKeyboardServiceReadKeyPress(void) {
   ssize_t rc;
   static char buf[32];
   static size_t pending;
+  tuimode = true;
+  action |= CONTINUE;
   pty->conf |= kPtyBlinkcursor;
   if (!pending) {
-    rc = readansi(ttyin, buf, sizeof(buf));
+    rc = ReadAnsi(ttyin, buf, sizeof(buf));
     if (rc > 0) {
       pending = rc;
     } else if (rc == -1 && errno == EINTR) {
@@ -2209,7 +2412,7 @@ static void OnKeyboardServiceReadKeyPress(void) {
   --pending;
   pty->conf &= ~kPtyBlinkcursor;
   ReactiveDraw();
-  if (b == 0x7F) b = '\b';
+  if (b == 0177) b = '\b';
   m->ax[0] = b;
   m->ax[1] = 0;
 }
@@ -2464,6 +2667,11 @@ static void OnContinueExec(void) {
   action &= ~FAILURE;
 }
 
+static void OnInt(void) {
+  action |= INT;
+  ReactiveDraw();
+}
+
 static void OnRestart(void) {
   action |= RESTART;
 }
@@ -2552,26 +2760,15 @@ static void OnMouseCtrlWheelDown(struct Panel *p, int y, int x) {
   ZoomMemoryViews(p, y, x, +1);
 }
 
-static struct Panel *LocatePanel(int y, int x) {
-  int i;
-  for (i = 0; i < ARRAYLEN(pan.p); ++i) {
-    if ((pan.p[i].left <= x && x < pan.p[i].right) &&
-        (pan.p[i].top <= y && y < pan.p[i].bottom)) {
-      return &pan.p[i];
-    }
-  }
-  return NULL;
-}
-
-static void OnMouse(char *p) {
+static void OnMouse(const char *p) {
   int e, x, y;
   struct Panel *ep;
-  e = strtol(p, &p, 10);
+  e = strtol(p, (char **)&p, 10);
   if (*p == ';') ++p;
-  x = strtol(p, &p, 10);
+  x = strtol(p, (char **)&p, 10);
   x = MIN(txn, MAX(1, x)) - 1;
   if (*p == ';') ++p;
-  y = strtol(p, &p, 10);
+  y = strtol(p, (char **)&p, 10);
   y = MIN(tyn, MAX(1, y)) - 1;
   e |= (*p == 'm') << 2;
   if ((ep = LocatePanel(y, x))) {
@@ -2592,17 +2789,8 @@ static void OnHelp(void) {
   dialog = HELP;
 }
 
-static void ReadKeyboard(void) {
-  char buf[64], *p = buf;
-  memset(buf, 0, sizeof(buf));
-  dialog = NULL;
-  if (readansi(ttyin, buf, sizeof(buf)) == -1) {
-    if (errno == EINTR) {
-      return;
-    }
-    fprintf(stderr, "ReadKeyboard failed: %s\n", strerror(errno));
-    exit(1);
-  }
+static void HandleKeyboard(const char *k) {
+  const char *p = k;
   switch (*p++) {
     CASE('q', OnQ());
     CASE('v', OnV());
@@ -2624,7 +2812,7 @@ static void ReadKeyboard(void) {
     CASE('\t', OnTab());
     CASE('\r', OnEnter());
     CASE('\n', OnEnter());
-    CASE(Ctrl('C'), action |= INT);
+    CASE(Ctrl('C'), OnInt());
     CASE(Ctrl('D'), action |= EXIT);
     CASE(Ctrl('\\'), raise(SIGQUIT));
     CASE(Ctrl('Z'), raise(SIGSTOP));
@@ -2666,6 +2854,22 @@ static void ReadKeyboard(void) {
     default:
       break;
   }
+  RecordKeystroke(k);
+}
+
+static void ReadKeyboard(void) {
+  char buf[64];
+  bzero(buf, sizeof(buf));
+  dialog = NULL;
+  if (readansi(ttyin, buf, sizeof(buf)) == -1) {
+    if (errno == EINTR) {
+      LOGF("ReadKeyboard interrupted");
+      return;
+    }
+    fprintf(stderr, "ReadKeyboard failed: %s\n", strerror(errno));
+    exit(1);
+  }
+  HandleKeyboard(buf);
 }
 
 static i64 ParseHexValue(const char *s) {
@@ -2811,7 +3015,9 @@ static void Exec(void) {
     }
   } else {
     if (OnHalt(interrupt)) {
-      goto KeepGoing;
+      if (!tuimode) {
+        goto KeepGoing;
+      }
     }
   }
   m->canhalt = false;
@@ -2887,6 +3093,7 @@ static void Tui(void) {
       if (action & INT) {
         LOGF("TUI INT");
         action &= ~INT;
+        RecordKeystroke("\3");
         if (action & (CONTINUE | NEXT | FINISH)) {
           action &= ~(CONTINUE | NEXT | FINISH);
         } else {

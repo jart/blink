@@ -53,7 +53,6 @@ void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
   char rng[16];
   i64 sp, *p, *bloc;
   size_t i, narg, nenv, naux, nall;
-  Put64(m->sp, Get64(m->sp) - 64);
   GetRandom(rng, 16);
   naux = 2;
   nenv = GetArgListLen(vars);

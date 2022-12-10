@@ -44,14 +44,14 @@
  *
  *   \t                                  TAB
  *   \a                                  BELL
+ *   \177                                BACKSPACE
  *   \r                                  CURSOR START
- *   \b                                  CURSOR LEFT
- *   \177                                CURSOR LEFT
+ *   \b                                  CURSOR LEFT OR CURSOR REWIND
  *   \n                                  CURSOR DOWN AND START IF OPOST
  *   \f                                  CURSOR DOWN AND START IF OPOST
- *   \v                                  CURSOR DOWN AND START IF OPOST
- *   \eD                                 CURSOR DOWN AND START
- *   \eE                                 CURSOR DOWN
+ *   \v                                  CURSOR DOWN AND START OR \e[H\e[J
+ *   \eE                                 CURSOR DOWN AND START
+ *   \eD                                 CURSOR DOWN
  *   \eM                                 CURSOR UP
  *   \ec                                 FULL RESET
  *   \e7                                 SAVE CURSOR POSITION
@@ -144,6 +144,7 @@
  *   \e[?25l                             HIDE CURSOR
  *   \e[s                                SAVE CURSOR POSITION
  *   \e[u                                RESTORE CURSOR POSITION
+ *   \e[?5h ... \e[?5l                   REVERSE VIDEO EPILEPSY
  *   \e[0q                               RESET LEDS
  *   \e[1q                               TURN ON FIRST LED
  *   \e[2q                               TURN ON SECOND LED
@@ -1267,10 +1268,45 @@ ssize_t PtyWrite(struct Pty *pty, const void *data, size_t n) {
 }
 
 ssize_t PtyWriteInput(struct Pty *pty, const void *data, size_t n) {
-  PtyConcatInput(pty, (const char *)data, n);
-  if (!(pty->conf & kPtyNoecho)) {
-    PtyWrite(pty, data, n);
+  int c;
+  bool cr;
+  char *p;
+  const char *q;
+  size_t i, j, m;
+  q = data;
+  p = pty->input.p;
+  i = pty->input.i;
+  m = pty->input.n;
+  if (i + n * 2 + 1 > m) {
+    m = MAX(m, 8);
+    do m += m >> 1;
+    while (i + n * 2 + 1 > m);
+    if (!(p = realloc(p, m))) {
+      return -1;
+    }
+    pty->input.p = p;
+    pty->input.n = m;
   }
+  cr = i && p[i - 1] == '\r';
+  for (j = 0; j < n; ++j) {
+    c = q[j] & 255;
+    if (c == '\r') {
+      cr = true;
+    } else if (cr) {
+      if (c != '\n') {
+        p[i++] = '\n';
+      }
+      cr = false;
+    }
+    p[i++] = c;
+  }
+  if (cr) {
+    p[i++] = '\n';
+  }
+  if (!(pty->conf & kPtyNoecho)) {
+    PtyWrite(pty, p + pty->input.i, i - pty->input.i);
+  }
+  pty->input.i = i;
   return n;
 }
 
@@ -1300,8 +1336,7 @@ static char *PtyEncodeXterm256(char *p, int xt) {
   return p + sprintf(p, "5;%u", xt);
 }
 
-char *PtyEncodeStyle(char *p, u32 xr, u32 pr, u32 fg,
-                     u32 bg) {
+char *PtyEncodeStyle(char *p, u32 xr, u32 pr, u32 fg, u32 bg) {
   *p++ = 033;
   *p++ = '[';
   if (pr & (kPtyBold | kPtyFaint | kPtyFlip | kPtyUnder | kPtyDunder |
