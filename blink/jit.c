@@ -417,7 +417,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
     while ((e = dll_first(jb->staged))) {
       js = JITSTAGE_CONTAINER(e);
       if (js->index <= blockoff) {
-        atomic_store_explicit(js->hook, (intptr_t)jb->addr + js->start,
+        atomic_store_explicit(js->hook, (jb->addr - IMAGE_END) + js->start,
                               memory_order_release);
         jb->staged = dll_remove(jb->staged, e);
         free(js);
@@ -460,9 +460,10 @@ static bool ReleaseJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook,
     addr = jb->addr + jb->start;
     if (CanJitForImmediateEffect()) {
       sys_icache_invalidate(addr, jb->index - jb->start);
-      atomic_store_explicit(hook, (intptr_t)addr, memory_order_release);
+      atomic_store_explicit(hook, addr - IMAGE_END, memory_order_release);
     } else {
-      atomic_store_explicit(hook, staging, memory_order_relaxed);
+      atomic_store_explicit(hook, (u8 *)staging - IMAGE_END,
+                            memory_order_relaxed);
       if ((js = (struct JitStage *)calloc(1, sizeof(struct JitStage)))) {
         dll_init(&js->elem);
         js->hook = hook;

@@ -454,19 +454,17 @@ static u64 Prot2Page(int prot) {
 }
 
 static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
-  u64 key;
-  size_t i;
+  u64 i, key;
   long gotsome = 0;
   if (!IsValidAddrSize(addr, size)) return einval();
   if ((key = Prot2Page(prot)) == -1) return einval();
   LOCK(&m->system->mmap_lock);
   ProtectVirtual(m->system, addr, size, ~(PAGE_U | PAGE_RW | PAGE_XD), key);
   if (prot & PROT_EXEC) {
-    for (i = 0; i < m->system->codesize; ++i) {
-      if (m->system->codestart + i >= addr &&
-          m->system->codestart + i < addr + size) {
-        atomic_store_explicit(m->system->fun + i, GeneralDispatch,
-                              memory_order_relaxed);
+    for (i = m->system->codestart;
+         i < m->system->codestart + m->system->codesize; ++i) {
+      if (i >= addr && i < addr + size) {
+        SetHook(m, i, GeneralDispatch);
         ++gotsome;
       }
     }

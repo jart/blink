@@ -69,6 +69,7 @@ bool CreatePath(struct Machine *m) {
       m->path.start = pc;
       m->path.elements = 0;
       res = true;
+      // SetHook(m, pc, JitlessDispatch);
     } else {
       LOGF("jit failed: %s", strerror(errno));
       res = false;
@@ -89,7 +90,7 @@ void CommitPath(struct Machine *m, intptr_t splice) {
   STATISTIC(path_longest = MAX(path_longest, m->path.elements));
   STATISTIC(AVERAGE(path_average_elements, m->path.elements));
   STATISTIC(AVERAGE(path_average_bytes, m->path.jb->index - m->path.jb->start));
-  if (SpliceJit(&m->system->jit, m->path.jb, (hook_t *)(m->fun + m->path.start),
+  if (SpliceJit(&m->system->jit, m->path.jb, m->fun + m->path.start,
                 (intptr_t)JitlessDispatch, splice)) {
     STATISTIC(++path_count);
     JIT_LOGF("staged path to %" PRIx64, m->path.start);

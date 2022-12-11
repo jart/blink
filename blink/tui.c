@@ -62,6 +62,7 @@
 #include "blink/pty.h"
 #include "blink/signal.h"
 #include "blink/sigwinch.h"
+#include "blink/stats.h"
 #include "blink/strwidth.h"
 #include "blink/syscall.h"
 #include "blink/termios.h"
@@ -3348,5 +3349,8 @@ int main(int argc, char *argv[]) {
   FreeMachine(m);
   FreeSystem(s);
   FreePanels();
+  if (printstats) {
+    PrintStats();
+  }
   return rc;
 }

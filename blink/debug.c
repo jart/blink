@@ -27,6 +27,7 @@
 #include "blink/assert.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
+#include "blink/flags.h"
 #include "blink/loader.h"
 #include "blink/log.h"
 #include "blink/map.h"
@@ -81,12 +82,23 @@ int GetInstruction(struct Machine *m, i64 pc, struct XedDecodedInst *x) {
   }
 }
 
-const char *DescribeOp(struct Machine *m) {
+const char *DescribeFlags(int flags) {
+  _Thread_local static char b[7];
+  b[0] = (flags & OF) ? 'O' : '.';
+  b[1] = (flags & SF) ? 'S' : '.';
+  b[2] = (flags & ZF) ? 'Z' : '.';
+  b[3] = (flags & AF) ? 'A' : '.';
+  b[4] = (flags & PF) ? 'P' : '.';
+  b[5] = (flags & CF) ? 'C' : '.';
+  return b;
+}
+
+const char *DescribeOp(struct Machine *m, i64 pc) {
   _Thread_local static char b[256];
   int i, o = 0, n = sizeof(b);
   struct Dis d = {true};
   char spec[64];
-  if (!GetInstruction(m, GetPc(m), d.xedd)) {
+  if (!GetInstruction(m, pc, d.xedd)) {
     DisInst(&d, b + o, DisSpec(d.xedd, spec));
   } else if (d.xedd->length) {
     for (i = 0; i < d.xedd->length; ++i) {
@@ -167,12 +179,13 @@ const char *GetBacktrace(struct Machine *m) {
          "OPS %-16ld "
          "JIT %-16ld\n\t"
          "%s\n\t",
-         m->cs + MaskAddress(m->mode, m->ip), DescribeOp(m), Get64(m->ax),
-         Get64(m->cx), Get64(m->dx), Get64(m->bx), Get64(m->sp), Get64(m->bp),
-         Get64(m->si), Get64(m->di), Get64(m->r8), Get64(m->r9), Get64(m->r10),
-         Get64(m->r11), Get64(m->r12), Get64(m->r13), Get64(m->r14),
-         Get64(m->r15), m->fs, m->gs, GET_COUNTER(instructions_decoded),
-         GET_COUNTER(instructions_jitted), g_progname);
+         m->cs + MaskAddress(m->mode, m->ip), DescribeOp(m, GetPc(m)),
+         Get64(m->ax), Get64(m->cx), Get64(m->dx), Get64(m->bx), Get64(m->sp),
+         Get64(m->bp), Get64(m->si), Get64(m->di), Get64(m->r8), Get64(m->r9),
+         Get64(m->r10), Get64(m->r11), Get64(m->r12), Get64(m->r13),
+         Get64(m->r14), Get64(m->r15), m->fs, m->gs,
+         GET_COUNTER(instructions_decoded), GET_COUNTER(instructions_jitted),
+         g_progname);
 
   rp = m->ip;
   bp = Get64(m->bp);
@@ -207,4 +220,36 @@ const char *GetBacktrace(struct Machine *m) {
 
   DisFree(&dis);
   return b;
+}
+
+// use cosmopolitan/tool/build/fastdiff.c
+void LogCpu(struct Machine *m) {
+  static FILE *f;
+  if (!f) f = fopen("/tmp/cpu.log", "w");
+  fprintf(f,
+          "\n"
+          "IP %" PRIx64 "\n"
+          "AX %#" PRIx64 "\n"
+          "CX %#" PRIx64 "\n"
+          "DX %#" PRIx64 "\n"
+          "BX %#" PRIx64 "\n"
+          "SP %#" PRIx64 "\n"
+          "BP %#" PRIx64 "\n"
+          "SI %#" PRIx64 "\n"
+          "DI %#" PRIx64 "\n"
+          "R8 %#" PRIx64 "\n"
+          "R9 %#" PRIx64 "\n"
+          "R10 %#" PRIx64 "\n"
+          "R11 %#" PRIx64 "\n"
+          "R12 %#" PRIx64 "\n"
+          "R13 %#" PRIx64 "\n"
+          "R14 %#" PRIx64 "\n"
+          "R15 %#" PRIx64 "\n"
+          "FLAGS %s\n"
+          "%s\n",
+          m->ip, Read64(m->ax), Read64(m->cx), Read64(m->dx), Read64(m->bx),
+          Read64(m->sp), Read64(m->bp), Read64(m->si), Read64(m->di),
+          Read64(m->r8), Read64(m->r9), Read64(m->r10), Read64(m->r11),
+          Read64(m->r12), Read64(m->r13), Read64(m->r14), Read64(m->r15),
+          DescribeFlags(m->flags), DescribeOp(m, GetPc(m)));
 }

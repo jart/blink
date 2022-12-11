@@ -93,7 +93,7 @@
 #define JITSTAGE_CONTAINER(e) DLL_CONTAINER(struct JitStage, elem, e)
 #define JITBLOCK_CONTAINER(e) DLL_CONTAINER(struct JitBlock, elem, e)
 
-typedef _Atomic(intptr_t) hook_t;
+typedef _Atomic(int) hook_t;
 
 struct JitStage {
   int start;

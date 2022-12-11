@@ -103,7 +103,7 @@ endif
 
 ifeq ($(MODE), ubsan)
 CC = clang
-CPPFLAGS += -DDEBUG
+CPPFLAGS += -DDEBUG -DNOJIT
 CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 CFLAGS += -fsanitize=undefined
 LDLIBS += -fsanitize=undefined

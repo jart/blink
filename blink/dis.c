@@ -26,6 +26,8 @@
 #include "blink/dis.h"
 #include "blink/endian.h"
 #include "blink/high.h"
+#include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/tpenc.h"
@@ -146,6 +148,19 @@ static char *DisLineCode(struct Dis *d, char *p, int err) {
     plen = PFIXLEN;
   }
   p = DisColumn(DisAddr(d, p), p, ADDRLEN);
+  if (d->m && !IsJitDisabled(&d->m->system->jit)) {
+    if (HasHook(d->m, d->addr)) {
+      if (GetHook(d->m, d->addr) == GeneralDispatch) {
+        *p++ = ' ';  // no hook
+      } else if (GetHook(d->m, d->addr) == JitlessDispatch) {
+        *p++ = 'S';  // staging hook
+      } else {
+        *p++ = '*';  // committed jit hook
+      }
+    } else {
+      *p++ = '!';
+    }
+  }
   if (!d->noraw) {
     p = DisColumn(DisRaw(d, p), p, plen * 2 + 1 + blen * 2);
   } else {

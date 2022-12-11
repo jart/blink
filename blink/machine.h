@@ -11,6 +11,7 @@
 #include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/elf.h"
+#include "blink/end.h"
 #include "blink/fds.h"
 #include "blink/jit.h"
 #include "blink/linux.h"
@@ -81,7 +82,12 @@
 #define HOSTPAGE_CONTAINER(e) DLL_CONTAINER(struct HostPage, elem, e)
 
 #define HasHook(m, pc) (((u64)(pc)) - m->codestart < m->codesize)
-#define GetHook(m, pc) (m->fun + (pc))
+#define GetHook(m, pc)       \
+  ((nexgen32e_f)(IMAGE_END + \
+                 atomic_load_explicit(m->fun + (pc), memory_order_relaxed)))
+#define SetHook(m, pc, func)                                   \
+  atomic_store_explicit(m->fun + (pc), (u8 *)(func)-IMAGE_END, \
+                        memory_order_relaxed)
 
 #if defined(NOLINEAR) || defined(__SANITIZE_THREAD__)
 #define CanHaveLinearMemory() false
@@ -201,9 +207,9 @@ struct System {
   i64 brk;
   i64 automap;
   i64 codestart;
+  _Atomic(int) *fun;
   unsigned long codesize;
   pthread_mutex_t lock_lock;
-  _Atomic(nexgen32e_f) *fun;
   struct MachineMemstat memstat;
   pthread_mutex_t machines_lock;
   struct Dll *machines GUARDED_BY(machines_lock);
@@ -243,7 +249,7 @@ struct Machine {                           //
   _Atomic(bool) invalidated;               // the tlb must be flushed
   _Atomic(bool) nolinear;                  // [dup] no linear address resolution
   u8 mode;                                 // [dup] XED_MODE_{REAL,LEGACY,LONG}
-  _Atomic(nexgen32e_f) *fun;               // [dup] jit hooks for code bytes
+  _Atomic(int) *fun;                       // [dup] jit hooks for code bytes
   unsigned long codesize;                  // [dup] size of exe code section
   i64 codestart;                           // [dup] virt of exe code section
   union {                                  // GENERAL REGISTER FILE

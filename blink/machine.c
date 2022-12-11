@@ -1475,6 +1475,7 @@ int ClassifyOp(u64 rde) {
     case 0x0E1:  // OpLoope
     case 0x0E2:  // OpLoop1
     case 0x0E3:  // OpJcxz
+    case 0x0E8:  // OpCallJvds
     case 0x0EA:  // OpJmpf
     case 0x0cf:  // OpIret
     case 0x180:  // OpJo
@@ -2148,10 +2149,9 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
 
 void ExecuteInstruction(struct Machine *m) {
 #ifdef HAVE_JIT
-  u64 pc;
   nexgen32e_f func;
-  if (HasHook(m, (pc = GetPc(m)))) {
-    func = IB(atomic_load_explicit(GetHook(m, pc), memory_order_relaxed));
+  if (HasHook(m, m->ip)) {
+    func = GetHook(m, m->ip);
     if (!m->path.jb) {
       STATISTIC(++instructions_dispatched);
       func(DISPATCH_NOTHING);

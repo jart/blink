@@ -28,6 +28,8 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/builtin.h"
+#include "blink/end.h"
 #include "blink/endian.h"
 #include "blink/loader.h"
 #include "blink/log.h"
@@ -96,6 +98,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
   CopyToUser(m, vaddr, (u8 *)image + offset, filesz);
   m->system->brk = MAX(m->system->brk, end);
 
+#ifdef HAVE_JIT
   if ((flags & PF_X) && CouldJit(m)) {
     if (!m->system->codesize) {
       m->system->codestart = vaddr;
@@ -107,6 +110,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
            "addresses; only the first region will benefit from jitting");
     }
   }
+#endif
 
   return end;
 }
@@ -226,13 +230,14 @@ static int GetElfHeader(char ehdr[64], const char *prog, const char *image) {
 }
 
 static void SetupDispatch(struct Machine *m) {
+#ifdef HAVE_JIT
   size_t i, n;
   free(m->system->fun);
-  if ((n = m->system->codesize)) {
-    if ((m->system->fun =
-             (_Atomic(nexgen32e_f) *)calloc(n, sizeof(nexgen32e_f)))) {
+  if (!IsJitDisabled(&m->system->jit) && (n = m->system->codesize)) {
+    if ((m->system->fun = (atomic_int *)calloc(n, sizeof(atomic_int)))) {
       for (i = 0; i < n; ++i) {
-        atomic_store_explicit(m->system->fun + i, GeneralDispatch,
+        atomic_store_explicit(m->system->fun + i,
+                              (u8 *)GeneralDispatch - IMAGE_END,
                               memory_order_relaxed);
       }
     } else {
@@ -241,11 +246,13 @@ static void SetupDispatch(struct Machine *m) {
     }
   } else {
     m->system->codestart = 0;
+    m->system->codesize = 0;
     m->system->fun = 0;
   }
   m->fun = m->system->fun - m->system->codestart;
   m->codestart = m->system->codestart;
   m->codesize = m->system->codesize;
+#endif
 }
 
 void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
