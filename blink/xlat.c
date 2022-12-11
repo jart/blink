@@ -323,9 +323,9 @@ int XlatRusage(int x) {
 
 int XlatSocketFamily(int x) {
   switch (x) {
-    XLAT(0, AF_UNSPEC);
-    XLAT(1, AF_UNIX);
-    XLAT(2, AF_INET);
+    XLAT(AF_UNSPEC_LINUX, AF_UNSPEC);
+    XLAT(AF_UNIX_LINUX, AF_UNIX);
+    XLAT(AF_INET_LINUX, AF_INET);
     default:
       LOGF("%s %d not supported yet", "socket family", x);
       errno = ENOPROTOOPT;
@@ -335,9 +335,9 @@ int XlatSocketFamily(int x) {
 
 int UnXlatSocketFamily(int x) {
   switch (x) {
-    XLAT(AF_UNSPEC, 0);
-    XLAT(AF_UNIX, 1);
-    XLAT(AF_INET, 2);
+    XLAT(AF_UNSPEC, AF_UNSPEC_LINUX);
+    XLAT(AF_UNIX, AF_UNIX_LINUX);
+    XLAT(AF_INET, AF_INET_LINUX);
     default:
       LOGF("don't know how to translate %s %d", "socket family", x);
       return x;
@@ -378,7 +378,7 @@ int XlatSocketLevel(int x) {
 
 int XlatSocketOptname(int level, int optname) {
   switch (level) {
-    case SOL_SOCKET:
+    case SOL_SOCKET_LINUX:
       switch (optname) {
         XLAT(2, SO_REUSEADDR);
         XLAT(5, SO_DONTROUTE);
@@ -387,10 +387,12 @@ int XlatSocketOptname(int level, int optname) {
         XLAT(9, SO_KEEPALIVE);
         XLAT(13, SO_LINGER);
         XLAT(15, SO_REUSEPORT);
+        XLAT(20, SO_RCVTIMEO);
+        XLAT(21, SO_SNDTIMEO);
         default:
           break;
       }
-    case IPPROTO_TCP:
+    case SOL_TCP_LINUX:
       switch (optname) {
         XLAT(1, TCP_NODELAY);
 #if defined(TCP_CORK)
@@ -401,8 +403,14 @@ int XlatSocketOptname(int level, int optname) {
 #ifdef TCP_FASTOPEN
         XLAT(23, TCP_FASTOPEN);
 #endif
+#ifdef TCP_FASTOPEN_CONNECT
+        XLAT(30, TCP_FASTOPEN_CONNECT);
+#endif
 #ifdef TCP_QUICKACK
         XLAT(12, TCP_QUICKACK);
+#endif
+#ifdef TCP_SAVE_SYN
+        XLAT(27, TCP_SAVE_SYN);
 #endif
         default:
           break;

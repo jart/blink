@@ -21,6 +21,10 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <net/if.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
 #include <poll.h>
 #include <pthread.h>
 #include <sched.h>
@@ -31,6 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/file.h>
+#include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
 #include <sys/socket.h>
@@ -986,6 +991,60 @@ static int IoctlTcsets(struct Machine *m, int fd, int request, i64 addr,
   return fn(fd, request, &tio);
 }
 
+static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
+  size_t i;
+  char *buf;
+  size_t len;
+  size_t bufsize;
+  char *buf_linux;
+  size_t len_linux;
+  struct ifreq *ifreq;
+  struct ifconf ifconf;
+  struct ifconf_linux ifconf_linux;
+  struct ifreq_linux ifreq_linux = {0};
+  CopyFromUserRead(m, &ifconf_linux, ifconf_addr, sizeof(ifconf_linux));
+  bufsize = MIN(16384, Read64(ifconf_linux.len));
+  if (!(buf = malloc(bufsize))) return -1;
+  if (!(buf_linux = malloc(bufsize))) {
+    free(buf);
+    return -1;
+  }
+  ifconf.ifc_len = bufsize;
+  ifconf.ifc_buf = buf;
+  if (ioctl(systemfd, SIOCGIFCONF, &ifconf)) {
+    free(buf_linux);
+    free(buf);
+    return -1;
+  }
+  len_linux = 0;
+  ifreq = ifconf.ifc_req;
+  for (i = 0; i < ifconf.ifc_len;) {
+    if (len_linux + sizeof(ifreq_linux) > bufsize) break;
+#ifndef __linux
+    len = IFNAMSIZ + ifreq->ifr_addr.sa_len;
+#else
+    len = sizeof(*ifreq);
+#endif
+    if (ifreq->ifr_addr.sa_family == AF_INET) {
+      memset(ifreq_linux.name, 0, sizeof(ifreq_linux.name));
+      memcpy(ifreq_linux.name, ifreq->ifr_name,
+             MIN(sizeof(ifreq_linux.name) - 1, sizeof(ifreq->ifr_name)));
+      XlatSockaddrToLinux(&ifreq_linux.addr,
+                          (struct sockaddr_in *)&ifreq->ifr_addr);
+      memcpy(buf_linux + len_linux, &ifreq_linux, sizeof(ifreq_linux));
+      len_linux += sizeof(ifreq_linux);
+    }
+    ifreq = (struct ifreq *)((char *)ifreq + len);
+    i += len;
+  }
+  Write64(ifconf_linux.len, len_linux);
+  CopyToUserWrite(m, ifconf_addr, &ifconf_linux, sizeof(ifconf_linux));
+  CopyToUserWrite(m, Read64(ifconf_linux.buf), buf_linux, len_linux);
+  free(buf_linux);
+  free(buf);
+  return 0;
+}
+
 static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
   struct Fd *fd;
   int rc, systemfd;
@@ -1009,6 +1068,9 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       break;
     case TCSETSF_LINUX:
       rc = IoctlTcsets(m, systemfd, TCSETSF, addr, func);
+      break;
+    case SIOCGIFCONF_LINUX:
+      rc = IoctlSiocgifconf(m, systemfd, addr);
       break;
     default:
       LOGF("missing ioctl %#" PRIx64, request);

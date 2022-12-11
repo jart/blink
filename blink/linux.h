@@ -148,6 +148,18 @@
 #define AT_RANDOM_LINUX 25
 #define AT_EXECFN_LINUX 31
 
+#define IFNAMSIZ_LINUX 16
+
+#define SIOCGIFCONF_LINUX 0x8912
+
+#define AF_UNSPEC_LINUX 0
+#define AF_UNIX_LINUX   1
+#define AF_INET_LINUX   2
+
+#define SOL_SOCKET_LINUX 1
+#define SOL_TCP_LINUX    6
+#define SOL_UDP_LINUX    17
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];
@@ -326,6 +338,23 @@ struct dirent_linux {
   u8 d_reclen[2];    // byte length of this whole struct and string
   u8 d_type[1];      // DT_REG, DT_DIR, DT_UNKNOWN, DT_BLK, etc.
   char d_name[256];  // NUL-terminated basename
+};
+
+struct ifconf_linux {
+  u8 len[8];
+  u8 buf[8];
+};
+
+struct ifreq_linux {
+  u8 name[IFNAMSIZ_LINUX];
+  union {
+    struct sockaddr_in_linux addr;
+    struct sockaddr_in_linux dstaddr;
+    struct sockaddr_in_linux netmask;
+    struct sockaddr_in_linux broadaddr;
+    u8 flags[2];
+    u8 pad[24];
+  };
 };
 
 #endif /* BLINK_LINUX_H_ */
