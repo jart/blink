@@ -544,12 +544,12 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
   LOCK(&m->system->mmap_lock);
   if (!(flags & MAP_FIXED_LINUX)) {
     if (!virt) {
-      if ((virt = FindVirtual(m->system, m->system->brk, size)) == -1) {
+      if ((virt = FindVirtual(m->system, m->system->automap, size)) == -1) {
         UNLOCK(&m->system->mmap_lock);
         goto Finished;
       }
       pagesize = GetSystemPageSize();
-      m->system->brk = ROUNDUP(virt + size, pagesize);
+      m->system->automap = ROUNDUP(virt + size, pagesize);
     } else {
       if ((virt = FindVirtual(m->system, virt, size)) == -1) {
         UNLOCK(&m->system->mmap_lock);

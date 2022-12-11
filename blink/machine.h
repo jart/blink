@@ -44,10 +44,12 @@
 #else
 #define kSkew 0x000000000000
 #endif
+#define kAutomapStart  0x200000000000
 #define kPreciousStart 0x444000000000  // 1 tb
 #define kPreciousEnd   0x454000000000
 #define kStackTop      0x500000000000
 #else
+#define kAutomapStart  0x20000000
 #define kSkew          0x00000000
 #define kStackTop      0xf8000000
 #define kPreciousStart 0x44000000  // 192 mb
@@ -197,6 +199,7 @@ struct System {
   u64 cr3;
   u64 cr4;
   i64 brk;
+  i64 automap;
   i64 codestart;
   unsigned long codesize;
   pthread_mutex_t lock_lock;

@@ -103,6 +103,7 @@ struct System *NewSystem(void) {
     pthread_mutex_init(&s->lock_lock, 0);
     pthread_mutex_init(&s->futex_lock, 0);
     pthread_mutex_init(&s->machines_lock, 0);
+    s->automap = kAutomapStart;
     s->pid = getpid();
   }
   return s;
