@@ -186,7 +186,10 @@ _Noreturn static void SysExitGroup(struct Machine *m, int rc) {
 static int SysFork(struct Machine *m) {
   int pid;
   pid = fork();
-  if (!pid) m->system->isfork = true;
+  if (!pid) {
+    m->system->isfork = true;
+    m->system->pid = getpid();
+  }
   return pid;
 }
 
@@ -290,7 +293,7 @@ static int SysClone(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
 
 static struct Futex *NewFutex(i64 addr) {
   struct Futex *f;
-  if ((f = calloc(1, sizeof(struct Futex)))) {
+  if ((f = (struct Futex *)calloc(1, sizeof(struct Futex)))) {
     pthread_cond_init(&f->cond, 0);
     pthread_mutex_init(&f->lock, 0);
     dll_init(&f->elem);
@@ -828,45 +831,52 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   return rc;
 }
 
-static off_t TellAndSeek(struct Fd *fd, u64 offset) {
-  off_t oldpos;
-  if ((oldpos = lseek(fd->systemfd, 0, SEEK_CUR)) != -1 &&
-      lseek(fd->systemfd, offset, SEEK_SET) != -1) {
-    return oldpos;
-  } else {
-    return -1;
-  }
-}
-
 static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
                     u64 offset) {
-  i64 rc;
-  off_t oldpos;
+  void *buf;
+  ssize_t rc;
   struct Fd *fd;
-  if (!(fd = GetAndLockFd(m, fildes))) return -1;
-  if ((oldpos = TellAndSeek(fd, offset)) != -1) {
-    rc = SysReadImpl(m, fd, addr, size);
-    lseek(fd->systemfd, oldpos, SEEK_SET);
+  if ((fd = GetAndLockFd(m, fildes))) {
+    if (size) {
+      if ((buf = malloc(size))) {
+        if ((rc = pread(fd->systemfd, buf, size, offset)) != -1) {
+          CopyToUserWrite(m, addr, buf, rc);
+        }
+        free(buf);
+      } else {
+        rc = -1;
+      }
+    } else {
+      rc = pread(fd->systemfd, 0, 0, offset);
+    }
+    UnlockFd(fd);
   } else {
     rc = -1;
   }
-  UnlockFd(fd);
   return rc;
 }
 
 static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
                      u64 offset) {
   i64 rc;
-  off_t oldpos;
+  void *buf;
   struct Fd *fd;
-  if (!(fd = GetAndLockFd(m, fildes))) return -1;
-  if ((oldpos = TellAndSeek(fd, offset)) != -1) {
-    rc = SysWriteImpl(m, fd, addr, size);
-    lseek(fd->systemfd, oldpos, SEEK_SET);
+  if ((fd = GetAndLockFd(m, fildes))) {
+    if (size) {
+      if ((buf = malloc(size))) {
+        CopyFromUserRead(m, buf, addr, size);
+        rc = pwrite(fd->systemfd, buf, size, offset);
+        free(buf);
+      } else {
+        rc = -1;
+      }
+    } else {
+      rc = pwrite(fd->systemfd, 0, 0, offset);
+    }
+    UnlockFd(fd);
   } else {
     rc = -1;
   }
-  UnlockFd(fd);
   return rc;
 }
 
@@ -1000,12 +1010,13 @@ static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
   size_t len_linux;
   struct ifreq *ifreq;
   struct ifconf ifconf;
+  struct ifreq_linux ifreq_linux;
   struct ifconf_linux ifconf_linux;
-  struct ifreq_linux ifreq_linux = {0};
+  memset(&ifreq_linux, 0, sizeof(ifreq_linux));
   CopyFromUserRead(m, &ifconf_linux, ifconf_addr, sizeof(ifconf_linux));
   bufsize = MIN(16384, Read64(ifconf_linux.len));
-  if (!(buf = malloc(bufsize))) return -1;
-  if (!(buf_linux = malloc(bufsize))) {
+  if (!(buf = (char *)malloc(bufsize))) return -1;
+  if (!(buf_linux = (char *)malloc(bufsize))) {
     free(buf);
     return -1;
   }
@@ -1163,6 +1174,58 @@ static int SysFchmod(struct Machine *m, i32 fd, u32 mode) {
   return fchmod(GetFildes(m, fd), mode);
 }
 
+int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
+  int rc;
+  int whence;
+  int syscmd;
+  struct flock flock;
+  struct flock_linux flock_linux;
+  CopyFromUserRead(m, &flock_linux, arg, sizeof(flock_linux));
+  if (cmd == F_SETLK_LINUX) {
+    syscmd = F_SETLK;
+  } else if (cmd == F_SETLKW_LINUX) {
+    syscmd = F_SETLKW;
+  } else {
+    syscmd = F_GETLK;
+  }
+  memset(&flock, 0, sizeof(flock));
+  if (Read16(flock_linux.l_type) == F_RDLCK_LINUX) {
+    flock.l_type = F_RDLCK;
+  } else if (Read16(flock_linux.l_type) == F_WRLCK_LINUX) {
+    flock.l_type = F_WRLCK;
+  } else if (Read16(flock_linux.l_type) == F_UNLCK_LINUX) {
+    flock.l_type = F_UNLCK;
+  } else {
+    return einval();
+  }
+  if ((whence = XlatWhence(Read16(flock_linux.l_whence))) == -1) return -1;
+  flock.l_whence = whence;
+  flock.l_start = Read64(flock_linux.l_start);
+  flock.l_len = Read64(flock_linux.l_len);
+  rc = fcntl(systemfd, syscmd, &flock);
+  if (rc != -1 && syscmd == F_GETLK) {
+    if (flock.l_type == F_RDLCK) {
+      Write16(flock_linux.l_type, F_RDLCK_LINUX);
+    } else if (flock.l_type == F_WRLCK) {
+      Write16(flock_linux.l_type, F_WRLCK_LINUX);
+    } else {
+      Write16(flock_linux.l_type, F_UNLCK_LINUX);
+    }
+    if (flock.l_whence == SEEK_END) {
+      Write16(flock_linux.l_whence, SEEK_END_LINUX);
+    } else if (flock.l_whence == SEEK_CUR) {
+      Write16(flock_linux.l_whence, SEEK_CUR_LINUX);
+    } else {
+      Write16(flock_linux.l_whence, SEEK_SET_LINUX);
+    }
+    Write64(flock_linux.l_start, flock.l_start);
+    Write64(flock_linux.l_len, flock.l_len);
+    Write32(flock_linux.l_pid, flock.l_pid);
+    CopyToUserWrite(m, arg, &flock_linux, sizeof(flock_linux));
+  }
+  return rc;
+}
+
 static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
   int rc, fl;
   struct Fd *fd;
@@ -1205,6 +1268,10 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
     } else {
       rc = -1;
     }
+  } else if (cmd == F_SETLK_LINUX ||   //
+             cmd == F_SETLKW_LINUX ||  //
+             cmd == F_GETLK_LINUX) {
+    rc = SysFcntlLock(m, fd->systemfd, cmd, arg);
   } else {
     LOGF("missing fcntl() command %" PRId32, cmd);
     rc = einval();

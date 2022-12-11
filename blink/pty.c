@@ -1273,7 +1273,7 @@ ssize_t PtyWriteInput(struct Pty *pty, const void *data, size_t n) {
   char *p;
   const char *q;
   size_t i, j, m;
-  q = data;
+  q = (char *)data;
   p = pty->input.p;
   i = pty->input.i;
   m = pty->input.n;
@@ -1281,7 +1281,7 @@ ssize_t PtyWriteInput(struct Pty *pty, const void *data, size_t n) {
     m = MAX(m, 8);
     do m += m >> 1;
     while (i + n * 2 + 1 > m);
-    if (!(p = realloc(p, m))) {
+    if (!(p = (char *)realloc(p, m))) {
       return -1;
     }
     pty->input.p = p;

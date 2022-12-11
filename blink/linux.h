@@ -160,6 +160,14 @@
 #define SOL_TCP_LINUX    6
 #define SOL_UDP_LINUX    17
 
+#define F_SETLK_LINUX  6
+#define F_SETLKW_LINUX 7
+#define F_GETLK_LINUX  5
+
+#define F_RDLCK_LINUX 0
+#define F_WRLCK_LINUX 1
+#define F_UNLCK_LINUX 2
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];
@@ -355,6 +363,16 @@ struct ifreq_linux {
     u8 flags[2];
     u8 pad[24];
   };
+};
+
+struct flock_linux {
+  u8 l_type[2];
+  u8 l_whence[2];
+  u8 pad1_[4];
+  u8 l_start[8];
+  u8 l_len[8];
+  u8 l_pid[4];
+  u8 pad2_[4];
 };
 
 #endif /* BLINK_LINUX_H_ */
