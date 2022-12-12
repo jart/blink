@@ -7,7 +7,7 @@
 #include "blink/types.h"
 #include "blink/x86.h"
 
-#define DIS_MAX_SYMBOL_LENGTH 32
+#define DIS_MAX_SYMBOL_LENGTH 128
 
 struct DisOp {
   i64 addr;
@@ -68,7 +68,7 @@ struct Dis {
   struct XedDecodedInst xedd[1];
   struct Machine *m; /* for the segment registers */
   u64 addr;          /* current effective address */
-  char buf[512];
+  char buf[1024];
 };
 
 extern bool g_disisprog_disable;

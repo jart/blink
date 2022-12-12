@@ -27,6 +27,7 @@
 #include "blink/high.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
+#include "blink/util.h"
 
 static const char kRiz[2][4] = {"eiz", "riz"};
 static const char kRip[2][4] = {"eip", "rip"};
@@ -114,17 +115,11 @@ static char *DisInt(char *p, i64 x) {
 }
 
 static char *DisSymImpl(struct Dis *d, char *p, i64 x, long sym) {
-  size_t n;
   i64 addend;
   const char *name;
   addend = x - d->syms.p[sym].addr;
   name = d->syms.stab + d->syms.p[sym].name;
-  /* p = Demangle(p, name, DIS_MAX_SYMBOL_LENGTH); */
-  n = strlen(name);
-  n = MIN(DIS_MAX_SYMBOL_LENGTH, n);
-  memcpy(p, name, n);
-  p += n;
-  *p = '\0';
+  p = Demangle(p, name, DIS_MAX_SYMBOL_LENGTH);
   if (addend) {
     *p++ = '+';
     p = DisInt(p, addend);

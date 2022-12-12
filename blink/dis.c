@@ -174,7 +174,7 @@ static char *DisLineCode(struct Dis *d, char *p, int err) {
 static char *DisLabel(struct Dis *d, char *p, const char *name) {
   p = DisColumn(DisAddr(d, p), p, ADDRLEN);
   p = HighStart(p, g_high.label);
-  p = stpcpy(p, name);
+  p = Demangle(p, name, DIS_MAX_SYMBOL_LENGTH);
   p = HighEnd(p);
   *p++ = ':';
   *p = '\0';

@@ -1582,7 +1582,7 @@ static void DrawFrames(struct Panel *p) {
     s = line;
     s += sprintf(s, "%0*" PRIx64 " %0*" PRIx64 " ", GetAddrHexWidth(),
                  m->ss + bp, GetAddrHexWidth(), rp);
-    strcpy(s, name);
+    s = Demangle(s, name, DIS_MAX_SYMBOL_LENGTH);
     AppendPanel(p, i - framesstart, line);
     if (sym != -1 && rp != dis->syms.p[sym].addr) {
       snprintf(line, sizeof(line), "+%#" PRIx64 "", rp - dis->syms.p[sym].addr);
