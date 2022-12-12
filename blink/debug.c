@@ -82,6 +82,79 @@ int GetInstruction(struct Machine *m, i64 pc, struct XedDecodedInst *x) {
   }
 }
 
+const char *DescribeSignal(int sig) {
+  _Thread_local static char buf[21];
+  switch (sig) {
+    case SIGHUP_LINUX:
+      return "SIGHUP";
+    case SIGINT_LINUX:
+      return "SIGINT";
+    case SIGQUIT_LINUX:
+      return "SIGQUIT";
+    case SIGILL_LINUX:
+      return "SIGILL";
+    case SIGTRAP_LINUX:
+      return "SIGTRAP";
+    case SIGABRT_LINUX:
+      return "SIGABRT";
+    case SIGBUS_LINUX:
+      return "SIGBUS";
+    case SIGFPE_LINUX:
+      return "SIGFPE";
+    case SIGKILL_LINUX:
+      return "SIGKILL";
+    case SIGUSR1_LINUX:
+      return "SIGUSR1";
+    case SIGSEGV_LINUX:
+      return "SIGSEGV";
+    case SIGUSR2_LINUX:
+      return "SIGUSR2";
+    case SIGPIPE_LINUX:
+      return "SIGPIPE";
+    case SIGALRM_LINUX:
+      return "SIGALRM";
+    case SIGTERM_LINUX:
+      return "SIGTERM";
+    case SIGSTKFLT_LINUX:
+      return "SIGSTKFLT";
+    case SIGCHLD_LINUX:
+      return "SIGCHLD";
+    case SIGCONT_LINUX:
+      return "SIGCONT";
+    case SIGSTOP_LINUX:
+      return "SIGSTOP";
+    case SIGTSTP_LINUX:
+      return "SIGTSTP";
+    case SIGTTIN_LINUX:
+      return "SIGTTIN";
+    case SIGTTOU_LINUX:
+      return "SIGTTOU";
+    case SIGURG_LINUX:
+      return "SIGURG";
+    case SIGXCPU_LINUX:
+      return "SIGXCPU";
+    case SIGXFSZ_LINUX:
+      return "SIGXFSZ";
+    case SIGVTALRM_LINUX:
+      return "SIGVTALRM";
+    case SIGPROF_LINUX:
+      return "SIGPROF";
+    case SIGWINCH_LINUX:
+      return "SIGWINCH";
+    case SIGIO_LINUX:
+      return "SIGIO";
+    case SIGSYS_LINUX:
+      return "SIGSYS";
+    case SIGINFO_LINUX:
+      return "SIGINFO";
+    case SIGPWR_LINUX:
+      return "SIGPWR";
+    default:
+      FormatInt64(buf, sig);
+      return buf;
+  }
+}
+
 const char *DescribeFlags(int flags) {
   _Thread_local static char b[7];
   b[0] = (flags & OF) ? 'O' : '.';

@@ -199,10 +199,16 @@ int XlatSignal(int x) {
     XLAT(13, SIGPIPE);
     XLAT(14, SIGALRM);
     XLAT(15, SIGTERM);
+#ifdef SIGSTKFLT
+    XLAT(16, SIGSTKFLT);
+#endif
     XLAT(17, SIGCHLD);
     XLAT(18, SIGCONT);
+    XLAT(19, SIGSTOP);
+    XLAT(20, SIGTSTP);
     XLAT(21, SIGTTIN);
     XLAT(22, SIGTTOU);
+    XLAT(23, SIGURG);
     XLAT(24, SIGXCPU);
     XLAT(25, SIGXFSZ);
     XLAT(26, SIGVTALRM);
@@ -211,16 +217,9 @@ int XlatSignal(int x) {
 #ifdef SIGIO
     XLAT(29, SIGIO);
 #endif
-    XLAT(19, SIGSTOP);
     XLAT(31, SIGSYS);
-    XLAT(20, SIGTSTP);
-    XLAT(23, SIGURG);
     default:
-      if (x > 0 && x <= 64) {
-        return x;
-      } else {
-        return einval();
-      }
+      return einval();
   }
 }
 
@@ -291,21 +290,13 @@ int UnXlatSignal(int x) {
 #ifdef SIGIO
     XLAT(SIGIO, 29);
 #endif
+#ifdef SIGSTKFLT
+    XLAT(SIGSTKFLT, 16);
+#endif
     XLAT(SIGSTOP, 19);
     XLAT(SIGSYS, 31);
     XLAT(SIGTSTP, 20);
     XLAT(SIGURG, 23);
-    default:
-      LOGF("don't know how to translate %s %d", "signal", x);
-      return 15;
-  }
-}
-
-int XlatSig(int x) {
-  switch (x) {
-    XLAT(SIG_BLOCK_LINUX, SIG_BLOCK);
-    XLAT(SIG_UNBLOCK_LINUX, SIG_UNBLOCK);
-    XLAT(SIG_SETMASK_LINUX, SIG_SETMASK);
     default:
       return einval();
   }
@@ -715,24 +706,26 @@ void XlatWinsizeToLinux(struct winsize_linux *dst, const struct winsize *src) {
 }
 
 void XlatSigsetToLinux(u8 dst[8], const sigset_t *src) {
-  int i;
-  u64 x;
-  for (x = i = 0; i < 64; ++i) {
-    if (sigismember(src, i + 1)) {
-      x |= 1ull << i;
+  u64 set = 0;
+  int syssig, linuxsig;
+  for (syssig = 1; syssig <= 32; ++syssig) {
+    if (sigismember(src, syssig) == 1 &&
+        (linuxsig = UnXlatSignal(syssig)) != -1) {
+      set |= 1ull << (linuxsig - 1);
     }
   }
-  Write64(dst, x);
+  Write64(dst, set);
 }
 
 void XlatLinuxToSigset(sigset_t *dst, const u8 src[8]) {
-  int i;
-  u64 x;
-  x = Read64(src);
+  u64 set;
+  int syssig, linuxsig;
+  set = Read64(src);
   sigemptyset(dst);
-  for (i = 0; i < 64; ++i) {
-    if ((1ull << i) & x) {
-      sigaddset(dst, i + 1);
+  for (linuxsig = 1; linuxsig <= 32; ++linuxsig) {
+    if (((1ull << (linuxsig - 1)) & set) &&
+        (syssig = XlatSignal(linuxsig)) != -1) {
+      sigaddset(dst, syssig);
     }
   }
 }

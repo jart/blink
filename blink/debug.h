@@ -20,6 +20,7 @@ void DumpHex(u8 *, size_t);
 void PrintFds(struct Fds *);
 void LogCpu(struct Machine *);
 const char *DescribeFlags(int);
+const char *DescribeSignal(int);
 const char *GetBacktrace(struct Machine *);
 const char *DescribeOp(struct Machine *, i64);
 int GetInstruction(struct Machine *, i64, struct XedDecodedInst *);

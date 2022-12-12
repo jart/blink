@@ -36,53 +36,47 @@ void dll_splice_after(struct Dll *elem, struct Dll *succ) {
 /**
  * Removes item from doubly-linked list.
  *
- * @param list is a doubly-linked list, or null if empty
- * @return new value for `list`
+ * @param list is a doubly-linked list, where `!*list` means empty
  */
-struct Dll *dll_remove(struct Dll *list, struct Dll *elem) {
-  if (list == elem) {
-    if (list->prev == list) {
-      list = 0;
+void dll_remove(struct Dll **list, struct Dll *elem) {
+  if (*list == elem) {
+    if ((*list)->prev == *list) {
+      *list = 0;
     } else {
-      list = list->prev;
+      *list = (*list)->prev;
     }
   }
   elem->next->prev = elem->prev;
   elem->prev->next = elem->next;
   elem->next = elem;
   elem->prev = elem;
-  return list;
 }
 
 /**
  * Inserts item into doubly-linked list, at the beginning.
  *
- * @param list is a doubly-linked list, or null if empty
+ * @param list is a doubly-linked list, where `!*list` means empty
  * @param elem must not be a member of `list`, or null for no-op
- * @return new value for `list`
  */
-struct Dll *dll_make_first(struct Dll *list, struct Dll *elem) {
+void dll_make_first(struct Dll **list, struct Dll *elem) {
   if (elem) {
-    if (!list) {
-      list = elem->prev;
+    if (!*list) {
+      *list = elem->prev;
     } else {
-      dll_splice_after(list, elem);
+      dll_splice_after(*list, elem);
     }
   }
-  return list;
 }
 
 /**
  * Inserts item into doubly-linked list, at the end.
  *
- * @param list is a doubly-linked list, or null if empty
+ * @param list is a doubly-linked list, where `!*list` means empty
  * @param elem must not be a member of `list`, or null for no-op
- * @return new value for `list`
  */
-struct Dll *dll_make_last(struct Dll *list, struct Dll *elem) {
+void dll_make_last(struct Dll **list, struct Dll *elem) {
   if (elem) {
     dll_make_first(list, elem->next);
-    list = elem;
+    *list = elem;
   }
-  return list;
 }

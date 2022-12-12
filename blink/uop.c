@@ -119,7 +119,7 @@ static i64 LoadReserve64(struct Machine *m, i64 v) {
   return Load64(ReserveAddress(m, v, 8, false));
 }
 typedef i64 (*loadreserve_f)(struct Machine *, i64);
-static const loadreserve_f kLoadReserve[] = {LoadReserve8, LoadReserve16,  //
+static const loadreserve_f kLoadReserve[] = {LoadReserve8, LoadReserve16,
                                              LoadReserve32, LoadReserve64};
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -160,12 +160,6 @@ static const storereserve_f kStoreReserve[] = {StoreReserve8, StoreReserve16,
 ////////////////////////////////////////////////////////////////////////////////
 // ALU MICRO-OPS
 
-MICRO_OP void FastZeroify(struct Machine *m, long i) {
-  m->flags &= ~(1 << FLAGS_CF | 1 << FLAGS_SF | 1 << FLAGS_OF | 0xFF000000u);
-  m->flags |= 1 << FLAGS_ZF;
-  Put64(m->weg[i], 0);
-}
-
 MICRO_OP i64 JustAdd(struct Machine *m, u64 x, u64 y) {
   return x + y;
 }
@@ -173,10 +167,10 @@ MICRO_OP i64 JustOr(struct Machine *m, u64 x, u64 y) {
   return x | y;
 }
 MICRO_OP i64 JustAdc(struct Machine *m, u64 x, u64 y) {
-  return x + y + (m->flags & 1);
+  return x + y + !!(m->flags & CF);
 }
 MICRO_OP i64 JustSbb(struct Machine *m, u64 x, u64 y) {
-  return x - y - (m->flags & 1);
+  return x - y - !!(m->flags & CF);
 }
 MICRO_OP i64 JustAnd(struct Machine *m, u64 x, u64 y) {
   return x & y;
@@ -257,29 +251,6 @@ MICRO_OP void FastRet(struct Machine *m) {
 
 MICRO_OP void FastJmp(struct Machine *m, i32 disp) {
   m->ip += disp;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// GENERALIZED FALLBACK FOR LOADING OF MODRM PARAMETER
-
-MICRO_OP static u64 GetRegOrMem(P) {
-  if (IsByteOp(rde)) {
-    return Load8(GetModrmRegisterBytePointerRead1(A));
-  } else {
-    return ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A));
-  }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// GENERALIZED FALLBACK FOR STORING TO MODRM PARAMETER
-
-MICRO_OP static void PutRegOrMem(P) {
-  if (IsByteOp(rde)) {
-    Store8(GetModrmRegisterBytePointerWrite1(A), uimm0);
-  } else {
-    WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
-                          uimm0);
-  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////

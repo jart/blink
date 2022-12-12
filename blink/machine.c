@@ -736,20 +736,16 @@ static void OpPushImm(P) {
   Push(A, uimm0);
 }
 
-static void Interrupt(P, int i) {
-  HaltMachine(m, i);
-}
-
 static void OpInterruptImm(P) {
-  Interrupt(A, uimm0);
+  HaltMachine(m, uimm0);
 }
 
 static void OpInterrupt1(P) {
-  Interrupt(A, 1);
+  HaltMachine(m, 1);
 }
 
 static void OpInterrupt3(P) {
-  Interrupt(A, 3);
+  HaltMachine(m, 3);
 }
 
 static void FastJne(struct Machine *m, i32 disp) {
@@ -2061,7 +2057,8 @@ static bool CanJit(struct Machine *m) {
 }
 
 void JitlessDispatch(P) {
-  ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m), GetPc(m));
+  ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
+           GetPc(m));
   STATISTIC(++instructions_dispatched);
   LoadInstruction(m);
   m->oldip = m->ip;
@@ -2079,14 +2076,15 @@ void GeneralDispatch(P) {
   i64 newip;
   int opclass;
   intptr_t jitpc;
-  ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m), GetPc(m));
+  ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
+           GetPc(m));
   LoadInstruction(m);
   m->oldip = m->ip;
   rde = m->xedd->op.rde;
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
   opclass = ClassifyOp(rde);
-  if (m->path.jb || (opclass == kOpNormal && CanJit(m) && CreatePath(m))) {
+  if (m->path.jb || (opclass == kOpNormal && CanJit(m) && CreatePath(A))) {
     if (opclass == kOpNormal || opclass == kOpBranching) {
       ++m->path.elements;
       STATISTIC(++path_elements);
@@ -2111,13 +2109,13 @@ void GeneralDispatch(P) {
         AddPath_EndOp(A);
       } else {
         JIT_LOGF("won't add [%" PRIx64 " %s] so path started at %" PRIx64,
-                 GetPc(m), DescribeOp(m), m->path.start);
+                 GetPc(m), DescribeOp(m, GetPc(m)), m->path.start);
       }
     } else {
       AddPath_EndOp(A);
     }
     if (opclass == kOpPrecious || opclass == kOpBranching) {
-      CommitPath(m, 0);
+      CommitPath(A, 0);
     }
     m->ip = newip;
   }
@@ -2138,7 +2136,7 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
     JIT_LOGF("splicing path starting at %" PRIx64
              " into previously created function %p",
              m->path.start, func);
-    CommitPath(m, (intptr_t)func);
+    CommitPath(DISPATCH_NOTHING, (intptr_t)func);
     STATISTIC(++instructions_dispatched);
     func(DISPATCH_NOTHING);
     return;

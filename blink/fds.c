@@ -57,7 +57,7 @@ struct Fd *AllocateFd(struct Fds *fds, int minfd, int oflags) {
     atomic_store_explicit(&fd->systemfd, -1, memory_order_release);
     if (!(e1 = dll_first(fds->list)) || minfd < FD_CONTAINER(e1)->fildes) {
       fd->fildes = minfd;
-      fds->list = dll_make_first(fds->list, &fd->elem);
+      dll_make_first(&fds->list, &fd->elem);
     } else {
       for (;; e1 = e2) {
         if ((!(e2 = dll_next(fds->list, e1)) ||
@@ -67,7 +67,7 @@ struct Fd *AllocateFd(struct Fds *fds, int minfd, int oflags) {
           if (e2) {
             dll_splice_after(e1, &fd->elem);
           } else {
-            fds->list = dll_make_last(fds->list, &fd->elem);
+            dll_make_last(&fds->list, &fd->elem);
           }
           break;
         }
@@ -117,7 +117,7 @@ int CountFds(struct Fds *fds) {
 void FreeFd(struct Fds *fds, struct Fd *fd) {
   if (fd) {
     unassert(!pthread_mutex_destroy(&fd->lock));
-    fds->list = dll_remove(fds->list, &fd->elem);
+    dll_remove(&fds->list, &fd->elem);
     free(fd);
   }
 }

@@ -1,5 +1,6 @@
 #ifndef BLINK_SIGWINCH_H_
 #define BLINK_SIGWINCH_H_
+#include <signal.h>
 
 #ifndef SIGWINCH
 // SIGWINCH has the same magic number on all platforms. Yet for some

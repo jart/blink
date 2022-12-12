@@ -35,9 +35,17 @@ static void StartPath(struct Machine *m) {
   JIT_LOGF("%" PRIx64 " <path>", m->ip);
 }
 
+static void DebugOp(struct Machine *m, i64 expected_ip) {
+  if (m->ip != expected_ip) {
+    LOGF("IP was %" PRIx64 " but it should have been %" PRIx64, m->ip,
+         expected_ip);
+  }
+  unassert(m->ip == expected_ip);
+}
+
 static void StartOp(struct Machine *m, long len) {
   JIT_LOGF("%" PRIx64 "   <op>", m->ip);
-  JIT_LOGF("%" PRIx64 "     %s", m->ip, DescribeOp(m));
+  JIT_LOGF("%" PRIx64 "     %s", m->ip, DescribeOp(m, GetPc(m)));
   unassert(!m->path.jb);
   m->oldip = m->ip;
   m->ip += len;
@@ -52,19 +60,20 @@ static void EndOp(struct Machine *m) {
 }
 
 static void EndPath(struct Machine *m) {
-  JIT_LOGF("%" PRIx64 "   %s", m->ip, DescribeOp(m));
+  JIT_LOGF("%" PRIx64 "   %s", m->ip, DescribeOp(m, GetPc(m)));
   JIT_LOGF("%" PRIx64 " </path>", m->ip);
 }
 
-bool CreatePath(struct Machine *m) {
+bool CreatePath(P) {
   i64 pc;
   bool res;
   unassert(!m->path.jb);
   if ((pc = GetPc(m))) {
     if ((m->path.jb = StartJit(&m->system->jit))) {
 #if LOG_JIT
-      JIT_LOGF("starting new path at %" PRIx64, pc);
-      Jitter(A, "s0a0= c", len, StartPath);
+      JIT_LOGF("starting new path %" PRIxPTR " at %" PRIx64,
+               GetJitPc(m->path.jb), pc);
+      Jitter(A, "s0a0= c", StartPath);
 #endif
       m->path.start = pc;
       m->path.elements = 0;
@@ -80,10 +89,10 @@ bool CreatePath(struct Machine *m) {
   return res;
 }
 
-void CommitPath(struct Machine *m, intptr_t splice) {
+void CommitPath(P, intptr_t splice) {
   unassert(m->path.jb);
 #if LOG_JIT
-  Jitter(A, "s0a0= c", len, EndPath);
+  Jitter(A, "s0a0= c s0a0=", EndPath);
 #endif
   STATISTIC(path_longest_bytes =
                 MAX(path_longest_bytes, m->path.jb->index - m->path.jb->start));
@@ -118,6 +127,10 @@ void AddPath_StartOp(P) {
     AddPath_StartOp_Hook(A);
   }
   u8 len = Oplength(rde);
+  // TODO(jart): We shouldn't need to modify m->ip on every op.
+#if defined(DEBUG) || LOG_JIT
+  Jitter(A, "a1i s0a0= c s0a0=", m->ip, DebugOp);
+#endif
 #if !LOG_JIT && defined(__x86_64__)
   AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
   u8 ip = offsetof(struct Machine, ip);
@@ -143,7 +156,7 @@ void AddPath_StartOp(P) {
   AppendJit(m->path.jb, code, sizeof(code));
   m->reserving = false;
 #else
-  Jitter(A, "a1i s0a0= c", len, StartOp);
+  Jitter(A, "a1i s0a0= c s0a0=", len, StartOp);
 #endif
 }
 
@@ -179,7 +192,7 @@ void AddPath_EndOp(P) {
 bool AddPath(P) {
   unassert(m->path.jb);
   JIT_LOGF("adding [%s] from address %" PRIx64 " to path starting at %" PRIx64,
-           DescribeOp(m), GetPc(m), m->path.start);
+           DescribeOp(m, GetPc(m)), GetPc(m), m->path.start);
   AppendJitSetReg(m->path.jb, kJitArg[kArgRde], rde);
   AppendJitSetReg(m->path.jb, kJitArg[kArgDisp], disp);
   AppendJitSetReg(m->path.jb, kJitArg[kArgUimm0], uimm0);

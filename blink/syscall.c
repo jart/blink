@@ -80,6 +80,7 @@
        ax = name args)
 
 char *g_blink_path;
+bool FLAG_statistics;
 
 // delegate to work around function pointer errors, b/c
 // old musl toolchains using `int ioctl(int, int, ...)`
@@ -224,10 +225,10 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
   }
 #endif
   if (m->system->isfork) {
-    THR_LOGF("calling _Exit");
+    THR_LOGF("calling _Exit(%d)", rc);
     _Exit(rc);
   } else {
-    THR_LOGF("calling exit");
+    THR_LOGF("calling exit(%d)", rc);
     exit(rc);
   }
 }
@@ -244,17 +245,31 @@ _Noreturn void SysExit(struct Machine *m, int rc) {
 }
 
 static int SysFork(struct Machine *m) {
-  int pid;
-  THR_LOGF("pid=%d tid=%d SysFork", m->system->pid, m->tid);
+  int pid, newpid;
+  LOCK(&m->system->sig_lock);
+  LOCK(&m->system->mmap_lock);
+  LOCK(&m->system->lock_lock);
+  LOCK(&m->system->futex_lock);
+  LOCK(&m->system->machines_lock);
   pid = fork();
+  UNLOCK(&m->system->machines_lock);
+  UNLOCK(&m->system->futex_lock);
+  UNLOCK(&m->system->lock_lock);
+  UNLOCK(&m->system->mmap_lock);
+  UNLOCK(&m->system->sig_lock);
   if (!pid) {
+    newpid = getpid();
+    THR_LOGF("pid=%d tid=%d SysFork -> pid=%d tid=%d",  //
+             m->system->pid, m->tid, newpid, newpid);
     m->system->isfork = true;
-    m->system->pid = getpid();
+    m->tid = m->system->pid = newpid;
+    RemoveOtherThreads(m->system);
   }
   return pid;
 }
 
 static int SysVfork(struct Machine *m) {
+  // TODO(jart): Parent should be stopped while child is running.
   return SysFork(m);
 }
 
@@ -264,7 +279,7 @@ static void *OnSpawn(void *arg) {
   THR_LOGF("pid=%d tid=%d OnSpawn", m->system->pid, m->tid);
   g_machine = m;
   if (!(rc = setjmp(m->onhalt))) {
-    unassert(!pthread_sigmask(SIG_SETMASK, &m->thread_sigmask, 0));
+    unassert(!pthread_sigmask(SIG_SETMASK, &m->spawn_sigmask, 0));
     Actor(m);
   } else {
     LOGF("halting machine from thread: %d", rc);
@@ -324,7 +339,7 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   }
   Put64(m2->ax, 0);
   Put64(m2->sp, stack);
-  m2->thread_sigmask = oldss;
+  m2->spawn_sigmask = oldss;
   unassert(!pthread_attr_init(&attr));
   unassert(!pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
   err = pthread_create(&m2->thread, &attr, OnSpawn, m2);
@@ -379,7 +394,9 @@ static int SysFutexWait(struct Machine *m,  //
     CopyFromUserRead(m, &gtimeout, timeout_addr, sizeof(gtimeout));
     timeout.tv_sec = Read64(gtimeout.tv_sec);
     timeout.tv_nsec = Read64(gtimeout.tv_nsec);
-    if (timeout.tv_nsec >= 1000000000) return einval();
+    if (!(0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000000)) {
+      return einval();
+    }
     timeout = AddTime(GetTime(), timeout);
   } else {
     timeout = GetMaxTime();
@@ -395,7 +412,7 @@ static int SysFutexWait(struct Machine *m,  //
   }
   if (!f) {
     if ((f = NewFutex(uaddr))) {
-      m->system->futexes = dll_make_first(m->system->futexes, &f->elem);
+      dll_make_first(&m->system->futexes, &f->elem);
       LOCK(&f->lock);
     } else {
       UNLOCK(&m->system->futex_lock);
@@ -411,7 +428,7 @@ static int SysFutexWait(struct Machine *m,  //
     UNLOCK(&f->lock);
   } else {
     LOCK(&m->system->futex_lock);
-    m->system->futexes = dll_remove(m->system->futexes, &f->elem);
+    dll_remove(&m->system->futexes, &f->elem);
     UNLOCK(&m->system->futex_lock);
     UNLOCK(&f->lock);
     free(f);
@@ -431,14 +448,18 @@ static int SysFutex(struct Machine *m,  //
                     i64 uaddr2,         //
                     u32 val3) {
   if (uaddr & 3) return efault();
+  op &= ~FUTEX_PRIVATE_FLAG_LINUX;
   switch (op) {
     case FUTEX_WAIT_LINUX:
-    case FUTEX_WAIT_LINUX | FUTEX_PRIVATE_FLAG_LINUX:
       return SysFutexWait(m, uaddr, op, val, timeout_addr);
       break;
     case FUTEX_WAKE_LINUX:
-    case FUTEX_WAKE_LINUX | FUTEX_PRIVATE_FLAG_LINUX:
       return SysFutexWake(m, uaddr, val);
+    case FUTEX_WAIT_BITSET_LINUX:
+    case FUTEX_WAIT_BITSET_LINUX | FUTEX_CLOCK_REALTIME_LINUX:
+      // will be supported soon
+      // avoid logging when cosmo feature checks this
+      return einval();
     default:
       LOGF("unsupported futex op %#x", op);
       return einval();
@@ -595,7 +616,7 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
       unassert(!pthread_sigmask(SIG_SETMASK, &ss, &oldss));
       unassert((tmp = calloc(1, size)));
       for (i = 0; i < size; i += rc) {
-        rc = pread(systemfd, tmp + i, size - i, offset + i);
+        rc = pread(systemfd, (char *)tmp + i, size - i, offset + i);
         if (!rc) break;
         if (rc == -1) {
           LOGF("failed to read %zu bytes at offset %" PRId64
@@ -656,8 +677,8 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
   int flags, fildes, systemfd;
   flags = type & (SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
   type &= ~(SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
-  if ((family = XlatSocketFamily(family)) == -1) return -1;
   if ((type = XlatSocketType(type)) == -1) return -1;
+  if ((family = XlatSocketFamily(family)) == -1) return -1;
   if ((protocol = XlatSocketProtocol(protocol)) == -1) return -1;
   LockFds(&m->system->fds);
   fd = AllocateFd(&m->system->fds, 0,
@@ -1477,22 +1498,81 @@ static ssize_t SysGetrandom(struct Machine *m, i64 a, size_t n, int f) {
   return rc;
 }
 
+static void OnSignal(int sig, siginfo_t *si, void *uc) {
+  EnqueueSignal(g_machine, UnXlatSignal(sig));
+}
+
 static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
                         u64 sigsetsize) {
-  if ((sig = XlatSignal(sig)) != -1 &&
-      (1 <= sig && sig <= ARRAYLEN(m->system->hands)) && sigsetsize == 8) {
-    if (old) {
-      CopyToUserWrite(m, old, &m->system->hands[sig - 1],
-                      sizeof(m->system->hands[0]));
+  int syssig;
+  u64 flags = 0;
+  i64 handler = 0;
+  bool isignored = false;
+  struct sigaction syshand;
+  struct sigaction_linux hand;
+  u32 supported = SA_SIGINFO_LINUX |    //
+                  SA_RESTART_LINUX |    //
+                  SA_ONSTACK_LINUX |    //
+                  SA_NODEFER_LINUX |    //
+                  SA_RESTORER_LINUX |   //
+                  SA_RESETHAND_LINUX |  //
+                  SA_NOCLDSTOP_LINUX |  //
+                  SA_NOCLDWAIT_LINUX;
+  if (sigsetsize != 8) return einval();
+  if (!(1 <= sig && sig <= 64)) return einval();
+  if (sig == SIGKILL_LINUX || sig == SIGSTOP_LINUX) return einval();
+  if (act) {
+    CopyFromUserRead(m, &hand, act, sizeof(hand));
+    flags = Read64(hand.flags);
+    handler = Read64(hand.handler);
+    if (flags & ~supported) {
+      LOGF("unrecognized sigaction() flags: %#" PRIx64, flags & ~supported);
+      return einval();
     }
-    if (act) {
-      CopyFromUserRead(m, &m->system->hands[sig - 1], act,
-                       sizeof(m->system->hands[0]));
+    switch (handler) {
+      case SIG_DFL_LINUX:
+        isignored = IsSignalIgnoredByDefault(sig);
+        break;
+      case SIG_IGN_LINUX:
+        isignored = true;
+        break;
+      default:
+        break;
     }
-    return 0;
-  } else {
-    return einval();
   }
+  LOCK(&m->system->sig_lock);
+  if (old) {
+    CopyToUserWrite(m, old, &m->system->hands[sig - 1], sizeof(hand));
+  }
+  if (act) {
+    m->system->hands[sig - 1] = hand;
+    if (isignored) {
+      m->signals &= ~(1ull << (sig - 1));
+    }
+    if ((syssig = XlatSignal(sig)) != -1 &&
+        (~m->system->blinksigs & (1ull << (sig - 1)))) {
+      unassert(syssig != SIGSEGV);
+      sigfillset(&syshand.sa_mask);
+      syshand.sa_flags = SA_SIGINFO;
+      if (flags & SA_RESTART_LINUX) syshand.sa_flags |= SA_RESTART;
+      if (flags & SA_NOCLDSTOP_LINUX) syshand.sa_flags |= SA_NOCLDSTOP;
+      if (flags & SA_NOCLDWAIT_LINUX) syshand.sa_flags |= SA_NOCLDWAIT;
+      switch (handler) {
+        case SIG_DFL_LINUX:
+          syshand.sa_handler = SIG_DFL;
+          break;
+        case SIG_IGN_LINUX:
+          syshand.sa_handler = SIG_IGN;
+          break;
+        default:
+          syshand.sa_sigaction = OnSignal;
+          break;
+      }
+      unassert(!sigaction(syssig, &syshand, 0));
+    }
+  }
+  UNLOCK(&m->system->sig_lock);
+  return 0;
 }
 
 static int SysGetitimer(struct Machine *m, int which, i64 curvaladdr) {
@@ -1581,12 +1661,46 @@ static int SysClockNanosleep(struct Machine *m, int clock, int flags,
   return rc;
 }
 
-static int SysSigsuspend(struct Machine *m, i64 maskaddr) {
-  u8 gmask[8];
-  sigset_t mask;
-  CopyFromUserRead(m, &gmask, maskaddr, 8);
-  XlatLinuxToSigset(&mask, gmask);
-  return sigsuspend(&mask);
+static int SysSigsuspend(struct Machine *m, i64 maskaddr, i64 sigsetsize) {
+  int sig;
+  u8 word[8];
+  long nanos;
+  struct timespec ts;
+  u64 oldmask, signals;
+  SIG_LOGF("SysSigsuspend");
+  if (sigsetsize != 8) return einval();
+  CopyFromUserRead(m, word, maskaddr, 8);
+  oldmask = m->sigmask;
+  m->sigmask = Read64(word);
+  nanos = 1;
+  for (;;) {
+    // TODO(jart): this needs to be refactored
+    signals = m->signals;
+    Put64(m->ax, -EINTR_LINUX);
+    if ((sig = ConsumeSignal(m))) {
+      TerminateSignal(m, sig);
+    }
+    if (signals != m->signals) {
+      m->sigmask = oldmask;
+      unassert(m->canhalt);
+      longjmp(m->onhalt, kMachineEscape);
+    }
+    // TODO(jart): do better than expo backoff
+    if (nanos > 256) {
+      if (nanos < 10 * 1000) {
+        sched_yield();
+      } else {
+        ts = FromNanoseconds(nanos);
+        if (nanosleep(&ts, 0)) {
+          unassert(errno == EINTR);
+          continue;
+        }
+      }
+    }
+    if (nanos < 100 * 1000 * 1000) {
+      nanos <<= 1;
+    }
+  }
 }
 
 static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
@@ -1746,53 +1860,113 @@ static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
 
 static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
                           i64 oldsetaddr, u64 sigsetsize) {
-  u8 set[8], mask[8];
-  if ((how = XlatSig(how)) != -1 && sigsetsize == sizeof(set)) {
-    if (oldsetaddr) {
-      Write64(mask, m->sigmask);
-      CopyToUserWrite(m, oldsetaddr, mask, sizeof(mask));
-    }
-    if (setaddr) {
-      CopyFromUserRead(m, set, setaddr, sizeof(set));
-      if (how == SIG_BLOCK) {
-        m->sigmask = m->sigmask | Read64(set);
-      } else if (how == SIG_UNBLOCK) {
-        m->sigmask = m->sigmask & ~Read64(set);
-      } else {
-        m->sigmask = Read64(set);
-      }
-    }
-    return 0;
-  } else {
-    return einval();
+  u64 set;
+  u8 word[8];
+  if (sigsetsize != 8) return einval();
+  if (oldsetaddr) {
+    Write64(word, m->sigmask);
+    CopyToUserWrite(m, oldsetaddr, word, 8);
   }
+  if (setaddr) {
+    CopyFromUserRead(m, word, setaddr, 8);
+    set = Read64(word);
+    if (how == SIG_BLOCK_LINUX) {
+      m->sigmask |= set;
+    } else if (how == SIG_UNBLOCK_LINUX) {
+      m->sigmask &= ~set;
+    } else if (how == SIG_SETMASK_LINUX) {
+      m->sigmask = set;
+    } else {
+      return einval();
+    }
+  }
+  return 0;
 }
 
 static int SysKill(struct Machine *m, int pid, int sig) {
-  if (pid == m->system->pid) {
-    // TODO(jart): Enqueue signal instead.
-    ThrowProtectionFault(m);
-  } else {
+  u64 sigbit;
+  struct Dll *e;
+  bool gotsome = false;
+  if (pid < 1) return einval();
+  if (!(1 <= sig && sig <= 64)) return einval();
+  if (pid != m->system->pid || sig == SIGKILL_LINUX) {
+    if ((sig = XlatSignal(sig)) == -1) return -1;
     return kill(pid, sig);
   }
+  // we're raising a signal
+  // always deliver signal to current thread if it's unblocked
+  sigbit = 1ull << (sig - 1);
+  if (~m->sigmask & sigbit) {
+    m->signals |= sigbit;
+  } else {
+    // otherwise look for any thread where it's unblocked
+    LOCK(&m->system->machines_lock);
+    for (e = dll_first(m->system->machines); e;
+         e = dll_next(m->system->machines, e)) {
+      if (~MACHINE_CONTAINER(e)->sigmask & sigbit) {
+        MACHINE_CONTAINER(e)->signals |= sigbit;
+        gotsome = true;
+        break;
+      }
+    }
+    UNLOCK(&m->system->machines_lock);
+    // otherwise just enqueue it in the current thread
+    if (!gotsome) {
+      m->signals |= sigbit;
+    }
+  }
+  return 0;
+}
+
+static bool IsValidThreadId(struct System *s, int tid) {
+  return tid == s->pid ||
+         (kMinThreadId <= tid && tid < kMinThreadId + kMaxThreadIds);
 }
 
 static int SysTkill(struct Machine *m, int tid, int sig) {
+  int err;
   struct Dll *e;
-  bool gotsome = false;
-  if (!(1 <= sig && sig <= 64)) return einval();
+  struct Machine *m2;
+  if (!(1 <= sig && sig <= 64)) {
+    SYS_LOGF("tkill() failed due to bogus signal: %d", sig);
+    return einval();
+  }
+  if (!IsValidThreadId(m->system, tid)) {
+    SYS_LOGF("tkill() failed due to bogus thread id: %d", tid);
+    return esrch();
+  }
   LOCK(&m->system->machines_lock);
+  err = ESRCH;
   for (e = dll_first(m->system->machines); e;
        e = dll_next(m->system->machines, e)) {
-    if (MACHINE_CONTAINER(e)->tid == tid) {
-      MACHINE_CONTAINER(e)->signals |= 1ull << (sig - 1);
-      gotsome = true;
+    m2 = MACHINE_CONTAINER(e);
+    if (m2->tid == tid) {
+      // TODO(jart): We should have a condition for stopping.
+      if (sig == SIGKILL_LINUX ||  //
+          sig == SIGSTOP_LINUX ||  //
+          sig == SIGCONT_LINUX) {
+        err = pthread_kill(m2->thread, XlatSignal(sig));
+      } else {
+        m2->signals |= 1ull << (sig - 1);
+        err = 0;
+      }
       break;
     }
   }
   UNLOCK(&m->system->machines_lock);
-  if (!gotsome) return esrch();
-  return 0;
+  if (!err) {
+    return 0;
+  } else {
+    LOGF("tkill() failed: %s", strerror(err));
+    errno = err;
+    return -1;
+  }
+}
+
+static int SysTgkill(struct Machine *m, int pid, int tid, int sig) {
+  if (pid < 1 || tid < 1) return einval();
+  if (pid != m->system->pid) return eperm();
+  return SysTkill(m, tid, sig);
 }
 
 static int SysPause(struct Machine *m) {
@@ -1884,6 +2058,38 @@ static int SysAccept(struct Machine *m, int fd, i64 sa, i64 sas) {
   return SysAccept4(m, fd, sa, sas, 0);
 }
 
+static int SysSchedSetparam(struct Machine *m, int pid, i64 paramaddr) {
+  if (pid < 0 || !paramaddr) return einval();
+  return 0;
+}
+
+static int SysSchedGetparam(struct Machine *m, int pid, i64 paramaddr) {
+  u8 param[8];
+  if (pid < 0 || !paramaddr) return einval();
+  Write32(param, 0);
+  CopyToUserWrite(m, paramaddr, param, 8);
+  return 0;
+}
+
+static int SysSchedSetscheduler(struct Machine *m, int pid, int policy,
+                                i64 paramaddr) {
+  if (pid < 0 || !paramaddr) return einval();
+  return 0;
+}
+
+static int SysSchedGetscheduler(struct Machine *m, int pid) {
+  if (pid < 0) return einval();
+  return SCHED_OTHER_LINUX;
+}
+
+static int SysSchedGetPriorityMax(struct Machine *m, int policy) {
+  return 0;
+}
+
+static int SysSchedGetPriorityMin(struct Machine *m, int policy) {
+  return 0;
+}
+
 void OpSyscall(P) {
   u64 ax, di, si, dx, r0, r8, r9;
   ax = Get64(m->ax);
@@ -1893,7 +2099,7 @@ void OpSyscall(P) {
   r0 = Get64(m->r10);
   r8 = Get64(m->r8);
   r9 = Get64(m->r9);
-  switch (ax & 0x1ff) {
+  switch (ax & 0xfff) {
     SYSCALL(0x000, SysRead, (m, di, si, dx));
     SYSCALL(0x001, SysWrite, (m, di, si, dx));
     SYSCALL(0x002, SysOpen, (m, di, si, dx));
@@ -1978,9 +2184,15 @@ void OpSyscall(P) {
     SYSCALL(0x06B, SysGeteuid, (m));
     SYSCALL(0x06C, SysGetegid, (m));
     SYSCALL(0x06E, SysGetppid, (m));
-    SYSCALL(0x082, SysSigsuspend, (m, di));
+    SYSCALL(0x082, SysSigsuspend, (m, di, si));
     SYSCALL(0x083, SysSigaltstack, (m, di, si));
     SYSCALL(0x085, SysMknod, (m, di, si, dx));
+    SYSCALL(0x08E, SysSchedSetparam, (m, di, si));
+    SYSCALL(0x08F, SysSchedGetparam, (m, di, si));
+    SYSCALL(0x090, SysSchedSetscheduler, (m, di, si, dx));
+    SYSCALL(0x091, SysSchedGetscheduler, (m, di));
+    SYSCALL(0x092, SysSchedGetPriorityMax, (m, di));
+    SYSCALL(0x093, SysSchedGetPriorityMin, (m, di));
     SYSCALL(0x09D, SysPrctl, (m, di, si, dx, r0, r8));
     SYSCALL(0x09E, SysArchPrctl, (m, di, si));
     SYSCALL(0x0A0, SysSetrlimit, (m, di, si));
@@ -1991,6 +2203,7 @@ void OpSyscall(P) {
     SYSCALL(0x0E4, SysClockGettime, (m, di, si));
     SYSCALL(0x0E5, SysClockGetres, (m, di, si));
     SYSCALL(0x0E6, SysClockNanosleep, (m, di, si, dx, r0));
+    SYSCALL(0x0EA, SysTgkill, (m, di, si, dx));
     SYSCALL(0x0EB, SysUtimes, (m, di, si));
     SYSCALL(0x101, SysOpenat, (m, di, si, dx, r0));
     SYSCALL(0x102, SysMkdirat, (m, di, si, dx));
@@ -2010,6 +2223,9 @@ void OpSyscall(P) {
     case 0x00F:
       SigRestore(m);
       return;
+    case 0x500:
+      ax = enosys();
+      break;
     default:
       LOGF("missing syscall 0x%03" PRIx64, ax);
       ax = enosys();

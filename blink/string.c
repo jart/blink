@@ -204,22 +204,24 @@ static void RepMovsbEnhanced(P) {
   if ((cx = ReadCx(A))) {
     diactual = AddressDi(A);
     siactual = AddressSi(A);
-    SetWriteAddr(m, diactual, cx);
-    SetReadAddr(m, siactual, cx);
-    atomic_thread_fence(memory_order_acquire);
-    do {
-      direal = ResolveAddress(m, diactual);
-      sireal = ResolveAddress(m, siactual);
-      diremain = 4096 - (diactual & 4095);
-      siremain = 4096 - (siactual & 4095);
-      n = MIN(cx, MIN(diremain, siremain));
-      for (i = 0; i < n; ++i) {
-        direal[i] = sireal[i];
-      }
-      diactual = AddDi(A, n);
-      siactual = AddSi(A, n);
-    } while ((cx = SubtractCx(A, n)));
-    atomic_thread_fence(memory_order_release);
+    if (diactual != siactual) {
+      SetWriteAddr(m, diactual, cx);
+      SetReadAddr(m, siactual, cx);
+      atomic_thread_fence(memory_order_acquire);
+      do {
+        direal = ResolveAddress(m, diactual);
+        sireal = ResolveAddress(m, siactual);
+        diremain = 4096 - (diactual & 4095);
+        siremain = 4096 - (siactual & 4095);
+        n = MIN(cx, MIN(diremain, siremain));
+        for (i = 0; i < n; ++i) {
+          direal[i] = sireal[i];
+        }
+        diactual = AddDi(A, n);
+        siactual = AddSi(A, n);
+      } while ((cx = SubtractCx(A, n)));
+      atomic_thread_fence(memory_order_release);
+    }
   }
 }
 

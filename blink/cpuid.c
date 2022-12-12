@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
 
@@ -25,10 +26,11 @@ void OpCpuid(P) {
   switch (Get32(m->ax)) {
     case 0:
     case 0x80000000:
+      unassert(m->system->brand);
       ax = 7;
-      bx = 'G' | 'e' << 8 | 'n' << 16 | 'u' << 24;
-      dx = 'i' | 'n' << 8 | 'e' << 16 | 'C' << 24;
-      cx = 'o' | 's' << 8 | 'm' << 16 | 'o' << 24;
+      bx = Read32((u8 *)(m->system->brand + 0));
+      dx = Read32((u8 *)(m->system->brand + 4));
+      cx = Read32((u8 *)(m->system->brand + 8));
       break;
     case 1:
       cx |= 1 << 0;   // sse3

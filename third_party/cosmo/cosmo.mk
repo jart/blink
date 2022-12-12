@@ -28,6 +28,7 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/pmulhrsw_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/mulaw_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/nanosleep_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/clock_nanosleep_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/palandprintf_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/pshuf_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/popcnt_test.com.ok					\
@@ -88,6 +89,9 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/atan2_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/argon2_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/counter_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/pthread_exit_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/pthread_create_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/pthread_detach_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/pthread_mutex_lock_test.com.ok			\
 		o/$(MODE)/third_party/cosmo/pthread_mutex_lock2_test.com.ok			\
 		o/$(MODE)/third_party/cosmo/pthread_spin_lock_test.com.ok			\
@@ -109,7 +113,6 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/commandv_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/closefrom_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/ecvt_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/dtoa_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/division_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/test_suite_aes.cbc.com.ok				\
 		o/$(MODE)/third_party/cosmo/test_suite_cipher.gcm.com.ok			\
@@ -119,7 +122,10 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/test_suite_md.com.ok				\
 		o/$(MODE)/third_party/cosmo/crc32_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/lock2_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/lock_test.com.ok
+		o/$(MODE)/third_party/cosmo/lock_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/sigaction_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/sigsetjmp_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/sigsuspend_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@
 

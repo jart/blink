@@ -4,11 +4,11 @@
 
 extern void (*AddPath_StartOp_Hook)(P);
 
-bool CreatePath(struct Machine *);
+bool CreatePath(P);
 bool AddPath(P);
 void AddPath_EndOp(P);
 void AddPath_StartOp(P);
 void AbandonPath(struct Machine *);
-void CommitPath(struct Machine *, intptr_t);
+void CommitPath(P, intptr_t);
 
 #endif /* BLINK_PATH_H_ */

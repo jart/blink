@@ -16,16 +16,18 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <ctype.h>
 #include <errno.h>
 #include <unistd.h>
 
 #include "blink/builtin.h"
+#include "blink/log.h"
 #include "blink/thompike.h"
 #include "blink/util.h"
 
 ssize_t readansi(int fd, char *buf, size_t size) {
-  int i, j;
   u8 c;
+  int i, j;
   enum { kAscii, kUtf8, kEsc, kCsi, kSs } t;
   if (size) buf[0] = 0;
   for (j = i = 0, t = kAscii;;) {

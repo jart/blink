@@ -55,12 +55,12 @@ CFLAGS +=				\
 	-U_FORTIFY_SOURCE
 
 ifeq ($(USER), jart)
+# -Wno-unused-const-variable
 CFLAGS +=				\
 	-fno-stack-protector		\
 	-Wall				\
 	-Werror				\
-	-Wno-unused-function		\
-	-Wno-unused-const-variable
+	-Wno-unused-function
 endif
 
 ifeq ($(MODE), rel)

@@ -51,17 +51,13 @@
 static bool FLAG_nojit;
 static bool FLAG_nolinear;
 
-static void OnSignal(int sig, siginfo_t *si, void *uc) {
-  EnqueueSignal(g_machine, sig);
-}
-
 static int Exec(char *prog, char **argv, char **envp) {
-  int rc;
   struct Machine *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
   unassert((g_machine = NewMachine(NewSystem(), 0)));
   if (FLAG_nojit) DisableJit(&g_machine->system->jit);
   SetMachineMode(g_machine, XED_MODE_LONG);
+  g_machine->system->brand = "GenuineBlink";
   g_machine->system->exec = Exec;
   g_machine->nolinear = FLAG_nolinear;
   g_machine->system->nolinear = FLAG_nolinear;
@@ -79,12 +75,11 @@ static int Exec(char *prog, char **argv, char **envp) {
     // FreeMachine(old);
     // FreeSystem(old->system);
   }
-  if (!(rc = setjmp(g_machine->onhalt))) {
-    g_machine->canhalt = true;
-    Actor(g_machine);
-  } else {
-    LOGF("halting machine from main thread: %d", rc);
-    SysExitGroup(g_machine, rc);
+  for (;;) {
+    if (!setjmp(g_machine->onhalt)) {
+      g_machine->canhalt = true;
+      Actor(g_machine);
+    }
   }
 }
 
@@ -122,22 +117,9 @@ static void GetOpts(int argc, char *argv[]) {
 }
 
 int main(int argc, char *argv[], char **envp) {
-  struct sigaction sa;
   g_blink_path = argc > 0 ? argv[0] : 0;
   GetOpts(argc, argv);
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
   WriteErrorInit();
-  sigfillset(&sa.sa_mask);
-  sa.sa_flags = 0;
-  sa.sa_sigaction = OnSignal;
-  unassert(!sigaction(SIGHUP, &sa, 0));
-  unassert(!sigaction(SIGINT, &sa, 0));
-  unassert(!sigaction(SIGQUIT, &sa, 0));
-  unassert(!sigaction(SIGUSR1, &sa, 0));
-  unassert(!sigaction(SIGUSR2, &sa, 0));
-  unassert(!sigaction(SIGPIPE, &sa, 0));
-  unassert(!sigaction(SIGALRM, &sa, 0));
-  unassert(!sigaction(SIGTERM, &sa, 0));
-  unassert(!sigaction(SIGWINCH, &sa, 0));
   return Exec(argv[optind_], argv + optind_, envp);
 }

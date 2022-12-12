@@ -25,6 +25,7 @@
 
 #include "blink/assert.h"
 #include "blink/errno.h"
+#include "blink/linux.h"
 #include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -32,9 +33,6 @@
 #include "blink/map.h"
 #include "blink/mop.h"
 #include "blink/types.h"
-
-#define MAX_THREAD_IDS    32768
-#define MINIMUM_THREAD_ID 262144
 
 struct Allocator {
   pthread_mutex_t lock;
@@ -103,7 +101,12 @@ struct System *NewSystem(void) {
     pthread_mutex_init(&s->lock_lock, 0);
     pthread_mutex_init(&s->futex_lock, 0);
     pthread_mutex_init(&s->machines_lock, 0);
+    s->blinksigs = 1ull << (SIGILL_LINUX - 1) |   //
+                   1ull << (SIGFPE_LINUX - 1) |   //
+                   1ull << (SIGSEGV_LINUX - 1) |  //
+                   1ull << (SIGTRAP_LINUX - 1);
     s->automap = kAutomapStart;
+    s->brand = "GenuineCosmo";
     s->pid = getpid();
   }
   return s;
@@ -123,8 +126,8 @@ static void FreeMachineUnlocked(struct Machine *m) {
 }
 
 void KillOtherThreads(struct System *s) {
-  struct Machine *m;
   struct Dll *e, *g;
+  struct Machine *m;
   LOCK(&s->machines_lock);
   for (e = dll_first(s->machines); e; e = g) {
     g = dll_next(s->machines, e);
@@ -133,6 +136,20 @@ void KillOtherThreads(struct System *s) {
       THR_LOGF("pid=%d tid=%d is killing tid %d", s->pid, g_machine->tid,
                m->tid);
       atomic_store_explicit(&m->killed, true, memory_order_relaxed);
+    }
+  }
+  UNLOCK(&s->machines_lock);
+}
+
+void RemoveOtherThreads(struct System *s) {
+  struct Dll *e, *g;
+  struct Machine *m;
+  LOCK(&s->machines_lock);
+  for (e = dll_first(s->machines); e; e = g) {
+    g = dll_next(s->machines, e);
+    m = MACHINE_CONTAINER(e);
+    if (m != g_machine) {
+      FreeMachine(m);
     }
   }
   UNLOCK(&s->machines_lock);
@@ -154,7 +171,7 @@ void FreeSystem(struct System *s) {
 }
 
 struct Machine *NewMachine(struct System *system, struct Machine *parent) {
-  _Static_assert(IS2POW(MAX_THREAD_IDS), "");
+  _Static_assert(IS2POW(kMaxThreadIds), "");
   struct Machine *m;
   unassert(system);
   unassert(!parent || system == parent->system);
@@ -182,14 +199,14 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
   m->codestart = system->codestart;
   m->fun = system->fun ? system->fun - system->codestart : 0;
   if (parent) {
-    m->tid = (system->next_tid++ & (MAX_THREAD_IDS - 1)) + MINIMUM_THREAD_ID;
+    m->tid = (system->next_tid++ & (kMaxThreadIds - 1)) + kMinThreadId;
   } else {
     // TODO(jart): We shouldn't be doing system calls in an allocator.
     m->tid = m->system->pid;
   }
   dll_init(&m->elem);
   // TODO(jart): Child thread should add itself to system.
-  system->machines = dll_make_first(system->machines, &m->elem);
+  dll_make_first(&system->machines, &m->elem);
   UNLOCK(&system->machines_lock);
   THR_LOGF("new machine thread pid=%d tid=%d", m->system->pid, m->tid);
   return m;
@@ -209,7 +226,7 @@ void FreeMachine(struct Machine *m) {
   if (m) {
     unassert((s = m->system));
     LOCK(&s->machines_lock);
-    s->machines = dll_remove(s->machines, &m->elem);
+    dll_remove(&s->machines, &m->elem);
     orphan = dll_is_empty(s->machines);
     UNLOCK(&s->machines_lock);
     FreeMachineUnlocked(m);

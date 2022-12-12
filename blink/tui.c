@@ -601,16 +601,18 @@ static void GetTtySize(int fd) {
 static void TuiRejuvinate(void) {
   struct termios term;
   struct sigaction sa;
+  LOGF("TuiRejuvinate");
   GetTtySize(ttyout);
   HideCursor();
   memcpy(&term, &oldterm, sizeof(term));
   term.c_cc[VMIN] = 1;
   term.c_cc[VTIME] = 1;
-  term.c_iflag &= ~(IXOFF | INPCK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR |
-                    ICRNL | IXON | IGNPAR);
-  term.c_iflag |= IGNBRK | ISIG;
+  term.c_iflag &= ~(BRKINT | ICRNL | INPCK | ISTRIP | IXON);
+  term.c_iflag &= ~(IXOFF | PARMRK | INLCR | IGNCR | IGNPAR);
+  term.c_iflag |= IGNBRK;
   term.c_lflag &=
       ~(IEXTEN | ICANON | ECHO | ECHOE | ECHONL | NOFLSH | TOSTOP | ECHOK);
+  term.c_lflag |= ISIG;
   term.c_cflag &= ~(CSIZE | PARENB);
   term.c_cflag |= CS8 | CREAD;
   term.c_oflag |= OPOST | ONLCR;
@@ -642,12 +644,8 @@ static void OnV(void) {
   vidya = !vidya;
 }
 
-static void OnSignal(int sig, siginfo_t *si, void *uc) {
-  EnqueueSignal(m, sig);
-}
-
 static void OnSigWinch(int sig, siginfo_t *si, void *uc) {
-  EnqueueSignal(m, sig);
+  EnqueueSignal(m, SIGWINCH_LINUX);
   action |= WINCHED;
 }
 
@@ -656,7 +654,7 @@ static void OnSigInt(int sig, siginfo_t *si, void *uc) {
 }
 
 static void OnSigAlrm(int sig, siginfo_t *si, void *uc) {
-  EnqueueSignal(m, sig);
+  EnqueueSignal(m, SIGALRM_LINUX);
   action |= ALARM;
 }
 
@@ -665,7 +663,7 @@ static void OnSigCont(int sig, siginfo_t *si, void *uc) {
     TuiRejuvinate();
     Redraw();
   }
-  EnqueueSignal(m, sig);
+  EnqueueSignal(m, SIGCONT);
 }
 
 static void TtyRestore1(void) {
@@ -674,6 +672,7 @@ static void TtyRestore1(void) {
 }
 
 static void TtyRestore2(void) {
+  LOGF("TtyRestore2");
   ioctl(ttyout, TCSETS, &oldterm);
   DisableMouseTracking();
 }
@@ -1654,22 +1653,6 @@ static int AppendStat(struct Buffer *b, int width, const char *name, i64 value,
   return 1 + width;
 }
 
-static long double dsleep(long double secs) {
-  struct timespec dur, rem;
-  dur.tv_sec = secs;
-  dur.tv_nsec = secs * 1e9;
-  dur.tv_nsec = dur.tv_nsec % 1000000000;
-  if (secs > 1e-6) {
-    nanosleep(&dur, &rem);
-    secs = rem.tv_nsec;
-    secs *= 1 / 1e9;
-    secs += rem.tv_sec;
-    return secs;
-  } else {
-    return 0;
-  }
-}
-
 static const char *DescribeAction(void) {
   static char buf[128];
   char *p = buf;
@@ -1920,6 +1903,7 @@ static struct Mouse ParseMouse(char *p) {
 static ssize_t ReadAnsi(int fd, char *p, size_t n) {
   ssize_t rc;
   struct Mouse m;
+  LOGF("ReadAnsi");
   for (;;) {
     readingteletype = true;
     ReactiveDraw();
@@ -1954,6 +1938,7 @@ static ssize_t ReadAnsi(int fd, char *p, size_t n) {
 static ssize_t ReadPtyFdDirect(int fd) {
   ssize_t rc;
   char buf[32];
+  LOGF("ReadPtyFdDirect");
   pty->conf |= kPtyBlinkcursor;
   rc = ReadAnsi(fd, buf, sizeof(buf));
   pty->conf &= ~kPtyBlinkcursor;
@@ -2486,19 +2471,17 @@ static bool OnHalt(int interrupt) {
       return false;
     case 0x13:
       OnDiskService();
-      m->ip += 2;
       return true;
     case 0x10:
       OnVidyaService();
-      m->ip += 2;
       return true;
     case 0x15:
       OnInt15h();
-      m->ip += 2;
       return true;
     case 0x16:
       OnKeyboardService();
-      m->ip += 2;
+      return true;
+    case kMachineEscape:
       return true;
     case kMachineSegmentationFault:
       OnSegmentationFault();
@@ -2791,6 +2774,7 @@ static void OnHelp(void) {
 
 static void HandleKeyboard(const char *k) {
   const char *p = k;
+  LOGF("HandleKeyboard(%#x [%c])", *k, isprint(*k) ? *k : '.');
   switch (*p++) {
     CASE('q', OnQ());
     CASE('v', OnV());
@@ -2955,7 +2939,7 @@ static void Exec(void) {
       if (verbose) LogInstruction();
       ExecuteInstruction(m);
       if (m->signals) {
-        if ((sig = ConsumeSignal(m)) && sig != SIGALRM) {
+        if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
           TerminateSignal(m, sig);
         }
       }
@@ -2984,7 +2968,7 @@ static void Exec(void) {
         if (verbose) LogInstruction();
         ExecuteInstruction(m);
         if (m->signals) {
-          if ((sig = ConsumeSignal(m)) && sig != SIGALRM) {
+          if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
             TerminateSignal(m, sig);
           }
         }
@@ -3008,7 +2992,7 @@ static void Exec(void) {
             tuimode = true;
           } else {
             action &= ~INT;
-            EnqueueSignal(m, SIGINT);
+            EnqueueSignal(m, SIGINT_LINUX);
           }
         }
       }
@@ -3097,7 +3081,7 @@ static void Tui(void) {
         if (action & (CONTINUE | NEXT | FINISH)) {
           action &= ~(CONTINUE | NEXT | FINISH);
         } else {
-          EnqueueSignal(m, SIGINT);
+          EnqueueSignal(m, SIGINT_LINUX);
           action |= STEP;
         }
       }
@@ -3133,7 +3117,7 @@ static void Tui(void) {
           if (verbose) LogInstruction();
           ExecuteInstruction(m);
           if (m->signals) {
-            if ((sig = ConsumeSignal(m)) && sig != SIGALRM) {
+            if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
               TerminateSignal(m, sig);
             }
           }
@@ -3199,6 +3183,7 @@ static void GetOpts(int argc, char *argv[]) {
         react = false;
         break;
       case 'r':
+        m->metal = true;
         SetMachineMode(m, XED_MODE_REAL);
         g_disisprog_disable = true;
         break;
@@ -3327,21 +3312,16 @@ int main(int argc, char *argv[]) {
   SetXmmDisp(kXmmHex);
   GetOpts(argc, argv);
   sigfillset(&sa.sa_mask);
-  sa.sa_sigaction = OnSignal;
   sa.sa_flags = SA_SIGINFO;
-  unassert(!sigaction(SIGHUP, &sa, 0));
-  unassert(!sigaction(SIGQUIT, &sa, 0));
-  unassert(!sigaction(SIGUSR1, &sa, 0));
-  unassert(!sigaction(SIGUSR2, &sa, 0));
-  unassert(!sigaction(SIGPIPE, &sa, 0));
-  unassert(!sigaction(SIGTERM, &sa, 0));
-  unassert(!sigaction(SIGCONT, &sa, 0));
   sa.sa_sigaction = OnSigInt;
   unassert(!sigaction(SIGINT, &sa, 0));
   sa.sa_sigaction = OnSigWinch;
   unassert(!sigaction(SIGWINCH, &sa, 0));
   sa.sa_sigaction = OnSigAlrm;
   unassert(!sigaction(SIGALRM, &sa, 0));
+  m->system->blinksigs |= 1ull << (SIGINT_LINUX - 1) |   //
+                          1ull << (SIGALRM_LINUX - 1) |  //
+                          1ull << (SIGWINCH_LINUX - 1);  //
   if (optind_ == argc) PrintUsage(48, stderr);
   rc = VirtualMachine(argc, argv);
   FreeMachine(m);

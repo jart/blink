@@ -23,11 +23,14 @@
 
 #include "blink/assert.h"
 #include "blink/bitscan.h"
+#include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/linux.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/signal.h"
+#include "blink/syscall.h"
 #include "blink/xlat.h"
 
 void SigRestore(struct Machine *m) {
@@ -35,9 +38,11 @@ void SigRestore(struct Machine *m) {
     struct fpstate_linux fp;
     struct ucontext_linux uc;
   } u;
+  SIG_LOGF("restoring from signal");
   CopyFromUserRead(m, &u.uc, m->siguc, sizeof(u.uc));
   m->ip = Read64(u.uc.rip);
   m->flags = Read64(u.uc.eflags);
+  m->sigmask = Read64(u.uc.uc_sigmask);
   memcpy(m->r8, u.uc.r8, 8);
   memcpy(m->r9, u.uc.r9, 8);
   memcpy(m->r10, u.uc.r10, 8);
@@ -71,8 +76,10 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   static struct siginfo_linux si;
   static struct fpstate_linux fp;
   static struct ucontext_linux uc;
+  SIG_LOGF("delivering signal %s", DescribeSignal(sig));
   Write32(si.si_signo, sig);
   Write32(si.si_code, code);
+  Write64(uc.uc_sigmask, m->sigmask);
   memcpy(uc.r8, m->r8, 8);
   memcpy(uc.r9, m->r9, 8);
   memcpy(uc.r10, m->r10, 8);
@@ -120,41 +127,76 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   m->ip = Read64(m->system->hands[sig - 1].handler);
 }
 
-int ConsumeSignal(struct Machine *m) {
+bool IsSignalIgnoredByDefault(int sig) {
+  return sig == SIGURG_LINUX ||   //
+         sig == SIGCONT_LINUX ||  //
+         sig == SIGCHLD_LINUX ||  //
+         sig == SIGWINCH_LINUX;
+}
+
+static int ConsumeSignalImpl(struct Machine *m) {
   int sig;
   i64 handler;
   u64 signals;
+  // TODO(jart): We should have a stack of signal handlers so we can be
+  //             smarter about avoiding re-entry than just using m->sig
   for (signals = m->signals; signals; signals &= ~(1ull << (sig - 1))) {
     sig = bsr(signals) + 1;
+    // determine if signal should be deferred
     if (!(m->sigmask & (1ull << (sig - 1))) &&
         (!m->sig ||
          ((sig != m->sig ||
-           (Read64(m->system->hands[m->sig - 1].flags) & 0x40000000)) &&
+           (Read64(m->system->hands[m->sig - 1].flags) & SA_NODEFER_LINUX)) &&
           !(Read64(m->system->hands[m->sig - 1].mask) &
-            (1ull << (m->sig - 1)))))) {
+            (1ull << (sig - 1)))))) {
+      // we're now handling the signal
       m->signals &= ~(1ull << (sig - 1));
+      // determine how signal should be handled
       handler = Read64(m->system->hands[sig - 1].handler);
-      if (!handler) {
-        if (sig == SIGCHLD_LINUX || sig == SIGURG_LINUX ||
-            sig == SIGWINCH_LINUX) {
+      if (handler == SIG_DFL_LINUX) {
+        if (IsSignalIgnoredByDefault(sig)) {
+          SIG_LOGF("default action is to ignore signal %s",
+                   DescribeSignal(sig));
           return 0;
         } else {
+          SIG_LOGF("default action is to terminate upon signal %s",
+                   DescribeSignal(sig));
           return sig;
         }
       } else if (handler == SIG_IGN_LINUX) {
+        SIG_LOGF("explicitly ignoring signal %s", DescribeSignal(sig));
         return 0;
       }
       DeliverSignal(m, sig, 0);
       return 0;
+    } else if (sig == SIGFPE_LINUX ||   //
+               sig == SIGILL_LINUX ||   //
+               sig == SIGSEGV_LINUX ||  //
+               sig == SIGTRAP_LINUX) {
+      // signal is too dangerous to be deferred
+      // TODO(jart): permit defer if sent by kill() or tkill()
+      return sig;
     }
   }
   return 0;
 }
 
-void EnqueueSignal(struct Machine *m, int sig) {
-  if (m) m->signals |= 1ul << (UnXlatSignal(sig) - 1);
+int ConsumeSignal(struct Machine *m) {
+  int rc;
+  if (m->metal) return 0;
+  LOCK(&m->system->sig_lock);
+  rc = ConsumeSignalImpl(m);
+  UNLOCK(&m->system->sig_lock);
+  return rc;
 }
 
-void TerminateSignal(struct Machine *m, int sig) {
-  exit(128 + sig);
+void EnqueueSignal(struct Machine *m, int sig) {
+  if (m && (1 <= sig && sig <= 64)) {
+    m->signals |= 1ul << (sig - 1);
+  }
+}
+
+_Noreturn void TerminateSignal(struct Machine *m, int sig) {
+  LOGF("terminating due to signal %s", DescribeSignal(sig));
+  SysExitGroup(m, 128 + sig);
 }

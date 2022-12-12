@@ -172,14 +172,14 @@ bool CanJitForImmediateEffect(void) {
 static void RelinquishJitBlock(struct JitBlock *jb) {
   struct Dll *e;
   while ((e = dll_first(jb->staged))) {
-    jb->staged = dll_remove(jb->staged, e);
+    dll_remove(&jb->staged, e);
     free(JITSTAGE_CONTAINER(e));
   }
   jb->start = 0;
   jb->index = 0;
   jb->committed = 0;
   LOCK(&g_jit.lock);
-  g_jit.freeblocks = dll_make_first(g_jit.freeblocks, &jb->elem);
+  dll_make_first(&g_jit.freeblocks, &jb->elem);
   UNLOCK(&g_jit.lock);
 }
 
@@ -188,7 +188,7 @@ static struct JitBlock *ReclaimJitBlock(void) {
   struct JitBlock *jb;
   LOCK(&g_jit.lock);
   if ((e = dll_first(g_jit.freeblocks))) {
-    g_jit.freeblocks = dll_remove(g_jit.freeblocks, e);
+    dll_remove(&g_jit.freeblocks, e);
     jb = JITBLOCK_CONTAINER(e);
   } else {
     jb = 0;
@@ -244,7 +244,7 @@ int DestroyJit(struct Jit *jit) {
   struct Dll *e;
   LOCK(&jit->lock);
   while ((e = dll_first(jit->blocks))) {
-    jit->blocks = dll_remove(jit->blocks, e);
+    dll_remove(&jit->blocks, e);
     RelinquishJitBlock(JITBLOCK_CONTAINER(e));
   }
   UNLOCK(&jit->lock);
@@ -278,7 +278,7 @@ static struct JitBlock *AcquireJit(struct Jit *jit) {
     e = dll_first(jit->blocks);
     if (e && (jb = JITBLOCK_CONTAINER(e)) &&
         jb->index + kJitFit <= jb->blocksize) {
-      jit->blocks = dll_remove(jit->blocks, &jb->elem);
+      dll_remove(&jit->blocks, &jb->elem);
     } else if (!(jb = ReclaimJitBlock()) &&
                (jb = (struct JitBlock *)calloc(1, sizeof(struct JitBlock)))) {
       for (;;) {
@@ -419,7 +419,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
       if (js->index <= blockoff) {
         atomic_store_explicit(js->hook, (jb->addr - IMAGE_END) + js->start,
                               memory_order_release);
-        jb->staged = dll_remove(jb->staged, e);
+        dll_remove(&jb->staged, e);
         free(js);
         ++count;
       } else {
@@ -434,9 +434,9 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
 void ReinsertJitBlock_(struct Jit *jit, struct JitBlock *jb) {
   unassert(jb->start == jb->index);
   if (jb->index < jb->blocksize) {
-    jit->blocks = dll_make_first(jit->blocks, &jb->elem);
+    dll_make_first(&jit->blocks, &jb->elem);
   } else {
-    jit->blocks = dll_make_last(jit->blocks, &jb->elem);
+    dll_make_last(&jit->blocks, &jb->elem);
   }
 }
 
@@ -469,7 +469,7 @@ static bool ReleaseJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook,
         js->hook = hook;
         js->start = jb->start;
         js->index = jb->index;
-        jb->staged = dll_make_last(jb->staged, &js->elem);
+        dll_make_last(&jb->staged, &js->elem);
       }
     }
     if (jb->index + kJitFit > jb->blocksize) {
@@ -576,6 +576,9 @@ int AbandonJit(struct Jit *jit, struct JitBlock *jb) {
   LOCK(&jit->lock);
   ReinsertJitBlock_(jit, jb);
   UNLOCK(&jit->lock);
+  if (pthread_jit_write_protect_supported_np()) {
+    pthread_jit_write_protect_np(true);
+  }
   return 0;
 }
 

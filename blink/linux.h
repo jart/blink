@@ -2,6 +2,100 @@
 #define BLINK_LINUX_H_
 #include "blink/types.h"
 
+#define ENOSYS_LINUX          38
+#define EPERM_LINUX           1
+#define ENOENT_LINUX          2
+#define ESRCH_LINUX           3
+#define EINTR_LINUX           4
+#define EIO_LINUX             5
+#define ENXIO_LINUX           6
+#define E2BIG_LINUX           7
+#define ENOEXEC_LINUX         8
+#define EBADF_LINUX           9
+#define ECHILD_LINUX          10
+#define EAGAIN_LINUX          11
+#define ENOMEM_LINUX          12
+#define EACCES_LINUX          13
+#define EFAULT_LINUX          14
+#define ENOTBLK_LINUX         15
+#define EBUSY_LINUX           16
+#define EEXIST_LINUX          17
+#define EXDEV_LINUX           18
+#define ENODEV_LINUX          19
+#define ENOTDIR_LINUX         20
+#define EISDIR_LINUX          21
+#define EINVAL_LINUX          22
+#define ENFILE_LINUX          23
+#define EMFILE_LINUX          24
+#define ENOTTY_LINUX          25
+#define ETXTBSY_LINUX         26
+#define EFBIG_LINUX           27
+#define ENOSPC_LINUX          28
+#define EDQUOT_LINUX          122
+#define ESPIPE_LINUX          29
+#define EROFS_LINUX           30
+#define EMLINK_LINUX          31
+#define EPIPE_LINUX           32
+#define EDOM_LINUX            33
+#define ERANGE_LINUX          34
+#define EDEADLK_LINUX         35
+#define ENAMETOOLONG_LINUX    36
+#define ENOLCK_LINUX          37
+#define ENOTEMPTY_LINUX       39
+#define ELOOP_LINUX           40
+#define ENOMSG_LINUX          42
+#define EIDRM_LINUX           43
+#define EPROTO_LINUX          71
+#define EOVERFLOW_LINUX       75
+#define EILSEQ_LINUX          84
+#define EUSERS_LINUX          87
+#define ENOTSOCK_LINUX        88
+#define EDESTADDRREQ_LINUX    89
+#define EMSGSIZE_LINUX        90
+#define EPROTOTYPE_LINUX      91
+#define ENOPROTOOPT_LINUX     92
+#define EPROTONOSUPPORT_LINUX 93
+#define ESOCKTNOSUPPORT_LINUX 94
+#define ENOTSUP_LINUX         95
+#define EOPNOTSUPP_LINUX      95
+#define EPFNOSUPPORT_LINUX    96
+#define EAFNOSUPPORT_LINUX    97
+#define EADDRINUSE_LINUX      98
+#define EADDRNOTAVAIL_LINUX   99
+#define ENETDOWN_LINUX        100
+#define ENETUNREACH_LINUX     101
+#define ENETRESET_LINUX       102
+#define ECONNABORTED_LINUX    103
+#define ECONNRESET_LINUX      104
+#define ENOBUFS_LINUX         105
+#define EISCONN_LINUX         106
+#define ENOTCONN_LINUX        107
+#define ESHUTDOWN_LINUX       108
+#define ETOOMANYREFS_LINUX    109
+#define ETIMEDOUT_LINUX       110
+#define ETIME_LINUX           62
+#define ECONNREFUSED_LINUX    111
+#define EHOSTDOWN_LINUX       112
+#define EHOSTUNREACH_LINUX    113
+#define EALREADY_LINUX        114
+#define EINPROGRESS_LINUX     115
+#define ESTALE_LINUX          116
+#define EREMOTE_LINUX         66
+#define EBADMSG_LINUX         74
+#define ECANCELED_LINUX       125
+#define EOWNERDEAD_LINUX      130
+#define ENOTRECOVERABLE_LINUX 131
+#define ENONET_LINUX          64
+#define ERESTART_LINUX        85
+#define ENODATA_LINUX         61
+#define ENOSR_LINUX           63
+#define ENOSTR_LINUX          60
+#define EMULTIHOP_LINUX       72
+#define ENOLINK_LINUX         67
+#define ENOMEDIUM_LINUX       123
+#define EMEDIUMTYPE_LINUX     124
+#define EBADFD_LINUX          77
+
 #define AT_FDCWD_LINUX -100
 
 #define O_RDONLY_LINUX  0
@@ -76,9 +170,11 @@
 #define CLONE_CHILD_CLEARTID_LINUX 0x00200000
 #define CLONE_CHILD_SETTID_LINUX   0x01000000
 
-#define FUTEX_WAIT_LINUX         0
-#define FUTEX_WAKE_LINUX         1
-#define FUTEX_PRIVATE_FLAG_LINUX 128
+#define FUTEX_WAIT_LINUX           0
+#define FUTEX_WAKE_LINUX           1
+#define FUTEX_WAIT_BITSET_LINUX    9
+#define FUTEX_PRIVATE_FLAG_LINUX   128
+#define FUTEX_CLOCK_REALTIME_LINUX 256
 
 #define DT_UNKNOWN_LINUX 0
 #define DT_FIFO_LINUX    1
@@ -102,6 +198,7 @@
 #define SHUT_WR_LINUX   1
 #define SHUT_RDWR_LINUX 2
 
+#define SIG_DFL_LINUX 0
 #define SIG_IGN_LINUX 1
 
 #define SIG_BLOCK_LINUX   0
@@ -167,6 +264,22 @@
 #define F_RDLCK_LINUX 0
 #define F_WRLCK_LINUX 1
 #define F_UNLCK_LINUX 2
+
+#define SA_NOCLDSTOP_LINUX 1
+#define SA_NOCLDWAIT_LINUX 2
+#define SA_SIGINFO_LINUX   4
+#define SA_RESTORER_LINUX  0x04000000
+#define SA_ONSTACK_LINUX   0x08000000
+#define SA_RESTART_LINUX   0x10000000
+#define SA_NODEFER_LINUX   0x40000000
+#define SA_RESETHAND_LINUX 0x80000000
+
+#define SCHED_OTHER_LINUX    0
+#define SCHED_FIFO_LINUX     1
+#define SCHED_RR_LINUX       2
+#define SCHED_BATCH_LINUX    3
+#define SCHED_IDLE_LINUX     5
+#define SCHED_DEADLINE_LINUX 6
 
 struct iovec_linux {
   u8 iov_base[8];

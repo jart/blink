@@ -36,7 +36,6 @@ void SetUp(void) {
 
 void TearDown(void) {
   FreeMachine(m);
-  FreeSystem(s);
 }
 
 TEST(modrm, testAddressSizeOverride_isNotPresent_keepsWholeExpression) {

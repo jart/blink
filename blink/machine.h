@@ -27,6 +27,9 @@
 #define kOpBranching 1
 #define kOpPrecious  2
 
+#define kMaxThreadIds 32768
+#define kMinThreadId  262144
+
 #define kInstructionBytes 40
 
 #define kMachineExit                 256
@@ -34,6 +37,7 @@
 #define kMachineDecodeError          -2
 #define kMachineUndefinedInstruction -3
 #define kMachineSegmentationFault    -4
+#define kMachineEscape               -5
 #define kMachineDivideError          -6
 #define kMachineFpuException         -7
 #define kMachineProtectionFault      -8
@@ -99,6 +103,18 @@
   (CanHaveLinearMemory() && \
    !atomic_load_explicit(&(x)->nolinear, memory_order_relaxed))
 
+#if LONG_BIT == 64
+#define _Atomicish(t) _Atomic(t)
+#else
+#define _Atomicish(t) t
+#endif
+
+#if !defined(__m68k__) && !defined(__mips__)
+typedef atomic_uint memstat_t;
+#else
+typedef unsigned memstat_t;
+#endif
+
 MICRO_OP_SAFE u8 *ToHost(i64 v) {
   return (u8 *)(intptr_t)(v + kSkew);
 }
@@ -131,12 +147,6 @@ struct MachineFpu {
   i64 ip;
   i64 dp;
 };
-
-#if !defined(__m68k__) && !defined(__mips__)
-typedef atomic_uint memstat_t;
-#else
-typedef unsigned memstat_t;
-#endif
 
 struct MachineMemstat {
   memstat_t freed;
@@ -207,6 +217,7 @@ struct System {
   i64 brk;
   i64 automap;
   i64 codestart;
+  const char *brand;
   _Atomic(int) *fun;
   unsigned long codesize;
   pthread_mutex_t lock_lock;
@@ -221,6 +232,7 @@ struct System {
   pthread_mutex_t futex_lock;
   pthread_mutex_t sig_lock;
   struct sigaction_linux hands[64] GUARDED_BY(sig_lock);
+  u64 blinksigs;  // signals blink itself handles
   pthread_mutex_t mmap_lock;
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
@@ -248,7 +260,7 @@ struct Machine {                           //
   bool reserving;                          // did it call ReserveAddress?
   _Atomic(bool) invalidated;               // the tlb must be flushed
   _Atomic(bool) nolinear;                  // [dup] no linear address resolution
-  _Atomic(bool) killed;                    //
+  _Atomic(bool) killed;                    // used to send a soft SIGKILL
   u8 mode;                                 // [dup] XED_MODE_{REAL,LEGACY,LONG}
   _Atomic(int) *fun;                       // [dup] jit hooks for code bytes
   unsigned long codesize;                  // [dup] size of exe code section
@@ -325,18 +337,19 @@ struct Machine {                           //
   struct JitPath path;                     // under construction jit route
   i64 bofram[2];                           // helps debug bootloading code
   i64 faultaddr;                           // used for tui error reporting
-  u64 signals;                             // signals waiting for delivery
-  u64 sigmask;                             // signals that've been blocked
+  _Atomicish(u64) signals;                 // signals waiting for delivery
+  _Atomicish(u64) sigmask;                 // signals that've been blocked
   u32 tlbindex;                            //
-  int sig;                                 //
-  u64 siguc;                               //
-  u64 sigfp;                               //
+  int sig;                                 // signal under active delivery
+  u64 siguc;                               // hosted address of ucontext_t
+  u64 sigfp;                               // virtual address of fpstate_t
   struct System *system;                   //
   bool canhalt;                            //
+  bool metal;                              //
   jmp_buf onhalt;                          //
   i64 ctid;                                //
   int tid;                                 //
-  sigset_t thread_sigmask;                 //
+  sigset_t spawn_sigmask;                  //
   struct Dll elem GUARDED_BY(system->machines_lock);
   struct OpCache opcache[1];
 };
@@ -352,6 +365,7 @@ struct Machine *NewMachine(struct System *, struct Machine *);
 void Jitter(P, const char *, ...);
 void FreeMachine(struct Machine *);
 void InvalidateSystem(struct System *, bool, bool);
+void RemoveOtherThreads(struct System *);
 void KillOtherThreads(struct System *);
 void ResetCpu(struct Machine *);
 void ResetTlb(struct Machine *);
@@ -369,7 +383,7 @@ i64 FindVirtual(struct System *, i64, i64);
 int FreeVirtual(struct System *, i64, i64);
 void LoadArgv(struct Machine *, char *, char **, char **);
 _Noreturn void HaltMachine(struct Machine *, int);
-void RaiseDivideError(struct Machine *);
+_Noreturn void RaiseDivideError(struct Machine *);
 _Noreturn void ThrowSegmentationFault(struct Machine *, i64);
 _Noreturn void ThrowProtectionFault(struct Machine *);
 _Noreturn void OpUdImpl(struct Machine *);
@@ -409,7 +423,6 @@ void ProtectVirtual(struct System *, i64, i64, u64, u64);
 int ClassifyOp(u64) pureconst;
 
 void CountOp(long *);
-void FastZeroify(struct Machine *, long);
 void FastJmp(struct Machine *, i32);
 void FastPush(struct Machine *, long);
 void FastPop(struct Machine *, long);

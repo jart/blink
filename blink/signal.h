@@ -3,9 +3,10 @@
 #include "blink/machine.h"
 
 void SigRestore(struct Machine *);
+bool IsSignalIgnoredByDefault(int);
 int ConsumeSignal(struct Machine *);
 void EnqueueSignal(struct Machine *, int);
-void TerminateSignal(struct Machine *, int);
 void DeliverSignal(struct Machine *, int, int);
+_Noreturn void TerminateSignal(struct Machine *, int);
 
 #endif /* BLINK_SIGNAL_H_ */

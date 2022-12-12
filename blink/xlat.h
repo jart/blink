@@ -23,7 +23,6 @@ int XlatAccMode(int);
 int XlatResource(int);
 int XlatRusage(int);
 int XlatShutdown(int);
-int XlatSig(int);
 int XlatSignal(int);
 int XlatSocketFamily(int);
 int XlatSocketLevel(int);

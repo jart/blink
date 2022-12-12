@@ -130,11 +130,11 @@ void OpDivAlAhAxEbSigned(P) {
   i16 x, q;
   x = Get16(m->ax);
   y = Load8(GetModrmRegisterBytePointerRead1(A));
-  if (!y) return RaiseDivideError(m);
-  if (x == INT16_MIN) return RaiseDivideError(m);
+  if (!y) RaiseDivideError(m);
+  if (x == INT16_MIN) RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q != (i8)q) return RaiseDivideError(m);
+  if (q != (i8)q) RaiseDivideError(m);
   m->al = q & 0xff;
   m->ah = r & 0xff;
 }
@@ -144,10 +144,10 @@ void OpDivAlAhAxEbUnsigned(P) {
   u16 x, q;
   x = Get16(m->ax);
   y = Load8(GetModrmRegisterBytePointerRead1(A));
-  if (!y) return RaiseDivideError(m);
+  if (!y) RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q > UINT8_MAX) return RaiseDivideError(m);
+  if (q > UINT8_MAX) RaiseDivideError(m);
   m->al = q & 0xff;
   m->ah = r & 0xff;
 }
@@ -158,13 +158,13 @@ static void OpDivRdxRaxEvqpSigned64(P, u8 *p) {
   __int128 x, q;
   x = (unsigned __int128)Get64(m->dx) << 64 | Get64(m->ax);
   y = Load64(p);
-  if (!y) return RaiseDivideError(m);
+  if (!y) RaiseDivideError(m);
   if (x == (unsigned __int128)0x8000000000000000ull << 64) {
-    return RaiseDivideError(m);
+    RaiseDivideError(m);
   }
   q = x / y;
   r = x % y;
-  if (q != (i64)q) return RaiseDivideError(m);
+  if (q != (i64)q) RaiseDivideError(m);
   Put64(m->ax, q);
   Put64(m->dx, r);
 #else
@@ -173,11 +173,11 @@ static void OpDivRdxRaxEvqpSigned64(P, u8 *p) {
   q.lo = Get64(m->ax);
   q.hi = Get64(m->dx);
   d = Load64(p);
-  if (!d) return RaiseDivideError(m);
-  if (!q.lo && q.hi == 0x8000000000000000) return RaiseDivideError(m);
+  if (!d) RaiseDivideError(m);
+  if (!q.lo && q.hi == 0x8000000000000000) RaiseDivideError(m);
   q = DubbleIdiv(q, d, &r);
-  if ((i64)q.lo < 0 && (i64)q.hi != -1) return RaiseDivideError(m);
-  if ((i64)q.lo >= 0 && q.hi) return RaiseDivideError(m);
+  if ((i64)q.lo < 0 && (i64)q.hi != -1) RaiseDivideError(m);
+  if ((i64)q.lo >= 0 && q.hi) RaiseDivideError(m);
   Put64(m->ax, q.lo);
   Put64(m->dx, r);
 #endif
@@ -188,11 +188,11 @@ static void OpDivRdxRaxEvqpSigned32(P, u8 *p) {
   i64 x, q;
   x = (u64)Get32(m->dx) << 32 | Get32(m->ax);
   y = Load32(p);
-  if (!y) return RaiseDivideError(m);
-  if (x == INT64_MIN) return RaiseDivideError(m);
+  if (!y) RaiseDivideError(m);
+  if (x == INT64_MIN) RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q != (i32)q) return RaiseDivideError(m);
+  if (q != (i32)q) RaiseDivideError(m);
   Put64(m->ax, q & 0xffffffff);
   Put64(m->dx, r & 0xffffffff);
 }
@@ -202,11 +202,11 @@ static void OpDivRdxRaxEvqpSigned16(P, u8 *p) {
   i32 x, q;
   x = (u32)Get16(m->dx) << 16 | Get16(m->ax);
   y = Load16(p);
-  if (!y) return RaiseDivideError(m);
-  if (x == INT32_MIN) return RaiseDivideError(m);
+  if (!y) RaiseDivideError(m);
+  if (x == INT32_MIN) RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q != (i16)q) return RaiseDivideError(m);
+  if (q != (i16)q) RaiseDivideError(m);
   Put16(m->ax, q);
   Put16(m->dx, r);
 }
@@ -216,10 +216,10 @@ static void OpDivRdxRaxEvqpUnsigned16(P, u8 *p) {
   u32 x, q;
   x = (u32)Get16(m->dx) << 16 | Get16(m->ax);
   y = Load16(p);
-  if (!y) return RaiseDivideError(m);
+  if (!y) RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q > UINT16_MAX) return RaiseDivideError(m);
+  if (q > UINT16_MAX) RaiseDivideError(m);
   Put16(m->ax, q);
   Put16(m->dx, r);
 }
@@ -229,10 +229,10 @@ static void OpDivRdxRaxEvqpUnsigned32(P, u8 *p) {
   u64 x, q;
   x = (u64)Get32(m->dx) << 32 | Get32(m->ax);
   y = Load32(p);
-  if (!y) return RaiseDivideError(m);
+  if (!y) RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q > UINT32_MAX) return RaiseDivideError(m);
+  if (q > UINT32_MAX) RaiseDivideError(m);
   Put64(m->ax, q & 0xffffffff);
   Put64(m->dx, r & 0xffffffff);
 }
@@ -243,10 +243,10 @@ static void OpDivRdxRaxEvqpUnsigned64(P, u8 *p) {
   unsigned __int128 x, q;
   x = (unsigned __int128)Get64(m->dx) << 64 | Get64(m->ax);
   y = Load64(p);
-  if (!y) return RaiseDivideError(m);
+  if (!y) RaiseDivideError(m);
   q = x / y;
   r = x % y;
-  if (q > UINT64_MAX) return RaiseDivideError(m);
+  if (q > UINT64_MAX) RaiseDivideError(m);
   Put64(m->ax, q);
   Put64(m->dx, r);
 #else
@@ -255,9 +255,9 @@ static void OpDivRdxRaxEvqpUnsigned64(P, u8 *p) {
   q.lo = Get64(m->ax);
   q.hi = Get64(m->dx);
   d = Load64(p);
-  if (!d) return RaiseDivideError(m);
+  if (!d) RaiseDivideError(m);
   q = DubbleDiv(q, d, &r);
-  if (q.hi) return RaiseDivideError(m);
+  if (q.hi) RaiseDivideError(m);
   Put64(m->ax, q.lo);
   Put64(m->dx, r);
 #endif

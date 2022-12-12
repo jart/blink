@@ -47,7 +47,7 @@ int FlushJit(struct Jit *jit) {
       jb = JITBLOCK_CONTAINER(e);
       if (jb->start >= jit->blocksize) break;
       if (!dll_is_empty(jb->staged)) {
-        jit->blocks = dll_remove(jit->blocks, e);
+        dll_remove(&jit->blocks, e);
         UNLOCK(&jit->lock);
         js = JITSTAGE_CONTAINER(dll_last(jb->staged));
         jb->start = ROUNDUP(js->index, pagesize);
