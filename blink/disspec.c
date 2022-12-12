@@ -476,6 +476,7 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0x34, "sysenter");
     RCASE(0x35, "sysexit");
     RCASE(0x40 ... 0x4f, "cmovCC %Gvqp Evqp");
+    RCASE(0x50, Osz(x->op.rde) ? "movmskpd %Gdqp %Udq" : "movmskps %Gdqp %Nq");
     RCASE(0x52, DisOpVpsWpsVssWss(x, p, "rsqrt"));
     RCASE(0x53, DisOpVpsWpsVssWss(x, p, "rcp"));
     RCASE(0x54, DisOpVpdWpdVpsWps(x, p, "and"));

@@ -197,6 +197,15 @@ void EnqueueSignal(struct Machine *m, int sig) {
 }
 
 _Noreturn void TerminateSignal(struct Machine *m, int sig) {
+  int syssig;
+  struct sigaction sa;
   LOGF("terminating due to signal %s", DescribeSignal(sig));
-  SysExitGroup(m, 128 + sig);
+  if ((syssig = XlatSignal(sig)) == -1) syssig = SIGTERM;
+  LOCK(&m->system->sig_lock);
+  sa.sa_flags = 0;
+  sa.sa_handler = SIG_DFL;
+  sigemptyset(&sa.sa_mask);
+  unassert(!sigaction(syssig, &sa, 0));
+  unassert(!kill(getpid(), syssig));
+  abort();
 }

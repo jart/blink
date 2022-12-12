@@ -76,6 +76,8 @@ void LoadInstruction(struct Machine *m) {
   unsigned key;
   if (atomic_load_explicit(&m->opcache->invalidated, memory_order_relaxed)) {
     ResetInstructionCache(m);
+    atomic_store_explicit(&m->opcache->invalidated, false,
+                          memory_order_relaxed);
   }
   pc = GetPc(m);
   key = pc & (ARRAYLEN(m->opcache->icache) - 1);

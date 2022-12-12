@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <signal.h>
@@ -536,7 +537,7 @@ int XlatOpenFlags(int x) {
 #endif
 #ifdef O_LARGEFILE
   if (x & O_LARGEFILE_LINUX) res |= O_LARGEFILE, x &= ~O_LARGEFILE_LINUX;
-#elif LONG_BIT > 32
+#else
   x &= ~O_LARGEFILE_LINUX;
 #endif
 #ifdef O_NDELAY

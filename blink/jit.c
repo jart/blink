@@ -730,6 +730,12 @@ bool AppendJitSetReg(struct JitBlock *jb, int reg, u64 value) {
     if (rex) buf[n++] = rex;
     buf[n++] = kAmdXor;
     buf[n++] = 0300 | (reg & 7) << 3 | (reg & 7);
+  } else if ((i64)value < 0 && (i64)value >= INT32_MIN) {
+    buf[n++] = rex | kAmdRexw;
+    buf[n++] = 0xC7;
+    buf[n++] = 0300 | (reg & 7);
+    Write32(buf + n, value);
+    n += 4;
   } else {
     if (value > 0xffffffff) rex |= kAmdRexw;
     if (rex) buf[n++] = rex;

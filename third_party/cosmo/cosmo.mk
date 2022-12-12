@@ -125,7 +125,35 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/lock_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/sigaction_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/sigsetjmp_test.com.ok				\
-		o/$(MODE)/third_party/cosmo/sigsuspend_test.com.ok
+		o/$(MODE)/third_party/cosmo/sigsuspend_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/escapehtml_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/escapeurlparam_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/escapejsstringliteral_test.com.ok			\
+		o/$(MODE)/third_party/cosmo/erf_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/encodebase64_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/fabs_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/fgets_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/fileexists_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/floor_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/fmemopen_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/fmt_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/fputc_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/ftruncate_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/gamma_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/tgamma_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/gclongjmp_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/getcwd_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/gz_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/ilogb_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/imaxdiv_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/inv3_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/iso8601_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/itsatrap_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/lseek_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/mu_starvation_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/open_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/stat_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/stackrwx_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@
 
@@ -177,7 +205,6 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/commandv_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/closefrom_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/ecvt_test.com.emulates			\
-		o/$(MODE)/aarch64/third_party/cosmo/dtoa_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/division_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/test_suite_aes.cbc.com.emulates		\
 		o/$(MODE)/aarch64/third_party/cosmo/test_suite_cipher.gcm.com.emulates		\
@@ -241,7 +268,6 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/s390x/third_party/cosmo/commandv_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/closefrom_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/ecvt_test.com.emulates			\
-		o/$(MODE)/s390x/third_party/cosmo/dtoa_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/division_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/test_suite_aes.cbc.com.emulates		\
 		o/$(MODE)/s390x/third_party/cosmo/test_suite_cipher.gcm.com.emulates		\

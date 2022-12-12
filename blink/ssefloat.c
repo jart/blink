@@ -202,6 +202,25 @@ void OpShufpsd(P) {
   }
 }
 
+static void Movmskps(P) {
+  u8 *p = GetModrmRegisterXmmPointerRead16(A);
+  Put64(RegRexrReg(m, rde), (!!(p[15] & 0x80) << 3 | !!(p[11] & 0x80) << 2 |
+                             !!(p[7] & 0x80) << 1 | !!(p[3] & 0x80)));
+}
+
+static void Movmskpd(P) {
+  u8 *p = GetModrmRegisterXmmPointerRead16(A);
+  Put64(RegRexrReg(m, rde), !!(p[15] & 0x80) << 1 | !!(p[7] & 0x80));
+}
+
+void OpMovmskpsd(P) {
+  if (Osz(rde)) {
+    Movmskpd(A);
+  } else {
+    Movmskps(A);
+  }
+}
+
 void OpSqrtpsd(P) {
   switch (Rep(rde) | Osz(rde)) {
     case 0: {
@@ -344,8 +363,7 @@ void OpComissVsWs(P) {
   }
 }
 
-static inline void OpPsd(P,
-                         float fs(float x, float y),
+static inline void OpPsd(P, float fs(float x, float y),
                          double fd(double x, double y)) {
   if (Rep(rde) == 2) {
     union DoublePun x, y;

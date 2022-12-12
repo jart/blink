@@ -410,6 +410,7 @@ u8 *MallocPage(void);
 u8 *RealAddress(struct Machine *, i64);
 u8 *ReserveAddress(struct Machine *, i64, size_t, bool);
 u8 *ResolveAddress(struct Machine *, i64);
+u8 *GetAddress(struct Machine *, i64);
 void CommitStash(struct Machine *);
 void CopyFromUserRead(struct Machine *, void *, i64, u64);
 void CopyToUser(struct Machine *, i64, void *, u64);

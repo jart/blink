@@ -380,6 +380,12 @@ static struct Futex *NewFutex(i64 addr) {
   return f;
 }
 
+static void FreeFutex(struct Futex *f) {
+  unassert(!pthread_mutex_destroy(&f->lock));
+  unassert(!pthread_cond_destroy(&f->cond));
+  free(f);
+}
+
 static int SysFutexWait(struct Machine *m,  //
                         i64 uaddr,          //
                         i32 op,             //
@@ -401,7 +407,7 @@ static int SysFutexWait(struct Machine *m,  //
   } else {
     timeout = GetMaxTime();
   }
-  if (!(mem = LookupAddress(m, uaddr))) return efault();
+  if (!(mem = GetAddress(m, uaddr))) return efault();
   LOCK(&m->system->futex_lock);
   if (Load32(mem) != expect) {
     UNLOCK(&m->system->futex_lock);
@@ -431,7 +437,7 @@ static int SysFutexWait(struct Machine *m,  //
     dll_remove(&m->system->futexes, &f->elem);
     UNLOCK(&m->system->futex_lock);
     UNLOCK(&f->lock);
-    free(f);
+    FreeFutex(f);
   }
   if (rc) {
     errno = rc;

@@ -85,6 +85,14 @@ CFLAGS += -O0
 CPPFLAGS += -DDEBUG
 endif
 
+# make m=prof o/prof/blink
+# o/prof/blink third_party/cosmo/mu_test.com
+# gprof o/prof/blink gmon.out | less
+ifeq ($(MODE), prof)
+CFLAGS += -pg
+LDFLAGS += -pg
+endif
+
 # make m=cov check
 # gcov -ukqjo o/cov/blink blink/*.c
 # less alu.c.gcov

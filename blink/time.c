@@ -30,7 +30,7 @@ void OpPause(P) {
 void OpRdtsc(P) {
   i64 c;
   struct timespec ts;
-  clock_gettime(CLOCK_MONOTONIC, &ts);
+  unassert(!clock_gettime(CLOCK_MONOTONIC, &ts));
   c = ts.tv_sec;
   c *= 1000000000;
   c += ts.tv_nsec;

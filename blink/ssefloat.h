@@ -26,5 +26,6 @@ void OpXorpsd(P);
 void OpHaddpsd(P);
 void OpHsubpsd(P);
 void OpAddsubpsd(P);
+void OpMovmskpsd(P);
 
 #endif /* BLINK_SSEFLOAT_H_ */

@@ -10,7 +10,7 @@ _start:
 	and	$-16,%rsp
 	push	%rbp
 	mov	%rsp,%rbp
-	sub	$8,%rsp
+	sub	$16,%rsp
 
 ////////////////////////////////////////////////////////////////////////////////
 //	locked
@@ -54,6 +54,27 @@ _start:
 	cmp	%rdx,%rbx			# reg stays the same
 	.e
 	cmp	%rdx,-8(%rbp)			# memory is the same
+	.e
+
+	.test	"lock cmpxchg 64 unaligned taken"
+	mov	$0x7fffffff,%eax
+	add	$1,%eax
+	mov	$0x1234567812345678,%rax
+	mov	$0x5555555155555550,%rbx
+	mov	%rax,-9(%rbp)
+	lock cmpxchg %rbx,-9(%rbp)
+	.z
+	.no
+	.ns
+	.nc
+	.p
+	mov	$0x1234567812345678,%rcx
+	mov	$0x5555555155555550,%rdx
+	cmp	%rcx,%rax			# rax stays the same
+	.e
+	cmp	%rdx,%rbx			# reg stays the same
+	.e
+	cmp	%rdx,-9(%rbp)			# memory got swapped
 	.e
 
 	.test	"lock cmpxchg 32 taken"

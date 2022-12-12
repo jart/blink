@@ -133,10 +133,14 @@ u8 *LookupAddress(struct Machine *m, i64 virt) {
   }
 }
 
+u8 *GetAddress(struct Machine *m, i64 v) {
+  if (HasLinearMapping(m)) return ToHost(v);
+  return LookupAddress(m, v);
+}
+
 u8 *ResolveAddress(struct Machine *m, i64 v) {
   u8 *r;
-  if (HasLinearMapping(m)) return ToHost(v);
-  if ((r = LookupAddress(m, v))) return r;
+  if ((r = GetAddress(m, v))) return r;
   ThrowSegmentationFault(m, v);
 }
 

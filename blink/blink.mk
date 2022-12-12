@@ -8,7 +8,10 @@ BLINK_HDRS = $(filter %.h,$(BLINK_FILES))
 
 # avoid junk being placed in micro-operations
 # TODO(jart): separate out uops into disjoint files
-o/$(MODE)/blink/uop.o: private CFLAGS += -fno-stack-protector -fomit-frame-pointer
+o/$(MODE)/blink/uop.o: private CFLAGS += -fno-stack-protector
+ifneq ($(MODE), prof)
+o/$(MODE)/blink/uop.o: private CFLAGS += -fomit-frame-pointer
+endif
 
 # vectorization makes code smaller
 o/$(MODE)/blink/sse2.o: private CFLAGS += -O3
