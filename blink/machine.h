@@ -248,6 +248,7 @@ struct Machine {                           //
   bool reserving;                          // did it call ReserveAddress?
   _Atomic(bool) invalidated;               // the tlb must be flushed
   _Atomic(bool) nolinear;                  // [dup] no linear address resolution
+  _Atomic(bool) killed;                    //
   u8 mode;                                 // [dup] XED_MODE_{REAL,LEGACY,LONG}
   _Atomic(int) *fun;                       // [dup] jit hooks for code bytes
   unsigned long codesize;                  // [dup] size of exe code section
@@ -350,7 +351,6 @@ void ChangeMachineMode(struct Machine *, int);
 struct Machine *NewMachine(struct System *, struct Machine *);
 void Jitter(P, const char *, ...);
 void FreeMachine(struct Machine *);
-void FreeMachineUnlocked(struct Machine *);
 void InvalidateSystem(struct System *, bool, bool);
 void KillOtherThreads(struct System *);
 void ResetCpu(struct Machine *);

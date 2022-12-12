@@ -109,7 +109,8 @@ struct System *NewSystem(void) {
   return s;
 }
 
-void FreeMachineUnlocked(struct Machine *m) {
+static void FreeMachineUnlocked(struct Machine *m) {
+  THR_LOGF("pid=%d tid=%d FreeMachine", m->system->pid, m->tid);
   if (g_machine == m) {
     g_machine = 0;
   }
@@ -124,23 +125,21 @@ void FreeMachineUnlocked(struct Machine *m) {
 void KillOtherThreads(struct System *s) {
   struct Machine *m;
   struct Dll *e, *g;
-StartOver:
   LOCK(&s->machines_lock);
   for (e = dll_first(s->machines); e; e = g) {
     g = dll_next(s->machines, e);
     m = MACHINE_CONTAINER(e);
     if (m != g_machine) {
-      s->machines = dll_remove(s->machines, &m->elem);
-      unassert(!pthread_kill(m->thread, SIGKILL));
-      UNLOCK(&s->machines_lock);
-      FreeMachineUnlocked(m);
-      goto StartOver;
+      THR_LOGF("pid=%d tid=%d is killing tid %d", s->pid, g_machine->tid,
+               m->tid);
+      atomic_store_explicit(&m->killed, true, memory_order_relaxed);
     }
   }
   UNLOCK(&s->machines_lock);
 }
 
 void FreeSystem(struct System *s) {
+  THR_LOGF("pid=%d FreeSystem", s->pid);
   unassert(dll_is_empty(s->machines));  // Use KillOtherThreads & FreeMachine
   FreeHostPages(s);
   unassert(!pthread_mutex_destroy(&s->machines_lock));
@@ -192,6 +191,7 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
   // TODO(jart): Child thread should add itself to system.
   system->machines = dll_make_first(system->machines, &m->elem);
   UNLOCK(&system->machines_lock);
+  THR_LOGF("new machine thread pid=%d tid=%d", m->system->pid, m->tid);
   return m;
 }
 
@@ -204,12 +204,20 @@ void CollectGarbage(struct Machine *m) {
 }
 
 void FreeMachine(struct Machine *m) {
+  bool orphan;
+  struct System *s;
   if (m) {
-    unassert(m->system);
-    LOCK(&m->system->machines_lock);
-    m->system->machines = dll_remove(m->system->machines, &m->elem);
-    UNLOCK(&m->system->machines_lock);
+    unassert((s = m->system));
+    LOCK(&s->machines_lock);
+    s->machines = dll_remove(s->machines, &m->elem);
+    orphan = dll_is_empty(s->machines);
+    UNLOCK(&s->machines_lock);
     FreeMachineUnlocked(m);
+    if (orphan) {
+      FreeSystem(s);
+    } else {
+      THR_LOGF("more threads remain in operation");
+    }
   }
 }
 

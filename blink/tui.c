@@ -258,7 +258,6 @@ static bool react;
 static bool tuimode;
 static bool alarmed;
 static bool mousemode;
-static bool printstats;
 static bool showhighsse;
 static bool readingteletype;
 
@@ -3204,7 +3203,7 @@ static void GetOpts(int argc, char *argv[]) {
         g_disisprog_disable = true;
         break;
       case 's':
-        printstats = true;
+        FLAG_statistics = true;
         break;
       case 'b':
         HandleBreakpointFlag(optarg_);
@@ -3345,11 +3344,9 @@ int main(int argc, char *argv[]) {
   unassert(!sigaction(SIGALRM, &sa, 0));
   if (optind_ == argc) PrintUsage(48, stderr);
   rc = VirtualMachine(argc, argv);
-  KillOtherThreads(s);
   FreeMachine(m);
-  FreeSystem(s);
   FreePanels();
-  if (printstats) {
+  if (FLAG_statistics) {
     PrintStats();
   }
   return rc;

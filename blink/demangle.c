@@ -41,9 +41,8 @@ struct CxxFilt {
     PTHREAD_MUTEX_INITIALIZER,
 };
 
-static void CloseCxxFilt(void) {
+static void CloseCxxFiltUnlocked(void) {
   sigset_t ss, oldss;
-  LOCK(&g_cxxfilt.lock);
   if (g_cxxfilt.pid > 0) {
     LOGF("closing pipe to c++filt");
     unassert(!sigemptyset(&ss));
@@ -55,6 +54,11 @@ static void CloseCxxFilt(void) {
     unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
     g_cxxfilt.pid = -1;
   }
+}
+
+static void CloseCxxFilt(void) {
+  LOCK(&g_cxxfilt.lock);
+  CloseCxxFiltUnlocked();
   UNLOCK(&g_cxxfilt.lock);
 }
 
@@ -193,23 +197,29 @@ char *Demangle(char *p, const char *symbol, size_t n) {
   sigset_t ss, oldss;
   sn = strlen(symbol);
   if (startswith(symbol, "_Z")) {
-    unassert(!sigemptyset(&ss));
-    unassert(!sigaddset(&ss, SIGINT));
-    unassert(!sigaddset(&ss, SIGALRM));
-    unassert(!sigaddset(&ss, SIGWINCH));
-    unassert(!pthread_sigmask(SIG_BLOCK, &ss, &oldss));
     LOCK(&g_cxxfilt.lock);
-    if (!g_cxxfilt.pid) SpawnCxxFilt();
     if (g_cxxfilt.pid != -1) {
-      r = DemangleCxxFilt(p, n, symbol, sn);
+      unassert(!sigemptyset(&ss));
+      unassert(!sigaddset(&ss, SIGINT));
+      unassert(!sigaddset(&ss, SIGALRM));
+      unassert(!sigaddset(&ss, SIGWINCH));
+      unassert(!pthread_sigmask(SIG_BLOCK, &ss, &oldss));
+      if (!g_cxxfilt.pid) {
+        SpawnCxxFilt();
+      }
+      if (g_cxxfilt.pid != -1) {
+        r = DemangleCxxFilt(p, n, symbol, sn);
+        if (!r) {
+          CloseCxxFiltUnlocked();
+        }
+      } else {
+        r = 0;
+      }
+      unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
     } else {
       r = 0;
     }
     UNLOCK(&g_cxxfilt.lock);
-    unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
-    if (!r) {
-      CloseCxxFilt();
-    }
   } else {
     r = 0;
   }

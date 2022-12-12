@@ -14,6 +14,7 @@
 #define LOG_ASM 0
 #define LOG_JIT 0
 #define LOG_MEM 0
+#define LOG_THR 0
 
 #if LOG_ENABLED
 #define LOGF(...) Log(__FILE__, __LINE__, __VA_ARGS__)
@@ -49,6 +50,12 @@
 #define MEM_LOGF(...) Log(__FILE__, __LINE__, "(mem) " __VA_ARGS__)
 #else
 #define MEM_LOGF(...) (void)0
+#endif
+
+#if LOG_THR
+#define THR_LOGF(...) Log(__FILE__, __LINE__, "(thr) " __VA_ARGS__)
+#else
+#define THR_LOGF(...) (void)0
 #endif
 
 #if LOG_ENABLED

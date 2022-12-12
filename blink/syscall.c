@@ -62,6 +62,7 @@
 #include "blink/pml4t.h"
 #include "blink/random.h"
 #include "blink/signal.h"
+#include "blink/stats.h"
 #include "blink/swap.h"
 #include "blink/syscall.h"
 #include "blink/timespec.h"
@@ -162,29 +163,89 @@ static bool IsOrphan(struct Machine *m) {
   return res;
 }
 
-_Noreturn static void SysExit(struct Machine *m, int rc) {
-  atomic_int *ctid;
-  if (m->ctid && (ctid = (atomic_int *)LookupAddress(m, m->ctid))) {
-    atomic_store_explicit(ctid, 0, memory_order_seq_cst);
+static struct Futex *FindFutex(struct Machine *m, i64 addr) {
+  struct Dll *e;
+  for (e = dll_first(m->system->futexes); e;
+       e = dll_next(m->system->futexes, e)) {
+    if (FUTEX_CONTAINER(e)->addr == addr) {
+      return FUTEX_CONTAINER(e);
+    }
   }
-  if (IsOrphan(m)) {
-    HaltMachine(m, kMachineExit | (rc & 255));
+  return 0;
+}
+
+static int SysFutexWake(struct Machine *m, i64 uaddr, u32 count) {
+  int rc;
+  struct Futex *f;
+  if (!count) return 0;
+  LOCK(&m->system->futex_lock);
+  if ((f = FindFutex(m, uaddr))) {
+    LOCK(&f->lock);
+  }
+  UNLOCK(&m->system->futex_lock);
+  if (f) {
+    unassert(f->waiters);
+    THR_LOGF("pid=%d tid=%d is waking %d waiters at address %#" PRIx64,
+             m->system->pid, m->tid, f->waiters, uaddr);
+    if (count == 1) {
+      unassert(!pthread_cond_signal(&f->cond));
+      rc = 1;
+    } else {
+      unassert(!pthread_cond_broadcast(&f->cond));
+      rc = f->waiters;
+    }
+    UNLOCK(&f->lock);
   } else {
+    THR_LOGF("pid=%d tid=%d is waking no one at address %#" PRIx64,
+             m->system->pid, m->tid, uaddr);
+    rc = 0;
+  }
+  return rc;
+}
+
+static void ClearChildTid(struct Machine *m) {
+  atomic_int *ctid;
+  if (m->ctid) {
+    THR_LOGF("ClearChildTid(%#" PRIx64 ")", m->ctid);
+    if ((ctid = (atomic_int *)LookupAddress(m, m->ctid))) {
+      atomic_store_explicit(ctid, 0, memory_order_seq_cst);
+    } else {
+      THR_LOGF("invalid clear child tid address %#" PRIx64, m->ctid);
+    }
+  }
+  SysFutexWake(m, m->ctid, INT_MAX);
+}
+
+_Noreturn void SysExitGroup(struct Machine *m, int rc) {
+  THR_LOGF("pid=%d tid=%d SysExitGroup", m->system->pid, m->tid);
+#ifndef NDEBUG
+  if (FLAG_statistics) {
+    PrintStats();
+  }
+#endif
+  if (m->system->isfork) {
+    THR_LOGF("calling _Exit");
+    _Exit(rc);
+  } else {
+    THR_LOGF("calling exit");
+    exit(rc);
+  }
+}
+
+_Noreturn void SysExit(struct Machine *m, int rc) {
+  THR_LOGF("pid=%d tid=%d SysExit", m->system->pid, m->tid);
+  if (IsOrphan(m)) {
+    SysExitGroup(m, rc);
+  } else {
+    ClearChildTid(m);
     FreeMachine(m);
     pthread_exit(0);
   }
 }
 
-_Noreturn static void SysExitGroup(struct Machine *m, int rc) {
-  if (m->system->isfork) {
-    _Exit(rc);
-  } else {
-    HaltMachine(m, kMachineExit | (rc & 255));
-  }
-}
-
 static int SysFork(struct Machine *m) {
   int pid;
+  THR_LOGF("pid=%d tid=%d SysFork", m->system->pid, m->tid);
   pid = fork();
   if (!pid) {
     m->system->isfork = true;
@@ -200,6 +261,7 @@ static int SysVfork(struct Machine *m) {
 static void *OnSpawn(void *arg) {
   int rc;
   struct Machine *m = (struct Machine *)arg;
+  THR_LOGF("pid=%d tid=%d OnSpawn", m->system->pid, m->tid);
   g_machine = m;
   if (!(rc = setjmp(m->onhalt))) {
     unassert(!pthread_sigmask(SIG_SETMASK, &m->thread_sigmask, 0));
@@ -220,6 +282,7 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   atomic_int *ptid_ptr;
   atomic_int *ctid_ptr;
   struct Machine *m2 = 0;
+  THR_LOGF("pid=%d tid=%d SysSpawn", m->system->pid, m->tid);
   supported = CLONE_THREAD_LINUX | CLONE_VM_LINUX | CLONE_FS_LINUX |
               CLONE_FILES_LINUX | CLONE_SIGHAND_LINUX | CLONE_SETTLS_LINUX |
               CLONE_PARENT_SETTID_LINUX | CLONE_CHILD_CLEARTID_LINUX |
@@ -302,17 +365,6 @@ static struct Futex *NewFutex(i64 addr) {
   return f;
 }
 
-static struct Futex *FindFutex(struct Machine *m, i64 addr) {
-  struct Dll *e;
-  for (e = dll_first(m->system->futexes); e;
-       e = dll_next(m->system->futexes, e)) {
-    if (FUTEX_CONTAINER(e)->addr == addr) {
-      return FUTEX_CONTAINER(e);
-    }
-  }
-  return 0;
-}
-
 static int SysFutexWait(struct Machine *m,  //
                         i64 uaddr,          //
                         i32 op,             //
@@ -352,6 +404,8 @@ static int SysFutexWait(struct Machine *m,  //
   }
   ++f->waiters;
   UNLOCK(&m->system->futex_lock);
+  THR_LOGF("pid=%d tid=%d is waiting at address %#" PRIx64, m->system->pid,
+           m->tid, uaddr);
   rc = pthread_cond_timedwait(&f->cond, &f->lock, &timeout);
   if (--f->waiters) {
     UNLOCK(&f->lock);
@@ -365,34 +419,6 @@ static int SysFutexWait(struct Machine *m,  //
   if (rc) {
     errno = rc;
     rc = -1;
-  }
-  return rc;
-}
-
-static int SysFutexWake(struct Machine *m,  //
-                        i64 uaddr,          //
-                        i32 op,             //
-                        u32 count) {
-  int rc;
-  struct Futex *f;
-  if (!count) return 0;
-  LOCK(&m->system->futex_lock);
-  if ((f = FindFutex(m, uaddr))) {
-    LOCK(&f->lock);
-  }
-  UNLOCK(&m->system->futex_lock);
-  if (f) {
-    unassert(f->waiters);
-    if (count == 1) {
-      unassert(!pthread_cond_signal(&f->cond));
-      rc = 1;
-    } else {
-      unassert(!pthread_cond_broadcast(&f->cond));
-      rc = f->waiters;
-    }
-    UNLOCK(&f->lock);
-  } else {
-    rc = 0;
   }
   return rc;
 }
@@ -412,8 +438,9 @@ static int SysFutex(struct Machine *m,  //
       break;
     case FUTEX_WAKE_LINUX:
     case FUTEX_WAKE_LINUX | FUTEX_PRIVATE_FLAG_LINUX:
-      return SysFutexWake(m, uaddr, op, val);
+      return SysFutexWake(m, uaddr, val);
     default:
+      LOGF("unsupported futex op %#x", op);
       return einval();
   }
 }
@@ -562,20 +589,24 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
     if (fd && m->system->nolinear) {
       // TODO(jart): Raise SIGBUS on i/o error.
       // TODO(jart): Support lazy file mappings.
-      unassert((tmp = malloc(size)));
-      for (;;) {
-        rc = pread(systemfd, tmp, size, offset);
-        if (rc != -1) break;
-        if (errno != EINTR) {
+      size_t i;
+      sigset_t ss, oldss;
+      unassert(!sigfillset(&ss));
+      unassert(!pthread_sigmask(SIG_SETMASK, &ss, &oldss));
+      unassert((tmp = calloc(1, size)));
+      for (i = 0; i < size; i += rc) {
+        rc = pread(systemfd, tmp + i, size - i, offset + i);
+        if (!rc) break;
+        if (rc == -1) {
           LOGF("failed to read %zu bytes at offset %" PRId64
                " from fd %d into memory map: %s",
                size, offset, systemfd, strerror(errno));
           abort();
         }
       }
-      unassert(size == rc);
       CopyToUserWrite(m, virt, tmp, size);
       free(tmp);
+      unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
     }
   } else {
     FreeVirtual(m->system, virt, size);
@@ -1345,7 +1376,7 @@ static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
 
 static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   if (m->system->exec) {
-    _exit(m->system->exec(LoadStr(m, pa), LoadStrList(m, aa),
+    _Exit(m->system->exec(LoadStr(m, pa), LoadStrList(m, aa),
                           LoadStrList(m, ea)));
   } else {
     return enosys();

@@ -1,5 +1,7 @@
 #ifndef BLINK_STATS_H_
 #define BLINK_STATS_H_
+#include <stdbool.h>
+
 #include "blink/tsan.h"
 
 #ifndef NDEBUG
@@ -43,6 +45,8 @@ struct Average {
   double a;
   long i;
 };
+
+extern bool FLAG_statistics;
 
 void PrintStats(void);
 

@@ -2177,5 +2177,8 @@ void Actor(struct Machine *m) {
   for (g_machine = m;;) {
     ExecuteInstruction(m);
     CheckForSignals(m);
+    if (VERY_UNLIKELY(atomic_load_explicit(&m->killed, memory_order_relaxed))) {
+      SysExit(m, 0);
+    }
   }
 }

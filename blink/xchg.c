@@ -58,9 +58,9 @@ void OpXchgGvqpEvqp(P) {
     } else {
       u64 x, y;
       x = Read64(q);
-      y = Read64(p);
+      y = Load64(p);
       Write64(q, y);
-      Write64(p, x);
+      Store64(p, x);
     }
   } else if (!Osz(rde)) {
     if (!IsModrmRegister(rde) && !((intptr_t)p & 3)) {
@@ -74,20 +74,30 @@ void OpXchgGvqpEvqp(P) {
     } else {
       u32 x, y;
       x = Read32(q);
-      y = Read32(p);
+      y = Load32(p);
       Write32(q, y);
-      Write32(p, x);
+      Store32(p, x);
     }
     Write32(q + 4, 0);
     if (IsModrmRegister(rde)) {
       Write32(p + 4, 0);
     }
   } else {
-    u16 x, y;
-    unassert(IsModrmRegister(rde));
-    x = Read16(q);
-    y = Read16(p);
-    Write16(q, y);
-    Write16(p, x);
+    if (!IsModrmRegister(rde) && !((intptr_t)p & 1)) {
+      atomic_store_explicit(
+          (_Atomic(u16) *)q,
+          atomic_exchange_explicit(
+              (_Atomic(u16) *)p,
+              atomic_load_explicit((_Atomic(u16) *)q, memory_order_relaxed),
+              memory_order_acq_rel),
+          memory_order_relaxed);
+    } else {
+      u16 x, y;
+      x = Read16(q);
+      y = Load16(p);
+      Write16(q, y);
+      Store16(p, x);
+    }
+    Write16(q + 4, 0);
   }
 }

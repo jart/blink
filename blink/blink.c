@@ -50,7 +50,6 @@
 
 static bool FLAG_nojit;
 static bool FLAG_nolinear;
-static bool FLAG_statistics;
 
 static void OnSignal(int sig, siginfo_t *si, void *uc) {
   EnqueueSignal(g_machine, sig);
@@ -58,7 +57,6 @@ static void OnSignal(int sig, siginfo_t *si, void *uc) {
 
 static int Exec(char *prog, char **argv, char **envp) {
   int rc;
-  struct System *s;
   struct Machine *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
   unassert((g_machine = NewMachine(NewSystem(), 0)));
@@ -85,17 +83,8 @@ static int Exec(char *prog, char **argv, char **envp) {
     g_machine->canhalt = true;
     Actor(g_machine);
   } else {
-    g_machine->canhalt = false;
-    s = g_machine->system;
-    KillOtherThreads(s);
-    FreeMachine(g_machine);
-    FreeSystem(s);
-#ifndef NDEBUG
-    if (FLAG_statistics) {
-      PrintStats();
-    }
-#endif
-    return rc;
+    LOGF("halting machine from main thread: %d", rc);
+    SysExitGroup(g_machine, rc);
   }
 }
 

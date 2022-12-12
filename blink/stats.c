@@ -27,6 +27,8 @@
 
 #define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
 
+bool FLAG_statistics;
+
 void PrintStats(void) {
 #ifndef NDEBUG
   char b[2048];
