@@ -1,3 +1,5 @@
+![Screenshot of Blink running GCC 9.4.0](blink/blink-gcc.png)
+
 # blink
 
 blink is a virtual machine for running statically-compiled x86-64-linux
