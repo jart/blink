@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/address.h"
 #include "blink/builtin.h"
 #include "blink/flags.h"
 #include "blink/modrm.h"
@@ -58,22 +59,23 @@ u64 ExportFlags(u64 flags) {
 
 bool CanSkipFlags(struct Machine *m, int myflags) {
   int i;
-  i64 ip = m->ip;
+  u64 rde;
+  i64 pc = GetPc(m);
   bool res = false;
   STATISTIC(++alu_ops);
   for (i = 0; i < 2; ++i) {
-    LoadInstruction(m);
-    m->ip += Oplength(m->xedd->op.rde);
-    if (Mopcode(m->xedd->op.rde) > 0x144) break;
-    if (ClassifyOp(m->xedd->op.rde) != kOpNormal) break;
-    if (GetFlagDeps(m->xedd->op.rde) & myflags) break;
-    if (!(myflags &= ~GetFlagClobbers(m->xedd->op.rde))) {
+    LoadInstruction(m, pc);
+    rde = m->xedd->op.rde;
+    pc += Oplength(rde);
+    if (Mopcode(rde) > 0x144) break;
+    if (ClassifyOp(rde) != kOpNormal) break;
+    if (GetFlagDeps(rde) & myflags) break;
+    if (!(myflags &= ~GetFlagClobbers(rde))) {
       STATISTIC(++alu_unflagged);
       res = true;
       break;
     }
   }
-  m->ip = ip;
   return res;
 }
 

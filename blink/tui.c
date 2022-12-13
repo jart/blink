@@ -667,6 +667,7 @@ static void OnSigCont(int sig, siginfo_t *si, void *uc) {
 }
 
 static void TtyRestore1(void) {
+  LOGF("TtyRestore1");
   ShowCursor();
   TtyWriteString("\033[0m");
 }
@@ -678,6 +679,7 @@ static void TtyRestore2(void) {
 }
 
 static void TuiCleanup(void) {
+  LOGF("TuiCleanup");
   sigaction(SIGCONT, oldsig + 2, 0);
   TtyRestore1();
   DisableMouseTracking();
@@ -2935,12 +2937,12 @@ static void Exec(void) {
       LOGF("BREAK1 %0*" PRIx64 "", GetAddrHexWidth(), breakpoints.p[bp].addr);
     ReactToPoint:
       tuimode = true;
-      LoadInstruction(m);
+      LoadInstruction(m, GetPc(m));
       if (verbose) LogInstruction();
       ExecuteInstruction(m);
       if (m->signals) {
         if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
-          TerminateSignal(m, sig);
+          exit(128 + sig);
         }
       }
       ++opcount;
@@ -2953,7 +2955,7 @@ static void Exec(void) {
     } else {
       action &= ~CONTINUE;
       for (;;) {
-        LoadInstruction(m);
+        LoadInstruction(m, GetPc(m));
         if ((bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
           LOGF("BREAK2 %0*" PRIx64 "", GetAddrHexWidth(),
                breakpoints.p[bp].addr);
@@ -2969,7 +2971,7 @@ static void Exec(void) {
         ExecuteInstruction(m);
         if (m->signals) {
           if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
-            TerminateSignal(m, sig);
+            exit(128 + sig);
           }
         }
         ++opcount;
@@ -3019,7 +3021,7 @@ static void Tui(void) {
     m->canhalt = true;
     do {
       if (!(action & FAILURE)) {
-        LoadInstruction(m);
+        LoadInstruction(m, GetPc(m));
         if ((action & (FINISH | NEXT | CONTINUE)) &&
             (bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
           action &= ~(FINISH | NEXT | CONTINUE);
@@ -3118,7 +3120,7 @@ static void Tui(void) {
           ExecuteInstruction(m);
           if (m->signals) {
             if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
-              TerminateSignal(m, sig);
+              exit(128 + sig);
             }
           }
           ++opcount;

@@ -98,6 +98,5 @@ void OpXchgGvqpEvqp(P) {
       Write16(q, y);
       Store16(p, x);
     }
-    Write16(q + 4, 0);
   }
 }

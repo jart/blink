@@ -1472,7 +1472,9 @@ int ClassifyOp(u64 rde) {
     case 0x0E2:  // OpLoop1
     case 0x0E3:  // OpJcxz
     case 0x0E8:  // OpCallJvds
+    case 0x0E9:  // OpJmp
     case 0x0EA:  // OpJmpf
+    case 0x0EB:  // OpJmp
     case 0x0cf:  // OpIret
     case 0x180:  // OpJo
     case 0x181:  // OpJno
@@ -2060,7 +2062,7 @@ void JitlessDispatch(P) {
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
            GetPc(m));
   STATISTIC(++instructions_dispatched);
-  LoadInstruction(m);
+  LoadInstruction(m, GetPc(m));
   m->oldip = m->ip;
   rde = m->xedd->op.rde;
   disp = m->xedd->op.disp;
@@ -2078,7 +2080,7 @@ void GeneralDispatch(P) {
   intptr_t jitpc;
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
            GetPc(m));
-  LoadInstruction(m);
+  LoadInstruction(m, GetPc(m));
   m->oldip = m->ip;
   rde = m->xedd->op.rde;
   disp = m->xedd->op.disp;

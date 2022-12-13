@@ -373,7 +373,7 @@ void CollectGarbage(struct Machine *);
 void ResetInstructionCache(struct Machine *);
 void GeneralDispatch(P);
 nexgen32e_f GetOp(long);
-void LoadInstruction(struct Machine *);
+void LoadInstruction(struct Machine *, u64);
 void ExecuteInstruction(struct Machine *);
 u64 AllocatePage(struct System *);
 u64 AllocatePageTable(struct System *);

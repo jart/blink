@@ -70,6 +70,7 @@ bool CreatePath(P) {
   unassert(!m->path.jb);
   if ((pc = GetPc(m))) {
     if ((m->path.jb = StartJit(&m->system->jit))) {
+      Jitter(A, "s4i", pc);
 #if LOG_JIT
       JIT_LOGF("starting new path %" PRIxPTR " at %" PRIx64,
                GetJitPc(m->path.jb), pc);
@@ -136,10 +137,9 @@ void AddPath_StartOp(P) {
   u8 ip = offsetof(struct Machine, ip);
   u8 oldip = offsetof(struct Machine, oldip);
   u8 code[] = {
-      0x48, 0x8b, 0107, ip,     // mov 8(%rdi),%rax
-      0x48, 0x89, 0107, oldip,  // mov %rax,16(%rdi)
-      0x48, 0x83, 0300, len,    // add $len,%rax
-      0x48, 0x89, 0107, ip,     // mov %rax,8(%rdi)
+      0x4c, 0x89, 0177, oldip,  // mov %r15,16(%rdi)
+      0x49, 0x83, 0307, len,    // add $len,%r15
+      0x4c, 0x89, 0177, ip,     // mov %r15,8(%rdi)
   };
   AppendJit(m->path.jb, code, sizeof(code));
   m->reserving = false;

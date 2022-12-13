@@ -70,8 +70,7 @@ static void LoadInstructionSlow(struct Machine *m, u64 ip) {
   }
 }
 
-void LoadInstruction(struct Machine *m) {
-  u64 pc;
+void LoadInstruction(struct Machine *m, u64 pc) {
   u8 *addr;
   unsigned key;
   if (atomic_load_explicit(&m->opcache->invalidated, memory_order_relaxed)) {
@@ -79,7 +78,6 @@ void LoadInstruction(struct Machine *m) {
     atomic_store_explicit(&m->opcache->invalidated, false,
                           memory_order_relaxed);
   }
-  pc = GetPc(m);
   key = pc & (ARRAYLEN(m->opcache->icache) - 1);
   m->xedd = (struct XedDecodedInst *)m->opcache->icache[key];
   if ((pc & 4095) < 4096 - 15) {
