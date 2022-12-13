@@ -748,40 +748,31 @@ static void OpInterrupt3(P) {
   HaltMachine(m, 3);
 }
 
-static void FastJne(struct Machine *m, i32 disp) {
-  if (!GetFlag(m->flags, FLAGS_ZF)) {
-    m->ip += disp;
-  }
-}
-
 static void OpJmp(P) {
   m->ip += disp;
   Jitter(A, "a1i m", disp, FastJmp);
 }
 
-static int Jae(struct Machine *m) {
-  return (~m->flags >> FLAGS_CF) & 1;
-}
-
 static void OpJae(P) {
-  if (Jae(m)) {
+  if (~m->flags & CF) {
     m->ip += disp;
   }
 }
 
 static void OpJne(P) {
-  FastJne(m, disp);
-  Jitter(A, "a1i c", disp, FastJne);
+  if (~m->flags & ZF) {
+    m->ip += disp;
+  }
 }
 
 static void OpJe(P) {
-  if (GetFlag(m->flags, FLAGS_ZF)) {
+  if (m->flags & ZF) {
     m->ip += disp;
   }
 }
 
 static void OpJb(P) {
-  if (GetFlag(m->flags, FLAGS_CF)) {
+  if (m->flags & CF) {
     m->ip += disp;
   }
 }
@@ -793,13 +784,13 @@ static void OpJbe(P) {
 }
 
 static void OpJo(P) {
-  if (GetFlag(m->flags, FLAGS_OF)) {
+  if (m->flags & OF) {
     m->ip += disp;
   }
 }
 
 static void OpJno(P) {
-  if (!GetFlag(m->flags, FLAGS_OF)) {
+  if (~m->flags & OF) {
     m->ip += disp;
   }
 }
@@ -811,13 +802,13 @@ static void OpJa(P) {
 }
 
 static void OpJs(P) {
-  if (GetFlag(m->flags, FLAGS_SF)) {
+  if (m->flags & SF) {
     m->ip += disp;
   }
 }
 
 static void OpJns(P) {
-  if (!GetFlag(m->flags, FLAGS_SF)) {
+  if (~m->flags & SF) {
     m->ip += disp;
   }
 }
@@ -2138,6 +2129,7 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
     JIT_LOGF("splicing path starting at %" PRIx64
              " into previously created function %p",
              m->path.start, func);
+    STATISTIC(++path_spliced);
     CommitPath(DISPATCH_NOTHING, (intptr_t)func);
     STATISTIC(++instructions_dispatched);
     func(DISPATCH_NOTHING);

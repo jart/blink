@@ -1,28 +1,55 @@
 #-*-mode:makefile-gmake;indent-tabs-mode:t;tab-width:8;coding:utf-8-*-┐
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
+emulates = o/$(MODE)/$1.ok $(foreach ARCH,$(ARCHITECTURES),o/$(MODE)/$(ARCH)/$1.emulates)
+
 # make -j8 o//test/sse
 # tests our simd instructions
 # https://github.com/jart/cosmopolitan/blob/master/test/libc/intrin/intrin_test.c
-o/$(MODE)/test/sse:												\
-		o/$(MODE)/third_party/cosmo/intrin_test.com.ok							\
-		$(foreach ARCH,$(ARCHITECTURES),o/$(MODE)/$(ARCH)/third_party/cosmo/intrin_test.com.emulates)	\
-		o/$(MODE)/third_party/cosmo/pshuf_test.com.ok							\
-		$(foreach ARCH,$(ARCHITECTURES),o/$(MODE)/$(ARCH)/third_party/cosmo/pshuf_test.com.emulates)	\
-		o/$(MODE)/third_party/cosmo/pshuf_test.com.ok							\
-		$(foreach ARCH,$(ARCHITECTURES),o/$(MODE)/$(ARCH)/third_party/cosmo/pshuf_test.com.emulates)	\
-		o/$(MODE)/third_party/cosmo/pmulhrsw_test.com.ok						\
-		$(foreach ARCH,$(ARCHITECTURES),o/$(MODE)/$(ARCH)/third_party/cosmo/pmulhrsw_test.com.emulates)
+o/$(MODE)/test/sse:								\
+		$(call emulates,third_party/cosmo/intrin_test.com)		\
+		$(call emulates,third_party/cosmo/popcnt_test.com)		\
+		$(call emulates,third_party/cosmo/pshuf_test.com)		\
+		$(call emulates,third_party/cosmo/pmulhrsw_test.com)		\
+		$(call emulates,third_party/cosmo/divmul_test.com)		\
+		$(call emulates,third_party/cosmo/palignr_test.com)
 	@mkdir -p $(@D)
 	@touch $@
 
 # make -j8 o//test/lib
 # test some c libraries
-o/$(MODE)/test/lib:												\
-		o/$(MODE)/third_party/cosmo/qsort_test.com.ok							\
-		$(foreach ARCH,$(ARCHITECTURES),o/$(MODE)/$(ARCH)/third_party/cosmo/qsort_test.com.emulates)	\
-		o/$(MODE)/third_party/cosmo/kprintf_test.com.ok							\
-		$(foreach ARCH,$(ARCHITECTURES),o/$(MODE)/$(ARCH)/third_party/cosmo/kprintf_test.com.emulates)
+o/$(MODE)/test/lib:								\
+		$(call emulates,third_party/cosmo/atoi_test.com)		\
+		$(call emulates,third_party/cosmo/qsort_test.com)		\
+		$(call emulates,third_party/cosmo/kprintf_test.com)
+	@mkdir -p $(@D)
+	@touch $@
+
+# make -j8 o//test/sys
+# test linux system call
+o/$(MODE)/test/sys:								\
+		$(call emulates,third_party/cosmo/renameat_test.com)		\
+		$(call emulates,third_party/cosmo/clock_gettime_test.com)	\
+		$(call emulates,third_party/cosmo/clock_getres_test.com)	\
+		$(call emulates,third_party/cosmo/clock_nanosleep_test.com)	\
+		$(call emulates,third_party/cosmo/access_test.com)		\
+		$(call emulates,third_party/cosmo/chdir_test.com)		\
+		$(call emulates,third_party/cosmo/closefrom_test.com)		\
+		$(call emulates,third_party/cosmo/commandv_test.com)		\
+		$(call emulates,third_party/cosmo/dirstream_test.com)		\
+		$(call emulates,third_party/cosmo/dirname_test.com)		\
+		$(call emulates,third_party/cosmo/clone_test.com)		\
+		$(call emulates,third_party/cosmo/fileexists_test.com)		\
+		$(call emulates,third_party/cosmo/getcwd_test.com)		\
+		$(call emulates,third_party/cosmo/lseek_test.com)		\
+		$(call emulates,third_party/cosmo/mkdir_test.com)		\
+		$(call emulates,third_party/cosmo/makedirs_test.com)		\
+		$(call emulates,third_party/cosmo/nanosleep_test.com)		\
+		$(call emulates,third_party/cosmo/readlinkat_test.com)		\
+		$(call emulates,third_party/cosmo/symlinkat_test.com)		\
+		$(call emulates,third_party/cosmo/tls_test.com)			\
+		$(call emulates,third_party/cosmo/tmpfile_test.com)		\
+		$(call emulates,third_party/cosmo/xslurp_test.com)
 	@mkdir -p $(@D)
 	@touch $@
 

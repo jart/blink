@@ -8,6 +8,7 @@ extern char *g_blink_path;
 
 void OpSyscall(P);
 
+int SysCloseExec(struct System *);
 int SysClose(struct System *, i32);
 int SysCloseRange(struct System *, u32, u32, u32);
 int SysDup(struct Machine *, i32, i32, i32, i32);

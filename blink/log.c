@@ -116,6 +116,6 @@ void LogInit(const char *path) {
     perror(path);
     exit(1);
   }
-  unassert((g_log = fcntl(fd, F_DUPFD_CLOEXEC, 100)) != -1);
+  unassert((g_log = fcntl(fd, F_DUPFD_CLOEXEC, kMinBlinkFd)) != -1);
   unassert(!close(fd));
 }

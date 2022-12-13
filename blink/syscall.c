@@ -984,6 +984,7 @@ static int UnXlatDt(int x) {
 static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
   int type;
   off_t off;
+  long tell;
   int reclen;
   i64 i, dlz;
   size_t len;
@@ -998,7 +999,11 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
     return -1;
   }
   for (i = 0; i + dlz <= size; i += reclen) {
-    unassert((off = telldir(fd->dirstream)) >= 0);
+    // telldir() can actually return negative on ARM/MIPS/i386
+    errno = 0;
+    tell = telldir(fd->dirstream);
+    unassert(tell != -1 || errno == 0);
+    off = tell;
     if (!(ent = readdir(fd->dirstream))) break;
     len = strlen(ent->d_name);
     if (len + 1 > sizeof(rec.d_name)) {
@@ -1375,6 +1380,12 @@ static int SysSymlink(struct Machine *m, i64 targetpath, i64 linkpath) {
   return symlink(LoadStr(m, targetpath), LoadStr(m, linkpath));
 }
 
+static int SysSymlinkat(struct Machine *m, i64 targetpath, i32 newdirfd,
+                        i64 linkpath) {
+  return symlinkat(LoadStr(m, targetpath), GetDirFildes(m, newdirfd),
+                   LoadStr(m, linkpath));
+}
+
 static int SysReadlink(struct Machine *m, i64 path, i64 bufaddr, u64 size) {
   return SysReadlinkat(m, AT_FDCWD_LINUX, path, bufaddr, size);
 }
@@ -1388,6 +1399,7 @@ static int SysLink(struct Machine *m, i64 existingpath, i64 newpath) {
 }
 
 static int SysMknod(struct Machine *m, i64 path, i32 mode, u64 dev) {
+  // TODO(jart): we can probably only emulate a subset of this call
   return mknod(LoadStr(m, path), mode, dev);
 }
 
@@ -1402,9 +1414,14 @@ static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
 }
 
 static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
+  char *prog, **argv, **envp;
+  // TODO(jart): do native exec with fd->fildes mapped to fd->systemfd
   if (m->system->exec) {
-    _Exit(m->system->exec(LoadStr(m, pa), LoadStrList(m, aa),
-                          LoadStrList(m, ea)));
+    prog = LoadStr(m, pa);
+    argv = LoadStrList(m, aa);
+    envp = LoadStrList(m, ea);
+    SysCloseExec(m->system);
+    _Exit(m->system->exec(prog, argv, envp));
   } else {
     return enosys();
   }
@@ -2216,6 +2233,7 @@ void OpSyscall(P) {
     SYSCALL(0x106, SysFstatat, (m, di, si, dx, r0));
     SYSCALL(0x107, SysUnlinkat, (m, di, si, dx));
     SYSCALL(0x108, SysRenameat, (m, di, si, dx, r0));
+    SYSCALL(0x10A, SysSymlinkat, (m, di, si, dx));
     SYSCALL(0x10B, SysReadlinkat, (m, di, si, dx, r0));
     SYSCALL(0x10D, SysFaccessat, (m, di, si, dx, r0));
     SYSCALL(0x120, SysAccept4, (m, di, si, dx, r0));

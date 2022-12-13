@@ -18,6 +18,12 @@ static inline struct timespec GetTime(void) {
   return ts;
 }
 
+static inline struct timespec GetMonotonic(void) {
+  struct timespec ts;
+  unassert(!clock_gettime(CLOCK_MONOTONIC, &ts));
+  return ts;
+}
+
 static inline struct timespec GetMaxTime(void) {
   struct timespec ts;
   ts.tv_sec = MAX_INTEGRAL_TIME;

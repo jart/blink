@@ -39,6 +39,7 @@ check:	test				\
 
 check2:	o/$(MODE)/test/sse		\
 	o/$(MODE)/test/lib		\
+	o/$(MODE)/test/sys		\
 	o/$(MODE)/test/asm		\
 	o/$(MODE)/test/asm/emulates
 

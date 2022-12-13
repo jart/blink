@@ -27,6 +27,7 @@
 #include "blink/errno.h"
 #include "blink/fds.h"
 #include "blink/lock.h"
+#include "blink/log.h"
 #include "blink/macros.h"
 
 // TODO(jart): We should track the first hole.
@@ -79,21 +80,19 @@ struct Fd *AllocateFd(struct Fds *fds, int minfd, int oflags) {
 
 struct Fd *GetFd(struct Fds *fds, int fildes) {
   struct Dll *e;
-  if (fildes < 0) {
-    ebadf();
-    return 0;
-  }
-  for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
-    if (FD_CONTAINER(e)->fildes == fildes) {
-      if (atomic_load_explicit(&FD_CONTAINER(e)->systemfd,
-                               memory_order_acquire) >= 0) {
-        return FD_CONTAINER(e);
-      } else {
-        ebadf();
-        break;
+  if (fildes >= 0) {
+    for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
+      if (FD_CONTAINER(e)->fildes == fildes) {
+        if (atomic_load_explicit(&FD_CONTAINER(e)->systemfd,
+                                 memory_order_acquire) >= 0) {
+          return FD_CONTAINER(e);
+        } else {
+          break;
+        }
       }
     }
   }
+  ebadf();
   return 0;
 }
 

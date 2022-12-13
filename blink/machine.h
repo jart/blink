@@ -60,9 +60,10 @@
 #define kPreciousStart 0x44000000  // 192 mb
 #define kPreciousEnd   0x50000000
 #endif
-#define kRealSize  (16 * 1024 * 1024)
-#define kStackSize (8 * 1024 * 1024)
-#define kMinBrk    (2 * 1024 * 1024)
+#define kRealSize   (16 * 1024 * 1024)
+#define kStackSize  (8 * 1024 * 1024)
+#define kMinBrk     (2 * 1024 * 1024)
+#define kMinBlinkFd 100
 
 #define PAGE_V    0x0001  // valid
 #define PAGE_RW   0x0002  // writeable

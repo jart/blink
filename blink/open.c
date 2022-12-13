@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include "blink/debug.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
 #include "blink/log.h"

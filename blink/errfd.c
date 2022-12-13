@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include "blink/log.h"
+#include "blink/machine.h"
 
 static int g_errfd;
 
@@ -42,6 +43,6 @@ int WriteError(int fd, const char *buf, int len) {
 
 void WriteErrorInit(void) {
   if (g_errfd) return;
-  g_errfd = fcntl(2, F_DUPFD_CLOEXEC, 100);
+  g_errfd = fcntl(2, F_DUPFD_CLOEXEC, kMinBlinkFd);
   if (g_errfd == -1) exit(200);
 }

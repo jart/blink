@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -28,18 +29,28 @@
 #include "blink/assert.h"
 #include "blink/lock.h"
 #include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/sigwinch.h"
 #include "blink/util.h"
 
 struct CxxFilt {
+  pthread_once_t once;
   pthread_mutex_t lock;
   int reader;
   int writer;
   int pid;
 } g_cxxfilt = {
-    PTHREAD_MUTEX_INITIALIZER,
+    PTHREAD_ONCE_INIT,
 };
+
+static void InitCxxFilt(void) {
+  pthread_mutexattr_t attr;
+  unassert(!pthread_mutexattr_init(&attr));
+  unassert(!pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE));
+  unassert(!pthread_mutex_init(&g_cxxfilt.lock, &attr));
+  unassert(!pthread_mutexattr_destroy(&attr));
+}
 
 static void CloseCxxFiltUnlocked(void) {
   sigset_t ss, oldss;
@@ -59,6 +70,26 @@ static void CloseCxxFiltUnlocked(void) {
 static void CloseCxxFilt(void) {
   LOCK(&g_cxxfilt.lock);
   CloseCxxFiltUnlocked();
+  UNLOCK(&g_cxxfilt.lock);
+}
+
+static void CxxFiltBeforeFork(void) {
+  LOGF("CxxFiltBeforeFork");
+  LOCK(&g_cxxfilt.lock);
+}
+
+static void CxxFiltAfterForkChild(void) {
+  LOGF("CxxFiltAfterForkChild");
+  if (g_cxxfilt.pid > 0) {
+    unassert(!close(g_cxxfilt.writer));
+    unassert(!close(g_cxxfilt.reader));
+    g_cxxfilt.pid = 0;
+  }
+  UNLOCK(&g_cxxfilt.lock);
+}
+
+static void CxxFiltAfterForkParent(void) {
+  LOGF("CxxFiltAfterForkParent");
   UNLOCK(&g_cxxfilt.lock);
 }
 
@@ -108,9 +139,16 @@ static void SpawnCxxFilt(void) {
   }
   unassert(!close(pipefds[0][1]));
   unassert(!close(pipefds[1][0]));
-  g_cxxfilt.reader = pipefds[0][0];
-  g_cxxfilt.writer = pipefds[1][1];
-  atexit(CloseCxxFilt);
+  g_cxxfilt.reader = fcntl(pipefds[0][0], F_DUPFD_CLOEXEC, kMinBlinkFd);
+  unassert(g_cxxfilt.reader != -1);
+  unassert(!close(pipefds[0][0]));
+  g_cxxfilt.writer = fcntl(pipefds[1][1], F_DUPFD_CLOEXEC, kMinBlinkFd);
+  unassert(g_cxxfilt.writer != -1);
+  unassert(!close(pipefds[1][1]));
+  unassert(!atexit(CloseCxxFilt));
+  unassert(!pthread_atfork(CxxFiltBeforeFork,       //
+                           CxxFiltAfterForkParent,  //
+                           CxxFiltAfterForkChild));
 }
 
 static char *CopySymbol(char *p, size_t pn, const char *s, size_t sn) {
@@ -192,11 +230,14 @@ static char *DemangleCxxFilt(char *p, size_t pn, const char *s, size_t sn) {
  * @return pointer to NUL byte, cf. stcpy()
  */
 char *Demangle(char *p, const char *symbol, size_t n) {
+  int cs;
   char *r;
   size_t sn;
   sigset_t ss, oldss;
   sn = strlen(symbol);
   if (startswith(symbol, "_Z")) {
+    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs);
+    pthread_once(&g_cxxfilt.once, InitCxxFilt);
     LOCK(&g_cxxfilt.lock);
     if (g_cxxfilt.pid != -1) {
       unassert(!sigemptyset(&ss));
@@ -220,6 +261,7 @@ char *Demangle(char *p, const char *symbol, size_t n) {
       r = 0;
     }
     UNLOCK(&g_cxxfilt.lock);
+    pthread_setcancelstate(cs, 0);
   } else {
     r = 0;
   }

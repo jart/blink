@@ -153,7 +153,11 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/mu_starvation_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/open_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/stat_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/stackrwx_test.com.ok
+		o/$(MODE)/third_party/cosmo/stackrwx_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/clone_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/dup_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/cv_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/writev_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@
 

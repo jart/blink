@@ -78,8 +78,8 @@ bool CreatePath(P) {
 #endif
       m->path.start = pc;
       m->path.elements = 0;
+      SetHook(m, pc, JitlessDispatch);
       res = true;
-      // SetHook(m, pc, JitlessDispatch);
     } else {
       LOGF("jit failed: %s", strerror(errno));
       res = false;

@@ -47,7 +47,7 @@ There's a terminal interface for debugging:
 
 ```
 $ build/bootstrap/make.com -j8 o//blink/tui
-$ o//blink/tui -t third_party/cosmo/tinyhello.elf
+$ o//blink/tui third_party/cosmo/tinyhello.elf
 ```
 
 You can run our test executables to check your local platform build:

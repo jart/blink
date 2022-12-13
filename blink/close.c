@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <fcntl.h>
 #include <limits.h>
 #include <stdatomic.h>
 #include <unistd.h>
@@ -74,4 +75,18 @@ int SysCloseRange(struct System *s, u32 first, u32 last, u32 flags) {
   }
   UnlockFds(&s->fds);
   return rc;
+}
+
+void SysCloseExec(struct System *s) {
+  struct Fd *fd;
+  struct Dll *e, *e2;
+  LockFds(&s->fds);
+  for (e = dll_first(s->fds.list); e; e = e2) {
+    fd = FD_CONTAINER(e);
+    e2 = dll_next(s->fds.list, e);
+    if (fd->cloexec) {
+      CloseFd(s, fd);
+    }
+  }
+  UnlockFds(&s->fds);
 }
