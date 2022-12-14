@@ -72,8 +72,7 @@ static int Exec(char *prog, char **argv, char **envp) {
     g_machine->system->fds.list = old->system->fds.list;
     old->system->fds.list = 0;
     UNLOCK(&old->system->fds.lock);
-    // FreeMachine(old);
-    // FreeSystem(old->system);
+    FreeMachine(old);
   }
   for (;;) {
     if (!setjmp(g_machine->onhalt)) {

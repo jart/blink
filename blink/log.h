@@ -13,6 +13,7 @@
 #define LOG_SIG 0
 #define LOG_ASM 0
 #define LOG_JIT 0
+#define LOG_JIX 0
 #define LOG_MEM 0
 #define LOG_THR 0
 
@@ -44,6 +45,12 @@
 #define JIT_LOGF(...) Log(__FILE__, __LINE__, "(jit) " __VA_ARGS__)
 #else
 #define JIT_LOGF(...) (void)0
+#endif
+
+#if LOG_JIX
+#define JIX_LOGF(...) Log(__FILE__, __LINE__, "(jix) " __VA_ARGS__)
+#else
+#define JIX_LOGF(...) (void)0
 #endif
 
 #if LOG_MEM

@@ -32,7 +32,7 @@
 void (*AddPath_StartOp_Hook)(P);
 
 static void StartPath(struct Machine *m) {
-  JIT_LOGF("%" PRIx64 " <path>", m->ip);
+  JIX_LOGF("%" PRIx64 " <path>", m->ip);
 }
 
 static void DebugOp(struct Machine *m, i64 expected_ip) {
@@ -44,15 +44,15 @@ static void DebugOp(struct Machine *m, i64 expected_ip) {
 }
 
 static void StartOp(struct Machine *m, long len) {
-  JIT_LOGF("%" PRIx64 "   <op>", m->ip);
-  JIT_LOGF("%" PRIx64 "     %s", m->ip, DescribeOp(m, GetPc(m)));
+  JIX_LOGF("%" PRIx64 "   <op>", GetPc(m));
+  JIX_LOGF("%" PRIx64 "     %s", GetPc(m), DescribeOp(m, GetPc(m)));
   unassert(!m->path.jb);
   m->oldip = m->ip;
   m->ip += len;
 }
 
 static void EndOp(struct Machine *m) {
-  JIT_LOGF("%" PRIx64 "   </op>", m->ip);
+  JIX_LOGF("%" PRIx64 "   </op>", GetPc(m));
   m->oldip = -1;
   if (m->stashaddr) {
     CommitStash(m);
@@ -60,8 +60,8 @@ static void EndOp(struct Machine *m) {
 }
 
 static void EndPath(struct Machine *m) {
-  JIT_LOGF("%" PRIx64 "   %s", m->ip, DescribeOp(m, GetPc(m)));
-  JIT_LOGF("%" PRIx64 " </path>", m->ip);
+  JIX_LOGF("%" PRIx64 "   %s", GetPc(m), DescribeOp(m, GetPc(m)));
+  JIX_LOGF("%" PRIx64 " </path>", GetPc(m));
 }
 
 bool CreatePath(P) {
@@ -70,11 +70,11 @@ bool CreatePath(P) {
   unassert(!m->path.jb);
   if ((pc = GetPc(m))) {
     if ((m->path.jb = StartJit(&m->system->jit))) {
-      Jitter(A, "s4i", pc);
-#if LOG_JIT
       JIT_LOGF("starting new path %" PRIxPTR " at %" PRIx64,
                GetJitPc(m->path.jb), pc);
-      Jitter(A, "s0a0= c", StartPath);
+      Jitter(A, "s4i", pc);
+#if LOG_JIX
+      Jitter(A, "c s0a0=", StartPath);
 #endif
       m->path.start = pc;
       m->path.elements = 0;
@@ -92,7 +92,7 @@ bool CreatePath(P) {
 
 void CommitPath(P, intptr_t splice) {
   unassert(m->path.jb);
-#if LOG_JIT
+#if LOG_JIX
   Jitter(A, "s0a0= c s0a0=", EndPath);
 #endif
   STATISTIC(path_longest_bytes =
@@ -129,10 +129,10 @@ void AddPath_StartOp(P) {
   }
   u8 len = Oplength(rde);
   // TODO(jart): We shouldn't need to modify m->ip on every op.
-#if defined(DEBUG) || LOG_JIT
+#if defined(DEBUG) || LOG_JIX
   Jitter(A, "a1i s0a0= c s0a0=", m->ip, DebugOp);
 #endif
-#if !LOG_JIT && defined(__x86_64__)
+#if !LOG_JIX && defined(__x86_64__)
   AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
   u8 ip = offsetof(struct Machine, ip);
   u8 oldip = offsetof(struct Machine, oldip);
@@ -143,7 +143,7 @@ void AddPath_StartOp(P) {
   };
   AppendJit(m->path.jb, code, sizeof(code));
   m->reserving = false;
-#elif !LOG_JIT && defined(__aarch64__)
+#elif !LOG_JIX && defined(__aarch64__)
   AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
   u8 ip = offsetof(struct Machine, ip);
   u8 oldip = offsetof(struct Machine, oldip);
@@ -162,7 +162,7 @@ void AddPath_StartOp(P) {
 
 void AddPath_EndOp(P) {
   _Static_assert(offsetof(struct Machine, stashaddr) < 128, "");
-#if !LOG_JIT && defined(__x86_64__)
+#if !LOG_JIX && defined(__x86_64__)
   if (m->reserving) {
     AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
     u8 sa = offsetof(struct Machine, stashaddr);
@@ -173,7 +173,7 @@ void AddPath_EndOp(P) {
     AppendJit(m->path.jb, code, sizeof(code));
     AppendJitCall(m->path.jb, (void *)CommitStash);
   }
-#elif !LOG_JIT && defined(__aarch64__)
+#elif !LOG_JIX && defined(__aarch64__)
   if (m->reserving) {
     AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
     u32 sa = offsetof(struct Machine, stashaddr);
@@ -191,8 +191,6 @@ void AddPath_EndOp(P) {
 
 bool AddPath(P) {
   unassert(m->path.jb);
-  JIT_LOGF("adding [%s] from address %" PRIx64 " to path starting at %" PRIx64,
-           DescribeOp(m, GetPc(m)), GetPc(m), m->path.start);
   AppendJitSetReg(m->path.jb, kJitArg[kArgRde], rde);
   AppendJitSetReg(m->path.jb, kJitArg[kArgDisp], disp);
   AppendJitSetReg(m->path.jb, kJitArg[kArgUimm0], uimm0);

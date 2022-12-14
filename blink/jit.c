@@ -128,23 +128,24 @@ static struct JitGlobals {
 
 #if defined(__x86_64__)
 static const u8 kJitPrologue[] = {
-    0x55,                                      // push %rbp
-    0x48, 0x89, 0xe5,                          // mov  %rsp,%rbp
-    0x48, 0x81, 0xec, 0x80, 0x00, 0x00, 0x00,  // sub  $0x80,%rsp
-    0x48, 0x89, 0x5d, 0x80,                    // mov  %rbx,-0x80(%rbp)
-    0x4c, 0x89, 0x65, 0x88,                    // mov  %r12,-0x78(%rbp)
-    0x4c, 0x89, 0x6d, 0x90,                    // mov  %r13,-0x70(%rbp)
-    0x4c, 0x89, 0x75, 0x98,                    // mov  %r14,-0x68(%rbp)
-    0x4c, 0x89, 0x7d, 0xa0,                    // mov  %r15,-0x60(%rbp)
-    0x48, 0x89, 0xfb,                          // mov  %rdi,%rbx
+    0x55,                    // push %rbp
+    0x48, 0x89, 0345,        // mov  %rsp,%rbp
+    0x48, 0x83, 0354, 0x30,  // sub  $0x30,%rsp
+    0x48, 0x89, 0135, 0xd8,  // mov  %rbx,-0x28(%rbp)
+    0x4c, 0x89, 0145, 0xe0,  // mov  %r12,-0x20(%rbp)
+    0x4c, 0x89, 0155, 0xe8,  // mov  %r13,-0x18(%rbp)
+    0x4c, 0x89, 0165, 0xf0,  // mov  %r14,-0x10(%rbp)
+    0x4c, 0x89, 0175, 0xf8,  // mov  %r15,-0x08(%rbp)
+    0x48, 0x89, 0xfb,        // mov  %rdi,%rbx
 };
 static const u8 kJitEpilogue[] = {
-    0x48, 0x8b, 0x5d, 0x80,  // mov -0x80(%rbp),%rbx
-    0x4c, 0x8b, 0x65, 0x88,  // mov -0x78(%rbp),%r12
-    0x4c, 0x8b, 0x6d, 0x90,  // mov -0x70(%rbp),%r13
-    0x4c, 0x8b, 0x75, 0x98,  // mov -0x68(%rbp),%r14
-    0x4c, 0x8b, 0x7d, 0xa0,  // mov -0x60(%rbp),%r15
-    0xc9,                    // leave
+    0x4c, 0x8b, 0175, 0xf8,  // mov -0x08(%rbp),%r15
+    0x4c, 0x8b, 0165, 0xf0,  // mov -0x10(%rbp),%r14
+    0x4c, 0x8b, 0155, 0xe8,  // mov -0x18(%rbp),%r13
+    0x4c, 0x8b, 0145, 0xe0,  // mov -0x20(%rbp),%r12
+    0x48, 0x8b, 0135, 0xd8,  // mov -0x28(%rbp),%rbx
+    0x48, 0x83, 0304, 0x30,  // add $0x30,%rsp
+    0x5d,                    // pop %rbp
     0xc3,                    // ret
 };
 #elif defined(__aarch64__)
@@ -154,7 +155,6 @@ static const u32 kJitPrologue[] = {
     0xa90153f3,  // stp x19, x20, [sp, #16]
     0xa9025bf5,  // stp x21, x22, [sp, #32]
     0xa90363f7,  // stp x23, x24, [sp, #48]
-    0xaa0003f3,  // mov x19, x0
 };
 static const u32 kJitEpilogue[] = {
     0xa94153f3,  // ldp x19, x20, [sp, #16]
@@ -326,7 +326,7 @@ static struct JitBlock *AcquireJit(struct Jit *jit) {
           // memory is requested. Since other OSes might exist, having
           // this same requirement, and possible a different errno, we
           // shall just clear the exec flag and try again.
-          MEM_LOGF("operating system doesn't permit rwx memory; your"
+          JIT_LOGF("operating system doesn't permit rwx memory; your"
                    " jit will have less predictable behavior");
           atomic_store_explicit(&g_jit.prot, prot & ~PROT_EXEC,
                                 memory_order_relaxed);
@@ -410,7 +410,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
       (blockoff = ROUNDDOWN(jb->start, jit->pagesize)) > jb->committed) {
     unassert(!mprotect(jb->addr + jb->committed, blockoff - jb->committed,
                        PROT_READ | PROT_EXEC));
-    MEM_LOGF("jit activated [%p,%p) w/ %zu kb", jb->addr + jb->committed,
+    JIT_LOGF("jit activated [%p,%p) w/ %zu kb", jb->addr + jb->committed,
              jb->addr + jb->committed + (blockoff - jb->committed),
              (blockoff - jb->committed) / 1024);
     unassert(jb->start == jb->index);

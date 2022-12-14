@@ -17,10 +17,10 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <stdio.h>
+#include <unistd.h>
 
 #include "blink/machine.h"
+#include "blink/timespec.h"
 
 int main(int argc, char *argv[]) {
-  printf("%zu\n", sizeof(struct System));
-  printf("%zu\n", sizeof(struct Machine));
 }

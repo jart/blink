@@ -1174,14 +1174,7 @@ static const nexgen32e_f kOp0ff[] = {
 
 static void Op0ff(P) {
   kOp0ff[ModrmReg(rde)](A);
-#if 0
-  // TODO(jart): jitter me
-  if (m->path.jb) {
-    AppendJitSetArg(m->path.jb, kArgRde, rde);
-    AppendJitSetArg(m->path.jb, kArgDisp, disp);
-    AppendJitCall(m->path.jb, (void *)kOp0ff[ModrmReg(rde)]);
-  }
-#endif
+  // Jitter(A, "a1i a2i c", rde, disp, kOp0ff[ModrmReg(rde)]);
 }
 
 static void OpDoubleShift(P) {
@@ -2084,6 +2077,9 @@ void GeneralDispatch(P) {
       AddPath_StartOp(A);
     }
     jitpc = GetJitPc(m->path.jb);
+    JIT_LOGF("adding [%s] from address %" PRIx64
+             " to path starting at %" PRIx64,
+             DescribeOp(m, GetPc(m)), GetPc(m), m->path.start);
   } else {
     jitpc = 0;
   }

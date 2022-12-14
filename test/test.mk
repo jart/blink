@@ -3,8 +3,19 @@
 
 emulates = o/$(MODE)/$1.ok $(foreach ARCH,$(ARCHITECTURES),o/$(MODE)/$(ARCH)/$1.emulates)
 
+# make -j8 o//test/alu
+# very time consuming tests of our core arithmetic ops
+# https://github.com/jart/cosmopolitan/blob/master/test/tool/build/lib/optest.c
+# https://github.com/jart/cosmopolitan/blob/master/test/tool/build/lib/alu_test.c
+# https://github.com/jart/cosmopolitan/blob/master/test/tool/build/lib/bsu_test.c
+o/$(MODE)/test/alu:								\
+		$(call emulates,third_party/cosmo/alu_test.com)			\
+		$(call emulates,third_party/cosmo/bsu_test.com)
+	@mkdir -p $(@D)
+	@touch $@
+
 # make -j8 o//test/sse
-# tests our simd instructions
+# fast and fairly comprehensive tests for our simd instructions
 # https://github.com/jart/cosmopolitan/blob/master/test/libc/intrin/intrin_test.c
 o/$(MODE)/test/sse:								\
 		$(call emulates,third_party/cosmo/intrin_test.com)		\
@@ -26,7 +37,7 @@ o/$(MODE)/test/lib:								\
 	@touch $@
 
 # make -j8 o//test/sys
-# test linux system call
+# test linux system call emulation
 o/$(MODE)/test/sys:								\
 		$(call emulates,third_party/cosmo/renameat_test.com)		\
 		$(call emulates,third_party/cosmo/clock_gettime_test.com)	\

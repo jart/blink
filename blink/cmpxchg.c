@@ -30,17 +30,15 @@
 #include "blink/mop.h"
 
 void OpCmpxchgEbAlGb(P) {
-  u8 *p, x;
-  UNLOCK(&m->system->lock_lock);
-  p = GetModrmRegisterBytePointerWrite1(A);
-  x = Get8(p);
-  Sub8(m, Get8(m->ax), x);
-  if (x == Get8(m->ax)) {
-    Put8(p, Get8(ByteRexrReg(m, rde)));
-  } else {
-    Put8(m->ax, x);
-  }
-  UNLOCK(&m->system->lock_lock);
+  u8 *p = GetModrmRegisterBytePointerWrite1(A);
+  u8 *q = ByteRexrReg(m, rde);
+  u8 ax = atomic_load_explicit((_Atomic(u8) *)m->ax, memory_order_relaxed);
+  atomic_compare_exchange_strong_explicit(
+      (_Atomic(u8) *)p, &ax,
+      atomic_load_explicit((_Atomic(u8) *)q, memory_order_relaxed),
+      memory_order_acq_rel, memory_order_acquire);
+  Sub8(m, Get8(m->ax), Little8(ax));
+  atomic_store_explicit((_Atomic(u8) *)m->ax, ax, memory_order_relaxed);
 }
 
 void OpCmpxchgEvqpRaxGvqp(P) {
@@ -49,33 +47,35 @@ void OpCmpxchgEvqpRaxGvqp(P) {
   q = RegRexrReg(m, rde);
   p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
-    if (LONG_BIT == 64 && Lock(rde) && !((intptr_t)p & 7)) {
-      unsigned long ax =
-          atomic_load_explicit((atomic_ulong *)m->ax, memory_order_relaxed);
+#if LONG_BIT == 64
+    if (Lock(rde) && !((intptr_t)p & 7)) {
+      u64 ax =
+          atomic_load_explicit((_Atomic(u64) *)m->ax, memory_order_relaxed);
       atomic_compare_exchange_strong_explicit(
-          (atomic_ulong *)p, &ax,
-          atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
+          (_Atomic(u64) *)p, &ax,
+          atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed),
           memory_order_acq_rel, memory_order_acquire);
       Sub64(m, Get64(m->ax), Little64(ax));
-      atomic_store_explicit((atomic_ulong *)m->ax, ax, memory_order_relaxed);
-    } else {
-      LOCK(&m->system->lock_lock);
-      u64 x = Load64(p);
-      Sub64(m, Get64(m->ax), x);
-      if ((didit = x == Get64(m->ax))) {
-        Store64(p, Get64(q));
-      } else {
-        Put64(m->ax, x);
-      }
-      UNLOCK(&m->system->lock_lock);
+      atomic_store_explicit((_Atomic(u64) *)m->ax, ax, memory_order_relaxed);
+      return;
     }
+#endif
+    LOCK(&m->system->lock_lock);
+    u64 x = Load64(p);
+    Sub64(m, Get64(m->ax), x);
+    if ((didit = x == Get64(m->ax))) {
+      Store64(p, Get64(q));
+    } else {
+      Put64(m->ax, x);
+    }
+    UNLOCK(&m->system->lock_lock);
   } else if (!Osz(rde)) {
     if (Lock(rde) && !((intptr_t)p & 3)) {
-      unsigned int ax =
-          atomic_load_explicit((atomic_uint *)m->ax, memory_order_relaxed);
+      u32 ax =
+          atomic_load_explicit((_Atomic(u32) *)m->ax, memory_order_relaxed);
       didit = atomic_compare_exchange_strong_explicit(
-          (atomic_uint *)p, &ax,
-          atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
+          (_Atomic(u32) *)p, &ax,
+          atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed),
           memory_order_acq_rel, memory_order_acquire);
       Sub32(m, Get32(m->ax), Little32(ax));
       if (!didit) Put64(m->ax, Little32(ax));
@@ -92,14 +92,23 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       Put32(p + 4, 0);
     }
   } else {
-    if (Lock(rde)) LOCK(&m->system->lock_lock);
-    u16 x = Load16(p);
-    Sub16(m, Get16(m->ax), x);
-    if ((didit = x == Get16(m->ax))) {
-      Store16(p, Read16(q));
+    if (Lock(rde) && !((intptr_t)p & 1)) {
+      u16 ax =
+          atomic_load_explicit((_Atomic(u16) *)m->ax, memory_order_relaxed);
+      atomic_compare_exchange_strong_explicit(
+          (_Atomic(u16) *)p, &ax,
+          atomic_load_explicit((_Atomic(u16) *)q, memory_order_relaxed),
+          memory_order_acq_rel, memory_order_acquire);
+      Sub16(m, Get16(m->ax), Little16(ax));
+      atomic_store_explicit((_Atomic(u16) *)m->ax, ax, memory_order_relaxed);
     } else {
-      Put16(m->ax, x);
+      u16 x = Load16(p);
+      Sub16(m, Get16(m->ax), x);
+      if ((didit = x == Get16(m->ax))) {
+        Store16(p, Get16(q));
+      } else {
+        Put16(m->ax, x);
+      }
     }
-    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
   }
 }

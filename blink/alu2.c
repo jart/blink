@@ -46,10 +46,10 @@ void OpAluw(P) {
   aluop_f f;
   q = RegRexrReg(m, rde);
   f = kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)];
-
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
-    if (LONG_BIT == 64 && Lock(rde) && !((intptr_t)p & 7)) {
+#if LONG_BIT == 64
+    if (Lock(rde) && !((intptr_t)p & 7)) {
       u64 x, y, z;
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
       y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);
@@ -59,13 +59,14 @@ void OpAluw(P) {
       } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x, z,
                                                       memory_order_release,
                                                       memory_order_relaxed));
-    } else {
-      u64 x, y, z;
-      x = Load64(p);
-      y = Get64(q);
-      z = f(m, x, y);
-      Store64(p, z);
+      return;
     }
+#endif
+    u64 x, y, z;
+    x = Load64(p);
+    y = Get64(q);
+    z = f(m, x, y);
+    Store64(p, z);
   } else if (!Osz(rde)) {
     u32 x, y, z;
     p = GetModrmRegisterWordPointerWrite4(A);
@@ -97,7 +98,6 @@ void OpAluw(P) {
     Store16(p, z);
     if (Lock(rde)) UNLOCK(&m->system->lock_lock);
   }
-
   if (m->path.jb && !Lock(rde)) {
     Jitter(A, "B r0s1= A r0a2= s1a1=");
     if (CanSkipFlags(m, CF | ZF | SF | OF | AF | PF)) {

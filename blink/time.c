@@ -24,16 +24,32 @@
 #include "blink/time.h"
 
 void OpPause(P) {
+#if defined(__GNUC__) && defined(__aarch64__)
+  __asm__ volatile("yield");
+#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+  __asm__ volatile("pause");
+#else
   sched_yield();
+#endif
 }
 
 void OpRdtsc(P) {
-  i64 c;
+  u64 c;
+#if defined(__GNUC__) && defined(__aarch64__)
+  __asm__ volatile("mrs %0, cntvct_el0" : "=r"(c));
+  c *= 48;  // the fudge factor
+#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+  u32 ax, dx;
+  __asm__ volatile("rdtsc" : "=a"(ax), "=d"(dx));
+  c = (u64)dx << 32 | ax;
+#else
   struct timespec ts;
   unassert(!clock_gettime(CLOCK_MONOTONIC, &ts));
   c = ts.tv_sec;
   c *= 1000000000;
   c += ts.tv_nsec;
+  c *= 3;  // the fudge factor
+#endif
   Put64(m->ax, (c & 0x00000000ffffffff) >> 000);
   Put64(m->dx, (c & 0xffffffff00000000) >> 040);
 }
