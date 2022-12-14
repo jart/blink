@@ -1428,6 +1428,74 @@ static void ZoomMemoryViews(struct Panel *p, int y, int x, int dy) {
   }
 }
 
+static void DrawMemoryZoomed(struct Panel *p, struct MemoryView *view,
+                             long histart, long hiend) {
+  bool high, changed;
+  u8 *canvas, *chunk, *invalid;
+  i64 a, b, c, d, n, i, j, k, size;
+  struct ContiguousMemoryRanges ranges;
+  a = view->start * DUMPWIDTH * (1ull << view->zoom);
+  b = (view->start + (p->bottom - p->top)) * DUMPWIDTH * (1ull << view->zoom);
+  size = (p->bottom - p->top) * DUMPWIDTH;
+  canvas = (u8 *)calloc(1, size);
+  invalid = (u8 *)calloc(1, size);
+  memset(&ranges, 0, sizeof(ranges));
+  FindContiguousMemoryRanges(m, &ranges);
+  for (k = i = 0; i < ranges.i; ++i) {
+    if ((a >= ranges.p[i].a && a < ranges.p[i].b) ||
+        (b >= ranges.p[i].a && b < ranges.p[i].b) ||
+        (a < ranges.p[i].a && b >= ranges.p[i].b)) {
+      c = MAX(a, ranges.p[i].a);
+      d = MIN(b, ranges.p[i].b);
+      n = ROUNDUP(d - c, 1ull << view->zoom);
+      chunk = (u8 *)malloc(n);
+      CopyFromUser(m, chunk, c, d - c);
+      memset(chunk + (d - c), 0, n - (d - c));
+      for (j = 0; j < view->zoom; ++j) {
+        Magikarp(chunk, n);
+        n >>= 1;
+      }
+      j = (c - a) / (1ull << view->zoom);
+      memset(invalid + k, -1, j - k);
+      memcpy(canvas + j, chunk, MIN(n, size - j));
+      k = j + MIN(n, size - j);
+      free(chunk);
+    }
+  }
+  memset(invalid + k, -1, size - k);
+  free(ranges.p);
+  high = false;
+  for (c = i = 0; i < p->bottom - p->top; ++i) {
+    AppendFmt(&p->lines[i], "%0*lx ", GetAddrHexWidth(),
+              ((view->start + i) * DUMPWIDTH * (1ull << view->zoom)) &
+                  0x0000ffffffffffff);
+    for (j = 0; j < DUMPWIDTH; ++j, ++c) {
+      a = ((view->start + i) * DUMPWIDTH + j + 0) * (1ull << view->zoom);
+      b = ((view->start + i) * DUMPWIDTH + j + 1) * (1ull << view->zoom);
+      changed = ((histart >= a && hiend < b) ||
+                 (histart && hiend && histart >= a && hiend < b));
+      if (changed && !high) {
+        high = true;
+        AppendStr(&p->lines[i], "\e[7m");
+      } else if (!changed && high) {
+        AppendStr(&p->lines[i], "\e[27m");
+        high = false;
+      }
+      if (invalid[c]) {
+        AppendWide(&p->lines[i], u'⋅');
+      } else {
+        AppendWide(&p->lines[i], kCp437[canvas[c]]);
+      }
+    }
+    if (high) {
+      AppendStr(&p->lines[i], "\e[27m");
+      high = false;
+    }
+  }
+  free(invalid);
+  free(canvas);
+}
+
 static void DrawMemoryUnzoomed(struct Panel *p, struct MemoryView *view,
                                i64 histart, i64 hiend) {
   int c, s, x, sc;
@@ -1492,7 +1560,11 @@ static void DrawMemoryUnzoomed(struct Panel *p, struct MemoryView *view,
 static void DrawMemory(struct Panel *p, struct MemoryView *view, i64 histart,
                        i64 hiend) {
   if (p->top == p->bottom) return;
-  DrawMemoryUnzoomed(p, view, histart, hiend);
+  if (view->zoom) {
+    DrawMemoryZoomed(p, view, histart, hiend);
+  } else {
+    DrawMemoryUnzoomed(p, view, histart, hiend);
+  }
 }
 
 static void DrawMaps(struct Panel *p) {
