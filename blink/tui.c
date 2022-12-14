@@ -3005,7 +3005,7 @@ static void Exec(void) {
   if (!(interrupt = setjmp(m->onhalt))) {
     m->canhalt = true;
     if (!(action & CONTINUE) &&
-        (bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
+        (bp = IsAtBreakpoint(&breakpoints, m->ip)) != -1) {
       LOGF("BREAK1 %0*" PRIx64 "", GetAddrHexWidth(), breakpoints.p[bp].addr);
     ReactToPoint:
       tuimode = true;
@@ -3028,7 +3028,7 @@ static void Exec(void) {
       action &= ~CONTINUE;
       for (;;) {
         LoadInstruction(m, GetPc(m));
-        if ((bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
+        if ((bp = IsAtBreakpoint(&breakpoints, m->ip)) != -1) {
           LOGF("BREAK2 %0*" PRIx64 "", GetAddrHexWidth(),
                breakpoints.p[bp].addr);
           action &= ~(FINISH | NEXT | CONTINUE);
@@ -3095,7 +3095,7 @@ static void Tui(void) {
       if (!(action & FAILURE)) {
         LoadInstruction(m, GetPc(m));
         if ((action & (FINISH | NEXT | CONTINUE)) &&
-            (bp = IsAtBreakpoint(&breakpoints, GetPc(m))) != -1) {
+            (bp = IsAtBreakpoint(&breakpoints, m->ip)) != -1) {
           action &= ~(FINISH | NEXT | CONTINUE);
           LOGF("BREAK %0*" PRIx64 "", GetAddrHexWidth(),
                breakpoints.p[bp].addr);
