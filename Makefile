@@ -40,6 +40,7 @@ check:	test				\
 check2:	o/$(MODE)/test/sse		\
 	o/$(MODE)/test/lib		\
 	o/$(MODE)/test/sys		\
+	o/$(MODE)/test/func		\
 	o/$(MODE)/test/asm		\
 	o/$(MODE)/test/asm/emulates
 
@@ -59,6 +60,7 @@ include build/rules.mk
 include blink/blink.mk
 include test/test.mk
 include test/asm/asm.mk
+include test/func/func.mk
 include test/flat/flat.mk
 include test/blink/test.mk
 include third_party/gcc/gcc.mk

@@ -37,9 +37,9 @@ o/$(MODE)/test/asm/%.com:						\
 		o/$(MODE)/blink/blink
 	@mkdir -p $(@D)
 	@echo "#!/bin/sh" >$@
-	@echo "echo testing $(VM) $<" >>$@
+	@echo "echo testing $(VM) $< >&2" >>$@
 	@echo "$(VM) $< || exit" >>$@
-	@echo "echo testing o/$(MODE)/blink/blink $<" >>$@
+	@echo "echo testing o/$(MODE)/blink/blink $< >&2" >>$@
 	@echo "o/$(MODE)/blink/blink $< || exit" >>$@
 	@chmod +x $@
 

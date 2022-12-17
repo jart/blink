@@ -281,6 +281,35 @@
 #define SCHED_IDLE_LINUX     5
 #define SCHED_DEADLINE_LINUX 6
 
+#define MSG_OOB_LINUX          0x00000001  // send, recv [portable]
+#define MSG_PEEK_LINUX         0x00000002  // recv       [portable]
+#define MSG_DONTROUTE_LINUX    0x00000004  // send       [portable]
+#define MSG_TRUNC_LINUX        0x00000020  // recv       [portable]
+#define MSG_DONTWAIT_LINUX     0x00000040  // send, recv [portable]
+#define MSG_EOR_LINUX          0x00000080  // send       [portable]
+#define MSG_WAITALL_LINUX      0x00000100  // recv       [portable]
+#define MSG_NOSIGNAL_LINUX     0x00004000  // send       [portable]
+#define MSG_CMSG_CLOEXEC_LINUX 0x40000000  // recv
+#define MSG_CONFIRM_LINUX      0x00000800  // send
+#define MSG_ERRQUEUE_LINUX     0x00002000  // recv
+#define MSG_MORE_LINUX         0x00008000  // send
+
+#define MSG_FASTOPEN_LINUX     0x20000000
+#define MSG_CTRUNC_LINUX       8
+#define MSG_NOERROR_LINUX      0x1000
+#define MSG_WAITFORONE_LINUX   0x010000
+#define MSG_BATCH_LINUX        0x040000
+#define MSG_EXCEPT_LINUX       0x2000
+#define MSG_FIN_LINUX          0x0200
+#define MSG_EOF_LINUX          0x0200
+#define MSG_INFO_LINUX         12
+#define MSG_PARITY_ERROR_LINUX 9
+#define MSG_PROXY_LINUX        0x10
+#define MSG_RST_LINUX          0x1000
+#define MSG_STAT_LINUX         11
+#define MSG_SYN_LINUX          0x0400
+#define MSG_NOTIFICATION_LINUX 0x8000
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];
@@ -331,11 +360,24 @@ struct termios_linux {
   u8 c_ospeed[4];
 };
 
+struct sockaddr_un_linux {
+  u8 sun_family[2];
+  char sun_path[108];
+};
+
 struct sockaddr_in_linux {
   u8 sin_family[2];
   u16 sin_port;
   u32 sin_addr;
   u8 sin_zero[8];
+};
+
+struct sockaddr_in6_linux {
+  u8 sin6_family[2];
+  u8 sin6_port[2];
+  u8 sin6_flowinfo[4];
+  u8 sin6_addr[16];
+  u8 sin6_scope_id[4];
 };
 
 struct stat_linux {

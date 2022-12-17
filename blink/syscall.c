@@ -678,6 +678,20 @@ void DropFd(struct Machine *m, struct Fd *fd) {
   UnlockFds(&m->system->fds);
 }
 
+static int SysUname(struct Machine *m, i64 utsaddr) {
+  struct utsname_linux uts = {
+      .sysname = "blink",
+      .nodename = "blink.local",
+      .release = "4.0",        // or glibc whines
+      .version = "blink 4.0",  // or glibc whines
+      .machine = "x86_64",
+  };
+  strcpy(uts.sysname, "unknown");
+  strcpy(uts.sysname, "unknown");
+  CopyToUser(m, utsaddr, &uts, sizeof(uts));
+  return 0;
+}
+
 static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
   struct Fd *fd;
   int flags, fildes, systemfd;
@@ -706,41 +720,57 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
   return fildes;
 }
 
+static u32 LoadAddrSize(struct Machine *m, i64 asa) {
+  u8 buf[4];
+  if (!asa) return 0;
+  CopyFromUserRead(m, buf, asa, sizeof(buf));
+  return Read32(buf);
+}
+
+static void StoreAddrSize(struct Machine *m, i64 asa, socklen_t len) {
+  u8 buf[4];
+  if (!asa) return;
+  Write32(buf, len);
+  CopyToUserWrite(m, asa, buf, sizeof(buf));
+}
+
+// TODO(jart): Support AF_UNIX and AF_INET6
+
+static int LoadSockaddr(struct Machine *m, i64 aa, u32 as,
+                        struct sockaddr_in *addr) {
+  struct sockaddr_in_linux gaddr;
+  if (as != sizeof(gaddr)) {
+    LOGF("sockaddr size param isn't sizeof(sockaddr_in)");
+    return einval();
+  }
+  CopyFromUserRead(m, &gaddr, aa, sizeof(gaddr));
+  if (XlatSockaddrToHost(addr, &gaddr) == -1) return -1;
+  return 0;
+}
+
+static void StoreSockaddr(struct Machine *m, i64 aa, u32 as, i64 asa,
+                          struct sockaddr_in *addr) {
+  struct sockaddr_in_linux gaddr;
+  if (!aa) return;
+  XlatSockaddrToLinux(&gaddr, addr);
+  StoreAddrSize(m, asa, sizeof(struct sockaddr_in_linux));
+  CopyToUserWrite(m, aa, &gaddr, MIN(as, sizeof(gaddr)));
+}
+
 static int SysSocketName(struct Machine *m, i32 fildes, i64 aa, i64 asa,
                          int SocketName(int, struct sockaddr *, socklen_t *)) {
   int rc;
-  u32 addrsize;
+  u32 as;
   struct Fd *fd;
-  u8 gaddrsize[4];
+  socklen_t addrlen;
   struct sockaddr_in addr;
-  struct sockaddr_in_linux gaddr;
-  CopyFromUserRead(m, gaddrsize, asa, sizeof(gaddrsize));
-  if (Read32(gaddrsize) < sizeof(gaddr)) return einval();
+  as = LoadAddrSize(m, asa);
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
-  addrsize = sizeof(addr);
-  rc = SocketName(fd->systemfd, (struct sockaddr *)&addr, &addrsize);
-  if (rc != -1) {
-    Write32(gaddrsize, sizeof(gaddr));
-    XlatSockaddrToLinux(&gaddr, &addr);
-    CopyToUser(m, asa, gaddrsize, sizeof(gaddrsize));
-    CopyToUserWrite(m, aa, &gaddr, sizeof(gaddr));
-  }
+  addrlen = sizeof(addr);
+  rc = SocketName(fd->systemfd, (struct sockaddr *)&addr, &addrlen);
+  if (rc != -1) StoreSockaddr(m, aa, as, asa, &addr);
   UnlockFd(fd);
   return rc;
-}
-
-static int SysUname(struct Machine *m, i64 utsaddr) {
-  struct utsname_linux uts = {
-      .sysname = "blink",
-      .nodename = "blink.local",
-      .release = "4.0",        // or glibc whines
-      .version = "blink 4.0",  // or glibc whines
-      .machine = "x86_64",
-  };
-  strcpy(uts.sysname, "unknown");
-  strcpy(uts.sysname, "unknown");
-  CopyToUser(m, utsaddr, &uts, sizeof(uts));
-  return 0;
 }
 
 static int SysGetsockname(struct Machine *m, int fd, i64 aa, i64 asa) {
@@ -753,18 +783,14 @@ static int SysGetpeername(struct Machine *m, int fd, i64 aa, i64 asa) {
 
 static int SysAccept4(struct Machine *m, i32 fildes, i64 aa, i64 asa,
                       i32 flags) {
-  u32 addrsize;
+  u32 as;
   int systemfd;
-  u8 gaddrsize[4];
+  socklen_t len;
   struct Fd *fd1, *fd2;
   struct sockaddr_in addr;
-  struct sockaddr_in_linux gaddr;
   if (m->system->redraw) m->system->redraw();
   if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
-  if (aa) {
-    CopyFromUserRead(m, gaddrsize, asa, sizeof(gaddrsize));
-    if (Read32(gaddrsize) < sizeof(gaddr)) return einval();
-  }
+  as = LoadAddrSize(m, asa);
   LockFds(&m->system->fds);
   if ((fd1 = GetFd(&m->system->fds, fildes))) {
     LockFd(fd1);
@@ -776,17 +802,12 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 aa, i64 asa,
   }
   UnlockFds(&m->system->fds);
   if (fd1 && fd2) {
-    addrsize = sizeof(addr);
+    len = sizeof(addr);
     systemfd = atomic_load_explicit(&fd1->systemfd, memory_order_relaxed);
-    systemfd = accept(systemfd, (struct sockaddr *)&addr, &addrsize);
+    systemfd = accept(systemfd, (struct sockaddr *)&addr, &len);
     if (systemfd != -1) {
       FixupSock(systemfd, flags);
-      if (aa) {
-        Write32(gaddrsize, sizeof(gaddr));
-        XlatSockaddrToLinux(&gaddr, &addr);
-        CopyToUser(m, asa, gaddrsize, sizeof(gaddrsize));
-        CopyToUserWrite(m, aa, &gaddr, sizeof(gaddr));
-      }
+      StoreSockaddr(m, aa, as, asa, &addr);
       fildes = fd2->fildes;
       atomic_store_explicit(&fd2->systemfd, systemfd, memory_order_release);
     } else {
@@ -800,15 +821,121 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 aa, i64 asa,
   return fildes;
 }
 
+static int XlatSendFlags(int flags) {
+  int supported, hostflags;
+  supported = MSG_OOB_LINUX |        //
+              MSG_DONTROUTE_LINUX |  //
+              MSG_DONTWAIT_LINUX |   //
+              MSG_EOR_LINUX |        //
+              MSG_NOSIGNAL_LINUX;
+  if (flags & ~supported) {
+    LOGF("unsupported %s flags %#x", "send", flags & ~supported);
+    return einval();
+  }
+  hostflags = 0;
+  if (flags & MSG_OOB_LINUX) hostflags |= MSG_OOB;
+  if (flags & MSG_DONTROUTE_LINUX) hostflags |= MSG_DONTROUTE;
+  if (flags & MSG_DONTWAIT_LINUX) hostflags |= MSG_DONTWAIT;
+  if (flags & MSG_EOR_LINUX) hostflags |= MSG_EOR;
+  if (flags & MSG_NOSIGNAL_LINUX) hostflags |= MSG_NOSIGNAL;
+  return hostflags;
+}
+
+static int XlatRecvFlags(int flags) {
+  int supported, hostflags;
+  supported = MSG_OOB_LINUX |      //
+              MSG_PEEK_LINUX |     //
+              MSG_TRUNC_LINUX |    //
+              MSG_WAITALL_LINUX |  //
+              MSG_DONTWAIT_LINUX;
+  if (flags & ~supported) {
+    LOGF("unsupported %s flags %#x", "recv", flags & ~supported);
+    return einval();
+  }
+  hostflags = 0;
+  if (flags & MSG_OOB_LINUX) hostflags |= MSG_OOB;
+  if (flags & MSG_PEEK_LINUX) hostflags |= MSG_PEEK;
+  if (flags & MSG_TRUNC_LINUX) hostflags |= MSG_TRUNC;
+  if (flags & MSG_WAITALL_LINUX) hostflags |= MSG_WAITALL;
+  if (flags & MSG_DONTWAIT_LINUX) hostflags |= MSG_DONTWAIT;
+  return hostflags;
+}
+
+static i64 SysSendto(struct Machine *m,  //
+                     i32 fildes,         //
+                     i64 bufaddr,        //
+                     u64 buflen,         //
+                     i32 flags,          //
+                     i64 aa,             //
+                     u32 as) {
+  i64 rc;
+  void *buf;
+  struct Fd *fd;
+  int hostflags;
+  socklen_t addrlen;
+  struct sockaddr *addrp;
+  struct sockaddr_in addr;
+  if ((hostflags = XlatSendFlags(flags)) == -1) return -1;
+  if (aa) {
+    if (LoadSockaddr(m, aa, as, &addr) == -1) return -1;
+    addrlen = sizeof(addr);
+    addrp = (struct sockaddr *)&addr;
+  } else {
+    addrlen = 0;
+    addrp = 0;
+  }
+  if (!(buf = malloc(buflen))) return -1;
+  CopyFromUserRead(m, buf, bufaddr, buflen);
+  if (!(fd = GetAndLockFd(m, fildes))) {
+    free(buf);
+    return -1;
+  }
+  rc = sendto(atomic_load_explicit(&fd->systemfd, memory_order_relaxed), buf,
+              buflen, hostflags, addrp, addrlen);
+  UnlockFd(fd);
+  free(buf);
+  return rc;
+}
+
+static i64 SysRecvfrom(struct Machine *m,  //
+                       i32 fildes,         //
+                       i64 bufaddr,        //
+                       u64 buflen,         //
+                       i32 flags,          //
+                       i64 aa,             //
+                       u32 asa) {
+  i64 rc;
+  u32 as;
+  void *buf;
+  struct Fd *fd;
+  int hostflags;
+  socklen_t len;
+  struct sockaddr_in addr;
+  as = LoadAddrSize(m, asa);
+  if ((hostflags = XlatRecvFlags(flags)) == -1) return -1;
+  if (!(buf = malloc(buflen))) return -1;
+  if (!(fd = GetAndLockFd(m, fildes))) {
+    free(buf);
+    return -1;
+  }
+  len = sizeof(addr);
+  rc = recvfrom(atomic_load_explicit(&fd->systemfd, memory_order_relaxed), buf,
+                buflen, hostflags, (struct sockaddr *)&addr, &len);
+  if (rc != -1) {
+    StoreSockaddr(m, aa, as, asa, &addr);
+    CopyToUserWrite(m, bufaddr, buf, rc);
+  }
+  UnlockFd(fd);
+  free(buf);
+  return rc;
+}
+
 static int SysConnectBind(struct Machine *m, i32 fildes, i64 aa, u32 as,
                           int impl(int, const struct sockaddr *, u32)) {
   int rc;
   struct Fd *fd;
   struct sockaddr_in addr;
-  struct sockaddr_in_linux gaddr;
-  if (as != sizeof(gaddr)) return einval();
-  CopyFromUserRead(m, &gaddr, aa, sizeof(gaddr));
-  if (XlatSockaddrToHost(&addr, &gaddr) == -1) return -1;
+  if (LoadSockaddr(m, aa, as, &addr) == -1) return -1;
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
   rc = impl(fd->systemfd, (const struct sockaddr *)&addr, sizeof(addr));
   UnlockFd(fd);
@@ -2130,7 +2257,9 @@ void OpSyscall(P) {
     SYSCALL(0x0BA, SysGettid, (m));
     SYSCALL(0x029, SysSocket, (m, di, si, dx));
     SYSCALL(0x02A, SysConnect, (m, di, si, dx));
-    SYSCALL(0x02B, SysAccept, (m, di, di, dx));
+    SYSCALL(0x02B, SysAccept, (m, di, si, dx));
+    SYSCALL(0x02C, SysSendto, (m, di, si, dx, r0, r8, r9));
+    SYSCALL(0x02D, SysRecvfrom, (m, di, si, dx, r0, r8, r9));
     SYSCALL(0x030, SysShutdown, (m, di, si));
     SYSCALL(0x031, SysBind, (m, di, si, dx));
     SYSCALL(0x032, SysListen, (m, di, si));

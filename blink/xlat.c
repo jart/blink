@@ -613,15 +613,12 @@ int UnXlatOpenFlags(int x) {
 int XlatSockaddrToHost(struct sockaddr_in *dst,
                        const struct sockaddr_in_linux *src) {
   int family;
-  if ((family = XlatSocketFamily(Read16(src->sin_family))) != -1) {
-    memset(dst, 0, sizeof(*dst));
-    dst->sin_family = family;
-    dst->sin_port = src->sin_port;
-    dst->sin_addr.s_addr = src->sin_addr;
-    return 0;
-  } else {
-    return -1;
-  }
+  if ((family = XlatSocketFamily(Read16(src->sin_family))) == -1) return -1;
+  memset(dst, 0, sizeof(*dst));
+  dst->sin_family = family;
+  dst->sin_port = src->sin_port;
+  dst->sin_addr.s_addr = src->sin_addr;
+  return 0;
 }
 
 void XlatSockaddrToLinux(struct sockaddr_in_linux *dst,

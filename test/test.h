@@ -1,6 +1,7 @@
 #ifndef TEST_TEST_H_
 #define TEST_TEST_H_
 #include <ctype.h>
+#include <errno.h>
 #include <inttypes.h>
 #include <math.h>
 #include <stdarg.h>
@@ -9,6 +10,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define TEST(GROUP, NAME)                                             \
   void GROUP##_##NAME(void);                                          \
@@ -109,6 +112,28 @@
     }                                                                       \
   } while (0)
 
+#define SPAWN(METHOD)                     \
+  {                                       \
+    int child, _failed = g_testing.fails; \
+    ASSERT_NE(-1, (child = METHOD()));    \
+    if (!child) {
+
+#define EXITS(CODE) \
+  PARENT()          \
+  WAIT(Exit, CODE)
+
+#define TERMS(SIG) \
+  PARENT()         \
+  WAIT(Term, SIG)
+
+#define PARENT()                                      \
+  _Exit(MAX(0, MIN(255, g_testing.fails - _failed))); \
+  }
+
+#define WAIT(KIND, CODE)                                 \
+  WaitFor##KIND(__FILE__, __LINE__, #CODE, CODE, child); \
+  }
+
 struct Test {
   struct Test *next;
   void (*func)(void);
@@ -122,7 +147,7 @@ struct Tests {
 struct Garbage {
   struct Garbage *next;
   void *ptr;
-} *g_garbage;
+} * g_garbage;
 
 void SetUp(void);
 void TearDown(void);
@@ -160,14 +185,16 @@ static void AssertionInt64(bool pred(int64_t, int64_t), bool isfatal,
                            ...) {
   va_list va;
   if (!pred(want, got)) {
+    int err = errno;
     fprintf(stderr, "error:%s:%d: %s() %s failed:", file, line, func, test);
     va_start(va, fmt);
     vfprintf(stderr, fmt, va);
     va_end(va);
     fprintf(stderr,
             "\n\twant %" PRId64 " (%#" PRIx64 ") %s\n"
-            "\tgot  %" PRId64 " (%#" PRIx64 ") %s\n",
-            want, want, wantstr, got, got, gotstr);
+            "\tgot  %" PRId64 " (%#" PRIx64 ") %s\n"
+            "\terrno = %d (%s)\n",
+            want, want, wantstr, got, got, gotstr, err, strerror(err));
     if (isfatal) {
       exit(1);
     } else {
@@ -264,6 +291,94 @@ static bool AssertLt(int64_t want, int64_t got) {
 
 static bool AssertGt(int64_t want, int64_t got) {
   return want > got;
+}
+
+static void WaitForExit(const char *file, int line, const char *code, int rc,
+                        int pid) {
+  int ws;
+  char host[64];
+  ASSERT_NE(-1, wait(&ws));
+  if (WIFEXITED(ws)) {
+    if (WEXITSTATUS(ws) == rc) {
+      return;
+    }
+    fprintf(stderr,
+            "%s:%d: test failed\n"
+            "\tEXITS(%s)\n"
+            "\t  want WEXITSTATUS(%d)\n"
+            "\t   got WEXITSTATUS(%d)\n",
+            file, line, code, rc, WEXITSTATUS(ws));
+  } else if (WIFSIGNALED(ws)) {
+    fprintf(stderr,
+            "%s:%d: test failed\n"
+            "\tEXITS(%s)\n"
+            "\t  want _Exit(%d)\n"
+            "\t   got WTERMSIG(%s)\n",
+            file, line, code, rc, strsignal(WTERMSIG(ws)));
+  } else if (WIFSTOPPED(ws)) {
+    fprintf(stderr,
+            "%s:%d: test failed\n"
+            "\tEXITS(%s)\n"
+            "\t  want _Exit(%d)\n"
+            "\t   got WSTOPSIG(%s)\n",
+            file, line, code, rc, strsignal(WSTOPSIG(ws)));
+  } else {
+    fprintf(stderr,
+            "%s:%d: test failed\n"
+            "\tEXITS(%s)\n"
+            "\t  want _Exit(%d)\n"
+            "\t   got ws=%#x\n",
+            file, line, code, rc, ws);
+  }
+  if (gethostname(host, sizeof(host))) {
+    strcpy(host, "unknown");
+  }
+  fprintf(stderr, "\t%s\n", host);
+  exit(1);
+}
+
+static void WaitForTerm(const char *file, int line, const char *code, int sig,
+                        int pid) {
+  int ws;
+  char host[64];
+  ASSERT_NE(-1, waitpid(pid, &ws, 0));
+  if (WIFSIGNALED(ws)) {
+    if (WTERMSIG(ws) == sig) {
+      return;
+    }
+    fprintf(stderr,
+            "%s:%d: test failed\n"
+            "\tTERMS(%s)\n"
+            "\t  want WTERMSIG(%s)\n"
+            "\t   got WTERMSIG(%s)\n",
+            file, line, code, strsignal(sig), strsignal(WTERMSIG(ws)));
+  } else if (WIFEXITED(ws)) {
+    fprintf(stderr,
+            "%s:%d: test failed\n"
+            "\tTERMS(%s)\n"
+            "\t  want WTERMSIG(%s)\n"
+            "\t   got _Exit(%d)\n",
+            file, line, code, strsignal(sig), WEXITSTATUS(ws));
+  } else if (WIFSTOPPED(ws)) {
+    fprintf(stderr,
+            "%s:%d: test failed\n"
+            "\tTERMS(%s)\n"
+            "\t  want WTERMSIG(%s)\n"
+            "\t   got WSTOPSIG(%s)\n",
+            file, line, code, strsignal(sig), strsignal(WSTOPSIG(ws)));
+  } else {
+    fprintf(stderr,
+            "%s:%d: test failed\n"
+            "\tTERMS(%s)\n"
+            "\t  want WTERMSIG(%s)\n"
+            "\t   got ws=%#x\n",
+            file, line, code, strsignal(sig), ws);
+  }
+  if (gethostname(host, sizeof(host))) {
+    strcpy(host, "unknown");
+  }
+  fprintf(stderr, "\t%s\n", host);
+  exit(1);
 }
 
 int main(int argc, char *argv[]) {
