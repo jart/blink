@@ -21,20 +21,19 @@
 
 #include "blink/assert.h"
 #include "blink/endian.h"
+#include "blink/lock.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 
 void OpXchgGbEb(P) {
-  u8 *q;
+  u8 *p, *q, x, y;
   q = ByteRexrReg(m, rde);
   if (!IsModrmRegister(rde)) {
     *q =
         atomic_exchange_explicit((atomic_uchar *)ComputeReserveAddressWrite1(A),
                                  *q, memory_order_acq_rel);
   } else {
-    u8 *p;
-    u8 x, y;
     p = ByteRexbRm(m, rde);
     x = Get8(q);
     y = Load8(p);
@@ -47,28 +46,39 @@ void OpXchgGvqpEvqp(P) {
   u8 *q = RegRexrReg(m, rde);
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
+#if LONG_BIT == 64
     if (!IsModrmRegister(rde) && !((intptr_t)p & 7)) {
       atomic_store_explicit(
-          (atomic_ulong *)q,
+          (_Atomic(u64) *)q,
           atomic_exchange_explicit(
-              (atomic_ulong *)p,
-              atomic_load_explicit((atomic_ulong *)q, memory_order_relaxed),
+              (_Atomic(u64) *)p,
+              atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed),
               memory_order_acq_rel),
           memory_order_relaxed);
+      return;
+    }
+#endif
+    u64 x, y;
+    if (IsModrmRegister(rde)) {
+      x = Get64(q);
+      y = Get64(p);
+      Put64(q, y);
+      Put64(p, x);
     } else {
-      u64 x, y;
-      x = Read64(q);
-      y = Load64(p);
-      Write64(q, y);
-      Store64(p, x);
+      LOCK(&m->system->lock_lock);
+      x = Get64(q);
+      y = Read64(p);
+      Put64(q, y);
+      Write64(p, x);
+      UNLOCK(&m->system->lock_lock);
     }
   } else if (!Osz(rde)) {
     if (!IsModrmRegister(rde) && !((intptr_t)p & 3)) {
       atomic_store_explicit(
-          (atomic_uint *)q,
+          (_Atomic(u32) *)q,
           atomic_exchange_explicit(
-              (atomic_uint *)p,
-              atomic_load_explicit((atomic_uint *)q, memory_order_relaxed),
+              (_Atomic(u32) *)p,
+              atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed),
               memory_order_acq_rel),
           memory_order_relaxed);
     } else {
