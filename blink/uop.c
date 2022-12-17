@@ -224,19 +224,19 @@ const aluop_f kJustBsu[8] = {
 MICRO_OP void FastPush(struct Machine *m, long rexbsrm) {
   u64 v, x = Get64(m->weg[rexbsrm]);
   Put64(m->sp, (v = Get64(m->sp) - 8));
-  Store64(ToHost(v), x);
+  Write64(ToHost(v), x);
 }
 
 MICRO_OP void FastPop(struct Machine *m, long rexbsrm) {
   u64 v = Get64(m->sp);
   Put64(m->sp, v + 8);
-  Put64(m->weg[rexbsrm], Load64(ToHost(v)));
+  Put64(m->weg[rexbsrm], Read64(ToHost(v)));
 }
 
 MICRO_OP void FastCall(struct Machine *m, u64 disp) {
   u64 v, x = m->ip + disp;
   Put64(m->sp, (v = Get64(m->sp) - 8));
-  Store64(ToHost(v), m->ip);
+  Write64(ToHost(v), m->ip);
   m->ip = x;
 }
 
