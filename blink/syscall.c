@@ -1907,38 +1907,7 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
 }
 
 static int SysKill(struct Machine *m, int pid, int sig) {
-  u64 sigbit;
-  struct Dll *e;
-  bool gotsome = false;
-  if (pid < 1) return einval();
-  if (!(1 <= sig && sig <= 64)) return einval();
-  if (pid != m->system->pid || sig == SIGKILL_LINUX) {
-    if ((sig = XlatSignal(sig)) == -1) return -1;
-    return kill(pid, sig);
-  }
-  // we're raising a signal
-  // always deliver signal to current thread if it's unblocked
-  sigbit = 1ull << (sig - 1);
-  if (~m->sigmask & sigbit) {
-    m->signals |= sigbit;
-  } else {
-    // otherwise look for any thread where it's unblocked
-    LOCK(&m->system->machines_lock);
-    for (e = dll_first(m->system->machines); e;
-         e = dll_next(m->system->machines, e)) {
-      if (~MACHINE_CONTAINER(e)->sigmask & sigbit) {
-        MACHINE_CONTAINER(e)->signals |= sigbit;
-        gotsome = true;
-        break;
-      }
-    }
-    UNLOCK(&m->system->machines_lock);
-    // otherwise just enqueue it in the current thread
-    if (!gotsome) {
-      m->signals |= sigbit;
-    }
-  }
-  return 0;
+  return kill(pid, XlatSignal(sig));
 }
 
 static bool IsValidThreadId(struct System *s, int tid) {
