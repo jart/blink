@@ -231,20 +231,12 @@ static int GetElfHeader(char ehdr[64], const char *prog, const char *image) {
 
 static void SetupDispatch(struct Machine *m) {
 #ifdef HAVE_JIT
-  size_t i, n;
+  size_t n;
   free(m->system->fun);
-  if (!IsJitDisabled(&m->system->jit) && (n = m->system->codesize)) {
-    if ((m->system->fun = (atomic_int *)calloc(n, sizeof(atomic_int)))) {
-      for (i = 0; i < n; ++i) {
-        atomic_store_explicit(m->system->fun + i,
-                              (u8 *)GeneralDispatch - IMAGE_END,
-                              memory_order_relaxed);
-      }
-    } else {
-      m->system->codestart = 0;
-      m->system->codesize = 0;
-    }
-  } else {
+  if (m->mode != XED_MODE_LONG ||        //
+      IsJitDisabled(&m->system->jit) ||  //
+      !(n = m->system->codesize) ||      //
+      !(m->system->fun = (atomic_int *)AllocateBig(n * sizeof(atomic_int)))) {
     m->system->codestart = 0;
     m->system->codesize = 0;
     m->system->fun = 0;

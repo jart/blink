@@ -86,14 +86,6 @@
 #define MACHINE_CONTAINER(e)  DLL_CONTAINER(struct Machine, elem, e)
 #define HOSTPAGE_CONTAINER(e) DLL_CONTAINER(struct HostPage, elem, e)
 
-#define HasHook(m, pc) (((u64)(pc)) - m->codestart < m->codesize)
-#define GetHook(m, pc)       \
-  ((nexgen32e_f)(IMAGE_END + \
-                 atomic_load_explicit(m->fun + (pc), memory_order_relaxed)))
-#define SetHook(m, pc, func)                                   \
-  atomic_store_explicit(m->fun + (pc), (u8 *)(func)-IMAGE_END, \
-                        memory_order_relaxed)
-
 #if defined(NOLINEAR) || defined(__SANITIZE_THREAD__)
 #define CanHaveLinearMemory() false
 #else
@@ -496,5 +488,12 @@ void OpXaddEbGb(P);
 void OpXaddEvqpGvqp(P);
 void OpXchgGbEb(P);
 void OpXchgGvqpEvqp(P);
+
+void *AllocateBig(size_t);
+void FreeBig(void *, size_t);
+
+bool HasHook(struct Machine *, u64);
+nexgen32e_f GetHook(struct Machine *, u64);
+void SetHook(struct Machine *, u64, nexgen32e_f);
 
 #endif /* BLINK_MACHINE_H_ */

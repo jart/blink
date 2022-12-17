@@ -2037,9 +2037,30 @@ nexgen32e_f GetOp(long op) {
 }
 
 static bool CanJit(struct Machine *m) {
-  if (IsJitDisabled(&m->system->jit)) return false;
-  if (m->mode != XED_MODE_LONG) return false;
-  return (u64)m->ip - m->codestart < m->codesize;
+  return !IsJitDisabled(&m->system->jit) && HasHook(m, m->ip);
+}
+
+bool HasHook(struct Machine *m, u64 pc) {
+  return pc - m->codestart < m->codesize;
+}
+
+nexgen32e_f GetHook(struct Machine *m, u64 pc) {
+  int off = atomic_load_explicit(m->fun + (uintptr_t)pc, memory_order_relaxed);
+  return off ? (nexgen32e_f)(IMAGE_END + off) : GeneralDispatch;
+}
+
+void SetHook(struct Machine *m, u64 pc, nexgen32e_f func) {
+  u8 *f;
+  int off;
+  if (func) {
+    f = (u8 *)func;
+    unassert(f - IMAGE_END);
+    unassert(INT_MIN <= f - IMAGE_END && f - IMAGE_END <= INT_MAX);
+    off = f - IMAGE_END;
+  } else {
+    off = 0;
+  }
+  atomic_store_explicit(m->fun + pc, off, memory_order_relaxed);
 }
 
 void JitlessDispatch(P) {

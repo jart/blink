@@ -256,15 +256,8 @@ int DestroyJit(struct Jit *jit) {
  * Disables Just-In-Time threader.
  */
 int DisableJit(struct Jit *jit) {
-  atomic_store_explicit(&jit->disabled, true, memory_order_release);
+  atomic_store_explicit(&jit->disabled, true, memory_order_relaxed);
   return 0;
-}
-
-/**
- * Returns true if DisableJit() was called or AcquireJit() had failed.
- */
-bool IsJitDisabled(const struct Jit *jit) {
-  return atomic_load_explicit(&jit->disabled, memory_order_acquire);
 }
 
 static struct JitBlock *AcquireJit(struct Jit *jit) {
@@ -352,25 +345,6 @@ static struct JitBlock *AcquireJit(struct Jit *jit) {
     }
   }
   return jb;
-}
-
-/**
- * Returns number of bytes of space remaining in JIT memory block.
- *
- * @return number of bytes of space that can be appended into, or -1 if
- *     if an append operation previously failed due to lack of space
- */
-long GetJitRemaining(const struct JitBlock *jb) {
-  return jb->blocksize - jb->index;
-}
-
-/**
- * Returns current program counter or instruction pointer of JIT block.
- *
- * @return absolute instruction pointer memory address in bytes
- */
-intptr_t GetJitPc(const struct JitBlock *jb) {
-  return (intptr_t)jb->addr + jb->index;
 }
 
 /**
@@ -818,16 +792,10 @@ bool AppendJitTrap(struct JitBlock *jb) {
 
 #else
 // clang-format off
-#define STUB(RETURN, NAME, PARAMS, RESULT) \
-  RETURN NAME PARAMS {                     \
-    return RESULT;                         \
-  }
+#define STUB(RETURN, NAME, PARAMS, RESULT) RETURN NAME PARAMS { return RESULT; }
 STUB(int, InitJit, (struct Jit *jit), 0)
 STUB(int, DestroyJit, (struct Jit *jit), 0)
 STUB(int, DisableJit, (struct Jit *jit), 0)
-STUB(bool, IsJitDisabled, (const struct Jit *jit), 1)
-STUB(intptr_t, GetJitPc, (const struct JitBlock *jb), 0)
-STUB(long, GetJitRemaining, (const struct JitBlock *jb), 0)
 STUB(bool, AppendJit, (struct JitBlock *jb, const void *data, long size), 0)
 STUB(bool, AppendJitMovReg, (struct JitBlock *jb, int dst, int src), 0)
 STUB(int, AbandonJit, (struct Jit *jit, struct JitBlock *jb), 0)

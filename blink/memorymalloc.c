@@ -52,15 +52,17 @@ static void ClearPage(void *p) {
 }
 
 static size_t GetBigSize(size_t n) {
+  unassert(n);
   long z = GetSystemPageSize();
   return ROUNDUP(n, z);
 }
 
-static void FreeBig(void *p, size_t n) {
+void FreeBig(void *p, size_t n) {
+  if (!p) return;
   unassert(!munmap(p, GetBigSize(n)));
 }
 
-static void *AllocateBig(size_t n) {
+void *AllocateBig(size_t n) {
   void *p;
   u8 *brk;
   if (!(brk = atomic_load_explicit(&g_allocator.brk, memory_order_relaxed))) {
@@ -166,7 +168,7 @@ void FreeSystem(struct System *s) {
   unassert(!pthread_mutex_destroy(&s->sig_lock));
   DestroyFds(&s->fds);
   DestroyJit(&s->jit);
-  free(s->fun);
+  FreeBig(s->fun, s->codesize * sizeof(atomic_int));
   FreeBig(s, sizeof(struct System));
 }
 

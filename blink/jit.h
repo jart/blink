@@ -2,6 +2,7 @@
 #define BLINK_JIT_H_
 #include <inttypes.h>
 #include <pthread.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 
 #include "blink/builtin.h"
@@ -114,8 +115,8 @@ struct JitBlock {
 
 struct Jit {
   int pagesize;
-  _Atomic(int) disabled;
   _Atomic(int) blocksize;
+  _Atomic(bool) disabled;
   pthread_mutex_t lock;
   struct Dll *blocks;
 };
@@ -129,9 +130,6 @@ int DestroyJit(struct Jit *);
 int DisableJit(struct Jit *);
 size_t GetSizeOfJitPrologue(void) pureconst;
 bool CanJitForImmediateEffect(void) nosideeffect;
-bool IsJitDisabled(const struct Jit *) nosideeffect;
-intptr_t GetJitPc(const struct JitBlock *) nosideeffect;
-long GetJitRemaining(const struct JitBlock *) nosideeffect;
 bool AppendJit(struct JitBlock *, const void *, long);
 int AbandonJit(struct Jit *, struct JitBlock *);
 int FlushJit(struct Jit *);
@@ -147,5 +145,31 @@ bool SpliceJit(struct Jit *, struct JitBlock *, hook_t *, intptr_t, intptr_t);
 
 int CommitJit_(struct Jit *, struct JitBlock *);
 void ReinsertJitBlock_(struct Jit *, struct JitBlock *);
+
+/**
+ * Returns true if DisableJit() was called or AcquireJit() had failed.
+ */
+static inline bool IsJitDisabled(const struct Jit *jit) {
+  return atomic_load_explicit(&jit->disabled, memory_order_relaxed);
+}
+
+/**
+ * Returns number of bytes of space remaining in JIT memory block.
+ *
+ * @return number of bytes of space that can be appended into, or -1 if
+ *     if an append operation previously failed due to lack of space
+ */
+static inline long GetJitRemaining(const struct JitBlock *jb) {
+  return jb->blocksize - jb->index;
+}
+
+/**
+ * Returns current program counter or instruction pointer of JIT block.
+ *
+ * @return absolute instruction pointer memory address in bytes
+ */
+static inline intptr_t GetJitPc(const struct JitBlock *jb) {
+  return (intptr_t)jb->addr + jb->index;
+}
 
 #endif /* BLINK_JIT_H_ */
