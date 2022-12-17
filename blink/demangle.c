@@ -180,7 +180,7 @@ static char *DemangleCxxFilt(char *p, size_t pn, const char *s, size_t sn) {
   ssize_t rc;
   size_t got;
   struct iovec iov[2];
-  static char buf[512];
+  static char buf[1024];
   buf[0] = '\n';
   iov[0].iov_base = (void *)s;
   iov[0].iov_len = sn;

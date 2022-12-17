@@ -65,8 +65,7 @@ i64 Not64(struct Machine *m, u64 x, u64 y) {
 }
 
 static i64 AluFlags(struct Machine *m, u64 x, u32 af, u32 of, u32 cf, u32 sf) {
-  m->flags &= ~(1 << FLAGS_CF | 1 << FLAGS_ZF | 1 << FLAGS_SF | 1 << FLAGS_OF |
-                1 << FLAGS_AF | 0xFF000000u);
+  m->flags &= ~(CF | ZF | SF | OF | AF | 0xFF000000u);
   m->flags |= sf << FLAGS_SF | cf << FLAGS_CF | !x << FLAGS_ZF |
               of << FLAGS_OF | af << FLAGS_AF | (x & 0xFF) << 24;
   return x;
@@ -193,7 +192,7 @@ i64 Adc8(struct Machine *m, u64 x64, u64 y64) {
   u8 x, y, z, t;
   x = x64;
   y = y64;
-  t = x + GetFlag(m->flags, FLAGS_CF);
+  t = x + !!(m->flags & CF);
   z = t + y;
   cf = (t < x) | (z < y);
   of = ((z ^ x) & (z ^ y)) >> 7;
@@ -206,7 +205,7 @@ i64 Adc32(struct Machine *m, u64 x64, u64 y64) {
   u32 x, y, z, t;
   x = x64;
   y = y64;
-  t = x + GetFlag(m->flags, FLAGS_CF);
+  t = x + !!(m->flags & CF);
   z = t + y;
   cf = (t < x) | (z < y);
   of = ((z ^ x) & (z ^ y)) >> 31;
@@ -217,7 +216,7 @@ i64 Adc32(struct Machine *m, u64 x64, u64 y64) {
 i64 Adc64(struct Machine *m, u64 x, u64 y) {
   u64 z, t;
   bool cf, of, af;
-  t = x + GetFlag(m->flags, FLAGS_CF);
+  t = x + !!(m->flags & CF);
   z = t + y;
   cf = (t < x) | (z < y);
   of = ((z ^ x) & (z ^ y)) >> 63;
@@ -230,7 +229,7 @@ i64 Sbb8(struct Machine *m, u64 x64, u64 y64) {
   u8 x, y, z, t;
   x = x64;
   y = y64;
-  t = x - GetFlag(m->flags, FLAGS_CF);
+  t = x - !!(m->flags & CF);
   z = t - y;
   cf = (x < t) | (t < z);
   of = ((z ^ x) & (x ^ y)) >> 7;
@@ -243,7 +242,7 @@ i64 Sbb32(struct Machine *m, u64 x64, u64 y64) {
   u32 x, y, z, t;
   x = x64;
   y = y64;
-  t = x - GetFlag(m->flags, FLAGS_CF);
+  t = x - !!(m->flags & CF);
   z = t - y;
   cf = (x < t) | (t < z);
   of = ((z ^ x) & (x ^ y)) >> 31;
@@ -254,7 +253,7 @@ i64 Sbb32(struct Machine *m, u64 x64, u64 y64) {
 i64 Sbb64(struct Machine *m, u64 x, u64 y) {
   u64 z, t;
   bool cf, of, af;
-  t = x - GetFlag(m->flags, FLAGS_CF);
+  t = x - !!(m->flags & CF);
   z = t - y;
   cf = (x < t) | (t < z);
   of = ((z ^ x) & (x ^ y)) >> 63;
@@ -293,7 +292,7 @@ i64 Neg64(struct Machine *m, u64 x64, u64 y) {
 }
 
 static i64 BumpFlags(struct Machine *m, u64 x, u32 af, u32 of, u32 sf) {
-  return AluFlags(m, x, af, of, GetFlag(m->flags, FLAGS_CF), sf);
+  return AluFlags(m, x, af, of, !!(m->flags & CF), sf);
 }
 
 i64 Dec32(struct Machine *m, u64 x64, u64 y) {
@@ -461,7 +460,7 @@ i64 Sar64(struct Machine *m, u64 x, u64 y) {
 }
 
 static i64 RotateFlags(struct Machine *m, u64 x, u32 cf, u32 of) {
-  m->flags &= ~(1u << FLAGS_CF | 1u << FLAGS_OF);
+  m->flags &= ~(CF | OF);
   m->flags |= cf << FLAGS_CF | of << FLAGS_OF;
   return x;
 }
@@ -529,7 +528,7 @@ static i64 Rcr(struct Machine *m, u64 x, u64 y, u64 xm, u64 k) {
   u32 ct;
   x &= xm;
   if (y) {
-    cf = GetFlag(m->flags, FLAGS_CF);
+    cf = !!(m->flags & CF);
     ct = (x >> (y - 1)) & 1;
     if (y == 1) {
       x = (x >> 1 | cf << (k - 1)) & xm;
@@ -563,7 +562,7 @@ static i64 Rcl(struct Machine *m, u64 x, u64 y, u64 xm, u64 k) {
   u32 ct;
   x &= xm;
   if (y) {
-    cf = GetFlag(m->flags, FLAGS_CF);
+    cf = !!(m->flags & CF);
     ct = (x >> (k - y)) & 1;
     if (y == 1) {
       x = (x << 1 | cf) & xm;
@@ -665,7 +664,7 @@ i64 Adc16(struct Machine *m, u64 x64, u64 y64) {
   u16 x, y, z, t;
   x = x64;
   y = y64;
-  t = x + GetFlag(m->flags, FLAGS_CF);
+  t = x + !!(m->flags & CF);
   z = t + y;
   cf = (t < x) | (z < y);
   of = ((z ^ x) & (z ^ y)) >> 15;
@@ -678,7 +677,7 @@ i64 Sbb16(struct Machine *m, u64 x64, u64 y64) {
   u16 x, y, z, t;
   x = x64;
   y = y64;
-  t = x - GetFlag(m->flags, FLAGS_CF);
+  t = x - !!(m->flags & CF);
   z = t - y;
   cf = (x < t) | (t < z);
   of = ((z ^ x) & (x ^ y)) >> 15;

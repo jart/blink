@@ -351,9 +351,9 @@ struct Machine {                           //
   i64 ctid;                                //
   int tid;                                 //
   sigset_t spawn_sigmask;                  //
-  struct Dll elem GUARDED_BY(system->machines_lock);
-  struct OpCache opcache[1];
-};
+  struct Dll elem;                         //
+  struct OpCache opcache[1];               //
+};                                         //
 
 extern _Thread_local struct Machine *g_machine;
 

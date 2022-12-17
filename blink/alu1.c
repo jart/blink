@@ -29,9 +29,8 @@
 #include "blink/swap.h"
 
 static void AluEb(P, aluop_f op) {
-  u8 *p = GetModrmRegisterBytePointerWrite1(A);
-  if (Lock(rde) && !((intptr_t)p & 1)) {
-    u8 x, z;
+  u8 x, z, *p = GetModrmRegisterBytePointerWrite1(A);
+  if (Lock(rde)) {
     x = atomic_load_explicit((_Atomic(u8) *)p, memory_order_acquire);
     do {
       z = Little8(op(m, Little8(x), 0));
@@ -69,7 +68,8 @@ static void AluEvqp(P, const aluop_f ops[4]) {
   f = ops[RegLog2(rde)];
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
-    if (LONG_BIT == 64 && Lock(rde) && !((intptr_t)p & 7)) {
+#if LONG_BIT == 64
+    if (Lock(rde) && !((intptr_t)p & 7)) {
       u64 x, z;
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
       do {
@@ -77,9 +77,10 @@ static void AluEvqp(P, const aluop_f ops[4]) {
       } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x, z,
                                                       memory_order_release,
                                                       memory_order_relaxed));
-    } else {
-      Store64(p, f(m, Load64(p), 0));
+      return;
     }
+#endif
+    Store64(p, f(m, Load64(p), 0));
   } else if (!Osz(rde)) {
     u32 x, z;
     p = GetModrmRegisterWordPointerWrite4(A);
@@ -94,7 +95,7 @@ static void AluEvqp(P, const aluop_f ops[4]) {
       Store32(p, f(m, Load32(p), 0));
     }
     if (IsModrmRegister(rde)) {
-      Write32(p + 4, 0);
+      Put32(p + 4, 0);
     }
   } else {
     p = GetModrmRegisterWordPointerWrite2(A);
