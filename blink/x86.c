@@ -636,9 +636,9 @@ int DecodeInstruction(struct XedDecodedInst *x, const void *itext, size_t bytes,
   rde = x->op.rde;
   rde |= (Opcode(rde) & 7) << 12;            // srm
   rde ^= (Mode(rde) == XED_MODE_REAL) << 5;  // osz ^= real
-  rde |= kLog2[IsByteOp(rde)][Osz(rde)][Rexw(rde)] << 28;
+  rde |= (u32)kLog2[IsByteOp(rde)][Osz(rde)][Rexw(rde)] << 28;
   rde |= (u64)kLog2[0][Osz(rde)][Rexw(rde)] << 57;  // wordlog2
-  rde |= kXed.eamode[Asz(rde)][Mode(rde)] << 24;
+  rde |= (u32)kXed.eamode[Asz(rde)][Mode(rde)] << 24;
   rde |= (u64)x->length << 53;
   x->op.rde = rde;
   return rc;

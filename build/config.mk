@@ -31,6 +31,9 @@ LDLIBS +=				\
 
 LDFLAGS_STATIC =			\
 	-static				\
+	-fno-exceptions			\
+	-fno-unwind-tables		\
+	-fno-asynchronous-unwind-tables	\
 	-Wl,-z,norelro			\
 	-Wl,-z,max-page-size=4096	\
 	-Wl,-Ttext-segment=$(IMAGE_BASE_VIRTUAL)
@@ -135,7 +138,7 @@ endif
 
 ifeq ($(MODE), tiny)
 CPPFLAGS += -DNDEBUG -DTINY
-CFLAGS += -Os -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-pie
+CFLAGS += -Os -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-pie -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables
 LDFLAGS += -no-pie -Wl,--cref,-Map=$@.map
 endif
 
