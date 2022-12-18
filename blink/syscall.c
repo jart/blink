@@ -955,16 +955,17 @@ static int SysSetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   int rc;
   void *optval;
   struct Fd *fd;
+  int syslevel, sysoptname;
   if (optvalsize > 256) return einval();
-  if ((level = XlatSocketLevel(level)) == -1) return -1;
-  if ((optname = XlatSocketOptname(level, optname)) == -1) return -1;
+  if ((syslevel = XlatSocketLevel(level)) == -1) return -1;
+  if ((sysoptname = XlatSocketOptname(level, optname)) == -1) return -1;
   if (!(optval = calloc(1, optvalsize))) return -1;
   if (!(fd = GetAndLockFd(m, fildes))) {
     free(optval);
     return -1;
   }
   CopyFromUserRead(m, optval, optvaladdr, optvalsize);
-  rc = setsockopt(fd->systemfd, level, optname, optval, optvalsize);
+  rc = setsockopt(fd->systemfd, syslevel, sysoptname, optval, optvalsize);
   UnlockFd(fd);
   free(optval);
   return rc;
