@@ -98,7 +98,7 @@ void OpAluw(P) {
     Store16(p, z);
     if (Lock(rde)) UNLOCK(&m->system->lock_lock);
   }
-  if (m->path.jb && !Lock(rde)) {
+  if (IsMakingPath(m) && !Lock(rde)) {
     Jitter(A, "B r0s1= A r0a2= s1a1=");
     if (CanSkipFlags(m, CF | ZF | SF | OF | AF | PF)) {
       if (GetFlagDeps(rde)) Jitter(A, "s0a0=");

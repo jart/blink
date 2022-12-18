@@ -21,6 +21,7 @@
 
 #include "blink/address.h"
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/debug.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -28,6 +29,44 @@
 #include "blink/modrm.h"
 #include "blink/path.h"
 #include "blink/stats.h"
+
+#if defined(__x86_64__)
+static const u8 kEnter[] = {
+    0x55,                    // push %rbp
+    0x48, 0x89, 0345,        // mov  %rsp,%rbp
+    0x48, 0x83, 0354, 0x30,  // sub  $0x30,%rsp
+    0x48, 0x89, 0135, 0xd8,  // mov  %rbx,-0x28(%rbp)
+    0x4c, 0x89, 0145, 0xe0,  // mov  %r12,-0x20(%rbp)
+    0x4c, 0x89, 0155, 0xe8,  // mov  %r13,-0x18(%rbp)
+    0x4c, 0x89, 0165, 0xf0,  // mov  %r14,-0x10(%rbp)
+    0x4c, 0x89, 0175, 0xf8,  // mov  %r15,-0x08(%rbp)
+    0x48, 0x89, 0xfb,        // mov  %rdi,%rbx
+};
+static const u8 kLeave[] = {
+    0x4c, 0x8b, 0175, 0xf8,  // mov -0x08(%rbp),%r15
+    0x4c, 0x8b, 0165, 0xf0,  // mov -0x10(%rbp),%r14
+    0x4c, 0x8b, 0155, 0xe8,  // mov -0x18(%rbp),%r13
+    0x4c, 0x8b, 0145, 0xe0,  // mov -0x20(%rbp),%r12
+    0x48, 0x8b, 0135, 0xd8,  // mov -0x28(%rbp),%rbx
+    0x48, 0x83, 0304, 0x30,  // add $0x30,%rsp
+    0x5d,                    // pop %rbp
+};
+#elif defined(__aarch64__)
+static const u32 kEnter[] = {
+    0xa9bc7bfd,  // stp x29, x30, [sp, #-64]!
+    0x910003fd,  // mov x29, sp
+    0xa90153f3,  // stp x19, x20, [sp, #16]
+    0xa9025bf5,  // stp x21, x22, [sp, #32]
+    0xa90363f7,  // stp x23, x24, [sp, #48]
+    0xaa0003f3,  // mov x19, x0
+};
+static const u32 kLeave[] = {
+    0xa94153f3,  // ldp x19, x20, [sp, #16]
+    0xa9425bf5,  // ldp x21, x22, [sp, #32]
+    0xa94363f7,  // ldp x23, x24, [sp, #48]
+    0xa8c47bfd,  // ldp x29, x30, [sp], #64
+};
+#endif
 
 void (*AddPath_StartOp_Hook)(P);
 
@@ -46,7 +85,7 @@ static void DebugOp(struct Machine *m, i64 expected_ip) {
 static void StartOp(struct Machine *m, long len) {
   JIX_LOGF("%" PRIx64 "   <op>", GetPc(m));
   JIX_LOGF("%" PRIx64 "     %s", GetPc(m), DescribeOp(m, GetPc(m)));
-  unassert(!m->path.jb);
+  unassert(!IsMakingPath(m));
   m->oldip = m->ip;
   m->ip += len;
 }
@@ -64,17 +103,45 @@ static void EndPath(struct Machine *m) {
   JIX_LOGF("%" PRIx64 " </path>", GetPc(m));
 }
 
+long GetPrologueSize(void) {
+#ifdef HAVE_JIT
+  return sizeof(kEnter);
+#else
+  return 0;
+#endif
+}
+
+static void InitPaths(struct System *s) {
+#ifdef HAVE_JIT
+  struct JitBlock *jb;
+  if (!s->ender) {
+    unassert((jb = StartJit(&s->jit)));
+    s->ender = GetJitPc(jb);
+#if LOG_JIX
+    AppendJitMovReg(jb, kJitArg0, kJitSav0);
+    AppendJitCall(jb, (void *)EndPath);
+#endif
+    AppendJit(jb, kLeave, sizeof(kLeave));
+    AppendJitRet(jb);
+    unassert(FinishJit(&s->jit, jb, 0));
+  }
+#endif
+}
+
 bool CreatePath(P) {
+#ifdef HAVE_JIT
   i64 pc;
   bool res;
-  unassert(!m->path.jb);
+  unassert(!IsMakingPath(m));
+  InitPaths(m->system);
   if ((pc = GetPc(m))) {
     if ((m->path.jb = StartJit(&m->system->jit))) {
       JIT_LOGF("starting new path %" PRIxPTR " at %" PRIx64,
                GetJitPc(m->path.jb), pc);
+      AppendJit(m->path.jb, kEnter, sizeof(kEnter));
       Jitter(A, "s4i", pc);
 #if LOG_JIX
-      Jitter(A, "c s0a0=", StartPath);
+      Jitter(A, "s0a0= c s0a0=", StartPath);
 #endif
       m->path.start = pc;
       m->path.elements = 0;
@@ -88,20 +155,25 @@ bool CreatePath(P) {
     res = false;
   }
   return res;
+#else
+  return false;
+#endif
 }
 
-void CommitPath(P, intptr_t splice) {
-  unassert(m->path.jb);
-#if LOG_JIX
-  Jitter(A, "s0a0= c s0a0=", EndPath);
-#endif
+void CompletePath(P) {
+  unassert(IsMakingPath(m));
+  AppendJitJump(m->path.jb, (void *)m->system->ender);
+  FinishPath(m);
+}
+
+void FinishPath(struct Machine *m) {
+  unassert(IsMakingPath(m));
   STATISTIC(path_longest_bytes =
                 MAX(path_longest_bytes, m->path.jb->index - m->path.jb->start));
   STATISTIC(path_longest = MAX(path_longest, m->path.elements));
   STATISTIC(AVERAGE(path_average_elements, m->path.elements));
   STATISTIC(AVERAGE(path_average_bytes, m->path.jb->index - m->path.jb->start));
-  if (SpliceJit(&m->system->jit, m->path.jb, m->fun + m->path.start,
-                (intptr_t)JitlessDispatch, splice)) {
+  if (FinishJit(&m->system->jit, m->path.jb, m->fun + m->path.start)) {
     STATISTIC(++path_count);
     JIT_LOGF("staged path to %" PRIx64, m->path.start);
   } else {
@@ -112,7 +184,7 @@ void CommitPath(P, intptr_t splice) {
 }
 
 void AbandonPath(struct Machine *m) {
-  unassert(m->path.jb);
+  unassert(IsMakingPath(m));
   STATISTIC(++path_abandoned);
   AbandonJit(&m->system->jit, m->path.jb);
   m->path.jb = 0;
@@ -137,9 +209,9 @@ void AddPath_StartOp(P) {
   u8 ip = offsetof(struct Machine, ip);
   u8 oldip = offsetof(struct Machine, oldip);
   u8 code[] = {
-      0x4c, 0x89, 0177, oldip,  // mov %r15,16(%rdi)
+      0x4c, 0x89, 0177, oldip,  // mov %r15,8(%rdi)
       0x49, 0x83, 0307, len,    // add $len,%r15
-      0x4c, 0x89, 0177, ip,     // mov %r15,8(%rdi)
+      0x4c, 0x89, 0177, ip,     // mov %r15,(%rdi)
   };
   AppendJit(m->path.jb, code, sizeof(code));
   m->reserving = false;
@@ -168,7 +240,7 @@ void AddPath_EndOp(P) {
     u8 sa = offsetof(struct Machine, stashaddr);
     u8 code[] = {
         0x48, 0x83, 0177, sa, 0x00,  // cmpq $0x0,0x18(%rdi)
-        0x74, 0x05,                  // jnz +5
+        0x74, 0x05,                  // jz +5
     };
     AppendJit(m->path.jb, code, sizeof(code));
     AppendJitCall(m->path.jb, (void *)CommitStash);
@@ -190,7 +262,7 @@ void AddPath_EndOp(P) {
 }
 
 bool AddPath(P) {
-  unassert(m->path.jb);
+  unassert(IsMakingPath(m));
   AppendJitSetReg(m->path.jb, kJitArg[kArgRde], rde);
   AppendJitSetReg(m->path.jb, kJitArg[kArgDisp], disp);
   AppendJitSetReg(m->path.jb, kJitArg[kArgUimm0], uimm0);

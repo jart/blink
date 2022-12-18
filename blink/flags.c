@@ -59,18 +59,15 @@ u64 ExportFlags(u64 flags) {
 
 bool CanSkipFlags(struct Machine *m, int myflags) {
   int i;
-  u64 rde;
   i64 pc = GetPc(m);
   bool res = false;
   STATISTIC(++alu_ops);
   for (i = 0; i < 2; ++i) {
     LoadInstruction(m, pc);
-    rde = m->xedd->op.rde;
-    pc += Oplength(rde);
-    if (Mopcode(rde) > 0x144) break;
-    if (ClassifyOp(rde) != kOpNormal) break;
-    if (GetFlagDeps(rde) & myflags) break;
-    if (!(myflags &= ~GetFlagClobbers(rde))) {
+    pc += Oplength(m->xedd->op.rde);
+    if (ClassifyOp(m->xedd->op.rde) != kOpNormal) break;
+    if (GetFlagDeps(m->xedd->op.rde) & myflags) break;
+    if (!(myflags &= ~GetFlagClobbers(m->xedd->op.rde))) {
       STATISTIC(++alu_unflagged);
       res = true;
       break;

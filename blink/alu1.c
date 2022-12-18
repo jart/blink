@@ -111,7 +111,7 @@ static void AluEvqp(P, const aluop_f ops[4]) {
       Store16(p, f(m, Load16(p), 0));
     }
   }
-  if (m->path.jb && !Lock(rde)) {
+  if (IsMakingPath(m) && !Lock(rde)) {
     Jitter(A, "B r0a1= s0a0= c r0 D", f);
   }
 }

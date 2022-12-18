@@ -119,7 +119,7 @@ static void FreeMachineUnlocked(struct Machine *m) {
   if (g_machine == m) {
     g_machine = 0;
   }
-  if (m->path.jb) {
+  if (IsMakingPath(m)) {
     AbandonJit(&m->system->jit, m->path.jb);
   }
   CollectGarbage(m);

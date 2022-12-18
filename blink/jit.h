@@ -11,6 +11,7 @@
 
 #define kJitFit          800
 #define kJitAlign        16
+#define kJitJumpTries    8
 #define kJitMinBlockSize 65536
 
 #ifdef __x86_64__
@@ -93,8 +94,17 @@
 
 #define JITSTAGE_CONTAINER(e) DLL_CONTAINER(struct JitStage, elem, e)
 #define JITBLOCK_CONTAINER(e) DLL_CONTAINER(struct JitBlock, elem, e)
+#define JITJUMP_CONTAINER(e)  DLL_CONTAINER(struct JitJump, elem, e)
 
 typedef _Atomic(int) hook_t;
+
+struct JitJump {
+  hook_t *hook;
+  u8 *code;
+  int tries;
+  int addend;
+  struct Dll elem;
+};
 
 struct JitStage {
   int start;
@@ -109,8 +119,9 @@ struct JitBlock {
   int index;
   int committed;
   int blocksize;
-  struct Dll *staged;
   struct Dll elem;
+  struct Dll *jumps;
+  struct Dll *staged;
 };
 
 struct Jit {
@@ -119,6 +130,7 @@ struct Jit {
   _Atomic(bool) disabled;
   pthread_mutex_t lock;
   struct Dll *blocks;
+  struct Dll *jumps;
 };
 
 extern const u8 kJitRes[2];
@@ -128,20 +140,21 @@ extern const u8 kJitArg[6];
 int InitJit(struct Jit *);
 int DestroyJit(struct Jit *);
 int DisableJit(struct Jit *);
-size_t GetSizeOfJitPrologue(void) pureconst;
 bool CanJitForImmediateEffect(void) nosideeffect;
 bool AppendJit(struct JitBlock *, const void *, long);
 int AbandonJit(struct Jit *, struct JitBlock *);
 int FlushJit(struct Jit *);
 struct JitBlock *StartJit(struct Jit *);
+bool AlignJit(struct JitBlock *, int);
+bool AppendJitRet(struct JitBlock *);
 bool AppendJitNop(struct JitBlock *);
 bool AppendJitTrap(struct JitBlock *);
-bool AppendJitJmp(struct JitBlock *, void *);
+bool AppendJitJump(struct JitBlock *, void *);
 bool AppendJitCall(struct JitBlock *, void *);
 bool AppendJitSetReg(struct JitBlock *, int, u64);
 bool AppendJitMovReg(struct JitBlock *, int, int);
-bool FinishJit(struct Jit *, struct JitBlock *, hook_t *, intptr_t);
-bool SpliceJit(struct Jit *, struct JitBlock *, hook_t *, intptr_t, intptr_t);
+bool FinishJit(struct Jit *, struct JitBlock *, hook_t *);
+bool RecordJitJump(struct JitBlock *, hook_t *, int);
 
 int CommitJit_(struct Jit *, struct JitBlock *);
 void ReinsertJitBlock_(struct Jit *, struct JitBlock *);

@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/end.h"
 #include "blink/endian.h"
@@ -33,6 +34,7 @@
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/map.h"
+#include "blink/stats.h"
 #include "blink/tsan.h"
 #include "blink/util.h"
 
@@ -74,18 +76,20 @@
  *
  *     // workflow for composing two function calls
  *     long Add(long x, long y) { return x + y; }
- *     _Atomic(intptr_t) hook;
+ *     _Atomic(int) hook;
  *     struct JitBlock *jb;
  *     jb = StartJit(jit);
- *     AppendJitSetReg(jit, kJitArg0, 1);
- *     AppendJitSetReg(jit, kJitArg1, 2);
- *     AppendJitCall(jit, (void *)Add);
- *     AppendJitMovReg(jit, kJitRes0, kJitArg0);
- *     AppendJitSetReg(jit, kJitArg1, 3);
- *     AppendJitCall(jit, (void *)Add);
+ *     AppendJit(jb, kPrologue, sizeof(kPrologue));
+ *     AppendJitSetReg(jb, kJitArg0, 1);
+ *     AppendJitSetReg(jb, kJitArg1, 2);
+ *     AppendJitCall(jb, (void *)Add);
+ *     AppendJitMovReg(jb, kJitRes0, kJitArg0);
+ *     AppendJitSetReg(jb, kJitArg1, 3);
+ *     AppendJitCall(jb, (void *)Add);
+ *     AppendJit(jb, kEpilogue, sizeof(kEpilogue));
  *     FinishJit(jit, jb, &hook, 0);
  *     FlushJit(jit);
- *     printf("1+2+3=%ld\n", ((long (*)(void))hook)());
+ *     printf("1+2+3=%ld\n", ((long (*)(void))(IMAGE_END + hook))());
  *
  *     // destroy jit and all its functions
  *     DestroyJit(&jit);
@@ -126,47 +130,26 @@ static struct JitGlobals {
     PROT_READ | PROT_WRITE | PROT_EXEC,
 };
 
-#if defined(__x86_64__)
-static const u8 kJitPrologue[] = {
-    0x55,                    // push %rbp
-    0x48, 0x89, 0345,        // mov  %rsp,%rbp
-    0x48, 0x83, 0354, 0x30,  // sub  $0x30,%rsp
-    0x48, 0x89, 0135, 0xd8,  // mov  %rbx,-0x28(%rbp)
-    0x4c, 0x89, 0145, 0xe0,  // mov  %r12,-0x20(%rbp)
-    0x4c, 0x89, 0155, 0xe8,  // mov  %r13,-0x18(%rbp)
-    0x4c, 0x89, 0165, 0xf0,  // mov  %r14,-0x10(%rbp)
-    0x4c, 0x89, 0175, 0xf8,  // mov  %r15,-0x08(%rbp)
-    0x48, 0x89, 0xfb,        // mov  %rdi,%rbx
-};
-static const u8 kJitEpilogue[] = {
-    0x4c, 0x8b, 0175, 0xf8,  // mov -0x08(%rbp),%r15
-    0x4c, 0x8b, 0165, 0xf0,  // mov -0x10(%rbp),%r14
-    0x4c, 0x8b, 0155, 0xe8,  // mov -0x18(%rbp),%r13
-    0x4c, 0x8b, 0145, 0xe0,  // mov -0x20(%rbp),%r12
-    0x48, 0x8b, 0135, 0xd8,  // mov -0x28(%rbp),%rbx
-    0x48, 0x83, 0304, 0x30,  // add $0x30,%rsp
-    0x5d,                    // pop %rbp
-    0xc3,                    // ret
-};
-#elif defined(__aarch64__)
-static const u32 kJitPrologue[] = {
-    0xa9bc7bfd,  // stp x29, x30, [sp, #-64]!
-    0x910003fd,  // mov x29, sp
-    0xa90153f3,  // stp x19, x20, [sp, #16]
-    0xa9025bf5,  // stp x21, x22, [sp, #32]
-    0xa90363f7,  // stp x23, x24, [sp, #48]
-};
-static const u32 kJitEpilogue[] = {
-    0xa94153f3,  // ldp x19, x20, [sp, #16]
-    0xa9425bf5,  // ldp x21, x22, [sp, #32]
-    0xa94363f7,  // ldp x23, x24, [sp, #48]
-    0xa8c47bfd,  // ldp x29, x30, [sp], #64
-    0xd65f03c0,  // ret
-};
-#endif
-
 bool CanJitForImmediateEffect(void) {
   return atomic_load_explicit(&g_jit.prot, memory_order_relaxed) & PROT_EXEC;
+}
+
+static int MakeJitJump(u8 buf[5], intptr_t pc, intptr_t addr) {
+  int n;
+  intptr_t disp;
+#if defined(__x86_64__)
+  disp = addr - (pc + 5);
+  unassert(kAmdDispMin <= disp && disp <= kAmdDispMax);
+  buf[0] = kAmdJmp;
+  Write32(buf + 1, disp & kAmdDispMask);
+  n = 5;
+#elif defined(__aarch64__)
+  disp = (addr - pc) >> 2;
+  unassert(kArmDispMin <= disp && disp <= kArmDispMax);
+  Write32(buf, kArmJmp | (disp & kArmDispMask));
+  n = 4;
+#endif
+  return n;
 }
 
 static void RelinquishJitBlock(struct JitBlock *jb) {
@@ -260,7 +243,18 @@ int DisableJit(struct Jit *jit) {
   return 0;
 }
 
-static struct JitBlock *AcquireJit(struct Jit *jit) {
+/**
+ * Begins writing function definition to JIT memory.
+ *
+ * This will acquire a block of JIT memory. Code may be added to the
+ * function using methods like AppendJitPrologue() and AppendJitCall().
+ * When a chunk is completed, FinishJit() should be called. The calling
+ * thread is granted exclusive ownership of the returned block of JIT
+ * memory, until it's relinquished by FinishJit().
+ *
+ * @return function builder object
+ */
+struct JitBlock *StartJit(struct Jit *jit) {
   u8 *brk;
   int prot;
   struct Dll *e;
@@ -348,13 +342,6 @@ static struct JitBlock *AcquireJit(struct Jit *jit) {
 }
 
 /**
- * Returns byte length of JIT function prologue.
- */
-size_t GetSizeOfJitPrologue(void) {
-  return sizeof(kJitPrologue);
-}
-
-/**
  * Appends bytes to JIT block.
  *
  * Errors here safely propagate to FinishJit().
@@ -371,6 +358,66 @@ bool AppendJit(struct JitBlock *jb, const void *data, long size) {
     jb->index = jb->blocksize + 1;
     return false;
   }
+}
+
+static struct JitJump *NewJitJump(void) {
+  return (struct JitJump *)malloc(sizeof(struct JitJump));
+}
+
+static void FreeJitJump(struct JitJump *jj) {
+  free(jj);
+}
+
+static struct Dll *GetJitJumps(struct Jit *jit, hook_t *hook) {
+  struct JitJump *jj;
+  struct Dll *res, *rem, *e, *e2;
+  LOCK(&jit->lock);
+  for (rem = res = 0, e = dll_first(jit->jumps); e; e = e2) {
+    e2 = dll_next(jit->jumps, e);
+    jj = JITJUMP_CONTAINER(e);
+    if (jj->hook == hook) {
+      dll_remove(&jit->jumps, e);
+      dll_make_first(&res, e);
+    } else if (++jj->tries == kJitJumpTries) {
+      dll_remove(&jit->jumps, e);
+      dll_make_first(&rem, e);
+    }
+  }
+  UNLOCK(&jit->lock);
+  for (e = dll_first(rem); e; e = e2) {
+    e2 = dll_next(rem, e);
+    FreeJitJump(JITJUMP_CONTAINER(e));
+  }
+  return res;
+}
+
+static void FixupJitJumps(struct Dll *list, u8 *addr) {
+  int n;
+  union {
+    u32 i;
+    u8 b[5];
+  } u;
+  struct Dll *e, *e2;
+  struct JitJump *jj;
+  for (e = dll_first(list); e; e = e2) {
+    STATISTIC(++jumps_applied);
+    e2 = dll_next(list, e);
+    jj = JITJUMP_CONTAINER(e);
+    n = MakeJitJump(u.b, (intptr_t)jj->code, (intptr_t)addr + jj->addend);
+    unassert(!((intptr_t)jj->code & 3));
+#ifdef __x86_64__
+    atomic_store_explicit((_Atomic(u8) *)jj->code + 4, u.b[4],
+                          memory_order_relaxed);
+#endif
+    atomic_store_explicit((_Atomic(u32) *)jj->code, u.i, memory_order_release);
+    sys_icache_invalidate(jj->code, n);
+    FreeJitJump(jj);
+  }
+}
+
+static void SetJitHook(struct Jit *jit, hook_t *hook, u8 *addr) {
+  FixupJitJumps(GetJitJumps(jit, hook), addr);
+  atomic_store_explicit(hook, addr - IMAGE_END, memory_order_release);
 }
 
 int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
@@ -391,8 +438,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
     while ((e = dll_first(jb->staged))) {
       js = JITSTAGE_CONTAINER(e);
       if (js->index <= blockoff) {
-        atomic_store_explicit(js->hook, (jb->addr - IMAGE_END) + js->start,
-                              memory_order_release);
+        SetJitHook(jit, js->hook, jb->addr + js->start);
         dll_remove(&jb->staged, e);
         free(js);
         ++count;
@@ -414,36 +460,80 @@ void ReinsertJitBlock_(struct Jit *jit, struct JitBlock *jb) {
   }
 }
 
-static bool ReleaseJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook,
-                       intptr_t staging) {
+static void CommitJitJumps(struct Jit *jit, struct JitBlock *jb) {
+  if (!dll_is_empty(jb->jumps)) {
+    LOCK(&jit->lock);
+    dll_make_first(&jit->jumps, jb->jumps);
+    jb->jumps = 0;
+    UNLOCK(&jit->lock);
+  }
+}
+
+static void AbandonJitJumps(struct JitBlock *jb) {
+  struct Dll *e, *e2;
+  for (e = dll_first(jb->jumps); e; e = e2) {
+    e2 = dll_next(jb->jumps, e);
+    FreeJitJump(JITJUMP_CONTAINER(e));
+  }
+  jb->jumps = 0;
+}
+
+bool RecordJitJump(struct JitBlock *jb, hook_t *hook, int addend) {
+  struct JitJump *jj;
+  if (!CanJitForImmediateEffect()) return false;
+  if (!(jj = NewJitJump())) return false;
+  jj->hook = hook;
+  jj->code = (u8 *)GetJitPc(jb);
+  jj->tries = 0;
+  jj->addend = addend;
+  dll_init(&jj->elem);
+  dll_make_first(&jb->jumps, &jj->elem);
+  STATISTIC(++jumps_recorded);
+  return true;
+}
+
+/**
+ * Finishes writing function definition to JIT memory.
+ *
+ * Errors that happened earlier in AppendJit*() methods will safely
+ * propagate to this function. This function may disable the JIT on
+ * errors that aren't recoverable.
+ *
+ * @param jb is function builder object that was returned by StartJit();
+ *     this function always relinquishes the calling thread's ownership
+ *     of this object, even if this function returns an error
+ * @param hook points to a function pointer where the address of the JIT
+ *     code chunk will be stored once it becomes active
+ * @return true if the function was generated, otherwise false if we ran
+ *     out of room in the block while building the function, in which
+ *     case the caller should simply try again
+ */
+bool FinishJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook) {
   bool ok;
   u8 *addr;
   int blocksize;
   struct JitStage *js;
-  unassert(hook);
   unassert(jb->index > jb->start);
   unassert(jb->start >= jb->committed);
   while (jb->index <= jb->blocksize && (jb->index & (kJitAlign - 1))) {
     unassert(AppendJitTrap(jb));
     unassert(jb->index <= jb->blocksize);
   }
-  if (pthread_jit_write_protect_supported_np()) {
-    pthread_jit_write_protect_np(true);
-  }
   if (jb->index <= jb->blocksize) {
-    addr = jb->addr + jb->start;
-    if (CanJitForImmediateEffect()) {
-      sys_icache_invalidate(addr, jb->index - jb->start);
-      atomic_store_explicit(hook, addr - IMAGE_END, memory_order_release);
-    } else {
-      atomic_store_explicit(hook, (u8 *)staging - IMAGE_END,
-                            memory_order_relaxed);
-      if ((js = (struct JitStage *)calloc(1, sizeof(struct JitStage)))) {
-        dll_init(&js->elem);
-        js->hook = hook;
-        js->start = jb->start;
-        js->index = jb->index;
-        dll_make_last(&jb->staged, &js->elem);
+    CommitJitJumps(jit, jb);
+    if (hook) {
+      addr = jb->addr + jb->start;
+      if (CanJitForImmediateEffect()) {
+        sys_icache_invalidate(addr, jb->index - jb->start);
+        SetJitHook(jit, hook, addr);
+      } else {
+        if ((js = (struct JitStage *)calloc(1, sizeof(struct JitStage)))) {
+          dll_init(&js->elem);
+          js->hook = hook;
+          js->start = jb->start;
+          js->index = jb->index;
+          dll_make_last(&jb->staged, &js->elem);
+        }
       }
     }
     if (jb->index + kJitFit > jb->blocksize) {
@@ -451,6 +541,7 @@ static bool ReleaseJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook,
     }
     ok = true;
   } else {
+    AbandonJitJumps(jb);
     // we ran out of room for the function, in which case we'll close
     // out this block and hope for better luck on the next pass.
     if (jb->index - jb->start > jb->blocksize / 2) {
@@ -471,73 +562,10 @@ static bool ReleaseJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook,
   LOCK(&jit->lock);
   ReinsertJitBlock_(jit, jb);
   UNLOCK(&jit->lock);
+  if (pthread_jit_write_protect_supported_np()) {
+    pthread_jit_write_protect_np(true);
+  }
   return ok;
-}
-
-/**
- * Begins writing function definition to JIT memory.
- *
- * This will acquire a block of JIT memory and insert a function
- * prologue. Code may be added to the function using methods like
- * AppendJitCall(). When a function is completed, FinishJit() should be
- * called. The calling thread is granted exclusive ownership of the
- * returned block of JIT memory, until it's relinquished by FinishJit().
- *
- * @return function builder object
- */
-struct JitBlock *StartJit(struct Jit *jit) {
-  struct JitBlock *jb;
-  if ((jb = AcquireJit(jit))) {
-    AppendJit(jb, kJitPrologue, sizeof(kJitPrologue));
-  }
-  return jb;
-}
-
-/**
- * Finishes writing function definition to JIT memory.
- *
- * Errors that happened earlier in AppendJit*() methods will safely
- * propagate to this function.
- *
- * @param jb is function builder object that was returned by StartJit();
- *     this function always relinquishes the calling thread's ownership
- *     of this object, even if this function returns an error
- * @param hook points to a function pointer where the address of the JIT
- *     code chunk will be stored, once it becomes active; hook is always
- *     updated before this function returns true, even if it has to be
- *     with the staging pointer; and hook isn't modified on error
- * @param staging should point to a statically compiled function which
- *     does the same thing as the generated function, so that the JITed
- *     function may go live at an arbitrary point in the future; it can
- *     also be zero in cases where FlushJit() is being used instead
- * @return true if the function was generated, in which case `hook` is
- *     updated with either (1) a function to the generated function, or
- *     (2) the value `staging` in which case `hook` shall be updated
- *     with the generated function later on, whenever `jb` is flushed;
- *     otherwise false if we ran out of room in the block while building
- *     the function, in which case the caller should simply try again
- */
-bool FinishJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook,
-               intptr_t staging) {
-  AppendJit(jb, kJitEpilogue, sizeof(kJitEpilogue));
-  return ReleaseJit(jit, jb, hook, staging);
-}
-
-/**
- * Finishes function by having it tail call a previously created one.
- *
- * @param jb becomes owned by `jit` again after this call
- * @see FinishJit() for further documentation
- */
-bool SpliceJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook,
-               intptr_t staging, intptr_t chunk) {
-  unassert(!chunk || !memcmp((u8 *)chunk, kJitPrologue, sizeof(kJitPrologue)));
-  if (chunk) {
-    AppendJitJmp(jb, (u8 *)chunk + sizeof(kJitPrologue));
-    return ReleaseJit(jit, jb, hook, staging);
-  } else {
-    return FinishJit(jit, jb, hook, staging);
-  }
 }
 
 /**
@@ -546,6 +574,7 @@ bool SpliceJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook,
  * @param jb becomes owned by `jit` again after this call
  */
 int AbandonJit(struct Jit *jit, struct JitBlock *jb) {
+  AbandonJitJumps(jb);
   jb->index = jb->start;
   LOCK(&jit->lock);
   ReinsertJitBlock_(jit, jb);
@@ -554,6 +583,55 @@ int AbandonJit(struct Jit *jit, struct JitBlock *jb) {
     pthread_jit_write_protect_np(true);
   }
   return 0;
+}
+
+/**
+ * Appends NOPs until PC is aligned to `align`.
+ *
+ * @param align is byte alignment, which must be a two power
+ */
+bool AlignJit(struct JitBlock *jb, int align) {
+  unassert(align > 0 && IS2POW(align));
+  while (jb->index & (align - 1)) {
+#ifdef __x86_64__
+    // Intel's Official Fat NOP Instructions
+    //
+    //     90                 nop
+    //     6690               xchg %ax,%ax
+    //     0F1F00             nopl (%rax)
+    //     0F1F4000           nopl 0x00(%rax)
+    //     0f1f440000         nopl 0x00(%rax,%rax,1)
+    //     660f1f440000       nopw 0x00(%rax,%rax,1)
+    //     0F1F8000000000     nopl 0x00000000(%rax)
+    //     0F1F840000000000   nopl 0x00000000(%rax,%rax,1)
+    //     660F1F840000000000 nopw 0x00000000(%rax,%rax,1)
+    //
+    // See Intel's Six Thousand Page Manual, Volume 2, Table 4-12:
+    // "Recommended Multi-Byte Sequence of NOP Instruction".
+    switch (MIN(3, align - (jb->index & (align - 1)))) {
+      case 1:
+        break;
+      case 2:  // xchg %ax,%ax
+        if (AppendJit(jb, (u8[]){0x66, 0x90}, 2)) {
+          continue;
+        } else {
+          return false;
+        }
+      case 3:  // nopl (%rax)
+        if (AppendJit(jb, (u8[]){0x0f, 0x1f, 0x00}, 3)) {
+          continue;
+        } else {
+          return false;
+        }
+      default:
+        __builtin_unreachable();
+    }
+#endif
+    if (!AppendJitNop(jb)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -658,30 +736,9 @@ bool AppendJitCall(struct JitBlock *jb, void *func) {
  * @param code points to some other code address in memory
  * @return true if room was available, otherwise false
  */
-bool AppendJitJmp(struct JitBlock *jb, void *code) {
-  int n;
-  intptr_t disp, addr;
-  addr = (intptr_t)code;
-#if defined(__x86_64__)
+bool AppendJitJump(struct JitBlock *jb, void *code) {
   u8 buf[5];
-  disp = addr - (GetJitPc(jb) + 5);
-  if (kAmdDispMin <= disp && disp <= kAmdDispMax) {
-    buf[0] = kAmdJmp;
-    Write32(buf + 1, disp & kAmdDispMask);
-    n = 5;
-  } else {
-    AppendJitSetReg(jb, kAmdAx, addr);
-    buf[0] = kAmdJmpAx[0];
-    buf[1] = kAmdJmpAx[1];
-    n = 2;
-  }
-#elif defined(__aarch64__)
-  uint32_t buf[1];
-  disp = (addr - GetJitPc(jb)) >> 2;
-  unassert(kArmDispMin <= disp && disp <= kArmDispMax);
-  buf[0] = kArmJmp | (disp & kArmDispMask);
-  n = 4;
-#endif
+  int n = MakeJitJump(buf, GetJitPc(jb), (intptr_t)code);
   return AppendJit(jb, buf, n);
 }
 
@@ -767,6 +824,18 @@ bool AppendJitSetReg(struct JitBlock *jb, int reg, u64 value) {
 }
 
 /**
+ * Appends return instruction.
+ */
+bool AppendJitRet(struct JitBlock *jb) {
+#if defined(__x86_64__)
+  u8 buf[1] = {0xc3};
+#elif defined(__aarch64__)
+  u32 buf[1] = {0xd65f03c0};
+#endif
+  return AppendJit(jb, buf, sizeof(buf));
+}
+
+/**
  * Appends no-op instruction.
  */
 bool AppendJitNop(struct JitBlock *jb) {
@@ -799,15 +868,16 @@ STUB(int, DisableJit, (struct Jit *jit), 0)
 STUB(bool, AppendJit, (struct JitBlock *jb, const void *data, long size), 0)
 STUB(bool, AppendJitMovReg, (struct JitBlock *jb, int dst, int src), 0)
 STUB(int, AbandonJit, (struct Jit *jit, struct JitBlock *jb), 0)
-STUB(int, FlushJit, (struct Jit *jit), 0);
+STUB(int, FlushJit, (struct Jit *jit), 0)
 STUB(struct JitBlock *, StartJit, (struct Jit *jit), 0)
-STUB(bool, FinishJit, (struct Jit *jit, struct JitBlock *jb, hook_t *hook, intptr_t staging), 0)
-STUB(bool, AppendJitJmp, (struct JitBlock *jb, void *code), 0)
+STUB(bool, AlignJit, (struct JitBlock *jb, int align), 0)
+STUB(bool, FinishJit, (struct Jit *jit, struct JitBlock *jb, hook_t *hook), 0)
+STUB(bool, RecordJitJump, (struct JitBlock *jb, hook_t *hook, int addend), 0)
+STUB(bool, AppendJitJump, (struct JitBlock *jb, void *code), 0)
 STUB(bool, AppendJitCall, (struct JitBlock *jb, void *func), 0)
 STUB(bool, AppendJitSetReg, (struct JitBlock *jb, int reg, u64 value), 0)
-STUB(bool, SpliceJit, (struct Jit *jit, struct JitBlock *jb, hook_t *hook, intptr_t staging, intptr_t chunk), 0)
-STUB(bool, AppendJitNop, (struct JitBlock *jb), 0);
+STUB(bool, AppendJitRet, (struct JitBlock *jb), 0)
+STUB(bool, AppendJitNop, (struct JitBlock *jb), 0)
 STUB(bool, AppendJitTrap, (struct JitBlock *jb), 0)
 STUB(bool, CanJitForImmediateEffect, (void), 0)
-STUB(size_t, GetSizeOfJitPrologue, (void), 0)
 #endif

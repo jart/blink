@@ -53,7 +53,10 @@ void dll_remove(struct Dll **list, struct Dll *elem) {
 }
 
 /**
- * Inserts item into doubly-linked list, at the beginning.
+ * Inserts items into list, at the beginning.
+ *
+ * The resulting list will start with `elem`, followed by other items in
+ * `elem`, followed by the items previously in `*list`.
  *
  * @param list is a doubly-linked list, where `!*list` means empty
  * @param elem must not be a member of `list`, or null for no-op
@@ -69,7 +72,10 @@ void dll_make_first(struct Dll **list, struct Dll *elem) {
 }
 
 /**
- * Inserts item into doubly-linked list, at the end.
+ * Inserts items into list, at the end.
+ *
+ * The resulting `*list` will end with `elem`, preceded by the other
+ * items in `elem`, preceded by the items previously in `*list`.
  *
  * @param list is a doubly-linked list, where `!*list` means empty
  * @param elem must not be a member of `list`, or null for no-op

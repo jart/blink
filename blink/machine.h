@@ -92,6 +92,12 @@
 #define CanHaveLinearMemory() (LONG_BIT == 64)
 #endif
 
+#ifdef HAVE_JIT
+#define IsMakingPath(m) m->path.jb
+#else
+#define IsMakingPath(m) 0
+#endif
+
 #define HasLinearMapping(x) \
   (CanHaveLinearMemory() && \
    !atomic_load_explicit(&(x)->nolinear, memory_order_relaxed))
@@ -182,7 +188,7 @@ struct OpCache {
   u32 stashsize;  // for writes that overlap page
   bool writable;
   _Atomic(bool) invalidated;
-  u64 icache[1024][kInstructionBytes / 8];
+  u64 icache[512][kInstructionBytes / 8];
 };
 
 struct Futex {
@@ -218,6 +224,7 @@ struct System {
   pthread_mutex_t machines_lock;
   struct Dll *machines GUARDED_BY(machines_lock);
   unsigned next_tid GUARDED_BY(machines_lock);
+  intptr_t ender;
   struct Jit jit;
   struct Fds fds;
   struct Elf elf;
@@ -415,13 +422,29 @@ void SetReadAddr(struct Machine *, i64, u32);
 void SetWriteAddr(struct Machine *, i64, u32);
 void ProtectVirtual(struct System *, i64, i64, u64, u64);
 int ClassifyOp(u64) pureconst;
+void Terminate(P, void (*)(struct Machine *, u64));
 
 void CountOp(long *);
-void FastJmp(struct Machine *, i32);
 void FastPush(struct Machine *, long);
 void FastPop(struct Machine *, long);
 void FastCall(struct Machine *, u64);
+void FastJmp(struct Machine *, u64);
 void FastRet(struct Machine *);
+
+u32 Jb(struct Machine *);
+u32 Jae(struct Machine *);
+u32 Je(struct Machine *);
+u32 Jne(struct Machine *);
+u32 Jo(struct Machine *);
+u32 Jno(struct Machine *);
+u32 Ja(struct Machine *);
+u32 Jbe(struct Machine *);
+u32 Jg(struct Machine *);
+u32 Jge(struct Machine *);
+u32 Jl(struct Machine *);
+u32 Jle(struct Machine *);
+u32 Js(struct Machine *);
+u32 Jns(struct Machine *);
 
 void Push(P, u64);
 u64 Pop(P, u16);

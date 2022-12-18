@@ -47,7 +47,7 @@ void DeliverSignalToUser(struct Machine *m, int sig) {
 
 void HaltMachine(struct Machine *m, int code) {
   SIG_LOGF("HaltMachine(%d)", code);
-  if (m->path.jb) {
+  if (IsMakingPath(m)) {
     AbandonPath(m);
   }
   switch (code) {

@@ -514,13 +514,14 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   if ((key = Prot2Page(prot)) == -1) return einval();
   LOCK(&m->system->mmap_lock);
   ProtectVirtual(m->system, addr, size, ~(PAGE_U | PAGE_RW | PAGE_XD), key);
+  // TODO(jart): Store jump edges to invalidate smarter.
   if (prot & PROT_EXEC) {
     for (i = m->system->codestart;
          i < m->system->codestart + m->system->codesize; ++i) {
-      if (i >= addr && i < addr + size) {
-        SetHook(m, i, GeneralDispatch);
-        ++gotsome;
+      if (GetHook(m, i) != GeneralDispatch) {
+        SetHook(m, i, 0);
       }
+      ++gotsome;
     }
   }
   UNLOCK(&m->system->mmap_lock);

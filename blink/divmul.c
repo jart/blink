@@ -329,7 +329,9 @@ void OpMulRdxRaxEvqpSigned(P) {
   u8 *p = GetModrmRegisterWordPointerReadOszRexw(A);
   if (Rexw(rde)) {
     OpMulRdxRaxEvqpSigned64(m, Load64(p));
-    Jitter(A, "B r0a1= s0a0= c", OpMulRdxRaxEvqpSigned64);
+    if (IsMakingPath(m)) {
+      Jitter(A, "B r0a1= s0a0= c", OpMulRdxRaxEvqpSigned64);
+    }
   } else if (!Osz(rde)) {
     i64 edxeax = (i64)(i32)Get32(m->ax) * (i32)Load32(p);
     unsigned of = edxeax != (i32)edxeax;
@@ -381,10 +383,14 @@ void OpMulRdxRaxEvqpUnsigned(P) {
   p = GetModrmRegisterWordPointerReadOszRexw(A);
   if (Rexw(rde)) {
     OpMulRdxRaxEvqpUnsigned64(m, Load64(p));
-    Jitter(A, "B r0a1= s0a0= c", OpMulRdxRaxEvqpUnsigned64);
+    if (IsMakingPath(m)) {
+      Jitter(A, "B r0a1= s0a0= c", OpMulRdxRaxEvqpUnsigned64);
+    }
   } else if (!Osz(rde)) {
     OpMulRdxRaxEvqpUnsigned32(m, Load32(p));
-    Jitter(A, "B r0a1= s0a0= c", OpMulRdxRaxEvqpUnsigned32);
+    if (IsMakingPath(m)) {
+      Jitter(A, "B r0a1= s0a0= c", OpMulRdxRaxEvqpUnsigned32);
+    }
   } else {
     dxax = (u32)(u16)Get16(m->ax) * (u16)Load16(p);
     of = (u16)dxax != dxax;

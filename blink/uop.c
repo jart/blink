@@ -249,8 +249,51 @@ MICRO_OP void FastRet(struct Machine *m) {
 ////////////////////////////////////////////////////////////////////////////////
 // BRANCHING
 
-MICRO_OP void FastJmp(struct Machine *m, i32 disp) {
+MICRO_OP void FastJmp(struct Machine *m, u64 disp) {
   m->ip += disp;
+}
+
+MICRO_OP u32 Jb(struct Machine *m) {
+  return m->flags & CF;
+}
+MICRO_OP u32 Jae(struct Machine *m) {
+  return ~m->flags & CF;
+}
+MICRO_OP u32 Je(struct Machine *m) {
+  return m->flags & ZF;
+}
+MICRO_OP u32 Jne(struct Machine *m) {
+  return ~m->flags & ZF;
+}
+MICRO_OP u32 Js(struct Machine *m) {
+  return m->flags & SF;
+}
+MICRO_OP u32 Jns(struct Machine *m) {
+  return ~m->flags & SF;
+}
+MICRO_OP u32 Jo(struct Machine *m) {
+  return m->flags & OF;
+}
+MICRO_OP u32 Jno(struct Machine *m) {
+  return ~m->flags & OF;
+}
+MICRO_OP u32 Ja(struct Machine *m) {
+  return IsAbove(m);
+}
+MICRO_OP u32 Jbe(struct Machine *m) {
+  return IsBelowOrEqual(m);
+}
+MICRO_OP u32 Jg(struct Machine *m) {
+  return IsGreater(m);
+}
+MICRO_OP u32 Jge(struct Machine *m) {
+  return IsGreaterOrEqual(m);
+}
+MICRO_OP u32 Jl(struct Machine *m) {
+  return IsLess(m);
+}
+MICRO_OP u32 Jle(struct Machine *m) {
+  return IsLessOrEqual(m);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -553,7 +596,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
 void Jitter(P, const char *fmt, ...) {
 #ifdef HAVE_JIT
   va_list va;
-  if (!m->path.jb) return;
+  if (!IsMakingPath(m)) return;
   va_start(va, fmt);
   JitterImpl(A, fmt, va, 0, 0);
   unassert(!i);

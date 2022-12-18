@@ -33,6 +33,7 @@
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/fpu.h"
+#include "blink/jit.h"
 #include "blink/likely.h"
 #include "blink/lock.h"
 #include "blink/log.h"
@@ -108,7 +109,9 @@ static void OpSahf(P) {
 
 static void OpLeaGvqpM(P) {
   WriteRegister(rde, RegRexrReg(m, rde), LoadEffectiveAddress(A).addr);
-  Jitter(A, "L r0 C");
+  if (IsMakingPath(m)) {
+    Jitter(A, "L r0 C");
+  }
 }
 
 static relegated void OpPushSeg(P) {
@@ -426,13 +429,17 @@ static void OpMovOvqpRax(P) {
 
 static void OpMovEbGb(P) {
   Store8(GetModrmRegisterBytePointerWrite1(A), Get8(ByteRexrReg(m, rde)));
-  Jitter(A, "A r0 D");
+  if (IsMakingPath(m)) {
+    Jitter(A, "A r0 D");
+  }
 }
 
 static void OpMovGbEb(P) {
   Put8(ByteRexrReg(m, rde), Load8(GetModrmRegisterBytePointerRead1(A)));
   unassert(!RegLog2(rde));
-  Jitter(A, "B r0 C");
+  if (IsMakingPath(m)) {
+    Jitter(A, "B r0 C");
+  }
 }
 
 static void OpMovZbIb(P) {
@@ -441,7 +448,9 @@ static void OpMovZbIb(P) {
 
 static void OpMovZvqpIvqp(P) {
   WriteRegister(rde, RegRexbSrm(m, rde), uimm0);
-  Jitter(A, "a2iu F", uimm0);
+  if (IsMakingPath(m)) {
+    Jitter(A, "a2iu F", uimm0);
+  }
 }
 
 static relegated void OpIncZv(P) {
@@ -462,19 +471,25 @@ static relegated void OpDecZv(P) {
 
 static void OpMovEvqpIvds(P) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A), uimm0);
-  Jitter(A, "a3iu D", uimm0);
+  if (IsMakingPath(m)) {
+    Jitter(A, "a3iu D", uimm0);
+  }
 }
 
 static void OpMovEvqpGvqp(P) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
                         ReadRegister(rde, RegRexrReg(m, rde)));
-  Jitter(A, "A r0 D");
+  if (IsMakingPath(m)) {
+    Jitter(A, "A r0 D");
+  }
 }
 
 static void OpMovGvqpEvqp(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)));
-  Jitter(A, "B r0 C");
+  if (IsMakingPath(m)) {
+    Jitter(A, "B r0 C");
+  }
 }
 
 static void OpMovzbGvqpEb(P) {
@@ -503,7 +518,9 @@ static void OpMovsxdGdqpEd(P) {
 
 static void AlubRo(P, aluop_f op) {
   op(m, Load8(GetModrmRegisterBytePointerRead1(A)), Get8(ByteRexrReg(m, rde)));
-  Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
+  if (IsMakingPath(m)) {
+    Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
+  }
 }
 
 static void OpAlubCmp(P) {
@@ -518,13 +535,17 @@ static void OpAlubFlip(P) {
   aluop_f op = kAlu[(Opcode(rde) & 070) >> 3][0];
   Put8(ByteRexrReg(m, rde), op(m, Get8(ByteRexrReg(m, rde)),
                                Load8(GetModrmRegisterBytePointerRead1(A))));
-  Jitter(A, "A r0s1= B r0a2= s1a1= s0a0= c r0 C", op);
+  if (IsMakingPath(m)) {
+    Jitter(A, "A r0s1= B r0a2= s1a1= s0a0= c r0 C", op);
+  }
 }
 
 static void OpAlubFlipCmp(P) {
   Sub8(m, Get8(ByteRexrReg(m, rde)),
        Load8(GetModrmRegisterBytePointerRead1(A)));
-  Jitter(A, "A r0s1= B r0a2= s1a1= s0a0= c", Sub8);
+  if (IsMakingPath(m)) {
+    Jitter(A, "A r0s1= B r0a2= s1a1= s0a0= c", Sub8);
+  }
 }
 
 static void Alubi(P, aluop_f op) {
@@ -556,10 +577,12 @@ static void AluwRo(P, const aluop_f ops[4]) {
   aluop_f op = ops[RegLog2(rde)];
   op(m, ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
      ReadRegister(rde, RegRexrReg(m, rde)));
-  if (op == Sub64 && IsModrmRegister(rde)) {
-    Jitter(A, "a1i a2i c", RexbRm(rde), RexrReg(rde), OpAluwCmpReg64);
-  } else {
-    Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
+  if (IsMakingPath(m)) {
+    if (op == Sub64 && IsModrmRegister(rde)) {
+      Jitter(A, "a1i a2i c", RexbRm(rde), RexrReg(rde), OpAluwCmpReg64);
+    } else {
+      Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
+    }
   }
 }
 
@@ -576,14 +599,18 @@ static void OpAluwFlip(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 op(m, ReadRegister(rde, RegRexrReg(m, rde)),
                    ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A))));
-  Jitter(A, "B r0s1= A r0a1= s1a2= s0a0= c r0 C", op);
+  if (IsMakingPath(m)) {
+    Jitter(A, "B r0s1= A r0a1= s1a2= s0a0= c r0 C", op);
+  }
 }
 
 static void AluwFlipRo(P, const aluop_f ops[4]) {
   aluop_f op = ops[RegLog2(rde)];
   op(m, ReadRegister(rde, RegRexrReg(m, rde)),
      ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)));
-  Jitter(A, "B r0s1= A r0a1= s1a2= s0a0= c", op);
+  if (IsMakingPath(m)) {
+    Jitter(A, "B r0s1= A r0a1= s1a2= s0a0= c", op);
+  }
 }
 
 static void OpAluwFlipCmp(P) {
@@ -594,19 +621,23 @@ static void Aluwi(P) {
   aluop_f op = kAlu[ModrmReg(rde)][RegLog2(rde)];
   u8 *a = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(rde, a, op(m, ReadMemory(rde, a), uimm0));
-  Jitter(A, "B r0a1= a2i", uimm0);
-  if (CanSkipFlags(m, CF | ZF | SF | OF | AF | PF)) {
-    if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
-    Jitter(A, "m r0 D", kJustAlu[ModrmReg(rde)]);
-  } else {
-    Jitter(A, "s0a0= c r0 D", op);
+  if (IsMakingPath(m)) {
+    Jitter(A, "B r0a1= a2i", uimm0);
+    if (CanSkipFlags(m, CF | ZF | SF | OF | AF | PF)) {
+      if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
+      Jitter(A, "m r0 D", kJustAlu[ModrmReg(rde)]);
+    } else {
+      Jitter(A, "s0a0= c r0 D", op);
+    }
   }
 }
 
 static void AluwiRo(P, const aluop_f ops[4]) {
   aluop_f op = ops[RegLog2(rde)];
   op(m, ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)), uimm0);
-  Jitter(A, "B r0a1= a2i s0a0= c", uimm0, op);
+  if (IsMakingPath(m)) {
+    Jitter(A, "B r0a1= a2i s0a0= c", uimm0, op);
+  }
 }
 
 static void OpAluwiReg(P) {
@@ -675,30 +706,34 @@ static void OpBsuwiCl(P) {
   aluop_f op = kBsu[ModrmReg(rde)][RegLog2(rde)];
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), m->cl));
-  Jitter(A, "B r0s1= %cl r0a2= s1a1= s0a0= c r0 D", op);
+  if (IsMakingPath(m)) {
+    Jitter(A, "B r0s1= %cl r0a2= s1a1= s0a0= c r0 D", op);
+  }
 }
 
 static void BsuwiConstant(P, u64 y) {
   aluop_f op = kBsu[ModrmReg(rde)][RegLog2(rde)];
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), y));
-  Jitter(A, "B r0a1= s0a0=");
-  switch (ModrmReg(rde)) {
-    case BSU_ROL:
-    case BSU_ROR:
-    case BSU_SHL:
-    case BSU_SHR:
-    case BSU_SAL:
-    case BSU_SAR:
-      if (Rexw(rde) && (y &= 63) && CanSkipFlags(m, GetFlagClobbers(rde))) {
-        Jitter(A, "a2i m r0 D", y, kJustBsu[ModrmReg(rde)]);
-        return;
-      }
-      break;
-    default:
-      break;
+  if (IsMakingPath(m)) {
+    Jitter(A, "B r0a1= s0a0=");
+    switch (ModrmReg(rde)) {
+      case BSU_ROL:
+      case BSU_ROR:
+      case BSU_SHL:
+      case BSU_SHR:
+      case BSU_SAL:
+      case BSU_SAR:
+        if (Rexw(rde) && (y &= 63) && CanSkipFlags(m, GetFlagClobbers(rde))) {
+          Jitter(A, "a2i m r0 D", y, kJustBsu[ModrmReg(rde)]);
+          return;
+        }
+        break;
+      default:
+        break;
+    }
+    Jitter(A, "a2i c r0 D", y, op);
   }
-  Jitter(A, "a2i c r0 D", y, op);
 }
 
 static void OpBsuwi1(P) {
@@ -748,69 +783,117 @@ static void OpInterrupt3(P) {
   HaltMachine(m, 3);
 }
 
+static void Connect(P, u64 pc) {
+  void *jump;
+  nexgen32e_f func;
+  if (HasHook(m, pc)) {
+    func = GetHook(m, pc);
+    if (func != JitlessDispatch && func != GeneralDispatch) {
+      jump = (u8 *)func + GetPrologueSize();
+    } else {
+      RecordJitJump(m->path.jb, m->fun + pc, GetPrologueSize());
+      jump = (void *)m->system->ender;
+    }
+  } else {
+    jump = (void *)m->system->ender;
+  }
+  AppendJitJump(m->path.jb, jump);
+}
+
+void Terminate(P, void uop(struct Machine *, u64)) {
+  if (IsMakingPath(m)) {
+    Jitter(A, "a1i m s0a0=", disp, uop);
+    AlignJit(m->path.jb, 4);
+    Connect(A, m->ip);
+    FinishPath(m);
+  }
+}
+
 static void OpJmp(P) {
   m->ip += disp;
-  Jitter(A, "a1i m", disp, FastJmp);
+  Terminate(A, FastJmp);
+}
+
+static void Jcc(P, u32 cc(struct Machine *)) {
+  if (IsMakingPath(m)) {
+    Jitter(A, "m r0a2= s0a0=", cc);
+#ifdef __x86_64__
+    AlignJit(m->path.jb, 4);
+    u8 code[] = {
+        0x85, 0300 | kJitArg2 << 3 | kJitArg2,  // test %edx,%edx
+        0x75, 5,                                // jnz  +5
+    };
+#else
+    u32 code[] = {
+        0xb5000000 | 2 << 5 | kJitArg2,  // cbnz x2,#8
+    };
+#endif
+    AppendJit(m->path.jb, code, sizeof(code));
+    Connect(A, m->ip);
+    Jitter(A, "a1i m s0a0=", disp, FastJmp);
+    AlignJit(m->path.jb, 4);
+    Connect(A, m->ip + disp);
+    FinishPath(m);
+  }
+  if (cc(m)) {
+    m->ip += disp;
+  }
 }
 
 static void OpJae(P) {
-  if (~m->flags & CF) {
-    m->ip += disp;
-  }
+  Jcc(A, Jae);
 }
 
 static void OpJne(P) {
-  if (~m->flags & ZF) {
-    m->ip += disp;
-  }
+  Jcc(A, Jne);
 }
 
 static void OpJe(P) {
-  if (m->flags & ZF) {
-    m->ip += disp;
-  }
+  Jcc(A, Je);
 }
 
 static void OpJb(P) {
-  if (m->flags & CF) {
-    m->ip += disp;
-  }
+  Jcc(A, Jb);
 }
 
 static void OpJbe(P) {
-  if (IsBelowOrEqual(m)) {
-    m->ip += disp;
-  }
+  Jcc(A, Jbe);
 }
 
 static void OpJo(P) {
-  if (m->flags & OF) {
-    m->ip += disp;
-  }
+  Jcc(A, Jo);
 }
 
 static void OpJno(P) {
-  if (~m->flags & OF) {
-    m->ip += disp;
-  }
+  Jcc(A, Jno);
 }
 
 static void OpJa(P) {
-  if (IsAbove(m)) {
-    m->ip += disp;
-  }
+  Jcc(A, Ja);
 }
 
 static void OpJs(P) {
-  if (m->flags & SF) {
-    m->ip += disp;
-  }
+  Jcc(A, Js);
 }
 
 static void OpJns(P) {
-  if (~m->flags & SF) {
-    m->ip += disp;
-  }
+  Jcc(A, Jns);
+}
+
+static void OpJl(P) {
+  Jcc(A, Jl);
+}
+
+static void OpJge(P) {
+  Jcc(A, Jge);
+}
+
+static void OpJle(P) {
+  Jcc(A, Jle);
+}
+
+static void OpJg(P) {
+  Jcc(A, Jg);
 }
 
 static void OpJp(P) {
@@ -821,30 +904,6 @@ static void OpJp(P) {
 
 static void OpJnp(P) {
   if (!IsParity(m)) {
-    m->ip += disp;
-  }
-}
-
-static void OpJl(P) {
-  if (IsLess(m)) {
-    m->ip += disp;
-  }
-}
-
-static void OpJge(P) {
-  if (IsGreaterOrEqual(m)) {
-    m->ip += disp;
-  }
-}
-
-static void OpJle(P) {
-  if (IsLessOrEqual(m)) {
-    m->ip += disp;
-  }
-}
-
-static void OpJg(P) {
-  if (IsGreater(m)) {
     m->ip += disp;
   }
 }
@@ -1174,7 +1233,6 @@ static const nexgen32e_f kOp0ff[] = {
 
 static void Op0ff(P) {
   kOp0ff[ModrmReg(rde)](A);
-  // Jitter(A, "a1i a2i c", rde, disp, kOp0ff[ModrmReg(rde)]);
 }
 
 static void OpDoubleShift(P) {
@@ -1346,7 +1404,7 @@ static relegated void OpBinbase(P) {
 }
 
 static void OpNoop(P) {
-  if (m->path.jb) {
+  if (IsMakingPath(m)) {
     AppendJitNop(m->path.jb);
   }
 }
@@ -2080,9 +2138,8 @@ void JitlessDispatch(P) {
 
 void GeneralDispatch(P) {
 #ifdef HAVE_JIT
-  i64 newip;
   int opclass;
-  intptr_t jitpc;
+  intptr_t jitpc = 0;
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
            GetPc(m));
   LoadInstruction(m, GetPc(m));
@@ -2091,7 +2148,7 @@ void GeneralDispatch(P) {
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
   opclass = ClassifyOp(rde);
-  if (m->path.jb || (opclass == kOpNormal && CanJit(m) && CreatePath(A))) {
+  if (IsMakingPath(m) || (opclass == kOpNormal && CanJit(m) && CreatePath(A))) {
     if (opclass == kOpNormal || opclass == kOpBranching) {
       ++m->path.elements;
       STATISTIC(++path_elements);
@@ -2101,17 +2158,13 @@ void GeneralDispatch(P) {
     JIT_LOGF("adding [%s] from address %" PRIx64
              " to path starting at %" PRIx64,
              DescribeOp(m, GetPc(m)), GetPc(m), m->path.start);
-  } else {
-    jitpc = 0;
   }
   m->ip += Oplength(rde);
   GetOp(Mopcode(rde))(A);
   if (m->stashaddr) {
     CommitStash(m);
   }
-  if (jitpc) {
-    newip = m->ip;
-    m->ip = m->oldip;
+  if (IsMakingPath(m)) {
     if (GetJitPc(m->path.jb) == jitpc) {
       if (opclass == kOpNormal || opclass == kOpBranching) {
         STATISTIC(++path_elements_auto);
@@ -2125,9 +2178,8 @@ void GeneralDispatch(P) {
       AddPath_EndOp(A);
     }
     if (opclass == kOpPrecious || opclass == kOpBranching) {
-      CommitPath(A, 0);
+      CompletePath(A);
     }
-    m->ip = newip;
   }
   m->oldip = -1;
 #endif
@@ -2147,7 +2199,9 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
              " into previously created function %p",
              m->path.start, func);
     STATISTIC(++path_spliced);
-    CommitPath(DISPATCH_NOTHING, (intptr_t)func);
+    AppendJitSetReg(m->path.jb, kJitArg0, kJitSav0);
+    AppendJitJump(m->path.jb, (u8 *)func + GetPrologueSize());
+    FinishPath(m);
     STATISTIC(++instructions_dispatched);
     func(DISPATCH_NOTHING);
     return;
@@ -2161,7 +2215,7 @@ void ExecuteInstruction(struct Machine *m) {
   nexgen32e_f func;
   if (HasHook(m, m->ip)) {
     func = GetHook(m, m->ip);
-    if (!m->path.jb) {
+    if (!IsMakingPath(m)) {
       STATISTIC(++instructions_dispatched);
       func(DISPATCH_NOTHING);
     } else {
@@ -2184,6 +2238,7 @@ static void CheckForSignals(struct Machine *m) {
 
 void Actor(struct Machine *m) {
   for (g_machine = m;;) {
+    STATISTIC(++interps);
     ExecuteInstruction(m);
     CheckForSignals(m);
     if (VERY_UNLIKELY(atomic_load_explicit(&m->killed, memory_order_relaxed))) {
