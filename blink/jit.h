@@ -160,13 +160,6 @@ int CommitJit_(struct Jit *, struct JitBlock *);
 void ReinsertJitBlock_(struct Jit *, struct JitBlock *);
 
 /**
- * Returns true if DisableJit() was called or AcquireJit() had failed.
- */
-static inline bool IsJitDisabled(const struct Jit *jit) {
-  return atomic_load_explicit(&jit->disabled, memory_order_relaxed);
-}
-
-/**
  * Returns number of bytes of space remaining in JIT memory block.
  *
  * @return number of bytes of space that can be appended into, or -1 if
@@ -183,6 +176,17 @@ static inline long GetJitRemaining(const struct JitBlock *jb) {
  */
 static inline intptr_t GetJitPc(const struct JitBlock *jb) {
   return (intptr_t)jb->addr + jb->index;
+}
+
+/**
+ * Returns true if DisableJit() was called or AcquireJit() had failed.
+ */
+static inline bool IsJitDisabled(const struct Jit *jit) {
+#ifdef HAVE_JIT
+  return atomic_load_explicit(&jit->disabled, memory_order_relaxed);
+#else
+  return true;
+#endif
 }
 
 #endif /* BLINK_JIT_H_ */

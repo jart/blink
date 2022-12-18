@@ -55,7 +55,7 @@ o/$(MODE)/mips/%.o: %.c o/third_party/gcc/mips/bin/mips-linux-musl-gcc
 
 o/$(MODE)/mipsel/%.o: %.c o/third_party/gcc/mipsel/bin/mipsel-linux-musl-gcc
 	@mkdir -p $(@D)
-	$(VM) o/third_party/gcc/mipsel/bin/mipsel-linux-musl-gcc -static -Werror $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
+	$(VM) o/third_party/gcc/mipsel/bin/mipsel-linux-musl-gcc -static -Werror $(filter-out -mtune=generic,$(CFLAGS)) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
 
 o/$(MODE)/mips64/%.o: %.c o/third_party/gcc/mips64/bin/mips64-linux-musl-gcc
 	@mkdir -p $(@D)

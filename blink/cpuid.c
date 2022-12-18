@@ -21,7 +21,7 @@
 #include "blink/machine.h"
 
 void OpCpuid(P) {
-  u32 ax, bx, cx, dx;
+  u32 ax, bx, cx, dx, jit;
   ax = bx = cx = dx = 0;
   switch (Get32(m->ax)) {
     case 0:
@@ -64,15 +64,17 @@ void OpCpuid(P) {
       }
       break;
     case 0x80000001:
-      cx |= 1 << 0;   // lahf
-      dx |= 1 << 0;   // fpu
-      dx |= 1 << 8;   // cmpxchg8b
-      dx |= 1 << 11;  // syscall
-      dx |= 1 << 15;  // cmov
-      dx |= 1 << 23;  // mmx
-      dx |= 1 << 24;  // fxsave
-      dx |= 1 << 27;  // rdtscp
-      dx |= 1 << 29;  // long
+      jit = !IsJitDisabled(&m->system->jit);
+      cx |= 1 << 0;     // lahf
+      cx |= jit << 31;  // jit
+      dx |= 1 << 0;     // fpu
+      dx |= 1 << 8;     // cmpxchg8b
+      dx |= 1 << 11;    // syscall
+      dx |= 1 << 15;    // cmov
+      dx |= 1 << 23;    // mmx
+      dx |= 1 << 24;    // fxsave
+      dx |= 1 << 27;    // rdtscp
+      dx |= 1 << 29;    // long
       break;
     case 0x80000007:
       dx |= 1 << 8;  // invtsc
