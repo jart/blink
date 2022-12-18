@@ -433,10 +433,10 @@ static int SysFutexWait(struct Machine *m,  //
   if (--f->waiters) {
     UNLOCK(&f->lock);
   } else {
+    UNLOCK(&f->lock);
     LOCK(&m->system->futex_lock);
     dll_remove(&m->system->futexes, &f->elem);
     UNLOCK(&m->system->futex_lock);
-    UNLOCK(&f->lock);
     FreeFutex(f);
   }
   if (rc) {

@@ -30,6 +30,7 @@
 #include "blink/path.h"
 #include "blink/stats.h"
 
+#ifdef HAVE_JIT
 #if defined(__x86_64__)
 static const u8 kEnter[] = {
     0x55,                    // push %rbp
@@ -66,6 +67,7 @@ static const u32 kLeave[] = {
     0xa94363f7,  // ldp x23, x24, [sp, #48]
     0xa8c47bfd,  // ldp x29, x30, [sp], #64
 };
+#endif
 #endif
 
 void (*AddPath_StartOp_Hook)(P);
