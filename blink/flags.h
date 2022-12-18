@@ -1,5 +1,6 @@
 #ifndef BLINK_FLAGS_H_
 #define BLINK_FLAGS_H_
+#include "blink/builtin.h"
 #include "blink/machine.h"
 
 #define FLAGS_CF   0   // carry flag
@@ -41,7 +42,7 @@ bool GetParity(u8) pureconst;
 void ImportFlags(struct Machine *, u64);
 int GetFlagDeps(u64) pureconst;
 int GetFlagClobbers(u64) pureconst;
-bool CanSkipFlags(struct Machine *, int);
+int GetNeededFlags(struct Machine *, i64, int, int);
 
 static inline bool GetFlag(u32 f, int b) {
   switch (b) {
@@ -61,31 +62,31 @@ static inline u32 SetFlag(u32 f, int b, bool v) {
   }
 }
 
-static inline bool IsParity(struct Machine *m) {
+MICRO_OP_SAFE bool IsParity(struct Machine *m) {
   return GetFlag(m->flags, FLAGS_PF);
 }
 
-static inline bool IsBelowOrEqual(struct Machine *m) {  // CF || ZF
+MICRO_OP_SAFE bool IsBelowOrEqual(struct Machine *m) {  // CF || ZF
   return ((m->flags >> 6) | m->flags) & 1;
 }
 
-static inline bool IsAbove(struct Machine *m) {  // !CF && ~ZF
+MICRO_OP_SAFE bool IsAbove(struct Machine *m) {  // !CF && ~ZF
   return ((~m->flags >> 6) & ~m->flags) & 1;
 }
 
-static inline bool IsLess(struct Machine *m) {  // SF != OF
+MICRO_OP_SAFE bool IsLess(struct Machine *m) {  // SF != OF
   return (i8)(m->flags ^ (m->flags >> 4)) < 0;
 }
 
-static inline bool IsGreaterOrEqual(struct Machine *m) {  // SF == OF
+MICRO_OP_SAFE bool IsGreaterOrEqual(struct Machine *m) {  // SF == OF
   return (i8)(~(m->flags ^ (m->flags >> 4))) < 0;
 }
 
-static inline bool IsLessOrEqual(struct Machine *m) {  // ZF || SF != OF
+MICRO_OP_SAFE bool IsLessOrEqual(struct Machine *m) {  // ZF || SF != OF
   return (i8)((m->flags ^ (m->flags >> 4)) | (m->flags << 1)) < 0;
 }
 
-static inline bool IsGreater(struct Machine *m) {  // !ZF && SF == OF
+MICRO_OP_SAFE bool IsGreater(struct Machine *m) {  // !ZF && SF == OF
   return (i8)(~(m->flags ^ (m->flags >> 4)) & ~(m->flags << 1)) < 0;
 }
 

@@ -30,6 +30,41 @@
 #include "blink/path.h"
 #include "blink/stats.h"
 
+void (*AddPath_StartOp_Hook)(P);
+
+static void StartPath(struct Machine *m) {
+  JIX_LOGF("%" PRIx64 " <path>", m->ip);
+}
+
+static void DebugOp(struct Machine *m, i64 expected_ip) {
+  if (m->ip != expected_ip) {
+    LOGF("IP was %" PRIx64 " but it should have been %" PRIx64, m->ip,
+         expected_ip);
+  }
+  unassert(m->ip == expected_ip);
+}
+
+static void StartOp(struct Machine *m, long len) {
+  JIX_LOGF("%" PRIx64 "   <op>", GetPc(m));
+  JIX_LOGF("%" PRIx64 "     %s", GetPc(m), DescribeOp(m, GetPc(m)));
+  unassert(!IsMakingPath(m));
+  m->oldip = m->ip;
+  m->ip += len;
+}
+
+static void EndOp(struct Machine *m) {
+  JIX_LOGF("%" PRIx64 "   </op>", GetPc(m));
+  m->oldip = -1;
+  if (m->stashaddr) {
+    CommitStash(m);
+  }
+}
+
+static void EndPath(struct Machine *m) {
+  JIX_LOGF("%" PRIx64 "   %s", GetPc(m), DescribeOp(m, GetPc(m)));
+  JIX_LOGF("%" PRIx64 " </path>", GetPc(m));
+}
+
 #ifdef HAVE_JIT
 #if defined(__x86_64__)
 static const u8 kEnter[] = {
@@ -70,41 +105,6 @@ static const u32 kLeave[] = {
 #endif
 #endif
 
-void (*AddPath_StartOp_Hook)(P);
-
-static void StartPath(struct Machine *m) {
-  JIX_LOGF("%" PRIx64 " <path>", m->ip);
-}
-
-static void DebugOp(struct Machine *m, i64 expected_ip) {
-  if (m->ip != expected_ip) {
-    LOGF("IP was %" PRIx64 " but it should have been %" PRIx64, m->ip,
-         expected_ip);
-  }
-  unassert(m->ip == expected_ip);
-}
-
-static void StartOp(struct Machine *m, long len) {
-  JIX_LOGF("%" PRIx64 "   <op>", GetPc(m));
-  JIX_LOGF("%" PRIx64 "     %s", GetPc(m), DescribeOp(m, GetPc(m)));
-  unassert(!IsMakingPath(m));
-  m->oldip = m->ip;
-  m->ip += len;
-}
-
-static void EndOp(struct Machine *m) {
-  JIX_LOGF("%" PRIx64 "   </op>", GetPc(m));
-  m->oldip = -1;
-  if (m->stashaddr) {
-    CommitStash(m);
-  }
-}
-
-static void EndPath(struct Machine *m) {
-  JIX_LOGF("%" PRIx64 "   %s", GetPc(m), DescribeOp(m, GetPc(m)));
-  JIX_LOGF("%" PRIx64 " </path>", GetPc(m));
-}
-
 long GetPrologueSize(void) {
 #ifdef HAVE_JIT
   return sizeof(kEnter);
@@ -141,7 +141,6 @@ bool CreatePath(P) {
       JIT_LOGF("starting new path %" PRIxPTR " at %" PRIx64,
                GetJitPc(m->path.jb), pc);
       AppendJit(m->path.jb, kEnter, sizeof(kEnter));
-      Jitter(A, "s4i", pc);
 #if LOG_JIX
       Jitter(A, "s0a0= c s0a0=", StartPath);
 #endif
@@ -211,9 +210,10 @@ void AddPath_StartOp(P) {
   u8 ip = offsetof(struct Machine, ip);
   u8 oldip = offsetof(struct Machine, oldip);
   u8 code[] = {
-      0x4c, 0x89, 0177, oldip,  // mov %r15,8(%rdi)
-      0x49, 0x83, 0307, len,    // add $len,%r15
-      0x4c, 0x89, 0177, ip,     // mov %r15,(%rdi)
+      0x48, 0x8b, 0107, ip,     // mov 8(%rdi),%rax
+      0x48, 0x89, 0107, oldip,  // mov %rax,16(%rdi)
+      0x48, 0x83, 0300, len,    // add $len,%rax
+      0x48, 0x89, 0107, ip,     // mov %rax,8(%rdi)
   };
   AppendJit(m->path.jb, code, sizeof(code));
   m->reserving = false;

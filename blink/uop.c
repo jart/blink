@@ -297,21 +297,6 @@ MICRO_OP u32 Jle(struct Machine *m) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// SIGN EXTENDING
-
-MICRO_OP static u64 Sex8(u64 x) {
-  return (i8)x;
-}
-MICRO_OP static u64 Sex16(u64 x) {
-  return (i16)x;
-}
-MICRO_OP static u64 Sex32(u64 x) {
-  return (i32)x;
-}
-typedef u64 (*sex_f)(u64);
-static const sex_f kSex[] = {Sex8, Sex16, Sex32};
-
-////////////////////////////////////////////////////////////////////////////////
 // ADDRESSING
 
 MICRO_OP static i64 Seg(struct Machine *m, u64 d, long s) {
@@ -501,11 +486,6 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
       case 'c':  // call
         AppendJitCall(m->path.jb, va_arg(va, void *));
         ClobberEverythingExceptResult(m);
-        break;
-
-      case 'x':  // sign extend
-        ItemsRequired(1);
-        Jitter(A, "a0= m", kSex[CheckBelow(fmt[k++] - '0', 3)]);
         break;
 
       case 'r':  // push res reg

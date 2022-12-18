@@ -569,8 +569,21 @@ static void OpAlubiReg(P) {
   }
 }
 
-static void OpAluwCmpReg64(struct Machine *m, long rexb, long rexr) {
-  Sub64(m, Get64(m->weg[rexb]), Get64(m->weg[rexr]));
+static void Connect(P, u64 pc) {
+  void *jump;
+  nexgen32e_f func;
+  if (HasHook(m, pc)) {
+    func = GetHook(m, pc);
+    if (func != JitlessDispatch && func != GeneralDispatch) {
+      jump = (u8 *)func + GetPrologueSize();
+    } else {
+      RecordJitJump(m->path.jb, m->fun + pc, GetPrologueSize());
+      jump = (void *)m->system->ender;
+    }
+  } else {
+    jump = (void *)m->system->ender;
+  }
+  AppendJitJump(m->path.jb, jump);
 }
 
 static void AluwRo(P, const aluop_f ops[4]) {
@@ -578,11 +591,7 @@ static void AluwRo(P, const aluop_f ops[4]) {
   op(m, ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
      ReadRegister(rde, RegRexrReg(m, rde)));
   if (IsMakingPath(m)) {
-    if (op == Sub64 && IsModrmRegister(rde)) {
-      Jitter(A, "a1i a2i c", RexbRm(rde), RexrReg(rde), OpAluwCmpReg64);
-    } else {
-      Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
-    }
+    Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
   }
 }
 
@@ -623,7 +632,7 @@ static void Aluwi(P) {
   WriteRegisterOrMemory(rde, a, op(m, ReadMemory(rde, a), uimm0));
   if (IsMakingPath(m)) {
     Jitter(A, "B r0a1= a2i", uimm0);
-    if (CanSkipFlags(m, CF | ZF | SF | OF | AF | PF)) {
+    if (!GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF, 2)) {
       if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
       Jitter(A, "m r0 D", kJustAlu[ModrmReg(rde)]);
     } else {
@@ -724,7 +733,8 @@ static void BsuwiConstant(P, u64 y) {
       case BSU_SHR:
       case BSU_SAL:
       case BSU_SAR:
-        if (Rexw(rde) && (y &= 63) && CanSkipFlags(m, GetFlagClobbers(rde))) {
+        if (Rexw(rde) && (y &= 63) &&
+            !GetNeededFlags(m, m->ip, GetFlagClobbers(rde), 2)) {
           Jitter(A, "a2i m r0 D", y, kJustBsu[ModrmReg(rde)]);
           return;
         }
@@ -781,23 +791,6 @@ static void OpInterrupt1(P) {
 
 static void OpInterrupt3(P) {
   HaltMachine(m, 3);
-}
-
-static void Connect(P, u64 pc) {
-  void *jump;
-  nexgen32e_f func;
-  if (HasHook(m, pc)) {
-    func = GetHook(m, pc);
-    if (func != JitlessDispatch && func != GeneralDispatch) {
-      jump = (u8 *)func + GetPrologueSize();
-    } else {
-      RecordJitJump(m->path.jb, m->fun + pc, GetPrologueSize());
-      jump = (void *)m->system->ender;
-    }
-  } else {
-    jump = (void *)m->system->ender;
-  }
-  AppendJitJump(m->path.jb, jump);
 }
 
 void Terminate(P, void uop(struct Machine *, u64)) {

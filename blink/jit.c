@@ -30,6 +30,7 @@
 #include "blink/end.h"
 #include "blink/endian.h"
 #include "blink/jit.h"
+#include "blink/jitcpy.h"
 #include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/macros.h"
@@ -348,10 +349,10 @@ struct JitBlock *StartJit(struct Jit *jit) {
  *
  * @return true if room was available, otherwise false
  */
-bool AppendJit(struct JitBlock *jb, const void *data, long size) {
+inline bool AppendJit(struct JitBlock *jb, const void *data, long size) {
   unassert(size > 0);
   if (size <= GetJitRemaining(jb)) {
-    memcpy(jb->addr + jb->index, data, size);
+    jitcpy(jb->addr + jb->index, data, size);
     jb->index += size;
     return true;
   } else {
