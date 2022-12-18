@@ -51,6 +51,10 @@
 static bool FLAG_nojit;
 static bool FLAG_nolinear;
 
+static void OnSigSys(int sig) {
+  // do nothing
+}
+
 static int Exec(char *prog, char **argv, char **envp) {
   struct Machine *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
@@ -115,10 +119,19 @@ static void GetOpts(int argc, char *argv[]) {
   }
 }
 
+static void HandleSigSys(void) {
+  struct sigaction sa;
+  sigfillset(&sa.sa_mask);
+  sa.sa_flags = 0;
+  sa.sa_handler = OnSigSys;
+  unassert(!sigaction(SIGSYS, &sa, 0));
+}
+
 int main(int argc, char *argv[], char **envp) {
   g_blink_path = argc > 0 ? argv[0] : 0;
   GetOpts(argc, argv);
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
   WriteErrorInit();
+  HandleSigSys();
   return Exec(argv[optind_], argv + optind_, envp);
 }

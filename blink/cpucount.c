@@ -16,54 +16,45 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
-#include <fcntl.h>
 #include <stdatomic.h>
-#include <string.h>
-#include <sys/stat.h>
+#ifdef __linux
+#include <sched.h>
+#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
+#include <sys/sysctl.h>
 #include <sys/types.h>
+#define HAVE_SYSCTL
+#elif defined(__NetBSD__)
+#include <sys/param.h>
+#include <sys/sysctl.h>
+#define HAVE_SYSCTL
+#endif
 
-#include "blink/debug.h"
-#include "blink/errno.h"
-#include "blink/fds.h"
-#include "blink/log.h"
-#include "blink/syscall.h"
-#include "blink/xlat.h"
+#include "blink/macros.h"
+#include "blink/util.h"
 
-int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
-              i32 mode) {
-  const char *path;
-  struct Fd *fd, *dirfd;
-  int rc, sf, fildes, sysdirfd;
-  if (!(path = LoadStr(m, pathaddr))) return efault();
-  if ((oflags = XlatOpenFlags(oflags)) == -1) return -1;
-  LockFds(&m->system->fds);
-  if ((rc = GetAfd(m, dirfildes, &dirfd)) != -1) {
-    if (dirfd) LockFd(dirfd);
-    fd = AllocateFd(&m->system->fds, 0, oflags);
-  } else {
-    dirfd = 0;
-    fd = 0;
+static atomic_int g_cpucount;
+
+static int GetCpuCountImpl(void) {
+#if defined(__linux)
+  cpu_set_t s;
+  if (sched_getaffinity(0, sizeof(s), &s) == -1) return -1;
+  return CPU_COUNT(&s);
+#elif defined(HAVE_SYSCTL)
+  int x;
+  size_t n = sizeof(x);
+  int mib[] = {CTL_HW, HW_NCPU};
+  if (sysctl(mib, ARRAYLEN(mib), &x, &n, 0, 0) == -1) return -1;
+  return x;
+#else
+  return 1;
+#endif /* HAVE_SYSCTL */
+}
+
+int GetCpuCount(void) {
+  int rc;
+  if (!(rc = g_cpucount)) {
+    if ((rc = GetCpuCountImpl()) < 1) rc = 1;
+    g_cpucount = rc;
   }
-  UnlockFds(&m->system->fds);
-  if (fd && rc != -1) {
-    if (dirfd) {
-      sysdirfd = atomic_load_explicit(&dirfd->systemfd, memory_order_relaxed);
-    } else {
-      sysdirfd = AT_FDCWD;
-    }
-    INTERRUPTIBLE(sf = openat(sysdirfd, path, oflags, mode));
-    if (sf != -1) {
-      atomic_store_explicit(&fd->systemfd, sf, memory_order_release);
-      fildes = fd->fildes;
-    } else {
-      SYS_LOGF("%s(%s) failed: %s", "openat", path, strerror(errno));
-      fildes = -1;
-    }
-  } else {
-    fildes = -1;
-  }
-  if (dirfd) UnlockFd(dirfd);
-  if (fildes == -1 && fd) DropFd(m, fd);
-  return fildes;
+  return rc;
 }

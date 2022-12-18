@@ -27,5 +27,6 @@ char *FormatSize(char *, uint64_t, uint64_t);
 char *Commandv(const char *, char *, size_t);
 char *Demangle(char *, const char *, size_t);
 long Magikarp(u8 *, long);
+int GetCpuCount(void);
 
 #endif /* BLINK_UTIL_H_ */

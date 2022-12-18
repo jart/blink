@@ -158,9 +158,28 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/dup_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/cv_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/writev_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/setsockopt_test.com.ok
+		o/$(MODE)/third_party/cosmo/setsockopt_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/sqlite_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/sched_yield_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/pwrite_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/pread_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/preadv_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/nsync_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/mt19937_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/modrm_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/measureentropy_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/malloc_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/ftell_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/fseeko_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/fputs_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/fork_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@
+
+DARWIN_PROBLEMATIC_TESTS =									\
+		o/$(MODE)/third_party/cosmo/sched_getaffinity_test.com.ok			\
+		o/$(MODE)/third_party/cosmo/pipe_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/execve_test.com.ok
 
 o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/intrin_test.com.emulates			\

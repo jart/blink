@@ -41,7 +41,7 @@
 static ssize_t GetDevRandom(char *p, size_t n) {
   int fd;
   ssize_t rc;
-  if ((fd = open("/dev/urandom", O_RDONLY)) == -1) return -1;
+  if ((fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC)) == -1) return -1;
   rc = read(fd, p, n);
   close(fd);
   return rc;

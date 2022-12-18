@@ -4,6 +4,19 @@
 #include "blink/machine.h"
 #include "blink/types.h"
 
+#define INTERRUPTIBLE(x)               \
+  do {                                 \
+    int rc_;                           \
+    rc_ = (x);                         \
+    if (rc_ == -1 && errno == EINTR) { \
+      if (CheckInterrupt(m)) {         \
+        break;                         \
+      }                                \
+    } else {                           \
+      break;                           \
+    }                                  \
+  } while (1)
+
 extern char *g_blink_path;
 
 void OpSyscall(P);
@@ -22,5 +35,6 @@ int GetAfd(struct Machine *, int, struct Fd **);
 void DropFd(struct Machine *, struct Fd *);
 int GetFildes(struct Machine *, int);
 struct Fd *GetAndLockFd(struct Machine *, int);
+bool CheckInterrupt(struct Machine *);
 
 #endif /* BLINK_SYSCALL_H_ */

@@ -310,6 +310,9 @@
 #define MSG_SYN_LINUX          0x0400
 #define MSG_NOTIFICATION_LINUX 0x8000
 
+#define GRND_NONBLOCK_LINUX 1
+#define GRND_RANDOM_LINUX   2
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];

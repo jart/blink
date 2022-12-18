@@ -644,6 +644,10 @@ static void OnV(void) {
   vidya = !vidya;
 }
 
+static void OnSigSys(int sig) {
+  // do nothing
+}
+
 static void OnSigWinch(int sig, siginfo_t *si, void *uc) {
   EnqueueSignal(m, SIGWINCH_LINUX);
   action |= WINCHED;
@@ -3386,6 +3390,9 @@ int main(int argc, char *argv[]) {
   SetXmmDisp(kXmmHex);
   GetOpts(argc, argv);
   sigfillset(&sa.sa_mask);
+  sa.sa_flags = 0;
+  sa.sa_handler = OnSigSys;
+  unassert(!sigaction(SIGSYS, &sa, 0));
   sa.sa_flags = SA_SIGINFO;
   sa.sa_sigaction = OnSigInt;
   unassert(!sigaction(SIGINT, &sa, 0));

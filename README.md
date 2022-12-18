@@ -18,6 +18,7 @@ on the motivations for this tool, please read
 Welcome everyone from the Hacker News, Lobsters, and Reddit communities!
 This project is a work in progress. Please don't use this for production
 yet. If you try this be sure to calibrate your expectations accordingly.
+Especially if you use multiple threads under heavy processor load.
 
 ## Getting Started
 

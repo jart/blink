@@ -377,7 +377,6 @@ int XlatSocketOptname(int level, int optname) {
         XLAT(7, SO_SNDBUF);
         XLAT(8, SO_RCVBUF);
         XLAT(9, SO_KEEPALIVE);
-        XLAT(13, SO_LINGER);
         XLAT(15, SO_REUSEPORT);
         XLAT(20, SO_RCVTIMEO);
         XLAT(21, SO_SNDTIMEO);

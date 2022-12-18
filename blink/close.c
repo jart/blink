@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <stdatomic.h>
@@ -38,6 +39,8 @@ static int CloseFd(struct System *s, struct Fd *fd) {
     } else {
       rc = IB(fd->cb->close)(sf);
     }
+    // EINTR shouldn't be possible since we don't support SO_LINGER
+    unassert(!(rc == -1 && errno == EINTR));
     FreeFd(&s->fds, fd);
   } else {
     rc = ebadf();

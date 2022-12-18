@@ -103,7 +103,8 @@ struct System *NewSystem(void) {
     pthread_mutex_init(&s->lock_lock, 0);
     pthread_mutex_init(&s->futex_lock, 0);
     pthread_mutex_init(&s->machines_lock, 0);
-    s->blinksigs = 1ull << (SIGILL_LINUX - 1) |   //
+    s->blinksigs = 1ull << (SIGSYS_LINUX - 1) |   //
+                   1ull << (SIGILL_LINUX - 1) |   //
                    1ull << (SIGFPE_LINUX - 1) |   //
                    1ull << (SIGSEGV_LINUX - 1) |  //
                    1ull << (SIGTRAP_LINUX - 1);
@@ -196,6 +197,7 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
   m->oldip = -1;
   m->system = system;
   m->mode = system->mode;
+  m->thread = pthread_self();
   m->nolinear = system->nolinear;
   m->codesize = system->codesize;
   m->codestart = system->codestart;
