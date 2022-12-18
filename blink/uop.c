@@ -398,14 +398,37 @@ static long GetInstructionLength(u8 *p) {
 #endif
 }
 
-static long GetMicroOpLength(void *p) {
+long GetMicroOpLengthImpl(void *uop) {
   long k, n = 0;
   for (;;) {
-    if (IsRet((u8 *)p + n)) return n;
-    k = GetInstructionLength((u8 *)p + n);
+    if (IsRet((u8 *)uop + n)) return n;
+    k = GetInstructionLength((u8 *)uop + n);
     if (k == -1) return -1;
     n += k;
   }
+}
+
+long GetMicroOpLength(void *uop) {
+#ifdef __x86_64__
+#define kMaxOps 64
+  static long count;
+  static void *ops[kMaxOps];
+  static short len[kMaxOps];
+  long i, res;
+  for (i = 0; i < count; ++i) {
+    if (ops[i] == uop) {
+      return len[i];
+    }
+  }
+  res = GetMicroOpLengthImpl(uop);
+  unassert(count < kMaxOps);
+  ops[count] = uop;
+  len[count] = res;
+  ++count;
+  return res;
+#else
+  return GetMicroOpLengthImpl(uop);
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////
