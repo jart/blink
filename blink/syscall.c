@@ -1623,6 +1623,13 @@ static int SysPrlimit(struct Machine *m, i32 pid, i32 resource,
   return rc;
 }
 
+static int SysSysinfo(struct Machine *m, i64 siaddr) {
+  struct sysinfo_linux si;
+  if (sysinfo_linux(&si) == -1) return -1;
+  CopyToUserWrite(m, siaddr, &si, sizeof(si));
+  return 0;
+}
+
 static i64 SysGetcwd(struct Machine *m, i64 bufaddr, size_t size) {
   size_t n;
   char *buf;
@@ -2297,6 +2304,7 @@ void OpSyscall(P) {
     SYSCALL(0x060, SysGettimeofday, (m, di, si));
     SYSCALL(0x061, SysGetrlimit, (m, di, si));
     SYSCALL(0x062, SysGetrusage, (m, di, si));
+    SYSCALL(0x063, SysSysinfo, (m, di));
     SYSCALL(0x070, SysSetsid, (m));
     SYSCALL(0x079, SysGetpgid, (m, di));
     SYSCALL(0x06D, SysSetpgid, (m, di, si));

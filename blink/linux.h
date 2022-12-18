@@ -530,4 +530,22 @@ struct flock_linux {
   u8 pad2_[4];
 };
 
+struct sysinfo_linux {
+  u8 uptime[8];     // seconds since boot
+  u8 loads[3][8];   // 1-5-15 min active process averages
+  u8 totalram[8];   // system physical memory
+  u8 freeram[8];    // amount of ram currently going to waste
+  u8 sharedram[8];  // bytes w/ pages mapped into multiple progs
+  u8 bufferram[8];  // lingering disk pages; see fadvise
+  u8 totalswap[8];  // size of emergency memory
+  u8 freeswap[8];   // hopefully equal to totalswap
+  u8 procs[2];      // number of processes
+  u8 __ignore[6];   // padding
+  u8 totalhigh[8];  // wut
+  u8 freehigh[8];   // wut
+  u8 mem_unit[4];   // ram stuff above is multiples of this
+};
+
+int sysinfo_linux(struct sysinfo_linux *);
+
 #endif /* BLINK_LINUX_H_ */
