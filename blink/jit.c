@@ -153,11 +153,23 @@ static int MakeJitJump(u8 buf[5], intptr_t pc, intptr_t addr) {
   return n;
 }
 
+static struct JitJump *NewJitJump(void) {
+  return (struct JitJump *)malloc(sizeof(struct JitJump));
+}
+
+static void FreeJitJump(struct JitJump *jj) {
+  free(jj);
+}
+
 static void RelinquishJitBlock(struct JitBlock *jb) {
   struct Dll *e;
   while ((e = dll_first(jb->staged))) {
     dll_remove(&jb->staged, e);
     free(JITSTAGE_CONTAINER(e));
+  }
+  while ((e = dll_first(jb->jumps))) {
+    dll_remove(&jb->jumps, e);
+    FreeJitJump(JITJUMP_CONTAINER(e));
   }
   jb->start = 0;
   jb->index = 0;
@@ -230,6 +242,10 @@ int DestroyJit(struct Jit *jit) {
   while ((e = dll_first(jit->blocks))) {
     dll_remove(&jit->blocks, e);
     RelinquishJitBlock(JITBLOCK_CONTAINER(e));
+  }
+  while ((e = dll_first(jit->jumps))) {
+    dll_remove(&jit->jumps, e);
+    FreeJitJump(JITJUMP_CONTAINER(e));
   }
   UNLOCK(&jit->lock);
   unassert(!pthread_mutex_destroy(&jit->lock));
@@ -359,14 +375,6 @@ inline bool AppendJit(struct JitBlock *jb, const void *data, long size) {
     jb->index = jb->blocksize + 1;
     return false;
   }
-}
-
-static struct JitJump *NewJitJump(void) {
-  return (struct JitJump *)malloc(sizeof(struct JitJump));
-}
-
-static void FreeJitJump(struct JitJump *jj) {
-  free(jj);
 }
 
 static struct Dll *GetJitJumps(struct Jit *jit, hook_t *hook) {
