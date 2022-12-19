@@ -3556,7 +3556,7 @@ int main(int argc, char *argv[]) {
   sa.sa_sigaction = OnSigAlrm;
   unassert(!sigaction(SIGALRM, &sa, 0));
   sa.sa_sigaction = OnSigSegv;
-  // unassert(!sigaction(SIGSEGV, &sa, 0));
+  unassert(!sigaction(SIGSEGV, &sa, 0));
   m->system->blinksigs |= 1ull << (SIGINT_LINUX - 1) |   //
                           1ull << (SIGALRM_LINUX - 1) |  //
                           1ull << (SIGWINCH_LINUX - 1);  //
