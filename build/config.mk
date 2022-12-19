@@ -27,6 +27,7 @@ CPPFLAGS +=				\
 
 LDLIBS +=				\
 	-lm				\
+	-lrt				\
 	-pthread
 
 LDFLAGS_STATIC =			\
