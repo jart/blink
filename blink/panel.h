@@ -14,7 +14,7 @@ struct Panel {
   int n;
 };
 
-ssize_t PrintPanels(int, long, struct Panel *, long, long);
+char *RenderPanels(long, struct Panel *, long, long, size_t *);
 void PrintMessageBox(int, const char *, long, long);
 
 #endif /* BLINK_PANEL_H_ */

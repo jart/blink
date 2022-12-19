@@ -26,6 +26,9 @@ char *FormatUint64Thousands(char *, uint64_t);
 char *FormatSize(char *, uint64_t, uint64_t);
 char *Commandv(const char *, char *, size_t);
 char *Demangle(char *, const char *, size_t);
+void *Deflate(const void *, unsigned, unsigned *);
+void Inflate(void *, unsigned, const void *, unsigned);
+ssize_t UninterruptibleWrite(int, const void *, size_t);
 long Magikarp(u8 *, long);
 int GetCpuCount(void);
 

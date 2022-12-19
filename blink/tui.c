@@ -126,17 +126,20 @@ R       restart                   -H       disable highlighting\n\
 x       hex                       -v       increase verbosity\n\
 ?       help                      -j       enables jit\n\
 t       sse type                  -m       disables memory safety\n\
-w       sse width                 -?       help\n\
-B       pop breakpoint\n\
+w       sse width                 -N       natural scroll wheel\n\
+B       pop breakpoint            -?       help\n\
 ctrl-t  turbo\n\
 alt-t   slowmo"
 
-#define MAXZOOM    16
+#define FPS        60     // frames per second written to tty
+#define TURBO      true   // to keep executing between frames
+#define HISTORY    65536  // number of rewind renders to ring
+#define WHEELDELTA 1      // how much impact scroll wheel has
+#define MAXZOOM    16     // lg2 maximum memory panel scaling
+#define DISPWIDTH  80     // size of the embedded tty display
+#define DUMPWIDTH  64     // columns of bytes in memory panel
+#define ASMWIDTH   40     // seed the width of assembly panel
 #define ASMRAWMIN  (m->mode == XED_MODE_REAL ? 50 : 65)
-#define ASMWIDTH   40
-#define DISPWIDTH  80
-#define DUMPWIDTH  64
-#define WHEELDELTA 1
 
 #define RESTART  0x001
 #define REDRAW   0x002
@@ -243,6 +246,20 @@ struct Panels {
   };
 };
 
+struct Rendering {
+  u64 cycle;
+  void *data;
+  unsigned compsize;
+  unsigned origsize;
+};
+
+struct History {
+  unsigned index;
+  unsigned count;
+  unsigned viewing;
+  struct Rendering p[HISTORY];
+};
+
 static const char kRipName[3][4] = {"IP", "EIP", "RIP"};
 
 static const char kRegisterNames[3][16][4] = {
@@ -258,6 +275,7 @@ static bool belay;
 static bool react;
 static bool tuimode;
 static bool alarmed;
+static bool natural;
 static bool mousemode;
 static bool showhighsse;
 static bool readingteletype;
@@ -277,7 +295,7 @@ static int verbose;
 static int exitcode;
 
 static long ips;
-static long jips;
+static u64 cycle;
 static i64 oldlen;
 static i64 opstart;
 static int lastfds;
@@ -286,6 +304,7 @@ static u64 readsize;
 static u64 writeaddr;
 static u64 writesize;
 static i64 mapsstart;
+static u64 last_cycle;
 static char *codepath;
 static i64 framesstart;
 static struct Pty *pty;
@@ -293,10 +312,6 @@ static jmp_buf *onbusted;
 static const char *dialog;
 static char *statusmessage;
 static i64 breakpointsstart;
-static unsigned long opcount;
-static unsigned long jitcount;
-static unsigned long last_opcount;
-static unsigned long last_jitcount;
 
 static struct Panels pan;
 static struct Keystrokes keystrokes;
@@ -316,6 +331,7 @@ static struct timespec statusexpires;
 static struct termios oldterm;
 static char systemfailure[128];
 static struct sigaction oldsig[4];
+struct History g_history;
 
 static void SetupDraw(void);
 static void Redraw(void);
@@ -824,10 +840,10 @@ static void ExecSetup(void) {
   struct itimerval it;
   CommonSetup();
   it.it_interval.tv_sec = 0;
-  it.it_interval.tv_usec = 1. / 60 * 1e6;
+  it.it_interval.tv_usec = 1. / FPS * 1e6;
   it.it_value.tv_sec = 0;
-  it.it_value.tv_usec = 1. / 60 * 1e6;
-  setitimer(ITIMER_REAL, &it, NULL);
+  it.it_value.tv_usec = 1. / FPS * 1e6;
+  setitimer(ITIMER_REAL, &it, 0);
 }
 
 static void AppendPanel(struct Panel *p, i64 line, const char *s) {
@@ -1796,7 +1812,6 @@ static void DrawStatus(struct Panel *p) {
   s = (struct Buffer *)malloc(sizeof(*s));
   memset(s, 0, sizeof(*s));
   AppendStr(s, DescribeAction());
-  if (jips > 0) rw += AppendStat(s, 12, "jips", jips, false);
   rw += AppendStat(s, 12, "ips", ips, false);
   toto = kRealSize + (long)m->system->memstat.allocated * 4096;
   rw += AppendStat(s, 10, "kb", toto / 1024, false);
@@ -1815,20 +1830,97 @@ static void DrawStatus(struct Panel *p) {
 #undef MEMSTAT
 }
 
-void PreventBufferbloat(void) {
+bool PreventBufferbloat(void) {
+  bool should_write;
   struct timespec time, rate;
   static struct timespec last;
   time = GetTime();
-  rate = FromMicroseconds(1. / 60 * 1e6);
-  if (CompareTime(SubtractTime(time, last), rate) < 0) {
+  rate = FromMicroseconds(1. / FPS * 1e6);
+  if (CompareTime(SubtractTime(time, last), rate) >= 0) {
+    should_write = true;
+    last = time;
+  } else if (TURBO) {
+    should_write = false;
+  } else {
     SleepTime(SubtractTime(rate, SubtractTime(time, last)));
+    should_write = true;
+    last = time;
   }
-  last = time;
+  return should_write;
+}
+
+static void ClearHistory(void) {
+  unsigned i;
+  for (i = 0; i < HISTORY; ++i) {
+    if (g_history.p[i].data) {
+      free(g_history.p[i].data);
+      g_history.p[i].data = 0;
+    }
+  }
+  g_history.viewing = 0;
+  g_history.count = 0;
+}
+
+static void AddHistory(const char *ansi, size_t size) {
+  struct Rendering *r;
+  unassert(g_history.count <= HISTORY);
+  if (g_history.count &&
+      g_history.p[(g_history.index - 1) % HISTORY].cycle == cycle) {
+    return;  // execution hasn't advanced yet
+  }
+  if (g_history.count < HISTORY) {
+    ++g_history.count;
+  }
+  r = g_history.p + g_history.index % HISTORY;
+  free(r->data);
+  r->cycle = cycle;
+  r->origsize = size;
+  r->data = Deflate(ansi, size, &r->compsize);
+  ++g_history.index;
+}
+
+static void RewindHistory(int delta) {
+  int count = g_history.count;
+  int viewing = g_history.viewing;
+  g_history.viewing = MAX(0, MIN(viewing + delta, count));
+}
+
+static void ShowHistory(void) {
+  char *ansi;
+  size_t len, size;
+  char status[1024];
+  struct Rendering *r;
+  unassert(g_history.viewing > 0);
+  unassert(g_history.viewing <= HISTORY);
+  unassert(g_history.viewing <= g_history.count);
+  r = g_history.p + (g_history.index - g_history.viewing) % HISTORY;
+  unassert(r->data);
+  len = snprintf(status, sizeof(status),
+                 "\033[7;35;47m\033[%d;0H"
+                 " [ HISTORY %d/%d CYCLE %" PRIu64 " ] "
+                 "\033[0m\033[%d;%dH",
+                 tyn, g_history.count - (g_history.viewing - 1),
+                 g_history.count, r->cycle, tyn, txn);
+  unassert(len < sizeof(status));
+  size = r->origsize + len;
+  unassert(ansi = (char *)malloc(size));
+  Inflate(ansi, r->origsize, r->data, r->compsize);
+  memcpy(ansi + r->origsize, status, len);
+  if (PreventBufferbloat()) {
+    unassert(UninterruptibleWrite(ttyout, ansi, size) != -1);
+  }
+  free(ansi);
 }
 
 static void Redraw(void) {
   int i, j;
+  char *ansi;
+  size_t size;
   double execsecs;
+  if (g_history.viewing) {
+    ShowHistory();
+    return;
+  }
   execsecs = ToNanoseconds(SubtractTime(GetTime(), last_draw)) * 1e-9;
   oldlen = m->xedd->length;
   if (!IsShadow(m->readaddr) && !IsShadow(m->readaddr + m->readsize)) {
@@ -1840,8 +1932,7 @@ static void Redraw(void) {
     writesize = m->writesize;
   }
   ScrollOp(&pan.disassembly, GetDisIndex());
-  ips = last_opcount ? (opcount - last_opcount) / execsecs : 0;
-  jips = last_jitcount ? (jitcount - last_jitcount) / execsecs : 0;
+  ips = last_cycle ? (cycle - last_cycle) / execsecs : 0;
   SetupDraw();
   for (i = 0; i < ARRAYLEN(pan.p); ++i) {
     for (j = 0; j < pan.p[i].bottom - pan.p[i].top; ++j) {
@@ -1868,10 +1959,13 @@ static void Redraw(void) {
   DrawMemory(&pan.writedata, &writeview, writeaddr, writeaddr + writesize);
   DrawMemory(&pan.stack, &stackview, GetSp(), GetSp() + GetPointerWidth());
   DrawStatus(&pan.status);
-  PreventBufferbloat();
-  PrintPanels(ttyout, ARRAYLEN(pan.p), pan.p, tyn, txn);
-  last_jitcount = jitcount;
-  last_opcount = opcount;
+  unassert(ansi = RenderPanels(ARRAYLEN(pan.p), pan.p, tyn, txn, &size));
+  if (PreventBufferbloat()) {
+    unassert(UninterruptibleWrite(ttyout, ansi, size) != -1);
+  }
+  AddHistory(ansi, size);
+  free(ansi);
+  last_cycle = cycle;
   last_draw = GetTime();
 }
 
@@ -1900,9 +1994,11 @@ static void DescribeKeystroke(char *b, const char *p) {
 }
 
 static void RecordKeystroke(const char *k) {
-  keystrokes.s[keystrokes.i] = GetTime();
-  DescribeKeystroke(keystrokes.p[keystrokes.i], k);
-  keystrokes.i = (keystrokes.i + 1) % ARRAYLEN(keystrokes.p);
+  if (!strchr(k, '[')) {
+    keystrokes.s[keystrokes.i] = GetTime();
+    DescribeKeystroke(keystrokes.p[keystrokes.i], k);
+    keystrokes.i = (keystrokes.i + 1) % ARRAYLEN(keystrokes.p);
+  }
 }
 
 static void HandleAlarm(void) {
@@ -1913,13 +2009,18 @@ static void HandleAlarm(void) {
   statusmessage = NULL;
 }
 
+static void HandleTerminalResize(void) {
+  GetTtySize(ttyout);
+  ClearHistory();
+}
+
 static void HandleAppReadInterrupt(void) {
   LOGF("HandleAppReadInterrupt");
   if (action & ALARM) {
     HandleAlarm();
   }
   if (action & WINCHED) {
-    GetTtySize(ttyout);
+    HandleTerminalResize();
     action &= ~WINCHED;
   }
   if (action & INT) {
@@ -2608,14 +2709,6 @@ static void OnLongBranch(struct Machine *m) {
   }
 }
 
-static void OnPageUp(void) {
-  opstart -= tyn / 2;
-}
-
-static void OnPageDown(void) {
-  opstart += tyn / 2;
-}
-
 static void SetStatus(const char *fmt, ...) {
   char *s;
   va_list va;
@@ -2660,19 +2753,27 @@ static void OnSlowmo(void) {
 }
 
 static void OnUpArrow(void) {
-  --opstart;
+  RewindHistory(+1);
 }
 
 static void OnDownArrow(void) {
-  ++opstart;
+  RewindHistory(-1);
+}
+
+static void OnPageUp(void) {
+  RewindHistory(+100);
+}
+
+static void OnPageDown(void) {
+  RewindHistory(-100);
 }
 
 static void OnHome(void) {
-  opstart = 0;
+  RewindHistory(+g_history.count);
 }
 
 static void OnEnd(void) {
-  opstart = dis->ops.i - (pan.disassembly.bottom - pan.disassembly.top);
+  RewindHistory(-g_history.count);
 }
 
 static void OnEnter(void) {
@@ -2776,7 +2877,7 @@ static void Sleep(int ms) {
 
 static void OnMouseWheelUp(struct Panel *p, int y, int x) {
   if (p == &pan.disassembly) {
-    opstart -= WHEELDELTA;
+    RewindHistory(+WHEELDELTA);
   } else if (p == &pan.code) {
     codeview.start -= WHEELDELTA;
   } else if (p == &pan.readdata) {
@@ -2796,7 +2897,7 @@ static void OnMouseWheelUp(struct Panel *p, int y, int x) {
 
 static void OnMouseWheelDown(struct Panel *p, int y, int x) {
   if (p == &pan.disassembly) {
-    opstart += WHEELDELTA;
+    RewindHistory(-WHEELDELTA);
   } else if (p == &pan.code) {
     codeview.start += WHEELDELTA;
   } else if (p == &pan.readdata) {
@@ -2837,10 +2938,34 @@ static void OnMouse(const char *p) {
     y -= ep->top;
     x -= ep->left;
     switch (e) {
-      CASE(kMouseWheelUp, OnMouseWheelUp(ep, y, x));
-      CASE(kMouseWheelDown, OnMouseWheelDown(ep, y, x));
-      CASE(kMouseCtrlWheelUp, OnMouseCtrlWheelUp(ep, y, x));
-      CASE(kMouseCtrlWheelDown, OnMouseCtrlWheelDown(ep, y, x));
+      case kMouseWheelUp:
+        if (!natural) {
+          OnMouseWheelUp(ep, y, x);
+        } else {
+          OnMouseWheelDown(ep, y, x);
+        }
+        break;
+      case kMouseWheelDown:
+        if (!natural) {
+          OnMouseWheelDown(ep, y, x);
+        } else {
+          OnMouseWheelUp(ep, y, x);
+        }
+        break;
+      case kMouseCtrlWheelUp:
+        if (!natural) {
+          OnMouseCtrlWheelUp(ep, y, x);
+        } else {
+          OnMouseCtrlWheelDown(ep, y, x);
+        }
+        break;
+      case kMouseCtrlWheelDown:
+        if (!natural) {
+          OnMouseCtrlWheelDown(ep, y, x);
+        } else {
+          OnMouseCtrlWheelUp(ep, y, x);
+        }
+        break;
       default:
         break;
     }
@@ -3002,6 +3127,22 @@ static void EnterWatchpoint(long bp) {
   tuimode = true;
 }
 
+static void StartOp_Tui(P) {
+  ++cycle;
+}
+
+static void Execute(void) {
+  u64 c;
+  if (g_history.viewing) {
+    g_history.viewing = 0;
+  }
+  c = cycle;
+  ExecuteInstruction(m);
+  if (c == cycle) {
+    ++cycle;
+  }
+}
+
 static void Exec(void) {
   int sig;
   ssize_t bp;
@@ -3016,13 +3157,12 @@ static void Exec(void) {
       tuimode = true;
       LoadInstruction(m, GetPc(m));
       if (verbose) LogInstruction();
-      ExecuteInstruction(m);
+      Execute();
       if (m->signals) {
         if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
           exit(128 + sig);
         }
       }
-      ++opcount;
       CheckFramePointer();
     } else if (!(action & CONTINUE) &&
                (bp = IsAtWatchpoint(&watchpoints, m)) != -1) {
@@ -3045,13 +3185,12 @@ static void Exec(void) {
           break;
         }
         if (verbose) LogInstruction();
-        ExecuteInstruction(m);
+        Execute();
         if (m->signals) {
           if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
             exit(128 + sig);
           }
         }
-        ++opcount;
       KeepGoing:
         CheckFramePointer();
         if (action & ALARM) {
@@ -3118,10 +3257,10 @@ static void Tui(void) {
         m->xedd->op.rde &= 0xCCull << 40;  // sets mopcode to int3
       }
       if (action & WINCHED) {
-        GetTtySize(ttyout);
+        HandleTerminalResize();
         action &= ~WINCHED;
       }
-      interactive = ++tick > speed;
+      interactive = ++tick >= speed;
       if (interactive && speed < 0) {
         Sleep(-speed);
       }
@@ -3194,13 +3333,12 @@ static void Tui(void) {
         if (!IsDebugBreak() && IsAtWatchpoint(&watchpoints, m) == -1) {
           UpdateXmmType(m->xedd->op.rde, &xmmtype);
           if (verbose) LogInstruction();
-          ExecuteInstruction(m);
+          Execute();
           if (m->signals) {
             if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
               exit(128 + sig);
             }
           }
-          ++opcount;
           if (!(action & CONTINUE) || interactive) {
             if (!(action & CONTINUE)) ReactiveDraw();
             ScrollMemoryViews();
@@ -3240,7 +3378,7 @@ static void GetOpts(int argc, char *argv[]) {
   bool wantjit = false;
   bool wantunsafe = false;
   const char *logpath = 0;
-  while ((opt = getopt_(argc, argv, "hjmvtrzRsb:Hw:L:")) != -1) {
+  while ((opt = getopt_(argc, argv, "hjmvtrzRNsb:Hw:L:")) != -1) {
     switch (opt) {
       case 'j':
         wantjit = true;
@@ -3260,6 +3398,9 @@ static void GetOpts(int argc, char *argv[]) {
         break;
       case 'R':
         react = false;
+        break;
+      case 'N':
+        natural = true;
         break;
       case 'r':
         m->metal = true;
@@ -3306,10 +3447,6 @@ static void GetOpts(int argc, char *argv[]) {
 
 static int OpenDevTty(void) {
   return open("/dev/tty", O_RDWR | O_NOCTTY);
-}
-
-static void StartOp_Tui(P) {
-  ++jitcount;
 }
 
 static void AddPath_StartOp_Tui(P) {
@@ -3403,7 +3540,7 @@ int main(int argc, char *argv[]) {
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;
   m->system->onlongbranch = OnLongBranch;
-  speed = 16;
+  speed = 1;
   SetXmmSize(2);
   SetXmmDisp(kXmmHex);
   GetOpts(argc, argv);
@@ -3426,6 +3563,7 @@ int main(int argc, char *argv[]) {
   if (optind_ == argc) PrintUsage(48, stderr);
   rc = VirtualMachine(argc, argv);
   FreeMachine(m);
+  ClearHistory();
   FreePanels();
   if (FLAG_statistics) {
     PrintStats();

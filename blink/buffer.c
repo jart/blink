@@ -26,23 +26,30 @@
 
 #include "blink/buffer.h"
 #include "blink/macros.h"
+#include "blink/stats.h"
 #include "blink/tpenc.h"
+#include "blink/util.h"
 
-void AppendData(struct Buffer *b, const char *data, int len) {
+static bool GrowBuffer(struct Buffer *b, int need) {
   char *p;
   unsigned n;
-  if (b->i + len + 1 > b->n) {
-    n = MAX(b->i + len + 1, MAX(16, b->n + (b->n >> 1)));
-    if (!(p = (char *)realloc(b->p, n))) return;
-    b->p = p;
-    b->n = n;
-  }
+  n = MAX(b->i + need, MAX(16, b->n + (b->n >> 1)));
+  if (!(p = (char *)realloc(b->p, n))) return false;
+  b->p = p;
+  b->n = n;
+  return true;
+}
+
+void AppendData(struct Buffer *b, const char *data, int len) {
+  if (b->i + len + 1 > b->n && !GrowBuffer(b, len + 1)) return;
   memcpy(b->p + b->i, data, len);
   b->p[b->i += len] = 0;
 }
 
 void AppendChar(struct Buffer *b, char c) {
-  AppendData(b, &c, 1);
+  if (b->i + 2 > b->n && !GrowBuffer(b, 2)) return;
+  b->p[b->i++] = c;
+  b->p[b->i] = 0;
 }
 
 void AppendStr(struct Buffer *b, const char *s) {
@@ -50,16 +57,20 @@ void AppendStr(struct Buffer *b, const char *s) {
 }
 
 void AppendWide(struct Buffer *b, wint_t wc) {
-  unsigned i;
   u64 wb;
+  unsigned i;
   char buf[8];
-  i = 0;
-  wb = tpenc(wc);
-  do {
-    buf[i++] = wb & 0xFF;
-    wb >>= 8;
-  } while (wb);
-  AppendData(b, buf, i);
+  if (0 <= wc && wc <= 0x7f) {
+    AppendChar(b, wc);
+  } else {
+    i = 0;
+    wb = tpenc(wc);
+    do {
+      buf[i++] = wb & 0xFF;
+      wb >>= 8;
+    } while (wb);
+    AppendData(b, buf, i);
+  }
 }
 
 int AppendFmt(struct Buffer *b, const char *fmt, ...) {
@@ -85,32 +96,14 @@ int AppendFmt(struct Buffer *b, const char *fmt, ...) {
   return n;
 }
 
-/**
- * Writes buffer until completion, or error occurs.
- */
-ssize_t WriteBuffer(struct Buffer *b, int fd) {
-  bool t;
-  char *p;
+ssize_t UninterruptibleWrite(int fd, const void *p, size_t n) {
+  size_t i;
   ssize_t rc;
-  size_t wrote, n;
-  p = b->p;
-  n = b->i;
-  t = false;
-  do {
-    if ((rc = write(fd, p, n)) != -1) {
-      wrote = rc;
-      p += wrote;
-      n -= wrote;
-    } else if (errno == EINTR) {
-      t = true;
-    } else {
-      return -1;
-    }
-  } while (n);
-  if (!t) {
-    return 0;
-  } else {
-    errno = EINTR;
-    return -1;
+  for (i = 0; i < n; i += rc) {
+  TryAgain:
+    rc = write(fd, (const char *)p + i, n - i);
+    if (rc == -1 && errno == EINTR) goto TryAgain;
+    if (rc == -1) return -1;
   }
+  return n;
 }

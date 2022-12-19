@@ -16,14 +16,42 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/timeval.h"
+#include <stdlib.h>
+#include <zlib.h>
 
-struct timeval timeval_sub(struct timeval a, struct timeval b) {
-  a.tv_sec -= b.tv_sec;
-  if (a.tv_usec < b.tv_usec) {
-    a.tv_usec += 1000000;
-    a.tv_sec--;
-  }
-  a.tv_usec -= b.tv_usec;
-  return a;
+#include "blink/assert.h"
+#include "blink/util.h"
+
+void *Deflate(const void *data, unsigned size, unsigned *out_size) {
+  void *res;
+  uLong bound;
+  z_stream zs = {0};
+  bound = compressBound(size);
+  unassert(res = malloc(bound));
+  unassert(deflateInit2(&zs, 4, Z_DEFLATED, -MAX_WBITS, 8,
+                        Z_DEFAULT_STRATEGY) == Z_OK);
+  zs.next_in = (z_const Bytef *)data;
+  zs.avail_in = size;
+  zs.avail_out = bound;
+  zs.next_out = (Bytef *)res;
+  unassert(deflate(&zs, Z_FINISH) == Z_STREAM_END);
+  unassert(deflateEnd(&zs) == Z_OK);
+  unassert(res = realloc(res, zs.total_out));
+  *out_size = zs.total_out;
+  return res;
+}
+
+void Inflate(void *out, unsigned outsize, const void *in, unsigned insize) {
+  z_stream zs;
+  zs.next_in = (z_const Bytef *)in;
+  zs.avail_in = insize;
+  zs.total_in = insize;
+  zs.next_out = (Bytef *)out;
+  zs.avail_out = outsize;
+  zs.total_out = outsize;
+  zs.zalloc = Z_NULL;
+  zs.zfree = Z_NULL;
+  unassert(inflateInit2(&zs, -MAX_WBITS) == Z_OK);
+  unassert(inflate(&zs, Z_FINISH) == Z_STREAM_END);
+  unassert(inflateEnd(&zs) == Z_OK);
 }

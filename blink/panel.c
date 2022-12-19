@@ -16,15 +16,17 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/types.h"
 #include <stdlib.h>
 #include <string.h>
 
+#include "blink/assert.h"
 #include "blink/bitscan.h"
 #include "blink/buffer.h"
 #include "blink/builtin.h"
+#include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/panel.h"
+#include "blink/types.h"
 
 static int tpdecode(const char *s, wint_t *out) {
   u32 wc, cb, need, msb, j, i = 0;
@@ -55,17 +57,15 @@ static int tpdecode(const char *s, wint_t *out) {
  *
  * You can use all the UNICODE and ANSI escape sequences you want.
  *
- * @param fd is file descriptor
  * @param pn is number of panels
  * @param p is panel list in logically sorted order
  * @param tyn is terminal height in cells
  * @param txn is terminal width in cells
- * @return -1 w/ errno if an error happened
- * @see nblack's notcurses project too!
+ * @param size optionally receives length of result
+ * @return ANSI codes, or null w/ errno
  */
-ssize_t PrintPanels(int fd, long pn, struct Panel *p, long tyn, long txn) {
+char *RenderPanels(long pn, struct Panel *p, long tyn, long txn, size_t *size) {
   wint_t wc;
-  ssize_t rc;
   struct Buffer b, *l;
   int x, y, i, j, width;
   enum { kUtf8, kAnsi, kAnsiCsi } s;
@@ -259,7 +259,7 @@ ssize_t PrintPanels(int fd, long pn, struct Panel *p, long tyn, long txn) {
       }
     }
   }
-  rc = WriteBuffer(&b, fd);
-  free(b.p);
-  return rc;
+  unassert(b.p = (char *)realloc(b.p, b.i + 1));
+  if (size) *size = b.i;
+  return b.p;
 }

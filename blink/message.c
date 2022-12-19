@@ -29,6 +29,7 @@
 #include "blink/macros.h"
 #include "blink/panel.h"
 #include "blink/strwidth.h"
+#include "blink/util.h"
 
 static int GetWidthOfLongestLine(struct Lines *lines) {
   int i, w, m;
@@ -58,8 +59,8 @@ void PrintMessageBox(int fd, const char *msg, long tyn, long txn) {
   AppendFmt(&b, "\033[%d;%dH ║  %-*s  ║ ", y++, x, w - 8, "");
   for (i = 0; i < lines->n; ++i) {
     int lw = strwidth(lines->p[i], 0);
-    AppendFmt(&b, "\033[%d;%dH ║  %s%-*s  ║ ", y++, x, lines->p[i],
-                                               w - 8 - lw, "");
+    AppendFmt(&b, "\033[%d;%dH ║  %s%-*s  ║ ", y++, x, lines->p[i], w - 8 - lw,
+              "");
   }
   FreeLines(lines);
   AppendFmt(&b, "\033[%d;%dH ║  %-*s  ║ ", y++, x, w - 8, "");
@@ -68,9 +69,6 @@ void PrintMessageBox(int fd, const char *msg, long tyn, long txn) {
   AppendStr(&b, "╝ ");
   AppendFmt(&b, "\033[%d;%dH", y++, x);
   for (i = 0; i < w; ++i) AppendStr(&b, " ");
-  if (WriteBuffer(&b, fd) == -1) {
-    LOGF("WriteBuffer failed: %s", strerror(errno));
-    exit(1);
-  }
+  UninterruptibleWrite(fd, b.p, b.i);
   free(b.p);
 }
