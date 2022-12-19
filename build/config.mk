@@ -27,8 +27,11 @@ CPPFLAGS +=				\
 
 LDLIBS +=				\
 	-lm				\
-	-lrt				\
 	-pthread
+
+ifneq ($(HOST_OS), Darwin)
+LDLIBS += -lrt
+endif
 
 LDFLAGS_STATIC =			\
 	-static				\

@@ -1,6 +1,14 @@
 #ifndef BLINK_MACROS_H_
 #define BLINK_MACROS_H_
 
+#ifdef MIN
+#undef MIN
+#endif
+
+#ifdef MAX
+#undef MAX
+#endif
+
 #define ROUNDDOWN(X, K) ((X) & -(K))
 #define ROUNDUP(X, K)   (((X) + (K)-1) & -(K))
 #define IS2POW(X)       (!((X) & ((X)-1)))
