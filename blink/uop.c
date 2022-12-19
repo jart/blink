@@ -395,21 +395,24 @@ long GetMicroOpLengthImpl(void *uop) {
 
 long GetMicroOpLength(void *uop) {
 #ifdef __x86_64__
-#define kMaxOps 64
-  static long count;
-  static void *ops[kMaxOps];
-  static short len[kMaxOps];
-  long i, res;
-  for (i = 0; i < count; ++i) {
-    if (ops[i] == uop) {
-      return len[i];
-    }
-  }
+#define kMaxOps 128
+  static unsigned count;
+  static void *ops[kMaxOps * 2];
+  static short len[kMaxOps * 2];
+  long res;
+  unsigned hash, i, step;
+  i = 0;
+  step = 0;
+  hash = ((uintptr_t)uop * 0x9e3779b1u) >> 16;
+  do {
+    i = (hash + step * (step + 1) / 2) & (kMaxOps - 1);
+    if (ops[i] == uop) return len[i];
+    ++step;
+  } while (ops[i]);
   res = GetMicroOpLengthImpl(uop);
-  unassert(count < kMaxOps);
-  ops[count] = uop;
-  len[count] = res;
-  ++count;
+  unassert(count++ < kMaxOps);
+  ops[i] = uop;
+  len[i] = res;
   return res;
 #else
   return GetMicroOpLengthImpl(uop);

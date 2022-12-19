@@ -81,7 +81,7 @@ void HaltMachine(struct Machine *m, int code) {
       }
   }
   unassert(m->canhalt);
-  longjmp(m->onhalt, code);
+  siglongjmp(m->onhalt, code);
 }
 
 void RaiseDivideError(struct Machine *m) {

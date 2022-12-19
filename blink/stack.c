@@ -151,7 +151,9 @@ static void OpCall(P, u64 func) {
 
 void OpCallJvds(P) {
   OpCall(A, m->ip + disp);
-  Terminate(A, FastCall);
+  if (HasLinearMapping(m)) {
+    Terminate(A, FastCall);
+  }
 }
 
 static u64 LoadAddressFromMemory(P) {

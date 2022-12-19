@@ -13,6 +13,8 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include "blink/machine.h"
+
 #define TEST(GROUP, NAME)                                             \
   void GROUP##_##NAME(void);                                          \
   __attribute__((__constructor__)) void GROUP##_##NAME##_init(void) { \
@@ -379,6 +381,10 @@ static void WaitForTerm(const char *file, int line, const char *code, int sig,
   }
   fprintf(stderr, "\t%s\n", host);
   exit(1);
+}
+
+_Noreturn void TerminateSignal(struct Machine *m, int sig) {
+  abort();
 }
 
 int main(int argc, char *argv[]) {

@@ -16,6 +16,7 @@
 #define LOG_JIX 0
 #define LOG_MEM 0
 #define LOG_THR 0
+#define LOG_ELF 0
 
 #if LOG_ENABLED
 #define LOGF(...) Log(__FILE__, __LINE__, __VA_ARGS__)
@@ -63,6 +64,12 @@
 #define THR_LOGF(...) Log(__FILE__, __LINE__, "(thr) " __VA_ARGS__)
 #else
 #define THR_LOGF(...) (void)0
+#endif
+
+#if LOG_ELF
+#define ELF_LOGF(...) Log(__FILE__, __LINE__, "(elf) " __VA_ARGS__)
+#else
+#define ELF_LOGF(...) (void)0
 #endif
 
 #if LOG_ENABLED

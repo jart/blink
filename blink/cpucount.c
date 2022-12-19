@@ -17,11 +17,11 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <stdatomic.h>
+#include <sys/types.h>
 #ifdef __linux
 #include <sched.h>
 #elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
 #include <sys/sysctl.h>
-#include <sys/types.h>
 #define HAVE_SYSCTL
 #elif defined(__NetBSD__)
 #include <sys/param.h>

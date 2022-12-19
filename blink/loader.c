@@ -46,7 +46,9 @@ static bool CouldJit(struct Machine *m) {
 }
 
 static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
-                              const Elf64_Phdr *phdr, i64 last_end) {
+                              const Elf64_Phdr *phdr, i64 last_end, int fd) {
+  i64 bulk;
+  struct System *s = m->system;
   u32 flags = Read32(phdr->p_flags);
   i64 vaddr = Read64(phdr->p_vaddr);
   i64 memsz = Read64(phdr->p_memsz);
@@ -55,6 +57,20 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
   long pagesize = GetSystemPageSize();
   i64 start = ROUNDDOWN(vaddr, pagesize);
   i64 end = ROUNDUP(vaddr + memsz, pagesize);
+  long skew = vaddr & (pagesize - 1);
+  u64 key = (flags & PF_R ? PAGE_U : 0) |   //
+            (flags & PF_W ? PAGE_RW : 0) |  //
+            (flags & PF_X ? 0 : PAGE_XD);
+
+  ELF_LOGF("PROGRAM HEADER");
+  ELF_LOGF("  vaddr = %" PRIx64, vaddr);
+  ELF_LOGF("  memsz = %" PRIx64, memsz);
+  ELF_LOGF("  offset = %" PRIx64, offset);
+  ELF_LOGF("  filesz = %" PRIx64, filesz);
+  ELF_LOGF("  pagesize = %" PRIx64, pagesize);
+  ELF_LOGF("  start = %" PRIx64, start);
+  ELF_LOGF("  end = %" PRIx64, end);
+  ELF_LOGF("  skew = %lx", skew);
 
   if (offset > imagesize) {
     LOGF("bad phdr offset");
@@ -72,39 +88,97 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
     LOGF("program headers aren't ordered");
     exit(127);
   }
-  if (memsz <= 0) {
-    return last_end;
+  if (skew != (offset & (pagesize - 1))) {
+    LOGF("p_vaddr p_offset skew unequal w.r.t. host page size");
+    exit(127);
   }
 
   // on systems with a page size greater than the elf executable (e.g.
   // apple m1) it's possible for the second program header load to end
   // up overlapping the previous one.
-  if (memsz > 0 && start < last_end) {
+  if (start < last_end) {
     start += last_end - start;
-    memsz = end - start;
+  }
+  if (start >= end) {
+    return last_end;
   }
 
-  if (memsz > 0) {
-    if (ReserveVirtual(m->system, start, end - start,
-                       (flags & PF_R ? PAGE_U : 0) |
-                           (flags & PF_W ? PAGE_RW : 0) |
-                           (flags & PF_X ? 0 : PAGE_XD),
-                       -1, false) == -1) {
-      LOGF("failed to reserve virtual memory for elf program header");
-      exit(127);
+  // mmap() always returns an address that page-size aligned, but elf
+  // program headers can start at any address. therefore the first page
+  // needs to be loaded with special care, if the phdr is skewed. the
+  // only real rule in this situation is that the skew of of the virtual
+  // address and the file offset need to be the same.
+  if (skew) {
+    if (vaddr > start && start + pagesize <= end) {
+      unassert(vaddr < start + pagesize);
+      ELF_LOGF("alloc %" PRIx64 "-%" PRIx64, start, start + pagesize);
+      if (ReserveVirtual(s, start, pagesize, key, -1, 0, 0) == -1) {
+        LOGF("failed to allocate program header skew");
+        exit(127);
+      }
+      start += pagesize;
+    }
+    ELF_LOGF("copy %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64, vaddr,
+             vaddr + (pagesize - skew), offset,
+             offset + MIN(filesz, pagesize - skew));
+    CopyToUser(m, vaddr, (u8 *)image + offset, MIN(filesz, pagesize - skew));
+    vaddr += pagesize - skew;
+    offset += pagesize - skew;
+    filesz -= MIN(filesz, pagesize - skew);
+  }
+
+  // load the aligned program header.
+  unassert(start <= end);
+  unassert(vaddr == start);
+  unassert(vaddr + filesz <= end);
+  unassert(!(vaddr & (pagesize - 1)));
+  unassert(!(start & (pagesize - 1)));
+  unassert(!(offset & (pagesize - 1)));
+  if (start < end) {
+    bulk = ROUNDDOWN(filesz, pagesize);
+    unassert(bulk >= 0);
+    if (bulk) {
+      // map the bulk of .text directly into memory without copying.
+      ELF_LOGF("load %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64, start,
+               start + bulk, offset, offset + bulk);
+      if (ReserveVirtual(s, start, bulk, key, fd, offset, 0) == -1) {
+        LOGF("failed to map elf program header file data");
+        exit(127);
+      }
+      if (!HasLinearMapping(m->system) && fd != -1) {
+        SyncVirtual(m, start, bulk, fd, offset);
+      }
+    }
+    start += bulk;
+    offset += bulk;
+    filesz -= bulk;
+    if (start < end) {
+      // allocate .bss zero-initialized memory.
+      ELF_LOGF("alloc %" PRIx64 "-%" PRIx64, start, end);
+      if (ReserveVirtual(s, start, end - start, key, -1, 0, 0) == -1) {
+        LOGF("failed to allocate program header bss");
+        exit(127);
+      }
+      // copy the tail skew.
+      if (filesz) {
+        ELF_LOGF("copy %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64,
+                 start, start + filesz, offset, offset + filesz);
+        CopyToUser(m, start, (u8 *)image + offset, filesz);
+      }
+    } else {
+      unassert(!filesz);
     }
   }
 
-  CopyToUser(m, vaddr, (u8 *)image + offset, filesz);
-  m->system->brk = MAX(m->system->brk, end);
+  s->brk = MAX(s->brk, end);
 
 #ifdef HAVE_JIT
   if ((flags & PF_X) && CouldJit(m)) {
-    if (!m->system->codesize) {
-      m->system->codestart = vaddr;
-      m->system->codesize = memsz;
-    } else if (vaddr == m->system->codestart + m->system->codesize) {
-      m->system->codesize += memsz;
+    if (!s->codesize) {
+      s->codestart = vaddr;
+      s->codesize = memsz;
+    } else if (vaddr == s->codestart + s->codesize) {
+      s->codesize += memsz;
     } else {
       LOGF("elf has multiple executable program headers at noncontiguous "
            "addresses; only the first region will benefit from jitting");
@@ -129,8 +203,8 @@ bool IsSupportedExecutable(const char *path, void *image) {
 }
 
 static void LoadFlatExecutable(struct Machine *m, intptr_t base,
-                               const char *prog, void *image,
-                               size_t imagesize) {
+                               const char *prog, void *image, size_t imagesize,
+                               int fd) {
   Elf64_Phdr phdr;
   Write32(phdr.p_type, PT_LOAD);
   Write32(phdr.p_flags, PF_X | PF_R | PF_W);
@@ -138,11 +212,11 @@ static void LoadFlatExecutable(struct Machine *m, intptr_t base,
   Write64(phdr.p_vaddr, base);
   Write64(phdr.p_filesz, imagesize);
   Write64(phdr.p_memsz, ROUNDUP(imagesize + kRealSize, 4096));
-  LoadElfLoadSegment(m, image, imagesize, &phdr, 0);
+  LoadElfLoadSegment(m, image, imagesize, &phdr, 0, fd);
   m->ip = base;
 }
 
-static bool LoadElf(struct Machine *m, struct Elf *elf) {
+static bool LoadElf(struct Machine *m, struct Elf *elf, int fd) {
   int i;
   Elf64_Phdr *phdr;
   i64 end = INT64_MIN;
@@ -153,7 +227,7 @@ static bool LoadElf(struct Machine *m, struct Elf *elf) {
     switch (Read32(phdr->p_type)) {
       case PT_LOAD:
         elf->base = MIN(elf->base, (i64)Read64(phdr->p_vaddr));
-        end = LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, end);
+        end = LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, end, fd);
         break;
       case PT_GNU_STACK:
         execstack = false;
@@ -270,7 +344,6 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
     WriteErrorString("\n");
     exit(127);
   };
-  unassert(!close(fd));
   if (!IsSupportedExecutable(prog, elf->map)) {
     WriteErrorString("\
 error: unsupported executable; we need:\n\
@@ -290,25 +363,25 @@ error: unsupported executable; we need:\n\
     if (READ32(elf->map) == READ32("\177ELF")) {
       elf->ehdr = (Elf64_Ehdr *)elf->map;
       elf->size = elf->mapsize;
-      execstack = LoadElf(m, elf);
+      execstack = LoadElf(m, elf, fd);
     } else if (READ64(elf->map) == READ64("MZqFpD='") ||
                READ64(elf->map) == READ64("jartsr='")) {
       if (GetElfHeader(ehdr, prog, elf->map) == -1) exit(127);
       memcpy(elf->map, ehdr, 64);
       elf->ehdr = (Elf64_Ehdr *)elf->map;
       elf->size = elf->mapsize;
-      execstack = LoadElf(m, elf);
+      execstack = LoadElf(m, elf, fd);
     } else {
       elf->base = 0x400000;
       elf->ehdr = NULL;
       elf->size = 0;
-      LoadFlatExecutable(m, elf->base, prog, elf->map, elf->mapsize);
+      LoadFlatExecutable(m, elf->base, prog, elf->map, elf->mapsize, fd);
       execstack = true;
     }
     sp = kStackTop;
     Put64(m->sp, sp);
     if (ReserveVirtual(m->system, sp - kStackSize, kStackSize,
-                       PAGE_U | PAGE_RW | (execstack ? 0 : PAGE_XD), -1,
+                       PAGE_U | PAGE_RW | (execstack ? 0 : PAGE_XD), -1, 0,
                        false) == -1) {
       LOGF("failed to reserve stack memory");
       exit(127);
@@ -319,4 +392,5 @@ error: unsupported executable; we need:\n\
   pagesize = sysconf(_SC_PAGESIZE);
   pagesize = MAX(4096, pagesize);
   m->system->brk = ROUNDUP(m->system->brk, pagesize);
+  unassert(!close(fd));
 }

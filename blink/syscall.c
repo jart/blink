@@ -295,7 +295,7 @@ static void *OnSpawn(void *arg) {
   struct Machine *m = (struct Machine *)arg;
   THR_LOGF("pid=%d tid=%d OnSpawn", m->system->pid, m->tid);
   g_machine = m;
-  if (!(rc = setjmp(m->onhalt))) {
+  if (!(rc = sigsetjmp(m->onhalt, 1))) {
     unassert(!pthread_sigmask(SIG_SETMASK, &m->spawn_sigmask, 0));
     Actor(m);
   } else {
@@ -617,20 +617,24 @@ static u64 Prot2Page(int prot) {
 }
 
 static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
-  u64 i, key;
+  _Static_assert(PROT_READ == 1, "");
+  _Static_assert(PROT_WRITE == 2, "");
+  _Static_assert(PROT_EXEC == 4, "");
+  u64 i;
+  int rc;
   long gotsome = 0;
   if (!IsValidAddrSize(addr, size)) return einval();
-  if ((key = Prot2Page(prot)) == -1) return einval();
+  if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) return einval();
   LOCK(&m->system->mmap_lock);
-  ProtectVirtual(m->system, addr, size, ~(PAGE_U | PAGE_RW | PAGE_XD), key);
-  // TODO(jart): Store jump edges to invalidate smarter.
-  if (prot & PROT_EXEC) {
+  rc = ProtectVirtual(m->system, addr, size, prot);
+  if (rc != -1 && (prot & PROT_EXEC)) {
+    // TODO(jart): Store jump edges to invalidate smarter.
     for (i = m->system->codestart;
          i < m->system->codestart + m->system->codesize; ++i) {
       if (GetHook(m, i) != GeneralDispatch) {
         SetHook(m, i, 0);
+        ++gotsome;
       }
-      ++gotsome;
     }
   }
   UNLOCK(&m->system->mmap_lock);
@@ -638,7 +642,7 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
     MEM_LOGF("mprotect(PROT_EXEC) reset %ld JIT hooks", gotsome);
     InvalidateSystem(m->system, false, true);
   }
-  return 0;
+  return rc;
 }
 
 static int SysMadvise(struct Machine *m, i64 addr, size_t len, int advice) {
@@ -655,7 +659,7 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
   if (addr >= kMinBrk) {
     if (addr > m->system->brk) {
       if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
-                         PAGE_RW | PAGE_U, -1, false) != -1) {
+                         PAGE_RW | PAGE_U, -1, 0, false) != -1) {
         m->system->brk = addr;
       }
     } else if (addr < m->system->brk) {
@@ -671,7 +675,6 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
 
 static int SysMunmap(struct Machine *m, i64 virt, u64 size) {
   int rc;
-  if (!IsValidAddrSize(virt, size)) return einval();
   LOCK(&m->system->mmap_lock);
   rc = FreeVirtual(m->system, virt, size);
   UNLOCK(&m->system->mmap_lock);
@@ -681,7 +684,6 @@ static int SysMunmap(struct Machine *m, i64 virt, u64 size) {
 static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
                    int flags, int fildes, i64 offset) {
   u64 key;
-  void *tmp;
   ssize_t rc;
   int systemfd;
   long pagesize;
@@ -719,34 +721,14 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
       }
     }
   }
-  rc = ReserveVirtual(m->system, virt, size, key, systemfd,
+  rc = ReserveVirtual(m->system, virt, size, key, systemfd, offset,
                       !!(flags & MAP_SHARED_LINUX));
   UNLOCK(&m->system->mmap_lock);
   if (rc != -1) {
-    if (fd && m->system->nolinear) {
-      // TODO(jart): Raise SIGBUS on i/o error.
-      // TODO(jart): Support lazy file mappings.
-      size_t i;
-      sigset_t ss, oldss;
-      unassert(!sigfillset(&ss));
-      unassert(!pthread_sigmask(SIG_SETMASK, &ss, &oldss));
-      unassert((tmp = calloc(1, size)));
-      for (i = 0; i < size; i += rc) {
-        rc = pread(systemfd, (char *)tmp + i, size - i, offset + i);
-        if (!rc) break;
-        if (rc == -1) {
-          LOGF("failed to read %zu bytes at offset %" PRId64
-               " from fd %d into memory map: %s",
-               size, offset, systemfd, strerror(errno));
-          abort();
-        }
-      }
-      CopyToUserWrite(m, virt, tmp, size);
-      free(tmp);
-      unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
+    if (!HasLinearMapping(m->system) && systemfd != -1) {
+      SyncVirtual(m, virt, size, systemfd, offset);
     }
   } else {
-    FreeVirtual(m->system, virt, size);
     virt = -1;
   }
 Finished:

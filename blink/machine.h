@@ -99,9 +99,7 @@
 #define IsMakingPath(m) 0
 #endif
 
-#define HasLinearMapping(x) \
-  (CanHaveLinearMemory() && \
-   !atomic_load_explicit(&(x)->nolinear, memory_order_relaxed))
+#define HasLinearMapping(x) (CanHaveLinearMemory() && !(x)->nolinear)
 
 #if LONG_BIT == 64
 #define _Atomicish(t) _Atomic(t)
@@ -121,7 +119,6 @@ MICRO_OP_SAFE u8 *ToHost(i64 v) {
 
 static inline i64 ToGuest(void *r) {
   i64 v = (intptr_t)r - kSkew;
-  unassert(!(v & ~PAGE_TA));
   return v;
 }
 
@@ -259,11 +256,12 @@ struct Machine {                           //
   i64 stashaddr;                           // page overlap buffer
   u32 flags;                               // x86 eflags register
   bool reserving;                          // did it call ReserveAddress?
+  bool nolinear;                           // [dup] no linear address resolution
   _Atomic(bool) invalidated;               // the tlb must be flushed
-  _Atomic(bool) nolinear;                  // [dup] no linear address resolution
   _Atomic(bool) killed;                    // used to send a soft SIGKILL
   u8 mode;                                 // [dup] XED_MODE_{REAL,LEGACY,LONG}
   _Atomic(int) *fun;                       // [dup] jit hooks for code bytes
+  _Atomicish(u64) signals;                 // signals waiting for delivery
   unsigned long codesize;                  // [dup] size of exe code section
   i64 codestart;                           // [dup] virt of exe code section
   union {                                  // GENERAL REGISTER FILE
@@ -338,7 +336,6 @@ struct Machine {                           //
   struct JitPath path;                     // under construction jit route
   i64 bofram[2];                           // helps debug bootloading code
   i64 faultaddr;                           // used for tui error reporting
-  _Atomicish(u64) signals;                 // signals waiting for delivery
   _Atomicish(u64) sigmask;                 // signals that've been blocked
   u32 tlbindex;                            //
   int sig;                                 // signal under active delivery
@@ -348,7 +345,7 @@ struct Machine {                           //
   bool canhalt;                            //
   bool metal;                              //
   bool interrupted;                        //
-  jmp_buf onhalt;                          //
+  sigjmp_buf onhalt;                       //
   i64 ctid;                                //
   int tid;                                 //
   sigset_t spawn_sigmask;                  //
@@ -379,7 +376,7 @@ void LoadInstruction(struct Machine *, u64);
 void ExecuteInstruction(struct Machine *);
 u64 AllocatePage(struct System *);
 u64 AllocatePageTable(struct System *);
-int ReserveVirtual(struct System *, i64, i64, u64, int, bool);
+int ReserveVirtual(struct System *, i64, i64, u64, int, i64, bool);
 char *FormatPml4t(struct Machine *);
 i64 FindVirtual(struct System *, i64, i64);
 int FreeVirtual(struct System *, i64, i64);
@@ -422,7 +419,11 @@ void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 void ResetRam(struct Machine *);
 void SetReadAddr(struct Machine *, i64, u32);
 void SetWriteAddr(struct Machine *, i64, u32);
-void ProtectVirtual(struct System *, i64, i64, u64, u64);
+int ProtectVirtual(struct System *, i64, i64, int);
+int CheckVirtual(struct System *, i64, i64);
+void SyncVirtual(struct Machine *, i64, i64, int, i64);
+int GetProtection(u64);
+u64 SetProtection(int);
 int ClassifyOp(u64) pureconst;
 void Terminate(P, void (*)(struct Machine *, u64));
 

@@ -152,7 +152,7 @@ void RemoveOtherThreads(struct System *s) {
     g = dll_next(s->machines, e);
     m = MACHINE_CONTAINER(e);
     if (m != g_machine) {
-      FreeMachine(m);
+      FreeMachineUnlocked(m);
     }
   }
   UNLOCK(&s->machines_lock);
@@ -369,8 +369,19 @@ static bool RemoveVirtual(struct System *s, i64 virt, i64 size) {
   return has_maps;
 }
 
+_Noreturn static void PanicDueToMmap(void) {
+#ifndef NDEBUG
+  WriteErrorString(
+      "Unrecoverable mmap() crisis: see log for further details\n");
+#else
+  WriteErrorString(
+      "Unrecoverable mmap() crisis: Blink was built with NDEBUG\n");
+#endif
+  exit(250);
+}
+
 int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
-                   bool shared) {
+                   i64 offset, bool shared) {
   u8 *mi;
   long pagesize;
   i64 ti, pt, end, level, entry;
@@ -383,7 +394,9 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   unassert(s->mode == XED_MODE_LONG);
 
   if (!IsValidAddrSize(virt, size)) {
-    LOGF("app attempted to map memory outside 48-bit pml4t space");
+    LOGF("app attempted to map memory outside 48-bit pml4t space"
+         " virt=%#" PRIx64 " size=%#" PRIx64,
+         virt, size);
     return einval();
   }
 
@@ -392,7 +405,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     return enomem();
   }
 
-  if (!s->nolinear) {
+  if (HasLinearMapping(s)) {
     if (virt <= 0) {
       LOGF("app attempted to map null or negative in linear mode");
       return enotsup();
@@ -411,17 +424,17 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
 
   RemoveVirtual(s, virt, size);
 
-  if (!s->nolinear) {
+  if (HasLinearMapping(s)) {
     if (Mmap(ToHost(virt), size,                                  //
              ((flags & PAGE_U ? PROT_READ : 0) |                  //
               ((flags & PAGE_RW) || fd == -1 ? PROT_WRITE : 0)),  //
              (MAP_FIXED |                                         //
               (fd == -1 ? MAP_ANONYMOUS : 0) |                    //
               (shared ? MAP_SHARED : MAP_PRIVATE)),               //
-             fd, 0, "linear") == MAP_FAILED) {
-      LOGF("mmap(%p) crisis: %s", ToHost(virt), strerror(errno));
-      WriteErrorString("system mmap() crisis\n");
-      exit(250);
+             fd, offset, "linear") == MAP_FAILED) {
+      LOGF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ") crisis: %s", virt,
+           ToHost(virt), size, strerror(errno));
+      PanicDueToMmap();
     }
     s->memstat.allocated += size / 4096;
     s->memstat.committed += size / 4096;
@@ -438,7 +451,10 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
       pt = Load64(mi);
       if (level > 12) {
         if (!(pt & PAGE_V)) {
-          if ((pt = AllocatePageTable(s)) == -1) return -1;
+          if ((pt = AllocatePageTable(s)) == -1) {
+            WriteErrorString("mmap() crisis: ran out of page table memory\n");
+            exit(250);
+          }
           Store64(mi, pt);
         }
         continue;
@@ -454,7 +470,9 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
           entry |= PAGE_EOF;
         }
         Store64(mi, entry);
-        if ((virt += 4096) >= end) return 0;
+        if ((virt += 4096) >= end) {
+          return 0;
+        }
         if (++ti == 512) break;
         pt = Load64((mi += 8));
       }
@@ -487,7 +505,7 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
   if (!IsValidAddrSize(virt, size)) {
     return einval();
   }
-  if (!s->nolinear) {
+  if (HasLinearMapping(s)) {
     pagesize = GetSystemPageSize();
     if (virt & (pagesize - 1)) {
       LOGF("app chose munmap addr (%#" PRIx64 ") that's not aligned "
@@ -507,21 +525,126 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
   return 0;
 }
 
-void ProtectVirtual(struct System *s, i64 virt, i64 size, u64 mask, u64 flags) {
+int GetProtection(u64 key) {
+  int prot = 0;
+  if (key & PAGE_U) prot |= PROT_READ;
+  if (key & PAGE_RW) prot |= PROT_WRITE;
+  if (~key & PAGE_XD) prot |= PROT_EXEC;
+  return prot;
+}
+
+u64 SetProtection(int prot) {
+  u64 key = 0;
+  if (prot & PROT_READ) key |= PAGE_U;
+  if (prot & PROT_WRITE) key |= PAGE_RW;
+  if (~prot & PROT_EXEC) key |= PAGE_XD;
+  return key;
+}
+
+int CheckVirtual(struct System *s, i64 virt, i64 size) {
   u8 *mi;
-  i64 end;
-  u64 i, pt;
-  for (end = virt + size; virt < end; virt += 1ull << i) {
-    for (pt = s->cr3, i = 39;; i -= 9) {
-      mi = GetPageAddress(s, pt) + ((virt >> i) & 511) * 8;
-      pt = Load64(mi);
-      if (!(pt & PAGE_V)) {
-        break;
-      } else if (i == 12) {
-        Store64(mi, (pt & mask) | flags);
-        break;
+  u64 pt;
+  i64 ti, end, level;
+  for (end = virt + size;;) {
+    for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
+      ti = (virt >> level) & 511;
+      mi = GetPageAddress(s, pt) + ti * 8;
+      pt = Get64(mi);
+      if (level > 12) {
+        if (!(pt & PAGE_V)) {
+          return enomem();
+        }
+        continue;
+      }
+      for (;;) {
+        if (!(pt & PAGE_V)) {
+          return enomem();
+        }
+        if ((virt += 4096) >= end) {
+          return 0;
+        }
+        if (++ti == 512) break;
+        pt = Get64((mi += 8));
+      }
+    }
+  }
+}
+
+int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
+  u8 *mi;
+  u64 pt, key;
+  long pagesize;
+  i64 ti, end, level, mpstart, last = -1;
+  pagesize = GetSystemPageSize();
+  if (!IsValidAddrSize(virt, size)) {
+    return einval();
+  }
+  if (HasLinearMapping(s) && (virt & (pagesize - 1))) {
+    LOGF("mprotect(%#" PRIx64 ", %#" PRIx64
+         ") not aligned to host page size while using linear mode",
+         virt, size, "addr");
+    return einval();
+  }
+  if (CheckVirtual(s, virt, size) == -1) {
+    LOGF("mprotect(%#" PRIx64 ", %#" PRIx64 ") interval has unmapped pages",
+         virt, size);
+    return -1;
+  }
+  key = SetProtection(prot);
+  for (end = virt + size;;) {
+    for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
+      ti = (virt >> level) & 511;
+      mi = GetPageAddress(s, pt) + ti * 8;
+      pt = Get64(mi);
+      if (level > 12) {
+        unassert(pt & PAGE_V);
+        continue;
+      }
+      for (;;) {
+        unassert(pt & PAGE_V);
+        // TODO(jart): have fewer system calls
+        if (HasLinearMapping(s) && (pt & PAGE_HOST) &&
+            (mpstart = ROUNDDOWN(virt, pagesize)) != last) {
+          last = mpstart;
+          if (mprotect(ToHost(mpstart), pagesize, prot)) {
+            LOGF("mprotect(%#" PRIx64 " [%p], %#" PRIx64 ", %d) failed",
+                 mpstart, ToHost(mpstart), pagesize, prot);
+            abort();
+          }
+        }
+        pt &= ~(PAGE_U | PAGE_RW | PAGE_XD);
+        pt |= key;
+        Put64(mi, pt);
+        if ((virt += 4096) >= end) return 0;
+        if (++ti == 512) break;
+        pt = Get64((mi += 8));
       }
     }
   }
   InvalidateSystem(s, true, false);
+}
+
+void SyncVirtual(struct Machine *m, i64 virt, i64 size, int fd, i64 offset) {
+  // TODO(jart): Raise SIGBUS on i/o error.
+  // TODO(jart): Support lazy file mappings.
+  size_t i;
+  void *tmp;
+  ssize_t rc;
+  sigset_t ss, oldss;
+  unassert(!sigfillset(&ss));
+  unassert(!pthread_sigmask(SIG_SETMASK, &ss, &oldss));
+  unassert((tmp = calloc(1, size)));
+  for (i = 0; i < size; i += rc) {
+    rc = pread(fd, (char *)tmp + i, size - i, offset + i);
+    if (!rc) break;
+    if (rc == -1) {
+      LOGF("failed to read %zu bytes at offset %" PRId64
+           " from fd %d into memory map: %s",
+           size, offset, fd, strerror(errno));
+      abort();
+    }
+  }
+  CopyToUserWrite(m, virt, tmp, size);
+  free(tmp);
+  unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
 }

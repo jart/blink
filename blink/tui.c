@@ -43,6 +43,7 @@
 #include "blink/case.h"
 #include "blink/cga.h"
 #include "blink/cp437.h"
+#include "blink/debug.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
 #include "blink/fds.h"
@@ -3006,7 +3007,7 @@ static void Exec(void) {
   ssize_t bp;
   int interrupt;
   ExecSetup();
-  if (!(interrupt = setjmp(m->onhalt))) {
+  if (!(interrupt = sigsetjmp(m->onhalt, 1))) {
     m->canhalt = true;
     if (!(action & CONTINUE) &&
         (bp = IsAtBreakpoint(&breakpoints, m->ip)) != -1) {
@@ -3093,7 +3094,7 @@ static void Tui(void) {
   TuiSetup();
   SetupDraw();
   ScrollOp(&pan.disassembly, GetDisIndex());
-  if (!(interrupt = setjmp(m->onhalt))) {
+  if (!(interrupt = sigsetjmp(m->onhalt, 1))) {
     m->canhalt = true;
     do {
       if (!(action & FAILURE)) {
@@ -3369,6 +3370,23 @@ void FreePanels(void) {
   }
 }
 
+_Noreturn void TerminateSignal(struct Machine *m, int sig) {
+  LOGF("terminating due to signal %s", DescribeSignal(sig));
+  WriteErrorString("\r\033[K\033[J"
+                   "terminating due to signal; see log\n");
+  exit(128 + sig);
+}
+
+static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
+  LOGF("OnSigSegv(%p)", si->si_addr);
+  RestoreIp(g_machine);
+  g_machine->faultaddr = ToGuest(si->si_addr);
+  LOGF("SEGMENTATION FAULT AT ADDRESS %" PRIx64 "\n\t%s", g_machine->faultaddr,
+       GetBacktrace(g_machine));
+  DeliverSignalToUser(g_machine, SIGSEGV_LINUX);
+  siglongjmp(g_machine->onhalt, kMachineSegmentationFault);
+}
+
 int main(int argc, char *argv[]) {
   int rc;
   struct System *s;
@@ -3400,6 +3418,8 @@ int main(int argc, char *argv[]) {
   unassert(!sigaction(SIGWINCH, &sa, 0));
   sa.sa_sigaction = OnSigAlrm;
   unassert(!sigaction(SIGALRM, &sa, 0));
+  sa.sa_sigaction = OnSigSegv;
+  // unassert(!sigaction(SIGSEGV, &sa, 0));
   m->system->blinksigs |= 1ull << (SIGINT_LINUX - 1) |   //
                           1ull << (SIGALRM_LINUX - 1) |  //
                           1ull << (SIGWINCH_LINUX - 1);  //

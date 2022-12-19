@@ -16,9 +16,11 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "blink/assert.h"
 #include "blink/debug.h"
@@ -39,7 +41,8 @@ static void PrintBacktraceUsingAsan(void) {
 void AssertFailed(const char *file, int line, const char *msg) {
   _Thread_local static bool noreentry;
   char b[512];
-  snprintf(b, sizeof(b), "%s:%d: assertion failed: %s\n", file, line, msg);
+  snprintf(b, sizeof(b), "%s:%d: assertion failed: %s (%s)\n", file, line, msg,
+           strerror(errno));
   b[sizeof(b) - 1] = 0;
   WriteErrorString(b);
   if (g_machine && !noreentry) {
