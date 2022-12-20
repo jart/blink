@@ -46,13 +46,21 @@ MICRO_OP void CountOp(long *instructions_jitted_ptr) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+// PROGRAM COUNTER
+
+MICRO_OP static u64 GetIp(struct Machine *m) {
+  return m->ip;
+}
+MICRO_OP void AddIp(struct Machine *m, long oplen) {
+  m->oplen = oplen;
+  m->ip += oplen;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 // READING FROM REGISTER FILE
 
 MICRO_OP static u64 GetCl(struct Machine *m) {
   return m->cl;
-}
-MICRO_OP static u64 GetIp(struct Machine *m) {
-  return m->ip;
 }
 MICRO_OP static u64 GetReg8(struct Machine *m, long b) {
   return Get8(m->beg + b);

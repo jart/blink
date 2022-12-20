@@ -12,5 +12,6 @@ void AddPath_StartOp(P);
 long GetPrologueSize(void);
 void FinishPath(struct Machine *);
 void AbandonPath(struct Machine *);
+void AddIp(struct Machine *, long);
 
 #endif /* BLINK_PATH_H_ */

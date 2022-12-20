@@ -194,7 +194,7 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
     ResetCpu(m);
   }
   m->ctid = 0;
-  m->oldip = -1;
+  m->oplen = 0;
   m->system = system;
   m->mode = system->mode;
   m->thread = pthread_self();

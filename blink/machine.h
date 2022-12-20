@@ -252,14 +252,14 @@ struct MachineTlb {
 
 struct Machine {                           //
   u64 ip;                                  // instruction pointer
-  u64 oldip;                               // ip saved at start of op, or -1
-  i64 stashaddr;                           // page overlap buffer
-  u32 flags;                               // x86 eflags register
-  bool reserving;                          // did it call ReserveAddress?
+  u8 oplen;                                // length of operation
+  u8 mode;                                 // [dup] XED_MODE_{REAL,LEGACY,LONG}
   bool nolinear;                           // [dup] no linear address resolution
+  bool reserving;                          // did it call ReserveAddress?
+  u32 flags;                               // x86 eflags register
+  i64 stashaddr;                           // page overlap buffer
   _Atomic(bool) invalidated;               // the tlb must be flushed
   _Atomic(bool) killed;                    // used to send a soft SIGKILL
-  u8 mode;                                 // [dup] XED_MODE_{REAL,LEGACY,LONG}
   _Atomic(int) *fun;                       // [dup] jit hooks for code bytes
   _Atomicish(u64) signals;                 // signals waiting for delivery
   unsigned long codesize;                  // [dup] size of exe code section

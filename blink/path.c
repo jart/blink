@@ -44,17 +44,15 @@ static void DebugOp(struct Machine *m, i64 expected_ip) {
   unassert(m->ip == expected_ip);
 }
 
-static void StartOp(struct Machine *m, long len) {
+static void StartOp(struct Machine *m) {
   JIX_LOGF("%" PRIx64 "   <op>", GetPc(m));
   JIX_LOGF("%" PRIx64 "     %s", GetPc(m), DescribeOp(m, GetPc(m)));
   unassert(!IsMakingPath(m));
-  m->oldip = m->ip;
-  m->ip += len;
 }
 
 static void EndOp(struct Machine *m) {
   JIX_LOGF("%" PRIx64 "   </op>", GetPc(m));
-  m->oldip = -1;
+  m->oplen = 0;
   if (m->stashaddr) {
     CommitStash(m);
   }
@@ -192,46 +190,22 @@ void AbandonPath(struct Machine *m) {
 }
 
 void AddPath_StartOp(P) {
-  _Static_assert(offsetof(struct Machine, ip) < 128, "");
-  _Static_assert(offsetof(struct Machine, oldip) < 128, "");
 #ifndef NDEBUG
-  Jitter(A, "a0i m", &instructions_jitted, CountOp);
+  if (FLAG_statistics) {
+    Jitter(A, "a0i m", &instructions_jitted, CountOp);
+  }
 #endif
   if (AddPath_StartOp_Hook) {
     AddPath_StartOp_Hook(A);
   }
-  u8 len = Oplength(rde);
-  // TODO(jart): We shouldn't need to modify m->ip on every op.
-#if defined(DEBUG) || LOG_JIX
-  Jitter(A, "a1i s0a0= c s0a0=", m->ip, DebugOp);
+#if LOG_JIX || defined(DEBUG)
+  Jitter(A, "a1i s0a0= c", m->ip, DebugOp);
 #endif
-#if !LOG_JIX && defined(__x86_64__)
-  AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
-  u8 ip = offsetof(struct Machine, ip);
-  u8 oldip = offsetof(struct Machine, oldip);
-  u8 code[] = {
-      0x48, 0x8b, 0107, ip,     // mov 8(%rdi),%rax
-      0x48, 0x89, 0107, oldip,  // mov %rax,16(%rdi)
-      0x48, 0x83, 0300, len,    // add $len,%rax
-      0x48, 0x89, 0107, ip,     // mov %rax,8(%rdi)
-  };
-  AppendJit(m->path.jb, code, sizeof(code));
-  m->reserving = false;
-#elif !LOG_JIX && defined(__aarch64__)
-  AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
-  u8 ip = offsetof(struct Machine, ip);
-  u8 oldip = offsetof(struct Machine, oldip);
-  u32 code[] = {
-      0xf9400001 | (ip / 8) << 10,     // ldr x1, [x0, #ip]
-      0xf9000001 | (oldip / 8) << 10,  // str x1, [x0, #oldip]
-      0x91000021 | len << 10,          // add x1, x1, #len
-      0xf9000001 | (ip / 8) << 10,     // str x1, [x0, #ip]
-  };
-  AppendJit(m->path.jb, code, sizeof(code));
-  m->reserving = false;
-#else
-  Jitter(A, "a1i s0a0= c s0a0=", len, StartOp);
+#if LOG_JIX
+  Jitter(A, "a1i s0a0= c", Oplength(rde), StartOp);
 #endif
+  Jitter(A, "s0a0= a1i m s0a0=", Oplength(rde), AddIp);
+  m->reserving = false;
 }
 
 void AddPath_EndOp(P) {

@@ -2119,14 +2119,14 @@ void JitlessDispatch(P) {
            GetPc(m));
   STATISTIC(++instructions_dispatched);
   LoadInstruction(m, GetPc(m));
-  m->oldip = m->ip;
   rde = m->xedd->op.rde;
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
+  m->oplen = Oplength(rde);
   m->ip += Oplength(rde);
   GetOp(Mopcode(rde))(A);
   if (m->stashaddr) CommitStash(m);
-  m->oldip = -1;
+  m->oplen = 0;
 }
 
 void GeneralDispatch(P) {
@@ -2136,7 +2136,6 @@ void GeneralDispatch(P) {
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
            GetPc(m));
   LoadInstruction(m, GetPc(m));
-  m->oldip = m->ip;
   rde = m->xedd->op.rde;
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
@@ -2153,6 +2152,7 @@ void GeneralDispatch(P) {
              " to path starting at %" PRIx64,
              DescribeOp(m, GetPc(m)), GetPc(m), m->path.start);
   }
+  m->oplen = Oplength(rde);
   m->ip += Oplength(rde);
   GetOp(Mopcode(rde))(A);
   if (m->stashaddr) {
@@ -2175,7 +2175,7 @@ void GeneralDispatch(P) {
       CompletePath(A);
     }
   }
-  m->oldip = -1;
+  m->oplen = 0;
 #endif
 }
 

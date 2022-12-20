@@ -69,8 +69,8 @@ o//blink/tui third_party/cosmo/tinyhello.elf
 ## Testing
 
 Blink is tested primarily using precompiled x86 binaries, which are
-downloaded from Justine Tunney's web server. You can check how well
-Blink works on your local platform by running:
+downloaded automatically. You can check how well Blink works on your
+local platform by running:
 
 ```sh
 make check
