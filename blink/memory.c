@@ -254,7 +254,7 @@ void EndStore(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   if ((v & 4095) + n <= 4096) return;
   k = 4096;
   k -= v & 4095;
-  unassert(k > n);
+  unassert(n > k);
   unassert(p[0]);
   unassert(p[1]);
   memcpy(p[0], b, k);
