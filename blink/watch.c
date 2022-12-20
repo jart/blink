@@ -50,12 +50,14 @@ ssize_t PushWatchpoint(struct Watchpoints *wps, struct Watchpoint *b) {
 
 ssize_t IsAtWatchpoint(struct Watchpoints *wps, struct Machine *m) {
   u8 *r;
+  int i;
+  u64 w;
   i64 oldip;
   bool hasop;
   struct XedDecodedInst x;
   if (!wps->i) return -1;
   hasop = !GetInstruction(m, GetPc(m), &x) && x.op.has_modrm;
-  for (int i = wps->i; i--;) {
+  for (i = wps->i; i--;) {
     if (wps->p[i].disable) continue;
     oldip = m->ip;
     m->ip += Oplength(x.op.rde);
@@ -67,7 +69,7 @@ ssize_t IsAtWatchpoint(struct Watchpoints *wps, struct Machine *m) {
     // TODO(jart): Handle case of overlapping page boundary.
     // TODO(jart): Possibly track munmap() type cases.
     if ((r = LookupAddress(m, wps->p[i].addr))) {
-      u64 w = Read64(r);
+      w = Read64(r);
       if (!wps->p[i].initialized) {
         wps->p[i].oldvalue = w;
         wps->p[i].initialized = true;

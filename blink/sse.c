@@ -27,25 +27,29 @@
 #include "blink/sse.h"
 
 static void MmxPaddusb(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 8; ++i) {
+  unsigned i;
+  for (i = 0; i < 8; ++i) {
     x[i] = MIN(255, x[i] + y[i]);
   }
 }
 
 static void MmxPsubusb(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 8; ++i) {
+  unsigned i;
+  for (i = 0; i < 8; ++i) {
     x[i] = MIN(255, MAX(0, x[i] - y[i]));
   }
 }
 
 static void MmxPsubsb(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 8; ++i) {
+  unsigned i;
+  for (i = 0; i < 8; ++i) {
     x[i] = MAX(-128, MIN(127, (i8)x[i] - (i8)y[i]));
   }
 }
 
 static void MmxPaddsb(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 8; ++i) {
+  unsigned i;
+  for (i = 0; i < 8; ++i) {
     x[i] = MAX(-128, MIN(127, (i8)x[i] + (i8)y[i]));
   }
 }
@@ -61,7 +65,8 @@ static void MmxPmulhrsw(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPmaddubsw(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 4; ++i) {
+  unsigned i;
+  for (i = 0; i < 4; ++i) {
     Put16(x + i * 2,
           MAX(-32768, MIN(32767, (x[i * 2 + 0] * (i8)y[i * 2 + 0] +
                                   x[i * 2 + 1] * (i8)y[i * 2 + 1]))));
@@ -69,15 +74,17 @@ static void MmxPmaddubsw(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPsraw(u8 x[8], unsigned k) {
+  unsigned i;
   if (k > 15) k = 15;
-  for (unsigned i = 0; i < 4; ++i) {
+  for (i = 0; i < 4; ++i) {
     Put16(x + i * 2, (i16)Get16(x + i * 2) >> k);
   }
 }
 
 static void MmxPsrad(u8 x[8], unsigned k) {
+  unsigned i;
   if (k > 31) k = 31;
-  for (unsigned i = 0; i < 2; ++i) {
+  for (i = 0; i < 2; ++i) {
     Put32(x + i * 4, (i32)Get32(x + i * 4) >> k);
   }
 }
@@ -143,8 +150,8 @@ static void MmxPsllq(u8 x[8], unsigned k) {
 }
 
 static void MmxPslldq(u8 x[8], unsigned k) {
-  unsigned i;
   u8 t[8];
+  unsigned i;
   if (k > 8) k = 8;
   for (i = 0; i < k; ++i) t[i] = 0;
   for (i = 0; i < 8 - k; ++i) t[k + i] = x[i];
@@ -168,13 +175,15 @@ static void MmxPalignr(u8 x[8], const u8 y[8], unsigned k) {
 }
 
 static void MmxPsubd(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 2; ++i) {
+  unsigned i;
+  for (i = 0; i < 2; ++i) {
     Put32(x + i * 4, Get32(x + i * 4) - Get32(y + i * 4));
   }
 }
 
 static void MmxPaddd(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 2; ++i) {
+  unsigned i;
+  for (i = 0; i < 2; ++i) {
     Put32(x + i * 4, Get32(x + i * 4) + Get32(y + i * 4));
   }
 }
@@ -188,26 +197,29 @@ static void MmxPsubq(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPsubusw(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 4; ++i) {
+  unsigned i;
+  for (i = 0; i < 4; ++i) {
     Put16(x + i * 2, MIN(65535, MAX(0, Get16(x + i * 2) - Get16(y + i * 2))));
   }
 }
 
 static void MmxPminsw(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 4; ++i) {
+  unsigned i;
+  for (i = 0; i < 4; ++i) {
     Put16(x + i * 2, MIN((i16)Get16(x + i * 2), (i16)Get16(y + i * 2)));
   }
 }
 
 static void MmxPmaxsw(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 4; ++i) {
+  unsigned i;
+  for (i = 0; i < 4; ++i) {
     Put16(x + i * 2, MAX((i16)Get16(x + i * 2), (i16)Get16(y + i * 2)));
   }
 }
 
 static void MmxPackuswb(u8 x[8], const u8 y[8]) {
-  unsigned i;
   u8 t[8];
+  unsigned i;
   for (i = 0; i < 4; ++i) {
     t[i + 0] = MIN(255, MAX(0, (i16)Get16(x + i * 2)));
   }
@@ -230,8 +242,8 @@ static void MmxPacksswb(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPackssdw(u8 x[8], const u8 y[8]) {
-  unsigned i;
   u8 t[8];
+  unsigned i;
   for (i = 0; i < 2; ++i) {
     Put16(t + i * 2 + 0, MAX(-32768, MIN(32767, (i32)Get32(x + i * 4))));
   }
@@ -242,13 +254,15 @@ static void MmxPackssdw(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPcmpgtd(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 2; ++i) {
+  unsigned i;
+  for (i = 0; i < 2; ++i) {
     Put32(x + i * 4, -((i32)Get32(x + i * 4) > (i32)Get32(y + i * 4)));
   }
 }
 
 static void MmxPcmpeqd(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 2; ++i) {
+  unsigned i;
+  for (i = 0; i < 2; ++i) {
     Put32(x + i * 4, -(Get32(x + i * 4) == Get32(y + i * 4)));
   }
 }
@@ -358,7 +372,8 @@ static void MmxPsadbw(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPmaddwd(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 2; ++i) {
+  unsigned i;
+  for (i = 0; i < 2; ++i) {
     Put32(x + i * 4, ((i16)Get16(x + i * 4 + 0) * (i16)Get16(y + i * 4 + 0) +
                       (i16)Get16(x + i * 4 + 2) * (i16)Get16(y + i * 4 + 2)));
   }
@@ -366,7 +381,8 @@ static void MmxPmaddwd(u8 x[8], const u8 y[8]) {
 
 static void MmxPmulhuw(u8 x[8], const u8 y[8]) {
   u32 v;
-  for (unsigned i = 0; i < 4; ++i) {
+  unsigned i;
+  for (i = 0; i < 4; ++i) {
     v = Get16(x + i * 2);
     v *= Get16(y + i * 2);
     v >>= 16;
@@ -379,7 +395,8 @@ static void MmxPmuludq(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPmulld(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 2; ++i) {
+  unsigned i;
+  for (i = 0; i < 2; ++i) {
     Put32(x + i * 4, Get32(x + i * 4) * Get32(y + i * 4));
   }
 }
@@ -394,8 +411,9 @@ static void MmxPshufb(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPsignb(u8 x[8], const u8 y[8]) {
+  unsigned i;
   int v;
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     v = (i8)y[i];
     if (!v) {
       x[i] = 0;
@@ -406,8 +424,9 @@ static void MmxPsignb(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPsignw(u8 x[8], const u8 y[8]) {
+  unsigned i;
   int v;
-  for (unsigned i = 0; i < 4; ++i) {
+  for (i = 0; i < 4; ++i) {
     v = (i16)Get16(y + i * 2);
     if (!v) {
       Put16(x + i * 2, 0);
@@ -418,8 +437,9 @@ static void MmxPsignw(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPsignd(u8 x[8], const u8 y[8]) {
+  unsigned i;
   i32 v;
-  for (unsigned i = 0; i < 2; ++i) {
+  for (i = 0; i < 2; ++i) {
     v = Get32(y + i * 4);
     if (!v) {
       Put32(x + i * 4, 0);
@@ -430,14 +450,16 @@ static void MmxPsignd(u8 x[8], const u8 y[8]) {
 }
 
 static void MmxPabsw(u8 x[8], const u8 y[8]) {
-  for (unsigned i = 0; i < 4; ++i) {
+  unsigned i;
+  for (i = 0; i < 4; ++i) {
     Put16(x + i * 2, ABS((i16)Get16(y + i * 2)));
   }
 }
 
 static void MmxPabsd(u8 x[8], const u8 y[8]) {
   i32 v;
-  for (unsigned i = 0; i < 2; ++i) {
+  unsigned i;
+  for (i = 0; i < 2; ++i) {
     v = Get32(y + i * 4);
     Put32(x + i * 4, v >= 0 ? v : -(u32)v);
   }
@@ -548,8 +570,8 @@ static void MmxPunpckhqdq(u8 x[8], const u8 y[8]) {
 }
 
 static void SsePslldq(u8 x[16], unsigned k) {
-  unsigned i;
   u8 t[16];
+  unsigned i;
   if (k > 16) k = 16;
   for (i = 0; i < k; ++i) t[i] = 0;
   for (i = 0; i < 16 - k; ++i) t[k + i] = x[i];
@@ -573,25 +595,29 @@ static void SsePalignr(u8 x[16], const u8 y[16], unsigned k) {
 }
 
 static void SsePsubd(u8 x[16], const u8 y[16]) {
-  for (unsigned i = 0; i < 4; ++i) {
+  unsigned i;
+  for (i = 0; i < 4; ++i) {
     Put32(x + i * 4, Get32(x + i * 4) - Get32(y + i * 4));
   }
 }
 
 static void SsePaddd(u8 x[16], const u8 y[16]) {
-  for (unsigned i = 0; i < 4; ++i) {
+  unsigned i;
+  for (i = 0; i < 4; ++i) {
     Put32(x + i * 4, Get32(x + i * 4) + Get32(y + i * 4));
   }
 }
 
 static void SsePaddq(u8 x[16], const u8 y[16]) {
-  for (unsigned i = 0; i < 2; ++i) {
+  unsigned i;
+  for (i = 0; i < 2; ++i) {
     Put64(x + i * 8, Get64(x + i * 8) + Get64(y + i * 8));
   }
 }
 
 static void SsePsubq(u8 x[16], const u8 y[16]) {
-  for (unsigned i = 0; i < 2; ++i) {
+  unsigned i;
+  for (i = 0; i < 2; ++i) {
     Put64(x + i * 8, Get64(x + i * 8) - Get64(y + i * 8));
   }
 }
@@ -641,14 +667,16 @@ static void SsePsadbw(u8 x[16], const u8 y[16]) {
 }
 
 static void SsePmuludq(u8 x[16], const u8 y[16]) {
-  for (unsigned i = 0; i < 2; ++i) {
+  unsigned i;
+  for (i = 0; i < 2; ++i) {
     Put64(x + i * 8, (u64)Get32(x + i * 8) * Get32(y + i * 8));
   }
 }
 
 static void SsePshufb(u8 x[16], const u8 y[16]) {
   u8 t[16];
-  for (unsigned i = 0; i < 16; ++i) {
+  unsigned i;
+  for (i = 0; i < 16; ++i) {
     t[i] = (y[i] & 128) ? 0 : x[y[i] & 15];
   }
   memcpy(x, t, 16);
@@ -891,40 +919,44 @@ static void SsePsllq(u8 x[16], unsigned k) {
 }
 
 static void SsePsubsb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = MAX(-128, MIN(127, X[i] - Y[i]));
   }
   memcpy(x, X, 16);
 }
 
 static void SsePaddsb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = MAX(-128, MIN(127, X[i] + Y[i]));
   }
   memcpy(x, X, 16);
 }
 
 static void SsePaddusb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   u8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = MIN(255, X[i] + Y[i]);
   }
   memcpy(x, X, 16);
 }
 
 static void SsePsubusb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   u8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = MIN(255, MAX(0, X[i] - Y[i]));
   }
   memcpy(x, X, 16);

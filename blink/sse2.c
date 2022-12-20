@@ -34,9 +34,9 @@
             (T)Get16(y + 6),  (T)Get16(y + 8), (T)Get16(y + 10), \
             (T)Get16(y + 12), (T)Get16(y + 14)}
 
-#define COPY16_x_FROM_X              \
-  for (unsigned i = 0; i < 8; ++i) { \
-    Put16(x + i * 2, X[i]);          \
+#define COPY16_x_FROM_X     \
+  for (i = 0; i < 8; ++i) { \
+    Put16(x + i * 2, X[i]); \
   }
 
 static void MmxPor(u8 x[8], const u8 y[8]) {
@@ -56,24 +56,27 @@ static void MmxPandn(u8 x[8], const u8 y[8]) {
 }
 
 static void SsePsubw(u8 x[16], const u8 y[16]) {
+  unsigned i;
   COPY16_X_Y_FROM_x_y(u16);
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     X[i] -= Y[i];
   }
   COPY16_x_FROM_X;
 }
 
 static void SsePaddw(u8 x[16], const u8 y[16]) {
+  unsigned i;
   COPY16_X_Y_FROM_x_y(u16);
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     X[i] += Y[i];
   }
   COPY16_x_FROM_X;
 }
 
 static void SsePaddusw(u8 x[16], const u8 y[16]) {
+  unsigned i;
   COPY16_X_Y_FROM_x_y(u16);
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     X[i] = MIN(65535, X[i] + Y[i]);
   }
   COPY16_x_FROM_X;
@@ -81,11 +84,12 @@ static void SsePaddusw(u8 x[16], const u8 y[16]) {
 
 static void SsePhaddsw(u8 x[16], const u8 y[16]) {
   i16 t[8];
+  unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
-  for (unsigned i = 0; i < 4; ++i) {
+  for (i = 0; i < 4; ++i) {
     t[i] = MAX(-32768, MIN(32767, X[i * 2] + X[i * 2 + 1]));
   }
-  for (unsigned i = 0; i < 4; ++i) {
+  for (i = 0; i < 4; ++i) {
     t[i + 4] = MAX(-32768, MIN(32767, Y[i * 2] + Y[i * 2 + 1]));
   }
   memcpy(X, t, 16);
@@ -94,11 +98,12 @@ static void SsePhaddsw(u8 x[16], const u8 y[16]) {
 
 static void SsePhsubsw(u8 x[16], const u8 y[16]) {
   i16 t[8];
+  unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
-  for (unsigned i = 0; i < 4; ++i) {
+  for (i = 0; i < 4; ++i) {
     t[i] = MAX(-32768, MIN(32767, X[i * 2] - X[i * 2 + 1]));
   }
-  for (unsigned i = 0; i < 4; ++i) {
+  for (i = 0; i < 4; ++i) {
     t[i + 4] = MAX(-32768, MIN(32767, Y[i * 2] - Y[i * 2 + 1]));
   }
   memcpy(X, t, 16);
@@ -106,216 +111,239 @@ static void SsePhsubsw(u8 x[16], const u8 y[16]) {
 }
 
 static void SsePsubsw(u8 x[16], const u8 y[16]) {
+  unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     X[i] = MAX(-32768, MIN(32767, X[i] - Y[i]));
   }
   COPY16_x_FROM_X;
 }
 
 static void SsePaddsw(u8 x[16], const u8 y[16]) {
+  unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     X[i] = MAX(-32768, MIN(32767, X[i] + Y[i]));
   }
   COPY16_x_FROM_X;
 }
 
 static void SsePcmpgtw(u8 x[16], const u8 y[16]) {
+  unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     X[i] = -(X[i] > Y[i]);
   }
   COPY16_x_FROM_X;
 }
 
 static void SsePcmpeqw(u8 x[16], const u8 y[16]) {
+  unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     X[i] = -(X[i] == Y[i]);
   }
   COPY16_x_FROM_X;
 }
 
 static void SsePavgw(u8 x[16], const u8 y[16]) {
+  unsigned i;
   COPY16_X_Y_FROM_x_y(u16);
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     X[i] = (X[i] + Y[i] + 1) >> 1;
   }
   COPY16_x_FROM_X;
 }
 
 static void SsePmulhw(u8 x[16], const u8 y[16]) {
+  unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     X[i] = (X[i] * Y[i]) >> 16;
   }
   COPY16_x_FROM_X;
 }
 
 static void SsePmullw(u8 x[16], const u8 y[16]) {
+  unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
-  for (unsigned i = 0; i < 8; ++i) {
+  for (i = 0; i < 8; ++i) {
     X[i] *= Y[i];
   }
   COPY16_x_FROM_X;
 }
 
 static void SsePsubsb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = MAX(-128, MIN(127, X[i] - Y[i]));
   }
   memcpy(x, X, 16);
 }
 
 static void SsePaddsb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = MAX(-128, MIN(127, X[i] + Y[i]));
   }
   memcpy(x, X, 16);
 }
 
 static void SsePaddusb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   u8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = MIN(255, X[i] + Y[i]);
   }
   memcpy(x, X, 16);
 }
 
 static void SsePsubusb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   u8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = MIN(255, MAX(0, X[i] - Y[i]));
   }
   memcpy(x, X, 16);
 }
 
 static void SsePsubb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] -= Y[i];
   }
   memcpy(x, X, 16);
 }
 
 static void SsePaddb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] += Y[i];
   }
   memcpy(x, X, 16);
 }
 
 static void SsePor(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] |= Y[i];
   }
   memcpy(x, X, 16);
 }
 
 static void SsePxor(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] ^= Y[i];
   }
   memcpy(x, X, 16);
 }
 
 static void SsePand(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] &= Y[i];
   }
   memcpy(x, X, 16);
 }
 
 static void SsePandn(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = ~X[i] & Y[i];
   }
   memcpy(x, X, 16);
 }
 
 static void SsePcmpeqb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = -(X[i] == Y[i]);
   }
   memcpy(x, X, 16);
 }
 
 static void SsePcmpgtb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = -(X[i] > Y[i]);
   }
   memcpy(x, X, 16);
 }
 
 static void SsePavgb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   u8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = (X[i] + Y[i] + 1) >> 1;
   }
   memcpy(x, X, 16);
 }
 
 static void SsePabsb(u8 x[16], const u8 y[16]) {
+  unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = ABS((i8)Y[i]);
   }
   memcpy(x, X, 16);
 }
 
 static void SsePminub(u8 x[16], const u8 y[16]) {
+  unsigned i;
   u8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = MIN(X[i], Y[i]);
   }
   memcpy(x, X, 16);
 }
 
 static void SsePmaxub(u8 x[16], const u8 y[16]) {
+  unsigned i;
   u8 X[16], Y[16];
   memcpy(X, x, 16);
   memcpy(Y, y, 16);
-  for (unsigned i = 0; i < 16; ++i) {
+  for (i = 0; i < 16; ++i) {
     X[i] = MAX(X[i], Y[i]);
   }
   memcpy(x, X, 16);
