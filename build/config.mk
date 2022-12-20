@@ -26,7 +26,6 @@ CPPFLAGS +=				\
 	-D__BSD_VISIBLE
 
 LDLIBS +=				\
-	-lz				\
 	-lm				\
 	-pthread
 

@@ -1,0 +1,18 @@
+DESCRIPTION
+
+  zlib is a data compression library
+
+ORIGIN
+
+  zlib 1.2.13
+  04f42ceca40f73e2978b50e93806c2a18c1281fc
+  https://github.com/madler/zlib
+
+LICENSE
+
+  The Zlib License
+
+LOCAL CHANGES
+
+  - Add comments disabling clang-format
+  - Made #include lines relative to repo root
