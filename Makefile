@@ -3,7 +3,7 @@
 
 SHELL = /bin/sh
 MAKEFLAGS += --no-builtin-rules
-ARCHITECTURES = x86_64 i486 aarch64 arm mips s390x mipsel mips64 mips64el powerpc powerpc64le
+ARCHITECTURES = x86_64-gcc49 i486 aarch64 arm mips s390x mipsel mips64 mips64el powerpc powerpc64le
 
 .SUFFIXES:
 .DELETE_ON_ERROR:
@@ -89,6 +89,7 @@ DEPENDS =				\
 	o/$(MODE)/depend.i486		\
 	o/$(MODE)/depend.m68k		\
 	o/$(MODE)/depend.x86_64		\
+	o/$(MODE)/depend.x86_64-gcc49	\
 	o/$(MODE)/depend.arm		\
 	o/$(MODE)/depend.aarch64	\
 	o/$(MODE)/depend.riscv64	\
@@ -111,6 +112,8 @@ o/$(MODE)/depend.m68k: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
 	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/m68k/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
 o/$(MODE)/depend.x86_64: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
 	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/x86_64/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
+o/$(MODE)/depend.x86_64-gcc49: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/x86_64-gcc49/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
 o/$(MODE)/depend.arm: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
 	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/arm/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
 o/$(MODE)/depend.aarch64: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt

@@ -33,6 +33,10 @@ o/$(MODE)/x86_64-gcc48/%.o: %.c o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-
 	@mkdir -p $(@D)
 	$(VM) o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc -static -Werror $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
 
+o/$(MODE)/x86_64-gcc49/%.o: %.c o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-gcc
+	@mkdir -p $(@D)
+	$(VM) o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-gcc -static -Werror $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
+
 o/$(MODE)/m68k/%.o: %.c o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc
 	@mkdir -p $(@D)
 	$(VM) o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc -static -Werror $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
@@ -103,6 +107,12 @@ o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc:	\
 		third_party/gcc/x86_64-linux-musl__x86_64-linux-musl__gcc-4.8.5.tar.xz
 	mkdir -p o/third_party/gcc/x86_64-gcc48
 	tar -C o/third_party/gcc/x86_64-gcc48 -xJf $<
+	touch $@
+
+o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-gcc:	\
+		third_party/gcc/x86_64-linux-musl__x86_64-linux-musl__g++-4.9.4.tar.xz
+	mkdir -p o/third_party/gcc/x86_64-gcc49
+	tar -C o/third_party/gcc/x86_64-gcc49 -xJf $<
 	touch $@
 
 o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc:		\

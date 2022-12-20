@@ -393,7 +393,8 @@ void RestoreIp(struct Machine *);
 
 bool IsValidAddrSize(i64, i64) pureconst;
 bool OverlapsPrecious(i64, i64) pureconst;
-char **LoadStrList(struct Machine *, i64);
+char **CopyStrList(struct Machine *, i64);
+char *CopyStr(struct Machine *, i64);
 char *LoadStr(struct Machine *, i64);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
 u8 *GetPageAddress(struct System *, u64);

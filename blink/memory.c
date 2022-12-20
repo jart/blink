@@ -265,6 +265,25 @@ void EndStoreNp(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   if (v) EndStore(m, v, n, p, b);
 }
 
+void *AddToFreeList(struct Machine *m, void *mem) {
+  int n;
+  void *p;
+  p = m->freelist.p;
+  n = m->freelist.n + 1;
+  if ((p = realloc(p, n * sizeof(*m->freelist.p)))) {
+    m->freelist.p = (void **)p;
+    m->freelist.n = n;
+    m->freelist.p[n - 1] = mem;
+    return mem;
+  } else {
+    free(mem);
+    return 0;
+  }
+}
+
+// Returns pointer to string in guest memory. If the string overlaps a
+// page boundary, then it's copied, and the temporary memory is pushed
+// to the free list.
 char *LoadStr(struct Machine *m, i64 addr) {
   size_t have;
   char *copy, *page, *p;
@@ -281,9 +300,7 @@ char *LoadStr(struct Machine *m, i64 addr) {
     if (!(page = (char *)LookupAddress(m, addr + have))) break;
     if ((p = (char *)memccpy(copy + have, page, '\0', 4096))) {
       SetReadAddr(m, addr, have + (p - (copy + have)) + 1);
-      m->freelist.p = (void **)realloc(
-          m->freelist.p, ++m->freelist.n * sizeof(*m->freelist.p));
-      return (char *)(m->freelist.p[m->freelist.n - 1] = copy);
+      return (char *)AddToFreeList(m, copy);
     }
     have += 4096;
     if (!(p = (char *)realloc(copy, have + 4096))) break;
@@ -293,19 +310,40 @@ char *LoadStr(struct Machine *m, i64 addr) {
   return 0;
 }
 
-char **LoadStrList(struct Machine *m, i64 addr) {
+// Copies string from guest memory. The returned memory is pushed to the
+// machine free list. NULL w/ ENOMEM is returned if we're out of memory.
+char *CopyStr(struct Machine *m, i64 addr) {
+  char *s;
+  if (!(s = LoadStr(m, addr))) return 0;
+  return (char *)AddToFreeList(m, strdup(s));
+}
+
+// Returns fully copied NULL-terminated NUL-terminated string list. All
+// memory allocated by this routine is pushed to the machine free list.
+char **CopyStrList(struct Machine *m, i64 addr) {
   int n;
   u8 b[8];
+  char *s;
+  void *mem;
   char **list;
   for (list = 0, n = 0;;) {
-    list = (char **)realloc(list, ++n * sizeof(*list));
+    if ((mem = realloc(list, ++n * sizeof(*list)))) {
+      list = (char **)mem;
+    } else {
+      free(list);
+      return 0;
+    }
     CopyFromUserRead(m, b, addr + n * 8 - 8, 8);
     if (Read64(b)) {
-      list[n - 1] = (char *)LoadStr(m, Read64(b));
+      if ((s = CopyStr(m, Read64(b)))) {
+        list[n - 1] = s;
+      } else {
+        free(list);
+        return 0;
+      }
     } else {
       list[n - 1] = 0;
-      break;
+      return (char **)AddToFreeList(m, list);
     }
   }
-  return list;
 }

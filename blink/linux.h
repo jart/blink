@@ -242,6 +242,13 @@
 #define SIGRTMIN_LINUX  32
 #define SIGRTMAX_LINUX  64
 
+#define AT_PAGESZ_LINUX 6
+#define AT_UID_LINUX    11
+#define AT_EUID_LINUX   12
+#define AT_GID_LINUX    13
+#define AT_EGID_LINUX   14
+#define AT_CLKTCK_LINUX 17
+#define AT_SECURE_LINUX 23
 #define AT_RANDOM_LINUX 25
 #define AT_EXECFN_LINUX 31
 
@@ -547,6 +554,13 @@ struct sysinfo_linux {
   u8 totalhigh[8];  // wut
   u8 freehigh[8];   // wut
   u8 mem_unit[4];   // ram stuff above is multiples of this
+};
+
+struct tms_linux {
+  u8 tms_utime[8];   // user time
+  u8 tms_stime[8];   // system time
+  u8 tms_cutime[8];  // user time of children
+  u8 tms_cstime[8];  // system time of children
 };
 
 int sysinfo_linux(struct sysinfo_linux *);

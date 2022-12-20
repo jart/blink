@@ -16,35 +16,44 @@ endif
 # vectorization makes code smaller
 o/$(MODE)/blink/sse2.o: private CFLAGS += -O3
 o/$(MODE)/x86_64/blink/sse2.o: private CFLAGS += -O3
+o/$(MODE)/x86_64-gcc49/blink/sse2.o: private CFLAGS += -O3
 o/$(MODE)/aarch64/blink/sse2.o: private CFLAGS += -O3
 
 # these files have big switch statements
 o/tiny/blink/cvt.o: private CFLAGS += -fpie
 o/tiny/x86_64/blink/cvt.o: private CFLAGS += -fpie
+o/tiny/x86_64-gcc49/blink/cvt.o: private CFLAGS += -fpie
 o/tiny/aarch64/blink/cvt.o: private CFLAGS += -fpie
 o/tiny/blink/xlat.o: private CFLAGS += -fpie
 o/tiny/x86_64/blink/xlat.o: private CFLAGS += -fpie
+o/tiny/x86_64-gcc49/blink/xlat.o: private CFLAGS += -fpie
 o/tiny/aarch64/blink/xlat.o: private CFLAGS += -fpie
 o/tiny/blink/fpu.o: private CFLAGS += -fpie
 o/tiny/x86_64/blink/fpu.o: private CFLAGS += -fpie
+o/tiny/x86_64-gcc49/blink/fpu.o: private CFLAGS += -fpie
 o/tiny/aarch64/blink/fpu.o: private CFLAGS += -fpie
 o/tiny/blink/flags.o: private CFLAGS += -fpie
 o/tiny/x86_64/blink/flags.o: private CFLAGS += -fpie
+o/tiny/x86_64-gcc49/blink/flags.o: private CFLAGS += -fpie
 o/tiny/aarch64/blink/flags.o: private CFLAGS += -fpie
 o/tiny/blink/x86.o: private CFLAGS += -fno-jump-tables
 o/tiny/x86_64/blink/x86.o: private CFLAGS += -fno-jump-tables
+o/tiny/x86_64-gcc49/blink/x86.o: private CFLAGS += -fno-jump-tables
 o/tiny/aarch64/blink/x86.o: private CFLAGS += -fno-jump-tables
 o/tiny/blink/uop.o: private CFLAGS += -fno-jump-tables
 o/tiny/x86_64/blink/uop.o: private CFLAGS += -fno-jump-tables
+o/tiny/x86_64-gcc49/blink/uop.o: private CFLAGS += -fno-jump-tables
 o/tiny/aarch64/blink/uop.o: private CFLAGS += -fno-jump-tables
 o/tiny/blink/syscall.o: private CFLAGS += -fpie
 o/tiny/x86_64/blink/syscall.o: private CFLAGS += -fpie
+o/tiny/x86_64-gcc49/blink/syscall.o: private CFLAGS += -fpie
 o/tiny/aarch64/blink/syscall.o: private CFLAGS += -fpie
 
 o/$(MODE)/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/%.o)))
 o/$(MODE)/i486/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/i486/%.o)))
 o/$(MODE)/m68k/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/m68k/%.o)))
 o/$(MODE)/x86_64/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/x86_64/%.o)))
+o/$(MODE)/x86_64-gcc49/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/x86_64-gcc49/%.o)))
 o/$(MODE)/arm/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/arm/%.o)))
 o/$(MODE)/aarch64/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/aarch64/%.o)))
 o/$(MODE)/riscv64/blink/blink.a: $(filter-out %/blink.o,$(filter-out %/tui.o,$(BLINK_SRCS:%.c=o/$(MODE)/riscv64/%.o)))
@@ -65,6 +74,8 @@ o/$(MODE)/m68k/blink/blink: o/$(MODE)/m68k/blink/blink.o o/$(MODE)/m68k/blink/bl
 	$(VM) o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc $(LDFLAGS_STATIC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/x86_64/blink/blink: o/$(MODE)/x86_64/blink/blink.o o/$(MODE)/x86_64/blink/blink.a
 	$(VM) o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc $(LDFLAGS_STATIC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
+o/$(MODE)/x86_64-gcc49/blink/blink: o/$(MODE)/x86_64-gcc49/blink/blink.o o/$(MODE)/x86_64-gcc49/blink/blink.a
+	$(VM) o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-gcc $(LDFLAGS_STATIC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/arm/blink/blink: o/$(MODE)/arm/blink/blink.o o/$(MODE)/arm/blink/blink.a
 	$(VM) o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc $(LDFLAGS_STATIC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/aarch64/blink/blink: o/$(MODE)/aarch64/blink/blink.o o/$(MODE)/aarch64/blink/blink.a
@@ -96,6 +107,8 @@ o/$(MODE)/m68k/blink/tui: o/$(MODE)/m68k/blink/tui.o o/$(MODE)/m68k/blink/blink.
 	$(VM) o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc $(LDFLAGS_STATIC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/x86_64/blink/tui: o/$(MODE)/x86_64/blink/tui.o o/$(MODE)/x86_64/blink/blink.a
 	$(VM) o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc $(LDFLAGS_STATIC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
+o/$(MODE)/x86_64-gcc49/blink/tui: o/$(MODE)/x86_64-gcc49/blink/tui.o o/$(MODE)/x86_64-gcc49/blink/blink.a
+	$(VM) o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-gcc $(LDFLAGS_STATIC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/arm/blink/tui: o/$(MODE)/arm/blink/tui.o o/$(MODE)/arm/blink/blink.a
 	$(VM) o/third_party/gcc/arm/bin/arm-linux-musleabi-gcc $(LDFLAGS_STATIC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/aarch64/blink/tui: o/$(MODE)/aarch64/blink/tui.o o/$(MODE)/aarch64/blink/blink.a

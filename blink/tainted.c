@@ -16,48 +16,19 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdatomic.h>
-#include <sys/types.h>
 #include <unistd.h>
 #ifdef __linux
-#include <sched.h>
-#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
-#include <sys/sysctl.h>
-#define HAVE_SYSCTL
-#elif defined(__NetBSD__)
-#include <sys/param.h>
-#include <sys/sysctl.h>
-#define HAVE_SYSCTL
+#include <sys/auxv.h>
 #endif
-
-#include "blink/macros.h"
 #include "blink/util.h"
 
-static atomic_int g_cpucount;
-
-static int GetCpuCountImpl(void) {
-#if defined(__linux)
-  cpu_set_t s;
-  if (sched_getaffinity(0, sizeof(s), &s) == -1) return -1;
-  return CPU_COUNT(&s);
-#elif defined(HAVE_SYSCTL)
-  int x;
-  size_t n = sizeof(x);
-  int mib[] = {CTL_HW, HW_NCPU};
-  if (sysctl(mib, ARRAYLEN(mib), &x, &n, 0, 0) == -1) return -1;
-  return x;
-#elif defined(_SC_NPROCESSORS_ONLN)
-  return sysconf(_SC_NPROCESSORS_ONLN);
+long IsProcessTainted(void) {
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || \
+    defined(__APPLE__) || defined(__COSMOPOLITAN__)
+  return issetugid();
+#elif defined(__linux)
+  return getauxval(AT_SECURE);
 #else
-  return 1;
-#endif /* HAVE_SYSCTL */
-}
-
-int GetCpuCount(void) {
-  int rc;
-  if (!(rc = g_cpucount)) {
-    if ((rc = GetCpuCountImpl()) < 1) rc = 1;
-    g_cpucount = rc;
-  }
-  return rc;
+  return 0;
+#endif
 }

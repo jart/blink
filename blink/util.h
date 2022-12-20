@@ -29,6 +29,7 @@ char *Demangle(char *, const char *, size_t);
 void *Deflate(const void *, unsigned, unsigned *);
 void Inflate(void *, unsigned, const void *, unsigned);
 ssize_t UninterruptibleWrite(int, const void *, size_t);
+long IsProcessTainted(void);
 long Magikarp(u8 *, long);
 int GetCpuCount(void);
 

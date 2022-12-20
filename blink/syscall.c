@@ -41,6 +41,7 @@
 #include <sys/socket.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
+#include <sys/times.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
@@ -1627,6 +1628,28 @@ static int SysMknod(struct Machine *m, i64 path, i32 mode, u64 dev) {
   return mknod(LoadStr(m, path), mode, dev);
 }
 
+static int XlatPrio(int x) {
+  switch (x) {
+    XLAT(0, PRIO_PROCESS);
+    XLAT(1, PRIO_PGRP);
+    XLAT(2, PRIO_USER);
+    default:
+      return -1;
+  }
+}
+
+static int SysGetpriority(struct Machine *m, i32 which, u32 who) {
+  int rc;
+  errno = 0;
+  rc = getpriority(XlatPrio(which), who);
+  if (rc == -1 && errno) return -1;
+  return MAX(-20, MIN(19, rc)) + 20;
+}
+
+static int SysSetpriority(struct Machine *m, i32 which, u32 who, int prio) {
+  return setpriority(XlatPrio(which), who, prio);
+}
+
 static int SysUnlinkat(struct Machine *m, i32 dirfd, i64 path, i32 flags) {
   return unlinkat(GetDirFildes(m, dirfd), LoadStr(m, path), XlatAtf(flags));
 }
@@ -1641,9 +1664,9 @@ static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   char *prog, **argv, **envp;
   // TODO(jart): do native exec with fd->fildes mapped to fd->systemfd
   if (m->system->exec) {
-    prog = LoadStr(m, pa);
-    argv = LoadStrList(m, aa);
-    envp = LoadStrList(m, ea);
+    prog = CopyStr(m, pa);
+    argv = CopyStrList(m, aa);
+    envp = CopyStrList(m, ea);
     SysCloseExec(m->system);
     _Exit(m->system->exec(prog, argv, envp));
   } else {
@@ -2024,6 +2047,20 @@ static int SysGettimeofday(struct Machine *m, i64 tv, i64 tz) {
   return rc;
 }
 
+static i64 SysTimes(struct Machine *m, i64 bufaddr) {
+  // no conversion needed thanks to getauxval(AT_CLKTCK)
+  clock_t res;
+  struct tms tms;
+  struct tms_linux gtms;
+  if ((res = times(&tms)) == (clock_t)-1) return -1;
+  Write64(gtms.tms_utime, tms.tms_utime);
+  Write64(gtms.tms_stime, tms.tms_stime);
+  Write64(gtms.tms_cutime, tms.tms_cutime);
+  Write64(gtms.tms_cstime, tms.tms_cstime);
+  CopyToUserWrite(m, bufaddr, &gtms, sizeof(gtms));
+  return res;
+}
+
 static int SysUtimes(struct Machine *m, i64 pathaddr, i64 tvsaddr) {
   const char *path;
   struct timeval tvs[2];
@@ -2214,6 +2251,10 @@ static int SysSetsid(struct Machine *m) {
   return setsid();
 }
 
+static i32 SysGetsid(struct Machine *m, i32 pid) {
+  return getsid(pid);
+}
+
 static int SysGetpid(struct Machine *m) {
   return m->system->pid;
 }
@@ -2260,6 +2301,10 @@ static int SysSetgid(struct Machine *m, int gid) {
 
 static int SysGetpgid(struct Machine *m, int pid) {
   return getpgid(pid);
+}
+
+static int SysGetpgrp(struct Machine *m) {
+  return getpgid(0);
 }
 
 static int SysAlarm(struct Machine *m, unsigned seconds) {
@@ -2415,7 +2460,10 @@ void OpSyscall(P) {
     SYSCALL(0x061, SysGetrlimit, (m, di, si));
     SYSCALL(0x062, SysGetrusage, (m, di, si));
     SYSCALL(0x063, SysSysinfo, (m, di));
+    SYSCALL(0x064, SysTimes, (m, di));
+    SYSCALL(0x06F, SysGetpgrp, (m));
     SYSCALL(0x070, SysSetsid, (m));
+    SYSCALL(0x07C, SysGetsid, (m, di));
     SYSCALL(0x079, SysGetpgid, (m, di));
     SYSCALL(0x06D, SysSetpgid, (m, di, si));
     SYSCALL(0x066, SysGetuid, (m));
@@ -2428,6 +2476,8 @@ void OpSyscall(P) {
     SYSCALL(0x082, SysSigsuspend, (m, di, si));
     SYSCALL(0x083, SysSigaltstack, (m, di, si));
     SYSCALL(0x085, SysMknod, (m, di, si, dx));
+    SYSCALL(0x08C, SysGetpriority, (m, di, si));
+    SYSCALL(0x08D, SysSetpriority, (m, di, si, dx));
     SYSCALL(0x08E, SysSchedSetparam, (m, di, si));
     SYSCALL(0x08F, SysSchedGetparam, (m, di, si));
     SYSCALL(0x090, SysSchedSetscheduler, (m, di, si, dx));
