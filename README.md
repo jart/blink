@@ -22,69 +22,99 @@ Especially if you use multiple threads under heavy processor load.
 
 ## Getting Started
 
-You can compile Blink on x86-64 Linux, Darwin, FreeBSD, NetBSD, OpenBSD,
-Apple Silicon, and Raspberry Pi using your operating system's toolchain.
+We regularly test that Blink is able run x86-64-linux binaries on the
+following platforms:
+
+- Linux (x86, ARM, MIPS, PowerPC, s390x)
+- MacOS (x86, ARM)
+- FreeBSD
+- OpenBSD
+- NetBSD
+
+Blink depends on the following libraries:
+
+- libc (POSIX.1-2017)
+
+Blink can be compiled on UNIX systems that have:
+
+- A C11 compiler (e.g. GCC 4.9.4+)
+- Modern GNU Make (i.e. not the one that comes with XCode)
+
+The instructions for compiling Blink are as follows:
 
 ```sh
-# for all x86-64 platforms
-$ build/bootstrap/make.com -j8 o//blink/blink
-
-# for apple m1 arm silicon
-# don't use the ancient version of gnu make that comes with xcode
-$ make -j8 o//blink/blink
-
-# for linux raspberry pi
-$ build/bootstrap/blink-linux-aarch64 build/bootstrap/make.com -j8 o//blink/blink
-
-# run actually portable executable in virtual machine
-$ o//blink/blink third_party/cosmo/hello.com
-hello world
-
-# run static elf binary in virtual machine
-$ o//blink/blink third_party/cosmo/tinyhello.elf
-hello world
+$ make -j4
+$ o//blink/blink -h
+Usage: o//blink/blink [-hjms] PROG [ARGS...]
+  -h        help
+  -j        disable jit
+  -m        enable memory safety
+  -s        print statistics on exit
 ```
 
-There's a terminal interface for debugging:
-
-```
-$ build/bootstrap/make.com -j8 o//blink/tui
-$ o//blink/tui third_party/cosmo/tinyhello.elf
-```
-
-You can run our test executables to check your local platform build:
+Here's how you can run a simple hello world program with Blink:
 
 ```sh
-$ build/bootstrap/make.com -j8 check
+o//blink/blink third_party/cosmo/tinyhello.elf
 ```
 
-For maximum performance, use `MODE=rel` or `MODE=opt`.
+Blink has a debugger TUI, which works with UTF-8 ANSI terminals. The
+most important keystrokes in this interface are `?` for help, 's' for
+step, `c` for continue, and scroll wheel for reverse debugging.
 
 ```sh
-$ build/bootstrap/make.com MODE=opt -j8 check
+o//blink/tui third_party/cosmo/tinyhello.elf
 ```
 
-For maximum tinyness, use `MODE=tiny`.
+## Testing
 
-```
-$ build/bootstrap/make.com MODE=tiny -j8 check
-$ strip o/tiny/blink/blink
-$ ls -hal o/tiny/blink/blink
-```
-
-You can sanitize using `MODE=asan`, `MODE=ubsan`, `MODE=tsan`, and
-`MODE=msan`.
-
-If you're building your code on an x86-64 Linux machine, then the
-following command will cross-compile blink for i386, arm, m68k, riscv,
-mips, s390x. Then it'll launch all the cross-compiled binaries in qemu
-to ensure the test programs above work on all architectures.
+Blink is tested primarily using precompiled x86 binaries, which are
+downloaded from Justine Tunney's web server. You can check how well
+Blink works on your local platform by running:
 
 ```sh
-$ build/bootstrap/make.com -j8 emulates
-$ o/third_party/qemu/qemu-aarch64 o//aarch64/blink/blink third_party/cosmo/hello.com
-hello world
+make check
 ```
+
+To check that Blink works on 11 different hardware `$(ARCHITECTURES)`
+(see [Makefile](Makefile)), you can run the following command, which
+will download statically-compiled builds of GCC and Qemu. Since our
+toolchain binaries are intended for x86-64 Linux, Blink will bootstrap
+itself locally first, so that it's possible to run these tests on other
+operating systems and architectures.
+
+```sh
+make check2
+make emulates  # potentially flaky
+```
+
+## Alternative Builds
+
+For maximum performance, use `MODE=rel` or `MODE=opt`. Please note the
+release mode builds will remove all the logging and assertion statements
+and Blink isn't mature enough for that yet. So extra caution is advised.
+
+```sh
+make MODE=rel
+o/rel/blink/blink -h
+```
+
+For maximum tinyness, use `MODE=tiny`. This build mode will not only
+remove logging and assertion statements, but also reduce performance in
+favor of smaller binary size whenever possible.
+
+```sh
+make MODE=tiny
+strip o/tiny/blink/blink
+ls -hal o/tiny/blink/blink
+```
+
+You can hunt down bugs in Blink using the following build modes:
+
+- `MODE=asan` helps find memory safety bugs
+- `MODE=tsan` helps find threading related bugs
+- `MODE=ubsan` to find violations of the C standard
+- `MODE=msan` helps find uninitialized memory errors
 
 ## Technical Details
 

@@ -2,7 +2,7 @@
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
 .PRECIOUS: third_party/cosmo/%.gz
-third_party/cosmo/%.gz: third_party/cosmo/%.gz.sha256
+third_party/cosmo/%.gz: third_party/cosmo/%.gz.sha256 $(VM)
 	curl -so $@ https://justine.lol/cosmotests/$(subst third_party/cosmo/,,$@)
 	$(VM) build/bootstrap/sha256sum.com $<
 
