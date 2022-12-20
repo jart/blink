@@ -2141,7 +2141,8 @@ void GeneralDispatch(P) {
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
   opclass = ClassifyOp(rde);
-  if (IsMakingPath(m) || (opclass == kOpNormal && CanJit(m) && CreatePath(A))) {
+  if (IsMakingPath(m) ||
+      (opclass != kOpPrecious && CanJit(m) && CreatePath(A))) {
     if (opclass == kOpNormal || opclass == kOpBranching) {
       ++m->path.elements;
       STATISTIC(++path_elements);

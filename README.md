@@ -59,7 +59,7 @@ o//blink/blink third_party/cosmo/tinyhello.elf
 ```
 
 Blink has a debugger TUI, which works with UTF-8 ANSI terminals. The
-most important keystrokes in this interface are `?` for help, 's' for
+most important keystrokes in this interface are `?` for help, `s` for
 step, `c` for continue, and scroll wheel for reverse debugging.
 
 ```sh

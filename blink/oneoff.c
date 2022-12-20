@@ -21,18 +21,17 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/timespec.h"
 #include "blink/types.h"
 #include "blink/util.h"
 
+_Noreturn void TerminateSignal(struct Machine *m, int sig) {
+  abort();
+}
+
 int main(int argc, char *argv[]) {
-  u8 A[] = {20, 20, 0, 0, 20, 20, 0, 0, 20, 20};
-  int i, n = Magikarp(A, ARRAYLEN(A));
-  for (i = 0; i < n; ++i) {
-    if (i) printf(", ");
-    printf("%d", A[i]);
-  }
-  printf("\n");
   return 0;
 }

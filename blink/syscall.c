@@ -775,13 +775,20 @@ void DropFd(struct Machine *m, struct Fd *fd) {
 static int SysUname(struct Machine *m, i64 utsaddr) {
   struct utsname_linux uts = {
       .sysname = "blink",
-      .nodename = "blink.local",
       .release = "4.0",        // or glibc whines
       .version = "blink 4.0",  // or glibc whines
       .machine = "x86_64",
   };
-  strcpy(uts.sysname, "unknown");
-  strcpy(uts.sysname, "unknown");
+  union {
+    char host[sizeof(uts.nodename)];
+    char domain[sizeof(uts.domainname)];
+  } u;
+  memset(u.host, 0, sizeof(u.host));
+  gethostname(u.host, sizeof(u.host) - 1);
+  strcpy(uts.nodename, u.host);
+  memset(u.domain, 0, sizeof(u.domain));
+  getdomainname(u.domain, sizeof(u.domain) - 1);
+  strcpy(uts.domainname, u.domain);
   CopyToUser(m, utsaddr, &uts, sizeof(uts));
   return 0;
 }
