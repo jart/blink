@@ -26,6 +26,7 @@
 
 #include "blink/buffer.h"
 #include "blink/macros.h"
+#include "blink/memcpy.h"
 #include "blink/stats.h"
 #include "blink/tpenc.h"
 #include "blink/util.h"
@@ -58,18 +59,15 @@ void AppendStr(struct Buffer *b, const char *s) {
 
 void AppendWide(struct Buffer *b, wint_t wc) {
   u64 wb;
-  unsigned i;
-  char buf[8];
   if (0 <= wc && wc <= 0x7f) {
     AppendChar(b, wc);
   } else {
-    i = 0;
+    if (b->i + 8 > b->n && !GrowBuffer(b, 8)) return;
     wb = tpenc(wc);
     do {
-      buf[i++] = wb & 0xFF;
-      wb >>= 8;
-    } while (wb);
-    AppendData(b, buf, i);
+      b->p[b->i++] = wb & 0xFF;
+    } while ((wb >>= 8));
+    b->p[b->i] = 0;
   }
 }
 

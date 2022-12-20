@@ -1877,6 +1877,8 @@ static void AddHistory(const char *ansi, size_t size) {
   r->origsize = size;
   r->data = Deflate(ansi, size, &r->compsize);
   ++g_history.index;
+  STATISTIC(AVERAGE(redraw_compressed_bytes, r->compsize));
+  STATISTIC(AVERAGE(redraw_uncompressed_bytes, r->origsize));
 }
 
 static void RewindHistory(int delta) {
@@ -1917,11 +1919,13 @@ static void Redraw(void) {
   char *ansi;
   size_t size;
   double execsecs;
+  struct timespec start_draw, end_draw;
   if (g_history.viewing) {
     ShowHistory();
     return;
   }
-  execsecs = ToNanoseconds(SubtractTime(GetTime(), last_draw)) * 1e-9;
+  start_draw = GetTime();
+  execsecs = ToNanoseconds(SubtractTime(start_draw, last_draw)) * 1e-9;
   oldlen = m->xedd->length;
   if (!IsShadow(m->readaddr) && !IsShadow(m->readaddr + m->readsize)) {
     readaddr = m->readaddr;
@@ -1960,6 +1964,10 @@ static void Redraw(void) {
   DrawMemory(&pan.stack, &stackview, GetSp(), GetSp() + GetPointerWidth());
   DrawStatus(&pan.status);
   unassert(ansi = RenderPanels(ARRAYLEN(pan.p), pan.p, tyn, txn, &size));
+  end_draw = GetTime();
+  (void)end_draw;
+  STATISTIC(AVERAGE(redraw_latency_us,
+                    ToMicroseconds(SubtractTime(end_draw, start_draw))));
   if (PreventBufferbloat()) {
     unassert(UninterruptibleWrite(ttyout, ansi, size) != -1);
   }

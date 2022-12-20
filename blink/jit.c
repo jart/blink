@@ -30,11 +30,11 @@
 #include "blink/end.h"
 #include "blink/endian.h"
 #include "blink/jit.h"
-#include "blink/jitcpy.h"
 #include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/map.h"
+#include "blink/memcpy.h"
 #include "blink/stats.h"
 #include "blink/tsan.h"
 #include "blink/util.h"
@@ -368,7 +368,7 @@ struct JitBlock *StartJit(struct Jit *jit) {
 inline bool AppendJit(struct JitBlock *jb, const void *data, long size) {
   unassert(size > 0);
   if (size <= GetJitRemaining(jb)) {
-    jitcpy(jb->addr + jb->index, data, size);
+    memcpy(jb->addr + jb->index, data, size);
     jb->index += size;
     return true;
   } else {
@@ -770,12 +770,14 @@ bool AppendJitSetReg(struct JitBlock *jb, int reg, u64 value) {
     if (rex) buf[n++] = rex;
     buf[n++] = kAmdXor;
     buf[n++] = 0300 | (reg & 7) << 3 | (reg & 7);
+#ifndef TINY
   } else if ((i64)value < 0 && (i64)value >= INT32_MIN) {
     buf[n++] = rex | kAmdRexw;
     buf[n++] = 0xC7;
     buf[n++] = 0300 | (reg & 7);
     Write32(buf + n, value);
     n += 4;
+#endif
   } else {
     if (value > 0xffffffff) rex |= kAmdRexw;
     if (rex) buf[n++] = rex;

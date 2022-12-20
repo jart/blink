@@ -33,8 +33,10 @@ void PrintStats(void) {
   int n = sizeof(b);
   int o = 0;
   b[0] = 0;
-#define DEFINE_COUNTER(S) APPEND("%-32s = %ld\n", #S, S);
-#define DEFINE_AVERAGE(S) APPEND("%-32s = %.6g\n", #S, S.a);
+#define DEFINE_COUNTER(S) \
+  if (S) APPEND("%-32s = %ld\n", #S, S);
+#define DEFINE_AVERAGE(S) \
+  if (S.a) APPEND("%-32s = %.6g\n", #S, S.a);
 #include "blink/stats.inc"
 #undef S
   WriteErrorString(b);

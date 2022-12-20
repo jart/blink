@@ -78,6 +78,11 @@ char *RenderPanels(long pn, struct Panel *p, long tyn, long txn, size_t *size) {
         j = 0;
         s = kUtf8;
         l = &p[i].lines[y - p[i].top];
+        while (x + 8 <= p[i].left) {
+          char t[8] = {' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '};
+          AppendData(&b, t, 8);
+          x += 8;
+        }
         while (x < p[i].left) {
           AppendChar(&b, ' ');
           x += 1;
