@@ -28,6 +28,7 @@
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
+#include "blink/stats.h"
 #include "blink/swap.h"
 
 void OpAlub(P) {
@@ -101,6 +102,7 @@ void OpAluw(P) {
   if (IsMakingPath(m) && !Lock(rde)) {
     Jitter(A, "B r0s1= A r0a2= s1a1=");
     if (!GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF, 2)) {
+      STATISTIC(++alu_unflagged);
       if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
       Jitter(A, "m r0 D", kJustAlu[(Opcode(rde) & 070) >> 3]);
     } else {

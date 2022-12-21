@@ -368,24 +368,21 @@ static void OpBit(P) {
   if (Lock(rde)) UNLOCK(&m->system->lock_lock);
 }
 
-static void OpSax(P) {
-  if (Rexw(rde)) {
-    Put64(m->ax, (i32)Get32(m->ax));
-  } else if (!Osz(rde)) {
-    Put64(m->ax, (u32)(i16)Get16(m->ax));
-  } else {
-    Put16(m->ax, (i8)Get8(m->ax));
+static void Trips(P, const nexgen32e_f ops[3]) {
+  nexgen32e_f op;
+  op = ops[WordLog2(rde) - 1];
+  op(A);
+  if (IsMakingPath(m)) {
+    Jitter(A, "m", op);
   }
 }
 
+static void OpSax(P) {
+  Trips(A, kSax);
+}
+
 static void OpConvert(P) {
-  if (Rexw(rde)) {
-    Put64(m->dx, Get64(m->ax) & 0x8000000000000000 ? 0xffffffffffffffff : 0);
-  } else if (!Osz(rde)) {
-    Put64(m->dx, Get32(m->ax) & 0x80000000 ? 0xffffffff : 0);
-  } else {
-    Put16(m->dx, Get16(m->ax) & 0x8000 ? 0xffff : 0);
-  }
+  Trips(A, kConvert);
 }
 
 static void OpBswapZvqp(P) {
@@ -495,21 +492,33 @@ static void OpMovGvqpEvqp(P) {
 static void OpMovzbGvqpEb(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 Load8(GetModrmRegisterBytePointerRead1(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "z0B r0 wC");
+  }
 }
 
 static void OpMovzwGvqpEw(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 Load16(GetModrmRegisterWordPointerRead2(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "z1B r0 C");
+  }
 }
 
 static void OpMovsbGvqpEb(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 (i8)Load8(GetModrmRegisterBytePointerRead1(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "z0B r0 z0x r0 wC");
+  }
 }
 
 static void OpMovswGvqpEw(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 (i16)Load16(GetModrmRegisterWordPointerRead2(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "z1B r0 z1x r0 C");
+  }
 }
 
 static void OpMovsxdGdqpEd(P) {
@@ -633,6 +642,7 @@ static void Aluwi(P) {
   if (IsMakingPath(m)) {
     Jitter(A, "B r0a1= a2i", uimm0);
     if (!GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF, 2)) {
+      STATISTIC(++alu_unflagged);
       if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
       Jitter(A, "m r0 D", kJustAlu[ModrmReg(rde)]);
     } else {
@@ -657,50 +667,35 @@ static void OpAluwiReg(P) {
   }
 }
 
-static void AluAlIb(P, aluop_f op) {
+static void OpAluAlIb(P) {
+  aluop_f op;
+  op = kAlu[(Opcode(rde) & 070) >> 3][0];
   Put8(m->ax, op(m, Get8(m->ax), uimm0));
 }
 
-static void OpAluAlIbAdd(P) {
-  AluAlIb(A, Add8);
-}
-
-static void OpAluAlIbOr(P) {
-  AluAlIb(A, Or8);
-}
-
-static void OpAluAlIbAdc(P) {
-  AluAlIb(A, Adc8);
-}
-
-static void OpAluAlIbSbb(P) {
-  AluAlIb(A, Sbb8);
-}
-
-static void OpAluAlIbAnd(P) {
-  AluAlIb(A, And8);
-}
-
-static void OpAluAlIbSub(P) {
-  AluAlIb(A, Sub8);
-}
-
-static void OpAluAlIbXor(P) {
-  AluAlIb(A, Xor8);
-}
-
 static void OpAluRaxIvds(P) {
-  WriteRegister(rde, m->ax,
-                kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)](
-                    m, ReadRegister(rde, m->ax), uimm0));
+  aluop_f op;
+  op = kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)];
+  WriteRegister(rde, m->ax, op(m, ReadRegister(rde, m->ax), uimm0));
+  if (IsMakingPath(m)) {
+    Jitter(A, "G r0a1= a2i s0a0= c r0 H", uimm0, op);
+  }
 }
 
 static void OpCmpAlIb(P) {
   Sub8(m, Get8(m->ax), uimm0);
+  if (IsMakingPath(m)) {
+    Jitter(A, "G r0a1= a2i s0a0= c", uimm0, Sub8);
+  }
 }
 
 static void OpCmpRaxIvds(P) {
-  kAlu[ALU_SUB][RegLog2(rde)](m, ReadRegister(rde, m->ax), uimm0);
+  aluop_f op;
+  op = kAlu[ALU_SUB][RegLog2(rde)];
+  op(m, ReadRegister(rde, m->ax), uimm0);
+  if (IsMakingPath(m)) {
+    Jitter(A, "G r0a1= a2i s0a0= c", uimm0, op);
+  }
 }
 
 static void OpTestAlIb(P) {
@@ -735,6 +730,7 @@ static void BsuwiConstant(P, u64 y) {
       case BSU_SAR:
         if (Rexw(rde) && (y &= 63) &&
             !GetNeededFlags(m, m->ip, GetFlagClobbers(rde), 2)) {
+          STATISTIC(++alu_unflagged);
           Jitter(A, "a2i m r0 D", y, kJustBsu[ModrmReg(rde)]);
           return;
         }
@@ -1547,7 +1543,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*001*/ OpAluw,                  // #8    (5.653689%)
     /*002*/ OpAlubFlip,              // #180  (0.000087%)
     /*003*/ OpAluwFlip,              // #7    (5.840835%)
-    /*004*/ OpAluAlIbAdd,            //
+    /*004*/ OpAluAlIb,               //
     /*005*/ OpAluRaxIvds,            // #166  (0.000114%)
     /*006*/ OpPushSeg,               //
     /*007*/ OpPopSeg,                //
@@ -1555,7 +1551,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*009*/ OpAluw,                  // #21   (0.520082%)
     /*00A*/ OpAlubFlip,              // #120  (0.001072%)
     /*00B*/ OpAluwFlip,              // #114  (0.001252%)
-    /*00C*/ OpAluAlIbOr,             //
+    /*00C*/ OpAluAlIb,               //
     /*00D*/ OpAluRaxIvds,            // #282  (0.000001%)
     /*00E*/ OpPushSeg,               //
     /*00F*/ OpPopSeg,                //
@@ -1563,7 +1559,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*011*/ OpAluw,                  // #11   (5.307809%)
     /*012*/ OpAlubFlip,              //
     /*013*/ OpAluwFlip,              // #108  (0.001526%)
-    /*014*/ OpAluAlIbAdc,            // #97   (0.002566%)
+    /*014*/ OpAluAlIb,               // #97   (0.002566%)
     /*015*/ OpAluRaxIvds,            //
     /*016*/ OpPushSeg,               //
     /*017*/ OpPopSeg,                //
@@ -1571,7 +1567,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*019*/ OpAluw,                  // #65   (0.015300%)
     /*01A*/ OpAlubFlip,              //
     /*01B*/ OpAluwFlip,              // #44   (0.241806%)
-    /*01C*/ OpAluAlIbSbb,            // #96   (0.002566%)
+    /*01C*/ OpAluAlIb,               // #96   (0.002566%)
     /*01D*/ OpAluRaxIvds,            //
     /*01E*/ OpPushSeg,               //
     /*01F*/ OpPopSeg,                //
@@ -1579,7 +1575,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*021*/ OpAluw,                  // #59   (0.019691%)
     /*022*/ OpAlubFlip,              //
     /*023*/ OpAluwFlip,              // #41   (0.279852%)
-    /*024*/ OpAluAlIbAnd,            // #279  (0.000001%)
+    /*024*/ OpAluAlIb,               // #279  (0.000001%)
     /*025*/ OpAluRaxIvds,            // #43   (0.275823%)
     /*026*/ OpPushSeg,               //
     /*027*/ OpPopSeg,                //
@@ -1587,7 +1583,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*029*/ OpAluw,                  // #29   (0.334693%)
     /*02A*/ OpAlubFlip,              // #179  (0.000087%)
     /*02B*/ OpAluwFlip,              // #71   (0.012465%)
-    /*02C*/ OpAluAlIbSub,            //
+    /*02C*/ OpAluAlIb,               //
     /*02D*/ OpAluRaxIvds,            // #112  (0.001317%)
     /*02E*/ OpUd,                    //
     /*02F*/ OpDas,                   //
@@ -1595,7 +1591,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*031*/ OpAluw,                  // #3    (6.612252%)
     /*032*/ OpAlubFlip,              // #81   (0.007453%)
     /*033*/ OpAluwFlip,              // #47   (0.138021%)
-    /*034*/ OpAluAlIbXor,            //
+    /*034*/ OpAluAlIb,               //
     /*035*/ OpAluRaxIvds,            // #295  (0.000000%)
     /*036*/ OpUd,                    //
     /*037*/ OpAaa,                   //

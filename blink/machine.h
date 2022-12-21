@@ -354,6 +354,8 @@ struct Machine {                           //
 };                                         //
 
 extern _Thread_local struct Machine *g_machine;
+extern const nexgen32e_f kConvert[3];
+extern const nexgen32e_f kSax[3];
 
 struct System *NewSystem(void);
 void FreeSystem(struct System *);
@@ -433,6 +435,7 @@ void FastPush(struct Machine *, long);
 void FastPop(struct Machine *, long);
 void FastCall(struct Machine *, u64);
 void FastJmp(struct Machine *, u64);
+void FastLeave(struct Machine *);
 void FastRet(struct Machine *);
 
 u32 Jb(struct Machine *);

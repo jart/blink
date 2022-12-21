@@ -31,6 +31,7 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/stats.h"
+#include "blink/swap.h"
 #include "blink/types.h"
 #include "blink/x86.h"
 
@@ -59,6 +60,9 @@ MICRO_OP void AddIp(struct Machine *m, long oplen) {
 ////////////////////////////////////////////////////////////////////////////////
 // READING FROM REGISTER FILE
 
+MICRO_OP static u64 GetAx(struct Machine *m) {
+  return Get64(m->ax);
+}
 MICRO_OP static u64 GetCl(struct Machine *m) {
   return m->cl;
 }
@@ -80,8 +84,8 @@ static const getreg_f kGetReg[] = {GetReg8, GetReg16, GetReg32, GetReg64};
 ////////////////////////////////////////////////////////////////////////////////
 // WRITING TO REGISTER FILE
 
-MICRO_OP static void PutReg8(struct Machine *m, long b, u64 x) {
-  Put8(m->beg + b, x);
+MICRO_OP static void PutReg8(struct Machine *m, long i, u64 x) {
+  Put8(m->beg + i, x);
 }
 MICRO_OP static void PutReg16(struct Machine *m, long i, u64 x) {
   Put16(m->weg[i], x);
@@ -248,6 +252,12 @@ MICRO_OP void FastCall(struct Machine *m, u64 disp) {
   m->ip = x;
 }
 
+MICRO_OP void FastLeave(struct Machine *m) {
+  u64 v = Get64(m->bp);
+  Put64(m->sp, v + 8);
+  Put64(m->bp, Read64(ToHost(v)));
+}
+
 MICRO_OP void FastRet(struct Machine *m) {
   u64 v = Get64(m->sp);
   Put64(m->sp, v + 8);
@@ -303,6 +313,43 @@ MICRO_OP u32 Jl(struct Machine *m) {
 MICRO_OP u32 Jle(struct Machine *m) {
   return IsLessOrEqual(m);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+// SIGN EXTENDING
+
+MICRO_OP static u64 Sex8(u64 x) {
+  return (i8)x;
+}
+MICRO_OP static u64 Sex16(u64 x) {
+  return (i16)x;
+}
+MICRO_OP static u64 Sex32(u64 x) {
+  return (i32)x;
+}
+typedef u64 (*sex_f)(u64);
+static const sex_f kSex[] = {Sex8, Sex16, Sex32};
+
+MICRO_OP static void Sax64(P) {
+  Put64(m->ax, (i32)Get32(m->ax));
+}
+MICRO_OP static void Sax32(P) {
+  Put64(m->ax, (u32)(i16)Get16(m->ax));
+}
+MICRO_OP static void Sax16(P) {
+  Put16(m->ax, (i8)Get8(m->ax));
+}
+const nexgen32e_f kSax[] = {Sax16, Sax32, Sax64};
+
+MICRO_OP static void Convert64(P) {
+  Put64(m->dx, Get64(m->ax) & 0x8000000000000000 ? 0xffffffffffffffff : 0);
+}
+MICRO_OP static void Convert32(P) {
+  Put64(m->dx, Get32(m->ax) & 0x80000000 ? 0xffffffff : 0);
+}
+MICRO_OP static void Convert16(P) {
+  Put16(m->dx, Get16(m->ax) & 0x8000 ? 0xffff : 0);
+}
+const nexgen32e_f kConvert[] = {Convert16, Convert32, Convert64};
 
 ////////////////////////////////////////////////////////////////////////////////
 // ADDRESSING
@@ -522,7 +569,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         i -= 2;
         break;
 
-      case 'A':  // r0 = ReadReg(RexrReg)
+      case 'A':  // r0 = GetReg(RexrReg)
         Jitter(A, "s0a0= a1i m",
                log2sz ? RexrReg(rde) : kByteReg[ByteRexr(rde)],
                kGetReg[log2sz]);
@@ -535,7 +582,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                kPutReg[log2sz]);
         break;
 
-      case 'B':  // r0 = ReadRegOrMem(RexbRm)
+      case 'B':  // r0 = GetRegOrMem(RexbRm)
         if (IsModrmRegister(rde)) {
           Jitter(A, "a1i s0a0= m",
                  log2sz ? RexbRm(rde) : kByteReg[ByteRexb(rde)],
@@ -585,13 +632,39 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         }
         break;
 
-      case 'E':  // r0 = ReadReg(RexbSrm)
+      case 'E':  // r0 = GetReg(RexbSrm)
         Jitter(A, "s0a0= a1i m", RexbSrm(rde), kGetReg[WordLog2(rde)]);
         break;
 
       case 'F':  // PutReg(RexbSrm, <pop>)
         ItemsRequired(1);
         Jitter(A, "a2= a1i s0a0= m", RexbSrm(rde), kPutReg[WordLog2(rde)]);
+        break;
+
+      case 'G':  // r0 = GetReg(AX)
+        Jitter(A, "s0a0= m", GetAx);
+        break;
+
+      case 'H':  // PutReg(AX, <pop>)
+        ItemsRequired(1);
+        Jitter(A, "a2= a1i s0a0= m", 0, kPutReg[log2sz]);
+        break;
+
+      case 'w':  // prevents byte operation
+        log2sz = WordLog2(rde);
+        continue;
+
+      case 'z':  // force size
+        log2sz = CheckBelow(fmt[k++] - '0', 4);
+        continue;
+
+      case 'x':  // sign extend
+        ItemsRequired(1);
+        if (log2sz < 3) {
+          Jitter(A, "a0= m", kSex[log2sz]);
+        } else {
+          Jitter(A, "r0=");
+        }
         break;
 
       default:

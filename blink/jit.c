@@ -72,7 +72,7 @@
  * updates a corresponding function hook.
  *
  *     // setup a multi-threaded jit manager
- *     struct Jit *jit;
+ *     struct Jit jit;
  *     InitJit(&jit);
  *
  *     // workflow for composing two function calls

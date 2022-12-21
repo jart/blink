@@ -454,6 +454,14 @@ static int SysFutexWait(struct Machine *m,  //
       rc = EINTR;
       break;
     }
+    if (!(mem = GetAddress(m, uaddr))) {
+      rc = EFAULT;
+      break;
+    }
+    if (Load32(mem) != expect) {
+      rc = 0;
+      break;
+    }
     tick = AddTime(tick, FromMilliseconds(kPollingMs));
     if (CompareTime(tick, deadline) > 0) tick = deadline;
     rc = pthread_cond_timedwait(&f->cond, &f->lock, &tick);

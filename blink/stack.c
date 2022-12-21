@@ -174,6 +174,9 @@ void OpLeave(P) {
     case XED_MODE_LONG:
       Put64(m->sp, Get64(m->bp));
       Put64(m->bp, Pop(A, 0));
+      if (HasLinearMapping(m)) {
+        Jitter(A, "m", FastLeave);
+      }
       break;
     case XED_MODE_LEGACY:
       Put64(m->sp, Get32(m->bp));
