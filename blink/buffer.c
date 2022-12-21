@@ -53,8 +53,10 @@ void AppendChar(struct Buffer *b, char c) {
   b->p[b->i] = 0;
 }
 
-void AppendStr(struct Buffer *b, const char *s) {
-  AppendData(b, s, strlen(s));
+int AppendStr(struct Buffer *b, const char *s) {
+  int n = strlen(s);
+  AppendData(b, s, n);
+  return n;
 }
 
 void AppendWide(struct Buffer *b, wint_t wc) {

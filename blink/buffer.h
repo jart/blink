@@ -10,7 +10,7 @@ struct Buffer {
 
 void AppendChar(struct Buffer *, char);
 void AppendData(struct Buffer *, const char *, int);
-void AppendStr(struct Buffer *, const char *);
+int AppendStr(struct Buffer *, const char *);
 void AppendWide(struct Buffer *, wint_t);
 int AppendFmt(struct Buffer *, const char *, ...);
 

@@ -1811,7 +1811,7 @@ static void DrawStatus(struct Panel *p) {
   fds = CountFds(&m->system->fds);
   s = (struct Buffer *)malloc(sizeof(*s));
   memset(s, 0, sizeof(*s));
-  AppendStr(s, DescribeAction());
+  rw += AppendStr(s, DescribeAction());
   rw += AppendStat(s, 12, "ips", ips, false);
   toto = kRealSize + (long)m->system->memstat.allocated * 4096;
   rw += AppendStat(s, 10, "kb", toto / 1024, false);
