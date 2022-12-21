@@ -580,9 +580,9 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
     return einval();
   }
   if (HasLinearMapping(s) && (virt & (pagesize - 1))) {
-    LOGF("mprotect(%#" PRIx64 ", %#" PRIx64
-         ") not aligned to host page size while using linear mode",
-         virt, size, "addr");
+    LOGF("mprotect(%#" PRIx64 ", %#" PRIx64 ", %d)"
+         " not aligned to host page size while using linear mode",
+         virt, size, prot);
     return einval();
   }
   if (CheckVirtual(s, virt, size) == -1) {
