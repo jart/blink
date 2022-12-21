@@ -62,7 +62,6 @@ CFLAGS +=				\
 	-U_FORTIFY_SOURCE
 
 ifeq ($(USER), jart)
-# -Wno-unused-const-variable
 CFLAGS +=				\
 	-fno-stack-protector		\
 	-Wall				\
@@ -82,8 +81,8 @@ endif
 
 # ifeq ($(MODE), opt)
 # CC = clang
-# # CPPFLAGS += -DNDEBUG
-# CFLAGS += -O3
+# CPPFLAGS += -DNDEBUG
+# CFLAGS += -O2
 # TARGET_ARCH = -march=native
 # endif
 

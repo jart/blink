@@ -56,7 +56,7 @@ static void OnSigSys(int sig) {
   // do nothing
 }
 
-_Noreturn void TerminateSignal(struct Machine *m, int sig) {
+void TerminateSignal(struct Machine *m, int sig) {
   int syssig;
   struct sigaction sa;
   LOGF("terminating due to signal %s", DescribeSignal(sig));

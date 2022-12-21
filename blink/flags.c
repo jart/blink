@@ -18,7 +18,9 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/address.h"
 #include "blink/builtin.h"
+#include "blink/debug.h"
 #include "blink/flags.h"
+#include "blink/log.h"
 #include "blink/modrm.h"
 #include "blink/stats.h"
 
@@ -57,19 +59,44 @@ u64 ExportFlags(u64 flags) {
   return flags;
 }
 
-int GetNeededFlags(struct Machine *m, i64 pc, int myflags, int lookahead) {
-  int i, need;
-  for (i = need = 0;;) {
-    LoadInstruction(m, pc);
+static bool IsJump(u64 rde) {
+  int op = Mopcode(rde);
+  return op == 0x0E9 || op == 0x0EB || op == 0x0E8;
+}
+
+static bool IsConditionalJump(u64 rde) {
+  int op = Mopcode(rde);
+  return (0x070 <= op && op <= 0x07F) || (0x180 <= op && op <= 0x18F);
+}
+
+static int CrawlFlags(struct Machine *m,  //
+                      i64 pc,             //
+                      int myflags,        //
+                      int look,           //
+                      int depth) {
+  int need = 0;
+  for (;;) {
+    SPX_LOGF("%" PRIx64 " %*s%s", pc, depth * 2, "", DescribeOp(m, pc));
+    if (LoadInstruction2(m, pc)) return -1;
     pc += Oplength(m->xedd->op.rde);
     need |= GetFlagDeps(m->xedd->op.rde) & myflags;
-    if (!(myflags &= ~GetFlagClobbers(m->xedd->op.rde))) break;
-    if (++i == lookahead || ClassifyOp(m->xedd->op.rde) != kOpNormal) {
-      need = -1;
-      break;
+    if (!(myflags &= ~GetFlagClobbers(m->xedd->op.rde))) {
+      return need;
+    } else if (!--look) {
+      return -1;
+    } else if (IsJump(m->xedd->op.rde)) {
+      pc += m->xedd->op.disp;
+    } else if (IsConditionalJump(m->xedd->op.rde)) {
+      need |= CrawlFlags(m, pc + m->xedd->op.disp, myflags, look, depth + 1);
+      if (need == -1) return -1;
+    } else if (ClassifyOp(m->xedd->op.rde) != kOpNormal) {
+      return -1;
     }
   }
-  return need;
+}
+
+int GetNeededFlags(struct Machine *m, i64 pc, int myflags) {
+  return CrawlFlags(m, pc, myflags, 16, 0);
 }
 
 int GetFlagClobbers(u64 rde) {

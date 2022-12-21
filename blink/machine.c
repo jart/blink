@@ -595,21 +595,33 @@ static void Connect(P, u64 pc) {
   AppendJitJump(m->path.jb, jump);
 }
 
-static void AluwRo(P, const aluop_f ops[4]) {
+static void AluwRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
   aluop_f op = ops[RegLog2(rde)];
   op(m, ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)),
      ReadRegister(rde, RegRexrReg(m, rde)));
   if (IsMakingPath(m)) {
-    Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
+    STATISTIC(++alu_ops);
+    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
+      case 0:
+      case CF:
+      case ZF:
+      case CF | ZF:
+        STATISTIC(++alu_simplified);
+        Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= m", fops[RegLog2(rde)]);
+        break;
+      default:
+        Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
+        break;
+    }
   }
 }
 
 static void OpAluwCmp(P) {
-  AluwRo(A, kAlu[ALU_SUB]);
+  AluwRo(A, kAlu[ALU_SUB], kAluFast[ALU_SUB]);
 }
 
 static void OpAluwTest(P) {
-  AluwRo(A, kAlu[ALU_AND]);
+  AluwRo(A, kAlu[ALU_AND], kAluFast[ALU_AND]);
 }
 
 static void OpAluwFlip(P) {
@@ -618,7 +630,25 @@ static void OpAluwFlip(P) {
                 op(m, ReadRegister(rde, RegRexrReg(m, rde)),
                    ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A))));
   if (IsMakingPath(m)) {
-    Jitter(A, "B r0s1= A r0a1= s1a2= s0a0= c r0 C", op);
+    STATISTIC(++alu_ops);
+    Jitter(A, "B r0s1= A");
+    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
+      case 0:
+        STATISTIC(++alu_unflagged);
+        if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
+        Jitter(A, "r0a1= s1a2= m r0 C", kJustAlu[(Opcode(rde) & 070) >> 3]);
+        break;
+      case CF:
+      case ZF:
+      case CF | ZF:
+        STATISTIC(++alu_simplified);
+        Jitter(A, "r0a1= s1a2= s0a0= m r0 C",
+               kAluFast[(Opcode(rde) & 070) >> 3][RegLog2(rde)]);
+        break;
+      default:
+        Jitter(A, "r0a1= s1a2= s0a0= c r0 C", op);
+        break;
+    }
   }
 }
 
@@ -640,28 +670,50 @@ static void Aluwi(P) {
   u8 *a = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(rde, a, op(m, ReadMemory(rde, a), uimm0));
   if (IsMakingPath(m)) {
+    STATISTIC(++alu_ops);
     Jitter(A, "B r0a1= a2i", uimm0);
-    if (!GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF, 2)) {
-      STATISTIC(++alu_unflagged);
-      if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
-      Jitter(A, "m r0 D", kJustAlu[ModrmReg(rde)]);
-    } else {
-      Jitter(A, "s0a0= c r0 D", op);
+    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
+      case 0:
+        STATISTIC(++alu_unflagged);
+        if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
+        Jitter(A, "m r0 D", kJustAlu[ModrmReg(rde)]);
+        break;
+      case CF:
+      case ZF:
+      case CF | ZF:
+        STATISTIC(++alu_simplified);
+        Jitter(A, "s0a0= m r0 D", kAluFast[ModrmReg(rde)][RegLog2(rde)]);
+        break;
+      default:
+        Jitter(A, "s0a0= c r0 D", op);
+        break;
     }
   }
 }
 
-static void AluwiRo(P, const aluop_f ops[4]) {
+static void AluwiRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
   aluop_f op = ops[RegLog2(rde)];
   op(m, ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)), uimm0);
   if (IsMakingPath(m)) {
-    Jitter(A, "B r0a1= a2i s0a0= c", uimm0, op);
+    STATISTIC(++alu_ops);
+    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
+      case 0:
+      case CF:
+      case ZF:
+      case CF | ZF:
+        STATISTIC(++alu_simplified);
+        Jitter(A, "B a2i r0a1= s0a0= m", uimm0, fops[RegLog2(rde)]);
+        break;
+      default:
+        Jitter(A, "B a2i r0a1= s0a0= c", uimm0, op);
+        break;
+    }
   }
 }
 
 static void OpAluwiReg(P) {
   if (ModrmReg(rde) == ALU_CMP) {
-    AluwiRo(A, kAlu[ModrmReg(rde)]);
+    AluwiRo(A, kAlu[ModrmReg(rde)], kAluFast[ModrmReg(rde)]);
   } else {
     Aluwi(A);
   }
@@ -728,8 +780,9 @@ static void BsuwiConstant(P, u64 y) {
       case BSU_SHR:
       case BSU_SAL:
       case BSU_SAR:
+        STATISTIC(++alu_ops);
         if (Rexw(rde) && (y &= 63) &&
-            !GetNeededFlags(m, m->ip, GetFlagClobbers(rde), 2)) {
+            !GetNeededFlags(m, m->ip, GetFlagClobbers(rde))) {
           STATISTIC(++alu_unflagged);
           Jitter(A, "a2i m r0 D", y, kJustBsu[ModrmReg(rde)]);
           return;
@@ -1191,7 +1244,7 @@ static void Op0f6(P) {
 }
 
 static void OpTestEvqpIvds(P) {
-  AluwiRo(A, kAlu[ALU_AND]);
+  AluwiRo(A, kAlu[ALU_AND], kAluFast[ALU_AND]);
 }
 
 static const nexgen32e_f kOp0f7[] = {

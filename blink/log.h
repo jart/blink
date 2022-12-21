@@ -9,14 +9,15 @@
 #define LOG_ENABLED 0
 #endif
 
-#define LOG_SYS 0
-#define LOG_SIG 0
-#define LOG_ASM 0
-#define LOG_JIT 0
-#define LOG_JIX 0
-#define LOG_MEM 0
-#define LOG_THR 0
-#define LOG_ELF 0
+#define LOG_SYS 0  // log system calls run by guest
+#define LOG_SIG 0  // log signal handling behaviors
+#define LOG_ASM 0  // log executed assembly opcodes
+#define LOG_JIT 0  // jit path construction logging
+#define LOG_JIX 0  // verbose jit execution logging
+#define LOG_MEM 0  // system memory mapping logging
+#define LOG_THR 0  // multi-threaded operation logs
+#define LOG_ELF 0  // elf executable loader logging
+#define LOG_SPX 0  // speculative execution logging
 
 #if LOG_ENABLED
 #define LOGF(...) Log(__FILE__, __LINE__, __VA_ARGS__)
@@ -70,6 +71,12 @@
 #define ELF_LOGF(...) Log(__FILE__, __LINE__, "(elf) " __VA_ARGS__)
 #else
 #define ELF_LOGF(...) (void)0
+#endif
+
+#if LOG_SPX
+#define SPX_LOGF(...) Log(__FILE__, __LINE__, "(spx) " __VA_ARGS__)
+#else
+#define SPX_LOGF(...) (void)0
 #endif
 
 #if LOG_ENABLED

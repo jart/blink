@@ -9,10 +9,10 @@
 #include "blink/dll.h"
 #include "blink/types.h"
 
-#define kJitFit          800
+#define kJitFit          1000
 #define kJitAlign        16
-#define kJitJumpTries    8
-#define kJitMinBlockSize 65536
+#define kJitJumpTries    16
+#define kJitMinBlockSize 131072
 
 #ifdef __x86_64__
 #define kJitRes0 kAmdAx

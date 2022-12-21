@@ -18,17 +18,12 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <limits.h>
 
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
-
-#if LONG_BIT == 64 && !defined(TINY)
-#if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 406 || defined(__llvm__)
-#define HAVE_INT128
-#endif
-#endif
 
 struct Dubble {
   u64 lo;

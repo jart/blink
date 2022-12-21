@@ -42,7 +42,7 @@ bool GetParity(u8) pureconst;
 void ImportFlags(struct Machine *, u64);
 int GetFlagDeps(u64) pureconst;
 int GetFlagClobbers(u64) pureconst;
-int GetNeededFlags(struct Machine *, i64, int, int);
+int GetNeededFlags(struct Machine *, i64, int);
 
 static inline bool GetFlag(u32 f, int b) {
   switch (b) {

@@ -121,7 +121,7 @@ n       next                      -s       statistics\n\
 c       continue                  -b ADDR  push breakpoint\n\
 C       continue harder           -w ADDR  push watchpoint\n\
 q       quit                      -L PATH  log file location\n\
-f       finish                    -R       reactive tui mode\n\
+f       finish                    -R       deliver crash sigs\n\
 R       restart                   -H       disable highlighting\n\
 x       hex                       -v       increase verbosity\n\
 ?       help                      -j       enables jit\n\
@@ -1885,6 +1885,17 @@ static void RewindHistory(int delta) {
   int count = g_history.count;
   int viewing = g_history.viewing;
   g_history.viewing = MAX(0, MIN(viewing + delta, count));
+  // skip over the first history entry, since it doesn't feel right to
+  // need to press up arrow twice to see some real history.
+  if (g_history.viewing == 1) {
+    if (delta > 0) {
+      g_history.viewing = 2;
+    } else if (delta < 0) {
+      g_history.viewing = 0;
+    }
+  }
+  // clear the crash dialog box if it exists.
+  action &= ~FAILURE;
 }
 
 static void ShowHistory(void) {
@@ -3515,20 +3526,22 @@ void FreePanels(void) {
   }
 }
 
-_Noreturn void TerminateSignal(struct Machine *m, int sig) {
-  LOGF("terminating due to signal %s", DescribeSignal(sig));
-  WriteErrorString("\r\033[K\033[J"
-                   "terminating due to signal; see log\n");
-  exit(128 + sig);
+void TerminateSignal(struct Machine *m, int sig) {
+  if (!react) {
+    LOGF("terminating due to signal %s", DescribeSignal(sig));
+    WriteErrorString("\r\033[K\033[J"
+                     "terminating due to signal; see log\n");
+    exit(128 + sig);
+  }
 }
 
 static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
   LOGF("OnSigSegv(%p)", si->si_addr);
   RestoreIp(g_machine);
   g_machine->faultaddr = ToGuest(si->si_addr);
-  LOGF("SEGMENTATION FAULT AT ADDRESS %" PRIx64 "\n\t%s", g_machine->faultaddr,
-       GetBacktrace(g_machine));
-  DeliverSignalToUser(g_machine, SIGSEGV_LINUX);
+  LOGF("SIGSEGV AT ADDRESS %" PRIx64 " (OR %" PRIx64 ")\n\t%s",
+       g_machine->faultaddr, si->si_addr, GetBacktrace(g_machine));
+  if (!react) DeliverSignalToUser(g_machine, SIGSEGV_LINUX);
   siglongjmp(g_machine->onhalt, kMachineSegmentationFault);
 }
 

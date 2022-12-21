@@ -100,13 +100,24 @@ void OpAluw(P) {
     if (Lock(rde)) UNLOCK(&m->system->lock_lock);
   }
   if (IsMakingPath(m) && !Lock(rde)) {
+    STATISTIC(++alu_ops);
     Jitter(A, "B r0s1= A r0a2= s1a1=");
-    if (!GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF, 2)) {
-      STATISTIC(++alu_unflagged);
-      if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
-      Jitter(A, "m r0 D", kJustAlu[(Opcode(rde) & 070) >> 3]);
-    } else {
-      Jitter(A, "s0a0= c r0 D", f);
+    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
+      case 0:
+        STATISTIC(++alu_unflagged);
+        if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
+        Jitter(A, "m r0 D", kJustAlu[(Opcode(rde) & 070) >> 3]);
+        break;
+      case CF:
+      case ZF:
+      case CF | ZF:
+        STATISTIC(++alu_simplified);
+        Jitter(A, "s0a0= m r0 D",
+               kAluFast[(Opcode(rde) & 070) >> 3][RegLog2(rde)]);
+        break;
+      default:
+        Jitter(A, "s0a0= c r0 D", f);
+        break;
     }
   }
 }

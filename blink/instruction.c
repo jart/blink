@@ -44,35 +44,39 @@ static bool IsOpcodeEqual(struct XedDecodedInst *xedd, u8 *a) {
   }
 }
 
-static void ReadInstruction(struct Machine *m, u8 *p, unsigned n) {
+static int ReadInstruction(struct Machine *m, u8 *p, unsigned n) {
   struct XedDecodedInst xedd[1];
   STATISTIC(++instructions_decoded);
   if (!DecodeInstruction(xedd, p, n, m->mode)) {
     memcpy(m->xedd, xedd, kInstructionBytes);
+    return 0;
   } else {
-    HaltMachine(m, kMachineDecodeError);
+    return kMachineDecodeError;
   }
 }
 
-static void LoadInstructionSlow(struct Machine *m, u64 ip) {
+static int LoadInstructionSlow(struct Machine *m, u64 ip) {
   u8 *addr;
   unsigned i;
   u8 copy[15], *toil;
   i = 4096 - (ip & 4095);
   STATISTIC(++page_overlaps);
-  addr = ResolveAddress(m, ip);
-  if ((toil = LookupAddress(m, ip + i))) {
-    memcpy(copy, addr, i);
-    memcpy(copy + i, toil, 15 - i);
-    ReadInstruction(m, copy, 15);
+  if ((addr = LookupAddress(m, ip))) {
+    if ((toil = LookupAddress(m, ip + i))) {
+      memcpy(copy, addr, i);
+      memcpy(copy + i, toil, 15 - i);
+      return ReadInstruction(m, copy, 15);
+    } else {
+      return ReadInstruction(m, addr, i);
+    }
   } else {
-    ReadInstruction(m, addr, i);
+    return kMachineSegmentationFault;
   }
 }
 
-void LoadInstruction(struct Machine *m, u64 pc) {
-  u8 *addr;
+int LoadInstruction2(struct Machine *m, u64 pc) {
   unsigned key;
+  u8 *addr, *page;
   if (atomic_load_explicit(&m->opcache->invalidated, memory_order_relaxed)) {
     ResetInstructionCache(m);
     atomic_store_explicit(&m->opcache->invalidated, false,
@@ -83,17 +87,27 @@ void LoadInstruction(struct Machine *m, u64 pc) {
   if ((pc & 4095) < 4096 - 15) {
     if (pc - (pc & 4095) == m->opcache->codevirt && m->opcache->codehost) {
       addr = m->opcache->codehost + (pc & 4095);
-    } else {
+    } else if ((page = LookupAddress(m, pc - (pc & 4095)))) {
       m->opcache->codevirt = pc - (pc & 4095);
-      m->opcache->codehost = ResolveAddress(m, m->opcache->codevirt);
-      addr = m->opcache->codehost + (pc & 4095);
+      m->opcache->codehost = page;
+      addr = page + (pc & 4095);
+    } else {
+      return kMachineSegmentationFault;
     }
     if (IsOpcodeEqual(m->xedd, addr)) {
       STATISTIC(++instructions_cached);
+      return 0;
     } else {
-      ReadInstruction(m, addr, 15);
+      return ReadInstruction(m, addr, 15);
     }
   } else {
-    LoadInstructionSlow(m, pc);
+    return LoadInstructionSlow(m, pc);
+  }
+}
+
+void LoadInstruction(struct Machine *m, u64 pc) {
+  int rc;
+  if ((rc = LoadInstruction2(m, pc))) {
+    HaltMachine(m, rc);
   }
 }

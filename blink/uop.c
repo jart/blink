@@ -170,7 +170,7 @@ static const storereserve_f kStoreReserve[] = {StoreReserve8, StoreReserve16,
                                                StoreReserve32, StoreReserve64};
 
 ////////////////////////////////////////////////////////////////////////////////
-// ALU MICRO-OPS
+// ARITHMETIC
 
 MICRO_OP i64 JustAdd(struct Machine *m, u64 x, u64 y) {
   return x + y;
@@ -228,6 +228,185 @@ const aluop_f kJustBsu[8] = {
     JustShr,  //
     JustShl,  //
     JustSar,  //
+};
+
+MICRO_OP static i64 FastXor64(struct Machine *m, u64 x, u64 y) {
+  u64 z = x ^ y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastOr64(struct Machine *m, u64 x, u64 y) {
+  u64 z = x | y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAnd64(struct Machine *m, u64 x, u64 y) {
+  u64 z = x & y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastSub64(struct Machine *m, u64 x, u64 y) {
+  u64 z = x - y;
+  int c = x < z;
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAdd64(struct Machine *m, u64 x, u64 y) {
+  u64 z = x + y;
+  int c = z < y;
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAdc64(struct Machine *m, u64 x, u64 y) {
+  u64 t = x + !!(m->flags & CF);
+  u64 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastSbb64(struct Machine *m, u64 x, u64 y) {
+  u64 t = x - !!(m->flags & CF);
+  u64 z = t - y;
+  int c = (x < t) | (t < z);
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+
+MICRO_OP static i64 FastXor32(struct Machine *m, u64 x, u64 y) {
+  u32 z = x ^ y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastOr32(struct Machine *m, u64 x, u64 y) {
+  u32 z = x | y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAnd32(struct Machine *m, u64 x, u64 y) {
+  u32 z = x & y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastSub32(struct Machine *m, u64 x, u64 y) {
+  u32 z = x - y;
+  int c = x < z;
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAdd32(struct Machine *m, u64 x, u64 y) {
+  u32 z = x + y;
+  int c = z < y;
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAdc32(struct Machine *m, u64 x, u64 y) {
+  u32 t = x + !!(m->flags & CF);
+  u32 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastSbb32(struct Machine *m, u64 x, u64 y) {
+  u32 t = x - !!(m->flags & CF);
+  u32 z = t - y;
+  int c = (x < t) | (t < z);
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+
+MICRO_OP static i64 FastXor16(struct Machine *m, u64 x, u64 y) {
+  u16 z = x ^ y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastOr16(struct Machine *m, u64 x, u64 y) {
+  u16 z = x | y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAnd16(struct Machine *m, u64 x, u64 y) {
+  u16 z = x & y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastSub16(struct Machine *m, u64 x, u64 y) {
+  u16 z = x - y;
+  int c = x < z;
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAdd16(struct Machine *m, u64 x, u64 y) {
+  u16 z = x + y;
+  int c = z < y;
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAdc16(struct Machine *m, u64 x, u64 y) {
+  u16 t = x + !!(m->flags & CF);
+  u16 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastSbb16(struct Machine *m, u64 x, u64 y) {
+  u16 t = x - !!(m->flags & CF);
+  u16 z = t - y;
+  int c = (x < t) | (t < z);
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+
+MICRO_OP static i64 FastXor8(struct Machine *m, u64 x, u64 y) {
+  u8 z = x ^ y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastOr8(struct Machine *m, u64 x, u64 y) {
+  u8 z = x | y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAnd8(struct Machine *m, u64 x, u64 y) {
+  u8 z = x & y;
+  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastSub8(struct Machine *m, u64 x, u64 y) {
+  u8 z = x - y;
+  int c = x < z;
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAdd8(struct Machine *m, u64 x, u64 y) {
+  u8 z = x + y;
+  int c = z < y;
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastAdc8(struct Machine *m, u64 x, u64 y) {
+  u8 t = x + !!(m->flags & CF);
+  u8 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastSbb8(struct Machine *m, u64 x, u64 y) {
+  u8 t = x - !!(m->flags & CF);
+  u8 z = t - y;
+  int c = (x < t) | (t < z);
+  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  return z;
+}
+
+const aluop_f kAluFast[8][4] = {
+    {FastAdd8, FastAdd16, FastAdd32, FastAdd64},  //
+    {FastOr8, FastOr16, FastOr32, FastOr64},      //
+    {FastAdc8, FastAdc16, FastAdc32, FastAdc64},  //
+    {FastSbb8, FastSbb16, FastSbb32, FastSbb64},  //
+    {FastAnd8, FastAnd16, FastAnd32, FastAnd64},  //
+    {FastSub8, FastSub16, FastSub32, FastSub64},  //
+    {FastXor8, FastXor16, FastXor32, FastXor64},  //
+    {FastSub8, FastSub16, FastSub32, FastSub64},  //
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -450,7 +629,8 @@ long GetMicroOpLengthImpl(void *uop) {
 
 long GetMicroOpLength(void *uop) {
 #ifdef __x86_64__
-#define kMaxOps 128
+#define kMaxOps 256
+  _Static_assert(IS2POW(kMaxOps), "");
   static unsigned count;
   static void *ops[kMaxOps * 2];
   static short len[kMaxOps * 2];

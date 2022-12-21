@@ -136,7 +136,7 @@ bool CreatePath(P) {
   InitPaths(m->system);
   if ((pc = GetPc(m))) {
     if ((m->path.jb = StartJit(&m->system->jit))) {
-      JIT_LOGF("starting new path %" PRIxPTR " at %" PRIx64,
+      JIT_LOGF("starting new path jit_pc:%" PRIxPTR " at pc:%" PRIx64,
                GetJitPc(m->path.jb), pc);
       AppendJit(m->path.jb, kEnter, sizeof(kEnter));
 #if LOG_JIX
@@ -178,6 +178,7 @@ void FinishPath(struct Machine *m) {
   } else {
     STATISTIC(++path_ooms);
     JIT_LOGF("path starting at %" PRIx64 " ran out of space", m->path.start);
+    SetHook(m, m->path.start, 0);
   }
   m->path.jb = 0;
 }
@@ -185,7 +186,10 @@ void FinishPath(struct Machine *m) {
 void AbandonPath(struct Machine *m) {
   unassert(IsMakingPath(m));
   STATISTIC(++path_abandoned);
+  JIT_LOGF("abandoning path jit_pc:%" PRIxPTR " which started at pc:%" PRIx64,
+           GetJitPc(m->path.jb), m->path.start);
   AbandonJit(&m->system->jit, m->path.jb);
+  SetHook(m, m->path.start, 0);
   m->path.jb = 0;
 }
 

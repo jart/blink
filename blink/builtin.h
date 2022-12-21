@@ -140,8 +140,6 @@
 #if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 407 || \
     __has_attribute(__optimize__)
 #define optimizesize __attribute__((__optimize__("s")))
-#elif defined(__llvm__) || __has_attribute(__optnone__)
-#define optimizesize __attribute__((__optnone__))
 #else
 #define optimizesize
 #endif
@@ -212,6 +210,12 @@
 #endif
 #endif
 
+#if LONG_BIT == 64 && !defined(TINY)
+#if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 406 || defined(__llvm__)
+#define HAVE_INT128
+#endif
+#endif
+
 #if (defined(__x86_64__) || defined(__aarch64__)) &&                     \
     !defined(__SANITIZE_MEMORY__) && !defined(__SANITIZE_UNDEFINED__) && \
     !defined(__SANITIZE_THREAD__) && !defined(NOJIT)
@@ -220,9 +224,14 @@
 
 #if defined(HAVE_JIT) && defined(__GNUC__) && \
     !defined(__SANITIZE_ADDRESS__) && !defined(__SANITIZE_UNDEFINED__)
+#ifndef __OPTIMIZE__
+#define TRIVIALLY_RELOCATABLE \
+  noinstrument dontclone noubsan smashmystack optimizesize
+#else
 #define TRIVIALLY_RELOCATABLE noinstrument dontclone noubsan smashmystack
-#define MICRO_OP_SAFE         TRIVIALLY_RELOCATABLE forceinline
-#define MICRO_OP              TRIVIALLY_RELOCATABLE
+#endif
+#define MICRO_OP_SAFE TRIVIALLY_RELOCATABLE forceinline
+#define MICRO_OP      TRIVIALLY_RELOCATABLE
 #else
 #define MICRO_OP_SAFE static inline
 #define MICRO_OP

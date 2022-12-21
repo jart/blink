@@ -6,11 +6,20 @@ BLINK_FILES := $(wildcard blink/*)
 BLINK_SRCS = $(filter %.c,$(BLINK_FILES))
 BLINK_HDRS = $(filter %.h,$(BLINK_FILES))
 
-# avoid junk being placed in micro-operations
-# TODO(jart): separate out uops into disjoint files
+# avoid static memory being placed in micro-operations
 o/$(MODE)/blink/uop.o: private CFLAGS += -fno-stack-protector
+
+# gcc whines if -pg is passed without this flag
 ifneq ($(MODE), prof)
 o/$(MODE)/blink/uop.o: private CFLAGS += -fomit-frame-pointer
+endif
+
+# Clang has an AVX pass that wrecks Write64() etc.
+o/$(MODE)/blink/uop.o: private CFLAGS += -mgeneral-regs-only
+
+# x86.c doesn't understand VEX encoding right now.
+ifeq ($(HOST_ARCH), x86_64)
+o/$(MODE)/blink/uop.o: private TARGET_ARCH = -march=k8
 endif
 
 # vectorization makes code smaller
