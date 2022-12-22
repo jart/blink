@@ -24,7 +24,8 @@ o/$(MODE)/test/asm/%.com.ok:						\
 .PRECIOUS: o/$(MODE)/test/asm/%.elf
 o/$(MODE)/test/asm/%.elf:						\
 		o/$(MODE)/x86_64/test/asm/%.o				\
-		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc
+		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc	\
+		$(VM)
 	@mkdir -p $(@D)
 	$(TEST_ASM_LINK)
 
@@ -34,7 +35,8 @@ $(TEST_ASM_OBJS): test/asm/asm.mk test/asm/mac.inc
 .PRECIOUS: o/$(MODE)/test/asm/%.com
 o/$(MODE)/test/asm/%.com:						\
 		o/$(MODE)/test/asm/%.elf				\
-		o/$(MODE)/blink/blink
+		o/$(MODE)/blink/blink					\
+		$(VM)
 	@mkdir -p $(@D)
 	@echo "#!/bin/sh" >$@
 	@echo "echo testing $(VM) $< >&2" >>$@

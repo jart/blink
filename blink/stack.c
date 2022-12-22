@@ -90,7 +90,10 @@ void OpPushZvq(P) {
   int osz = kStackOsz[Osz(rde)][Mode(rde)];
   PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Eamode(rde), osz);
   if (IsMakingPath(m) && HasLinearMapping(m) && !Osz(rde)) {
-    Jitter(A, "a1i m", RexbSrm(rde), FastPush);
+    Jitter(A,
+           "a1i"
+           "m",
+           RexbSrm(rde), FastPush);
   }
 }
 
@@ -140,7 +143,10 @@ void OpPopZvq(P) {
       __builtin_unreachable();
   }
   if (IsMakingPath(m) && HasLinearMapping(m) && !Osz(rde)) {
-    Jitter(A, "a1i m", RexbSrm(rde), FastPop);
+    Jitter(A,
+           "a1i"
+           "m",
+           RexbSrm(rde), FastPop);
   }
 }
 

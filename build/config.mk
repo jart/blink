@@ -30,7 +30,9 @@ LDLIBS +=				\
 	-pthread
 
 ifneq ($(HOST_OS), Darwin)
+ifneq ($(HOST_OS), OpenBSD)
 LDLIBS += -lrt
+endif
 endif
 
 LDFLAGS_STATIC =			\

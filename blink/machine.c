@@ -110,7 +110,8 @@ static void OpSahf(P) {
 static void OpLeaGvqpM(P) {
   WriteRegister(rde, RegRexrReg(m, rde), LoadEffectiveAddress(A).addr);
   if (IsMakingPath(m)) {
-    Jitter(A, "L r0 C");
+    Jitter(A, "L"      // res0 = LoadEffectiveAddress()
+              "r0C");  // PutReg(RexrReg, res0)
   }
 }
 
@@ -373,7 +374,7 @@ static void Trips(P, const nexgen32e_f ops[3]) {
   op = ops[WordLog2(rde) - 1];
   op(A);
   if (IsMakingPath(m)) {
-    Jitter(A, "m", op);
+    Jitter(A, "m", op);  // call micro-op
   }
 }
 
@@ -427,7 +428,8 @@ static void OpMovOvqpRax(P) {
 static void OpMovEbGb(P) {
   Store8(GetModrmRegisterBytePointerWrite1(A), Get8(ByteRexrReg(m, rde)));
   if (IsMakingPath(m)) {
-    Jitter(A, "A r0 D");
+    Jitter(A, "A"      // res0 = GetReg(RexrReg)
+              "r0D");  // PutRegOrMem(RexbRm, res0)
   }
 }
 
@@ -435,7 +437,8 @@ static void OpMovGbEb(P) {
   Put8(ByteRexrReg(m, rde), Load8(GetModrmRegisterBytePointerRead1(A)));
   unassert(!RegLog2(rde));
   if (IsMakingPath(m)) {
-    Jitter(A, "B r0 C");
+    Jitter(A, "B"      // res0 = GetRegOrMem(RexbRm)
+              "r0C");  // PutReg(RexrReg, res0)
   }
 }
 
@@ -446,7 +449,12 @@ static void OpMovZbIb(P) {
 static void OpMovZvqpIvqp(P) {
   WriteRegister(rde, RegRexbSrm(m, rde), uimm0);
   if (IsMakingPath(m)) {
-    Jitter(A, "a2iu F", uimm0);
+    Jitter(A,
+           "a2"  // push arg2
+           "i"   // <pop> = uimm0
+           "u"   // unpop
+           "F",  // PutReg(RexbSrm, arg2)
+           uimm0);
   }
 }
 
@@ -469,7 +477,12 @@ static relegated void OpDecZv(P) {
 static void OpMovEvqpIvds(P) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A), uimm0);
   if (IsMakingPath(m)) {
-    Jitter(A, "a3iu D", uimm0);
+    Jitter(A,
+           "a3"  // push arg3
+           "i"   // <pop> = uimm0
+           "u"   // unpop
+           "D",  // PutRegOrMem(RexbRm, arg3)
+           uimm0);
   }
 }
 
@@ -477,7 +490,8 @@ static void OpMovEvqpGvqp(P) {
   WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
                         ReadRegister(rde, RegRexrReg(m, rde)));
   if (IsMakingPath(m)) {
-    Jitter(A, "A r0 D");
+    Jitter(A, "A"      // res0 = GetReg(RexrReg)
+              "r0D");  // PutRegOrMem(RexbRm, res0)
   }
 }
 
@@ -485,7 +499,8 @@ static void OpMovGvqpEvqp(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)));
   if (IsMakingPath(m)) {
-    Jitter(A, "B r0 C");
+    Jitter(A, "B"      // res0 = GetRegOrMem(RexbRm)
+              "r0C");  // PutReg(RexrReg, res0)
   }
 }
 
@@ -493,7 +508,8 @@ static void OpMovzbGvqpEb(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 Load8(GetModrmRegisterBytePointerRead1(A)));
   if (IsMakingPath(m)) {
-    Jitter(A, "z0B r0 wC");
+    Jitter(A, "B"       // res0 = GetRegOrMem(RexbRm)
+              "r0wC");  // PutReg[force16/32/64bit](RexrReg, res0)
   }
 }
 
@@ -501,7 +517,8 @@ static void OpMovzwGvqpEw(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 Load16(GetModrmRegisterWordPointerRead2(A)));
   if (IsMakingPath(m)) {
-    Jitter(A, "z1B r0 C");
+    Jitter(A, "z1B"    // res0 = GetRegOrMem[force16bit](RexbRm)
+              "r0C");  // PutReg(RexrReg, res0)
   }
 }
 
@@ -509,7 +526,9 @@ static void OpMovsbGvqpEb(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 (i8)Load8(GetModrmRegisterBytePointerRead1(A)));
   if (IsMakingPath(m)) {
-    Jitter(A, "z0B r0 z0x r0 wC");
+    Jitter(A, "B"       // res0 = GetRegOrMem(RexbRm)
+              "r0x"     // res0 = SignExtend(res0)
+              "r0wC");  // PutReg[force16/32/64bit](RexrReg, res0)
   }
 }
 
@@ -517,18 +536,35 @@ static void OpMovswGvqpEw(P) {
   WriteRegister(rde, RegRexrReg(m, rde),
                 (i16)Load16(GetModrmRegisterWordPointerRead2(A)));
   if (IsMakingPath(m)) {
-    Jitter(A, "z1B r0 z1x r0 C");
+    Jitter(A, "z1B"    // res0 = GetRegOrMem[force16bit](RexbRm)
+              "r0z1x"  // res0 = SignExtend[force16bit](res0)
+              "r0C");  // PutReg(RexrReg, res0)
   }
 }
 
-static void OpMovsxdGdqpEd(P) {
-  Put64(RegRexrReg(m, rde), (i32)Load32(GetModrmRegisterWordPointerRead4(A)));
+static void OpMovslGdqpEd(P) {
+  WriteRegister(rde, RegRexrReg(m, rde),
+                (i32)Load32(GetModrmRegisterWordPointerRead4(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "z2B"    // res0 = GetRegOrMem[force32bit](RexbRm)
+              "r0z2x"  // res0 = SignExtend[force32bit](res0)
+              "r0C");  // PutReg(RexrReg, res0)
+  }
 }
 
 static void AlubRo(P, aluop_f op) {
   op(m, Load8(GetModrmRegisterBytePointerRead1(A)), Get8(ByteRexrReg(m, rde)));
   if (IsMakingPath(m)) {
-    Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
+    STATISTIC(++alu_ops);
+    Jitter(A,
+           "B"
+           "r0s1="
+           "A"
+           "r0a2="
+           "s1a1="
+           "q"
+           "c",
+           op);
   }
 }
 
@@ -545,7 +581,18 @@ static void OpAlubFlip(P) {
   Put8(ByteRexrReg(m, rde), op(m, Get8(ByteRexrReg(m, rde)),
                                Load8(GetModrmRegisterBytePointerRead1(A))));
   if (IsMakingPath(m)) {
-    Jitter(A, "A r0s1= B r0a2= s1a1= s0a0= c r0 C", op);
+    STATISTIC(++alu_ops);
+    Jitter(A,
+           "A"
+           "r0s1="
+           "B"
+           "r0a2="
+           "s1a1="
+           "q"
+           "c"
+           "r0"
+           "C",
+           op);
   }
 }
 
@@ -553,7 +600,16 @@ static void OpAlubFlipCmp(P) {
   Sub8(m, Get8(ByteRexrReg(m, rde)),
        Load8(GetModrmRegisterBytePointerRead1(A)));
   if (IsMakingPath(m)) {
-    Jitter(A, "A r0s1= B r0a2= s1a1= s0a0= c", Sub8);
+    STATISTIC(++alu_ops);
+    Jitter(A,
+           "A"
+           "r0s1="
+           "B"
+           "r0a2="
+           "s1a1="
+           "q"
+           "c",
+           Sub8);
   }
 }
 
@@ -607,10 +663,26 @@ static void AluwRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
       case ZF:
       case CF | ZF:
         STATISTIC(++alu_simplified);
-        Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= m", fops[RegLog2(rde)]);
+        Jitter(A,
+               "B"
+               "r0s1="
+               "A"
+               "r0a2="
+               "s1a1="
+               "q"
+               "m",
+               fops[RegLog2(rde)]);
         break;
       default:
-        Jitter(A, "B r0s1= A r0a2= s1a1= s0a0= c", op);
+        Jitter(A,
+               "B"
+               "r0s1="
+               "A"
+               "r0a2="
+               "s1a1="
+               "q"
+               "c",
+               op);
         break;
     }
   }
@@ -631,38 +703,87 @@ static void OpAluwFlip(P) {
                    ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A))));
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
-    Jitter(A, "B r0s1= A");
+    Jitter(A, "B"
+              "r0s1="
+              "A");
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
         STATISTIC(++alu_unflagged);
-        if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
-        Jitter(A, "r0a1= s1a2= m r0 C", kJustAlu[(Opcode(rde) & 070) >> 3]);
+        if (GetFlagDeps(rde)) Jitter(A, "q");
+        Jitter(A,
+               "r0a1="
+               "s1a2="
+               "m"
+               "r0"
+               "C",
+               kJustAlu[(Opcode(rde) & 070) >> 3]);
         break;
       case CF:
       case ZF:
       case CF | ZF:
         STATISTIC(++alu_simplified);
-        Jitter(A, "r0a1= s1a2= s0a0= m r0 C",
+        Jitter(A,
+               "r0a1="
+               "s1a2="
+               "q"
+               "m"
+               "r0"
+               "C",
                kAluFast[(Opcode(rde) & 070) >> 3][RegLog2(rde)]);
         break;
       default:
-        Jitter(A, "r0a1= s1a2= s0a0= c r0 C", op);
+        Jitter(A,
+               "r0a1="
+               "s1a2="
+               "q"
+               "c"
+               "r0"
+               "C",
+               op);
         break;
     }
   }
 }
 
-static void AluwFlipRo(P, const aluop_f ops[4]) {
+static void AluwFlipRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
   aluop_f op = ops[RegLog2(rde)];
   op(m, ReadRegister(rde, RegRexrReg(m, rde)),
      ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)));
   if (IsMakingPath(m)) {
-    Jitter(A, "B r0s1= A r0a1= s1a2= s0a0= c", op);
+    STATISTIC(++alu_ops);
+    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
+      case 0:
+      case CF:
+      case ZF:
+      case CF | ZF:
+        STATISTIC(++alu_simplified);
+        Jitter(A,
+               "B"
+               "r0s1="
+               "A"
+               "r0a1="
+               "s1a2="
+               "q"
+               "m",
+               fops[RegLog2(rde)]);
+        break;
+      default:
+        Jitter(A,
+               "B"
+               "r0s1="
+               "A"
+               "r0a1="
+               "s1a2="
+               "q"
+               "c",
+               op);
+        break;
+    }
   }
 }
 
 static void OpAluwFlipCmp(P) {
-  AluwFlipRo(A, kAlu[ALU_SUB]);
+  AluwFlipRo(A, kAlu[ALU_SUB], kAluFast[ALU_SUB]);
 }
 
 static void Aluwi(P) {
@@ -671,21 +792,39 @@ static void Aluwi(P) {
   WriteRegisterOrMemory(rde, a, op(m, ReadMemory(rde, a), uimm0));
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
-    Jitter(A, "B r0a1= a2i", uimm0);
+    Jitter(A,
+           "B"
+           "r0a1="
+           "a2i",
+           uimm0);
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
         STATISTIC(++alu_unflagged);
-        if (GetFlagDeps(rde)) Jitter(A, "s0a0=");
-        Jitter(A, "m r0 D", kJustAlu[ModrmReg(rde)]);
+        if (GetFlagDeps(rde)) Jitter(A, "q");
+        Jitter(A,
+               "m"
+               "r0"
+               "D",
+               kJustAlu[ModrmReg(rde)]);
         break;
       case CF:
       case ZF:
       case CF | ZF:
         STATISTIC(++alu_simplified);
-        Jitter(A, "s0a0= m r0 D", kAluFast[ModrmReg(rde)][RegLog2(rde)]);
+        Jitter(A,
+               "q"
+               "m"
+               "r0"
+               "D",
+               kAluFast[ModrmReg(rde)][RegLog2(rde)]);
         break;
       default:
-        Jitter(A, "s0a0= c r0 D", op);
+        Jitter(A,
+               "q"
+               "c"
+               "r0"
+               "D",
+               op);
         break;
     }
   }
@@ -702,10 +841,22 @@ static void AluwiRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
       case ZF:
       case CF | ZF:
         STATISTIC(++alu_simplified);
-        Jitter(A, "B a2i r0a1= s0a0= m", uimm0, fops[RegLog2(rde)]);
+        Jitter(A,
+               "B"
+               "a2i"
+               "r0a1="
+               "q"
+               "m",
+               uimm0, fops[RegLog2(rde)]);
         break;
       default:
-        Jitter(A, "B a2i r0a1= s0a0= c", uimm0, op);
+        Jitter(A,
+               "B"
+               "a2i"
+               "r0a1="
+               "q"
+               "c",
+               uimm0, op);
         break;
     }
   }
@@ -730,14 +881,45 @@ static void OpAluRaxIvds(P) {
   op = kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)];
   WriteRegister(rde, m->ax, op(m, ReadRegister(rde, m->ax), uimm0));
   if (IsMakingPath(m)) {
-    Jitter(A, "G r0a1= a2i s0a0= c r0 H", uimm0, op);
+    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
+      case 0:
+      case CF:
+      case ZF:
+      case CF | ZF:
+        STATISTIC(++alu_simplified);
+        Jitter(A,
+               "G"      // res0 = %ax
+               "r0a1="  //
+               "a2i"    //
+               "q"      // arg0 = machine
+               "m"      // call op
+               "r0H",   // %ax = res0
+               uimm0, kAluFast[(Opcode(rde) & 070) >> 3][RegLog2(rde)]);
+        break;
+      default:
+        Jitter(A,
+               "G"      // res0 = %ax
+               "r0a1="  //
+               "a2i"    //
+               "q"      // arg0 = machine
+               "c"      // call op
+               "r0H",   // %ax = res0
+               uimm0, op);
+        break;
+    }
   }
 }
 
 static void OpCmpAlIb(P) {
   Sub8(m, Get8(m->ax), uimm0);
   if (IsMakingPath(m)) {
-    Jitter(A, "G r0a1= a2i s0a0= c", uimm0, Sub8);
+    Jitter(A,
+           "G"      // res0 = %al
+           "a2i"    // arg2 = uimm0
+           "r0a1="  // arg1 = res0
+           "q"      // arg0 = machine
+           "c",     // call Sub8
+           uimm0, Sub8);
   }
 }
 
@@ -746,7 +928,31 @@ static void OpCmpRaxIvds(P) {
   op = kAlu[ALU_SUB][RegLog2(rde)];
   op(m, ReadRegister(rde, m->ax), uimm0);
   if (IsMakingPath(m)) {
-    Jitter(A, "G r0a1= a2i s0a0= c", uimm0, op);
+    STATISTIC(++alu_ops);
+    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
+      case 0:
+      case CF:
+      case ZF:
+      case CF | ZF:
+        STATISTIC(++alu_simplified);
+        Jitter(A,
+               "G"
+               "a2i"
+               "r0a1="
+               "q"
+               "m",
+               uimm0, kAluFast[ALU_SUB][RegLog2(rde)]);
+        break;
+      default:
+        Jitter(A,
+               "G"
+               "r0a1="
+               "a2i"
+               "q"
+               "c",
+               uimm0, op);
+        break;
+    }
   }
 }
 
@@ -763,7 +969,17 @@ static void OpBsuwiCl(P) {
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), m->cl));
   if (IsMakingPath(m)) {
-    Jitter(A, "B r0s1= %cl r0a2= s1a1= s0a0= c r0 D", op);
+    Jitter(A,
+           "B"
+           "r0s1="
+           "%cl"
+           "r0a2="
+           "s1a1="
+           "q"
+           "c"
+           "r0"
+           "D",
+           op);
   }
 }
 
@@ -772,7 +988,9 @@ static void BsuwiConstant(P, u64 y) {
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), y));
   if (IsMakingPath(m)) {
-    Jitter(A, "B r0a1= s0a0=");
+    Jitter(A, "B"
+              "r0a1="
+              "q");
     switch (ModrmReg(rde)) {
       case BSU_ROL:
       case BSU_ROR:
@@ -784,14 +1002,24 @@ static void BsuwiConstant(P, u64 y) {
         if (Rexw(rde) && (y &= 63) &&
             !GetNeededFlags(m, m->ip, GetFlagClobbers(rde))) {
           STATISTIC(++alu_unflagged);
-          Jitter(A, "a2i m r0 D", y, kJustBsu[ModrmReg(rde)]);
+          Jitter(A,
+                 "a2i"
+                 "m"
+                 "r0"
+                 "D",
+                 y, kJustBsu[ModrmReg(rde)]);
           return;
         }
         break;
       default:
         break;
     }
-    Jitter(A, "a2i c r0 D", y, op);
+    Jitter(A,
+           "a2i"
+           "c"
+           "r0"
+           "D",
+           y, op);
   }
 }
 
@@ -811,11 +1039,29 @@ static aluop_f Bsubi(P, u64 y) {
 }
 
 static void OpBsubiCl(P) {
-  Jitter(A, "B r0s1= %cl r0a2= s1a1= s0a0= c r0 D", Bsubi(A, m->cl));
+  Jitter(A,
+         "B"
+         "r0s1="
+         "%cl"
+         "r0a2="
+         "s1a1="
+         "q"
+         "c"
+         "r0"
+         "D",
+         Bsubi(A, m->cl));
 }
 
 static void BsubiConstant(P, u64 y) {
-  Jitter(A, "B r0a1= s0a0= a2i c r0 D", y, Bsubi(A, y));
+  Jitter(A,
+         "B"
+         "r0a1="
+         "q"
+         "a2i"
+         "c"
+         "r0"
+         "D",
+         y, Bsubi(A, y));
 }
 
 static void OpBsubi1(P) {
@@ -844,7 +1090,11 @@ static void OpInterrupt3(P) {
 
 void Terminate(P, void uop(struct Machine *, u64)) {
   if (IsMakingPath(m)) {
-    Jitter(A, "a1i m s0a0=", disp, uop);
+    Jitter(A,
+           "a1i"
+           "m"
+           "q",
+           disp, uop);
     AlignJit(m->path.jb, 4);
     Connect(A, m->ip);
     FinishPath(m);
@@ -858,7 +1108,11 @@ static void OpJmp(P) {
 
 static void Jcc(P, u32 cc(struct Machine *)) {
   if (IsMakingPath(m)) {
-    Jitter(A, "m r0a2= s0a0=", cc);
+    Jitter(A,
+           "m"
+           "r0a2="
+           "q",
+           cc);
 #ifdef __x86_64__
     AlignJit(m->path.jb, 4);
     u8 code[] = {
@@ -872,7 +1126,11 @@ static void Jcc(P, u32 cc(struct Machine *)) {
 #endif
     AppendJit(m->path.jb, code, sizeof(code));
     Connect(A, m->ip);
-    Jitter(A, "a1i m s0a0=", disp, FastJmp);
+    Jitter(A,
+           "a1i"
+           "m"
+           "q",
+           disp, FastJmp);
     AlignJit(m->path.jb, 4);
     Connect(A, m->ip + disp);
     FinishPath(m);
@@ -1691,7 +1949,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*060*/ OpPusha,                 //
     /*061*/ OpPopa,                  //
     /*062*/ OpUd,                    //
-    /*063*/ OpMovsxdGdqpEd,          // #58   (0.026117%)
+    /*063*/ OpMovslGdqpEd,           // #58   (0.026117%)
     /*064*/ OpUd,                    //
     /*065*/ OpUd,                    //
     /*066*/ OpUd,                    //

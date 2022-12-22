@@ -61,12 +61,15 @@ u64 ExportFlags(u64 flags) {
 
 static bool IsJump(u64 rde) {
   int op = Mopcode(rde);
-  return op == 0x0E9 || op == 0x0EB || op == 0x0E8;
+  return op == 0x0E9 ||  // jmp  Jvds
+         op == 0x0EB ||  // jmp  Jbs
+         op == 0x0E8;    // call Jvds
 }
 
 static bool IsConditionalJump(u64 rde) {
   int op = Mopcode(rde);
-  return (0x070 <= op && op <= 0x07F) || (0x180 <= op && op <= 0x18F);
+  return (0x070 <= op && op <= 0x07F) ||  // Jcc Jbs
+         (0x180 <= op && op <= 0x18F);    // Jcc Jvds
 }
 
 static int CrawlFlags(struct Machine *m,  //
@@ -95,10 +98,12 @@ static int CrawlFlags(struct Machine *m,  //
   }
 }
 
+// returns bitset of flags read by code at pc, or -1 if unknown
 int GetNeededFlags(struct Machine *m, i64 pc, int myflags) {
   return CrawlFlags(m, pc, myflags, 16, 0);
 }
 
+// returns bitset of flags set or undefined by operation
 int GetFlagClobbers(u64 rde) {
   switch (Mopcode(rde)) {
     default:
@@ -383,6 +388,7 @@ static int GetFlagDepsImpl(u64 rde) {
   }
 }
 
+// returns bitset of flags read by operation
 int GetFlagDeps(u64 rde) {
   int flags = GetFlagDepsImpl(rde);
   if (Rep(rde) >= 2) flags |= ZF;

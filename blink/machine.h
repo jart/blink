@@ -125,6 +125,11 @@ static inline i64 ToGuest(void *r) {
 struct Machine;
 typedef void (*nexgen32e_f)(P);
 
+struct Xmm {
+  u64 lo;
+  u64 hi;
+};
+
 struct FreeList {
   int n;
   void **p;

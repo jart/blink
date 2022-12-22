@@ -112,7 +112,14 @@ static void AluEvqp(P, const aluop_f ops[4]) {
     }
   }
   if (IsMakingPath(m) && !Lock(rde)) {
-    Jitter(A, "B r0a1= s0a0= c r0 D", f);
+    Jitter(A,
+           "B"
+           "r0a1="
+           "q"
+           "c"
+           "r0"
+           "D",
+           f);
   }
 }
 

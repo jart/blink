@@ -332,7 +332,8 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
   unassert(prog);
   elf = &m->system->elf;
   elf->prog = prog;
-  g_progname = prog;
+  free(g_progname);
+  g_progname = strdup(prog);
   if ((fd = open(prog, O_RDONLY)) == -1 ||
       (fstat(fd, &st) == -1 || !st.st_size) ||
       (elf->map =

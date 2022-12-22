@@ -91,7 +91,7 @@
 #define LOG_ONCE(x) (void)0
 #endif
 
-extern const char *g_progname;
+extern char *g_progname;
 
 void LogInit(const char *);
 void Log(const char *, int, const char *, ...);

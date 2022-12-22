@@ -302,6 +302,7 @@ struct JitBlock *StartJit(struct Jit *jit) {
                                     memory_order_relaxed);
             }
             dll_init(&jb->elem);
+            STATISTIC(++jit_blocks);
             break;
           } else {
             // we currently only support jitting when we're able to have
@@ -358,6 +359,11 @@ struct JitBlock *StartJit(struct Jit *jit) {
   return jb;
 }
 
+static bool OomJit(struct JitBlock *jb) {
+  jb->index = jb->blocksize + 1;
+  return false;
+}
+
 /**
  * Appends bytes to JIT block.
  *
@@ -372,8 +378,7 @@ inline bool AppendJit(struct JitBlock *jb, const void *data, long size) {
     jb->index += size;
     return true;
   } else {
-    jb->index = jb->blocksize + 1;
-    return false;
+    return OomJit(jb);
   }
 }
 
@@ -438,12 +443,11 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
   unassert(!(jb->committed & (jit->pagesize - 1)));
   if (!CanJitForImmediateEffect() &&
       (blockoff = ROUNDDOWN(jb->start, jit->pagesize)) > jb->committed) {
-    unassert(!mprotect(jb->addr + jb->committed, blockoff - jb->committed,
-                       PROT_READ | PROT_EXEC));
-    JIT_LOGF("jit activated [%p,%p) w/ %zu kb", jb->addr + jb->committed,
+    JIT_LOGF("jit activating [%p,%p) w/ %zu kb", jb->addr + jb->committed,
              jb->addr + jb->committed + (blockoff - jb->committed),
              (blockoff - jb->committed) / 1024);
-    unassert(jb->start == jb->index);
+    unassert(!mprotect(jb->addr + jb->committed, blockoff - jb->committed,
+                       PROT_READ | PROT_EXEC));
     while ((e = dll_first(jb->staged))) {
       js = JITSTAGE_CONTAINER(e);
       if (js->index <= blockoff) {
@@ -655,13 +659,15 @@ bool AlignJit(struct JitBlock *jb, int align) {
  */
 bool AppendJitMovReg(struct JitBlock *jb, int dst, int src) {
   if (dst == src) return true;
+  if (GetJitRemaining(jb) < 4) return OomJit(jb);
 #if defined(__x86_64__)
   unassert(!(dst & ~15));
   unassert(!(src & ~15));
-  u8 buf[3];
-  buf[0] = kAmdRexw | (src & 8 ? kAmdRexr : 0) | (dst & 8 ? kAmdRexb : 0);
-  buf[1] = 0x89;
-  buf[2] = 0300 | (src & 7) << 3 | (dst & 7);
+  Write32(jb->addr + jb->index,
+          ((kAmdRexw | (src & 8 ? kAmdRexr : 0) | (dst & 8 ? kAmdRexb : 0)) |
+           0x89 << 010 | (0300 | (src & 7) << 3 | (dst & 7)) << 020));
+  jb->index += 3;
+  return true;
 #elif defined(__aarch64__)
   //               src            target
   //              ┌─┴─┐           ┌─┴─┐
@@ -671,9 +677,10 @@ bool AppendJitMovReg(struct JitBlock *jb, int dst, int src) {
   // 0b10101010000100110000001111100000 mov x0, x19
   unassert(!(dst & ~31));
   unassert(!(src & ~31));
-  u32 buf[1] = {0xaa0003e0 | src << 16 | dst};
+  Put32(jb->addr + jb->index, 0xaa0003e0 | src << 16 | dst);
+  jb->index += 4;
+  return true;
 #endif
-  return AppendJit(jb, buf, sizeof(buf));
 }
 
 /**
@@ -770,14 +777,12 @@ bool AppendJitSetReg(struct JitBlock *jb, int reg, u64 value) {
     if (rex) buf[n++] = rex;
     buf[n++] = kAmdXor;
     buf[n++] = 0300 | (reg & 7) << 3 | (reg & 7);
-#ifndef TINY
   } else if ((i64)value < 0 && (i64)value >= INT32_MIN) {
     buf[n++] = rex | kAmdRexw;
     buf[n++] = 0xC7;
     buf[n++] = 0300 | (reg & 7);
     Write32(buf + n, value);
     n += 4;
-#endif
   } else {
     if (value > 0xffffffff) rex |= kAmdRexw;
     if (rex) buf[n++] = rex;

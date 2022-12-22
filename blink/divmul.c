@@ -325,7 +325,12 @@ void OpMulRdxRaxEvqpSigned(P) {
   if (Rexw(rde)) {
     OpMulRdxRaxEvqpSigned64(m, Load64(p));
     if (IsMakingPath(m)) {
-      Jitter(A, "B r0a1= s0a0= c", OpMulRdxRaxEvqpSigned64);
+      Jitter(A,
+             "B"
+             "r0a1="
+             "q"
+             "c",
+             OpMulRdxRaxEvqpSigned64);
     }
   } else if (!Osz(rde)) {
     i64 edxeax = (i64)(i32)Get32(m->ax) * (i32)Load32(p);
@@ -379,12 +384,22 @@ void OpMulRdxRaxEvqpUnsigned(P) {
   if (Rexw(rde)) {
     OpMulRdxRaxEvqpUnsigned64(m, Load64(p));
     if (IsMakingPath(m)) {
-      Jitter(A, "B r0a1= s0a0= c", OpMulRdxRaxEvqpUnsigned64);
+      Jitter(A,
+             "B"
+             "r0a1="
+             "q"
+             "c",
+             OpMulRdxRaxEvqpUnsigned64);
     }
   } else if (!Osz(rde)) {
     OpMulRdxRaxEvqpUnsigned32(m, Load32(p));
     if (IsMakingPath(m)) {
-      Jitter(A, "B r0a1= s0a0= c", OpMulRdxRaxEvqpUnsigned32);
+      Jitter(A,
+             "B"
+             "r0a1="
+             "q"
+             "c",
+             OpMulRdxRaxEvqpUnsigned32);
     }
   } else {
     dxax = (u32)(u16)Get16(m->ax) * (u16)Load16(p);

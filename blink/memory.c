@@ -191,6 +191,7 @@ void CommitStash(struct Machine *m) {
 }
 
 u8 *ReserveAddress(struct Machine *m, i64 v, size_t n, bool writable) {
+  if (HasLinearMapping(m)) return ToHost(v);
   m->reserving = true;
   if ((v & 4095) + n <= 4096) {
     return ResolveAddress(m, v);

@@ -3469,7 +3469,10 @@ static int OpenDevTty(void) {
 }
 
 static void AddPath_StartOp_Tui(P) {
-  Jitter(m, rde, 0, 0, "s0a0= c", StartOp_Tui);
+  Jitter(m, rde, 0, 0,
+         "q"
+         "c",
+         StartOp_Tui);
 }
 
 int VirtualMachine(int argc, char *argv[]) {

@@ -34,10 +34,18 @@ static u32 pmovmskb(const u8 p[16]) {
 
 static void MovdquVdqWdq(P) {
   memcpy(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead16(A), 16);
+  if (IsMakingPath(m)) {
+    Jitter(A, "z4B"    // 128-bit GetRegOrMem
+              "z4C");  // 128-bit PutReg
+  }
 }
 
 static void MovdquWdqVdq(P) {
   memcpy(GetModrmRegisterXmmPointerWrite16(A), XmmRexrReg(m, rde), 16);
+  if (IsMakingPath(m)) {
+    Jitter(A, "z4A"    // 128-bit GetReg
+              "z4D");  // 128-bit PutRegOrMem
+  }
 }
 
 static void MovupsVpsWps(P) {

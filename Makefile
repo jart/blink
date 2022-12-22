@@ -77,6 +77,17 @@ o/$(MODE)/.x:
 	@mkdir -p $(@D)
 	@touch $@
 
+o/tool/sha256sum: tool/sha256sum.c
+	@mkdir -p $(@D)
+	$(CC) -w -O2 -o $@ $<
+
+o/$(MODE)/tool/sha256sum.o: tool/sha256sum.c
+	@mkdir -p $(@D)
+	clang++ -Wall -Wextra -Werror -pedantic -O2 -xc++ -c -o $@ $<
+	g++ -Wall -Wextra -Werror -pedantic -O2 -xc++ -c -o $@ $<
+	clang -Wall -Wextra -Werror -pedantic -O2 -c -o $@ $<
+	gcc -Wall -Wextra -Werror -pedantic -O2 -c -o $@ $<
+
 o/$(MODE)/srcs.txt: o/$(MODE)/.x $(MAKEFILES) $(SRCS) $(call uniq,$(foreach x,$(SRCS),$(dir $(x))))
 	$(file >$@) $(foreach x,$(SRCS),$(file >>$@,$(x)))
 o/$(MODE)/hdrs.txt: o/$(MODE)/.x $(MAKEFILES) $(HDRS) $(call uniq,$(foreach x,$(HDRS) $(INCS),$(dir $(x))))

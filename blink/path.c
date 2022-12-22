@@ -140,7 +140,11 @@ bool CreatePath(P) {
                GetJitPc(m->path.jb), pc);
       AppendJit(m->path.jb, kEnter, sizeof(kEnter));
 #if LOG_JIX
-      Jitter(A, "s0a0= c s0a0=", StartPath);
+      Jitter(A,
+             "q"   // arg0 = machine
+             "c"   // call function (StartPath)
+             "q",  // arg0 = machine
+             StartPath);
 #endif
       m->path.start = pc;
       m->path.elements = 0;
@@ -196,19 +200,35 @@ void AbandonPath(struct Machine *m) {
 void AddPath_StartOp(P) {
 #ifndef NDEBUG
   if (FLAG_statistics) {
-    Jitter(A, "a0i m", &instructions_jitted, CountOp);
+    Jitter(A,
+           "a0i"  // arg0 = &instructions_jitted
+           "m",   // call micro-op (CountOp)
+           &instructions_jitted, CountOp);
   }
 #endif
   if (AddPath_StartOp_Hook) {
     AddPath_StartOp_Hook(A);
   }
 #if LOG_JIX || defined(DEBUG)
-  Jitter(A, "a1i s0a0= c", m->ip, DebugOp);
+  Jitter(A,
+         "a1i"  // arg1 = m->ip
+         "q"    // arg0 = machine
+         "c",   // call function (DebugOp)
+         m->ip, DebugOp);
 #endif
 #if LOG_JIX
-  Jitter(A, "a1i s0a0= c", Oplength(rde), StartOp);
+  Jitter(A,
+         "a1i"  // arg1 = Oplength(rde)
+         "q"    // arg0 = machine
+         "c",   // call function (StartOp)
+         Oplength(rde), StartOp);
 #endif
-  Jitter(A, "s0a0= a1i m s0a0=", Oplength(rde), AddIp);
+  Jitter(A,
+         "a1i"  // arg1 = Oplength(rde)
+         "q"    // arg0 = machine
+         "m"    // call micro-op (AddIp)
+         "q",   // arg0 = machine
+         Oplength(rde), AddIp);
   m->reserving = false;
 }
 
@@ -237,7 +257,10 @@ void AddPath_EndOp(P) {
     AppendJitCall(m->path.jb, (void *)CommitStash);
   }
 #else
-  Jitter(A, "s0a0= c", EndOp);
+  Jitter(A,
+         "q"   // arg0 = machine
+         "c",  // call function (EndOp)
+         EndOp);
 #endif
 }
 

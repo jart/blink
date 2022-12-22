@@ -18,4 +18,4 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/log.h"
 
-const char *g_progname;
+char *g_progname;

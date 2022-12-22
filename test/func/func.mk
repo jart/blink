@@ -26,7 +26,8 @@ o/$(MODE)/test/func/%.com.ok:						\
 .PRECIOUS: o/$(MODE)/test/func/%.elf
 o/$(MODE)/test/func/%.elf:						\
 		o/$(MODE)/x86_64/test/func/%.o				\
-		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc
+		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc	\
+		$(VM)
 	@mkdir -p $(@D)
 	$(TEST_FUNC_LINK)
 

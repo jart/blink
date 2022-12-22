@@ -6,12 +6,11 @@ blink is a virtual machine for running statically-compiled x86-64-linux
 programs on different operating systems and hardware architectures. It's
 designed to do the same thing as the `qemu-x86_64` command, except (a)
 rather than being a 4mb binary, Blink only has a ~166kb footprint; and
-(b) Blink goes faster than Qemu on some benchmarks, such as emulating
-GCC. The tradeoff is Blink doesn't have as many systems integrations as
-Qemu. Blink is a great fit when you want a virtual machine that's
-embeddable, readable, hackable, and easy to compile. For further details
-on the motivations for this tool, please read
-<https://justine.lol/ape.html>.
+(b) Blink goes 2x faster than Qemu on some benchmarks such as emulating
+GCC. The tradeoff is Blink doesn't have as many features as Qemu. Blink
+is a great fit when you want a virtual machine that's extremely small
+and runs ephemeral programs much faster. For further details on the
+motivations for this tool, please read <https://justine.lol/ape.html>.
 
 ## Caveat Emptor
 

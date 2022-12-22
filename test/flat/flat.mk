@@ -19,7 +19,8 @@ TEST_FLAT_LINK =							\
 o/$(MODE)/test/flat/%.bin:						\
 		o/$(MODE)/x86_64/test/flat/%.o				\
 		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc	\
-		test/flat/flat.lds
+		test/flat/flat.lds					\
+		$(VM)
 	@mkdir -p $(@D)
 	$(TEST_FLAT_LINK)
 
