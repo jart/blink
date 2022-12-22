@@ -22,6 +22,7 @@
 
 #include "blink/alu.h"
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/jit.h"
@@ -113,28 +114,88 @@ static const putreg_f kPutReg[] = {PutReg8, PutReg16,   //
 ////////////////////////////////////////////////////////////////////////////////
 // MEMORY OPERATIONS
 
+typedef i64 (*load_f)(const u8 *);
+typedef void (*store_f)(u8 *, u64);
+
 MICRO_OP static u8 *ResolveHost(i64 v) {
   return ToHost(v);
 }
 
+#if defined(__x86_64__) && defined(TRIVIALLY_RELOCATABLE)
+#define LOADSTORE "m"
+
+MICRO_OP static i64 NativeLoad8(const u8 *p) {
+  return *p;
+}
+MICRO_OP static i64 NativeLoad16(const u8 *p) {
+  return *(const u16 *)p;
+}
+MICRO_OP static i64 NativeLoad32(const u8 *p) {
+  return *(const u32 *)p;
+}
+MICRO_OP static i64 NativeLoad64(const u8 *p) {
+  return *(const u64 *)p;
+}
+MICRO_OP static struct Xmm NativeLoad128(u8 *p) {
+  return (struct Xmm){
+      ((const u64 *)p)[0],
+      ((const u64 *)p)[1],
+  };
+}
+
+MICRO_OP static void NativeStore8(u8 *p, u64 x) {
+  *p = x;
+}
+MICRO_OP static void NativeStore16(u8 *p, u64 x) {
+  *(u16 *)p = x;
+}
+MICRO_OP static void NativeStore32(u8 *p, u64 x) {
+  *(u32 *)p = x;
+}
+MICRO_OP static void NativeStore64(u8 *p, u64 x) {
+  *(u64 *)p = x;
+}
+MICRO_OP static void NativeStore128(u8 *p, u64 x, u64 y) {
+  ((u64 *)p)[0] = x;
+  ((u64 *)p)[1] = y;
+}
+
+static const load_f kLoad[] = {
+    (load_f)NativeLoad8,    //
+    (load_f)NativeLoad16,   //
+    (load_f)NativeLoad32,   //
+    (load_f)NativeLoad64,   //
+    (load_f)NativeLoad128,  //
+};
+
+static const store_f kStore[] = {
+    (store_f)NativeStore8,    //
+    (store_f)NativeStore16,   //
+    (store_f)NativeStore32,   //
+    (store_f)NativeStore64,   //
+    (store_f)NativeStore128,  //
+};
+
+#else
+#define LOADSTORE "c"
+
 MICRO_OP static struct Xmm Load128(u8 *p) {
   return (struct Xmm){Read64(p), Read64(p + 8)};
 }
-
-typedef i64 (*load_f)(const u8 *);
-static const load_f kLoad[] = {Load8, Load16,   //
-                               Load32, Load64,  //
-                               (load_f)Load128};
 
 MICRO_OP static void Store128(u8 *p, u64 x, u64 y) {
   Write64(p, x);
   Write64(p + 8, y);
 }
 
-typedef void (*store_f)(u8 *, u64);
+static const load_f kLoad[] = {Load8, Load16,   //
+                               Load32, Load64,  //
+                               (load_f)Load128};
 static const store_f kStore[] = {Store8, Store16,   //
                                  Store32, Store64,  //
                                  (store_f)Store128};
+
+#endif /* __GNUC__ */
 
 ////////////////////////////////////////////////////////////////////////////////
 // ARITHMETIC
@@ -755,11 +816,11 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  kGetReg[log2sz]);
         } else if (HasLinearMapping(m)) {
           Jitter(A,
-                 "L"      // load effective address
-                 "r0a0="  // arg0 = virtual address
-                 "m"      // call micro-op (turn virtual into pointer)
-                 "r0a0="  // arg0 = pointer
-                 "c",     // call function (read word shared memory)
+                 "L"         // load effective address
+                 "r0a0="     // arg0 = virtual address
+                 "m"         // call micro-op (turn virtual into pointer)
+                 "r0a0="     // arg0 = pointer
+                 LOADSTORE,  // call function (read word shared memory)
                  ResolveHost, kLoad[log2sz]);
         } else {
           Jitter(A,
@@ -788,26 +849,26 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    kPutReg[log2sz]);
           } else if (HasLinearMapping(m)) {
             Jitter(A,
-                   "s3="    // sav3 = <pop>
-                   "L"      // load effective address
-                   "r0a0="  // arg0 = virtual address
-                   "m"      // call micro-op
-                   "s3a1="  // arg1 = sav3
-                   "r0a0="  // arg0 = res0
-                   "c",     // call micro-op (write word to shared memory)
+                   "s3="       // sav3 = <pop>
+                   "L"         // load effective address
+                   "r0a0="     // arg0 = virtual address
+                   "m"         // call micro-op
+                   "s3a1="     // arg1 = sav3
+                   "r0a0="     // arg0 = res0
+                   LOADSTORE,  // call micro-op (write word to shared memory)
                    ResolveHost, kStore[log2sz]);
           } else {
             Jitter(A,
-                   "s3="    // sav3 = <pop>
-                   "L"      // load effective address
-                   "a3i"    // arg3 = true
-                   "a2i"    // arg2 = byte width of write operation
-                   "r0a1="  // arg1 = res0
-                   "q"      // arg0 = machine
-                   "c"      // call function (turn virtual into pointer)
-                   "s3a1="  // arg1 = sav3
-                   "r0a0="  // arg0 = res0
-                   "c",     // call function (write word to shared memory)
+                   "s3="       // sav3 = <pop>
+                   "L"         // load effective address
+                   "a3i"       // arg3 = true
+                   "a2i"       // arg2 = byte width of write operation
+                   "r0a1="     // arg1 = res0
+                   "q"         // arg0 = machine
+                   "c"         // call function (turn virtual into pointer)
+                   "s3a1="     // arg1 = sav3
+                   "r0a0="     // arg0 = res0
+                   LOADSTORE,  // call function (write word to shared memory)
                    true, 1ul << log2sz, ReserveAddress, kStore[log2sz]);
           }
         } else {
