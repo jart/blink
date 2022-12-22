@@ -25,17 +25,22 @@
 #include "blink/swap.h"
 #include "blink/tsan.h"
 
+#if defined(__x86_64__) || defined(__i386__)
+#define ORDER memory_order_relaxed
+#else
+#define ORDER memory_order_seq_cst
+#endif
+
 i64 Load8(const u8 p[1]) {
   i64 res;
-  res = atomic_load_explicit((_Atomic(u8) *)p, memory_order_seq_cst);
+  res = atomic_load_explicit((_Atomic(u8) *)p, ORDER);
   return res;
 }
 
 i64 Load16(const u8 p[2]) {
   i64 res;
   if (!((intptr_t)p & 1)) {
-    res =
-        Little16(atomic_load_explicit((_Atomic(u16) *)p, memory_order_seq_cst));
+    res = Little16(atomic_load_explicit((_Atomic(u16) *)p, ORDER));
   } else {
     res = Read16(p);
   }
@@ -45,8 +50,7 @@ i64 Load16(const u8 p[2]) {
 i64 Load32(const u8 p[4]) {
   i64 res;
   if (!((intptr_t)p & 3)) {
-    res =
-        Little32(atomic_load_explicit((_Atomic(u32) *)p, memory_order_seq_cst));
+    res = Little32(atomic_load_explicit((_Atomic(u32) *)p, ORDER));
   } else {
     res = Read32(p);
   }
@@ -57,8 +61,7 @@ i64 Load64(const u8 p[8]) {
   i64 res;
 #if LONG_BIT >= 64
   if (!((intptr_t)p & 7)) {
-    res =
-        Little64(atomic_load_explicit((_Atomic(u64) *)p, memory_order_seq_cst));
+    res = Little64(atomic_load_explicit((_Atomic(u64) *)p, ORDER));
   } else {
     res = Read64(p);
   }
@@ -69,12 +72,12 @@ i64 Load64(const u8 p[8]) {
 }
 
 void Store8(u8 p[1], u64 x) {
-  atomic_store_explicit((_Atomic(u8) *)p, x, memory_order_seq_cst);
+  atomic_store_explicit((_Atomic(u8) *)p, x, ORDER);
 }
 
 void Store16(u8 p[2], u64 x) {
   if (!((intptr_t)p & 1)) {
-    atomic_store_explicit((_Atomic(u16) *)p, Little16(x), memory_order_seq_cst);
+    atomic_store_explicit((_Atomic(u16) *)p, Little16(x), ORDER);
   } else {
     Write16(p, x);
   }
@@ -82,7 +85,7 @@ void Store16(u8 p[2], u64 x) {
 
 void Store32(u8 p[4], u64 x) {
   if (!((intptr_t)p & 3)) {
-    atomic_store_explicit((_Atomic(u32) *)p, Little32(x), memory_order_seq_cst);
+    atomic_store_explicit((_Atomic(u32) *)p, Little32(x), ORDER);
   } else {
     Write32(p, x);
   }
@@ -91,7 +94,7 @@ void Store32(u8 p[4], u64 x) {
 void Store64(u8 p[8], u64 x) {
 #if LONG_BIT >= 64
   if (!((intptr_t)p & 7)) {
-    atomic_store_explicit((_Atomic(u64) *)p, Little64(x), memory_order_seq_cst);
+    atomic_store_explicit((_Atomic(u64) *)p, Little64(x), ORDER);
   } else {
     Write64(p, x);
   }
