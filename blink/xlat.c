@@ -729,7 +729,6 @@ void XlatLinuxToSigset(sigset_t *dst, const u8 src[8]) {
 
 static int XlatTermiosCflag(int x) {
   int r = 0;
-  if (x & 0x0001) r |= ISIG;
   if (x & 0x0040) r |= CSTOPB;
   if (x & 0x0080) r |= CREAD;
   if (x & 0x0100) r |= PARENB;
@@ -748,7 +747,6 @@ static int XlatTermiosCflag(int x) {
 
 static int UnXlatTermiosCflag(int x) {
   int r = 0;
-  if (x & ISIG) r |= 0x0001;
   if (x & CSTOPB) r |= 0x0040;
   if (x & CREAD) r |= 0x0080;
   if (x & PARENB) r |= 0x0100;
@@ -1067,67 +1065,67 @@ static int UnXlatTermiosOflag(int x) {
 
 static void XlatTermiosCc(struct termios *dst,
                           const struct termios_linux *src) {
-  dst->c_cc[VINTR] = src->c_cc[0];
-  dst->c_cc[VQUIT] = src->c_cc[1];
-  dst->c_cc[VERASE] = src->c_cc[2];
-  dst->c_cc[VKILL] = src->c_cc[3];
-  dst->c_cc[VEOF] = src->c_cc[4];
-  dst->c_cc[VTIME] = src->c_cc[5];
-  dst->c_cc[VMIN] = src->c_cc[6];
-  dst->c_cc[VSTART] = src->c_cc[8];
-  dst->c_cc[VSTOP] = src->c_cc[9];
-  dst->c_cc[VSUSP] = src->c_cc[10];
-  dst->c_cc[VEOL] = src->c_cc[11];
+  dst->c_cc[VINTR] = src->c_cc[VINTR_LINUX];
+  dst->c_cc[VQUIT] = src->c_cc[VQUIT_LINUX];
+  dst->c_cc[VERASE] = src->c_cc[VERASE_LINUX];
+  dst->c_cc[VKILL] = src->c_cc[VKILL_LINUX];
+  dst->c_cc[VEOF] = src->c_cc[VEOF_LINUX];
+  dst->c_cc[VTIME] = src->c_cc[VTIME_LINUX];
+  dst->c_cc[VMIN] = src->c_cc[VMIN_LINUX];
+  dst->c_cc[VSTART] = src->c_cc[VSTART_LINUX];
+  dst->c_cc[VSTOP] = src->c_cc[VSTOP_LINUX];
+  dst->c_cc[VSUSP] = src->c_cc[VSUSP_LINUX];
+  dst->c_cc[VEOL] = src->c_cc[VEOL_LINUX];
 #ifdef VSWTC
-  dst->c_cc[VSWTC] = src->c_cc[7];
+  dst->c_cc[VSWTC] = src->c_cc[VSWTC_LINUX];
 #endif
 #ifdef VREPRINT
-  dst->c_cc[VREPRINT] = src->c_cc[12];
+  dst->c_cc[VREPRINT] = src->c_cc[VREPRINT_LINUX];
 #endif
 #ifdef VDISCARD
-  dst->c_cc[VDISCARD] = src->c_cc[13];
+  dst->c_cc[VDISCARD] = src->c_cc[VDISCARD_LINUX];
 #endif
 #ifdef VWERASE
-  dst->c_cc[VWERASE] = src->c_cc[14];
+  dst->c_cc[VWERASE] = src->c_cc[VWERASE_LINUX];
 #endif
 #ifdef VLNEXT
-  dst->c_cc[VLNEXT] = src->c_cc[15];
+  dst->c_cc[VLNEXT] = src->c_cc[VLNEXT_LINUX];
 #endif
 #ifdef VEOL2
-  dst->c_cc[VEOL2] = src->c_cc[16];
+  dst->c_cc[VEOL2] = src->c_cc[VEOL2_LINUX];
 #endif
 }
 
 static void UnXlatTermiosCc(struct termios_linux *dst,
                             const struct termios *src) {
-  dst->c_cc[0] = src->c_cc[VINTR];
-  dst->c_cc[1] = src->c_cc[VQUIT];
-  dst->c_cc[2] = src->c_cc[VERASE];
-  dst->c_cc[3] = src->c_cc[VKILL];
-  dst->c_cc[4] = src->c_cc[VEOF];
-  dst->c_cc[5] = src->c_cc[VTIME];
-  dst->c_cc[6] = src->c_cc[VMIN];
-  dst->c_cc[8] = src->c_cc[VSTART];
-  dst->c_cc[9] = src->c_cc[VSTOP];
-  dst->c_cc[10] = src->c_cc[VSUSP];
-  dst->c_cc[11] = src->c_cc[VEOL];
+  dst->c_cc[VINTR_LINUX] = src->c_cc[VINTR];
+  dst->c_cc[VQUIT_LINUX] = src->c_cc[VQUIT];
+  dst->c_cc[VERASE_LINUX] = src->c_cc[VERASE];
+  dst->c_cc[VKILL_LINUX] = src->c_cc[VKILL];
+  dst->c_cc[VEOF_LINUX] = src->c_cc[VEOF];
+  dst->c_cc[VTIME_LINUX] = src->c_cc[VTIME];
+  dst->c_cc[VMIN_LINUX] = src->c_cc[VMIN];
+  dst->c_cc[VSTART_LINUX] = src->c_cc[VSTART];
+  dst->c_cc[VSTOP_LINUX] = src->c_cc[VSTOP];
+  dst->c_cc[VSUSP_LINUX] = src->c_cc[VSUSP];
+  dst->c_cc[VEOL_LINUX] = src->c_cc[VEOL];
 #ifdef VSWTC
-  dst->c_cc[7] = src->c_cc[VSWTC];
+  dst->c_cc[VSWTC_LINUX] = src->c_cc[VSWTC];
 #endif
 #ifdef VREPRINT
-  dst->c_cc[12] = src->c_cc[VREPRINT];
+  dst->c_cc[VREPRINT_LINUX] = src->c_cc[VREPRINT];
 #endif
 #ifdef VDISCARD
-  dst->c_cc[13] = src->c_cc[VDISCARD];
+  dst->c_cc[VDISCARD_LINUX] = src->c_cc[VDISCARD];
 #endif
 #ifdef VWERASE
-  dst->c_cc[14] = src->c_cc[VWERASE];
+  dst->c_cc[VWERASE_LINUX] = src->c_cc[VWERASE];
 #endif
 #ifdef VLNEXT
-  dst->c_cc[15] = src->c_cc[VLNEXT];
+  dst->c_cc[VLNEXT_LINUX] = src->c_cc[VLNEXT];
 #endif
 #ifdef VEOL2
-  dst->c_cc[16] = src->c_cc[VEOL2];
+  dst->c_cc[VEOL2_LINUX] = src->c_cc[VEOL2];
 #endif
 }
 

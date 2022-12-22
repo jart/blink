@@ -320,6 +320,25 @@
 #define GRND_NONBLOCK_LINUX 1
 #define GRND_RANDOM_LINUX   2
 
+#define VMIN_LINUX     7
+#define VTIME_LINUX    6
+#define NCCS_LINUX     20
+#define VINTR_LINUX    1
+#define VQUIT_LINUX    2
+#define VERASE_LINUX   3
+#define VKILL_LINUX    4
+#define VEOF_LINUX     5
+#define VSWTC_LINUX    8
+#define VSTART_LINUX   9
+#define VSTOP_LINUX    10
+#define VSUSP_LINUX    11
+#define VEOL_LINUX     12
+#define VREPRINT_LINUX 13
+#define VDISCARD_LINUX 14
+#define VWERASE_LINUX  15
+#define VLNEXT_LINUX   16
+#define VEOL2_LINUX    17
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];
