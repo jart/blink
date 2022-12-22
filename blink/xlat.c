@@ -670,14 +670,24 @@ void XlatRusageToLinux(struct rusage_linux *dst, const struct rusage *src) {
   Write64(dst->ru_nivcsw, src->ru_nivcsw);
 }
 
+static u64 XlatRlimitToLinuxScalar(u64 x) {
+  if (x == RLIM_INFINITY) x = RLIM_INFINITY_LINUX;
+  return x;
+}
+
 void XlatRlimitToLinux(struct rlimit_linux *dst, const struct rlimit *src) {
-  Write64(dst->rlim_cur, src->rlim_cur);
-  Write64(dst->rlim_max, src->rlim_max);
+  Write64(dst->rlim_cur, XlatRlimitToLinuxScalar(src->rlim_cur));
+  Write64(dst->rlim_max, XlatRlimitToLinuxScalar(src->rlim_max));
+}
+
+static u64 XlatLinuxToRlimitScalar(u64 x) {
+  if (x == RLIM_INFINITY_LINUX) x = RLIM_INFINITY;
+  return x;
 }
 
 void XlatLinuxToRlimit(struct rlimit *dst, const struct rlimit_linux *src) {
-  dst->rlim_cur = Read64(src->rlim_cur);
-  dst->rlim_max = Read64(src->rlim_max);
+  dst->rlim_cur = XlatLinuxToRlimitScalar(Read64(src->rlim_cur));
+  dst->rlim_max = XlatLinuxToRlimitScalar(Read64(src->rlim_max));
 }
 
 void XlatItimervalToLinux(struct itimerval_linux *dst,

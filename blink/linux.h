@@ -339,6 +339,8 @@
 #define VLNEXT_LINUX   16
 #define VEOL2_LINUX    17
 
+#define RLIM_INFINITY_LINUX 0xffffffffffffffffull
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];
