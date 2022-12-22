@@ -44,7 +44,7 @@ struct Allocator {
 
 static void FillPage(void *p, int c) {
   memset(p, c, 4096);
-  atomic_thread_fence(memory_order_release);
+  FENCE;
 }
 
 static void ClearPage(void *p) {
@@ -86,6 +86,7 @@ void *AllocateBig(size_t n) {
     p = Mmap(brk, n, PROT_READ | PROT_WRITE,
              MAP_DEMAND | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0, "big");
   } while (p == MAP_FAILED && errno == MAP_DENIED);
+  unassert(p == MAP_FAILED || (uintptr_t)p < 0x800000000000);
   return p != MAP_FAILED ? p : 0;
 }
 

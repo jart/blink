@@ -23,6 +23,7 @@
 #include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
+#include "blink/lock.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/stats.h"
@@ -68,7 +69,7 @@ static void AluEvqp(P, const aluop_f ops[4]) {
   f = ops[RegLog2(rde)];
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
-#if LONG_BIT == 64
+#if LONG_BIT >= 64
     if (Lock(rde) && !((intptr_t)p & 7)) {
       u64 x, z;
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
@@ -80,7 +81,13 @@ static void AluEvqp(P, const aluop_f ops[4]) {
       return;
     }
 #endif
+#if LONG_BIT < 64
+    if (Lock(rde)) LOCK(&m->system->lock_lock);
+#endif
     Store64(p, f(m, Load64(p), 0));
+#if LONG_BIT < 64
+    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
+#endif
   } else if (!Osz(rde)) {
     u32 x, z;
     p = GetModrmRegisterWordPointerWrite4(A);
@@ -113,12 +120,11 @@ static void AluEvqp(P, const aluop_f ops[4]) {
   }
   if (IsMakingPath(m) && !Lock(rde)) {
     Jitter(A,
-           "B"
-           "r0a1="
-           "q"
-           "c"
-           "r0"
-           "D",
+           "B"      // res0 = GetRegOrMem(RexbRm)
+           "r0a1="  // arg1 = res0
+           "q"      // arg0 = machine
+           "c"      // call function
+           "r0D",   // PutRegOrMem(RexbRm, res0)
            f);
   }
 }

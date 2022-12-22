@@ -117,46 +117,24 @@ MICRO_OP static u8 *ResolveHost(i64 v) {
   return ToHost(v);
 }
 
-MICRO_OP static i64 LoadMem8(u8 *p) {
-  return Load8(p);
-}
-MICRO_OP static i64 LoadMem16(u8 *p) {
-  return Load16(p);
-}
-MICRO_OP static i64 LoadMem32(u8 *p) {
-  return Load32(p);
-}
-MICRO_OP static i64 LoadMem64(u8 *p) {
-  return Load64(p);
-}
-MICRO_OP static struct Xmm LoadMem128(u8 *p) {
+MICRO_OP static struct Xmm Load128(u8 *p) {
   return (struct Xmm){Read64(p), Read64(p + 8)};
 }
-typedef i64 (*loader_f)(u8 *);
-static const loader_f kLoadMem[] = {LoadMem8, LoadMem16,   //
-                                    LoadMem32, LoadMem64,  //
-                                    (loader_f)LoadMem128};
 
-MICRO_OP static void StoreMem8(u8 *p, u64 x) {
-  Store8(p, x);
-}
-MICRO_OP static void StoreMem16(u8 *p, u64 x) {
-  Store16(p, x);
-}
-MICRO_OP static void StoreMem32(u8 *p, u64 x) {
-  Store32(p, x);
-}
-MICRO_OP static void StoreMem64(u8 *p, u64 x) {
-  Store64(p, x);
-}
-MICRO_OP static void StoreMem128(u8 *p, u64 x, u64 y) {
+typedef i64 (*load_f)(const u8 *);
+static const load_f kLoad[] = {Load8, Load16,   //
+                               Load32, Load64,  //
+                               (load_f)Load128};
+
+MICRO_OP static void Store128(u8 *p, u64 x, u64 y) {
   Write64(p, x);
   Write64(p + 8, y);
 }
-typedef void (*storemem_f)(u8 *, u64);
-static const storemem_f kStoreMem[] = {StoreMem8, StoreMem16,   //
-                                       StoreMem32, StoreMem64,  //
-                                       (storemem_f)StoreMem128};
+
+typedef void (*store_f)(u8 *, u64);
+static const store_f kStore[] = {Store8, Store16,   //
+                                 Store32, Store64,  //
+                                 (store_f)Store128};
 
 ////////////////////////////////////////////////////////////////////////////////
 // ARITHMETIC
@@ -429,7 +407,7 @@ MICRO_OP void FastLeave(struct Machine *m) {
 MICRO_OP void FastRet(struct Machine *m) {
   u64 v = Get64(m->sp);
   Put64(m->sp, v + 8);
-  m->ip = Load64(ToHost(v));
+  m->ip = Read64(ToHost(v));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -781,8 +759,8 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "r0a0="  // arg0 = virtual address
                  "m"      // call micro-op (turn virtual into pointer)
                  "r0a0="  // arg0 = pointer
-                 "m",     // call micro-op (read pointer to shared memory)
-                 ResolveHost, kLoadMem[log2sz]);
+                 "c",     // call function (read word shared memory)
+                 ResolveHost, kLoad[log2sz]);
         } else {
           Jitter(A,
                  "L"      // load effective address
@@ -792,8 +770,8 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "q"      // arg0 = machine
                  "c"      // call function (turn virtual into pointer)
                  "r0a0="  // arg0 = pointer
-                 "m",     // call micro-op (read pointer to shared memory)
-                 false, 1ul << log2sz, ReserveAddress, kLoadMem[log2sz]);
+                 "m",     // call micro-op (read vector shared memory)
+                 false, 1ul << log2sz, ReserveAddress, kLoad[log2sz]);
         }
         break;
 
@@ -816,8 +794,8 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "m"      // call micro-op
                    "s3a1="  // arg1 = sav3
                    "r0a0="  // arg0 = res0
-                   "m",     // call micro-op
-                   ResolveHost, kStoreMem[log2sz]);
+                   "c",     // call micro-op (write word to shared memory)
+                   ResolveHost, kStore[log2sz]);
           } else {
             Jitter(A,
                    "s3="    // sav3 = <pop>
@@ -829,8 +807,8 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "c"      // call function (turn virtual into pointer)
                    "s3a1="  // arg1 = sav3
                    "r0a0="  // arg0 = res0
-                   "m",     // call function
-                   true, 1ul << log2sz, ReserveAddress, kStoreMem[log2sz]);
+                   "c",     // call function (write word to shared memory)
+                   true, 1ul << log2sz, ReserveAddress, kStore[log2sz]);
           }
         } else {
           if (IsModrmRegister(rde)) {
@@ -852,8 +830,8 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "s4a2="  // arg2 = sav4
                    "s3a1="  // arg1 = sav3
                    "r0a0="  // arg0 = res0
-                   "m",     // call micro-op (128-bit store memory)
-                   ResolveHost, kStoreMem[log2sz]);
+                   "m",     // call micro-op (store vector to shared memory)
+                   ResolveHost, kStore[log2sz]);
           } else {
             Jitter(A,
                    "r1s4="  // sav4 = res1
@@ -867,8 +845,8 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "s4a2="  // arg2 = sav4
                    "s3a1="  // arg1 = sav3
                    "r0a0="  // arg0 = res0
-                   "m",     // call micro-op (128-bit store memory)
-                   true, 1ul << log2sz, ReserveAddress, kStoreMem[log2sz]);
+                   "m",     // call micro-op (store vector to shared memory)
+                   true, 1ul << log2sz, ReserveAddress, kStore[log2sz]);
           }
         }
         break;

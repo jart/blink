@@ -33,13 +33,22 @@ void OpXaddEbGb(P) {
   u8 x, y, z, *p, *q;
   p = GetModrmRegisterBytePointerWrite1(A);
   q = ByteRexrReg(m, rde);
-  LOCK(&m->system->lock_lock);
-  x = Load8(p);
-  y = Get8(q);
-  z = Add8(m, x, y);
-  Put8(q, x);
-  Store8(p, z);
-  UNLOCK(&m->system->lock_lock);
+  if (Lock(rde)) {
+    x = atomic_load_explicit((_Atomic(u8) *)p, memory_order_acquire);
+    y = atomic_load_explicit((_Atomic(u8) *)q, memory_order_relaxed);
+    y = Little8(y);
+    do {
+      atomic_store_explicit((_Atomic(u8) *)q, x, memory_order_relaxed);
+      z = Little8(kAlu[ALU_ADD][ALU_INT8](m, Little8(x), y));
+    } while (!atomic_compare_exchange_weak_explicit(
+        (_Atomic(u8) *)p, &x, z, memory_order_release, memory_order_acquire));
+  } else {
+    x = Load8(p);
+    y = Get8(q);
+    z = kAlu[ALU_ADD][ALU_INT8](m, x, y);
+    Put8(q, x);
+    Store8(p, z);
+  }
 }
 
 void OpXaddEvqpGvqp(P) {
@@ -48,7 +57,8 @@ void OpXaddEvqpGvqp(P) {
   p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
     u64 x, y, z;
-    if (LONG_BIT == 64 && Lock(rde) && !((intptr_t)p & 7)) {
+#if LONG_BIT >= 64
+    if (Lock(rde) && !((intptr_t)p & 7)) {
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
       y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);
       y = Little64(y);
@@ -58,15 +68,20 @@ void OpXaddEvqpGvqp(P) {
       } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x, z,
                                                       memory_order_release,
                                                       memory_order_acquire));
-    } else {
-      LOCK(&m->system->lock_lock);
-      x = Load64(p);
-      y = Get64(q);
-      z = kAlu[ALU_ADD][ALU_INT64](m, x, y);
-      Put64(q, x);
-      Store64(p, z);
-      UNLOCK(&m->system->lock_lock);
+      return;
     }
+#endif
+#if LONG_BIT < 64
+    if (Lock(rde)) LOCK(&m->system->lock_lock);
+#endif
+    x = Load64(p);
+    y = Get64(q);
+    z = kAlu[ALU_ADD][ALU_INT64](m, x, y);
+    Put64(q, x);
+    Store64(p, z);
+#if LONG_BIT < 64
+    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
+#endif
   } else if (!Osz(rde)) {
     u32 x, y, z;
     if (Lock(rde) && !((intptr_t)p & 3)) {
@@ -92,12 +107,22 @@ void OpXaddEvqpGvqp(P) {
     }
   } else {
     u16 x, y, z;
-    LOCK(&m->system->lock_lock);
-    x = Load16(p);
-    y = Get16(q);
-    z = kAlu[ALU_ADD][ALU_INT16](m, x, y);
-    Put16(q, x);
-    Store16(p, z);
-    UNLOCK(&m->system->lock_lock);
+    if (Lock(rde) && !((intptr_t)p & 1)) {
+      x = atomic_load_explicit((_Atomic(u16) *)p, memory_order_acquire);
+      y = atomic_load_explicit((_Atomic(u16) *)q, memory_order_relaxed);
+      y = Little16(y);
+      do {
+        atomic_store_explicit((_Atomic(u16) *)q, x, memory_order_relaxed);
+        z = Little16(kAlu[ALU_ADD][ALU_INT16](m, Little16(x), y));
+      } while (!atomic_compare_exchange_weak_explicit((_Atomic(u16) *)p, &x, z,
+                                                      memory_order_release,
+                                                      memory_order_acquire));
+    } else {
+      x = Load16(p);
+      y = Get16(q);
+      z = kAlu[ALU_ADD][ALU_INT16](m, x, y);
+      Put16(q, x);
+      Store16(p, z);
+    }
   }
 }

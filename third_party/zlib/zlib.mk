@@ -7,6 +7,8 @@ ZLIB_SRCS = $(filter %.c,$(ZLIB_FILES))
 ZLIB_HDRS = $(filter %.h,$(ZLIB_FILES))
 ZLIB_OBJS = $(ZLIB_SRCS:%.c=o/$(MODE)/%.o)
 
+$(ZLIB_OBJS): private CFLAGS += -xc -w
+
 o/$(MODE)/third_party/zlib/zlib.a: $(ZLIB_OBJS)
 
 o/$(MODE)/third_party/zlib:	\

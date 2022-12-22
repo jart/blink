@@ -113,38 +113,38 @@ DEPENDS =				\
 
 o/$(MODE)/depend: $(DEPENDS)
 	cat $^ >$@
-o/$(MODE)/depend.host: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.i486: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/i486/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.m68k: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/m68k/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.x86_64: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/x86_64/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.x86_64-gcc49: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/x86_64-gcc49/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.arm: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/arm/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.aarch64: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/aarch64/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.riscv64: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/riscv64/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.mips: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/mips/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.mipsel: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/mipsel/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.mips64: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/mips64/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.mips64el: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/mips64el/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.s390x: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/s390x/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.microblaze: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/microblaze/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.powerpc: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/powerpc/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
-o/$(MODE)/depend.powerpc64le: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt $(VM)
-	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/powerpc64le/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt
+o/$(MODE)/depend.host: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.i486: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/i486/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.m68k: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/m68k/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.x86_64: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/x86_64/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.x86_64-gcc49: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/x86_64-gcc49/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.arm: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/arm/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.aarch64: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/aarch64/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.riscv64: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/riscv64/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.mips: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/mips/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.mipsel: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/mipsel/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.mips64: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/mips64/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.mips64el: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/mips64el/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.s390x: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/s390x/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.microblaze: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/microblaze/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.powerpc: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/powerpc/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
+o/$(MODE)/depend.powerpc64le: o/$(MODE)/srcs.txt o/$(MODE)/hdrs.txt
+	$(VM) build/bootstrap/mkdeps.com -o $@ -r o/$(MODE)/powerpc64le/ @o/$(MODE)/srcs.txt @o/$(MODE)/hdrs.txt 2>/dev/null
 
 TAGS:	o/$(MODE)/srcs.txt $(SRCS)
 	$(RM) $@

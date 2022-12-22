@@ -30,6 +30,7 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/string.h"
+#include "blink/tsan.h"
 
 static u64 ReadInt(u8 p[8], unsigned long w) {
   switch (w) {
@@ -137,7 +138,8 @@ static void StringOp(P, int op) {
   stop = false;
   n = 1 << RegLog2(rde);
   sgn = GetFlag(m->flags, FLAGS_DF) ? -1 : 1;
-  atomic_thread_fence(memory_order_acquire);
+  FENCE;
+  IGNORE_RACES_START();
   do {
     if (Rep(rde) && !ReadCx(A)) break;
     switch (op) {
@@ -194,7 +196,8 @@ static void StringOp(P, int op) {
       break;
     }
   } while (!stop);
-  atomic_thread_fence(memory_order_release);
+  IGNORE_RACES_END();
+  FENCE;
 }
 
 static void RepMovsbEnhanced(P) {
@@ -207,7 +210,8 @@ static void RepMovsbEnhanced(P) {
     if (diactual != siactual) {
       SetWriteAddr(m, diactual, cx);
       SetReadAddr(m, siactual, cx);
-      atomic_thread_fence(memory_order_acquire);
+      FENCE;
+      IGNORE_RACES_START();
       do {
         direal = ResolveAddress(m, diactual);
         sireal = ResolveAddress(m, siactual);
@@ -220,7 +224,8 @@ static void RepMovsbEnhanced(P) {
         diactual = AddDi(A, n);
         siactual = AddSi(A, n);
       } while ((cx = SubtractCx(A, n)));
-      atomic_thread_fence(memory_order_release);
+      IGNORE_RACES_END();
+      FENCE;
     }
   }
 }
@@ -232,6 +237,7 @@ static void RepStosbEnhanced(P) {
   if ((cx = ReadCx(A))) {
     diactual = AddressDi(A);
     SetWriteAddr(m, diactual, cx);
+    IGNORE_RACES_START();
     do {
       direal = ResolveAddress(m, diactual);
       diremain = 4096 - (diactual & 4095);
@@ -239,7 +245,8 @@ static void RepStosbEnhanced(P) {
       memset(direal, m->al, n);
       diactual = AddDi(A, n);
     } while ((cx = SubtractCx(A, n)));
-    atomic_thread_fence(memory_order_release);
+    IGNORE_RACES_END();
+    FENCE;
   }
 }
 

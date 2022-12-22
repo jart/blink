@@ -46,7 +46,7 @@ void OpXchgGvqpEvqp(P) {
   u8 *q = RegRexrReg(m, rde);
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
-#if LONG_BIT == 64
+#if LONG_BIT >= 64
     if (!IsModrmRegister(rde) && !((intptr_t)p & 7)) {
       atomic_store_explicit(
           (_Atomic(u64) *)q,
@@ -65,12 +65,16 @@ void OpXchgGvqpEvqp(P) {
       Put64(q, y);
       Put64(p, x);
     } else {
+#if LONG_BIT < 64
       LOCK(&m->system->lock_lock);
+#endif
       x = Get64(q);
-      y = Read64(p);
+      y = Load64(p);
       Put64(q, y);
-      Write64(p, x);
+      Store64(p, x);
+#if LONG_BIT < 64
       UNLOCK(&m->system->lock_lock);
+#endif
     }
   } else if (!Osz(rde)) {
     if (!IsModrmRegister(rde) && !((intptr_t)p & 3)) {

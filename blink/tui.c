@@ -70,6 +70,7 @@
 #include "blink/thompike.h"
 #include "blink/timespec.h"
 #include "blink/tpenc.h"
+#include "blink/tsan.h"
 #include "blink/types.h"
 #include "blink/util.h"
 #include "blink/watch.h"
@@ -3579,8 +3580,10 @@ int main(int argc, char *argv[]) {
   unassert(!sigaction(SIGWINCH, &sa, 0));
   sa.sa_sigaction = OnSigAlrm;
   unassert(!sigaction(SIGALRM, &sa, 0));
+#ifndef __SANITIZE_THREAD__
   sa.sa_sigaction = OnSigSegv;
   unassert(!sigaction(SIGSEGV, &sa, 0));
+#endif
   m->system->blinksigs |= 1ull << (SIGINT_LINUX - 1) |   //
                           1ull << (SIGALRM_LINUX - 1) |  //
                           1ull << (SIGWINCH_LINUX - 1);  //

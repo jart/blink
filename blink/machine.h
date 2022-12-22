@@ -101,7 +101,7 @@
 
 #define HasLinearMapping(x) (CanHaveLinearMemory() && !(x)->nolinear)
 
-#if LONG_BIT == 64
+#if LONG_BIT >= 64
 #define _Atomicish(t) _Atomic(t)
 #else
 #define _Atomicish(t) t

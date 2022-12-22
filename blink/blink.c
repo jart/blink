@@ -149,9 +149,11 @@ static void HandleSigs(void) {
   sa.sa_flags = 0;
   sa.sa_handler = OnSigSys;
   unassert(!sigaction(SIGSYS, &sa, 0));
+#ifndef __SANITIZE_THREAD__
   sa.sa_sigaction = OnSigSegv;
   sa.sa_flags = SA_SIGINFO;
   unassert(!sigaction(SIGSEGV, &sa, 0));
+#endif
 }
 
 int main(int argc, char *argv[], char **envp) {

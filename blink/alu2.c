@@ -32,14 +32,25 @@
 #include "blink/swap.h"
 
 void OpAlub(P) {
-  u8 *p, *q;
+  u8 x, y, z, *p, *q;
   aluop_f f;
   f = kAlu[(Opcode(rde) & 070) >> 3][0];
   p = GetModrmRegisterBytePointerWrite1(A);
   q = ByteRexrReg(m, rde);
-  if (Lock(rde)) LOCK(&m->system->lock_lock);
-  Write8(p, f(m, Load8(p), Get8(q)));
-  if (Lock(rde)) UNLOCK(&m->system->lock_lock);
+  if (Lock(rde)) {
+    x = atomic_load_explicit((_Atomic(u8) *)p, memory_order_acquire);
+    y = atomic_load_explicit((_Atomic(u8) *)q, memory_order_relaxed);
+    y = Little8(y);
+    do {
+      z = Little8(f(m, Little8(x), y));
+    } while (!atomic_compare_exchange_weak_explicit(
+        (_Atomic(u8) *)p, &x, z, memory_order_release, memory_order_relaxed));
+  } else {
+    x = Load8(p);
+    y = Get8(q);
+    z = f(m, x, y);
+    Store8(p, z);
+  }
 }
 
 void OpAluw(P) {
@@ -49,7 +60,7 @@ void OpAluw(P) {
   f = kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)];
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
-#if LONG_BIT == 64
+#if LONG_BIT >= 64
     if (Lock(rde) && !((intptr_t)p & 7)) {
       u64 x, y, z;
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
@@ -64,10 +75,16 @@ void OpAluw(P) {
     }
 #endif
     u64 x, y, z;
+#if LONG_BIT < 64
+    if (Lock(rde)) LOCK(&m->system->lock_lock);
+#endif
     x = Load64(p);
     y = Get64(q);
     z = f(m, x, y);
     Store64(p, z);
+#if LONG_BIT < 64
+    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
+#endif
   } else if (!Osz(rde)) {
     u32 x, y, z;
     p = GetModrmRegisterWordPointerWrite4(A);
@@ -91,44 +108,54 @@ void OpAluw(P) {
     }
   } else {
     u16 x, y, z;
-    if (Lock(rde)) LOCK(&m->system->lock_lock);
     p = GetModrmRegisterWordPointerWrite2(A);
-    x = Load16(p);
-    y = Get16(q);
-    z = f(m, x, y);
-    Store16(p, z);
-    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
+    if (Lock(rde) && !((intptr_t)p & 1)) {
+      x = atomic_load_explicit((_Atomic(u16) *)p, memory_order_acquire);
+      y = atomic_load_explicit((_Atomic(u16) *)q, memory_order_relaxed);
+      y = Little16(y);
+      do {
+        z = Little16(f(m, Little16(x), y));
+      } while (!atomic_compare_exchange_weak_explicit((_Atomic(u16) *)p, &x, z,
+                                                      memory_order_release,
+                                                      memory_order_relaxed));
+    } else {
+      x = Load16(p);
+      y = Get16(q);
+      z = f(m, x, y);
+      Store16(p, z);
+    }
   }
   if (IsMakingPath(m) && !Lock(rde)) {
     STATISTIC(++alu_ops);
-    Jitter(A, "B"
-              "r0s1="
-              "A"
-              "r0a2="
-              "s1a1=");
+    Jitter(A, "B"        // res0 = GetRegOrMem(RexbR)m
+              "r0s1="    // sav1 = res0
+              "A"        // res0 = GetReg(RexrReg)
+              "r0a2="    // arg2 = res0
+              "s1a1=");  // arg1 = sav1
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
         STATISTIC(++alu_unflagged);
-        if (GetFlagDeps(rde)) Jitter(A, "q");
-        Jitter(A, "m r0 D", kJustAlu[(Opcode(rde) & 070) >> 3]);
+        if (GetFlagDeps(rde)) Jitter(A, "q");  // arg0 = machine
+        Jitter(A,
+               "m"     // call micro-op
+               "r0D",  // PutRegOrMem(RexbRm, res0)
+               kJustAlu[(Opcode(rde) & 070) >> 3]);
         break;
       case CF:
       case ZF:
       case CF | ZF:
         STATISTIC(++alu_simplified);
         Jitter(A,
-               "q"
-               "m"
-               "r0"
-               "D",
+               "q"     // arg0 = machine
+               "m"     // call micro-op
+               "r0D",  // PutRegOrMem(RexbRm, res0)
                kAluFast[(Opcode(rde) & 070) >> 3][RegLog2(rde)]);
         break;
       default:
         Jitter(A,
-               "q"
-               "c"
-               "r0"
-               "D",
+               "q"     // arg0 = machine
+               "c"     // call function
+               "r0D",  // PutRegOrMem(RexbRm, res0)
                f);
         break;
     }
