@@ -55,7 +55,7 @@ o/$(MODE)/riscv64/%.o: %.c o/third_party/gcc/riscv64/bin/riscv64-linux-musl-gcc 
 
 o/$(MODE)/mips/%.o: %.c o/third_party/gcc/mips/bin/mips-linux-musl-gcc $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/gcc/mips/bin/mips-linux-musl-gcc -static -Werror $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
+	$(VM) o/third_party/gcc/mips/bin/mips-linux-musl-gcc -static -Werror $(filter-out -mtune=generic,$(CFLAGS)) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
 
 o/$(MODE)/mipsel/%.o: %.c o/third_party/gcc/mipsel/bin/mipsel-linux-musl-gcc $(VM)
 	@mkdir -p $(@D)
@@ -71,7 +71,7 @@ o/$(MODE)/mips64el/%.o: %.c o/third_party/gcc/mips64el/bin/mips64el-linux-musl-g
 
 o/$(MODE)/s390x/%.o: %.c o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static -Werror $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
+	$(VM) o/third_party/gcc/s390x/bin/s390x-linux-musl-gcc -static -Werror $(filter-out -mtune=generic,$(CFLAGS)) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
 
 o/$(MODE)/microblaze/%.o: %.c o/third_party/gcc/microblaze/bin/microblaze-linux-musl-gcc $(VM)
 	@mkdir -p $(@D)
@@ -79,11 +79,11 @@ o/$(MODE)/microblaze/%.o: %.c o/third_party/gcc/microblaze/bin/microblaze-linux-
 
 o/$(MODE)/powerpc/%.o: %.c o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static -Werror $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
+	$(VM) o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc -static -Werror $(filter-out -mtune=generic,$(CFLAGS)) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
 
 o/$(MODE)/powerpc64le/%.o: %.c o/third_party/gcc/powerpc64le/bin/powerpc64le-linux-musl-gcc $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/gcc/powerpc64le/bin/powerpc64le-linux-musl-gcc -static -Werror $(CFLAGS) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
+	$(VM) o/third_party/gcc/powerpc64le/bin/powerpc64le-linux-musl-gcc -static -Werror $(filter-out -mtune=generic,$(CFLAGS)) $(CPPFLAGS) $(TARGET_ARCH) -c -o $@ $<
 
 o/third_party/gcc/i486/bin/i486-linux-musl-gcc:			\
 		third_party/gcc/x86_64-linux-musl__i486-linux-musl__g++-7.2.0.tar.xz
