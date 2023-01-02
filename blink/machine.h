@@ -361,6 +361,7 @@ struct Machine {                           //
 extern _Thread_local struct Machine *g_machine;
 extern const nexgen32e_f kConvert[3];
 extern const nexgen32e_f kSax[3];
+extern bool FLAG_noconnect;
 
 struct System *NewSystem(void);
 void FreeSystem(struct System *);
@@ -444,20 +445,9 @@ void FastJmp(struct Machine *, u64);
 void FastLeave(struct Machine *);
 void FastRet(struct Machine *);
 
-u32 Jb(struct Machine *);
-u32 Jae(struct Machine *);
-u32 Je(struct Machine *);
-u32 Jne(struct Machine *);
-u32 Jo(struct Machine *);
-u32 Jno(struct Machine *);
-u32 Ja(struct Machine *);
-u32 Jbe(struct Machine *);
-u32 Jg(struct Machine *);
-u32 Jge(struct Machine *);
-u32 Jl(struct Machine *);
-u32 Jle(struct Machine *);
-u32 Js(struct Machine *);
-u32 Jns(struct Machine *);
+u64 Pick(u32, u64, u64);
+typedef u32 (*cc_f)(struct Machine *);
+extern const cc_f kConditionCode[16];
 
 void Push(P, u64);
 u64 Pop(P, u16);

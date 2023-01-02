@@ -50,6 +50,7 @@
 #include "blink/time.h"
 #include "blink/util.h"
 
+bool FLAG_noconnect;
 _Thread_local struct Machine *g_machine;
 
 static void OpHintNopEv(P) {
@@ -638,7 +639,9 @@ static void Connect(P, u64 pc) {
     if (func != JitlessDispatch && func != GeneralDispatch) {
       jump = (u8 *)func + GetPrologueSize();
     } else {
-      RecordJitJump(m->path.jb, m->fun + pc, GetPrologueSize());
+      if (!FLAG_noconnect) {
+        RecordJitJump(m->path.jb, m->fun + pc, GetPrologueSize());
+      }
       jump = (void *)m->system->ender;
     }
   } else {
@@ -799,8 +802,7 @@ static void Aluwi(P) {
         if (GetFlagDeps(rde)) Jitter(A, "q");
         Jitter(A,
                "m"
-               "r0"
-               "D",
+               "r0D",
                kJustAlu[ModrmReg(rde)]);
         break;
       case CF:
@@ -810,16 +812,14 @@ static void Aluwi(P) {
         Jitter(A,
                "q"
                "m"
-               "r0"
-               "D",
+               "r0D",
                kAluFast[ModrmReg(rde)][RegLog2(rde)]);
         break;
       default:
         Jitter(A,
                "q"
                "c"
-               "r0"
-               "D",
+               "r0D",
                op);
         break;
     }
@@ -973,8 +973,7 @@ static void OpBsuwiCl(P) {
            "s1a1="
            "q"
            "c"
-           "r0"
-           "D",
+           "r0D",
            op);
   }
 }
@@ -1001,8 +1000,7 @@ static void BsuwiConstant(P, u64 y) {
           Jitter(A,
                  "a2i"
                  "m"
-                 "r0"
-                 "D",
+                 "r0D",
                  y, kJustBsu[ModrmReg(rde)]);
           return;
         }
@@ -1013,8 +1011,7 @@ static void BsuwiConstant(P, u64 y) {
     Jitter(A,
            "a2i"
            "c"
-           "r0"
-           "D",
+           "r0D",
            y, op);
   }
 }
@@ -1043,8 +1040,7 @@ static void OpBsubiCl(P) {
          "s1a1="
          "q"
          "c"
-         "r0"
-         "D",
+         "r0D",
          Bsubi(A, m->cl));
 }
 
@@ -1055,8 +1051,7 @@ static void BsubiConstant(P, u64 y) {
          "q"
          "a2i"
          "c"
-         "r0"
-         "D",
+         "r0D",
          y, Bsubi(A, y));
 }
 
@@ -1102,20 +1097,31 @@ static void OpJmp(P) {
   Terminate(A, FastJmp);
 }
 
-static void Jcc(P, u32 cc(struct Machine *)) {
+static cc_f GetCc(P) {
+  int code;
+  code = Opcode(rde) & 15;
+  unassert(code != 0xA);  // JP
+  unassert(code != 0xB);  // JNP
+  return kConditionCode[code];
+}
+
+static void OpJcc(P) {
+  cc_f cc;
+  cc = GetCc(A);
   if (IsMakingPath(m)) {
-    Jitter(A,
-           "m"
-           "r0a2="
-           "q",
-           cc);
 #ifdef __x86_64__
+    Jitter(A, "mq", cc);
     AlignJit(m->path.jb, 4);
     u8 code[] = {
-        0x85, 0300 | kJitArg2 << 3 | kJitArg2,  // test %edx,%edx
+        0x85, 0300 | kJitRes0 << 3 | kJitRes0,  // test %eax,%eax
         0x75, 5,                                // jnz  +5
     };
 #else
+    Jitter(A,
+           "m"      // res0 = condition code
+           "r0a2="  // arg2 = res0
+           "q",     // arg0 = machine
+           cc);
     u32 code[] = {
         0xb5000000 | 2 << 5 | kJitArg2,  // cbnz x2,#8
     };
@@ -1123,9 +1129,9 @@ static void Jcc(P, u32 cc(struct Machine *)) {
     AppendJit(m->path.jb, code, sizeof(code));
     Connect(A, m->ip);
     Jitter(A,
-           "a1i"
-           "m"
-           "q",
+           "a1i"  // arg1 = disp
+           "m"    // call micro-op
+           "q",   // arg0 = machine
            disp, FastJmp);
     AlignJit(m->path.jb, 4);
     Connect(A, m->ip + disp);
@@ -1134,62 +1140,6 @@ static void Jcc(P, u32 cc(struct Machine *)) {
   if (cc(m)) {
     m->ip += disp;
   }
-}
-
-static void OpJae(P) {
-  Jcc(A, Jae);
-}
-
-static void OpJne(P) {
-  Jcc(A, Jne);
-}
-
-static void OpJe(P) {
-  Jcc(A, Je);
-}
-
-static void OpJb(P) {
-  Jcc(A, Jb);
-}
-
-static void OpJbe(P) {
-  Jcc(A, Jbe);
-}
-
-static void OpJo(P) {
-  Jcc(A, Jo);
-}
-
-static void OpJno(P) {
-  Jcc(A, Jno);
-}
-
-static void OpJa(P) {
-  Jcc(A, Ja);
-}
-
-static void OpJs(P) {
-  Jcc(A, Js);
-}
-
-static void OpJns(P) {
-  Jcc(A, Jns);
-}
-
-static void OpJl(P) {
-  Jcc(A, Jl);
-}
-
-static void OpJge(P) {
-  Jcc(A, Jge);
-}
-
-static void OpJle(P) {
-  Jcc(A, Jle);
-}
-
-static void OpJg(P) {
-  Jcc(A, Jg);
 }
 
 static void OpJp(P) {
@@ -1204,122 +1154,20 @@ static void OpJnp(P) {
   }
 }
 
-static void OpCmov(P, bool taken) {
-  u64 x;
-  if (taken) {
-    x = ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A));
-  } else {
-    x = Get64(RegRexrReg(m, rde));
-  }
-  WriteRegister(rde, RegRexrReg(m, rde), x);
-}
-
-static void OpCmovo(P) {
-  OpCmov(A, GetFlag(m->flags, FLAGS_OF));
-}
-
-static void OpCmovno(P) {
-  OpCmov(A, !GetFlag(m->flags, FLAGS_OF));
-}
-
-static void OpCmovb(P) {
-  OpCmov(A, GetFlag(m->flags, FLAGS_CF));
-}
-
-static void OpCmovae(P) {
-  OpCmov(A, !GetFlag(m->flags, FLAGS_CF));
-}
-
-static void OpCmove(P) {
-  OpCmov(A, GetFlag(m->flags, FLAGS_ZF));
-}
-
-static void OpCmovne(P) {
-  OpCmov(A, !GetFlag(m->flags, FLAGS_ZF));
-}
-
-static void OpCmovbe(P) {
-  OpCmov(A, IsBelowOrEqual(m));
-}
-
-static void OpCmova(P) {
-  OpCmov(A, IsAbove(m));
-}
-
-static void OpCmovs(P) {
-  OpCmov(A, GetFlag(m->flags, FLAGS_SF));
-}
-
-static void OpCmovns(P) {
-  OpCmov(A, !GetFlag(m->flags, FLAGS_SF));
-}
-
-static void OpCmovp(P) {
-  OpCmov(A, IsParity(m));
-}
-
-static void OpCmovnp(P) {
-  OpCmov(A, !IsParity(m));
-}
-
-static void OpCmovl(P) {
-  OpCmov(A, IsLess(m));
-}
-
-static void OpCmovge(P) {
-  OpCmov(A, IsGreaterOrEqual(m));
-}
-
-static void OpCmovle(P) {
-  OpCmov(A, IsLessOrEqual(m));
-}
-
-static void OpCmovg(P) {
-  OpCmov(A, IsGreater(m));
-}
-
 static void SetEb(P, bool x) {
   Store8(GetModrmRegisterBytePointerWrite1(A), x);
 }
 
-static void OpSeto(P) {
-  SetEb(A, GetFlag(m->flags, FLAGS_OF));
-}
-
-static void OpSetno(P) {
-  SetEb(A, !GetFlag(m->flags, FLAGS_OF));
-}
-
-static void OpSetb(P) {
-  SetEb(A, GetFlag(m->flags, FLAGS_CF));
-}
-
-static void OpSetae(P) {
-  SetEb(A, !GetFlag(m->flags, FLAGS_CF));
-}
-
-static void OpSete(P) {
-  SetEb(A, GetFlag(m->flags, FLAGS_ZF));
-}
-
-static void OpSetne(P) {
-  SetEb(A, !GetFlag(m->flags, FLAGS_ZF));
-}
-
-static void OpSetbe(P) {
-  SetEb(A, IsBelowOrEqual(m));
-}
-
-static void OpSeta(P) {
-  SetEb(A, IsAbove(m));
-}
-
-static void OpSets(P) {
-  SetEb(A, GetFlag(m->flags, FLAGS_SF));
-}
-
-static void OpSetns(P) {
-  SetEb(A, !GetFlag(m->flags, FLAGS_SF));
+static void OpSetcc(P) {
+  cc_f cc;
+  cc = GetCc(A);
+  SetEb(A, cc(m));
+  if (IsMakingPath(m)) {
+    Jitter(A,
+           "m"       // call micro-op
+           "r0z0D",  // PutRegOrMem[force8](RexbRm, res0)
+           cc);
+  }
 }
 
 static void OpSetp(P) {
@@ -1330,20 +1178,43 @@ static void OpSetnp(P) {
   SetEb(A, !IsParity(m));
 }
 
-static void OpSetl(P) {
-  SetEb(A, IsLess(m));
+static void OpCmovImpl(P, bool cond) {
+  u64 x;
+  if (cond) {
+    x = ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A));
+  } else {
+    x = Get64(RegRexrReg(m, rde));
+  }
+  WriteRegister(rde, RegRexrReg(m, rde), x);
 }
 
-static void OpSetge(P) {
-  SetEb(A, IsGreaterOrEqual(m));
+static void OpCmov(P) {
+  cc_f cc;
+  cc = GetCc(A);
+  OpCmovImpl(A, cc(m));
+  if (IsMakingPath(m)) {
+    Jitter(A,
+           "wB"     // res0 = GetRegOrMem[force16+bit](RexbRm)
+           "r0s1="  // sav1 = res0
+           "wA"     // res0 = GetReg[force16+bit](RexrReg)
+           "r0s2="  // sav2 = res0
+           "q"      // arg0 = sav0 (machine)
+           "m"      // call micro-op (cc)
+           "s2a2="  // arg2 = sav2
+           "s1a1="  // arg1 = sav1
+           "t"      // arg0 = res0
+           "m"      // call micro-op (Pick)
+           "r0wC",  // PutReg[force16+bit](RexrReg, res0)
+           cc, Pick);
+  }
 }
 
-static void OpSetle(P) {
-  SetEb(A, IsLessOrEqual(m));
+static void OpCmovp(P) {
+  OpCmovImpl(A, IsParity(m));
 }
 
-static void OpSetg(P) {
-  SetEb(A, IsGreater(m));
+static void OpCmovnp(P) {
+  OpCmovImpl(A, !IsParity(m));
 }
 
 static void OpJcxz(P) {
@@ -1958,22 +1829,22 @@ static const nexgen32e_f kNexgen32e[] = {
     /*06D*/ OpIns,                   //
     /*06E*/ OpOuts,                  //
     /*06F*/ OpOuts,                  //
-    /*070*/ OpJo,                    // #177  (0.000094%)
-    /*071*/ OpJno,                   // #200  (0.000034%)
-    /*072*/ OpJb,                    // #64   (0.015441%)
-    /*073*/ OpJae,                   // #9    (5.615257%)
-    /*074*/ OpJe,                    // #15   (0.713108%)
-    /*075*/ OpJne,                   // #13   (0.825247%)
-    /*076*/ OpJbe,                   // #23   (0.475584%)
-    /*077*/ OpJa,                    // #48   (0.054677%)
-    /*078*/ OpJs,                    // #66   (0.014096%)
-    /*079*/ OpJns,                   // #84   (0.006506%)
+    /*070*/ OpJcc,                   // #177  (0.000094%)
+    /*071*/ OpJcc,                   // #200  (0.000034%)
+    /*072*/ OpJcc,                   // #64   (0.015441%)
+    /*073*/ OpJcc,                   // #9    (5.615257%)
+    /*074*/ OpJcc,                   // #15   (0.713108%)
+    /*075*/ OpJcc,                   // #13   (0.825247%)
+    /*076*/ OpJcc,                   // #23   (0.475584%)
+    /*077*/ OpJcc,                   // #48   (0.054677%)
+    /*078*/ OpJcc,                   // #66   (0.014096%)
+    /*079*/ OpJcc,                   // #84   (0.006506%)
     /*07A*/ OpJp,                    // #175  (0.000112%)
     /*07B*/ OpJnp,                   // #174  (0.000112%)
-    /*07C*/ OpJl,                    // #223  (0.000008%)
-    /*07D*/ OpJge,                   // #80   (0.007801%)
-    /*07E*/ OpJle,                   // #70   (0.012536%)
-    /*07F*/ OpJg,                    // #76   (0.010144%)
+    /*07C*/ OpJcc,                   // #223  (0.000008%)
+    /*07D*/ OpJcc,                   // #80   (0.007801%)
+    /*07E*/ OpJcc,                   // #70   (0.012536%)
+    /*07F*/ OpJcc,                   // #76   (0.010144%)
     /*080*/ OpAlubiReg,              // #53   (0.033021%)
     /*081*/ OpAluwiReg,              // #60   (0.018910%)
     /*082*/ OpAlubiReg,              //
@@ -2166,22 +2037,22 @@ static const nexgen32e_f kNexgen32e[] = {
     /*13D*/ OpUd,                    //
     /*13E*/ OpUd,                    //
     /*13F*/ OpUd,                    //
-    /*140*/ OpCmovo,                 //
-    /*141*/ OpCmovno,                //
-    /*142*/ OpCmovb,                 // #69   (0.012667%)
-    /*143*/ OpCmovae,                // #276  (0.000002%)
-    /*144*/ OpCmove,                 // #134  (0.000584%)
-    /*145*/ OpCmovne,                // #132  (0.000700%)
-    /*146*/ OpCmovbe,                // #125  (0.000945%)
-    /*147*/ OpCmova,                 // #40   (0.289378%)
-    /*148*/ OpCmovs,                 // #130  (0.000774%)
-    /*149*/ OpCmovns,                // #149  (0.000228%)
+    /*140*/ OpCmov,                  //
+    /*141*/ OpCmov,                  //
+    /*142*/ OpCmov,                  // #69   (0.012667%)
+    /*143*/ OpCmov,                  // #276  (0.000002%)
+    /*144*/ OpCmov,                  // #134  (0.000584%)
+    /*145*/ OpCmov,                  // #132  (0.000700%)
+    /*146*/ OpCmov,                  // #125  (0.000945%)
+    /*147*/ OpCmov,                  // #40   (0.289378%)
+    /*148*/ OpCmov,                  // #130  (0.000774%)
+    /*149*/ OpCmov,                  // #149  (0.000228%)
     /*14A*/ OpCmovp,                 //
     /*14B*/ OpCmovnp,                //
-    /*14C*/ OpCmovl,                 // #102  (0.002008%)
-    /*14D*/ OpCmovge,                // #196  (0.000044%)
-    /*14E*/ OpCmovle,                // #110  (0.001379%)
-    /*14F*/ OpCmovg,                 // #121  (0.001029%)
+    /*14C*/ OpCmov,                  // #102  (0.002008%)
+    /*14D*/ OpCmov,                  // #196  (0.000044%)
+    /*14E*/ OpCmov,                  // #110  (0.001379%)
+    /*14F*/ OpCmov,                  // #121  (0.001029%)
     /*150*/ OpMovmskpsd,             //
     /*151*/ OpSqrtpsd,               //
     /*152*/ OpRsqrtps,               //
@@ -2230,38 +2101,38 @@ static const nexgen32e_f kNexgen32e[] = {
     /*17D*/ OpHsubpsd,               //
     /*17E*/ OpMov0f7e,               // #122  (0.001005%)
     /*17F*/ OpMov0f7f,               // #192  (0.000048%)
-    /*180*/ OpJo,                    //
-    /*181*/ OpJno,                   //
-    /*182*/ OpJb,                    // #107  (0.001532%)
-    /*183*/ OpJae,                   // #72   (0.011761%)
-    /*184*/ OpJe,                    // #55   (0.029121%)
-    /*185*/ OpJne,                   // #57   (0.027593%)
-    /*186*/ OpJbe,                   // #46   (0.147358%)
-    /*187*/ OpJa,                    // #86   (0.005907%)
-    /*188*/ OpJs,                    // #106  (0.001569%)
-    /*189*/ OpJns,                   // #160  (0.000142%)
+    /*180*/ OpJcc,                   //
+    /*181*/ OpJcc,                   //
+    /*182*/ OpJcc,                   // #107  (0.001532%)
+    /*183*/ OpJcc,                   // #72   (0.011761%)
+    /*184*/ OpJcc,                   // #55   (0.029121%)
+    /*185*/ OpJcc,                   // #57   (0.027593%)
+    /*186*/ OpJcc,                   // #46   (0.147358%)
+    /*187*/ OpJcc,                   // #86   (0.005907%)
+    /*188*/ OpJcc,                   // #106  (0.001569%)
+    /*189*/ OpJcc,                   // #160  (0.000142%)
     /*18A*/ OpJp,                    //
     /*18B*/ OpJnp,                   //
-    /*18C*/ OpJl,                    // #105  (0.001786%)
-    /*18D*/ OpJge,                   // #281  (0.000001%)
-    /*18E*/ OpJle,                   // #77   (0.009607%)
-    /*18F*/ OpJg,                    // #126  (0.000890%)
-    /*190*/ OpSeto,                  // #280  (0.000001%)
-    /*191*/ OpSetno,                 //
-    /*192*/ OpSetb,                  // #26   (0.364366%)
-    /*193*/ OpSetae,                 // #183  (0.000063%)
-    /*194*/ OpSete,                  // #78   (0.009363%)
-    /*195*/ OpSetne,                 // #94   (0.003096%)
-    /*196*/ OpSetbe,                 // #162  (0.000139%)
-    /*197*/ OpSeta,                  // #92   (0.003559%)
-    /*198*/ OpSets,                  //
-    /*199*/ OpSetns,                 //
+    /*18C*/ OpJcc,                   // #105  (0.001786%)
+    /*18D*/ OpJcc,                   // #281  (0.000001%)
+    /*18E*/ OpJcc,                   // #77   (0.009607%)
+    /*18F*/ OpJcc,                   // #126  (0.000890%)
+    /*190*/ OpSetcc,                 // #280  (0.000001%)
+    /*191*/ OpSetcc,                 //
+    /*192*/ OpSetcc,                 // #26   (0.364366%)
+    /*193*/ OpSetcc,                 // #183  (0.000063%)
+    /*194*/ OpSetcc,                 // #78   (0.009363%)
+    /*195*/ OpSetcc,                 // #94   (0.003096%)
+    /*196*/ OpSetcc,                 // #162  (0.000139%)
+    /*197*/ OpSetcc,                 // #92   (0.003559%)
+    /*198*/ OpSetcc,                 //
+    /*199*/ OpSetcc,                 //
     /*19A*/ OpSetp,                  //
     /*19B*/ OpSetnp,                 //
-    /*19C*/ OpSetl,                  // #119  (0.001079%)
-    /*19D*/ OpSetge,                 // #275  (0.000002%)
-    /*19E*/ OpSetle,                 // #167  (0.000112%)
-    /*19F*/ OpSetg,                  // #95   (0.002688%)
+    /*19C*/ OpSetcc,                 // #119  (0.001079%)
+    /*19D*/ OpSetcc,                 // #275  (0.000002%)
+    /*19E*/ OpSetcc,                 // #167  (0.000112%)
+    /*19F*/ OpSetcc,                 // #95   (0.002688%)
     /*1A0*/ OpPushSeg,               //
     /*1A1*/ OpPopSeg,                //
     /*1A2*/ OpCpuid,                 // #285  (0.000001%)

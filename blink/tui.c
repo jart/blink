@@ -3394,13 +3394,16 @@ static void GetOpts(int argc, char *argv[]) {
   bool wantjit = false;
   bool wantunsafe = false;
   const char *logpath = 0;
-  while ((opt = GetOpt(argc, argv, "hjmvtrzRNsb:Hw:L:")) != -1) {
+  while ((opt = GetOpt(argc, argv, "hjmCvtrzRNsb:Hw:L:")) != -1) {
     switch (opt) {
       case 'j':
         wantjit = true;
         break;
       case 't':
         tuimode = false;
+        break;
+      case 'C':
+        FLAG_noconnect = true;
         break;
       case 'm':
         wantunsafe = true;

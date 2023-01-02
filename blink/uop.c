@@ -475,47 +475,70 @@ MICRO_OP void FastJmp(struct Machine *m, u64 disp) {
   m->ip += disp;
 }
 
-MICRO_OP u32 Jb(struct Machine *m) {
-  return m->flags & CF;
+MICRO_OP static u32 Jb(struct Machine *m) {
+  return !!(m->flags & CF);
 }
-MICRO_OP u32 Jae(struct Machine *m) {
-  return ~m->flags & CF;
+MICRO_OP static u32 Jae(struct Machine *m) {
+  return !!(~m->flags & CF);
 }
-MICRO_OP u32 Je(struct Machine *m) {
-  return m->flags & ZF;
+MICRO_OP static u32 Je(struct Machine *m) {
+  return !!(m->flags & ZF);
 }
-MICRO_OP u32 Jne(struct Machine *m) {
-  return ~m->flags & ZF;
+MICRO_OP static u32 Jne(struct Machine *m) {
+  return !!(~m->flags & ZF);
 }
-MICRO_OP u32 Js(struct Machine *m) {
-  return m->flags & SF;
+MICRO_OP static u32 Js(struct Machine *m) {
+  return !!(m->flags & SF);
 }
-MICRO_OP u32 Jns(struct Machine *m) {
-  return ~m->flags & SF;
+MICRO_OP static u32 Jns(struct Machine *m) {
+  return !!(~m->flags & SF);
 }
-MICRO_OP u32 Jo(struct Machine *m) {
-  return m->flags & OF;
+MICRO_OP static u32 Jo(struct Machine *m) {
+  return !!(m->flags & OF);
 }
-MICRO_OP u32 Jno(struct Machine *m) {
-  return ~m->flags & OF;
+MICRO_OP static u32 Jno(struct Machine *m) {
+  return !!(~m->flags & OF);
 }
-MICRO_OP u32 Ja(struct Machine *m) {
+MICRO_OP static u32 Ja(struct Machine *m) {
   return IsAbove(m);
 }
-MICRO_OP u32 Jbe(struct Machine *m) {
+MICRO_OP static u32 Jbe(struct Machine *m) {
   return IsBelowOrEqual(m);
 }
-MICRO_OP u32 Jg(struct Machine *m) {
+MICRO_OP static u32 Jg(struct Machine *m) {
   return IsGreater(m);
 }
-MICRO_OP u32 Jge(struct Machine *m) {
+MICRO_OP static u32 Jge(struct Machine *m) {
   return IsGreaterOrEqual(m);
 }
-MICRO_OP u32 Jl(struct Machine *m) {
+MICRO_OP static u32 Jl(struct Machine *m) {
   return IsLess(m);
 }
-MICRO_OP u32 Jle(struct Machine *m) {
+MICRO_OP static u32 Jle(struct Machine *m) {
   return IsLessOrEqual(m);
+}
+
+const cc_f kConditionCode[16] = {
+    Jo,   //
+    Jno,  //
+    Jb,   //
+    Jae,  //
+    Je,   //
+    Jne,  //
+    Jbe,  //
+    Ja,   //
+    Js,   //
+    Jns,  //
+    0,    //
+    0,    //
+    Jl,   //
+    Jge,  //
+    Jle,  //
+    Jg,   //
+};
+
+MICRO_OP u64 Pick(u32 p, u64 x, u64 y) {
+  return p ? x : y;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -567,7 +590,7 @@ MICRO_OP static i64 Base(struct Machine *m, u64 d, long i) {
 MICRO_OP static i64 Index(struct Machine *m, u64 d, long i, int z) {
   return d + (Get64(m->weg[i]) << z);
 }
-MICRO_OP static i64 BaseIndex(struct Machine *m, u64 d, long b, long i, int z) {
+MICRO_OP static i64 BaseIndex(struct Machine *m, u64 d, long b, int z, long i) {
   return d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z);
 }
 
@@ -772,6 +795,10 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
         break;
 
+      case 't':  // r0a0= [shortcut]
+        AppendJitMovReg(m->path.jb, kJitArg0, kJitRes0);
+        break;
+
       case 'A':  // res0 = GetReg(RexrReg)
         Jitter(A,
                "q"    // arg0 = machine
@@ -797,7 +824,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "s0a3="  // arg3 = machine
                  ""       // arg2 = undefined
                  "r1a1="  // arg1 = res1
-                 "r0a0="  // arg0 = res0
+                 "t"      // arg0 = res0
                  "m",     // call micro-op
                  RexrReg(rde), kPutReg[log2sz]);
         }
@@ -814,9 +841,9 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         } else if (HasLinearMapping(m)) {
           Jitter(A,
                  "L"         // load effective address
-                 "r0a0="     // arg0 = virtual address
+                 "t"         // arg0 = virtual address
                  "m"         // call micro-op (turn virtual into pointer)
-                 "r0a0="     // arg0 = pointer
+                 "t"         // arg0 = pointer
                  LOADSTORE,  // call function (read word shared memory)
                  ResolveHost, kLoad[log2sz]);
         } else {
@@ -827,7 +854,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "r0a1="  // arg1 = virtual address
                  "q"      // arg0 = machine
                  "c"      // call function (turn virtual into pointer)
-                 "r0a0="  // arg0 = pointer
+                 "t"      // arg0 = pointer
                  "m",     // call micro-op (read vector shared memory)
                  false, 1ul << log2sz, ReserveAddress, kLoad[log2sz]);
         }
@@ -848,10 +875,10 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
             Jitter(A,
                    "s3="       // sav3 = <pop>
                    "L"         // load effective address
-                   "r0a0="     // arg0 = virtual address
+                   "t"         // arg0 = virtual address
                    "m"         // call micro-op
                    "s3a1="     // arg1 = sav3
-                   "r0a0="     // arg0 = res0
+                   "t"         // arg0 = res0
                    LOADSTORE,  // call micro-op (write word to shared memory)
                    ResolveHost, kStore[log2sz]);
           } else {
@@ -864,7 +891,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "q"         // arg0 = machine
                    "c"         // call function (turn virtual into pointer)
                    "s3a1="     // arg1 = sav3
-                   "r0a0="     // arg0 = res0
+                   "t"         // arg0 = res0
                    LOADSTORE,  // call function (write word to shared memory)
                    true, 1ul << log2sz, ReserveAddress, kStore[log2sz]);
           }
@@ -875,7 +902,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "s0a3="  // arg3 = machine
                    ""       // arg2 = undefined
                    "r1a1="  // arg1 = res1
-                   "r0a0="  // arg0 = res0
+                   "t"      // arg0 = res0
                    "m",     // call micro-op (xmm put register)
                    RexbRm(rde), kPutReg[log2sz]);
           } else if (HasLinearMapping(m)) {
@@ -883,11 +910,11 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "r1s4="  // sav4 = res1
                    "r0s3="  // sav3 = res0
                    "L"      // load effective address
-                   "r0a0="  // arg0 = virtual address
+                   "t"      // arg0 = virtual address
                    "m"      // call micro-op
                    "s4a2="  // arg2 = sav4
                    "s3a1="  // arg1 = sav3
-                   "r0a0="  // arg0 = res0
+                   "t"      // arg0 = res0
                    "m",     // call micro-op (store vector to shared memory)
                    ResolveHost, kStore[log2sz]);
           } else {
@@ -902,7 +929,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "c"      // call function (turn virtual into pointer)
                    "s4a2="  // arg2 = sav4
                    "s3a1="  // arg1 = sav3
-                   "r0a0="  // arg0 = res0
+                   "t"      // arg0 = res0
                    "m",     // call micro-op (store vector to shared memory)
                    true, 1ul << log2sz, ReserveAddress, kStore[log2sz]);
           }
@@ -938,13 +965,13 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  SibScale(rde), Rexx(rde) << 3 | SibIndex(rde), disp, Index);
         } else {
           Jitter(A,
-                 "a4i"  // arg4 = log2(address index scale)
-                 "a3i"  // arg3 = address index register index
+                 "a4i"  // arg4 = address index register index
+                 "a3i"  // arg3 = log2(address index scale)
                  "a2i"  // arg2 = address base register index
                  "a1i"  // arg1 = displacement
                  "q"    // arg0 = machine
                  "m",   // call micro-op
-                 SibScale(rde), Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde),
+                 Rexx(rde) << 3 | SibIndex(rde), SibScale(rde), RexbBase(rde),
                  disp, BaseIndex);
         }
         if (Sego(rde)) {
