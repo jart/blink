@@ -20,7 +20,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "blink/address.h"
 #include "blink/alu.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"

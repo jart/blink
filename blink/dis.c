@@ -21,7 +21,6 @@
 #include <string.h>
 
 #include "blink/assert.h"
-#include "blink/cp437.h"
 #include "blink/debug.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
@@ -30,7 +29,6 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
-#include "blink/tpenc.h"
 #include "blink/types.h"
 #include "blink/util.h"
 

@@ -23,7 +23,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "blink/address.h"
 #include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/bitscan.h"
@@ -41,12 +40,9 @@
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
-#include "blink/path.h"
 #include "blink/random.h"
 #include "blink/signal.h"
 #include "blink/sse.h"
-#include "blink/ssefloat.h"
-#include "blink/ssemov.h"
 #include "blink/stats.h"
 #include "blink/string.h"
 #include "blink/swap.h"

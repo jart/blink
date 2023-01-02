@@ -31,7 +31,7 @@
 #include "blink/pty.h"
 #include "blink/termios.h"
 #include "blink/thompike.h"
-#include "blink/tpenc.h"
+#include "blink/util.h"
 
 #ifdef IUTF8
 #define CURSOR L'▂'

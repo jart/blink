@@ -18,11 +18,10 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <string.h>
 
-#include "blink/address.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
+#include "blink/machine.h"
 #include "blink/modrm.h"
-#include "blink/ssemov.h"
 
 static u32 pmovmskb(const u8 p[16]) {
   u32 i, m;

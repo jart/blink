@@ -1,6 +1,7 @@
 #ifndef BLINK_DEBUG_H_
 #define BLINK_DEBUG_H_
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/fds.h"
 #include "blink/machine.h"
 #include "blink/types.h"

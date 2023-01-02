@@ -18,7 +18,6 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <string.h>
 
-#include "blink/address.h"
 #include "blink/assert.h"
 #include "blink/bitscan.h"
 #include "blink/endian.h"

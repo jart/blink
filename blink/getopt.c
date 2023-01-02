@@ -98,7 +98,7 @@ static void getopt_print_badch(int argc, char *const argv[], int optopt,
  * @see optind_
  * @see optarg_
  */
-int getopt_(int nargc, char *const nargv[], const char *ostr) {
+int GetOpt(int nargc, char *const nargv[], const char *ostr) {
   int optopt;
   const char *oli; /* option letter list index */
   if (!optind_) optind_ = 1;

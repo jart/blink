@@ -2,6 +2,7 @@
 #define BLINK_STATS_H_
 #include <stdbool.h>
 
+#include "blink/builtin.h"
 #include "blink/tsan.h"
 
 #ifndef NDEBUG

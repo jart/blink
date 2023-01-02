@@ -36,13 +36,11 @@
 #include <wchar.h>
 #include <wctype.h>
 
-#include "blink/address.h"
 #include "blink/assert.h"
 #include "blink/breakpoint.h"
 #include "blink/builtin.h"
 #include "blink/case.h"
 #include "blink/cga.h"
-#include "blink/cp437.h"
 #include "blink/debug.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
@@ -58,7 +56,6 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/panel.h"
-#include "blink/path.h"
 #include "blink/pml4t.h"
 #include "blink/pty.h"
 #include "blink/signal.h"
@@ -69,7 +66,6 @@
 #include "blink/termios.h"
 #include "blink/thompike.h"
 #include "blink/timespec.h"
-#include "blink/tpenc.h"
 #include "blink/tsan.h"
 #include "blink/types.h"
 #include "blink/util.h"
@@ -3398,7 +3394,7 @@ static void GetOpts(int argc, char *argv[]) {
   bool wantjit = false;
   bool wantunsafe = false;
   const char *logpath = 0;
-  while ((opt = getopt_(argc, argv, "hjmvtrzRNsb:Hw:L:")) != -1) {
+  while ((opt = GetOpt(argc, argv, "hjmvtrzRNsb:Hw:L:")) != -1) {
     switch (opt) {
       case 'j':
         wantjit = true;

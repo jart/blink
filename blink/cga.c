@@ -20,8 +20,8 @@
 
 #include "blink/buffer.h"
 #include "blink/cga.h"
-#include "blink/cp437.h"
 #include "blink/macros.h"
+#include "blink/util.h"
 
 /*                                blk blu grn cyn red mag yel wht */
 static const u8 kCgaToAnsi[16] = {30, 34, 32, 36, 31, 35, 33, 37,

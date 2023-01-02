@@ -28,7 +28,6 @@
 #include "blink/macros.h"
 #include "blink/memcpy.h"
 #include "blink/stats.h"
-#include "blink/tpenc.h"
 #include "blink/util.h"
 
 static bool GrowBuffer(struct Buffer *b, int need) {

@@ -124,7 +124,7 @@ _Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   FLAG_nolinear = !CanHaveLinearMemory();
-  while ((opt = getopt_(argc, argv, OPTS)) != -1) {
+  while ((opt = GetOpt(argc, argv, OPTS)) != -1) {
     switch (opt) {
       case 'j':
         FLAG_nojit = true;

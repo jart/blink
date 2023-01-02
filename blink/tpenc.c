@@ -17,7 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/bitscan.h"
-#include "blink/tpenc.h"
+#include "blink/util.h"
 
 static const u16 kTpEnc[32 - 7] = {
     1 | 0300 << 8, 1 | 0300 << 8, 1 | 0300 << 8, 1 | 0300 << 8, 2 | 0340 << 8,

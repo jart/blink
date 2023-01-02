@@ -19,7 +19,6 @@
 #include <errno.h>
 #include <string.h>
 
-#include "blink/address.h"
 #include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/debug.h"
@@ -27,7 +26,6 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
-#include "blink/path.h"
 #include "blink/stats.h"
 
 void (*AddPath_StartOp_Hook)(P);

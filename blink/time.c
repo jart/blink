@@ -19,15 +19,16 @@
 #include <sched.h>
 #include <time.h>
 
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/modrm.h"
 #include "blink/time.h"
 
 void OpPause(P) {
 #if defined(__GNUC__) && defined(__aarch64__)
-  __asm__ volatile("yield");
+  asm volatile("yield");
 #elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
-  __asm__ volatile("pause");
+  asm volatile("pause");
 #else
   sched_yield();
 #endif
@@ -36,11 +37,11 @@ void OpPause(P) {
 void OpRdtsc(P) {
   u64 c;
 #if defined(__GNUC__) && defined(__aarch64__)
-  __asm__ volatile("mrs %0, cntvct_el0" : "=r"(c));
+  asm volatile("mrs %0, cntvct_el0" : "=r"(c));
   c *= 48;  // the fudge factor
 #elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
   u32 ax, dx;
-  __asm__ volatile("rdtsc" : "=a"(ax), "=d"(dx));
+  asm volatile("rdtsc" : "=a"(ax), "=d"(dx));
   c = (u64)dx << 32 | ax;
 #else
   struct timespec ts;

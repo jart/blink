@@ -19,7 +19,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "blink/address.h"
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/machine.h"

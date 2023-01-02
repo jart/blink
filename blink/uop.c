@@ -52,9 +52,6 @@ MICRO_OP void CountOp(long *instructions_jitted_ptr) {
 ////////////////////////////////////////////////////////////////////////////////
 // PROGRAM COUNTER
 
-MICRO_OP static u64 GetIp(struct Machine *m) {
-  return m->ip;
-}
 MICRO_OP void AddIp(struct Machine *m, long oplen) {
   m->oplen = oplen;
   m->ip += oplen;

@@ -5,13 +5,16 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <sys/types.h>
+#include <wchar.h>
 
 #include "blink/types.h"
 
 extern int optind_;
 extern char *optarg_;
-int getopt_(int, char *const[], const char *);
+extern const short kCp437[256];
 
+int GetOpt(int, char *const[], const char *);
+u64 tpenc(wint_t);
 bool mulo(u64, u64, u64 *);
 bool endswith(const char *, const char *);
 bool startswith(const char *, const char *);

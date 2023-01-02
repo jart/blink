@@ -17,9 +17,9 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/buffer.h"
-#include "blink/cp437.h"
 #include "blink/macros.h"
 #include "blink/mda.h"
+#include "blink/util.h"
 
 #define kBlink     1
 #define kVisible   2

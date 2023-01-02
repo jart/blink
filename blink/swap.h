@@ -1,5 +1,6 @@
 #ifndef BLINK_SWAP_H_
 #define BLINK_SWAP_H_
+#include "blink/builtin.h"
 
 #ifdef __GNUC__
 #define SWAP16(x) __builtin_bswap16(x)

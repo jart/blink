@@ -1,5 +1,6 @@
 #ifndef BLINK_BITSCAN_H_
 #define BLINK_BITSCAN_H_
+#include "blink/builtin.h"
 #include "blink/types.h"
 #ifndef __GNUC__
 

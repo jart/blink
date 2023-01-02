@@ -23,7 +23,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "blink/address.h"
 #include "blink/assert.h"
 #include "blink/dis.h"
 #include "blink/endian.h"

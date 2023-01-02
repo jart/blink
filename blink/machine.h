@@ -532,4 +532,73 @@ bool HasHook(struct Machine *, u64);
 nexgen32e_f GetHook(struct Machine *, u64);
 void SetHook(struct Machine *, u64, nexgen32e_f);
 
+u64 MaskAddress(u32, u64);
+i64 GetIp(struct Machine *);
+i64 GetPc(struct Machine *);
+u64 AddressOb(P);
+u64 AddressDi(P);
+i64 AddressSi(P);
+u64 *GetSegment(P, unsigned);
+i64 DataSegment(P, u64);
+i64 AddSegment(P, u64, u64);
+
+void OpLddquVdqMdq(P);
+void OpMaskMovDiXmmRegXmmRm(P);
+void OpMov0f10(P);
+void OpMov0f12(P);
+void OpMov0f13(P);
+void OpMov0f16(P);
+void OpMov0f17(P);
+void OpMov0f28(P);
+void OpMov0f29(P);
+void OpMov0f2b(P);
+void OpMov0f6e(P);
+void OpMov0f6f(P);
+void OpMov0f7e(P);
+void OpMov0f7f(P);
+void OpMov0fD6(P);
+void OpMov0fE7(P);
+void OpMovWpsVps(P);
+void OpMovntdqaVdqMdq(P);
+void OpMovntiMdqpGdqp(P);
+void OpPmovmskbGdqpNqUdq(P);
+
+void OpUnpcklpsd(P);
+void OpUnpckhpsd(P);
+void OpPextrwGdqpUdqIb(P);
+void OpPinsrwVdqEwIb(P);
+void OpShuffle(P);
+void OpShufpsd(P);
+void OpSqrtpsd(P);
+void OpRsqrtps(P);
+void OpRcpps(P);
+void OpComissVsWs(P);
+void OpAddpsd(P);
+void OpMulpsd(P);
+void OpSubpsd(P);
+void OpDivpsd(P);
+void OpMinpsd(P);
+void OpMaxpsd(P);
+void OpCmppsd(P);
+void OpAndpsd(P);
+void OpAndnpsd(P);
+void OpOrpsd(P);
+void OpXorpsd(P);
+void OpHaddpsd(P);
+void OpHsubpsd(P);
+void OpAddsubpsd(P);
+void OpMovmskpsd(P);
+
+extern void (*AddPath_StartOp_Hook)(P);
+
+bool AddPath(P);
+bool CreatePath(P);
+void CompletePath(P);
+void AddPath_EndOp(P);
+void AddPath_StartOp(P);
+long GetPrologueSize(void);
+void FinishPath(struct Machine *);
+void AbandonPath(struct Machine *);
+void AddIp(struct Machine *, long);
+
 #endif /* BLINK_MACHINE_H_ */
