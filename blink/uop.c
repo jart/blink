@@ -456,6 +456,13 @@ MICRO_OP void FastCall(struct Machine *m, u64 disp) {
   m->ip = x;
 }
 
+MICRO_OP void FastCallAbs(u64 x, struct Machine *m) {
+  u64 v;
+  Put64(m->sp, (v = Get64(m->sp) - 8));
+  Write64(ToHost(v), m->ip);
+  m->ip = x;
+}
+
 MICRO_OP void FastLeave(struct Machine *m) {
   u64 v = Get64(m->bp);
   Put64(m->sp, v + 8);
@@ -473,6 +480,9 @@ MICRO_OP void FastRet(struct Machine *m) {
 
 MICRO_OP void FastJmp(struct Machine *m, u64 disp) {
   m->ip += disp;
+}
+MICRO_OP void FastJmpAbs(u64 addr, struct Machine *m) {
+  m->ip = addr;
 }
 
 MICRO_OP static u32 Jb(struct Machine *m) {

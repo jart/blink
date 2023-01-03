@@ -445,7 +445,9 @@ void CountOp(long *);
 void FastPush(struct Machine *, long);
 void FastPop(struct Machine *, long);
 void FastCall(struct Machine *, u64);
+void FastCallAbs(u64, struct Machine *);
 void FastJmp(struct Machine *, u64);
+void FastJmpAbs(u64, struct Machine *);
 void FastLeave(struct Machine *);
 void FastRet(struct Machine *);
 

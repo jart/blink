@@ -52,6 +52,18 @@ static u64 ReadStackWord(u8 *p, u32 osz) {
   return x;
 }
 
+static u64 ReadMemoryWord(u8 *p, u32 osz) {
+  u64 x;
+  if (osz == 8) {
+    x = Load64(p);
+  } else if (osz == 2) {
+    x = Load16(p);
+  } else {
+    x = Load32(p);
+  }
+  return x;
+}
+
 static void PushN(P, u64 x, unsigned mode, unsigned osz) {
   u8 *w;
   u64 v;
@@ -162,14 +174,30 @@ void OpCallJvds(P) {
 
 static u64 LoadAddressFromMemory(P) {
   unsigned osz = kCallOsz[Osz(rde)][Mode(rde)];
-  return ReadStackWord(GetModrmRegisterWordPointerRead(A, osz), osz);
+  return ReadMemoryWord(GetModrmRegisterWordPointerRead(A, osz), osz);
 }
 
 void OpCallEq(P) {
+  if (IsMakingPath(m) && HasLinearMapping(m) && !Osz(rde)) {
+    Jitter(A,
+           "z3B"    // res0 = GetRegOrMem[force64bit](RexbRm)
+           "s0a1="  // arg1 = machine
+           "t"      // arg0 = res0
+           "m",     // call micro-op (FastCallAbs)
+           FastCallAbs);
+  }
   OpCall(A, LoadAddressFromMemory(A));
 }
 
 void OpJmpEq(P) {
+  if (IsMakingPath(m) && HasLinearMapping(m) && !Osz(rde)) {
+    Jitter(A,
+           "z3B"    // res0 = GetRegOrMem[force64bit](RexbRm)
+           "s0a1="  // arg1 = machine
+           "t"      // arg0 = res0
+           "m",     // call micro-op (FastJmpAbs)
+           FastJmpAbs);
+  }
   m->ip = LoadAddressFromMemory(A);
 }
 
