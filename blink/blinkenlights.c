@@ -257,6 +257,15 @@ struct History {
   struct Rendering p[HISTORY];
 };
 
+struct ProfSyms {
+  int i, n;
+  unsigned long toto;
+  struct ProfSym {
+    int sym;  // dis->syms.p[sym]
+    unsigned long hits;
+  } * p;
+};
+
 static const char kRipName[3][4] = {"IP", "EIP", "RIP"};
 
 static const char kRegisterNames[3][16][4] = {
@@ -275,6 +284,7 @@ static bool alarmed;
 static bool natural;
 static bool mousemode;
 static bool showhighsse;
+static bool showprofile;
 static bool readingteletype;
 
 static int tyn;
@@ -309,6 +319,8 @@ static jmp_buf *onbusted;
 static const char *dialog;
 static char *statusmessage;
 static i64 breakpointsstart;
+static unsigned long *ophits;
+static struct ProfSyms profsyms;
 
 static struct Panels pan;
 static struct Keystrokes keystrokes;
@@ -479,6 +491,71 @@ static i64 ReadWord(u8 *p) {
       return Read32(p);
     case 2:
       return Read16(p);
+  }
+}
+
+static void AppendPanel(struct Panel *p, i64 line, const char *s) {
+  if (0 <= line && line < p->bottom - p->top) {
+    AppendStr(&p->lines[line], s);
+  }
+}
+
+static int CompareProfSyms(const void *p, const void *q) {
+  const struct ProfSym *a = (const struct ProfSym *)p;
+  const struct ProfSym *b = (const struct ProfSym *)q;
+  if (a->hits > b->hits) return -1;
+  if (a->hits < b->hits) return +1;
+  return 0;
+}
+
+static void SortProfSyms(void) {
+  qsort(profsyms.p, profsyms.i, sizeof(*profsyms.p), CompareProfSyms);
+}
+
+static int AddProfSym(int sym, unsigned long hits) {
+  if (!hits) return -1;
+  if (profsyms.i == profsyms.n) {
+    profsyms.p = realloc(profsyms.p, ++profsyms.n * sizeof(*profsyms.p));
+  }
+  profsyms.p[profsyms.i].sym = sym;
+  profsyms.p[profsyms.i].hits = hits;
+  return profsyms.i++;
+}
+
+static unsigned long TallyHits(i64 addr, int size) {
+  i64 pc;
+  unsigned long hits;
+  for (hits = 0, pc = addr; pc < addr + size; ++pc) {
+    hits += ophits[pc - m->system->codestart];
+  }
+  return hits;
+}
+
+static void GenerateProfile(void) {
+  int sym;
+  profsyms.i = 0;
+  profsyms.toto = TallyHits(m->system->codestart, m->system->codesize);
+  if (!ophits) return;
+  for (sym = 0; sym < dis->syms.i; ++sym) {
+    if (dis->syms.p[sym].addr >= m->system->codestart &&
+        dis->syms.p[sym].addr + dis->syms.p[sym].size <
+            m->system->codestart + m->system->codesize) {
+      AddProfSym(sym, TallyHits(dis->syms.p[sym].addr, dis->syms.p[sym].size));
+    }
+  }
+  SortProfSyms();
+  profsyms.i = MIN(50, profsyms.i);
+}
+
+static void DrawProfile(struct Panel *p) {
+  int i;
+  char line[256];
+  GenerateProfile();
+  for (i = 0; i < profsyms.i; ++i) {
+    snprintf(line, sizeof(line), "%7.3f%% %s",
+             (double)profsyms.p[i].hits / profsyms.toto * 100,
+             dis->syms.stab + dis->syms.p[profsyms.p[i].sym].name);
+    AppendPanel(p, i - framesstart, line);
   }
 }
 
@@ -841,12 +918,6 @@ static void ExecSetup(void) {
   it.it_value.tv_sec = 0;
   it.it_value.tv_usec = 1. / FPS * 1e6;
   setitimer(ITIMER_REAL, &it, 0);
-}
-
-static void AppendPanel(struct Panel *p, i64 line, const char *s) {
-  if (0 <= line && line < p->bottom - p->top) {
-    AppendStr(&p->lines[line], s);
-  }
 }
 
 static void pcmpeqb(u8 x[16], const u8 y[16]) {
@@ -1957,14 +2028,24 @@ static void Redraw(void) {
   DrawSse(&pan.sse);
   DrawHr(&pan.breakpointshr, "BREAKPOINTS");
   DrawHr(&pan.mapshr, "PML4T");
-  DrawHr(&pan.frameshr, m->bofram[0] ? "PROTECTED FRAMES" : "FRAMES");
+  if (showprofile) {
+    DrawHr(&pan.frameshr, "PROFILE");
+  } else if (m->bofram[0]) {
+    DrawHr(&pan.frameshr, "PROTECTED FRAMES");
+  } else {
+    DrawHr(&pan.frameshr, "FRAMES");
+  }
   DrawHr(&pan.ssehr, "SSE");
   DrawHr(&pan.codehr, "CODE");
   DrawHr(&pan.readhr, "READ");
   DrawHr(&pan.writehr, "WRITE");
   DrawHr(&pan.stackhr, "STACK");
   DrawMaps(&pan.maps);
-  DrawFrames(&pan.frames);
+  if (showprofile) {
+    DrawProfile(&pan.frames);
+  } else {
+    DrawFrames(&pan.frames);
+  }
   DrawBreakpoints(&pan.breakpoints);
   DrawMemory(&pan.code, &codeview, GetPc(m), GetPc(m) + m->xedd->length);
   DrawMemory(&pan.readdata, &readview, readaddr, readaddr + readsize);
@@ -3011,6 +3092,7 @@ static void HandleKeyboard(const char *k) {
     CASE('u', OnUp());
     CASE('d', OnDown());
     CASE('V', ++verbose);
+    CASE('p', showprofile = !showprofile);
     CASE('B', PopBreakpoint(&breakpoints));
     CASE('M', ToggleMouseTracking());
     CASE('\t', OnTab());
@@ -3143,8 +3225,17 @@ static void EnterWatchpoint(long bp) {
   tuimode = true;
 }
 
+static void ProfileOp(struct Machine *m, u64 pc) {
+  if (ophits &&                      //
+      pc >= m->system->codestart &&  //
+      pc < m->system->codestart + m->system->codesize) {
+    ++ophits[pc - m->system->codestart];
+  }
+}
+
 static void StartOp_Tui(P) {
   ++cycle;
+  ProfileOp(m, m->ip - m->oplen);
 }
 
 static void Execute(void) {
@@ -3156,6 +3247,7 @@ static void Execute(void) {
   ExecuteInstruction(m);
   if (c == cycle) {
     ++cycle;
+    ProfileOp(m, GetPc(m) - m->oplen);
   }
 }
 
@@ -3469,10 +3561,7 @@ static int OpenDevTty(void) {
 }
 
 static void AddPath_StartOp_Tui(P) {
-  Jitter(m, rde, 0, 0,
-         "q"
-         "c",
-         StartOp_Tui);
+  Jitter(m, rde, 0, 0, "qc", StartOp_Tui);
 }
 
 int VirtualMachine(int argc, char *argv[]) {
@@ -3481,6 +3570,10 @@ int VirtualMachine(int argc, char *argv[]) {
   do {
     action = 0;
     LoadProgram(m, codepath, argv + optind_ - 1, environ);
+    if (m->system->codesize) {
+      ophits = (unsigned long *)AllocateBig(m->system->codesize *
+                                            sizeof(unsigned long));
+    }
     ScrollMemoryViews();
     AddStdFd(&m->system->fds, 0);
     AddStdFd(&m->system->fds, 1);
@@ -3588,9 +3681,11 @@ int main(int argc, char *argv[]) {
                           1ull << (SIGWINCH_LINUX - 1);  //
   if (optind_ == argc) PrintUsage(48, stderr);
   rc = VirtualMachine(argc, argv);
+  FreeBig(ophits, m->system->codesize * sizeof(unsigned long));
   FreeMachine(m);
   ClearHistory();
   FreePanels();
+  free(profsyms.p);
   if (FLAG_statistics) {
     PrintStats();
   }
