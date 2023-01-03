@@ -49,6 +49,7 @@
 
 #include "blink/assert.h"
 #include "blink/macros.h"
+#include "blink/mop.h"
 #include "blink/util.h"
 
 #ifdef __linux
@@ -266,16 +267,15 @@ static int SysFork(struct Machine *m) {
   int pid, newpid;
   LOCK(&m->system->sig_lock);
   LOCK(&m->system->mmap_lock);
-  LOCK(&m->system->lock_lock);
   LOCK(&m->system->futex_lock);
   LOCK(&m->system->machines_lock);
   pid = fork();
   UNLOCK(&m->system->machines_lock);
   UNLOCK(&m->system->futex_lock);
-  UNLOCK(&m->system->lock_lock);
   UNLOCK(&m->system->mmap_lock);
   UNLOCK(&m->system->sig_lock);
   if (!pid) {
+    InitBus();
     newpid = getpid();
     THR_LOGF("pid=%d tid=%d SysFork -> pid=%d tid=%d",  //
              m->system->pid, m->tid, newpid, newpid);
@@ -307,7 +307,9 @@ static void *OnSpawn(void *arg) {
 
 static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
                     u64 tls, u64 func) {
-  int tid, err;
+  int tid;
+  int err;
+  int ignored;
   int supported;
   int mandatory;
   sigset_t ss, oldss;
@@ -322,8 +324,10 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
               CLONE_CHILD_SETTID_LINUX | CLONE_SYSVSEM_LINUX;
   mandatory = CLONE_THREAD_LINUX | CLONE_VM_LINUX | CLONE_FS_LINUX |
               CLONE_FILES_LINUX | CLONE_SIGHAND_LINUX;
+  ignored = CLONE_DETACHED_LINUX;
+  flags &= ~ignored;
   if (flags & ~supported) {
-    LOGF("unsupported clone() flags: %#x", flags);
+    LOGF("unsupported clone() flags: %#x", flags & ~supported);
     return einval();
   }
   if ((flags & mandatory) != mandatory) {

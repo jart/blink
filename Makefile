@@ -39,7 +39,8 @@ check2:	o/$(MODE)/test/sse		\
 	o/$(MODE)/test/sys		\
 	o/$(MODE)/test/func		\
 	o/$(MODE)/test/asm		\
-	o/$(MODE)/test/asm/emulates
+	o/$(MODE)/test/asm/emulates	\
+	o/$(MODE)/test/func/emulates
 
 emulates:				\
 	o/$(MODE)/test/asm		\

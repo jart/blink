@@ -319,7 +319,6 @@ static void OpBit(P) {
   unsigned bit;
   u64 v, x, y, z;
   u8 w, W[2][2] = {{2, 3}, {1, 3}};
-  if (Lock(rde)) LOCK(&m->system->lock_lock);
   w = W[Osz(rde)][Rexw(rde)];
   if (Opcode(rde) == 0xBA) {
     op = ModrmReg(rde);
@@ -343,9 +342,14 @@ static void OpBit(P) {
       SetWriteAddr(m, v, 1 << w);
     }
   }
+  if (Lock(rde)) LockBus(p);
   y = 1;
   y <<= bit;
-  x = ReadMemory(rde, p);
+  if (Lock(rde)) {
+    x = ReadMemoryUnlocked(rde, p);
+  } else {
+    x = ReadMemory(rde, p);
+  }
   m->flags = SetFlag(m->flags, FLAGS_CF, !!(y & x));
   switch (op) {
     case 4:
@@ -363,7 +367,7 @@ static void OpBit(P) {
       OpUdImpl(m);
   }
   WriteRegisterOrMemory(rde, p, z);
-  if (Lock(rde)) UNLOCK(&m->system->lock_lock);
+  if (Lock(rde)) UnlockBus(p);
 }
 
 static void Trips(P, const nexgen32e_f ops[3]) {
@@ -1223,7 +1227,7 @@ static void OpJcxz(P) {
   }
 }
 
-static u64 AluPopcnt(P, u64 x) {
+static u64 AluPopcnt(u64 x, struct Machine *m) {
   m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
   m->flags = SetFlag(m->flags, FLAGS_CF, false);
   m->flags = SetFlag(m->flags, FLAGS_SF, false);
@@ -1232,74 +1236,91 @@ static u64 AluPopcnt(P, u64 x) {
   return popcount(x);
 }
 
-static u64 AluBsr(P, u64 x) {
-  unsigned n;
-  if (Rexw(rde)) {
-    x &= 0xffffffffffffffff;
-    n = 64;
-  } else if (!Osz(rde)) {
-    x &= 0xffffffff;
-    n = 32;
-  } else {
-    x &= 0xffff;
-    n = 16;
-  }
-  if (Rep(rde) == 3) {
-    if (!x) {
-      m->flags = SetFlag(m->flags, FLAGS_CF, true);
-      m->flags = SetFlag(m->flags, FLAGS_ZF, false);
-      return n;
-    } else {
-      m->flags = SetFlag(m->flags, FLAGS_CF, false);
-      m->flags = SetFlag(m->flags, FLAGS_ZF, x == 1);
-    }
-  } else {
-    m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
-    if (!x) return 0;
-  }
-  return bsr(x);
+static u64 AluLzcnt(u64 x, struct Machine *m, int bits) {
+  u64 r = x ? bsf(x) : bits;
+  m->flags = SetFlag(m->flags, FLAGS_CF, !x);
+  m->flags = SetFlag(m->flags, FLAGS_ZF, !r);
+  return r;
 }
-
-static u64 AluBsf(P, u64 x) {
-  unsigned n;
-  if (Rexw(rde)) {
-    x &= 0xffffffffffffffff;
-    n = 64;
-  } else if (!Osz(rde)) {
-    x &= 0xffffffff;
-    n = 32;
-  } else {
-    x &= 0xffff;
-    n = 16;
-  }
-  if (Rep(rde) == 3) {
-    if (!x) {
-      m->flags = SetFlag(m->flags, FLAGS_CF, true);
-      m->flags = SetFlag(m->flags, FLAGS_ZF, false);
-      return n;
-    } else {
-      m->flags = SetFlag(m->flags, FLAGS_CF, false);
-      m->flags = SetFlag(m->flags, FLAGS_ZF, x & 1);
-    }
-  } else {
-    m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
-    if (!x) return 0;
-  }
+static u64 AluLzcnt64(u64 x, struct Machine *m) {
+  return AluLzcnt(x, m, 64);
+}
+static u64 AluLzcnt32(u64 x, struct Machine *m) {
+  return AluLzcnt(x, m, 32);
+}
+static u64 AluLzcnt16(u64 x, struct Machine *m) {
+  return AluLzcnt(x, m, 16);
+}
+static u64 AluBsf(u64 x, struct Machine *m) {
+  m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
   return bsf(x);
 }
 
-static void Bitscan(P, u64 op(P, u64)) {
+static u64 AluTzcnt(u64 x, struct Machine *m, int bits) {
+  u64 r = x ? bsr(x) : bits;
+  m->flags = SetFlag(m->flags, FLAGS_CF, !x);
+  m->flags = SetFlag(m->flags, FLAGS_ZF, !r);
+  return r;
+}
+static u64 AluTzcnt64(u64 x, struct Machine *m) {
+  return AluTzcnt(x, m, 64);
+}
+static u64 AluTzcnt32(u64 x, struct Machine *m) {
+  return AluTzcnt(x, m, 32);
+}
+static u64 AluTzcnt16(u64 x, struct Machine *m) {
+  return AluTzcnt(x, m, 16);
+}
+static u64 AluBsr(u64 x, struct Machine *m) {
+  m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
+  return bsr(x);
+}
+
+static void Bitscan(P, u64 op(u64, struct Machine *)) {
   WriteRegister(
       rde, RegRexrReg(m, rde),
-      op(A, ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A))));
+      op(ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)), m));
+  if (IsMakingPath(m)) {
+    Jitter(A,
+           "wB"     // res0 = GetRegOrMem[force16+bit](RexbRm)
+           "s0a1="  // arg1 = sav0
+           "t"      // arg0 = res0
+           "c"      // call function (op)
+           "r0wC",  // PutReg[force16+bit](RexrReg, res0)
+           op);
+  }
 }
 
 static void OpBsf(P) {
-  Bitscan(A, AluBsf);
+  u64 (*op)(u64, struct Machine *);
+  if (Rep(rde) == 3) {
+    if (Rexw(rde)) {
+      op = AluLzcnt64;
+    } else if (!Osz(rde)) {
+      op = AluLzcnt32;
+    } else {
+      op = AluLzcnt16;
+    }
+  } else {
+    op = AluBsf;
+  }
+  Bitscan(A, op);
 }
 
 static void OpBsr(P) {
-  Bitscan(A, AluBsr);
+  u64 (*op)(u64, struct Machine *);
+  if (Rep(rde) == 3) {
+    if (Rexw(rde)) {
+      op = AluTzcnt64;
+    } else if (!Osz(rde)) {
+      op = AluTzcnt32;
+    } else {
+      op = AluTzcnt16;
+    }
+  } else {
+    op = AluBsr;
+  }
+  Bitscan(A, op);
 }
 
 static void Op1b8(P) {

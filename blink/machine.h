@@ -60,11 +60,16 @@
 #define kPreciousStart 0x44000000  // 192 mb
 #define kPreciousEnd   0x50000000
 #endif
-#define kRealSize   (16 * 1024 * 1024)
-#define kStackSize  (8 * 1024 * 1024)
-#define kMinBrk     (2 * 1024 * 1024)
-#define kMinBlinkFd 100
-#define kPollingMs  50
+
+#define kRealSize  (16 * 1024 * 1024)  // size of ram for real mode
+#define kStackSize (8 * 1024 * 1024)   // size of stack for user mode
+#define kMinBrk    (2 * 1024 * 1024)   // minimum user mode image address
+
+#define kMinBlinkFd 100       // fds owned by the vm start here
+#define kPollingMs  50        // busy loop for futex(), poll(), etc.
+#define kSemSize    128       // number of bytes used for each semaphore
+#define kBusCount   256       // # load balanced semaphores in virtual bus
+#define kBusRegion  kSemSize  // 16 is sufficient for 8-byte loads/stores
 
 #define PAGE_V    0x0001  // valid
 #define PAGE_RW   0x0002  // writeable
@@ -222,7 +227,6 @@ struct System {
   const char *brand;
   _Atomic(int) *fun;
   unsigned long codesize;
-  pthread_mutex_t lock_lock;
   struct MachineMemstat memstat;
   pthread_mutex_t machines_lock;
   struct Dll *machines GUARDED_BY(machines_lock);

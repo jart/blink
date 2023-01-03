@@ -71,17 +71,21 @@ void OpXaddEvqpGvqp(P) {
       return;
     }
 #endif
-#if LONG_BIT < 64
-    if (Lock(rde)) LOCK(&m->system->lock_lock);
-#endif
-    x = Load64(p);
-    y = Get64(q);
-    z = kAlu[ALU_ADD][ALU_INT64](m, x, y);
-    Put64(q, x);
-    Store64(p, z);
-#if LONG_BIT < 64
-    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
-#endif
+    if (Lock(rde)) {
+      LockBus(p);
+      x = Load64Unlocked(p);
+      y = Get64(q);
+      z = kAlu[ALU_ADD][ALU_INT64](m, x, y);
+      Put64(q, x);
+      Store64Unlocked(p, z);
+      UnlockBus(p);
+    } else {
+      x = Load64(p);
+      y = Get64(q);
+      z = kAlu[ALU_ADD][ALU_INT64](m, x, y);
+      Put64(q, x);
+      Store64(p, z);
+    }
   } else if (!Osz(rde)) {
     u32 x, y, z;
     if (Lock(rde) && !((intptr_t)p & 3)) {
@@ -95,11 +99,13 @@ void OpXaddEvqpGvqp(P) {
                                                       memory_order_release,
                                                       memory_order_acquire));
     } else {
+      if (Lock(rde)) LockBus(p);
       x = Load32(p);
       y = Get32(q);
       z = kAlu[ALU_ADD][ALU_INT32](m, x, y);
       Put32(q, x);
       Store32(p, z);
+      if (Lock(rde)) UnlockBus(p);
     }
     Put32(q + 4, 0);
     if (IsModrmRegister(rde)) {
@@ -118,11 +124,13 @@ void OpXaddEvqpGvqp(P) {
                                                       memory_order_release,
                                                       memory_order_acquire));
     } else {
+      if (Lock(rde)) LockBus(p);
       x = Load16(p);
       y = Get16(q);
       z = kAlu[ALU_ADD][ALU_INT16](m, x, y);
       Put16(q, x);
       Store16(p, z);
+      if (Lock(rde)) UnlockBus(p);
     }
   }
 }

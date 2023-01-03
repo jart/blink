@@ -29,16 +29,18 @@
 void OpXchgGbEb(P) {
   u8 *p, *q, x, y;
   q = ByteRexrReg(m, rde);
+  /* When a memory operand is used with the XCHG instruction, the
+     processor's LOCK signal is automatically asserted. ──Intel V.1
+     §7.3.1.2 */
   if (!IsModrmRegister(rde)) {
-    *q =
-        atomic_exchange_explicit((atomic_uchar *)ComputeReserveAddressWrite1(A),
-                                 *q, memory_order_acq_rel);
+    p = ComputeReserveAddressWrite1(A);
+    *q = atomic_exchange_explicit((atomic_uchar *)p, *q, memory_order_acq_rel);
   } else {
     p = ByteRexbRm(m, rde);
     x = Get8(q);
-    y = Load8(p);
+    y = Get8(p);
     Put8(q, y);
-    Store8(p, x);
+    Put8(p, x);
   }
 }
 
@@ -65,16 +67,12 @@ void OpXchgGvqpEvqp(P) {
       Put64(q, y);
       Put64(p, x);
     } else {
-#if LONG_BIT < 64
-      LOCK(&m->system->lock_lock);
-#endif
+      LockBus(p);
       x = Get64(q);
-      y = Load64(p);
+      y = Load64Unlocked(p);
       Put64(q, y);
-      Store64(p, x);
-#if LONG_BIT < 64
-      UNLOCK(&m->system->lock_lock);
-#endif
+      Store64Unlocked(p, x);
+      UnlockBus(p);
     }
   } else if (!Osz(rde)) {
     if (!IsModrmRegister(rde) && !((intptr_t)p & 3)) {
@@ -87,10 +85,12 @@ void OpXchgGvqpEvqp(P) {
           memory_order_relaxed);
     } else {
       u32 x, y;
+      if (!IsModrmRegister(rde)) LockBus(p);
       x = Read32(q);
       y = Load32(p);
       Write32(q, y);
       Store32(p, x);
+      if (!IsModrmRegister(rde)) UnlockBus(p);
     }
     Write32(q + 4, 0);
     if (IsModrmRegister(rde)) {
@@ -107,10 +107,12 @@ void OpXchgGvqpEvqp(P) {
           memory_order_relaxed);
     } else {
       u16 x, y;
+      if (!IsModrmRegister(rde)) LockBus(p);
       x = Read16(q);
       y = Load16(p);
       Write16(q, y);
       Store16(p, x);
+      if (!IsModrmRegister(rde)) UnlockBus(p);
     }
   }
 }

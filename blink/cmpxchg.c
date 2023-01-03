@@ -47,32 +47,38 @@ void OpCmpxchgEvqpRaxGvqp(P) {
   q = RegRexrReg(m, rde);
   p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
+    u64 x;
 #if LONG_BIT >= 64
     if (Lock(rde) && !((intptr_t)p & 7)) {
-      u64 ax =
-          atomic_load_explicit((_Atomic(u64) *)m->ax, memory_order_relaxed);
+      x = atomic_load_explicit((_Atomic(u64) *)m->ax, memory_order_relaxed);
       atomic_compare_exchange_strong_explicit(
-          (_Atomic(u64) *)p, &ax,
+          (_Atomic(u64) *)p, &x,
           atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed),
           memory_order_acq_rel, memory_order_acquire);
-      Sub64(m, Get64(m->ax), Little64(ax));
-      atomic_store_explicit((_Atomic(u64) *)m->ax, ax, memory_order_relaxed);
+      Sub64(m, Get64(m->ax), Little64(x));
+      atomic_store_explicit((_Atomic(u64) *)m->ax, x, memory_order_relaxed);
       return;
     }
 #endif
-#if LONG_BIT < 64
-    if (Lock(rde)) LOCK(&m->system->lock_lock);
-#endif
-    u64 x = Load64(p);
-    Sub64(m, Get64(m->ax), x);
-    if ((didit = x == Get64(m->ax))) {
-      Store64(p, Get64(q));
+    if (Lock(rde)) {
+      LockBus(p);
+      x = Load64Unlocked(p);
+      Sub64(m, Get64(m->ax), x);
+      if ((didit = x == Get64(m->ax))) {
+        Store64Unlocked(p, Get64(q));
+      } else {
+        Put64(m->ax, x);
+      }
+      UnlockBus(p);
     } else {
-      Put64(m->ax, x);
+      x = Load64(p);
+      Sub64(m, Get64(m->ax), x);
+      if ((didit = x == Get64(m->ax))) {
+        Store64(p, Get64(q));
+      } else {
+        Put64(m->ax, x);
+      }
     }
-#if LONG_BIT < 64
-    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
-#endif
   } else if (!Osz(rde)) {
     if (Lock(rde) && !((intptr_t)p & 3)) {
       u32 ax =
@@ -84,6 +90,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       Sub32(m, Get32(m->ax), Little32(ax));
       if (!didit) Put64(m->ax, Little32(ax));
     } else {
+      if (Lock(rde)) LockBus(p);
       u32 x = Load32(p);
       Sub32(m, Get32(m->ax), x);
       if ((didit = x == Get32(m->ax))) {
@@ -91,6 +98,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       } else {
         Put64(m->ax, x);
       }
+      if (Lock(rde)) UnlockBus(p);
     }
     if (IsModrmRegister(rde)) {
       Put32(p + 4, 0);
@@ -106,6 +114,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       Sub16(m, Get16(m->ax), Little16(ax));
       atomic_store_explicit((_Atomic(u16) *)m->ax, ax, memory_order_relaxed);
     } else {
+      if (Lock(rde)) LockBus(p);
       u16 x = Load16(p);
       Sub16(m, Get16(m->ax), x);
       if ((didit = x == Get16(m->ax))) {
@@ -113,6 +122,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       } else {
         Put16(m->ax, x);
       }
+      if (Lock(rde)) UnlockBus(p);
     }
   }
 }

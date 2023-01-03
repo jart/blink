@@ -20,84 +20,163 @@
 #include <stdatomic.h>
 
 #include "blink/endian.h"
+#include "blink/machine.h"
+#include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/swap.h"
 #include "blink/tsan.h"
 
-#if defined(__x86_64__) || defined(__i386__)
-#define ORDER memory_order_relaxed
-#else
-#define ORDER memory_order_seq_cst
-#endif
+/* When software uses locks or semaphores to synchronize processes,
+   threads, or other code sections; Intel recommends that only one lock
+   or semaphore be present within a cache line (or 128 byte sector, if
+   128-byte sector is supported). In processors based on Intel NetBurst
+   microarchitecture (which support 128-byte sector consisting of two
+   cache lines), following this recommendation means that each lock or
+   semaphore should be contained in a 128-byte block of memory that
+   begins on a 128-byte boundary. The practice minimizes the bus traffic
+   required to service locks. ──Intel V.3 §8.10.6.7 */
+_Alignas(kSemSize) static atomic_int g_bus[kBusCount][kSemSize / sizeof(int)];
+
+void InitBus(void) {
+  int i;
+  for (i = 0; i < kBusCount; ++i) {
+    atomic_store_explicit(g_bus[i], 0, memory_order_relaxed);
+  }
+}
+
+void LockBus(const u8 *locality) {
+  /* A locked instruction is guaranteed to lock only the area of memory
+     defined by the destination operand, but may be interpreted by the
+     system as a lock for a larger memory area. ──Intel V.3 §8.1.2.2 */
+  _Static_assert(IS2POW(kSemSize), "semaphore size must be two-power");
+  _Static_assert(IS2POW(kBusCount), "virtual bus count must be two-power");
+  _Static_assert(IS2POW(kBusRegion), "virtual bus region must be two-power");
+  _Static_assert(kBusRegion >= 16, "virtual bus region must be at least 16");
+  SpinLock(g_bus[(uintptr_t)locality / kBusRegion % kBusCount]);
+}
+
+void UnlockBus(const u8 *locality) {
+  SpinUnlock(g_bus[(uintptr_t)locality / kBusRegion % kBusCount]);
+}
 
 i64 Load8(const u8 p[1]) {
-  i64 res;
-  res = atomic_load_explicit((_Atomic(u8) *)p, ORDER);
-  return res;
+  i64 z;
+  z = atomic_load_explicit((_Atomic(u8) *)p, memory_order_seq_cst);
+  return z;
 }
 
 i64 Load16(const u8 p[2]) {
-  i64 res;
-  if (ORDER != memory_order_relaxed && !((intptr_t)p & 1)) {
-    res = Little16(atomic_load_explicit((_Atomic(u16) *)p, ORDER));
+  i64 z;
+#if (defined(__x86_64__) || defined(__i386__)) && \
+    !defined(__SANITIZE_UNDEFINED__)
+  z = atomic_load_explicit((_Atomic(u16) *)p, memory_order_relaxed);
+#else
+  if (!((intptr_t)p & 1)) {
+    z = Little16(atomic_load_explicit((_Atomic(u16) *)p, memory_order_seq_cst));
   } else {
-    res = Read16(p);
+    z = Read16(p);
   }
-  return res;
+#endif
+  return z;
 }
 
 i64 Load32(const u8 p[4]) {
-  i64 res;
-  if (ORDER != memory_order_relaxed && !((intptr_t)p & 3)) {
-    res = Little32(atomic_load_explicit((_Atomic(u32) *)p, ORDER));
+  i64 z;
+#if (defined(__x86_64__) || defined(__i386__)) && \
+    !defined(__SANITIZE_UNDEFINED__)
+  z = atomic_load_explicit((_Atomic(u32) *)p, memory_order_relaxed);
+#else
+  if (!((intptr_t)p & 3)) {
+    z = Little32(atomic_load_explicit((_Atomic(u32) *)p, memory_order_seq_cst));
   } else {
-    res = Read32(p);
+    z = Read32(p);
   }
-  return res;
+#endif
+  return z;
 }
 
 i64 Load64(const u8 p[8]) {
-  i64 res;
+  i64 z;
 #if LONG_BIT >= 64
-  if (ORDER != memory_order_relaxed && !((intptr_t)p & 7)) {
-    res = Little64(atomic_load_explicit((_Atomic(u64) *)p, ORDER));
-  } else {
-    res = Read64(p);
-  }
+#if defined(__x86_64__) && !defined(__SANITIZE_UNDEFINED__)
+  z = atomic_load_explicit((_Atomic(u64) *)p, memory_order_relaxed);
 #else
-  res = Read64(p);
+  if (!((intptr_t)p & 7)) {
+    z = Little64(atomic_load_explicit((_Atomic(u64) *)p, memory_order_seq_cst));
+  } else {
+    z = Read64(p);
+  }
 #endif
-  return res;
+#else
+  LockBus(p);
+  z = Read64(p);
+  UnlockBus(p);
+#endif
+  return z;
+}
+
+i64 Load64Unlocked(const u8 p[8]) {
+  i64 z;
+#if LONG_BIT >= 64
+  z = Load64(p);
+#else
+  z = Read64(p);
+#endif
+  return z;
 }
 
 void Store8(u8 p[1], u64 x) {
-  atomic_store_explicit((_Atomic(u8) *)p, x, ORDER);
+  atomic_store_explicit((_Atomic(u8) *)p, x, memory_order_seq_cst);
 }
 
 void Store16(u8 p[2], u64 x) {
-  if (ORDER != memory_order_relaxed && !((intptr_t)p & 1)) {
-    atomic_store_explicit((_Atomic(u16) *)p, Little16(x), ORDER);
+#if (defined(__x86_64__) || defined(__i386__)) && \
+    !defined(__SANITIZE_UNDEFINED__)
+  atomic_store_explicit((_Atomic(u16) *)p, x, memory_order_relaxed);
+#else
+  if (!((intptr_t)p & 1)) {
+    atomic_store_explicit((_Atomic(u16) *)p, Little16(x), memory_order_seq_cst);
   } else {
     Write16(p, x);
   }
+#endif
 }
 
 void Store32(u8 p[4], u64 x) {
-  if (ORDER != memory_order_relaxed && !((intptr_t)p & 3)) {
-    atomic_store_explicit((_Atomic(u32) *)p, Little32(x), ORDER);
+#if (defined(__x86_64__) || defined(__i386__)) && \
+    !defined(__SANITIZE_UNDEFINED__)
+  atomic_store_explicit((_Atomic(u32) *)p, x, memory_order_relaxed);
+#else
+  if (!((intptr_t)p & 3)) {
+    atomic_store_explicit((_Atomic(u32) *)p, Little32(x), memory_order_seq_cst);
   } else {
     Write32(p, x);
   }
+#endif
 }
 
 void Store64(u8 p[8], u64 x) {
 #if LONG_BIT >= 64
-  if (ORDER != memory_order_relaxed && !((intptr_t)p & 7)) {
-    atomic_store_explicit((_Atomic(u64) *)p, Little64(x), ORDER);
+#if defined(__x86_64__) && !defined(__SANITIZE_UNDEFINED__)
+  atomic_store_explicit((_Atomic(u64) *)p, x, memory_order_relaxed);
+#else
+  if (!((intptr_t)p & 7)) {
+    atomic_store_explicit((_Atomic(u64) *)p, Little64(x), memory_order_seq_cst);
   } else {
     Write64(p, x);
   }
+#endif
+#else
+  LockBus(p);
+  Write64(p, x);
+  UnlockBus(p);
+#endif
+}
+
+void Store64Unlocked(u8 p[8], u64 x) {
+#if LONG_BIT >= 64
+  Store64(p, x);
 #else
   Write64(p, x);
 #endif
@@ -136,6 +215,16 @@ void WriteRegister(u64 rde, u8 p[8], u64 x) {
 u64 ReadMemory(u64 rde, u8 p[8]) {
   if (Rexw(rde)) {
     return Load64(p);
+  } else if (!Osz(rde)) {
+    return Load32(p);
+  } else {
+    return Load16(p);
+  }
+}
+
+u64 ReadMemoryUnlocked(u64 rde, u8 p[8]) {
+  if (Rexw(rde)) {
+    return Load64Unlocked(p);
   } else if (!Osz(rde)) {
     return Load32(p);
   } else {

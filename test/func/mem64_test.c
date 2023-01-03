@@ -16,14 +16,66 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/bitscan.h"
+#include <pthread.h>
+#include <stdatomic.h>
 
-int(popcount)(u64 x) {
-  x = x - ((x >> 1) & 0x5555555555555555);
-  x = ((x >> 2) & 0x3333333333333333) + (x & 0x3333333333333333);
-  x = (x + (x >> 4)) & 0x0f0f0f0f0f0f0f0f;
-  x = (x + (x >> 32)) & 0xffffffff;
-  x = x + (x >> 16);
-  x = (x + (x >> 8)) & 0x7f;
-  return x;
+#include "test/test.h"
+
+#define WORKERS    4
+#define ITERATIONS 100000
+
+void SetUp(void) {
+}
+
+void TearDown(void) {
+}
+
+static atomic_ulong word;
+
+////////////////////////////////////////////////////////////////////////////////
+
+static void *AddWorker(void *arg) {
+  int i;
+  unsigned long x;
+  for (i = 0; i < ITERATIONS; ++i) {
+    x = atomic_load_explicit(&word, memory_order_relaxed);
+    ASSERT_EQ(x & 0xffffffff, x >> 32);
+    x += 1ul | 1ul << 32;
+    atomic_store_explicit(&word, x, memory_order_relaxed);
+  }
+  return 0;
+}
+
+TEST(mem64, add) {
+  int i;
+  pthread_t t[WORKERS];
+  for (i = 0; i < WORKERS; ++i) {
+    ASSERT_EQ(0, pthread_create(t + i, 0, AddWorker, 0));
+  }
+  for (i = 0; i < WORKERS; ++i) {
+    ASSERT_EQ(0, pthread_join(t[i], 0));
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+static void *XaddWorker(void *arg) {
+  int i;
+  unsigned long x;
+  for (i = 0; i < ITERATIONS; ++i) {
+    x = atomic_fetch_add_explicit(&word, 1ul | 1ul << 32, memory_order_relaxed);
+    ASSERT_EQ(x & 0xffffffff, x >> 32);
+  }
+  return 0;
+}
+
+TEST(mem64, xadd) {
+  int i;
+  pthread_t t[WORKERS];
+  for (i = 0; i < WORKERS; ++i) {
+    ASSERT_EQ(0, pthread_create(t + i, 0, XaddWorker, 0));
+  }
+  for (i = 0; i < WORKERS; ++i) {
+    ASSERT_EQ(0, pthread_join(t[i], 0));
+  }
 }

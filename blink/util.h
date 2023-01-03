@@ -19,7 +19,6 @@ bool mulo(u64, u64, u64 *);
 bool endswith(const char *, const char *);
 bool startswith(const char *, const char *);
 const char *doublenul(const char *, unsigned);
-int popcount(u64);
 ssize_t readansi(int, char *, size_t);
 int vasprintf_(char **, const char *, va_list);
 char *FormatInt64(char *, int64_t);

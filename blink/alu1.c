@@ -81,13 +81,13 @@ static void AluEvqp(P, const aluop_f ops[4]) {
       return;
     }
 #endif
-#if LONG_BIT < 64
-    if (Lock(rde)) LOCK(&m->system->lock_lock);
-#endif
-    Store64(p, f(m, Load64(p), 0));
-#if LONG_BIT < 64
-    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
-#endif
+    if (!Lock(rde)) {
+      Store64(p, f(m, Load64(p), 0));
+    } else {
+      LockBus(p);
+      Store64Unlocked(p, f(m, Load64Unlocked(p), 0));
+      UnlockBus(p);
+    }
   } else if (!Osz(rde)) {
     u32 x, z;
     p = GetModrmRegisterWordPointerWrite4(A);
@@ -99,7 +99,9 @@ static void AluEvqp(P, const aluop_f ops[4]) {
                                                       memory_order_release,
                                                       memory_order_relaxed));
     } else {
+      if (Lock(rde)) LockBus(p);
       Store32(p, f(m, Load32(p), 0));
+      if (Lock(rde)) UnlockBus(p);
     }
     if (IsModrmRegister(rde)) {
       Put32(p + 4, 0);
@@ -115,7 +117,9 @@ static void AluEvqp(P, const aluop_f ops[4]) {
                                                       memory_order_release,
                                                       memory_order_relaxed));
     } else {
+      if (Lock(rde)) LockBus(p);
       Store16(p, f(m, Load16(p), 0));
+      if (Lock(rde)) UnlockBus(p);
     }
   }
   if (IsMakingPath(m) && !Lock(rde)) {

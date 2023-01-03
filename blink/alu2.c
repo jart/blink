@@ -75,16 +75,14 @@ void OpAluw(P) {
     }
 #endif
     u64 x, y, z;
-#if LONG_BIT < 64
-    if (Lock(rde)) LOCK(&m->system->lock_lock);
-#endif
+    /* The integrity of a bus lock is not affected by the alignment of
+       the memory field. ──Intel V.3 §8.1.2.2 */
+    if (Lock(rde)) LockBus(p);
     x = Load64(p);
     y = Get64(q);
     z = f(m, x, y);
     Store64(p, z);
-#if LONG_BIT < 64
-    if (Lock(rde)) UNLOCK(&m->system->lock_lock);
-#endif
+    if (Lock(rde)) UnlockBus(p);
   } else if (!Osz(rde)) {
     u32 x, y, z;
     p = GetModrmRegisterWordPointerWrite4(A);
@@ -101,10 +99,12 @@ void OpAluw(P) {
                                                       memory_order_release,
                                                       memory_order_relaxed));
     } else {
+      if (Lock(rde)) LockBus(p);
       x = Load32(p);
       y = Get32(q);
       z = f(m, x, y);
       Store32(p, z);
+      if (Lock(rde)) UnlockBus(p);
     }
   } else {
     u16 x, y, z;
@@ -119,10 +119,12 @@ void OpAluw(P) {
                                                       memory_order_release,
                                                       memory_order_relaxed));
     } else {
+      if (Lock(rde)) LockBus(p);
       x = Load16(p);
       y = Get16(q);
       z = f(m, x, y);
       Store16(p, z);
+      if (Lock(rde)) UnlockBus(p);
     }
   }
   if (IsMakingPath(m) && !Lock(rde)) {
