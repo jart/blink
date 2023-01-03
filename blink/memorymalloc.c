@@ -605,7 +605,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
         if (HasLinearMapping(s) && (pt & PAGE_HOST) &&
             (mpstart = ROUNDDOWN(virt, pagesize)) != last) {
           last = mpstart;
-          if (mprotect(ToHost(mpstart), pagesize, prot)) {
+          if (mprotect(ToHost(mpstart), pagesize, prot & ~PROT_EXEC)) {
             LOGF("mprotect(%#" PRIx64 " [%p], %#" PRIx64 ", %d) failed",
                  mpstart, ToHost(mpstart), pagesize, prot);
             abort();

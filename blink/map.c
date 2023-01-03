@@ -57,22 +57,3 @@ void *Mmap(void *addr,     //
 #endif
   return res;
 }
-
-int Mprotect(void *addr,     //
-             size_t length,  //
-             int prot,       //
-             const char *owner) {
-  int res = mprotect(addr, length, prot);
-#if LOG_MEM
-  char szbuf[16];
-  FormatSize(szbuf, length, 1024);
-  if (res != -1) {
-    MEM_LOGF("%s protected %s map [%p,%p)", owner, szbuf, addr,
-             (u8 *)addr + length);
-  } else {
-    MEM_LOGF("%s failed to protect %s map [%p,%p): %s", owner, szbuf,
-             (u8 *)addr, (u8 *)addr + length, strerror(errno));
-  }
-#endif
-  return res;
-}
