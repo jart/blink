@@ -558,13 +558,13 @@ static void AlubRo(P, aluop_f op) {
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
     Jitter(A,
-           "B"
-           "r0s1="
-           "A"
-           "r0a2="
-           "s1a1="
-           "q"
-           "c",
+           "B"      // res0 = GetRegOrMem(RexbRm)
+           "r0s1="  // sav1 = res0
+           "A"      // res0 = GetReg(RexrReg)
+           "r0a2="  // arg2 = res0
+           "s1a1="  // arg1 = sav1
+           "q"      // arg0 = sav0 (machine)
+           "c",     // call function
            op);
   }
 }
@@ -584,15 +584,14 @@ static void OpAlubFlip(P) {
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
     Jitter(A,
-           "A"
-           "r0s1="
-           "B"
-           "r0a2="
-           "s1a1="
-           "q"
-           "c"
-           "r0"
-           "C",
+           "A"      // res0 = GetReg(RexrReg)
+           "r0s1="  // sav1 = res0
+           "B"      // res0 = GetRegOrMem(RexbRm)
+           "r0a2="  // arg2 = res0
+           "s1a1="  // arg1 = sav1
+           "q"      // arg0 = sav0 (machine)
+           "c"      // call function
+           "r0C",   // PutReg(RexrReg, res0)
            op);
   }
 }
@@ -603,35 +602,14 @@ static void OpAlubFlipCmp(P) {
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
     Jitter(A,
-           "A"
-           "r0s1="
-           "B"
-           "r0a2="
-           "s1a1="
-           "q"
-           "c",
+           "A"      // res0 = GetReg(RexrReg)
+           "r0s1="  // sav1 = res0
+           "B"      // res0 = GetRegOrMem(RexbRm)
+           "r0a2="  // arg2 = res0
+           "s1a1="  // arg1 = sav1
+           "q"      // arg0 = sav0 (machine)
+           "c",     // call function
            Sub8);
-  }
-}
-
-static void Alubi(P, aluop_f op) {
-  u8 *a = GetModrmRegisterBytePointerWrite1(A);
-  Store8(a, op(m, Load8(a), uimm0));
-}
-
-static void AlubiRo(P, aluop_f op) {
-  op(m, Load8(GetModrmRegisterBytePointerRead1(A)), uimm0);
-}
-
-static void OpAlubiTest(P) {
-  AlubiRo(A, And8);
-}
-
-static void OpAlubiReg(P) {
-  if (ModrmReg(rde) == ALU_CMP) {
-    AlubiRo(A, kAlu[ModrmReg(rde)][0]);
-  } else {
-    Alubi(A, kAlu[ModrmReg(rde)][0]);
   }
 }
 
@@ -667,24 +645,24 @@ static void AluwRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
       case CF | ZF:
         STATISTIC(++alu_simplified);
         Jitter(A,
-               "B"
-               "r0s1="
-               "A"
-               "r0a2="
-               "s1a1="
-               "q"
-               "m",
+               "B"      // res0 = GetRegOrMem(RexbRm)
+               "r0s1="  // sav1 = res0
+               "A"      // res0 = GetReg(RexrReg)
+               "r0a2="  // arg2 = res0
+               "s1a1="  // arg1 = sav1
+               "q"      // arg0 = sav0 (machine)
+               "m",     // call micro-op
                fops[RegLog2(rde)]);
         break;
       default:
         Jitter(A,
-               "B"
-               "r0s1="
-               "A"
-               "r0a2="
-               "s1a1="
-               "q"
-               "c",
+               "B"      // res0 = GetRegOrMem(RexbRm)
+               "r0s1="  // sav1 = res0
+               "A"      // res0 = GetReg(RexrReg)
+               "r0a2="  // arg2 = res0
+               "s1a1="  // arg1 = sav1
+               "q"      // arg0 = sav0 (machine)
+               "c",     // call function
                op);
         break;
     }
@@ -706,19 +684,18 @@ static void OpAluwFlip(P) {
                    ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A))));
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
-    Jitter(A, "B"
-              "r0s1="
-              "A");
+    Jitter(A, "B"      // res0 = GetRegOrMem(RexbRm)
+              "r0s1="  // sav1 = res0
+              "A");    // res0 = GetReg(RexrReg)
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
         STATISTIC(++alu_unflagged);
-        if (GetFlagDeps(rde)) Jitter(A, "q");
+        if (GetFlagDeps(rde)) Jitter(A, "q");  // arg0 = sav0 (machine)
         Jitter(A,
-               "r0a1="
-               "s1a2="
-               "m"
-               "r0"
-               "C",
+               "r0a1="  // arg1 = res0
+               "s1a2="  // arg2 = sav1
+               "m"      // call micro-op
+               "r0C",   // PutReg(RexrReg, res0)
                kJustAlu[(Opcode(rde) & 070) >> 3]);
         break;
       case CF:
@@ -726,22 +703,20 @@ static void OpAluwFlip(P) {
       case CF | ZF:
         STATISTIC(++alu_simplified);
         Jitter(A,
-               "r0a1="
-               "s1a2="
-               "q"
-               "m"
-               "r0"
-               "C",
+               "r0a1="  // arg1 = res0
+               "s1a2="  // arg2 = sav1
+               "q"      // arg0 = sav0 (machine)
+               "m"      // call micro-op
+               "r0C",   // PutReg(RexrReg, res0)
                kAluFast[(Opcode(rde) & 070) >> 3][RegLog2(rde)]);
         break;
       default:
         Jitter(A,
-               "r0a1="
-               "s1a2="
-               "q"
-               "c"
-               "r0"
-               "C",
+               "r0a1="  // arg1 = res0
+               "s1a2="  // arg2 = sav1
+               "q"      // arg0 = sav0 (machine)
+               "c"      // call function
+               "r0C",   // PutReg(RexrReg, res0)
                op);
         break;
     }
@@ -761,24 +736,24 @@ static void AluwFlipRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
       case CF | ZF:
         STATISTIC(++alu_simplified);
         Jitter(A,
-               "B"
-               "r0s1="
-               "A"
-               "r0a1="
-               "s1a2="
-               "q"
-               "m",
+               "B"      // res0 = GetRegOrMem(RexbRm)
+               "r0s1="  // sav1 = res0
+               "A"      // res0 = GetReg(RexrReg)
+               "r0a1="  // arg1 = res0
+               "s1a2="  // arg2 = sav1
+               "q"      // arg0 = sav0 (machine)
+               "m",     // call micro-op
                fops[RegLog2(rde)]);
         break;
       default:
         Jitter(A,
-               "B"
-               "r0s1="
-               "A"
-               "r0a1="
-               "s1a2="
-               "q"
-               "c",
+               "B"      // res0 = GetRegOrMem(RexbRm)
+               "r0s1="  // sav1 = res0
+               "A"      // res0 = GetReg(RexrReg)
+               "r0a1="  // arg1 = res0
+               "s1a2="  // arg2 = sav1
+               "q"      // arg0 = sav0 (machine)
+               "c",     // call function
                op);
         break;
     }
@@ -787,87 +762,6 @@ static void AluwFlipRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
 
 static void OpAluwFlipCmp(P) {
   AluwFlipRo(A, kAlu[ALU_SUB], kAluFast[ALU_SUB]);
-}
-
-static void Aluwi(P) {
-  aluop_f op = kAlu[ModrmReg(rde)][RegLog2(rde)];
-  u8 *a = GetModrmRegisterWordPointerWriteOszRexw(A);
-  WriteRegisterOrMemory(rde, a, op(m, ReadMemory(rde, a), uimm0));
-  if (IsMakingPath(m)) {
-    STATISTIC(++alu_ops);
-    Jitter(A,
-           "B"
-           "r0a1="
-           "a2i",
-           uimm0);
-    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
-      case 0:
-        STATISTIC(++alu_unflagged);
-        if (GetFlagDeps(rde)) Jitter(A, "q");
-        Jitter(A,
-               "m"
-               "r0D",
-               kJustAlu[ModrmReg(rde)]);
-        break;
-      case CF:
-      case ZF:
-      case CF | ZF:
-        STATISTIC(++alu_simplified);
-        Jitter(A,
-               "q"
-               "m"
-               "r0D",
-               kAluFast[ModrmReg(rde)][RegLog2(rde)]);
-        break;
-      default:
-        Jitter(A,
-               "q"
-               "c"
-               "r0D",
-               op);
-        break;
-    }
-  }
-}
-
-static void AluwiRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
-  aluop_f op = ops[RegLog2(rde)];
-  op(m, ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)), uimm0);
-  if (IsMakingPath(m)) {
-    STATISTIC(++alu_ops);
-    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
-      case 0:
-      case CF:
-      case ZF:
-      case CF | ZF:
-        STATISTIC(++alu_simplified);
-        Jitter(A,
-               "B"
-               "a2i"
-               "r0a1="
-               "q"
-               "m",
-               uimm0, fops[RegLog2(rde)]);
-        break;
-      default:
-        Jitter(A,
-               "B"
-               "a2i"
-               "r0a1="
-               "q"
-               "c",
-               uimm0, op);
-        break;
-    }
-  }
-}
-
-static void OpAluwiReg(P) {
-  if (ModrmReg(rde) == ALU_CMP) {
-    AluwiRo(A, kAlu[ModrmReg(rde)], kAluFast[ModrmReg(rde)]);
-  } else {
-    Aluwi(A);
-  }
 }
 
 static void OpAluAlIb(P) {
@@ -889,7 +783,7 @@ static void OpAluRaxIvds(P) {
         STATISTIC(++alu_simplified);
         Jitter(A,
                "G"      // res0 = %ax
-               "r0a1="  //
+               "r0a1="  // arg1 = res0
                "a2i"    //
                "q"      // arg0 = machine
                "m"      // call op
@@ -899,7 +793,7 @@ static void OpAluRaxIvds(P) {
       default:
         Jitter(A,
                "G"      // res0 = %ax
-               "r0a1="  //
+               "r0a1="  // arg1 = res0
                "a2i"    //
                "q"      // arg0 = machine
                "c"      // call op
@@ -938,18 +832,18 @@ static void OpCmpRaxIvds(P) {
         Jitter(A,
                "G"
                "a2i"
-               "r0a1="
-               "q"
-               "m",
+               "r0a1="  // arg1 = res0
+               "q"      // arg0 = sav0 (machine)
+               "m",     // call micro-op
                uimm0, kAluFast[ALU_SUB][RegLog2(rde)]);
         break;
       default:
         Jitter(A,
                "G"
-               "r0a1="
+               "r0a1="  // arg1 = res0
                "a2i"
-               "q"
-               "c",
+               "q"   // arg0 = sav0 (machine)
+               "c",  // call function
                uimm0, op);
         break;
     }
@@ -970,13 +864,13 @@ static void OpBsuwiCl(P) {
   WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), m->cl));
   if (IsMakingPath(m)) {
     Jitter(A,
-           "B"
-           "r0s1="
+           "B"      // res0 = GetRegOrMem(RexbRm)
+           "r0s1="  // sav1 = res0
            "%cl"
-           "r0a2="
-           "s1a1="
-           "q"
-           "c"
+           "r0a2="  // arg2 = res0
+           "s1a1="  // arg1 = sav1
+           "q"      // arg0 = sav0 (machine)
+           "c"      // call function
            "r0D",
            op);
   }
@@ -987,9 +881,9 @@ static void BsuwiConstant(P, u64 y) {
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), y));
   if (IsMakingPath(m)) {
-    Jitter(A, "B"
-              "r0a1="
-              "q");
+    Jitter(A, "B"      // res0 = GetRegOrMem(RexbRm)
+              "r0a1="  // arg1 = res0
+              "q");    // arg0 = sav0 (machine)
     switch (ModrmReg(rde)) {
       case BSU_ROL:
       case BSU_ROR:
@@ -1003,7 +897,7 @@ static void BsuwiConstant(P, u64 y) {
           STATISTIC(++alu_unflagged);
           Jitter(A,
                  "a2i"
-                 "m"
+                 "m"  // call micro-op
                  "r0D",
                  y, kJustBsu[ModrmReg(rde)]);
           return;
@@ -1014,7 +908,7 @@ static void BsuwiConstant(P, u64 y) {
     }
     Jitter(A,
            "a2i"
-           "c"
+           "c"  // call function
            "r0D",
            y, op);
   }
@@ -1037,24 +931,24 @@ static aluop_f Bsubi(P, u64 y) {
 
 static void OpBsubiCl(P) {
   Jitter(A,
-         "B"
-         "r0s1="
+         "B"      // res0 = GetRegOrMem(RexbRm)
+         "r0s1="  // sav1 = res0
          "%cl"
-         "r0a2="
-         "s1a1="
-         "q"
-         "c"
+         "r0a2="  // arg2 = res0
+         "s1a1="  // arg1 = sav1
+         "q"      // arg0 = sav0 (machine)
+         "c"      // call function
          "r0D",
          Bsubi(A, m->cl));
 }
 
 static void BsubiConstant(P, u64 y) {
   Jitter(A,
-         "B"
-         "r0a1="
-         "q"
+         "B"      // res0 = GetRegOrMem(RexbRm)
+         "r0a1="  // arg1 = res0
+         "q"      // arg0 = sav0 (machine)
          "a2i"
-         "c"
+         "c"  // call function
          "r0D",
          y, Bsubi(A, y));
 }
@@ -1087,8 +981,8 @@ void Terminate(P, void uop(struct Machine *, u64)) {
   if (IsMakingPath(m)) {
     Jitter(A,
            "a1i"
-           "m"
-           "q",
+           "m"   // call micro-op
+           "q",  // arg0 = sav0 (machine)
            disp, uop);
     AlignJit(m->path.jb, 4);
     Connect(A, m->ip);
@@ -1375,8 +1269,8 @@ static relegated void OpLoop1(P) {
 }
 
 static const nexgen32e_f kOp0f6[] = {
-    OpAlubiTest,
-    OpAlubiTest,
+    OpTest,
+    OpTest,
     OpNotEb,
     OpNegEb,
     OpMulAxAlEbUnsigned,
@@ -1389,13 +1283,9 @@ static void Op0f6(P) {
   kOp0f6[ModrmReg(rde)](A);
 }
 
-static void OpTestEvqpIvds(P) {
-  AluwiRo(A, kAlu[ALU_AND], kAluFast[ALU_AND]);
-}
-
 static const nexgen32e_f kOp0f7[] = {
-    OpTestEvqpIvds,
-    OpTestEvqpIvds,
+    OpTest,
+    OpTest,
     OpNotEvqp,
     OpNegEvqp,
     OpMulRdxRaxEvqpUnsigned,
@@ -1866,10 +1756,10 @@ static const nexgen32e_f kNexgen32e[] = {
     /*07D*/ OpJcc,                   // #80   (0.007801%)
     /*07E*/ OpJcc,                   // #70   (0.012536%)
     /*07F*/ OpJcc,                   // #76   (0.010144%)
-    /*080*/ OpAlubiReg,              // #53   (0.033021%)
-    /*081*/ OpAluwiReg,              // #60   (0.018910%)
-    /*082*/ OpAlubiReg,              //
-    /*083*/ OpAluwiReg,              // #4    (6.518845%)
+    /*080*/ OpAlui,                  // #53   (0.033021%)
+    /*081*/ OpAlui,                  // #60   (0.018910%)
+    /*082*/ OpAlui,                  //
+    /*083*/ OpAlui,                  // #4    (6.518845%)
     /*084*/ OpAlubTest,              // #54   (0.030642%)
     /*085*/ OpAluwTest,              // #18   (0.628547%)
     /*086*/ OpXchgGbEb,              // #219  (0.000011%)

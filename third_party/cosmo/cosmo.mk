@@ -263,7 +263,6 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/s390x/third_party/cosmo/2/kprintf_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/2/snprintf_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/2/once_test.com.emulates			\
-		o/$(MODE)/s390x/third_party/cosmo/2/mu_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/2/note_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/2/counter_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/2/dll_test.com.emulates			\

@@ -77,6 +77,8 @@ struct AddrSeg {
 
 extern const u8 kByteReg[32];
 
+u8 *GetModrmReadBW(P);
+u8 *GetModrmWriteBW(P);
 i64 ComputeAddress(P);
 struct AddrSeg LoadEffectiveAddress(const P);
 u8 *ComputeReserveAddressRead(P, size_t);

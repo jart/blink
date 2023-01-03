@@ -39,4 +39,11 @@ void WriteMemory(u64, u8[8], u64);
 void WriteRegister(u64, u8[8], u64);
 void WriteRegisterOrMemory(u64, u8[8], u64);
 
+i64 ReadMemoryBW(u64, u8[8]);
+i64 ReadRegisterBW(u64, u8[8]);
+void WriteMemoryBW(u64, u8[8], u64);
+void WriteRegisterBW(u64, u8[8], u64);
+i64 ReadRegisterOrMemoryBW(u64, u8[8]);
+void WriteRegisterOrMemoryBW(u64, u8[8], u64);
+
 #endif /* BLINK_MOP_H_ */

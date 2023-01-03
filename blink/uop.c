@@ -391,12 +391,12 @@ MICRO_OP static i64 FastOr8(struct Machine *m, u64 x, u64 y) {
   m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastAnd8(struct Machine *m, u64 x, u64 y) {
+MICRO_OP i64 FastAnd8(struct Machine *m, u64 x, u64 y) {
   u8 z = x & y;
   m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastSub8(struct Machine *m, u64 x, u64 y) {
+MICRO_OP i64 FastSub8(struct Machine *m, u64 x, u64 y) {
   u8 z = x - y;
   int c = x < z;
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;

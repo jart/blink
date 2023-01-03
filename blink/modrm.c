@@ -320,3 +320,29 @@ u8 *GetMmxAddress(P) {
 u8 *GetXmmAddress(P) {
   return GetVectorAddress(A, 16);
 }
+
+u8 *GetModrmReadBW(P) {
+  int lg2 = RegLog2(rde);
+  if (IsModrmRegister(rde)) {
+    if (!lg2) {
+      return ByteRexbRm(m, rde);
+    } else {
+      return RegRexbRm(m, rde);
+    }
+  } else {
+    return ComputeReserveAddressRead(A, 1 << RegLog2(rde));
+  }
+}
+
+u8 *GetModrmWriteBW(P) {
+  int lg2 = RegLog2(rde);
+  if (IsModrmRegister(rde)) {
+    if (!lg2) {
+      return ByteRexbRm(m, rde);
+    } else {
+      return RegRexbRm(m, rde);
+    }
+  } else {
+    return ComputeReserveAddressWrite(A, 1 << RegLog2(rde));
+  }
+}

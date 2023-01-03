@@ -259,3 +259,87 @@ void WriteRegisterOrMemory(u64 rde, u8 p[8], u64 x) {
     WriteMemory(rde, p, x);
   }
 }
+
+void WriteRegisterBW(u64 rde, u8 p[8], u64 x) {
+  switch (RegLog2(rde)) {
+    case 3:
+      Put64(p, x);
+      break;
+    case 2:
+      Put64(p, x & 0xffffffff);
+      break;
+    case 0:
+      Put8(p, x);
+      break;
+    case 1:
+      Put16(p, x);
+      break;
+    default:
+      __builtin_unreachable();
+  }
+}
+
+i64 ReadRegisterBW(u64 rde, u8 p[8]) {
+  switch (RegLog2(rde)) {
+    case 3:
+      return Get64(p);
+    case 2:
+      return Get32(p);
+    case 0:
+      return Get8(p);
+    case 1:
+      return Get16(p);
+    default:
+      __builtin_unreachable();
+  }
+}
+
+i64 ReadMemoryBW(u64 rde, u8 p[8]) {
+  switch (RegLog2(rde)) {
+    case 3:
+      return Load64(p);
+    case 2:
+      return Load32(p);
+    case 0:
+      return Load8(p);
+    case 1:
+      return Load16(p);
+    default:
+      __builtin_unreachable();
+  }
+}
+
+void WriteMemoryBW(u64 rde, u8 p[8], u64 x) {
+  switch (RegLog2(rde)) {
+    case 3:
+      Put64(p, x);
+      break;
+    case 2:
+      Put32(p, x);
+      break;
+    case 0:
+      Put8(p, x);
+      break;
+    case 1:
+      Put16(p, x);
+      break;
+    default:
+      __builtin_unreachable();
+  }
+}
+
+void WriteRegisterOrMemoryBW(u64 rde, u8 p[8], u64 x) {
+  if (IsModrmRegister(rde)) {
+    WriteRegisterBW(rde, p, x);
+  } else {
+    WriteMemoryBW(rde, p, x);
+  }
+}
+
+i64 ReadRegisterOrMemoryBW(u64 rde, u8 p[8]) {
+  if (IsModrmRegister(rde)) {
+    return ReadRegisterBW(rde, p);
+  } else {
+    return ReadMemoryBW(rde, p);
+  }
+}

@@ -12,13 +12,6 @@ is a great fit when you want a virtual machine that's extremely small
 and runs ephemeral programs much faster. For further details on the
 motivations for this tool, please read <https://justine.lol/ape.html>.
 
-## Caveat Emptor
-
-Welcome everyone from the Hacker News, Lobsters, and Reddit communities!
-This project is a work in progress. Please don't use this for production
-yet. If you try this be sure to calibrate your expectations accordingly.
-Especially if you use multiple threads under heavy processor load.
-
 ## Getting Started
 
 We regularly test that Blink is able run x86-64-linux binaries on the
@@ -84,7 +77,7 @@ operating systems and architectures.
 
 ```sh
 make check2
-make emulates  # potentially flaky
+make emulates
 ```
 
 ## Alternative Builds

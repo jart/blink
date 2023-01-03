@@ -275,7 +275,7 @@ static int SysFork(struct Machine *m) {
   UNLOCK(&m->system->mmap_lock);
   UNLOCK(&m->system->sig_lock);
   if (!pid) {
-    InitBus();
+    InitBus();  // TODO(jart): use shared memory for g_bus
     newpid = getpid();
     THR_LOGF("pid=%d tid=%d SysFork -> pid=%d tid=%d",  //
              m->system->pid, m->tid, newpid, newpid);

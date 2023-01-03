@@ -16,9 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <limits.h>
-#include <stdatomic.h>
-
 #include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/endian.h"

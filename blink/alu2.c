@@ -77,12 +77,19 @@ void OpAluw(P) {
     u64 x, y, z;
     /* The integrity of a bus lock is not affected by the alignment of
        the memory field. ──Intel V.3 §8.1.2.2 */
-    if (Lock(rde)) LockBus(p);
-    x = Load64(p);
-    y = Get64(q);
-    z = f(m, x, y);
-    Store64(p, z);
-    if (Lock(rde)) UnlockBus(p);
+    if (Lock(rde)) {
+      LockBus(p);
+      x = Load64Unlocked(p);
+      y = Get64(q);
+      z = f(m, x, y);
+      Store64Unlocked(p, z);
+      UnlockBus(p);
+    } else {
+      x = Load64(p);
+      y = Get64(q);
+      z = f(m, x, y);
+      Store64(p, z);
+    }
   } else if (!Osz(rde)) {
     u32 x, y, z;
     p = GetModrmRegisterWordPointerWrite4(A);

@@ -471,6 +471,7 @@ void OpAam(P);
 void OpAas(P);
 void OpAlub(P);
 void OpAluw(P);
+void OpAluwi(P);
 void OpCallEq(P);
 void OpCallJvds(P);
 void OpCallf(P);
@@ -594,5 +595,10 @@ long GetPrologueSize(void);
 void FinishPath(struct Machine *);
 void AbandonPath(struct Machine *);
 void AddIp(struct Machine *, long);
+
+void OpTest(P);
+void OpAlui(P);
+i64 FastAnd8(struct Machine *, u64, u64);
+i64 FastSub8(struct Machine *, u64, u64);
 
 #endif /* BLINK_MACHINE_H_ */
