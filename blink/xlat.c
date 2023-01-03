@@ -380,19 +380,49 @@ int XlatSocketOptname(int level, int optname) {
         XLAT(15, SO_REUSEPORT);
         XLAT(20, SO_RCVTIMEO);
         XLAT(21, SO_SNDTIMEO);
+#ifdef SO_RCVLOWAT
+        XLAT(18, SO_RCVLOWAT);
+#endif
+#ifdef SO_SNDLOWAT
+        XLAT(19, SO_SNDLOWAT);
+#endif
         default:
           break;
       }
     case SOL_TCP_LINUX:
       switch (optname) {
         XLAT(1, TCP_NODELAY);
+#ifdef TCP_MAXSEG
+        XLAT(2, TCP_MAXSEG);
+#endif
 #if defined(TCP_CORK)
         XLAT(3, TCP_CORK);
 #elif defined(TCP_NOPUSH)
         XLAT(3, TCP_NOPUSH);
 #endif
+#ifdef TCP_KEEPIDLE
+        XLAT(4, TCP_KEEPIDLE);
+#endif
+#ifdef TCP_KEEPINTVL
+        XLAT(5, TCP_KEEPINTVL);
+#endif
+#ifdef TCP_KEEPCNT
+        XLAT(6, TCP_KEEPCNT);
+#endif
+#ifdef TCP_SYNCNT
+        XLAT(7, TCP_SYNCNT);
+#endif
+#ifdef TCP_DEFER_ACCEPT
+        XLAT(9, TCP_DEFER_ACCEPT);
+#endif
+#ifdef TCP_WINDOW_CLAMP
+        XLAT(10, TCP_WINDOW_CLAMP);
+#endif
 #ifdef TCP_FASTOPEN
         XLAT(23, TCP_FASTOPEN);
+#endif
+#ifdef TCP_NOTSENT_LOWAT
+        XLAT(25, TCP_NOTSENT_LOWAT);
 #endif
 #ifdef TCP_FASTOPEN_CONNECT
         XLAT(30, TCP_FASTOPEN_CONNECT);

@@ -1084,6 +1084,35 @@ static int SysSetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   return rc;
 }
 
+static int SysGetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
+                         i64 optvaladdr, i64 optvalsizeaddr) {
+  int rc;
+  void *optval;
+  struct Fd *fd;
+  socklen_t optvalsize;
+  u8 optvalsize_linux[4];
+  int syslevel, sysoptname;
+  if ((syslevel = XlatSocketLevel(level)) == -1) return -1;
+  if ((sysoptname = XlatSocketOptname(level, optname)) == -1) return -1;
+  CopyFromUserRead(m, optvalsize_linux, optvalsizeaddr,
+                   sizeof(optvalsize_linux));
+  optvalsize = Read32(optvalsize_linux);
+  if (optvalsize > 256) return einval();
+  if (!(optval = calloc(1, optvalsize))) return -1;
+  if (!(fd = GetAndLockFd(m, fildes))) {
+    free(optval);
+    return -1;
+  }
+  rc = getsockopt(fd->systemfd, syslevel, sysoptname, optval, &optvalsize);
+  Write32(optvalsize_linux, optvalsize);
+  CopyToUserWrite(m, optvaladdr, optval, optvalsize);
+  CopyToUserWrite(m, optvalsizeaddr, optvalsize_linux,
+                  sizeof(optvalsize_linux));
+  UnlockFd(fd);
+  free(optval);
+  return rc;
+}
+
 static i64 SysReadImpl(struct Machine *m, struct Fd *fd, i64 addr, u64 size) {
   i64 rc;
   struct Iovs iv;
@@ -2480,6 +2509,7 @@ void OpSyscall(P) {
     SYSCALL(0x033, SysGetsockname, (m, di, si, dx));
     SYSCALL(0x034, SysGetpeername, (m, di, si, dx));
     SYSCALL(0x036, SysSetsockopt, (m, di, si, dx, r0, r8));
+    SYSCALL(0x037, SysGetsockopt, (m, di, si, dx, r0, r8));
     SYSCALL(0x038, SysClone, (m, di, si, dx, r0, r8, r9));
     SYSCALL(0x039, SysFork, (m));
     SYSCALL(0x03A, SysVfork, (m));
