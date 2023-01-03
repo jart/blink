@@ -1796,11 +1796,13 @@ static int SysGetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
 }
 
 static int SysSetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
+  int sysresource;
   struct rlimit rlim;
   struct rlimit_linux lux;
+  if ((sysresource = XlatResource(resource)) == -1) return -1;
   CopyFromUserRead(m, &lux, rlimitaddr, sizeof(lux));
-  XlatRlimitToLinux(&lux, &rlim);
-  return setrlimit(XlatResource(resource), &rlim);
+  XlatLinuxToRlimit(sysresource, &rlim, &lux);
+  return setrlimit(sysresource, &rlim);
 }
 
 static int SysPrlimit(struct Machine *m, i32 pid, i32 resource,

@@ -710,14 +710,29 @@ void XlatRlimitToLinux(struct rlimit_linux *dst, const struct rlimit *src) {
   Write64(dst->rlim_max, XlatRlimitToLinuxScalar(src->rlim_max));
 }
 
-static u64 XlatLinuxToRlimitScalar(u64 x) {
-  if (x == RLIM_INFINITY_LINUX) x = RLIM_INFINITY;
+static u64 XlatLinuxToRlimitScalar(int r, u64 x) {
+  if (x == RLIM_INFINITY_LINUX) {
+    x = RLIM_INFINITY;
+  } else if (r == RLIMIT_NOFILE) {
+    x += 4;
+  } else if (r == RLIMIT_CPU ||   //
+             r == RLIMIT_DATA ||  //
+#ifdef RLIMIT_RSS
+             r == RLIMIT_RSS ||  //
+#endif
+#ifdef RLIMIT_AS
+             r == RLIMIT_AS ||  //
+#endif
+             0) {
+    x *= 10;
+  }
   return x;
 }
 
-void XlatLinuxToRlimit(struct rlimit *dst, const struct rlimit_linux *src) {
-  dst->rlim_cur = XlatLinuxToRlimitScalar(Read64(src->rlim_cur));
-  dst->rlim_max = XlatLinuxToRlimitScalar(Read64(src->rlim_max));
+void XlatLinuxToRlimit(int sysresource, struct rlimit *dst,
+                       const struct rlimit_linux *src) {
+  dst->rlim_cur = XlatLinuxToRlimitScalar(sysresource, Read64(src->rlim_cur));
+  dst->rlim_max = XlatLinuxToRlimitScalar(sysresource, Read64(src->rlim_max));
 }
 
 void XlatItimervalToLinux(struct itimerval_linux *dst,
