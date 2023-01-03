@@ -1357,6 +1357,25 @@ static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
   return 0;
 }
 
+static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
+                            int kind) {
+  struct ifreq ifreq;
+  struct ifreq_linux ifreq_linux;
+  CopyFromUserRead(m, &ifreq_linux, ifreq_addr, sizeof(ifreq_linux));
+  memset(ifreq.ifr_name, 0, sizeof(ifreq.ifr_name));
+  memcpy(ifreq.ifr_name, ifreq_linux.name,
+         MIN(sizeof(ifreq_linux.name) - 1, sizeof(ifreq.ifr_name)));
+  if (Read16(ifreq_linux.addr.sin_family) != AF_INET_LINUX) return einval();
+  XlatSockaddrToHost((struct sockaddr_in *)&ifreq.ifr_addr, &ifreq_linux.addr);
+  if (ioctl(systemfd, kind, &ifreq)) return -1;
+  memset(ifreq_linux.name, 0, sizeof(ifreq_linux.name));
+  memcpy(ifreq_linux.name, ifreq.ifr_name,
+         MIN(sizeof(ifreq_linux.name) - 1, sizeof(ifreq.ifr_name)));
+  XlatSockaddrToLinux(&ifreq_linux.addr, (struct sockaddr_in *)&ifreq.ifr_addr);
+  CopyToUserWrite(m, ifreq_addr, &ifreq_linux, sizeof(ifreq_linux));
+  return 0;
+}
+
 static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
   struct Fd *fd;
   int rc, systemfd;
@@ -1383,6 +1402,18 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       break;
     case SIOCGIFCONF_LINUX:
       rc = IoctlSiocgifconf(m, systemfd, addr);
+      break;
+    case SIOCGIFADDR_LINUX:
+      rc = IoctlSiocgifaddr(m, systemfd, addr, SIOCGIFADDR);
+      break;
+    case SIOCGIFNETMASK_LINUX:
+      rc = IoctlSiocgifaddr(m, systemfd, addr, SIOCGIFNETMASK);
+      break;
+    case SIOCGIFBRDADDR_LINUX:
+      rc = IoctlSiocgifaddr(m, systemfd, addr, SIOCGIFBRDADDR);
+      break;
+    case SIOCGIFDSTADDR_LINUX:
+      rc = IoctlSiocgifaddr(m, systemfd, addr, SIOCGIFDSTADDR);
       break;
     default:
       LOGF("missing ioctl %#" PRIx64, request);
