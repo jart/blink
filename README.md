@@ -28,7 +28,7 @@ the assembly display allows the rewinding of execution history.
 We regularly test that Blink is able run x86-64-linux binaries on the
 following platforms:
 
-- Linux (x86, ARM, MIPS, PowerPC, s390x)
+- Linux (x86, ARM, RISC-V, MIPS, PowerPC, s390x)
 - MacOS (x86, ARM)
 - FreeBSD
 - OpenBSD
