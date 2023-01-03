@@ -78,7 +78,7 @@
 \n\
 DESCRIPTION\n\
 \n\
-  blink virtual machine terminal user interface\n\
+  blinkenlights - x86_64-linux virtual machine tui\n\
 \n\
 FLAGS\n\
 \n\
@@ -107,8 +107,8 @@ FEATURES\n\
 \n"
 
 #define HELP \
-  "\033[1mBLINK v1.o\033[22m\
-                        https://github.com/jart/blink/\n\
+  "\033[1mBlinkenlights v2.o\033[22m\
+                https://github.com/jart/blink/\n\
 \n\
 KEYBOARD SHORTCUTS                CLI FLAGS\n\
 \n\
@@ -1772,7 +1772,7 @@ static char *GetStatus(int m) {
   if (statusmessage && CompareTime(GetTime(), statusexpires)) {
     AppendStr(&s, statusmessage);
   } else {
-    AppendStr(&s, "blink virtual machine");
+    AppendStr(&s, "das blinkenlights");
   }
   n = ARRAYLEN(keystrokes.p);
   for (first = true, t = GetTime(), i = 1; i <= n; --i) {

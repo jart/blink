@@ -1,8 +1,10 @@
 ![Screenshot of Blink running GCC 9.4.0](blink/blink-gcc.png)
 
-# blink
+# Blinkenlights
 
-blink is a virtual machine for running statically-compiled x86-64-linux
+This project contains two programs:
+
+`blink` is a virtual machine that runs statically-compiled x86-64-linux
 programs on different operating systems and hardware architectures. It's
 designed to do the same thing as the `qemu-x86_64` command, except (a)
 rather than being a 4mb binary, Blink only has a ~156kb footprint; and
@@ -11,6 +13,15 @@ GCC. The tradeoff is Blink doesn't have as many features as Qemu. Blink
 is a great fit when you want a virtual machine that's extremely small
 and runs ephemeral programs much faster. For further details on the
 motivations for this tool, please read <https://justine.lol/ape.html>.
+
+[`blinkenlights`](https://justine.lol/blinkenlights) is a TUI interface
+that may be used for debugging x86_64-linux programs across platforms.
+Unlike GDB, Blinkenlights focuses on visualizing program execution. It
+uses UNICODE IBM Code Page 437 characters to display binary memory
+panels, which change as you step through your program's assembly code.
+These memory panels may be scrolled and zoomed using your mouse wheel.
+Blinkenlights also permits reverse debugging, where scroll wheeling over
+the assembly display allows the rewinding of execution history.
 
 ## Getting Started
 
@@ -55,7 +66,7 @@ most important keystrokes in this interface are `?` for help, `s` for
 step, `c` for continue, and scroll wheel for reverse debugging.
 
 ```sh
-o//blink/tui third_party/cosmo/tinyhello.elf
+o//blink/blinkenlights third_party/cosmo/tinyhello.elf
 ```
 
 ## Testing
@@ -139,9 +150,9 @@ Blink has a runtime check which will catch obvious problems, and then
 gracefully fall back to using a CALL instruction. Since no JIT can be
 fully perfect on all platforms, the `o//blink/blink -j` flag may be
 passed to disable Blink's JIT. Please note that disabling JIT makes
-Blink go 10x slower. With the `o//blink/tui` command, the `-j` flag
-takes on the opposite meaning, where it instead *enables* JIT. This can
-be useful for troubleshooting the JIT, because the TUI display has a
+Blink go 10x slower. With the `o//blink/blinkenlights` command, the `-j`
+flag takes on the opposite meaning, where it instead *enables* JIT. This
+can be useful for troubleshooting the JIT, because the TUI display has a
 feature that lets JIT path formation be visualized. Blink currently only
 enables the JIT for programs running in long mode (64-bit) but we may
 support JITing 16-bit programs in the future.
@@ -179,12 +190,13 @@ embedded terminal display. For example, it's possible to use Antirez's
 Kilo text editor inside Blink's TUI.
 
 Blink supports 16-bit BIOS programs, such as SectorLISP. To boot real
-mode programs in Blink, the `o//blink/tui -r` flag may be passed, which
-puts the virtual machine in i8086 mode. Currently only a limited set of
-BIOS APIs are available. For example, Blink supports IBM PC Serial UART,
-CGA display, and the MDA display APIs which are rendered using block
-characters in the TUI interface. We hope to expand our real mode support
-in the near future, in order to run operating systems like ELKS.
+mode programs in Blink, the `o//blink/blinkenlights -r` flag may be
+passed, which puts the virtual machine in i8086 mode. Currently only a
+limited set of BIOS APIs are available. For example, Blink supports IBM
+PC Serial UART, CGA display, and the MDA display APIs which are rendered
+using block characters in the TUI interface. We hope to expand our real
+mode support in the near future, in order to run operating systems like
+ELKS.
 
 Blink supports troubleshooting operating system bootloaders. Blink was
 designed for Cosmopolitan Libc, which embeds an operating system in each
@@ -211,4 +223,5 @@ static. You can run:
   of BSS memory.
 
 - Real mode executables, which are loaded to the address `0x7c00`. These
-  programs must be run using the `tui` command with the `-r` flag.
+  programs must be run using the `blinkenlights` command with the `-r`
+  flag.
