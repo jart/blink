@@ -583,7 +583,8 @@ static void Connect(P, u64 pc) {
 static void AluRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
   aluop_f op = ops[RegLog2(rde)];
   op(m, ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A)),
-     ReadRegisterBW(rde, RegRexrReg(m, rde)));
+     ReadRegisterBW(rde,
+                    RegLog2(rde) ? RegRexrReg(m, rde) : ByteRexrReg(m, rde)));
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
@@ -627,8 +628,9 @@ static void OpAluTest(P) {
 
 static void OpAluFlip(P) {
   aluop_f op = kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)];
-  WriteRegisterBW(rde, RegRexrReg(m, rde),
-                  op(m, ReadRegisterBW(rde, RegRexrReg(m, rde)),
+  u8 *q = RegLog2(rde) ? RegRexrReg(m, rde) : ByteRexrReg(m, rde);
+  WriteRegisterBW(rde, q,
+                  op(m, ReadRegisterBW(rde, q),
                      ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A))));
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
@@ -673,8 +675,8 @@ static void OpAluFlip(P) {
 
 static void OpAluFlipCmp(P) {
   aluop_f op = kAlu[ALU_SUB][RegLog2(rde)];
-  op(m, ReadRegisterBW(rde, RegRexrReg(m, rde)),
-     ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A)));
+  u8 *q = RegLog2(rde) ? RegRexrReg(m, rde) : ByteRexrReg(m, rde);
+  op(m, ReadRegisterBW(rde, q), ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A)));
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
