@@ -22,8 +22,8 @@ static inline void *BetterMemcpyX86(void *dst, const void *src, size_t n) {
   size_t i;
   uint64_t a, b;
   const char *s;
-  d = dst;
-  s = src;
+  d = (char *)dst;
+  s = (const char *)src;
   switch (n) {
     case 0:
       return d;

@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/util.h"
 
 const short kCp437[256] = /* clang-format off */ {
   0x00a0,0x263a,0x263b,0x2665,0x2666,0x2663,0x2660,0x2022, /*00: ☺☻♥♦♣♠•*/

@@ -257,13 +257,15 @@ struct History {
   struct Rendering p[HISTORY];
 };
 
+struct ProfSym {
+  int sym;  // dis->syms.p[sym]
+  unsigned long hits;
+};
+
 struct ProfSyms {
   int i, n;
   unsigned long toto;
-  struct ProfSym {
-    int sym;  // dis->syms.p[sym]
-    unsigned long hits;
-  } * p;
+  struct ProfSym *p;
 };
 
 static const char kRipName[3][4] = {"IP", "EIP", "RIP"};
@@ -515,7 +517,8 @@ static void SortProfSyms(void) {
 static int AddProfSym(int sym, unsigned long hits) {
   if (!hits) return -1;
   if (profsyms.i == profsyms.n) {
-    profsyms.p = realloc(profsyms.p, ++profsyms.n * sizeof(*profsyms.p));
+    profsyms.p = (struct ProfSym *)realloc(profsyms.p,
+                                           ++profsyms.n * sizeof(*profsyms.p));
   }
   profsyms.p[profsyms.i].sym = sym;
   profsyms.p[profsyms.i].hits = hits;
@@ -1571,7 +1574,7 @@ static void DrawMemoryZoomed(struct Panel *p, struct MemoryView *view,
         high = false;
       }
       if (invalid[c]) {
-        AppendWide(&p->lines[i], u'⋅');
+        AppendWide(&p->lines[i], L'⋅');
       } else {
         AppendWide(&p->lines[i], kCp437[canvas[c]]);
       }
