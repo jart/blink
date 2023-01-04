@@ -19,44 +19,51 @@
 
 #define XED_MAX_INSTRUCTION_BYTES 15
 
-#define XED_ERROR_NONE             0
-#define XED_ERROR_BUFFER_TOO_SHORT 1
-#define XED_ERROR_GENERAL_ERROR    2
-#define XED_ERROR_BAD_MAP          10
-#define XED_ERROR_INSTR_TOO_LONG   18
-#define XED_ERROR_LAST             22
+#define XED_ERROR_NONE              0
+#define XED_ERROR_BUFFER_TOO_SHORT  1
+#define XED_ERROR_GENERAL_ERROR     2
+#define XED_ERROR_BAD_LEGACY_PREFIX 7
+#define XED_ERROR_BAD_REX_PREFIX    8
+#define XED_ERROR_BAD_MAP           10
+#define XED_ERROR_INSTR_TOO_LONG    18
+#define XED_ERROR_INVALID_MODE      19
+#define XED_ERROR_LAST              22
 
 struct XedOperands { /*
-         ┌log₂𝑏 (-/16/32/64)
-         │ ┌length
-         │ │   ┌rep
-         │ │   │ ┌map
-         │ │   │ │  ┌opcode
-         │ │   │ │  │       ┌sib scale
-         │ │   │ │  │       │ ┌sib index
-         │ │   │ │  │       │ │  ┌sib base
-         │ │   │ │  │       │ │  │  ┌lock
-         │ │   │ │  │       │ │  │  │ ┌log₂𝑏 (8/16/32/64)
-         │ │   │ │  │       │ │  │  │ │ ┌mode
-         │ │   │ │  │       │ │  │  │ │ │ ┌eamode
-         │ │   │ │  │       │ │  │  │ │ │ │ ┌mod
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ┌asz
-         │ │   │ │  │       │ │  │  │ │ │ │ │ │┌sego
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  ┌rexx
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  │┌rex         REGISTER
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  ││┌rexb       DISPATCH
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  │││┌srm       ENCODING
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  ││││  ┌rex
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  ││││  │┌rexb
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  ││││  ││┌rm
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  ││││  │││  ┌rexw
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  ││││  │││  │┌osz
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  ││││  │││  ││┌rex
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  ││││  │││  │││┌rexr
-         │ │   │ │  │       │ │  │  │ │ │ │ │ ││  ││││  │││  ││││┌reg
-         │5│5  │5│4 │4      │3│3 │3 │ │2│2│2│2││  ││││  │││  │││││
-         │7│3  │1│8 │0      │8│5 │2 │ │8│6│4│2││18││││12│││ 7│││││ 0
-         ├┐├──┐├┐├─┐├──────┐├┐├─┐├─┐│ ├┐├┐├┐├┐│├─┐│││├─┐││├─┐││││├─┐
+    ┌rexx
+    │┌vexarg
+    ││  ┌trips
+    ││  │┌log₂𝑏 (-/16/32/64)
+    ││  ││ ┌length
+    ││  ││ │   ┌rep
+    ││  ││ │   │ ┌map
+    ││  ││ │   │ │  ┌opcode
+    ││  ││ │   │ │  │       ┌sib scale
+    ││  ││ │   │ │  │       │ ┌sib index
+    ││  ││ │   │ │  │       │ │  ┌sib base
+    ││  ││ │   │ │  │       │ │  │  ┌lock
+    ││  ││ │   │ │  │       │ │  │  │┌ymm
+    ││  ││ │   │ │  │       │ │  │  ││┌log₂𝑏 (8/16/32/64)
+    ││  ││ │   │ │  │       │ │  │  │││ ┌mode
+    ││  ││ │   │ │  │       │ │  │  │││ │ ┌eamode
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ ┌mod
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ┌asz
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ │┌sego
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  ┌rexx
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  │┌rex         REGISTER
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  ││┌rexb       DISPATCH
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  │││┌srm       ENCODING
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  ││││  ┌rex
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  ││││  │┌rexb
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  ││││  ││┌rm
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  ││││  │││  ┌rexw
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  ││││  │││  │┌osz
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  ││││  │││  ││┌rex
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  ││││  │││  │││┌rexr
+    ││  ││ │   │ │  │       │ │  │  │││ │ │ │ ││  ││││  │││  ││││┌reg
+    ││6 ││5│5  │5│4 │4      │3│3 │3 │││2│2│2│2││  ││││  │││  │││││
+    ││0 ││7│3  │1│8 │0      │8│5 │2 │││8│6│4│2││18││││12│││ 7│││││ 0
+    │├─┐│├┐├──┐├┐├─┐├──────┐├┐├─┐├─┐││├┐├┐├┐├┐│├─┐│││├─┐││├─┐││││├─┐
   0b0000000000000000000000000000000000000000000000000000000000000000*/
   u64 rde;
   u64 uimm0;  // $immediate mostly sign-extended

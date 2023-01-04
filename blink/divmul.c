@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <limits.h>
 
+#include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
@@ -370,7 +371,7 @@ static void OpMulRdxRaxEvqpUnsigned32(struct Machine *m, u64 x) {
   unsigned of;
   edxeax = (u64)Get32(m->ax) * x;
   of = (u32)edxeax != edxeax;
-  Put64(m->ax, edxeax);
+  Put64(m->ax, edxeax & 0xffffffff);
   Put64(m->dx, edxeax >> 32);
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
@@ -448,4 +449,27 @@ void OpImulGvqpEvqpImm(P) {
   u8 b[8];
   Put64(b, uimm0);
   AluImul(A, GetModrmRegisterWordPointerReadOszRexw(A), b);
+}
+
+void OpMulx(P) {
+  if (Rexw(rde)) {
+    u64 x, y;
+    x = Load64(GetModrmRegisterWordPointerRead8(A));
+    y = Get64(m->dx);
+#ifdef HAVE_INT128
+    unsigned __int128 z = (unsigned __int128)y * x;
+    Put64(RegVexarg(m, rde), z);
+    Put64(RegRexrReg(m, rde), z >> 64);
+#else
+    struct Dubble z = DubbleMul(y, x);
+    Put64(RegVexarg(m, rde), z.lo);
+    Put64(RegRexrReg(m, rde), z.hi);
+#endif
+  } else {
+    u64 x;
+    x = Load32(GetModrmRegisterWordPointerRead4(A));
+    x *= Get32(m->dx);
+    Put64(RegVexarg(m, rde), x & 0xffffffff);
+    Put64(RegRexrReg(m, rde), x >> 32);
+  }
 }

@@ -22,6 +22,7 @@
 #include "blink/bitscan.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
+#include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/x86.h"
@@ -190,14 +191,14 @@ static int xed_too_short(struct XedDecodedInst *x) {
 }
 
 static void xed_set_simmz_imm_width_eosz(struct XedDecodedInst *x,
-                                         const u8 eosz[2][2][3], u8 *imm_width,
+                                         const u8 eosz[2][2][3], int *imm_width,
                                          u8 *imm_signed) {
   *imm_width = kXed.SIMMz_IMM_WIDTH[eosz[Rexw(x->op.rde)][Osz(x->op.rde)]
                                         [Mode(x->op.rde)]];
   *imm_signed = 1;
 }
 
-static int xed_set_imm_bytes(struct XedDecodedInst *x, u8 *imm_width,
+static int xed_set_imm_bytes(struct XedDecodedInst *x, int *imm_width,
                              u8 *imm_signed) {
   if (!*imm_width && Opmap(x->op.rde) < XED_ILD_MAP2) {
     switch (kXed.imm_bits_2d[Opmap(x->op.rde)][Opcode(x->op.rde)]) {
@@ -270,6 +271,12 @@ static int xed_set_imm_bytes(struct XedDecodedInst *x, u8 *imm_width,
   } else {
     return XED_ERROR_NONE;
   }
+}
+
+static bool xed_is_bound_instruction(struct XedDecodedInst *x) {
+  return Mode(x->op.rde) != XED_MODE_LONG &&  //
+         x->length + 1 < x->op.max_bytes &&   //
+         (x->bytes[x->length + 1] & 0xC0) != 0xC0;
 }
 
 static int xed_prefix_scanner(struct XedDecodedInst *x) {
@@ -372,6 +379,134 @@ out:
   }
 }
 
+static void xed_set_vex_prefix(struct XedDecodedInst *x, unsigned prefix) {
+  switch (prefix) {
+    case 0:
+      break;
+    case 1:  // osz
+      x->op.rde &= ~(1 << 5);
+      x->op.rde |= 1 << 5;
+      break;
+    case 2:  // rep3
+    case 3:  // rep2
+      x->op.rde &= ~(3ull << 51);
+      x->op.rde |= (u64)(prefix ^ 1) << 51;
+      break;
+    default:
+      __builtin_unreachable();
+  }
+}
+
+static int xed_vex_opcode_scanner(struct XedDecodedInst *x, int map) {
+  xed_set_mopcode(x, map << 8 | x->bytes[x->length]);
+  x->op.pos_opcode = x->length++;
+#ifndef TINY
+  if (Mode(x->op.rde) == XED_MODE_LONG && Rex(x->op.rde)) {
+    return XED_ERROR_BAD_REX_PREFIX;
+  }
+  if (Osz(x->op.rde) /* || Rep(x->op.rde) */) {
+    return XED_ERROR_BAD_LEGACY_PREFIX;
+  }
+  if (Mode(x->op.rde) == XED_MODE_REAL) {
+    return XED_ERROR_INVALID_MODE;
+  }
+#endif
+  return 0;
+}
+
+static void xed_vex_set_args(struct XedDecodedInst *x, int ymm, unsigned trips,
+                             unsigned vexdest210) {
+  x->op.rde |= ymm << 30;
+  x->op.rde |= (u64)trips << 59;
+  x->op.rde |= (u64)vexdest210 << 60;
+}
+
+static int xed_vex_c4_scanner(struct XedDecodedInst *x, int *imm_width,
+                              int *vexvalid) {
+  unsigned length, b1, b2;
+  int map, rexr, rexx, rexb, rexw, ymm, trips, vexdest210;
+  if (xed_is_bound_instruction(x)) return 0;
+  length = x->length;
+  length++;
+  if (length + 2 < x->op.max_bytes) {
+    // map:   5-bit
+    // rex.b: 1-bit (expands r/m or srm register operand)
+    // rex.x: 1-bit (expands sib or vex register operand)
+    // rex.r: 1-bit (expands reg register operand)
+    b1 = x->bytes[length];
+    rexr = !(b1 & 128);
+    rexx = !(b1 & 64);
+    rexb = (Mode(x->op.rde) == XED_MODE_LONG) & !(b1 & 32);
+    // prefix:        2-bit → {none, osz, rep3, rep2}
+    // vector_length: 1-bit → {xmm, ymm}
+    // vexdest210:    3-bit (second reg operand, inverted)
+    // vexdest3:      1-bit (if true has three operands)
+    // rex.w:         1-bit (for 64-bit registers)
+    b2 = x->bytes[length + 1];
+    rexw = !!(b2 & 128);
+    trips = !!(b2 & 64);
+    vexdest210 = (~b2 >> 3) & 7;
+    ymm = !!(b2 & 4);
+    xed_set_vex_prefix(x, b2 & 3);
+    map = b1 & 31;
+    if ((b1 & 3) == XED_ILD_MAP3) {
+      *imm_width = xed_bytes2bits(1);
+    }
+    x->op.rde |= (u64)rexx << 63 | rexx << 17 | rexb << 15 | rexb << 10 |
+                 rexw << 6 | rexr << 3;
+    xed_vex_set_args(x, ymm, trips, vexdest210);
+    *vexvalid = 1;
+    length += 2;
+    x->length = length;
+    return xed_vex_opcode_scanner(x, map);
+  } else {
+    x->length = length;
+    return xed_too_short(x);
+  }
+}
+
+static int xed_vex_c5_scanner(struct XedDecodedInst *x, int *vexvalid) {
+  unsigned length, b;
+  int rexr, ymm, trips, vexdest210;
+  length = x->length;
+  if (xed_is_bound_instruction(x)) return 0;
+  length++;
+  if (length + 1 < x->op.max_bytes) {
+    // prefix:        2-bit → {none, osz, rep3, rep2}
+    // vector_length: 1-bit → {xmm, ymm}
+    // vexdest210:    3-bit
+    // vexdest3:      1-bit
+    // rex.r:         1-bit
+    b = x->bytes[length];
+    rexr = !(b & 128);
+    trips = !!(b & 64);
+    vexdest210 = (~b >> 3) & 7;
+    ymm = (b >> 2) & 1;
+    xed_set_vex_prefix(x, b & 3);
+    x->op.rde |= (u64)rexr << 63 | rexr << 3;
+    xed_vex_set_args(x, ymm, trips, vexdest210);
+    *vexvalid = 1;
+    length++;
+    x->length = length;
+    return xed_vex_opcode_scanner(x, XED_ILD_MAP1);
+  } else {
+    x->length = length;
+    return xed_too_short(x);
+  }
+}
+
+static int xed_vex_scanner(struct XedDecodedInst *x, int *imm_width,
+                           int *vexvalid) {
+  switch (x->bytes[x->length]) {
+    case 0xC5:
+      return xed_vex_c5_scanner(x, vexvalid);
+    case 0xC4:
+      return xed_vex_c4_scanner(x, imm_width, vexvalid);
+    default:
+      return 0;
+  }
+}
+
 static int xed_get_next_as_opcode(struct XedDecodedInst *x, int map) {
   u8 length;
   length = x->length;
@@ -384,7 +519,7 @@ static int xed_get_next_as_opcode(struct XedDecodedInst *x, int map) {
   }
 }
 
-static int xed_opcode_scanner(struct XedDecodedInst *x, u8 *imm_width) {
+static int xed_opcode_scanner(struct XedDecodedInst *x, int *imm_width) {
   u8 b, length;
   length = x->length;
   if ((b = x->bytes[length]) != 0x0F) {
@@ -457,8 +592,8 @@ static void xed_set_has_modrm(struct XedDecodedInst *x) {
   }
 }
 
-static int xed_modrm_scanner(struct XedDecodedInst *x, u8 *disp_width,
-                             u8 *has_sib) {
+static int xed_modrm_scanner(struct XedDecodedInst *x, int *disp_width,
+                             int *has_sib) {
   u8 b, rm, reg, mod, eamode, length, has_modrm;
   xed_set_has_modrm(x);
   has_modrm = x->op.has_modrm;
@@ -486,7 +621,7 @@ static int xed_modrm_scanner(struct XedDecodedInst *x, u8 *disp_width,
   }
 }
 
-static int xed_sib_scanner(struct XedDecodedInst *x, u8 *disp_width) {
+static int xed_sib_scanner(struct XedDecodedInst *x, int *disp_width) {
   u8 b, length;
   length = x->length;
   if (length < x->op.max_bytes) {
@@ -510,7 +645,7 @@ static u8 XED_LF_BRDISPz_BRDISP_WIDTH_OSZ_NONTERM_EOSZ_l2(
       x->op.rde)][Mode(x->op.rde)]];
 }
 
-static int xed_disp_scanner(struct XedDecodedInst *x, u8 disp_width) {
+static int xed_disp_scanner(struct XedDecodedInst *x, int disp_width) {
   u8 disp_unsigned = 0;
   u8 length, disp_bytes;
   length = x->length;
@@ -568,7 +703,7 @@ static int xed_disp_scanner(struct XedDecodedInst *x, u8 disp_width) {
   }
 }
 
-static int xed_imm_scanner(struct XedDecodedInst *x, u8 imm_width) {
+static int xed_imm_scanner(struct XedDecodedInst *x, int imm_width) {
   u8 *p;
   int e;
   u8 imm_signed = 0;
@@ -591,11 +726,13 @@ static int xed_imm_scanner(struct XedDecodedInst *x, u8 imm_width) {
 
 static int xed_decode_instruction_length(struct XedDecodedInst *x) {
   int e;
-  u8 has_sib = 0;
-  u8 imm_width = 0;
-  u8 disp_width = 0;
+  int has_sib = 0;
+  int imm_width = 0;
+  int vexvalid = 0;
+  int disp_width = 0;
   if ((e = xed_prefix_scanner(x))) return e;
-  if ((e = xed_opcode_scanner(x, &imm_width))) return e;
+  if ((e = xed_vex_scanner(x, &imm_width, &vexvalid))) return e;
+  if (!vexvalid && (e = xed_opcode_scanner(x, &imm_width))) return e;
   if ((e = xed_modrm_scanner(x, &disp_width, &has_sib))) return e;
   if (has_sib && (e = xed_sib_scanner(x, &disp_width))) return e;
   if ((e = xed_disp_scanner(x, disp_width))) return e;

@@ -1074,6 +1074,7 @@ const char *DisSpecMap2(struct XedDecodedInst *x, char *p) {
     RCASE(0x41, "phminposuw %Vdq Wdq");
     RCASE(0x80, "invept %Gq Mdq");
     RCASE(0x81, "invvpid %Gq Mdq");
+    RCASE(0xF6, "mulx Edqp %Bdqp %Gdqp");
     case 0xF0:
       if (Rep(x->op.rde) == 2) {
         return "crc32 %Gvqp Eb";

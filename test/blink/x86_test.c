@@ -1092,3 +1092,17 @@ TEST(ild, testWideNops) {
   EXPECT_EQ(8, ild("\017\037\204\000\000\000\000\000", 8));
   EXPECT_EQ(9, ild("f\017\037\204\000\000\000\000\000", 9));
 }
+
+TEST(ild, vex) {
+  // mulx %rbx,%rdx,%rcx
+  char code[15] = "\xc4\xe2\xeb\xf6\xcb";
+  EXPECT_EQ(0, DecodeInstruction(&xedd, code, 15, XED_MODE_LONG));
+  EXPECT_EQ(5, xedd.length);
+  EXPECT_EQ(2 << 8 | 0xf6, Mopcode(xedd.op.rde));
+  EXPECT_TRUE(Trips(xedd.op.rde));      // three params
+  EXPECT_EQ(3, ModrmMod(xedd.op.rde));  // register operand
+  EXPECT_TRUE(Rexw(xedd.op.rde));       // 64-bit
+  EXPECT_EQ(1, ModrmReg(xedd.op.rde));  // rcx (arg1)
+  EXPECT_EQ(2, Vexarg(xedd.op.rde));    // rdx (arg2)
+  EXPECT_EQ(3, ModrmRm(xedd.op.rde));   // rbx (arg3)
+}

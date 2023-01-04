@@ -370,7 +370,7 @@ static void OpBit(P) {
   if (Lock(rde)) UnlockBus(p);
 }
 
-static void Trips(P, const nexgen32e_f ops[3]) {
+static void TripleOp(P, const nexgen32e_f ops[3]) {
   nexgen32e_f op;
   op = ops[WordLog2(rde) - 1];
   op(A);
@@ -380,11 +380,11 @@ static void Trips(P, const nexgen32e_f ops[3]) {
 }
 
 static void OpSax(P) {
-  Trips(A, kSax);
+  TripleOp(A, kSax);
 }
 
 static void OpConvert(P) {
-  Trips(A, kConvert);
+  TripleOp(A, kConvert);
 }
 
 static void OpBswapZvqp(P) {
@@ -2087,6 +2087,7 @@ nexgen32e_f GetOp(long op) {
       XLAT(0x21e, OpSsePabsd);
       XLAT(0x22a, OpMovntdqaVdqMdq);
       XLAT(0x240, OpSsePmulld);
+      XLAT(0x2f6, OpMulx);
       XLAT(0x30f, OpSsePalignr);
       XLAT(0x344, OpSsePclmulqdq);
       default:

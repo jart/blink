@@ -152,6 +152,10 @@ static char *DisGdqp(struct Dis *d, u64 rde, char *p) {
   return DisRegister(p, kGreg[0][Rexw(rde)][Rexr(rde)][ModrmReg(rde)]);
 }
 
+static char *DisBdqp(struct Dis *d, u64 rde, char *p) {
+  return DisRegister(p, kGreg[0][Rexw(rde)][Rexx(rde)][Vexarg(rde)]);
+}
+
 static char *DisGb(struct Dis *d, u64 rde, char *p) {
   return DisRegisterByte(d, rde, p, Rexr(rde), ModrmReg(rde));
 }
@@ -593,6 +597,7 @@ static const struct DisArg {
   char *(*f)(struct Dis *, u64, char *);
 } kDisArgs[] = /* <sorted> */ {
     {"$1", DisOne},      //
+    {"%Bdqp", DisBdqp},  //
     {"%Cd", DisCd},      //
     {"%Gb", DisGb},      //
     {"%Gdqp", DisGdqp},  //

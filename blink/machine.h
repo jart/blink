@@ -521,6 +521,7 @@ void OpXaddEbGb(P);
 void OpXaddEvqpGvqp(P);
 void OpXchgGbEb(P);
 void OpXchgGvqpEvqp(P);
+void OpMulx(P);
 
 void *AllocateBig(size_t);
 void FreeBig(void *, size_t);
