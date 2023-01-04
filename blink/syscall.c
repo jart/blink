@@ -1321,8 +1321,8 @@ static int IoctlTcgets(struct Machine *m, int fd, i64 addr,
   return rc;
 }
 
-static int IoctlTcsets(struct Machine *m, int fd, int request, i64 addr,
-                       int fn(int, unsigned long, ...)) {
+static int IoctlTcsets(struct Machine *m, int fd, unsigned long request,
+                       i64 addr, int fn(int, unsigned long, ...)) {
   struct termios tio;
   struct termios_linux gtio;
   CopyFromUserRead(m, &gtio, addr, sizeof(gtio));
@@ -1386,7 +1386,7 @@ static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
 }
 
 static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
-                            int kind) {
+                            unsigned long kind) {
   struct ifreq ifreq;
   struct ifreq_linux ifreq_linux;
   CopyFromUserRead(m, &ifreq_linux, ifreq_addr, sizeof(ifreq_linux));
