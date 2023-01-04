@@ -2,7 +2,7 @@
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
 third_party/gcc/%.xz: third_party/gcc/%.xz.sha256 o/tool/sha256sum
-	curl -so $@ https://justine.lol/compilers/$(notdir $@)
+	curl -so $@ https://justine.storage.googleapis.com/compilers/$(notdir $@)
 	o/tool/sha256sum $<
 
 o/$(MODE)/i486/%.o: %.c o/third_party/gcc/i486/bin/i486-linux-musl-gcc $(VM)

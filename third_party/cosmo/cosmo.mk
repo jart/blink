@@ -1,9 +1,8 @@
 #-*-mode:makefile-gmake;indent-tabs-mode:t;tab-width:8;coding:utf-8-*-┐
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
-.PRECIOUS: third_party/cosmo/%.gz
 third_party/cosmo/%.gz: third_party/cosmo/%.gz.sha256 o/tool/sha256sum
-	curl -so $@ https://justine.lol/cosmotests/$(subst third_party/cosmo/,,$@)
+	curl -so $@ https://justine.storage.googleapis.com/cosmotests/$(subst third_party/cosmo/,,$@)
 	o/tool/sha256sum $<
 
 .PRECIOUS: third_party/cosmo/%.com.dbg

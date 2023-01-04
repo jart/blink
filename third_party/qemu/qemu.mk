@@ -1,9 +1,9 @@
 #-*-mode:makefile-gmake;indent-tabs-mode:t;tab-width:8;coding:utf-8-*-┐
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
-third_party/qemu/%.xz: third_party/qemu/%.xz.sha256
-	curl -so $@ https://justine.lol/compilers/$(notdir $@)
-	$(VM) build/bootstrap/sha256sum.com $<
+third_party/qemu/%.xz: third_party/qemu/%.xz.sha256 o/tool/sha256sum
+	curl -so $@ https://justine.storage.googleapis.com/compilers/$(notdir $@)
+	o/tool/sha256sum $<
 
 o/third_party/qemu/qemu-aarch64: third_party/qemu/qemu-aarch64-static.xz
 	@mkdir -p $(@D)

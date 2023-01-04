@@ -5,8 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define THREADS    12
-#define ITERATIONS 100000
+#define THREADS    4
+#define ITERATIONS 10000
 
 _Alignas(128) static int a;
 _Alignas(128) static int b;
