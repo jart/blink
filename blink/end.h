@@ -3,7 +3,7 @@
 #include "blink/jit.h"
 #include "blink/mop.h"
 
-#ifdef __APPLE__
+#if defined(__APPLE__) || defined(__EMSCRIPTEN__)
 #define IMAGE_END ((u8 *)&StartJit)
 #else
 extern u8 end[];

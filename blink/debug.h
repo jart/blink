@@ -6,17 +6,6 @@
 #include "blink/machine.h"
 #include "blink/types.h"
 
-#if !defined(NDEBUG) && defined(__GNUC__)
-#define IB(x)                      \
-  __extension__({                  \
-    __typeof__(x) x_ = (x);        \
-    unassert((intptr_t)x_ > 4096); \
-    x_;                            \
-  })
-#else
-#define IB(x) (x)
-#endif
-
 void DumpHex(u8 *, size_t);
 void PrintFds(struct Fds *);
 void LogCpu(struct Machine *);

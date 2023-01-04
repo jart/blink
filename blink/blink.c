@@ -16,11 +16,11 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <setjmp.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "blink/web.h"
 #include <unistd.h>
 
 #include "blink/assert.h"
@@ -156,11 +156,12 @@ static void HandleSigs(void) {
 #endif
 }
 
-int main(int argc, char *argv[], char **envp) {
+int main(int argc, char *argv[]) {
+  SetupWeb();
   g_blink_path = argc > 0 ? argv[0] : 0;
   GetOpts(argc, argv);
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
   WriteErrorInit();
   HandleSigs();
-  return Exec(argv[optind_], argv + optind_, envp);
+  return Exec(argv[optind_], argv + optind_, environ);
 }

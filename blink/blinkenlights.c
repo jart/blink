@@ -34,6 +34,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
+#include "blink/web.h"
 #include <wctype.h>
 
 #include "blink/assert.h"
@@ -3659,6 +3660,7 @@ int main(int argc, char *argv[]) {
   int rc;
   struct System *s;
   static struct sigaction sa;
+  SetupWeb();
   g_blink_path = argc > 0 ? argv[0] : 0;
   react = true;
   tuimode = true;

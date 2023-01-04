@@ -14,11 +14,6 @@ ifneq ($(MODE), prof)
 o/$(MODE)/blink/uop.o: private CFLAGS += -fomit-frame-pointer
 endif
 
-# x86.c doesn't understand VEX encoding right now
-ifeq ($(HOST_ARCH), x86_64)
-o/$(MODE)/blink/uop.o: private TARGET_ARCH = -march=k8
-endif
-
 # vectorization makes code smaller
 o/$(MODE)/blink/sse2.o: private CFLAGS += -O3
 o/$(MODE)/x86_64/blink/sse2.o: private CFLAGS += -O3

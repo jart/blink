@@ -1119,7 +1119,7 @@ static i64 SysReadImpl(struct Machine *m, struct Fd *fd, i64 addr, u64 size) {
   unassert(fd->cb);
   InitIovs(&iv);
   if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
-    INTERRUPTIBLE(rc = IB(fd->cb->readv)(fd->systemfd, iv.p, iv.i));
+    INTERRUPTIBLE(rc = fd->cb->readv(fd->systemfd, iv.p, iv.i));
     if (rc != -1) SetWriteAddr(m, addr, rc);
   }
   FreeIovs(&iv);
@@ -1132,7 +1132,7 @@ static i64 SysWriteImpl(struct Machine *m, struct Fd *fd, i64 addr, u64 size) {
   unassert(fd->cb);
   InitIovs(&iv);
   if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
-    INTERRUPTIBLE(rc = IB(fd->cb->writev)(fd->systemfd, iv.p, iv.i));
+    INTERRUPTIBLE(rc = fd->cb->writev(fd->systemfd, iv.p, iv.i));
     if (rc != -1) SetReadAddr(m, addr, rc);
   }
   FreeIovs(&iv);
@@ -1213,7 +1213,7 @@ static i64 SysReadv(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   unassert(fd->cb);
   InitIovs(&iv);
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
-    INTERRUPTIBLE(rc = IB(fd->cb->readv)(fd->systemfd, iv.p, iv.i));
+    INTERRUPTIBLE(rc = fd->cb->readv(fd->systemfd, iv.p, iv.i));
   }
   UnlockFd(fd);
   FreeIovs(&iv);
@@ -1228,7 +1228,7 @@ static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   unassert(fd->cb);
   InitIovs(&iv);
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
-    INTERRUPTIBLE(rc = IB(fd->cb->writev)(fd->systemfd, iv.p, iv.i));
+    INTERRUPTIBLE(rc = fd->cb->writev(fd->systemfd, iv.p, iv.i));
   }
   UnlockFd(fd);
   FreeIovs(&iv);
@@ -1412,7 +1412,7 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
   int (*func)(int, unsigned long, ...);
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
   unassert(fd->cb);
-  func = IB(fd->cb->ioctl);
+  func = fd->cb->ioctl;
   systemfd = atomic_load_explicit(&fd->systemfd, memory_order_relaxed);
   switch (request) {
     case TIOCGWINSZ_LINUX:
@@ -1761,7 +1761,12 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
   struct rusage hrusage;
   struct rusage_linux grusage;
   if ((options = XlatWait(options)) == -1) return -1;
+#if !defined(__EMSCRIPTEN__)
   INTERRUPTIBLE(rc = wait4(pid, &wstatus, options, &hrusage));
+#else
+  memset(&hrusage, 0, sizeof(hrusage));
+  INTERRUPTIBLE(rc = waitpid(pid, &wstatus, options));
+#endif
   if (rc != -1) {
     if (opt_out_wstatus_addr) {
       CopyToUserWrite(m, opt_out_wstatus_addr, &wstatus, sizeof(wstatus));
@@ -2191,7 +2196,7 @@ static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
             hfds[0].events = (((ev & POLLIN_LINUX) ? POLLIN : 0) |
                               ((ev & POLLOUT_LINUX) ? POLLOUT : 0) |
                               ((ev & POLLPRI_LINUX) ? POLLPRI : 0));
-            switch (IB(fd->cb->poll)(hfds, 1, 0)) {
+            switch (fd->cb->poll(hfds, 1, 0)) {
               case 0:
                 Write16(gfds[i].revents, 0);
                 break;
