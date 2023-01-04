@@ -814,8 +814,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                "q"    // arg0 = machine
                "a1i"  // arg1 = register index
                "m",   // call micro-op
-               log2sz ? RexrReg(rde) : kByteReg[ByteRexr(rde)],
-               kGetReg[log2sz]);
+               log2sz ? RexrReg(rde) : kByteReg[RexRexr(rde)], kGetReg[log2sz]);
         break;
 
       case 'C':  // PutReg(RexrReg, <pop>)
@@ -826,7 +825,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "a1i"  // arg1 = register index
                  "q"    // arg0 = machine
                  "m",   // call micro-op
-                 log2sz ? RexrReg(rde) : kByteReg[ByteRexr(rde)],
+                 log2sz ? RexrReg(rde) : kByteReg[RexRexr(rde)],
                  kPutReg[log2sz]);
         } else {
           Jitter(A,
@@ -846,7 +845,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "a1i"  // arg1 = register index
                  "q"    // arg0 = machine
                  "m",   // call micro-op
-                 log2sz ? RexbRm(rde) : kByteReg[ByteRexb(rde)],
+                 log2sz ? RexbRm(rde) : kByteReg[RexRexb(rde)],
                  kGetReg[log2sz]);
         } else if (HasLinearMapping(m)) {
           Jitter(A,
@@ -879,7 +878,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "a1i"  // arg1 = register index
                    "q"    // arg0 = machine
                    "m",   // call micro-op
-                   log2sz ? RexbRm(rde) : kByteReg[ByteRexb(rde)],
+                   log2sz ? RexbRm(rde) : kByteReg[RexRexb(rde)],
                    kPutReg[log2sz]);
           } else if (HasLinearMapping(m)) {
             Jitter(A,
@@ -999,7 +998,8 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                "a1i"  // arg1 = index of register
                "q"    // arg0 = machine
                "m",   // call micro-op (get register)
-               RexbSrm(rde), kGetReg[WordLog2(rde)]);
+               log2sz ? RexbSrm(rde) : kByteReg[RexRexbSrm(rde)],
+               kGetReg[WordLog2(rde)]);
         break;
 
       case 'F':  // PutReg(RexbSrm, <pop>)
@@ -1010,7 +1010,8 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                "a1i"  // arg1 = index of register
                "q"    // arg0 = machine
                "m",   // call micro-op
-               RexbSrm(rde), kPutReg[WordLog2(rde)]);
+               log2sz ? RexbSrm(rde) : kByteReg[RexRexbSrm(rde)],
+               kPutReg[log2sz]);
         break;
 
       case 'G':  // r0 = GetReg(AX)
