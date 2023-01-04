@@ -642,8 +642,7 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   rc = ProtectVirtual(m->system, addr, size, prot);
   if (rc != -1 && (prot & PROT_EXEC)) {
     // TODO(jart): Store jump edges to invalidate smarter.
-    for (i = m->system->codestart;
-         i < m->system->codestart + m->system->codesize; ++i) {
+    for (i = m->codestart; i < m->codestart + m->codesize; ++i) {
       if (GetHook(m, i) != GeneralDispatch) {
         SetHook(m, i, 0);
         ++gotsome;
