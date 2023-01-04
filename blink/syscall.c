@@ -900,7 +900,7 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 aa, i64 asa,
   socklen_t len;
   struct Fd *fd1, *fd2;
   struct sockaddr_in addr;
-  if (m->system->redraw) m->system->redraw();
+  if (m->system->redraw) m->system->redraw(true);
   if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
   as = LoadAddrSize(m, asa);
   LockFds(&m->system->fds);

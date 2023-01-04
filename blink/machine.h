@@ -244,7 +244,7 @@ struct System {
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
   int (*exec)(char *, char **, char **);
-  void (*redraw)(void);
+  void (*redraw)(bool);
   _Alignas(4096) u8 real[kRealSize];
 };
 

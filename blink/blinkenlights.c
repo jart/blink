@@ -44,6 +44,7 @@
 #include "blink/debug.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
+#include "blink/errno.h"
 #include "blink/fds.h"
 #include "blink/flags.h"
 #include "blink/fpu.h"
@@ -344,8 +345,8 @@ static char systemfailure[128];
 static struct sigaction oldsig[4];
 struct History g_history;
 
+static void Redraw(bool);
 static void SetupDraw(void);
-static void Redraw(void);
 static void HandleKeyboard(const char *);
 
 const char kXedErrorNames[] = "\
@@ -759,7 +760,7 @@ static void OnSigAlrm(int sig, siginfo_t *si, void *uc) {
 static void OnSigCont(int sig, siginfo_t *si, void *uc) {
   if (tuimode) {
     TuiRejuvinate();
-    Redraw();
+    Redraw(true);
   }
   EnqueueSignal(m, SIGCONT);
 }
@@ -1221,7 +1222,8 @@ static i64 Disassemble(void) {
 
 static i64 GetDisIndex(void) {
   i64 i;
-  if ((i = DisFind(dis, GetPc(m))) != -1 || (i = Disassemble()) != -1) {
+  if ((i = DisFind(dis, GetPc(m) - m->oplen)) != -1 ||
+      (i = Disassemble()) != -1) {
     while (i + 1 < dis->ops.i) {
       if (!dis->ops.p[i].size) {
         ++i;
@@ -1996,7 +1998,7 @@ static void ShowHistory(void) {
   free(ansi);
 }
 
-static void Redraw(void) {
+static void Redraw(bool force) {
   int i, j;
   char *ansi;
   size_t size;
@@ -2060,7 +2062,7 @@ static void Redraw(void) {
   (void)end_draw;
   STATISTIC(AVERAGE(redraw_latency_us,
                     ToMicroseconds(SubtractTime(end_draw, start_draw))));
-  if (PreventBufferbloat()) {
+  if (force || PreventBufferbloat()) {
     unassert(UninterruptibleWrite(ttyout, ansi, size) != -1);
   }
   AddHistory(ansi, size);
@@ -2071,7 +2073,8 @@ static void Redraw(void) {
 
 static void ReactiveDraw(void) {
   if (tuimode) {
-    Redraw();
+    LOGF("%" PRIx64 " %s ReactiveDraw", GetPc(m), tuimode ? "TUI" : "EXEC");
+    Redraw(true);
     tick = speed;
   }
 }
@@ -2182,9 +2185,9 @@ static struct Mouse ParseMouse(char *p) {
 
 static ssize_t ReadAnsi(int fd, char *p, size_t n) {
   ssize_t rc;
-  struct Mouse m;
-  LOGF("ReadAnsi");
+  struct Mouse mo;
   for (;;) {
+    LOGF("%" PRIx64 " %s ReadAnsi", GetPc(m), tuimode ? "TUI" : "EXEC");
     readingteletype = true;
     ReactiveDraw();
     rc = readansi(fd, p, n);
@@ -2200,8 +2203,8 @@ static ssize_t ReadAnsi(int fd, char *p, size_t n) {
           continue;
         }
         if (p[2] == '<') {
-          m = ParseMouse(p + 3);
-          if (LocatePanel(m.y, m.x) != &pan.display) {
+          mo = ParseMouse(p + 3);
+          if (LocatePanel(mo.y, mo.x) != &pan.display) {
             HandleKeyboard(p);
             continue;
           }
@@ -2211,6 +2214,7 @@ static ssize_t ReadAnsi(int fd, char *p, size_t n) {
     } else {
       unassert(errno == EINTR);
       HandleAppReadInterrupt();
+      return eintr();
     }
   }
 }
@@ -2655,8 +2659,11 @@ static void OnKeyboardServiceReadKeyPress(void) {
   ssize_t rc;
   static char buf[32];
   static size_t pending;
-  tuimode = true;
-  action |= CONTINUE;
+  LOGF("OnKeyboardServiceReadKeyPress");
+  if (!tuimode) {
+    tuimode = true;
+    action |= CONTINUE;
+  }
   pty->conf |= kPtyBlinkcursor;
   if (!pending) {
     rc = ReadAnsi(ttyin, buf, sizeof(buf));
@@ -2742,7 +2749,8 @@ static void OnInt15h(void) {
 }
 
 static bool OnHalt(int interrupt) {
-  LOGF("OnHalt(%d)", interrupt);
+  LOGF("%" PRIx64 " %s OnHalt(%#x)", GetPc(m), tuimode ? "TUI" : "EXEC",
+       interrupt);
   ReactiveDraw();
   switch (interrupt) {
     case 1:
@@ -3148,6 +3156,7 @@ static void HandleKeyboard(const char *k) {
 
 static void ReadKeyboard(void) {
   char buf[64];
+  LOGF("ReadKeyboard");
   memset(buf, 0, sizeof(buf));
   dialog = NULL;
   if (readansi(ttyin, buf, sizeof(buf)) == -1) {
@@ -3258,6 +3267,7 @@ static void Exec(void) {
   int sig;
   ssize_t bp;
   int interrupt;
+  LOGF("Exec");
   ExecSetup();
   if (!(interrupt = sigsetjmp(m->onhalt, 1))) {
     m->canhalt = true;
@@ -3341,6 +3351,7 @@ static void Tui(void) {
   ssize_t bp;
   int interrupt;
   bool interactive;
+  LOGF("Tui");
   TuiSetup();
   SetupDraw();
   ScrollOp(&pan.disassembly, GetDisIndex());
@@ -3383,7 +3394,7 @@ static void Tui(void) {
       }
       if (!(action & CONTINUE) || interactive) {
         tick = 0;
-        Redraw();
+        Redraw(false);
         CopyMachineState(&laststate);
       }
       if (dialog) {
