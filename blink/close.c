@@ -29,6 +29,7 @@
 #include "blink/fds.h"
 #include "blink/log.h"
 #include "blink/machine.h"
+#include "blink/syscall.h"
 
 static int CloseFd(struct System *s, struct Fd *fd) {
   int sf, rc;

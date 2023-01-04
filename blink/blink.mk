@@ -9,11 +9,6 @@ BLINK_HDRS = $(filter %.h,$(BLINK_FILES))
 # avoid static memory being placed in micro-operations
 o/$(MODE)/blink/uop.o: private CFLAGS += -fno-stack-protector
 
-# Clang isn't very good at compiling Write64()
-ifeq ($(HOST_ARCH), x86_64)
-o/$(MODE)/blink/uop.o: private CFLAGS += -mno-avx
-endif
-
 # GCC whines if -pg is passed without this flag
 ifneq ($(MODE), prof)
 o/$(MODE)/blink/uop.o: private CFLAGS += -fomit-frame-pointer
@@ -110,6 +105,8 @@ o/$(MODE)/powerpc/blink/blink: o/$(MODE)/powerpc/blink/blink.o o/$(MODE)/powerpc
 o/$(MODE)/powerpc64le/blink/blink: o/$(MODE)/powerpc64le/blink/blink.o o/$(MODE)/powerpc64le/blink/blink.a
 	$(VM) o/third_party/gcc/powerpc64le/bin/powerpc64le-linux-musl-gcc $(LDFLAGS_STATIC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 
+o/$(MODE)/blink/blinkenlights.html: o/$(MODE)/blink/blinkenlights.o o/$(MODE)/blink/blink.a o/$(MODE)/third_party/zlib/zlib.a
+	$(CC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/blink/blinkenlights: o/$(MODE)/blink/blinkenlights.o o/$(MODE)/blink/blink.a o/$(MODE)/third_party/zlib/zlib.a
 	$(CC) $(LDFLAGS) $(TARGET_ARCH) $^ $(LOADLIBES) $(LDLIBS) -o $@
 o/$(MODE)/i486/blink/blinkenlights: o/$(MODE)/i486/blink/blinkenlights.o o/$(MODE)/i486/blink/blink.a o/$(MODE)/i486/third_party/zlib/zlib.a

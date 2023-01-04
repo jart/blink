@@ -1414,7 +1414,7 @@ static void DrawCpu(struct Panel *p) {
 static void DrawXmm(struct Panel *p, i64 i, i64 r) {
   float f;
   double d;
-  wint_t ival;
+  wchar_t ival;
   char buf[32];
   bool changed;
   u64 itmp;

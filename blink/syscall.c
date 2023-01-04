@@ -50,6 +50,7 @@
 #include "blink/assert.h"
 #include "blink/macros.h"
 #include "blink/mop.h"
+#include "blink/syscall.h"
 #include "blink/util.h"
 
 #ifdef __linux
@@ -1360,7 +1361,8 @@ static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
   ifreq = ifconf.ifc_req;
   for (i = 0; i < ifconf.ifc_len;) {
     if (len_linux + sizeof(ifreq_linux) > bufsize) break;
-#ifndef __linux
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || \
+    defined(__NetBSD__)
     len = IFNAMSIZ + ifreq->ifr_addr.sa_len;
 #else
     len = sizeof(*ifreq);
