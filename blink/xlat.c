@@ -44,181 +44,178 @@
 #include "blink/xlat.h"
 
 int XlatErrno(int x) {
-  switch (x) {
-    XLAT(EPERM, 1);
-    XLAT(ENOENT, 2);
-    XLAT(ESRCH, 3);
-    XLAT(EINTR, 4);
-    XLAT(EIO, 5);
-    XLAT(ENXIO, 6);
-    XLAT(E2BIG, 7);
-    XLAT(ENOEXEC, 8);
-    XLAT(EBADF, 9);
-    XLAT(ECHILD, 10);
-    XLAT(EAGAIN, 11);
+  if (x == EPERM) return EPERM_LINUX;
+  if (x == ENOENT) return ENOENT_LINUX;
+  if (x == ESRCH) return ESRCH_LINUX;
+  if (x == EINTR) return EINTR_LINUX;
+  if (x == EIO) return EIO_LINUX;
+  if (x == ENXIO) return ENXIO_LINUX;
+  if (x == E2BIG) return E2BIG_LINUX;
+  if (x == ENOEXEC) return ENOEXEC_LINUX;
+  if (x == EBADF) return EBADF_LINUX;
+  if (x == ECHILD) return ECHILD_LINUX;
+  if (x == EAGAIN) return EAGAIN_LINUX;
 #if EWOULDBLOCK != EAGAIN
-    XLAT(EWOULDBLOCK, 11);
+  if (x == EWOULDBLOCK) return EWOULDBLOCK_LINUX;
 #endif
-    XLAT(ENOMEM, 12);
-    XLAT(EACCES, 13);
-    XLAT(EFAULT, 14);
+  if (x == ENOMEM) return ENOMEM_LINUX;
+  if (x == EACCES) return EACCES_LINUX;
+  if (x == EFAULT) return EFAULT_LINUX;
 #ifdef ENOTBLK
-    XLAT(ENOTBLK, 15);
+  if (x == ENOTBLK) return ENOTBLK_LINUX;
 #endif
-    XLAT(EBUSY, 16);
-    XLAT(EEXIST, 17);
-    XLAT(EXDEV, 18);
-    XLAT(ENODEV, 19);
-    XLAT(ENOTDIR, 20);
-    XLAT(EISDIR, 21);
-    XLAT(EINVAL, 22);
-    XLAT(ENFILE, 23);
-    XLAT(EMFILE, 24);
-    XLAT(ENOTTY, 25);
-    XLAT(ETXTBSY, 26);
-    XLAT(EFBIG, 27);
-    XLAT(ENOSPC, 28);
-    XLAT(ESPIPE, 29);
-    XLAT(EROFS, 30);
-    XLAT(EMLINK, 31);
-    XLAT(EPIPE, 32);
-    XLAT(EDOM, 33);
-    XLAT(ERANGE, 34);
-    XLAT(EDEADLK, 35);
-    XLAT(ENAMETOOLONG, 36);
-    XLAT(ENOLCK, 37);
-    XLAT(ENOSYS, 38);
-    XLAT(ENOTEMPTY, 39);
-    XLAT(ELOOP, 40);
-    XLAT(ENOMSG, 42);
-    XLAT(EIDRM, 43);
+  if (x == EBUSY) return EBUSY_LINUX;
+  if (x == EEXIST) return EEXIST_LINUX;
+  if (x == EXDEV) return EXDEV_LINUX;
+  if (x == ENODEV) return ENODEV_LINUX;
+  if (x == ENOTDIR) return ENOTDIR_LINUX;
+  if (x == EISDIR) return EISDIR_LINUX;
+  if (x == EINVAL) return EINVAL_LINUX;
+  if (x == ENFILE) return ENFILE_LINUX;
+  if (x == EMFILE) return EMFILE_LINUX;
+  if (x == ENOTTY) return ENOTTY_LINUX;
+  if (x == ETXTBSY) return ETXTBSY_LINUX;
+  if (x == EFBIG) return EFBIG_LINUX;
+  if (x == ENOSPC) return ENOSPC_LINUX;
+  if (x == ESPIPE) return ESPIPE_LINUX;
+  if (x == EROFS) return EROFS_LINUX;
+  if (x == EMLINK) return EMLINK_LINUX;
+  if (x == EPIPE) return EPIPE_LINUX;
+  if (x == EDOM) return EDOM_LINUX;
+  if (x == ERANGE) return ERANGE_LINUX;
+  if (x == EDEADLK) return EDEADLK_LINUX;
+  if (x == ENAMETOOLONG) return ENAMETOOLONG_LINUX;
+  if (x == ENOLCK) return ENOLCK_LINUX;
+  if (x == ENOSYS) return ENOSYS_LINUX;
+  if (x == ENOTEMPTY) return ENOTEMPTY_LINUX;
+  if (x == ELOOP) return ELOOP_LINUX;
+  if (x == ENOMSG) return ENOMSG_LINUX;
+  if (x == EIDRM) return EIDRM_LINUX;
 #ifdef EREMOTE
-    XLAT(EREMOTE, 66);
+  if (x == EREMOTE) return EREMOTE_LINUX;
 #endif
-    XLAT(EPROTO, 71);
-    XLAT(EBADMSG, 74);
-    XLAT(EOVERFLOW, 75);
-    XLAT(EILSEQ, 84);
+  if (x == EPROTO) return EPROTO_LINUX;
+  if (x == EBADMSG) return EBADMSG_LINUX;
+  if (x == EOVERFLOW) return EOVERFLOW_LINUX;
+  if (x == EILSEQ) return EILSEQ_LINUX;
 #ifdef EUSERS
-    XLAT(EUSERS, 87);
+  if (x == EUSERS) return EUSERS_LINUX;
 #endif
-    XLAT(ENOTSOCK, 88);
-    XLAT(EDESTADDRREQ, 89);
-    XLAT(EMSGSIZE, 90);
-    XLAT(EPROTOTYPE, 91);
-    XLAT(ENOPROTOOPT, 92);
-    XLAT(EPROTONOSUPPORT, 93);
+  if (x == ENOTSOCK) return ENOTSOCK_LINUX;
+  if (x == EDESTADDRREQ) return EDESTADDRREQ_LINUX;
+  if (x == EMSGSIZE) return EMSGSIZE_LINUX;
+  if (x == EPROTOTYPE) return EPROTOTYPE_LINUX;
+  if (x == ENOPROTOOPT) return ENOPROTOOPT_LINUX;
+  if (x == EPROTONOSUPPORT) return EPROTONOSUPPORT_LINUX;
 #ifdef ESOCKTNOSUPPORT
-    XLAT(ESOCKTNOSUPPORT, 94);
+  if (x == ESOCKTNOSUPPORT) return ESOCKTNOSUPPORT_LINUX;
 #endif
-    XLAT(ENOTSUP, 95);
+  if (x == ENOTSUP) return ENOTSUP_LINUX;
 #if EOPNOTSUPP != ENOTSUP
-    XLAT(EOPNOTSUPP, 95);
+  if (x == EOPNOTSUPP) return EOPNOTSUPP_LINUX;
 #endif
 #ifdef EPFNOSUPPORT
-    XLAT(EPFNOSUPPORT, 96);
+  if (x == EPFNOSUPPORT) return EPFNOSUPPORT_LINUX;
 #endif
-    XLAT(EAFNOSUPPORT, 97);
-    XLAT(EADDRINUSE, 98);
-    XLAT(EADDRNOTAVAIL, 99);
-    XLAT(ENETDOWN, 100);
-    XLAT(ENETUNREACH, 101);
-    XLAT(ENETRESET, 102);
-    XLAT(ECONNABORTED, 103);
-    XLAT(ECONNRESET, 104);
-    XLAT(ENOBUFS, 105);
-    XLAT(EISCONN, 106);
-    XLAT(ENOTCONN, 107);
+  if (x == EAFNOSUPPORT) return EAFNOSUPPORT_LINUX;
+  if (x == EADDRINUSE) return EADDRINUSE_LINUX;
+  if (x == EADDRNOTAVAIL) return EADDRNOTAVAIL_LINUX;
+  if (x == ENETDOWN) return ENETDOWN_LINUX;
+  if (x == ENETUNREACH) return ENETUNREACH_LINUX;
+  if (x == ENETRESET) return ENETRESET_LINUX;
+  if (x == ECONNABORTED) return ECONNABORTED_LINUX;
+  if (x == ECONNRESET) return ECONNRESET_LINUX;
+  if (x == ENOBUFS) return ENOBUFS_LINUX;
+  if (x == EISCONN) return EISCONN_LINUX;
+  if (x == ENOTCONN) return ENOTCONN_LINUX;
 #ifdef ESHUTDOWN
-    XLAT(ESHUTDOWN, 108);
+  if (x == ESHUTDOWN) return ESHUTDOWN_LINUX;
 #endif
 #ifdef ETOOMANYREFS
-    XLAT(ETOOMANYREFS, 109);
+  if (x == ETOOMANYREFS) return ETOOMANYREFS_LINUX;
 #endif
-    XLAT(ETIMEDOUT, 110);
-    XLAT(ECONNREFUSED, 111);
+  if (x == ETIMEDOUT) return ETIMEDOUT_LINUX;
+  if (x == ECONNREFUSED) return ECONNREFUSED_LINUX;
 #ifdef EHOSTDOWN
-    XLAT(EHOSTDOWN, 112);
+  if (x == EHOSTDOWN) return EHOSTDOWN_LINUX;
 #endif
-    XLAT(EHOSTUNREACH, 113);
-    XLAT(EALREADY, 114);
-    XLAT(EINPROGRESS, 115);
-    XLAT(ESTALE, 116);
-    XLAT(EDQUOT, 122);
-    XLAT(ECANCELED, 125);
-    XLAT(EOWNERDEAD, 130);
-    XLAT(ENOTRECOVERABLE, 131);
+  if (x == EHOSTUNREACH) return EHOSTUNREACH_LINUX;
+  if (x == EALREADY) return EALREADY_LINUX;
+  if (x == EINPROGRESS) return EINPROGRESS_LINUX;
+  if (x == ESTALE) return ESTALE_LINUX;
+  if (x == EDQUOT) return EDQUOT_LINUX;
+  if (x == ECANCELED) return ECANCELED_LINUX;
+  if (x == EOWNERDEAD) return EOWNERDEAD_LINUX;
+  if (x == ENOTRECOVERABLE) return ENOTRECOVERABLE_LINUX;
 #ifdef ETIME
-    XLAT(ETIME, 62);
+  if (x == ETIME) return ETIME_LINUX;
 #endif
 #ifdef ENONET
-    XLAT(ENONET, 64);
+  if (x == ENONET) return ENONET_LINUX;
 #endif
 #ifdef ERESTART
-    XLAT(ERESTART, 85);
+  if (x == ERESTART) return ERESTART_LINUX;
 #endif
 #ifdef ENOSR
-    XLAT(ENOSR, 63);
+  if (x == ENOSR) return ENOSR_LINUX;
 #endif
 #ifdef ENOSTR
-    XLAT(ENOSTR, 60);
+  if (x == ENOSTR) return ENOSTR_LINUX;
 #endif
 #ifdef ENODATA
-    XLAT(ENODATA, 61);
+  if (x == ENODATA) return ENODATA_LINUX;
 #endif
 #ifdef EMULTIHOP
-    XLAT(EMULTIHOP, 72);
+  if (x == EMULTIHOP) return EMULTIHOP_LINUX;
 #endif
 #ifdef ENOLINK
-    XLAT(ENOLINK, 67);
+  if (x == ENOLINK) return ENOLINK_LINUX;
 #endif
 #ifdef ENOMEDIUM
-    XLAT(ENOMEDIUM, 123);
+  if (x == ENOMEDIUM) return ENOMEDIUM_LINUX;
 #endif
 #ifdef EMEDIUMTYPE
-    XLAT(EMEDIUMTYPE, 124);
+  if (x == EMEDIUMTYPE) return EMEDIUMTYPE_LINUX;
 #endif
-    default:
-      return x;
-  }
+  return x;
 }
 
 int XlatSignal(int x) {
   switch (x) {
-    XLAT(1, SIGHUP);
-    XLAT(2, SIGINT);
-    XLAT(3, SIGQUIT);
-    XLAT(4, SIGILL);
-    XLAT(5, SIGTRAP);
-    XLAT(6, SIGABRT);
-    XLAT(7, SIGBUS);
-    XLAT(8, SIGFPE);
-    XLAT(9, SIGKILL);
-    XLAT(10, SIGUSR1);
-    XLAT(11, SIGSEGV);
-    XLAT(12, SIGUSR2);
-    XLAT(13, SIGPIPE);
-    XLAT(14, SIGALRM);
-    XLAT(15, SIGTERM);
+    XLAT(SIGHUP_LINUX, SIGHUP);
+    XLAT(SIGINT_LINUX, SIGINT);
+    XLAT(SIGQUIT_LINUX, SIGQUIT);
+    XLAT(SIGILL_LINUX, SIGILL);
+    XLAT(SIGTRAP_LINUX, SIGTRAP);
+    XLAT(SIGABRT_LINUX, SIGABRT);
+    XLAT(SIGBUS_LINUX, SIGBUS);
+    XLAT(SIGFPE_LINUX, SIGFPE);
+    XLAT(SIGKILL_LINUX, SIGKILL);
+    XLAT(SIGUSR1_LINUX, SIGUSR1);
+    XLAT(SIGSEGV_LINUX, SIGSEGV);
+    XLAT(SIGUSR2_LINUX, SIGUSR2);
+    XLAT(SIGPIPE_LINUX, SIGPIPE);
+    XLAT(SIGALRM_LINUX, SIGALRM);
+    XLAT(SIGTERM_LINUX, SIGTERM);
 #ifdef SIGSTKFLT
-    XLAT(16, SIGSTKFLT);
+    XLAT(SIGSTKFLT_LINUX, SIGSTKFLT);
 #endif
-    XLAT(17, SIGCHLD);
-    XLAT(18, SIGCONT);
-    XLAT(19, SIGSTOP);
-    XLAT(20, SIGTSTP);
-    XLAT(21, SIGTTIN);
-    XLAT(22, SIGTTOU);
-    XLAT(23, SIGURG);
-    XLAT(24, SIGXCPU);
-    XLAT(25, SIGXFSZ);
-    XLAT(26, SIGVTALRM);
-    XLAT(27, SIGPROF);
-    XLAT(28, SIGWINCH);
+    XLAT(SIGCHLD_LINUX, SIGCHLD);
+    XLAT(SIGCONT_LINUX, SIGCONT);
+    XLAT(SIGSTOP_LINUX, SIGSTOP);
+    XLAT(SIGTSTP_LINUX, SIGTSTP);
+    XLAT(SIGTTIN_LINUX, SIGTTIN);
+    XLAT(SIGTTOU_LINUX, SIGTTOU);
+    XLAT(SIGURG_LINUX, SIGURG);
+    XLAT(SIGXCPU_LINUX, SIGXCPU);
+    XLAT(SIGXFSZ_LINUX, SIGXFSZ);
+    XLAT(SIGVTALRM_LINUX, SIGVTALRM);
+    XLAT(SIGPROF_LINUX, SIGPROF);
+    XLAT(SIGWINCH_LINUX, SIGWINCH);
 #ifdef SIGIO
-    XLAT(29, SIGIO);
+    XLAT(SIGIO_LINUX, SIGIO);
 #endif
-    XLAT(31, SIGSYS);
+    XLAT(SIGSYS_LINUX, SIGSYS);
     default:
       return einval();
   }
@@ -263,44 +260,41 @@ int XlatResource(int x) {
 }
 
 int UnXlatSignal(int x) {
-  switch (x) {
-    XLAT(SIGHUP, 1);
-    XLAT(SIGINT, 2);
-    XLAT(SIGQUIT, 3);
-    XLAT(SIGILL, 4);
-    XLAT(SIGTRAP, 5);
-    XLAT(SIGABRT, 6);
-    XLAT(SIGBUS, 7);
-    XLAT(SIGFPE, 8);
-    XLAT(SIGKILL, 9);
-    XLAT(SIGUSR1, 10);
-    XLAT(SIGSEGV, 11);
-    XLAT(SIGUSR2, 12);
-    XLAT(SIGPIPE, 13);
-    XLAT(SIGALRM, 14);
-    XLAT(SIGTERM, 15);
-    XLAT(SIGCHLD, 17);
-    XLAT(SIGCONT, 18);
-    XLAT(SIGTTIN, 21);
-    XLAT(SIGTTOU, 22);
-    XLAT(SIGXCPU, 24);
-    XLAT(SIGXFSZ, 25);
-    XLAT(SIGVTALRM, 26);
-    XLAT(SIGPROF, 27);
-    XLAT(SIGWINCH, 28);
+  if (x == SIGHUP) return SIGHUP_LINUX;
+  if (x == SIGINT) return SIGINT_LINUX;
+  if (x == SIGQUIT) return SIGQUIT_LINUX;
+  if (x == SIGILL) return SIGILL_LINUX;
+  if (x == SIGTRAP) return SIGTRAP_LINUX;
+  if (x == SIGABRT) return SIGABRT_LINUX;
+  if (x == SIGBUS) return SIGBUS_LINUX;
+  if (x == SIGFPE) return SIGFPE_LINUX;
+  if (x == SIGKILL) return SIGKILL_LINUX;
+  if (x == SIGUSR1) return SIGUSR1_LINUX;
+  if (x == SIGSEGV) return SIGSEGV_LINUX;
+  if (x == SIGUSR2) return SIGUSR2_LINUX;
+  if (x == SIGPIPE) return SIGPIPE_LINUX;
+  if (x == SIGALRM) return SIGALRM_LINUX;
+  if (x == SIGTERM) return SIGTERM_LINUX;
+  if (x == SIGCHLD) return SIGCHLD_LINUX;
+  if (x == SIGCONT) return SIGCONT_LINUX;
+  if (x == SIGTTIN) return SIGTTIN_LINUX;
+  if (x == SIGTTOU) return SIGTTOU_LINUX;
+  if (x == SIGXCPU) return SIGXCPU_LINUX;
+  if (x == SIGXFSZ) return SIGXFSZ_LINUX;
+  if (x == SIGVTALRM) return SIGVTALRM_LINUX;
+  if (x == SIGPROF) return SIGPROF_LINUX;
+  if (x == SIGWINCH) return SIGWINCH_LINUX;
 #ifdef SIGIO
-    XLAT(SIGIO, 29);
+  if (x == SIGIO) return SIGIO_LINUX;
 #endif
 #ifdef SIGSTKFLT
-    XLAT(SIGSTKFLT, 16);
+  if (x == SIGSTKFLT) return SIGSTKFLT_LINUX;
 #endif
-    XLAT(SIGSTOP, 19);
-    XLAT(SIGSYS, 31);
-    XLAT(SIGTSTP, 20);
-    XLAT(SIGURG, 23);
-    default:
-      return einval();
-  }
+  if (x == SIGSTOP) return SIGSTOP_LINUX;
+  if (x == SIGSYS) return SIGSYS_LINUX;
+  if (x == SIGTSTP) return SIGTSTP_LINUX;
+  if (x == SIGURG) return SIGURG_LINUX;
+  return einval();
 }
 
 int XlatRusage(int x) {
@@ -326,14 +320,11 @@ int XlatSocketFamily(int x) {
 }
 
 int UnXlatSocketFamily(int x) {
-  switch (x) {
-    XLAT(AF_UNSPEC, AF_UNSPEC_LINUX);
-    XLAT(AF_UNIX, AF_UNIX_LINUX);
-    XLAT(AF_INET, AF_INET_LINUX);
-    default:
-      LOGF("don't know how to translate %s %d", "socket family", x);
-      return x;
-  }
+  if (x == AF_UNSPEC) return AF_UNSPEC_LINUX;
+  if (x == AF_UNIX) return AF_UNIX_LINUX;
+  if (x == AF_INET) return AF_INET_LINUX;
+  LOGF("don't know how to translate %s %d", "socket family", x);
+  return x;
 }
 
 int XlatSocketType(int x) {

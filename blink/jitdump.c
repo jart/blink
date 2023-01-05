@@ -33,6 +33,12 @@
 #include "blink/timespec.h"
 #include "blink/util.h"
 
+#ifdef __COSMOPOLITAN__
+#define GETTID() gettid()
+#else
+#define GETTID() syscall(__NR_gettid)
+#endif
+
 static struct JitDump {
   int pid;
   atomic_uint gen;
@@ -85,7 +91,7 @@ int LoadJitDump(int fd, const u8 *code, size_t size) {
   p = stpcpy(p, "JIT#");
   p = FormatInt64(p, id);
   namelen = p - name;
-  if (!tid) unassert((tid = syscall(__NR_gettid)) > 0);
+  if (!tid) unassert((tid = GETTID()) > 0);
   r.p.id = JIT_CODE_CLOSE;
   r.p.total_size = sizeof(r) + namelen + 1 + size;
   r.p.timestamp = GetJitDumpTimestamp();

@@ -2238,7 +2238,7 @@ static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
           usleep(wait);
         } else {
           unassert(!gettimeofday(&ts2, 0));
-          elapsed = timeval_tomicros(timeval_sub(ts2, ts1));
+          elapsed = TimevalTomicros(TimevalSub(ts2, ts1));
           if (elapsed >= timeout) {
             break;
           }

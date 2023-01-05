@@ -55,6 +55,7 @@ clean:
 
 include build/config.mk
 include build/rules.mk
+include third_party/zlib/zlib.mk
 include blink/blink.mk
 include test/test.mk
 include test/asm/asm.mk
@@ -62,7 +63,6 @@ include test/func/func.mk
 include test/flat/flat.mk
 include test/blink/test.mk
 include third_party/gcc/gcc.mk
-include third_party/zlib/zlib.mk
 include third_party/qemu/qemu.mk
 include third_party/cosmo/cosmo.mk
 

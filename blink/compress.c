@@ -17,10 +17,10 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <stdlib.h>
+#include <zlib.h>
 
 #include "blink/assert.h"
 #include "blink/util.h"
-#include "third_party/zlib/zlib.h"
 
 void *Deflate(const void *data, unsigned size, unsigned *out_size) {
   void *res;

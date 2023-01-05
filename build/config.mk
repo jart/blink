@@ -93,6 +93,10 @@ CFLAGS += -O0
 CPPFLAGS += -DDEBUG
 endif
 
+ifeq ($(MODE), cosmo)
+CC = cosmocc
+endif
+
 # make m=prof o/prof/blink
 # o/prof/blink third_party/cosmo/mu_test.com
 # gprof o/prof/blink gmon.out | less
