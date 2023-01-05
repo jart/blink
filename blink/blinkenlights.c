@@ -34,7 +34,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <wchar.h>
-#include "blink/web.h"
 #include <wctype.h>
 
 #include "blink/assert.h"
@@ -72,6 +71,7 @@
 #include "blink/types.h"
 #include "blink/util.h"
 #include "blink/watch.h"
+#include "blink/web.h"
 #include "blink/xlat.h"
 #include "blink/xmmtype.h"
 
@@ -127,6 +127,7 @@ x       hex                       -v       increase verbosity\n\
 t       sse type                  -m       disables memory safety\n\
 w       sse width                 -N       natural scroll wheel\n\
 B       pop breakpoint            -?       help\n\
+p       profiling mode\n\
 ctrl-t  turbo\n\
 alt-t   slowmo"
 
@@ -1571,9 +1572,9 @@ static void DrawMemoryZoomed(struct Panel *p, struct MemoryView *view,
                  (histart && hiend && histart >= a && hiend < b));
       if (changed && !high) {
         high = true;
-        AppendStr(&p->lines[i], "\e[7m");
+        AppendStr(&p->lines[i], "\033[7m");
       } else if (!changed && high) {
-        AppendStr(&p->lines[i], "\e[27m");
+        AppendStr(&p->lines[i], "\033[27m");
         high = false;
       }
       if (invalid[c]) {
@@ -1583,7 +1584,7 @@ static void DrawMemoryZoomed(struct Panel *p, struct MemoryView *view,
       }
     }
     if (high) {
-      AppendStr(&p->lines[i], "\e[27m");
+      AppendStr(&p->lines[i], "\033[27m");
       high = false;
     }
   }
@@ -2084,7 +2085,7 @@ static void DescribeKeystroke(char *b, const char *p) {
   int c;
   do {
     c = *p++ & 255;
-    if (c == '\e') {
+    if (c == '\033') {
       b = stpcpy(b, "ALT-");
       c = *p++ & 255;
     }
@@ -2194,7 +2195,7 @@ static ssize_t ReadAnsi(int fd, char *p, size_t n) {
     rc = readansi(fd, p, n);
     readingteletype = false;
     if (rc != -1) {
-      if (tuimode && rc > 3 && p[0] == '\e' && p[1] == '[') {
+      if (tuimode && rc > 3 && p[0] == '\033' && p[1] == '[') {
         if (p[2] == '2' && p[3] == '0' && p[4] == '0' && p[5] == '~') {
           belay = true;
           continue;
@@ -2312,7 +2313,7 @@ static void DrawDisplayOnly(struct Panel *p) {
   memset(&b, 0, sizeof(b));
   tly = tyn / 2 - yn / 2;
   tlx = txn / 2 - xn / 2;
-  AppendStr(&b, "\e[0m\e[H");
+  AppendStr(&b, "\033[0m\033[H");
   for (y = 0; y < tyn; ++y) {
     if (y) AppendStr(&b, "\r\n");
     if (tly <= y && y <= tly + yn) {
@@ -2321,7 +2322,7 @@ static void DrawDisplayOnly(struct Panel *p) {
       }
       AppendData(&b, p->lines[y - tly].p, p->lines[y - tly].i);
     }
-    AppendStr(&b, "\e[0m\e[K");
+    AppendStr(&b, "\033[0m\033[K");
   }
   write(ttyout, b.p, b.i);
   free(b.p);

@@ -27,6 +27,9 @@
 #include "blink/swap.h"
 #include "blink/tsan.h"
 
+#define ACQUIRE memory_order_acquire
+#define RELEASE memory_order_release
+
 /* When software uses locks or semaphores to synchronize processes,
    threads, or other code sections; Intel recommends that only one lock
    or semaphore be present within a cache line (or 128 byte sector, if
@@ -62,7 +65,7 @@ void UnlockBus(const u8 *locality) {
 
 i64 Load8(const u8 p[1]) {
   i64 z;
-  z = atomic_load_explicit((_Atomic(u8) *)p, memory_order_seq_cst);
+  z = atomic_load_explicit((_Atomic(u8) *)p, ACQUIRE);
   return z;
 }
 
@@ -73,7 +76,7 @@ i64 Load16(const u8 p[2]) {
   z = atomic_load_explicit((_Atomic(u16) *)p, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 1)) {
-    z = Little16(atomic_load_explicit((_Atomic(u16) *)p, memory_order_seq_cst));
+    z = Little16(atomic_load_explicit((_Atomic(u16) *)p, ACQUIRE));
   } else {
     z = Read16(p);
   }
@@ -88,7 +91,7 @@ i64 Load32(const u8 p[4]) {
   z = atomic_load_explicit((_Atomic(u32) *)p, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 3)) {
-    z = Little32(atomic_load_explicit((_Atomic(u32) *)p, memory_order_seq_cst));
+    z = Little32(atomic_load_explicit((_Atomic(u32) *)p, ACQUIRE));
   } else {
     z = Read32(p);
   }
@@ -103,7 +106,7 @@ i64 Load64(const u8 p[8]) {
   z = atomic_load_explicit((_Atomic(u64) *)p, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 7)) {
-    z = Little64(atomic_load_explicit((_Atomic(u64) *)p, memory_order_seq_cst));
+    z = Little64(atomic_load_explicit((_Atomic(u64) *)p, ACQUIRE));
   } else {
     z = Read64(p);
   }
@@ -127,7 +130,7 @@ i64 Load64Unlocked(const u8 p[8]) {
 }
 
 void Store8(u8 p[1], u64 x) {
-  atomic_store_explicit((_Atomic(u8) *)p, x, memory_order_seq_cst);
+  atomic_store_explicit((_Atomic(u8) *)p, x, RELEASE);
 }
 
 void Store16(u8 p[2], u64 x) {
@@ -136,7 +139,7 @@ void Store16(u8 p[2], u64 x) {
   atomic_store_explicit((_Atomic(u16) *)p, x, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 1)) {
-    atomic_store_explicit((_Atomic(u16) *)p, Little16(x), memory_order_seq_cst);
+    atomic_store_explicit((_Atomic(u16) *)p, Little16(x), RELEASE);
   } else {
     Write16(p, x);
   }
@@ -149,7 +152,7 @@ void Store32(u8 p[4], u64 x) {
   atomic_store_explicit((_Atomic(u32) *)p, x, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 3)) {
-    atomic_store_explicit((_Atomic(u32) *)p, Little32(x), memory_order_seq_cst);
+    atomic_store_explicit((_Atomic(u32) *)p, Little32(x), RELEASE);
   } else {
     Write32(p, x);
   }
@@ -162,7 +165,7 @@ void Store64(u8 p[8], u64 x) {
   atomic_store_explicit((_Atomic(u64) *)p, x, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 7)) {
-    atomic_store_explicit((_Atomic(u64) *)p, Little64(x), memory_order_seq_cst);
+    atomic_store_explicit((_Atomic(u64) *)p, Little64(x), RELEASE);
   } else {
     Write64(p, x);
   }

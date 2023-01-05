@@ -119,126 +119,126 @@ o/$(MODE)/powerpc64le/%.runs: o/$(MODE)/powerpc64le/% o/third_party/qemu/qemu-po
 	$(VM) o/third_party/qemu/qemu-powerpc64le $<
 	@touch $@
 
-o/$(MODE)/i486/%.emulates: % o//i486/blink/blink o/third_party/qemu/qemu-i486 $(VM)
+o/$(MODE)/i486/%.emulates: % o/$(MODE)/i486/blink/blink o/third_party/qemu/qemu-i486 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-i486 o//i486/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-i486 o/$(MODE)/i486/blink/blink $<
 	@touch $@
-o/$(MODE)/m68k/%.emulates: % o//m68k/blink/blink o/third_party/qemu/qemu-m68k $(VM)
+o/$(MODE)/m68k/%.emulates: % o/$(MODE)/m68k/blink/blink o/third_party/qemu/qemu-m68k $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-m68k o//m68k/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-m68k o/$(MODE)/m68k/blink/blink $<
 	@touch $@
-o/$(MODE)/x86_64/%.emulates: % o//x86_64/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
+o/$(MODE)/x86_64/%.emulates: % o/$(MODE)/x86_64/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-x86_64 o//x86_64/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-x86_64 o/$(MODE)/x86_64/blink/blink $<
 	@touch $@
-o/$(MODE)/x86_64-gcc49/%.emulates: % o//x86_64-gcc49/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
+o/$(MODE)/x86_64-gcc49/%.emulates: % o/$(MODE)/x86_64-gcc49/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-x86_64 o//x86_64-gcc49/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-x86_64 o/$(MODE)/x86_64-gcc49/blink/blink $<
 	@touch $@
-o/$(MODE)/arm/%.emulates: % o//arm/blink/blink o/third_party/qemu/qemu-arm $(VM)
+o/$(MODE)/arm/%.emulates: % o/$(MODE)/arm/blink/blink o/third_party/qemu/qemu-arm $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-arm o//arm/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-arm o/$(MODE)/arm/blink/blink $<
 	@touch $@
-o/$(MODE)/aarch64/%.emulates: % o//aarch64/blink/blink o/third_party/qemu/qemu-aarch64 $(VM)
+o/$(MODE)/aarch64/%.emulates: % o/$(MODE)/aarch64/blink/blink o/third_party/qemu/qemu-aarch64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-aarch64 o//aarch64/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-aarch64 o/$(MODE)/aarch64/blink/blink $<
 	@touch $@
-o/$(MODE)/riscv64/%.emulates: % o//riscv64/blink/blink o/third_party/qemu/qemu-riscv64 $(VM)
+o/$(MODE)/riscv64/%.emulates: % o/$(MODE)/riscv64/blink/blink o/third_party/qemu/qemu-riscv64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-riscv64 o//riscv64/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-riscv64 o/$(MODE)/riscv64/blink/blink $<
 	@touch $@
-o/$(MODE)/mips/%.emulates: % o//mips/blink/blink o/third_party/qemu/qemu-mips $(VM)
+o/$(MODE)/mips/%.emulates: % o/$(MODE)/mips/blink/blink o/third_party/qemu/qemu-mips $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-mips o//mips/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-mips o/$(MODE)/mips/blink/blink $<
 	@touch $@
-o/$(MODE)/mipsel/%.emulates: % o//mipsel/blink/blink o/third_party/qemu/qemu-mipsel $(VM)
+o/$(MODE)/mipsel/%.emulates: % o/$(MODE)/mipsel/blink/blink o/third_party/qemu/qemu-mipsel $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-mipsel o//mipsel/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-mipsel o/$(MODE)/mipsel/blink/blink $<
 	@touch $@
-o/$(MODE)/mips64/%.emulates: % o//mips64/blink/blink o/third_party/qemu/qemu-mips64 $(VM)
+o/$(MODE)/mips64/%.emulates: % o/$(MODE)/mips64/blink/blink o/third_party/qemu/qemu-mips64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-mips64 o//mips64/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-mips64 o/$(MODE)/mips64/blink/blink $<
 	@touch $@
-o/$(MODE)/mips64el/%.emulates: % o//mips64el/blink/blink o/third_party/qemu/qemu-mips64el $(VM)
+o/$(MODE)/mips64el/%.emulates: % o/$(MODE)/mips64el/blink/blink o/third_party/qemu/qemu-mips64el $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-mips64el o//mips64el/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-mips64el o/$(MODE)/mips64el/blink/blink $<
 	@touch $@
-o/$(MODE)/s390x/%.emulates: % o//s390x/blink/blink o/third_party/qemu/qemu-s390x $(VM)
+o/$(MODE)/s390x/%.emulates: % o/$(MODE)/s390x/blink/blink o/third_party/qemu/qemu-s390x $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-s390x o//s390x/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-s390x o/$(MODE)/s390x/blink/blink $<
 	@touch $@
-o/$(MODE)/microblaze/%.emulates: % o//microblaze/blink/blink o/third_party/qemu/qemu-microblaze $(VM)
+o/$(MODE)/microblaze/%.emulates: % o/$(MODE)/microblaze/blink/blink o/third_party/qemu/qemu-microblaze $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-microblaze o//microblaze/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-microblaze o/$(MODE)/microblaze/blink/blink $<
 	@touch $@
-o/$(MODE)/powerpc/%.emulates: % o//powerpc/blink/blink o/third_party/qemu/qemu-powerpc $(VM)
+o/$(MODE)/powerpc/%.emulates: % o/$(MODE)/powerpc/blink/blink o/third_party/qemu/qemu-powerpc $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-powerpc o//powerpc/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-powerpc o/$(MODE)/powerpc/blink/blink $<
 	@touch $@
-o/$(MODE)/powerpc64le/%.emulates: % o//powerpc64le/blink/blink o/third_party/qemu/qemu-powerpc64le $(VM)
+o/$(MODE)/powerpc64le/%.emulates: % o/$(MODE)/powerpc64le/blink/blink o/third_party/qemu/qemu-powerpc64le $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-powerpc64le o//powerpc64le/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-powerpc64le o/$(MODE)/powerpc64le/blink/blink $<
 	@touch $@
 
-o/$(MODE)/i486/%.emulates: o/$(MODE)/% o//i486/blink/blink o/third_party/qemu/qemu-i486 $(VM)
+o/$(MODE)/i486/%.emulates: o/$(MODE)/% o/$(MODE)/i486/blink/blink o/third_party/qemu/qemu-i486 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-i486 o//i486/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-i486 o/$(MODE)/i486/blink/blink $<
 	@touch $@
-o/$(MODE)/m68k/%.emulates: o/$(MODE)/% o//m68k/blink/blink o/third_party/qemu/qemu-m68k $(VM)
+o/$(MODE)/m68k/%.emulates: o/$(MODE)/% o/$(MODE)/m68k/blink/blink o/third_party/qemu/qemu-m68k $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-m68k o//m68k/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-m68k o/$(MODE)/m68k/blink/blink $<
 	@touch $@
-o/$(MODE)/x86_64/%.emulates: o/$(MODE)/% o//x86_64/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
+o/$(MODE)/x86_64/%.emulates: o/$(MODE)/% o/$(MODE)/x86_64/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-x86_64 o//x86_64/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-x86_64 o/$(MODE)/x86_64/blink/blink $<
 	@touch $@
-o/$(MODE)/x86_64-gcc49/%.emulates: o/$(MODE)/% o//x86_64-gcc49/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
+o/$(MODE)/x86_64-gcc49/%.emulates: o/$(MODE)/% o/$(MODE)/x86_64-gcc49/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-x86_64 o//x86_64-gcc49/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-x86_64 o/$(MODE)/x86_64-gcc49/blink/blink $<
 	@touch $@
-o/$(MODE)/arm/%.emulates: o/$(MODE)/% o//arm/blink/blink o/third_party/qemu/qemu-arm $(VM)
+o/$(MODE)/arm/%.emulates: o/$(MODE)/% o/$(MODE)/arm/blink/blink o/third_party/qemu/qemu-arm $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-arm o//arm/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-arm o/$(MODE)/arm/blink/blink $<
 	@touch $@
-o/$(MODE)/aarch64/%.emulates: o/$(MODE)/% o//aarch64/blink/blink o/third_party/qemu/qemu-aarch64 $(VM)
+o/$(MODE)/aarch64/%.emulates: o/$(MODE)/% o/$(MODE)/aarch64/blink/blink o/third_party/qemu/qemu-aarch64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-aarch64 o//aarch64/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-aarch64 o/$(MODE)/aarch64/blink/blink $<
 	@touch $@
-o/$(MODE)/riscv64/%.emulates: o/$(MODE)/% o//riscv64/blink/blink o/third_party/qemu/qemu-riscv64 $(VM)
+o/$(MODE)/riscv64/%.emulates: o/$(MODE)/% o/$(MODE)/riscv64/blink/blink o/third_party/qemu/qemu-riscv64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-riscv64 o//riscv64/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-riscv64 o/$(MODE)/riscv64/blink/blink $<
 	@touch $@
-o/$(MODE)/mips/%.emulates: o/$(MODE)/% o//mips/blink/blink o/third_party/qemu/qemu-mips $(VM)
+o/$(MODE)/mips/%.emulates: o/$(MODE)/% o/$(MODE)/mips/blink/blink o/third_party/qemu/qemu-mips $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-mips o//mips/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-mips o/$(MODE)/mips/blink/blink $<
 	@touch $@
-o/$(MODE)/mipsel/%.emulates: o/$(MODE)/% o//mipsel/blink/blink o/third_party/qemu/qemu-mipsel $(VM)
+o/$(MODE)/mipsel/%.emulates: o/$(MODE)/% o/$(MODE)/mipsel/blink/blink o/third_party/qemu/qemu-mipsel $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-mipsel o//mipsel/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-mipsel o/$(MODE)/mipsel/blink/blink $<
 	@touch $@
-o/$(MODE)/mips64/%.emulates: o/$(MODE)/% o//mips64/blink/blink o/third_party/qemu/qemu-mips64 $(VM)
+o/$(MODE)/mips64/%.emulates: o/$(MODE)/% o/$(MODE)/mips64/blink/blink o/third_party/qemu/qemu-mips64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-mips64 o//mips64/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-mips64 o/$(MODE)/mips64/blink/blink $<
 	@touch $@
-o/$(MODE)/mips64el/%.emulates: o/$(MODE)/% o//mips64el/blink/blink o/third_party/qemu/qemu-mips64el $(VM)
+o/$(MODE)/mips64el/%.emulates: o/$(MODE)/% o/$(MODE)/mips64el/blink/blink o/third_party/qemu/qemu-mips64el $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-mips64el o//mips64el/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-mips64el o/$(MODE)/mips64el/blink/blink $<
 	@touch $@
-o/$(MODE)/s390x/%.emulates: o/$(MODE)/% o//s390x/blink/blink o/third_party/qemu/qemu-s390x $(VM)
+o/$(MODE)/s390x/%.emulates: o/$(MODE)/% o/$(MODE)/s390x/blink/blink o/third_party/qemu/qemu-s390x $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-s390x o//s390x/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-s390x o/$(MODE)/s390x/blink/blink $<
 	@touch $@
-o/$(MODE)/microblaze/%.emulates: o/$(MODE)/% o//microblaze/blink/blink o/third_party/qemu/qemu-microblaze $(VM)
+o/$(MODE)/microblaze/%.emulates: o/$(MODE)/% o/$(MODE)/microblaze/blink/blink o/third_party/qemu/qemu-microblaze $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-microblaze o//microblaze/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-microblaze o/$(MODE)/microblaze/blink/blink $<
 	@touch $@
-o/$(MODE)/powerpc/%.emulates: o/$(MODE)/% o//powerpc/blink/blink o/third_party/qemu/qemu-powerpc $(VM)
+o/$(MODE)/powerpc/%.emulates: o/$(MODE)/% o/$(MODE)/powerpc/blink/blink o/third_party/qemu/qemu-powerpc $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-powerpc o//powerpc/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-powerpc o/$(MODE)/powerpc/blink/blink $<
 	@touch $@
-o/$(MODE)/powerpc64le/%.emulates: o/$(MODE)/% o//powerpc64le/blink/blink o/third_party/qemu/qemu-powerpc64le $(VM)
+o/$(MODE)/powerpc64le/%.emulates: o/$(MODE)/% o/$(MODE)/powerpc64le/blink/blink o/third_party/qemu/qemu-powerpc64le $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-powerpc64le o//powerpc64le/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-powerpc64le o/$(MODE)/powerpc64le/blink/blink $<
 	@touch $@
 
 o/$(MODE)/test:									\
