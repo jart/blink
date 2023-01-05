@@ -1538,6 +1538,11 @@ static int SysFchmod(struct Machine *m, i32 fd, u32 mode) {
   return fchmod(GetFildes(m, fd), mode);
 }
 
+static int SysFchmodat(struct Machine *m, i32 dirfd, i64 path, u32 mode,
+                       i32 flags) {
+  return fchmodat(GetFildes(m, dirfd), LoadStr(m, path), mode, XlatAtf(flags));
+}
+
 int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
   int rc;
   int whence;
@@ -2593,6 +2598,7 @@ void OpSyscall(P) {
     SYSCALL(0x108, SysRenameat, (m, di, si, dx, r0));
     SYSCALL(0x10A, SysSymlinkat, (m, di, si, dx));
     SYSCALL(0x10B, SysReadlinkat, (m, di, si, dx, r0));
+    SYSCALL(0x10C, SysFchmodat, (m, di, si, dx, r0));
     SYSCALL(0x10D, SysFaccessat, (m, di, si, dx, r0));
     SYSCALL(0x120, SysAccept4, (m, di, si, dx, r0));
     SYSCALL(0x12E, SysPrlimit, (m, di, si, dx, r0));

@@ -523,6 +523,7 @@ void OpXchgGbEb(P);
 void OpXchgGvqpEvqp(P);
 void Op2f5(P);
 void Op2f6(P);
+void OpRorx(P);
 
 void *AllocateBig(size_t);
 void FreeBig(void *, size_t);

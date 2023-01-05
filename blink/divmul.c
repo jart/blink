@@ -471,9 +471,9 @@ static void OpAdx(P, i64 op64(u64, u64, struct Machine *),
              op64);
     }
   } else {
-    Put32(RegRexrReg(m, rde),
-          op32(Get32(RegRexrReg(m, rde)),
-               Load32(GetModrmRegisterWordPointerRead4(A)), m));
+    Put64(RegRexrReg(m, rde),
+          (u32)op32(Get32(RegRexrReg(m, rde)),
+                    Load32(GetModrmRegisterWordPointerRead4(A)), m));
     if (IsMakingPath(m)) {
       Jitter(A,
              "z2B"     // res0 = GetRegOrMem[force32bit](RexbRm)

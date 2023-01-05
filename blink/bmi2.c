@@ -17,15 +17,16 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/endian.h"
+#include "blink/flags.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 
-// todo BZHI zero starting at bit, i.e. x&((1<<i)-1)
+// todo BZHI clearing starting at bit
 //      MULX flagless unsigned multiply
 //      PDEP parallel bits deposit
 //      PEXT parallel bits extract
-// todo RORX flagless rotate right logical
+//      RORX flagless rotate right logical
 // todo SARX flagless shift arithmetic right
 // todo SHRX flagless shift logical right
 // todo SHLX flagless shift logical left
@@ -71,4 +72,21 @@ void Op2f5(P) {
   } else {
     OpUdImpl(m);
   }
+}
+
+void OpRorx(P) {
+  int i;
+  u64 z;
+  if (Rexw(rde)) {
+    u64 x = Load64(GetModrmRegisterWordPointerRead8(A));
+    i = uimm0 & 63;
+    x = x >> i | x << (64 - i);
+    z = x;
+  } else {
+    u32 x = Load32(GetModrmRegisterWordPointerRead4(A));
+    i = uimm0 & 31;
+    x = x >> i | x << (32 - i);
+    z = x;
+  }
+  Put64(RegRexrReg(m, rde), z);
 }

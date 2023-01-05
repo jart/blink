@@ -1079,6 +1079,8 @@ const char *DisSpecMap2(struct XedDecodedInst *x, char *p) {
         return "pdep %Gdqp %Bdqp Edqp";
       } else if (Rep(x->op.rde) == 3) {
         return "pext %Gdqp %Bdqp Edqp";
+      } else if (!Osz(x->op.rde)) {
+        return "bzhi %Gdqp %Bdqp Edqp";
       } else {
         return "wut";
       }
@@ -1114,6 +1116,7 @@ const char *DisSpecMap2(struct XedDecodedInst *x, char *p) {
 const char *DisSpecMap3(struct XedDecodedInst *x, char *p) {
   switch (Opcode(x->op.rde)) {
     RCASE(0x0F, DisOpPqQqIbVdqWdqIb(x, p, "palignr"));
+    RCASE(0xF0, "rorx %Gdqp Edqp Ib");
     default:
       return UNKNOWN;
   }
