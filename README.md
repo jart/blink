@@ -135,10 +135,11 @@ the System V ABI.
 
 ### Instruction Sets
 
-The following hardware ISAs:
+The following hardware ISAs are supported by Blink.
 
 - i8086
 - i386
+- X87
 - SSE2
 - x86_64
 - SSE3
@@ -146,20 +147,19 @@ The following hardware ISAs:
 - CLMUL
 - POPCNT
 - ADX
-- BMI2 (only MULX, PDEP, PEXT so far)
-- X87 (truncates to double precision)
+- BMI2
 - RDRND
 - RDSEED
 - RDTSCP
 
-are supported by Blink. Programs may use `CPUID` to confirm the presence
-or absence of optional instruction sets. Please note that Blink does not
-follow the same monotonic progress as Intel's hardware. For example,
-BMI2 is supported; this is an AVX2-encoded (VEX) instruction set, which
-Blink is able to decode, even though the AVX2 ISA isn't supported.
-Therefore it's important to not glob ISAs into "levels" (as Windows
-software tends to do) where it's assumed that BMI2 support implies AVX2
-support; because with Blink that currently isn't the case.
+Programs may use `CPUID` to confirm the presence or absence of optional
+instruction sets. Please note that Blink does not follow the same
+monotonic progress as Intel's hardware. For example, BMI2 is supported;
+this is an AVX2-encoded (VEX) instruction set, which Blink is able to
+decode, even though the AVX2 ISA isn't supported. Therefore it's
+important to not glob ISAs into "levels" (as Windows software tends to
+do) where it's assumed that BMI2 support implies AVX2 support; because
+with Blink that currently isn't the case.
 
 On the other hand, Blink does share Windows' x87 behavior w.r.t. double
 (rather than long double) precision. It's not possible to use 80-bit

@@ -1093,7 +1093,7 @@ TEST(ild, testWideNops) {
   EXPECT_EQ(9, ild("f\017\037\204\000\000\000\000\000", 9));
 }
 
-TEST(ild, vex) {
+TEST(ild, mulx) {
   // mulx %rbx,%rdx,%rcx
   char code[15] = "\xc4\xe2\xeb\xf6\xcb";
   EXPECT_EQ(0, DecodeInstruction(&xedd, code, 15, XED_MODE_LONG));
@@ -1104,4 +1104,18 @@ TEST(ild, vex) {
   EXPECT_EQ(1, ModrmReg(xedd.op.rde));  // rcx (arg1)
   EXPECT_EQ(2, Vreg(xedd.op.rde));      // rdx (arg2)
   EXPECT_EQ(3, ModrmRm(xedd.op.rde));   // rbx (arg3)
+}
+
+TEST(ild, shlx) {
+  // mulx %rbx,%rdx,%rcx
+  char code[15] = "\xc4\xe2\x71\xf7\xd8";
+  EXPECT_EQ(0, DecodeInstruction(&xedd, code, 15, XED_MODE_LONG));
+  EXPECT_EQ(5, xedd.length);
+  EXPECT_EQ(2 << 8 | 0xf7, Mopcode(xedd.op.rde));
+  EXPECT_EQ(3, ModrmMod(xedd.op.rde));  // register operand
+  EXPECT_TRUE(!Rexw(xedd.op.rde));      // 32-bit
+  EXPECT_EQ(3, ModrmReg(xedd.op.rde));  //
+  EXPECT_EQ(1, Vreg(xedd.op.rde));      //
+  EXPECT_EQ(0, ModrmRm(xedd.op.rde));   //
+  EXPECT_TRUE(Osz(xedd.op.rde));        //
 }

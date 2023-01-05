@@ -153,6 +153,7 @@ static void HandleSigs(void) {
 #ifndef __SANITIZE_THREAD__
   sa.sa_sigaction = OnSigSegv;
   sa.sa_flags = SA_SIGINFO;
+  unassert(!sigaction(SIGILL, &sa, 0));
   unassert(!sigaction(SIGSEGV, &sa, 0));
 #endif
 }

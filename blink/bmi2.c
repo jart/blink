@@ -18,18 +18,20 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/endian.h"
 #include "blink/flags.h"
+#include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
 
-// todo BZHI clearing starting at bit
-//      MULX flagless unsigned multiply
-//      PDEP parallel bits deposit
-//      PEXT parallel bits extract
-//      RORX flagless rotate right logical
-// todo SARX flagless shift arithmetic right
-// todo SHRX flagless shift logical right
-// todo SHLX flagless shift logical left
+// BMI2
+// BZHI clearing starting at bit
+// MULX flagless unsigned multiply
+// PDEP parallel bits deposit
+// PEXT parallel bits extract
+// RORX flagless rotate right logical
+// SARX flagless shift arithmetic right
+// SHRX flagless shift logical right
+// SHLX flagless shift logical left
 
 static u64 Pdep(u64 x, u64 mask) {
   u64 r, b;
@@ -64,19 +66,56 @@ static void OpPbit(P, u64 op(u64, u64)) {
   }
 }
 
+static void OpBzhi(P) {
+  int i;
+  u64 x;
+  bool sf;
+  bool cf = 0;
+  i = Get8(RegVreg(m, rde));
+  if (Rexw(rde)) {
+    x = Load64(GetModrmRegisterWordPointerRead8(A));
+    if (i < 64) {
+      x &= (1ull << i) - 1;
+    } else {
+      cf = 1;
+    }
+    sf = (i64)x < 0;
+  } else {
+    x = Load32(GetModrmRegisterWordPointerRead4(A));
+    if (i < 32) {
+      x &= (1u << i) - 1;
+    } else {
+      cf = 1;
+    }
+    sf = (i32)x < 0;
+  }
+  Put64(RegRexrReg(m, rde), x);
+  m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
+  m->flags = SetFlag(m->flags, FLAGS_CF, cf);
+  m->flags = SetFlag(m->flags, FLAGS_SF, sf);
+  m->flags = SetFlag(m->flags, FLAGS_OF, false);
+}
+
 void Op2f5(P) {
   if (Rep(rde) == 2) {
     OpPbit(A, Pdep);
   } else if (Rep(rde) == 3) {
     OpPbit(A, Pext);
+  } else if (!Osz(rde)) {
+    OpBzhi(A);
+#ifndef TINY
   } else {
     OpUdImpl(m);
+#endif
   }
 }
 
 void OpRorx(P) {
   int i;
   u64 z;
+#ifndef TINY
+  if (Ymm(rde)) OpUdImpl(m);
+#endif
   if (Rexw(rde)) {
     u64 x = Load64(GetModrmRegisterWordPointerRead8(A));
     i = uimm0 & 63;
@@ -89,4 +128,75 @@ void OpRorx(P) {
     z = x;
   }
   Put64(RegRexrReg(m, rde), z);
+}
+
+static void OpShlx(P) {
+  int i;
+  u64 z;
+  i = Get8(RegVreg(m, rde));
+  if (Rexw(rde)) {
+    u64 x = Load64(GetModrmRegisterWordPointerRead8(A));
+    i &= 63;
+    if (i) x <<= i;
+    z = x;
+  } else {
+    u32 x = Load32(GetModrmRegisterWordPointerRead4(A));
+    i &= 31;
+    if (i) x <<= i;
+    z = x;
+  }
+  Put64(RegRexrReg(m, rde), z);
+}
+
+static void OpShrx(P) {
+  int i;
+  u64 z;
+  i = Get8(RegVreg(m, rde));
+  if (Rexw(rde)) {
+    u64 x = Load64(GetModrmRegisterWordPointerRead8(A));
+    i &= 63;
+    if (i) x >>= i;
+    z = x;
+  } else {
+    u32 x = Load32(GetModrmRegisterWordPointerRead4(A));
+    i &= 31;
+    if (i) x >>= i;
+    z = x;
+  }
+  Put64(RegRexrReg(m, rde), z);
+}
+
+static void OpSarx(P) {
+  int i;
+  u64 z;
+  i = Get8(RegVreg(m, rde));
+  if (Rexw(rde)) {
+    i64 x = Load64(GetModrmRegisterWordPointerRead8(A));
+    i &= 63;
+    if (i) x >>= i;
+    z = x;
+  } else {
+    i32 x = Load32(GetModrmRegisterWordPointerRead4(A));
+    i &= 31;
+    if (i) x >>= i;
+    z = (u32)x;
+  }
+  Put64(RegRexrReg(m, rde), z);
+}
+
+void OpShx(P) {
+#ifndef TINY
+  if (Ymm(rde)) OpUdImpl(m);
+#endif
+  if (Osz(rde)) {
+    OpShlx(A);
+  } else if (Rep(rde) == 2) {
+    OpShrx(A);
+  } else if (Rep(rde) == 3) {
+    OpSarx(A);
+#ifndef TINY
+  } else {
+    OpUdImpl(m);
+#endif
+  }
 }

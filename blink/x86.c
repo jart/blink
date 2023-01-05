@@ -404,9 +404,6 @@ static int xed_vex_opcode_scanner(struct XedDecodedInst *x, int map) {
   if (Mode(x->op.rde) == XED_MODE_LONG && Rex(x->op.rde)) {
     return XED_ERROR_BAD_REX_PREFIX;
   }
-  if (Osz(x->op.rde) /* || Rep(x->op.rde) */) {
-    return XED_ERROR_BAD_LEGACY_PREFIX;
-  }
   if (Mode(x->op.rde) == XED_MODE_REAL) {
     return XED_ERROR_INVALID_MODE;
   }
@@ -431,10 +428,10 @@ static int xed_vex_c4_scanner(struct XedDecodedInst *x, int *imm_width,
     rexx = !(b1 & 64);
     rexb = (Mode(x->op.rde) == XED_MODE_LONG) & !(b1 & 32);
     // prefix:        2-bit → {none, osz, rep3, rep2}
-    // vector_length: 1-bit → {xmm, ymm}
+    // vector_length: 1-bit → {xmm, ymm} aka VEX.L
     // vexdest210:    3-bit (second reg operand, inverted)
     // vrex:          1-bit a.k.a. vexdest3
-    // rex.w:         1-bit (for 64-bit registers)
+    // rex.w:         1-bit (for 64-bit registers) aka VEX.W1
     b2 = x->bytes[length + 1];
     rexw = !!(b2 & 128);
     vrex = !(b2 & 64);
