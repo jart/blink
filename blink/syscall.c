@@ -652,7 +652,8 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   }
   UNLOCK(&m->system->mmap_lock);
   if (gotsome) {
-    MEM_LOGF("mprotect(PROT_EXEC) reset %ld JIT hooks", gotsome);
+    STATISTIC(++smc_resets);
+    LOGF("mprotect(PROT_EXEC) reset %ld JIT hooks", gotsome);
     InvalidateSystem(m->system, false, true);
   }
   return rc;
@@ -2466,6 +2467,7 @@ static int SysSchedGetPriorityMin(struct Machine *m, int policy) {
 
 void OpSyscall(P) {
   u64 ax, di, si, dx, r0, r8, r9;
+  STATISTIC(++syscalls);
   ax = Get64(m->ax);
   di = Get64(m->di);
   si = Get64(m->si);

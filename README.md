@@ -128,10 +128,10 @@ done using our trimmed-down version of Intel's disassembler Xed.
 The prime directive of this project is to act as a virtual machine for
 userspace binaries compiled by Cosmopolitan Libc. However we've also had
 success virtualizing programs compiled with Glibc and Musl Libc, such as
-GCC and Qemu. Blink supports more than a hundred Linux system call ABIs,
-including fork() and clone(). Linux system calls may only be used by
-long mode programs via the `SYSCALL` instruction, as it is written in
-the System V ABI.
+GCC and Qemu. Blink supports 130+ Linux system call ABIs, including
+fork() and clone(). Linux system calls may only be used by long mode
+programs via the `SYSCALL` instruction, as it is written in the System V
+ABI.
 
 ### Instruction Sets
 

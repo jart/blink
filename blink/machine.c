@@ -806,9 +806,6 @@ static void BsuwiConstant(P, u64 y) {
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), y));
   if (IsMakingPath(m)) {
-    Jitter(A, "B"      // res0 = GetRegOrMem(RexbRm)
-              "r0a1="  // arg1 = res0
-              "q");    // arg0 = sav0 (machine)
     switch (ModrmReg(rde)) {
       case BSU_ROL:
       case BSU_ROR:
@@ -817,24 +814,44 @@ static void BsuwiConstant(P, u64 y) {
       case BSU_SAL:
       case BSU_SAR:
         STATISTIC(++alu_ops);
-        if (Rexw(rde) && (y &= 63) &&
-            !GetNeededFlags(m, m->ip, GetFlagClobbers(rde))) {
-          STATISTIC(++alu_unflagged);
-          Jitter(A,
-                 "a2i"
-                 "m"  // call micro-op
-                 "r0D",
-                 y, kJustBsu[ModrmReg(rde)]);
-          return;
+        if (!GetNeededFlags(m, m->ip, GetFlagClobbers(rde))) {
+          if (Rexw(rde) && (y &= 63)) {
+            STATISTIC(++alu_unflagged);
+            Jitter(A,
+                   "B"     // res0 = GetRegOrMem(RexbRm)
+                   "a3i"   // arg3 = shift amount
+                   ""      // arg2 = undefined
+                   ""      // arg1 = undefined
+                   "t"     // arg0 = res0
+                   "m"     // call micro-op
+                   "r0D",  // PutRegOrMem(RexbRm, res0)
+                   y, kJustBsu[ModrmReg(rde)]);
+            return;
+          } else if (!Osz(rde) && (y &= 31)) {
+            STATISTIC(++alu_unflagged);
+            Jitter(A,
+                   "B"     // res0 = GetRegOrMem(RexbRm)
+                   "a3i"   // arg3 = shift amount
+                   ""      // arg2 = undefined
+                   ""      // arg1 = undefined
+                   "t"     // arg0 = res0
+                   "m"     // call micro-op
+                   "r0D",  // PutRegOrMem(RexbRm, res0)
+                   y, kJustBsu32[ModrmReg(rde)]);
+            return;
+          }
         }
         break;
       default:
         break;
     }
     Jitter(A,
-           "a2i"
-           "c"  // call function
-           "r0D",
+           "B"      // res0 = GetRegOrMem(RexbRm)
+           "a2i"    // arg2 = shift amount
+           "r0a1="  // arg1 = res0
+           "q"      // arg0 = sav0 (machine)
+           "c"      // call function
+           "r0D",   // PutRegOrMem(RexbRm, res0)
            y, op);
   }
 }
@@ -858,7 +875,7 @@ static void OpBsubiCl(P) {
   Jitter(A,
          "B"      // res0 = GetRegOrMem(RexbRm)
          "r0s1="  // sav1 = res0
-         "%cl"
+         "%cl"    //
          "r0a2="  // arg2 = res0
          "s1a1="  // arg1 = sav1
          "q"      // arg0 = sav0 (machine)
@@ -872,9 +889,9 @@ static void BsubiConstant(P, u64 y) {
          "B"      // res0 = GetRegOrMem(RexbRm)
          "r0a1="  // arg1 = res0
          "q"      // arg0 = sav0 (machine)
-         "a2i"
-         "c"  // call function
-         "r0D",
+         "a2i"    //
+         "c"      // call function
+         "r0D",   //
          y, Bsubi(A, y));
 }
 
@@ -905,9 +922,9 @@ static void OpInterrupt3(P) {
 void Terminate(P, void uop(struct Machine *, u64)) {
   if (IsMakingPath(m)) {
     Jitter(A,
-           "a1i"
-           "m"   // call micro-op
-           "q",  // arg0 = sav0 (machine)
+           "a1i"  //
+           "m"    // call micro-op
+           "q",   // arg0 = sav0 (machine)
            disp, uop);
     AlignJit(m->path.jb, 4);
     Connect(A, m->ip);

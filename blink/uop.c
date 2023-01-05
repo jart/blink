@@ -229,30 +229,56 @@ const aluop_f kJustAlu[8] = {
     JustSub,  //
 };
 
-MICRO_OP i64 JustRol(struct Machine *m, u64 x, u64 y) {
+MICRO_OP i64 JustRol(u64 x, int ign1, int ign2, u64 y) {
   return x << y | x >> (64 - y);
 }
-MICRO_OP i64 JustRor(struct Machine *m, u64 x, u64 y) {
+MICRO_OP i64 JustRor(u64 x, int ign1, int ign2, u64 y) {
   return x >> y | x << (64 - y);
 }
-MICRO_OP i64 JustShl(struct Machine *m, u64 x, u64 y) {
+MICRO_OP i64 JustShl(u64 x, int ign1, int ign2, u64 y) {
   return x << y;
 }
-MICRO_OP i64 JustShr(struct Machine *m, u64 x, u64 y) {
+MICRO_OP i64 JustShr(u64 x, int ign1, int ign2, u64 y) {
   return x >> y;
 }
-MICRO_OP i64 JustSar(struct Machine *m, u64 x, u64 y) {
+MICRO_OP i64 JustSar(u64 x, int ign1, int ign2, u64 y) {
   return (i64)x >> y;
 }
 const aluop_f kJustBsu[8] = {
-    JustRol,  //
-    JustRor,  //
-    0,        //
-    0,        //
-    JustShl,  //
-    JustShr,  //
-    JustShl,  //
-    JustSar,  //
+    (aluop_f)JustRol,  //
+    (aluop_f)JustRor,  //
+    0,                 //
+    0,                 //
+    (aluop_f)JustShl,  //
+    (aluop_f)JustShr,  //
+    (aluop_f)JustShl,  //
+    (aluop_f)JustSar,  //
+};
+
+MICRO_OP i32 JustRol32(u32 x, int ign1, int ign2, u32 y) {
+  return x << y | x >> (32 - y);
+}
+MICRO_OP i32 JustRor32(u32 x, int ign1, int ign2, u32 y) {
+  return x >> y | x << (32 - y);
+}
+MICRO_OP i32 JustShl32(u32 x, int ign1, int ign2, u32 y) {
+  return x << y;
+}
+MICRO_OP i32 JustShr32(u32 x, int ign1, int ign2, u32 y) {
+  return x >> y;
+}
+MICRO_OP i32 JustSar32(u32 x, int ign1, int ign2, u32 y) {
+  return (i32)x >> y;
+}
+const aluop_f kJustBsu32[8] = {
+    (aluop_f)JustRol32,  //
+    (aluop_f)JustRor32,  //
+    0,                   //
+    0,                   //
+    (aluop_f)JustShl32,  //
+    (aluop_f)JustShr32,  //
+    (aluop_f)JustShl32,  //
+    (aluop_f)JustSar32,  //
 };
 
 MICRO_OP static i64 FastXor64(struct Machine *m, u64 x, u64 y) {
