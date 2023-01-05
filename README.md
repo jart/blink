@@ -129,9 +129,70 @@ The prime directive of this project is to act as a virtual machine for
 userspace binaries compiled by Cosmopolitan Libc. However we've also had
 success virtualizing programs compiled with Glibc and Musl Libc, such as
 GCC and Qemu. Blink supports more than a hundred Linux system call ABIs,
-including fork() and clone(). The SSE2, SSE3, SSSE3, POPCNT, CLMUL,
-RDTSCP, and RDRND hardware ISAs are supported. Blink's legacy x87 FPU
-currently only supports double (64-bit) precision, just like Windows.
+including fork() and clone(). Linux system calls may only be used by
+long mode programs via the `SYSCALL` instruction, as it is written in
+the System V ABI.
+
+### Instruction Sets
+
+The following hardware ISAs:
+
+- i8086
+- i386
+- SSE2
+- x86_64
+- SSE3
+- SSSE3
+- CLMUL
+- POPCNT
+- ADX
+- BMI2 (only MULX, PDEP, PEXT so far)
+- X87 (truncates to double precision)
+- RDRND
+- RDSEED
+- RDTSCP
+
+are supported by Blink. Programs may use `CPUID` to confirm the presence
+or absence of optional instruction sets. Please note that Blink does not
+follow the same monotonic progress as Intel's hardware. For example,
+BMI2 is supported; this is an AVX2-encoded (VEX) instruction set, which
+Blink is able to decode, even though the AVX2 ISA isn't supported.
+Therefore it's important to not glob ISAs into "levels" (as Windows
+software tends to do) where it's assumed that BMI2 support implies AVX2
+support; because with Blink that currently isn't the case.
+
+On the other hand, Blink does share Windows' x87 behavior w.r.t. double
+(rather than long double) precision. It's not possible to use 80-bit
+floating point precision with Blink, because Blink simply passes along
+floating point operations to the host architecture, and very few
+architectures support `long double` precision. You can still use x87
+with 80-bit words. Blink will just store 64-bit floating point values
+inside them, and that's a legal configuration according to the x87 FPU
+control word. If possible, it's recommended that `long double` simply be
+avoided. If 64-bit floating point [is good enough for the rocket
+scientists at
+NASA](https://www.jpl.nasa.gov/edu/news/2016/3/16/how-many-decimals-of-pi-do-we-really-need/)
+then it should be good enough for everybody. There are some peculiar
+differences in behavior with `double` across architectures (which Blink
+currently does nothing to address) but they tend to be comparatively
+minor, e.g. an op returning `NAN` instead of `-NAN`.
+
+Blink has reasonably comprehensive coverage of the baseline ISAs,
+including even support for BCD operations (even in long mode!) But there
+are some truly fringe instructions Blink hasn't implemented, such as
+`BOUND` and `ENTER`. Most of the unsupported instructions, are usually
+ring-0 system instructions, since Blink is primarily a user-mode VM, and
+therefore only has limited support for bare metal operating system
+software (which we'll discuss more in-depth in a later section).
+
+Blink itself may be detected via `CPUID` by checking for the vendor
+string `GenuineBlink` (rather than the `GenuineIntel` / `AuthenticAMD`
+brands that get reported normally). Please note that old versions of
+Blinkenlights use the brand `GenuineCosmo`. Blink also identifies itself
+as `blink 4.0` via the `uname()` system call. We report a false version
+because otherwise, every program that links Glibc will refuse to run.
+
+### JIT
 
 Blink uses just-in-time compilation, which is supported on x86_64 and
 aarch64. Blink takes the appropriate steps to work around restrictions
@@ -156,6 +217,8 @@ can be useful for troubleshooting the JIT, because the TUI display has a
 feature that lets JIT path formation be visualized. Blink currently only
 enables the JIT for programs running in long mode (64-bit) but we may
 support JITing 16-bit programs in the future.
+
+### Virtualization
 
 Blink virtualizes memory using the same PML4T approach as the hardware
 itself, where memory lookups are indirected through a four-level radix

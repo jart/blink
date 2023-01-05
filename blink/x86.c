@@ -414,24 +414,17 @@ static int xed_vex_opcode_scanner(struct XedDecodedInst *x, int map) {
   return 0;
 }
 
-static void xed_vex_set_args(struct XedDecodedInst *x, int ymm, unsigned trips,
-                             unsigned vexdest210) {
-  x->op.rde |= ymm << 30;
-  x->op.rde |= (u64)trips << 59;
-  x->op.rde |= (u64)vexdest210 << 60;
-}
-
 static int xed_vex_c4_scanner(struct XedDecodedInst *x, int *imm_width,
                               int *vexvalid) {
   unsigned length, b1, b2;
-  int map, rexr, rexx, rexb, rexw, ymm, trips, vexdest210;
+  int map, rexr, rexx, rexb, rexw, ymm, vrex, vexdest210;
   if (xed_is_bound_instruction(x)) return 0;
   length = x->length;
   length++;
   if (length + 2 < x->op.max_bytes) {
     // map:   5-bit
     // rex.b: 1-bit (expands r/m or srm register operand)
-    // rex.x: 1-bit (expands sib or vex register operand)
+    // rex.x: 1-bit (expands sib register operands)
     // rex.r: 1-bit (expands reg register operand)
     b1 = x->bytes[length];
     rexr = !(b1 & 128);
@@ -440,11 +433,11 @@ static int xed_vex_c4_scanner(struct XedDecodedInst *x, int *imm_width,
     // prefix:        2-bit → {none, osz, rep3, rep2}
     // vector_length: 1-bit → {xmm, ymm}
     // vexdest210:    3-bit (second reg operand, inverted)
-    // vexdest3:      1-bit (if true has three operands)
+    // vrex:          1-bit a.k.a. vexdest3
     // rex.w:         1-bit (for 64-bit registers)
     b2 = x->bytes[length + 1];
     rexw = !!(b2 & 128);
-    trips = !!(b2 & 64);
+    vrex = !(b2 & 64);
     vexdest210 = (~b2 >> 3) & 7;
     ymm = !!(b2 & 4);
     xed_set_vex_prefix(x, b2 & 3);
@@ -452,9 +445,10 @@ static int xed_vex_c4_scanner(struct XedDecodedInst *x, int *imm_width,
     if ((b1 & 3) == XED_ILD_MAP3) {
       *imm_width = xed_bytes2bits(1);
     }
-    x->op.rde |= (u64)rexx << 63 | rexx << 17 | rexb << 15 | rexb << 10 |
+    x->op.rde |= (u64)vrex << 63 | rexx << 17 | rexb << 15 | rexb << 10 |
                  rexw << 6 | rexr << 3;
-    xed_vex_set_args(x, ymm, trips, vexdest210);
+    x->op.rde |= ymm << 30;
+    x->op.rde |= (u64)vexdest210 << 60;
     *vexvalid = 1;
     length += 2;
     x->length = length;
@@ -467,7 +461,7 @@ static int xed_vex_c4_scanner(struct XedDecodedInst *x, int *imm_width,
 
 static int xed_vex_c5_scanner(struct XedDecodedInst *x, int *vexvalid) {
   unsigned length, b;
-  int rexr, ymm, trips, vexdest210;
+  int rexr, ymm, vrex, vexdest210;
   length = x->length;
   if (xed_is_bound_instruction(x)) return 0;
   length++;
@@ -475,16 +469,17 @@ static int xed_vex_c5_scanner(struct XedDecodedInst *x, int *vexvalid) {
     // prefix:        2-bit → {none, osz, rep3, rep2}
     // vector_length: 1-bit → {xmm, ymm}
     // vexdest210:    3-bit
-    // vexdest3:      1-bit
+    // vrex:          1-bit
     // rex.r:         1-bit
     b = x->bytes[length];
     rexr = !(b & 128);
-    trips = !!(b & 64);
+    vrex = !!(b & 64);
     vexdest210 = (~b >> 3) & 7;
     ymm = (b >> 2) & 1;
     xed_set_vex_prefix(x, b & 3);
-    x->op.rde |= (u64)rexr << 63 | rexr << 3;
-    xed_vex_set_args(x, ymm, trips, vexdest210);
+    x->op.rde |= (u64)vrex << 63 | rexr << 3;
+    x->op.rde |= ymm << 30;
+    x->op.rde |= (u64)vexdest210 << 60;
     *vexvalid = 1;
     length++;
     x->length = length;

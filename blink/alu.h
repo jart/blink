@@ -124,4 +124,9 @@ i64 Rcl64(struct Machine *, u64, u64);
 
 u64 BsuDoubleShift(struct Machine *, int, u64, u64, u8, bool);
 
+i64 Adcx32(u64, u64, struct Machine *);
+i64 Adcx64(u64, u64, struct Machine *);
+i64 Adox32(u64, u64, struct Machine *);
+i64 Adox64(u64, u64, struct Machine *);
+
 #endif /* BLINK_ALU_H_ */

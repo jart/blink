@@ -47,8 +47,7 @@
 #define Mopcode(x)  ((x & 00000077760000000000000) >> 050)
 #define Rep(x)      ((x & 00000300000000000000000) >> 063)
 #define WordLog2(x) ((x & 00030000000000000000000) >> 071)
-#define Trips(x)    ((x & 00040000000000000000000) >> 073)
-#define Vexarg(x)   ((x & 01700000000000000000000) >> 074)
+#define Vreg(x)     ((x & 01700000000000000000000) >> 074)
 
 #define Bite(x)            (~ModrmSrm(x) & 1)
 #define RexbBase(x)        (Rexb(x) << 3 | SibBase(x))
@@ -57,7 +56,7 @@
 #define ByteRexbRm(m, x)   AddrByteReg(m, RexRexb(x))
 #define ByteRexbSrm(m, x)  AddrByteReg(m, RexRexbSrm(x))
 #define RegSrm(m, x)       m->weg[Srm(x)]
-#define RegVexarg(m, x)    m->weg[Vexarg(x)]
+#define RegVreg(m, x)      m->weg[Vreg(x)]
 #define RegRexbRm(m, x)    m->weg[RexbRm(x)]
 #define RegRexrReg(m, x)   m->weg[RexrReg(x)]
 #define RegRexbBase(m, x)  m->weg[RexbBase(x)]

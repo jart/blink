@@ -20,7 +20,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "blink/web.h"
 #include <unistd.h>
 
 #include "blink/assert.h"
@@ -39,6 +38,7 @@
 #include "blink/stats.h"
 #include "blink/syscall.h"
 #include "blink/util.h"
+#include "blink/web.h"
 #include "blink/xlat.h"
 
 #define OPTS "hjms"
@@ -49,6 +49,7 @@
   -m        enable memory safety\n\
   -s        print statistics on exit\n"
 
+extern char **environ;
 static bool FLAG_nojit;
 static bool FLAG_nolinear;
 

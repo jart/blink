@@ -434,6 +434,48 @@ const aluop_f kAluFast[8][4] = {
     {FastSub8, FastSub16, FastSub32, FastSub64},  //
 };
 
+#ifdef HAVE_INT128
+MICRO_OP void Mulx64(u64 x,              //
+                     struct Machine *m,  //
+                     long vreg,          //
+                     long rexrreg) {
+  unsigned __int128 z;
+  z = (unsigned __int128)x * Get64(m->dx);
+  Put64(m->weg[vreg], z);
+  Put64(m->weg[rexrreg], z >> 64);
+}
+#endif
+
+MICRO_OP i64 Adcx32(u64 x, u64 y, struct Machine *m) {
+  u32 t = x + !!(m->flags & CF);
+  u32 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~CF) | c << FLAGS_CF;
+  return z;
+}
+MICRO_OP i64 Adcx64(u64 x, u64 y, struct Machine *m) {
+  u64 t = x + !!(m->flags & CF);
+  u64 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~CF) | c << FLAGS_CF;
+  return z;
+}
+
+MICRO_OP i64 Adox32(u64 x, u64 y, struct Machine *m) {
+  u32 t = x + !!(m->flags & OF);
+  u32 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~OF) | c << FLAGS_OF;
+  return z;
+}
+MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
+  u64 t = x + !!(m->flags & OF);
+  u64 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~OF) | c << FLAGS_OF;
+  return z;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // STACK OPERATIONS
 

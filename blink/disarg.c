@@ -153,7 +153,7 @@ static char *DisGdqp(struct Dis *d, u64 rde, char *p) {
 }
 
 static char *DisBdqp(struct Dis *d, u64 rde, char *p) {
-  return DisRegister(p, kGreg[0][Rexw(rde)][Rexx(rde)][Vexarg(rde)]);
+  return DisRegister(p, kGreg[0][Rexw(rde)][Rexx(rde)][Vreg(rde)]);
 }
 
 static char *DisGb(struct Dis *d, u64 rde, char *p) {

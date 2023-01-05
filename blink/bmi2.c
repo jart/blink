@@ -16,76 +16,59 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
+#include "blink/modrm.h"
+#include "blink/mop.h"
 
-void OpCpuid(P) {
-  u32 ax, bx, cx, dx, jit;
-  ax = bx = cx = dx = 0;
-  switch (Get32(m->ax)) {
-    case 0:
-    case 0x80000000:
-      unassert(m->system->brand);
-      ax = 7;
-      bx = Read32((u8 *)(m->system->brand + 0));
-      dx = Read32((u8 *)(m->system->brand + 4));
-      cx = Read32((u8 *)(m->system->brand + 8));
-      break;
-    case 1:
-      cx |= 1 << 0;   // sse3
-      cx |= 1 << 1;   // pclmulqdq
-      cx |= 1 << 9;   // ssse3
-      cx |= 1 << 23;  // popcnt
-      cx |= 1 << 30;  // rdrnd
-      cx |= 0 << 25;  // aes
-      cx |= 1 << 13;  // cmpxchg16b
-      dx |= 1 << 0;   // fpu
-      dx |= 1 << 4;   // tsc
-      dx |= 1 << 6;   // pae
-      dx |= 1 << 8;   // cmpxchg8b
-      dx |= 1 << 15;  // cmov
-      dx |= 1 << 19;  // clflush
-      dx |= 1 << 23;  // mmx
-      dx |= 1 << 24;  // fxsave
-      dx |= 1 << 25;  // sse
-      dx |= 1 << 26;  // sse2
-      break;
-    case 7:
-      switch (Get32(m->cx)) {
-        case 0:
-          bx |= 1 << 0;   // fsgsbase
-          bx |= 1 << 8;   // bmi2
-          bx |= 1 << 9;   // erms
-          bx |= 1 << 18;  // rdseed
-          bx |= 1 << 19;  // adx
-          cx |= 1 << 22;  // rdpid
-          break;
-        default:
-          break;
-      }
-      break;
-    case 0x80000001:
-      jit = !IsJitDisabled(&m->system->jit);
-      cx |= 1 << 0;     // lahf
-      cx |= jit << 31;  // jit
-      dx |= 1 << 0;     // fpu
-      dx |= 1 << 8;     // cmpxchg8b
-      dx |= 1 << 11;    // syscall
-      dx |= 1 << 15;    // cmov
-      dx |= 1 << 23;    // mmx
-      dx |= 1 << 24;    // fxsave
-      dx |= 1 << 27;    // rdtscp
-      dx |= 1 << 29;    // long
-      break;
-    case 0x80000007:
-      dx |= 1 << 8;  // invtsc
-      break;
-    default:
-      break;
+// todo BZHI zero starting at bit, i.e. x&((1<<i)-1)
+//      MULX flagless unsigned multiply
+//      PDEP parallel bits deposit
+//      PEXT parallel bits extract
+// todo RORX flagless rotate right logical
+// todo SARX flagless shift arithmetic right
+// todo SHRX flagless shift logical right
+// todo SHLX flagless shift logical left
+
+static u64 Pdep(u64 x, u64 mask) {
+  u64 r, b;
+  for (r = 0, b = 1; mask; mask >>= 1, b <<= 1) {
+    if (mask & 1) {
+      if (x & 1) r |= b;
+      x >>= 1;
+    }
   }
-  Put64(m->ax, ax);
-  Put64(m->bx, bx);
-  Put64(m->cx, cx);
-  Put64(m->dx, dx);
+  return r;
+}
+
+static u64 Pext(u64 x, u64 mask) {
+  u64 r, b;
+  for (r = 0, b = 1; mask; mask >>= 1, x >>= 1) {
+    if (mask & 1) {
+      if (x & 1) r |= b;
+      b <<= 1;
+    }
+  }
+  return r;
+}
+
+static void OpPbit(P, u64 op(u64, u64)) {
+  if (Rexw(rde)) {
+    Put64(RegRexrReg(m, rde), op(Get64(RegVreg(m, rde)),
+                                 Load64(GetModrmRegisterWordPointerRead8(A))));
+  } else {
+    Put64(RegRexrReg(m, rde),
+          (u32)op(Get32(RegVreg(m, rde)),
+                  Load32(GetModrmRegisterWordPointerRead4(A))));
+  }
+}
+
+void Op2f5(P) {
+  if (Rep(rde) == 2) {
+    OpPbit(A, Pdep);
+  } else if (Rep(rde) == 3) {
+    OpPbit(A, Pext);
+  } else {
+    OpUdImpl(m);
+  }
 }

@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <limits.h>
 
+#include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
@@ -189,8 +190,8 @@ static void OpDivRdxRaxEvqpSigned32(P, u8 *p) {
   q = x / y;
   r = x % y;
   if (q != (i32)q) RaiseDivideError(m);
-  Put64(m->ax, q & 0xffffffff);
-  Put64(m->dx, r & 0xffffffff);
+  Put64(m->ax, (u32)q);
+  Put64(m->dx, (u32)r);
 }
 
 static void OpDivRdxRaxEvqpSigned16(P, u8 *p) {
@@ -229,8 +230,8 @@ static void OpDivRdxRaxEvqpUnsigned32(P, u8 *p) {
   q = x / y;
   r = x % y;
   if (q > UINT32_MAX) RaiseDivideError(m);
-  Put64(m->ax, q & 0xffffffff);
-  Put64(m->dx, r & 0xffffffff);
+  Put64(m->ax, (u32)q);
+  Put64(m->dx, (u32)r);
 }
 
 static void OpDivRdxRaxEvqpUnsigned64(P, u8 *p) {
@@ -336,7 +337,7 @@ void OpMulRdxRaxEvqpSigned(P) {
   } else if (!Osz(rde)) {
     i64 edxeax = (i64)(i32)Get32(m->ax) * (i32)Load32(p);
     unsigned of = edxeax != (i32)edxeax;
-    Put64(m->ax, edxeax);
+    Put64(m->ax, (u32)edxeax);
     Put64(m->dx, edxeax >> 32);
     m->flags = SetFlag(m->flags, FLAGS_CF, of);
     m->flags = SetFlag(m->flags, FLAGS_OF, of);
@@ -371,7 +372,7 @@ static void OpMulRdxRaxEvqpUnsigned32(struct Machine *m, u64 x) {
   unsigned of;
   edxeax = (u64)Get32(m->ax) * x;
   of = (u32)edxeax != edxeax;
-  Put64(m->ax, edxeax & 0xffffffff);
+  Put64(m->ax, (u32)edxeax);
   Put64(m->dx, edxeax >> 32);
   m->flags = SetFlag(m->flags, FLAGS_CF, of);
   m->flags = SetFlag(m->flags, FLAGS_OF, of);
@@ -430,7 +431,7 @@ static void AluImul(P, u8 *a, u8 *b) {
     i64 z;
     z = (i64)(i32)Get32(a) * (i32)Load32(b);
     of = z != (i32)z;
-    Put64(RegRexrReg(m, rde), z & 0xffffffff);
+    Put64(RegRexrReg(m, rde), (u32)z);
   } else {
     i32 z;
     z = (i32)(i16)Get16(a) * (i16)Load16(b);
@@ -451,25 +452,84 @@ void OpImulGvqpEvqpImm(P) {
   AluImul(A, GetModrmRegisterWordPointerReadOszRexw(A), b);
 }
 
-void OpMulx(P) {
+static void OpAdx(P, i64 op64(u64, u64, struct Machine *),
+                  i64 op32(u64, u64, struct Machine *)) {
+  if (Rexw(rde)) {
+    Put64(RegRexrReg(m, rde),
+          op64(Get64(RegRexrReg(m, rde)),
+               Load64(GetModrmRegisterWordPointerRead8(A)), m));
+    if (IsMakingPath(m)) {
+      Jitter(A,
+             "z3B"     // res0 = GetRegOrMem[force32bit](RexbRm)
+             "r0s1="   // sav1 = res0
+             "z3A"     // res0 = GetReg[force32bit](RexrReg)
+             "s0a2="   // arg2 = machine
+             "s1a1="   // arg1 = sav1
+             "t"       // arg0 = res0
+             "m"       // call micro-op
+             "r0z3C",  // PutReg(RexrReg, <pop>)
+             op64);
+    }
+  } else {
+    Put32(RegRexrReg(m, rde),
+          op32(Get32(RegRexrReg(m, rde)),
+               Load32(GetModrmRegisterWordPointerRead4(A)), m));
+    if (IsMakingPath(m)) {
+      Jitter(A,
+             "z2B"     // res0 = GetRegOrMem[force32bit](RexbRm)
+             "r0s1="   // sav1 = res0
+             "z2A"     // res0 = GetReg[force32bit](RexrReg)
+             "s0a2="   // arg2 = machine
+             "s1a1="   // arg1 = sav1
+             "t"       // arg0 = res0
+             "m"       // call micro-op
+             "r0z2C",  // PutReg(RexrReg, <pop>)
+             op32);
+    }
+  }
+}
+
+static void OpMulx(P) {
   if (Rexw(rde)) {
     u64 x, y;
     x = Load64(GetModrmRegisterWordPointerRead8(A));
     y = Get64(m->dx);
 #ifdef HAVE_INT128
     unsigned __int128 z = (unsigned __int128)y * x;
-    Put64(RegVexarg(m, rde), z);
+    Put64(RegVreg(m, rde), z);
     Put64(RegRexrReg(m, rde), z >> 64);
+    if (IsMakingPath(m)) {
+      Jitter(A,
+             "z3B"    // res0 = GetRegOrMem[force64bit](RexbRm)
+             "a3i"    // arg3 = rexrreg
+             "a2i"    // arg2 = vreg
+             "s0a1="  // arg1 = sav0 (machine)
+             "t"      // arg0 = res0
+             "m",     // call micro-op
+             RexrReg(rde), Vreg(rde), Mulx64);
+    }
 #else
     struct Dubble z = DubbleMul(y, x);
-    Put64(RegVexarg(m, rde), z.lo);
+    Put64(RegVreg(m, rde), z.lo);
     Put64(RegRexrReg(m, rde), z.hi);
 #endif
   } else {
     u64 x;
     x = Load32(GetModrmRegisterWordPointerRead4(A));
     x *= Get32(m->dx);
-    Put64(RegVexarg(m, rde), x & 0xffffffff);
+    Put64(RegVreg(m, rde), (u32)x);
     Put64(RegRexrReg(m, rde), x >> 32);
+  }
+}
+
+void Op2f6(P) {
+  if (Osz(rde)) {
+    OpAdx(A, Adcx64, Adcx32);
+  } else if (Rep(rde) == 3) {
+    OpAdx(A, Adox64, Adox32);
+  } else if (Rep(rde) == 2) {
+    OpMulx(A);
+  } else {
+    OpUdImpl(m);
   }
 }

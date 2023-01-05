@@ -521,7 +521,8 @@ void OpXaddEbGb(P);
 void OpXaddEvqpGvqp(P);
 void OpXchgGbEb(P);
 void OpXchgGvqpEvqp(P);
-void OpMulx(P);
+void Op2f5(P);
+void Op2f6(P);
 
 void *AllocateBig(size_t);
 void FreeBig(void *, size_t);
@@ -603,5 +604,6 @@ void OpTest(P);
 void OpAlui(P);
 i64 FastAnd8(struct Machine *, u64, u64);
 i64 FastSub8(struct Machine *, u64, u64);
+void Mulx64(u64, struct Machine *, long, long);
 
 #endif /* BLINK_MACHINE_H_ */
