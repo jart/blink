@@ -23,6 +23,7 @@
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/fpu.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/pun.h"
@@ -363,28 +364,18 @@ void OpComissVsWs(P) {
   }
 }
 
-static void OpPsd2(u8 *p, struct Machine *m, u64 reg,
-                   double fd(double, double)) {
-  union DoublePun x, y;
-  y.i = Read64(p);
-  x.i = Read64(m->xmm[reg]);
-  x.f = fd(x.f, y.f);
-  Write64(m->xmm[reg], x.i);
-}
-
-static void OpPsd(P, float fs(float x, float y),
-                  double fd(double x, double y)) {
+static void OpPsd(P, float fs(float x, float y), double fd(double x, double y),
+                  void d1(u8 *, struct Machine *, long)) {
   if (Rep(rde) == 2) {
-    OpPsd2(GetModrmRegisterXmmPointerRead8(A), m, RexrReg(rde), fd);
+    d1(GetModrmRegisterXmmPointerRead8(A), m, RexrReg(rde));
     if (IsMakingPath(m)) {
       Jitter(A,
              "P"      // res0 = GetXmmOrMemPointer(RexbRm)
-             "a3i"    // arg3 = fd
              "a2i"    // arg2 = RexrReg(rde)
              "s0a1="  // arg1 = machine
              "t"      // arg0 = res0
-             "c",     // call function (OpPsd2)
-             fd, RexrReg(rde), OpPsd2);
+             "m",     // call function (d1)
+             RexrReg(rde), d1);
     }
   } else if (Rep(rde) == 3) {
     union FloatPun x, y;
@@ -438,7 +429,7 @@ static inline double Addd(double x, double y) {
 }
 
 void OpAddpsd(P) {
-  OpPsd(A, Adds, Addd);
+  OpPsd(A, Adds, Addd, OpPsdAddd1);
 }
 
 static inline float Subs(float x, float y) {
@@ -450,7 +441,7 @@ static inline double Subd(double x, double y) {
 }
 
 void OpSubpsd(P) {
-  OpPsd(A, Subs, Subd);
+  OpPsd(A, Subs, Subd, OpPsdSubd1);
 }
 
 static inline float Muls(float x, float y) {
@@ -462,7 +453,7 @@ static inline double Muld(double x, double y) {
 }
 
 void OpMulpsd(P) {
-  OpPsd(A, Muls, Muld);
+  OpPsd(A, Muls, Muld, OpPsdMuld1);
 }
 
 static inline float Divs(float x, float y) {
@@ -474,7 +465,7 @@ static inline double Divd(double x, double y) {
 }
 
 void OpDivpsd(P) {
-  OpPsd(A, Divs, Divd);
+  OpPsd(A, Divs, Divd, OpPsdDivd1);
 }
 
 static inline float Mins(float x, float y) {
@@ -486,7 +477,7 @@ static inline double Mind(double x, double y) {
 }
 
 void OpMinpsd(P) {
-  OpPsd(A, Mins, Mind);
+  OpPsd(A, Mins, Mind, OpPsdMind1);
 }
 
 static inline float Maxs(float x, float y) {
@@ -498,7 +489,7 @@ static inline double Maxd(double x, double y) {
 }
 
 void OpMaxpsd(P) {
-  OpPsd(A, Maxs, Maxd);
+  OpPsd(A, Maxs, Maxd, OpPsdMaxd1);
 }
 
 static int Cmps(int imm, float x, float y) {

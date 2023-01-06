@@ -27,6 +27,7 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/pun.h"
+#include "blink/stats.h"
 
 #define kOpCvt0f2a  0
 #define kOpCvtt0f2c 4
@@ -53,7 +54,7 @@ static double SseRoundDouble(struct Machine *m, double x) {
 static void OpGdqpWssCvttss2si(P) {
   i64 n;
   union FloatPun f;
-  f.i = Load32(GetModrmRegisterXmmPointerRead4(A));
+  f.i = Read32(GetModrmRegisterXmmPointerRead4(A));
   n = f.f;
   if (!Rexw(rde)) n &= 0xffffffff;
   Put64(RegRexrReg(m, rde), n);
@@ -62,7 +63,7 @@ static void OpGdqpWssCvttss2si(P) {
 static void OpGdqpWsdCvttsd2si(P) {
   i64 n;
   union DoublePun d;
-  d.i = Load64(GetModrmRegisterXmmPointerRead8(A));
+  d.i = Read64(GetModrmRegisterXmmPointerRead8(A));
   n = d.f;
   if (!Rexw(rde)) n &= 0xffffffff;
   Put64(RegRexrReg(m, rde), n);
@@ -71,7 +72,7 @@ static void OpGdqpWsdCvttsd2si(P) {
 static void OpGdqpWssCvtss2si(P) {
   i64 n;
   union FloatPun f;
-  f.i = Load32(GetModrmRegisterXmmPointerRead4(A));
+  f.i = Read32(GetModrmRegisterXmmPointerRead4(A));
   n = rintf(f.f);
   if (!Rexw(rde)) n &= 0xffffffff;
   Put64(RegRexrReg(m, rde), n);
@@ -80,7 +81,7 @@ static void OpGdqpWssCvtss2si(P) {
 static void OpGdqpWsdCvtsd2si(P) {
   i64 n;
   union DoublePun d;
-  d.i = Load64(GetModrmRegisterXmmPointerRead8(A));
+  d.i = Read64(GetModrmRegisterXmmPointerRead8(A));
   n = SseRoundDouble(m, d.f);
   if (!Rexw(rde)) n &= 0xffffffff;
   Put64(RegRexrReg(m, rde), n);
@@ -89,11 +90,11 @@ static void OpGdqpWsdCvtsd2si(P) {
 static void OpVssEdqpCvtsi2ss(P) {
   union FloatPun f;
   if (Rexw(rde)) {
-    i64 n = Load64(GetModrmRegisterWordPointerRead8(A));
+    i64 n = Read64(GetModrmRegisterWordPointerRead8(A));
     f.f = n;
     Put32(XmmRexrReg(m, rde), f.i);
   } else {
-    i32 n = Load32(GetModrmRegisterWordPointerRead4(A));
+    i32 n = Read32(GetModrmRegisterWordPointerRead4(A));
     f.f = n;
     Put32(XmmRexrReg(m, rde), f.i);
   }
@@ -102,13 +103,29 @@ static void OpVssEdqpCvtsi2ss(P) {
 static void OpVsdEdqpCvtsi2sd(P) {
   union DoublePun d;
   if (Rexw(rde)) {
-    i64 n = Load64(GetModrmRegisterWordPointerRead8(A));
-    d.f = n;
+    d.f = (i64)Read64(GetModrmRegisterWordPointerRead8(A));
     Put64(XmmRexrReg(m, rde), d.i);
+    if (IsMakingPath(m)) {
+      Jitter(A,
+             "z3B"    // res0 = GetRegOrMem[force64bit](RexbRm)
+             "a2i"    // arg2 = RexrReg(rde)
+             "s0a1="  // arg1 = machine
+             "t"      // arg0 = res0
+             "m",     // call function (d1)
+             RexrReg(rde), Int64ToDouble);
+    }
   } else {
-    i32 n = Load32(GetModrmRegisterWordPointerRead4(A));
-    d.f = n;
+    d.f = (i32)Read32(GetModrmRegisterWordPointerRead4(A));
     Put64(XmmRexrReg(m, rde), d.i);
+    if (IsMakingPath(m)) {
+      Jitter(A,
+             "z2B"    // res0 = GetRegOrMem[force32bit](RexbRm)
+             "a2i"    // arg2 = RexrReg(rde)
+             "s0a1="  // arg1 = machine
+             "t"      // arg0 = res0
+             "m",     // call function (d1)
+             RexrReg(rde), Int32ToDouble);
+    }
   }
 }
 
@@ -117,8 +134,8 @@ static void OpVpsQpiCvtpi2ps(P) {
   i32 i[2];
   union FloatPun f[2];
   p = GetModrmRegisterMmPointerRead8(A);
-  i[0] = Load32(p + 0);
-  i[1] = Load32(p + 4);
+  i[0] = Read32(p + 0);
+  i[1] = Read32(p + 4);
   f[0].f = i[0];
   f[1].f = i[1];
   Put32(XmmRexrReg(m, rde) + 0, f[0].i);
@@ -130,8 +147,8 @@ static void OpVpdQpiCvtpi2pd(P) {
   i32 n[2];
   union DoublePun f[2];
   p = GetModrmRegisterMmPointerRead8(A);
-  n[0] = Load32(p + 0);
-  n[1] = Load32(p + 4);
+  n[0] = Read32(p + 0);
+  n[1] = Read32(p + 4);
   f[0].f = n[0];
   f[1].f = n[1];
   Put64(XmmRexrReg(m, rde) + 0, f[0].i);
@@ -144,8 +161,8 @@ static void OpPpiWpsqCvtps2pi(P) {
   i32 n[2];
   union FloatPun f[2];
   p = GetModrmRegisterXmmPointerRead8(A);
-  f[0].i = Load32(p + 0 * 4);
-  f[1].i = Load32(p + 1 * 4);
+  f[0].i = Read32(p + 0 * 4);
+  f[1].i = Read32(p + 1 * 4);
   switch ((m->mxcsr & kMxcsrRc) >> 13) {
     case 0:
       for (i = 0; i < 2; ++i) n[i] = rintf(f[i].f);
@@ -171,8 +188,8 @@ static void OpPpiWpsqCvttps2pi(P) {
   i32 n[2];
   union FloatPun f[2];
   p = GetModrmRegisterXmmPointerRead8(A);
-  f[0].i = Load32(p + 0);
-  f[1].i = Load32(p + 4);
+  f[0].i = Read32(p + 0);
+  f[1].i = Read32(p + 4);
   n[0] = f[0].f;
   n[1] = f[1].f;
   Put32(MmReg(m, rde) + 0, n[0]);
@@ -185,8 +202,8 @@ static void OpPpiWpdCvtpd2pi(P) {
   i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(A);
-  d[0].i = Load64(p + 0);
-  d[1].i = Load64(p + 8);
+  d[0].i = Read64(p + 0);
+  d[1].i = Read64(p + 8);
   for (i = 0; i < 2; ++i) n[i] = SseRoundDouble(m, d[i].f);
   Put32(MmReg(m, rde) + 0, n[0]);
   Put32(MmReg(m, rde) + 4, n[1]);
@@ -197,8 +214,8 @@ static void OpPpiWpdCvttpd2pi(P) {
   i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(A);
-  d[0].i = Load64(p + 0);
-  d[1].i = Load64(p + 8);
+  d[0].i = Read64(p + 0);
+  d[1].i = Read64(p + 8);
   n[0] = d[0].f;
   n[1] = d[1].f;
   Put32(MmReg(m, rde) + 0, n[0]);
@@ -210,8 +227,8 @@ static void OpVpdWpsCvtps2pd(P) {
   union FloatPun f[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead8(A);
-  f[0].i = Load32(p + 0);
-  f[1].i = Load32(p + 4);
+  f[0].i = Read32(p + 0);
+  f[1].i = Read32(p + 4);
   d[0].f = f[0].f;
   d[1].f = f[1].f;
   Put64(XmmRexrReg(m, rde) + 0, d[0].i);
@@ -223,8 +240,8 @@ static void OpVpsWpdCvtpd2ps(P) {
   union FloatPun f[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(A);
-  d[0].i = Load64(p + 0);
-  d[1].i = Load64(p + 8);
+  d[0].i = Read64(p + 0);
+  d[1].i = Read64(p + 8);
   f[0].f = d[0].f;
   f[1].f = d[1].f;
   Put32(XmmRexrReg(m, rde) + 0, f[0].i);
@@ -234,7 +251,7 @@ static void OpVpsWpdCvtpd2ps(P) {
 static void OpVssWsdCvtsd2ss(P) {
   union FloatPun f;
   union DoublePun d;
-  d.i = Load64(GetModrmRegisterXmmPointerRead8(A));
+  d.i = Read64(GetModrmRegisterXmmPointerRead8(A));
   f.f = d.f;
   Put32(XmmRexrReg(m, rde), f.i);
 }
@@ -242,7 +259,7 @@ static void OpVssWsdCvtsd2ss(P) {
 static void OpVsdWssCvtss2sd(P) {
   union FloatPun f;
   union DoublePun d;
-  f.i = Load32(GetModrmRegisterXmmPointerRead4(A));
+  f.i = Read32(GetModrmRegisterXmmPointerRead4(A));
   d.f = f.f;
   Put64(XmmRexrReg(m, rde), d.i);
 }
@@ -252,10 +269,10 @@ static void OpVpsWdqCvtdq2ps(P) {
   i32 n[4];
   union FloatPun f[4];
   p = GetModrmRegisterXmmPointerRead16(A);
-  n[0] = Load32(p + 0 * 4);
-  n[1] = Load32(p + 1 * 4);
-  n[2] = Load32(p + 2 * 4);
-  n[3] = Load32(p + 3 * 4);
+  n[0] = Read32(p + 0 * 4);
+  n[1] = Read32(p + 1 * 4);
+  n[2] = Read32(p + 2 * 4);
+  n[3] = Read32(p + 3 * 4);
   f[0].f = n[0];
   f[1].f = n[1];
   f[2].f = n[2];
@@ -271,8 +288,8 @@ static void OpVpdWdqCvtdq2pd(P) {
   i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead8(A);
-  n[0] = Load32(p + 0 * 4);
-  n[1] = Load32(p + 1 * 4);
+  n[0] = Read32(p + 0 * 4);
+  n[1] = Read32(p + 1 * 4);
   d[0].f = n[0];
   d[1].f = n[1];
   Put64(XmmRexrReg(m, rde) + 0, d[0].i);
@@ -284,10 +301,10 @@ static void OpVdqWpsCvttps2dq(P) {
   i32 n[4];
   union FloatPun f[4];
   p = GetModrmRegisterXmmPointerRead16(A);
-  f[0].i = Load32(p + 0 * 4);
-  f[1].i = Load32(p + 1 * 4);
-  f[2].i = Load32(p + 2 * 4);
-  f[3].i = Load32(p + 3 * 4);
+  f[0].i = Read32(p + 0 * 4);
+  f[1].i = Read32(p + 1 * 4);
+  f[2].i = Read32(p + 2 * 4);
+  f[3].i = Read32(p + 3 * 4);
   n[0] = f[0].f;
   n[1] = f[1].f;
   n[2] = f[2].f;
@@ -304,10 +321,10 @@ static void OpVdqWpsCvtps2dq(P) {
   i32 n[4];
   union FloatPun f[4];
   p = GetModrmRegisterXmmPointerRead16(A);
-  f[0].i = Load32(p + 0 * 4);
-  f[1].i = Load32(p + 1 * 4);
-  f[2].i = Load32(p + 2 * 4);
-  f[3].i = Load32(p + 3 * 4);
+  f[0].i = Read32(p + 0 * 4);
+  f[1].i = Read32(p + 1 * 4);
+  f[2].i = Read32(p + 2 * 4);
+  f[3].i = Read32(p + 3 * 4);
   switch ((m->mxcsr & kMxcsrRc) >> 13) {
     case 0:
       for (i = 0; i < 4; ++i) n[i] = rintf(f[i].f);
@@ -335,8 +352,8 @@ static void OpVdqWpdCvttpd2dq(P) {
   i32 n[2];
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(A);
-  d[0].i = Load64(p + 0);
-  d[1].i = Load64(p + 8);
+  d[0].i = Read64(p + 0);
+  d[1].i = Read64(p + 8);
   n[0] = d[0].f;
   n[1] = d[1].f;
   Put32(XmmRexrReg(m, rde) + 0, n[0]);
@@ -349,8 +366,8 @@ static void OpVdqWpdCvtpd2dq(P) {
   unsigned i;
   union DoublePun d[2];
   p = GetModrmRegisterXmmPointerRead16(A);
-  d[0].i = Load64(p + 0);
-  d[1].i = Load64(p + 8);
+  d[0].i = Read64(p + 0);
+  d[1].i = Read64(p + 8);
   for (i = 0; i < 2; ++i) n[i] = SseRoundDouble(m, d[i].f);
   Put32(XmmRexrReg(m, rde) + 0, n[0]);
   Put32(XmmRexrReg(m, rde) + 4, n[1]);
@@ -365,7 +382,7 @@ static void OpCvt(P, unsigned long op) {
       OpVpdQpiCvtpi2pd(A);
       break;
     case kOpCvt0f2a + 2:
-      OpVsdEdqpCvtsi2sd(A);
+      OpVsdEdqpCvtsi2sd(A);  // #1 hot (6796033)
       break;
     case kOpCvt0f2a + 3:
       OpVssEdqpCvtsi2ss(A);
@@ -376,7 +393,7 @@ static void OpCvt(P, unsigned long op) {
     case kOpCvtt0f2c + 1:
       OpPpiWpdCvttpd2pi(A);
       break;
-    case kOpCvtt0f2c + 2:
+    case kOpCvtt0f2c + 2:  // #2 hot (111540)
       OpGdqpWsdCvttsd2si(A);
       break;
     case kOpCvtt0f2c + 3:

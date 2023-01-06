@@ -608,4 +608,14 @@ i64 FastAnd8(struct Machine *, u64, u64);
 i64 FastSub8(struct Machine *, u64, u64);
 void Mulx64(u64, struct Machine *, long, long);
 
+void OpPsdMuld1(u8 *, struct Machine *, long);
+void OpPsdAddd1(u8 *, struct Machine *, long);
+void OpPsdSubd1(u8 *, struct Machine *, long);
+void OpPsdDivd1(u8 *, struct Machine *, long);
+void OpPsdMind1(u8 *, struct Machine *, long);
+void OpPsdMaxd1(u8 *, struct Machine *, long);
+
+void Int64ToDouble(i64, struct Machine *, long);
+void Int32ToDouble(i32, struct Machine *, long);
+
 #endif /* BLINK_MACHINE_H_ */

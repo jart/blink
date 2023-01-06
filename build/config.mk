@@ -99,8 +99,8 @@ CC = cosmocc
 endif
 
 # make m=prof o/prof/blink
-# o/prof/blink third_party/cosmo/mu_test.com
-# gprof o/prof/blink gmon.out | less
+# o/prof/blink/blink third_party/cosmo/mu_test.com
+# gprof o/prof/blink/blink gmon.out | less
 ifeq ($(MODE), prof)
 CFLAGS += -pg
 LDFLAGS += -pg

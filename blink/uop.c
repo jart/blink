@@ -31,6 +31,7 @@
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
+#include "blink/pun.h"
 #include "blink/stats.h"
 #include "blink/swap.h"
 #include "blink/types.h"
@@ -674,6 +675,69 @@ MICRO_OP static i64 Index(struct Machine *m, u64 d, long i, int z) {
 }
 MICRO_OP static i64 BaseIndex(struct Machine *m, u64 d, long b, int z, long i) {
   return d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// FLOATING POINT
+
+MICRO_OP void OpPsdMuld1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = x.f * y.f;
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdAddd1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = x.f + y.f;
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdSubd1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = x.f - y.f;
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdDivd1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = x.f / y.f;
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdMind1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = MIN(x.f, y.f);
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdMaxd1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = MAX(x.f, y.f);
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void Int64ToDouble(i64 x, struct Machine *m, long reg) {
+  union DoublePun d;
+  d.f = x;
+  Put64(m->xmm[reg], d.i);
+}
+
+MICRO_OP void Int32ToDouble(i32 x, struct Machine *m, long reg) {
+  union DoublePun d;
+  d.f = x;
+  Put64(m->xmm[reg], d.i);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
