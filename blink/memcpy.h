@@ -8,6 +8,10 @@
 #if !defined(TINY) && defined(__x86_64__) && defined(__GNUC__) && \
     !defined(__COSMOPOLITAN__) && !defined(__GLIBC__)
 
+#ifdef memcpy
+#undef memcpy
+#endif
+
 #define memcpy(x, y, z) BetterMemcpyX86(x, y, z)
 
 forceinline void *RepMovsb(void *di, const void *si, size_t cx) {
