@@ -15,13 +15,16 @@
 #endif
 
 #ifndef MAP_JIT
-#define MAP_JIT                                  0
+#define MAP_JIT 0
+#endif
+
+#if defined(__APPLE__) && defined(__aarch64__)
+#include <libkern/OSCacheControl.h>
+#else
 #define pthread_jit_write_protect_supported_np() 0
 #define pthread_jit_write_protect_np(x)          (void)(x)
 #define sys_icache_invalidate(addr, size) \
   __builtin___clear_cache((char *)(addr), (char *)(addr) + (size));
-#else
-#include <libkern/OSCacheControl.h>
 #endif
 
 #ifndef MAP_ANONYMOUS
