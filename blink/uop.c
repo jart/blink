@@ -925,14 +925,14 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  ResolveHost, kLoad[log2sz]);
         } else {
           Jitter(A,
-                 "L"      // load effective address
-                 "a3i"    // arg3 = false
-                 "a2i"    // arg2 = bytes to read
-                 "r0a1="  // arg1 = virtual address
-                 "q"      // arg0 = machine
-                 "c"      // call function (turn virtual into pointer)
-                 "t"      // arg0 = pointer
-                 "m",     // call micro-op (read vector shared memory)
+                 "L"         // load effective address
+                 "a3i"       // arg3 = false
+                 "a2i"       // arg2 = bytes to read
+                 "r0a1="     // arg1 = virtual address
+                 "q"         // arg0 = machine
+                 "c"         // call function (turn virtual into pointer)
+                 "t"         // arg0 = pointer
+                 LOADSTORE,  // call micro-op (read vector shared memory)
                  false, 1ul << log2sz, ReserveAddress, kLoad[log2sz]);
         }
         break;
@@ -984,30 +984,30 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    RexbRm(rde), kPutReg[log2sz]);
           } else if (HasLinearMapping(m)) {
             Jitter(A,
-                   "r1s4="  // sav4 = res1
-                   "r0s3="  // sav3 = res0
-                   "L"      // load effective address
-                   "t"      // arg0 = virtual address
-                   "m"      // call micro-op
-                   "s4a2="  // arg2 = sav4
-                   "s3a1="  // arg1 = sav3
-                   "t"      // arg0 = res0
-                   "m",     // call micro-op (store vector to shared memory)
+                   "r1s4="     // sav4 = res1
+                   "r0s3="     // sav3 = res0
+                   "L"         // load effective address
+                   "t"         // arg0 = virtual address
+                   "m"         // call micro-op
+                   "s4a2="     // arg2 = sav4
+                   "s3a1="     // arg1 = sav3
+                   "t"         // arg0 = res0
+                   LOADSTORE,  // call micro-op (store vector to shared memory)
                    ResolveHost, kStore[log2sz]);
           } else {
             Jitter(A,
-                   "r1s4="  // sav4 = res1
-                   "r0s3="  // sav3 = res0
-                   "L"      // load effective address
-                   "a3i"    // arg3 = true
-                   "a2i"    // arg2 = bytes to write
-                   "r0a1="  // arg1 = res0
-                   "q"      // arg0 = machine
-                   "c"      // call function (turn virtual into pointer)
-                   "s4a2="  // arg2 = sav4
-                   "s3a1="  // arg1 = sav3
-                   "t"      // arg0 = res0
-                   "m",     // call micro-op (store vector to shared memory)
+                   "r1s4="     // sav4 = res1
+                   "r0s3="     // sav3 = res0
+                   "L"         // load effective address
+                   "a3i"       // arg3 = true
+                   "a2i"       // arg2 = bytes to write
+                   "r0a1="     // arg1 = res0
+                   "q"         // arg0 = machine
+                   "c"         // call function (turn virtual into pointer)
+                   "s4a2="     // arg2 = sav4
+                   "s3a1="     // arg1 = sav3
+                   "t"         // arg0 = res0
+                   LOADSTORE,  // call micro-op (store vector to shared memory)
                    true, 1ul << log2sz, ReserveAddress, kStore[log2sz]);
           }
         }
