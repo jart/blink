@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <unistd.h>
 
 #include "blink/assert.h"
 #include "blink/errno.h"
@@ -133,4 +134,23 @@ void DestroyFds(struct Fds *fds) {
   }
   unassert(!fds->list);
   unassert(!pthread_mutex_destroy(&fds->lock));
+}
+
+void NormalizeFds(struct Fds *fds) {
+  int systemfd;
+  struct Fd *fd;
+  struct Dll *e;
+  for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
+    fd = FD_CONTAINER(e);
+    unassert(!fd->cloexec);  // close them before calling
+    systemfd = atomic_load_explicit(&fd->systemfd, memory_order_acquire);
+    if (systemfd >= 0) {
+      unassert(systemfd >= fd->fildes);  // invariant
+      if (fd->fildes != systemfd) {
+        unassert(dup2(systemfd, fd->fildes) == fd->fildes);
+        unassert(!close(systemfd));
+        atomic_store_explicit(&fd->systemfd, fd->fildes, memory_order_release);
+      }
+    }
+  }
 }

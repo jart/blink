@@ -1754,6 +1754,10 @@ static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
     argv = CopyStrList(m, aa);
     envp = CopyStrList(m, ea);
     SysCloseExec(m->system);
+    NormalizeFds(&m->system->fds);
+    SYS_LOGF("execve(%s)", prog);
+    execve(prog, argv, envp);
+    SYS_LOGF("m->system->exec(%s) due to %s", prog, strerror(errno));
     _Exit(m->system->exec(prog, argv, envp));
   } else {
     return enosys();

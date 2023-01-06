@@ -68,13 +68,14 @@ int SysDup(struct Machine *m, i32 fildes, i32 newfildes, i32 flags, i32 minfd) {
   if (fd1 && fd2) {
     if (fd1 != fd2) {
       systemfd = atomic_load_explicit(&fd1->systemfd, memory_order_relaxed);
-      systemfd = fcntl(systemfd, flags ? F_DUPFD_CLOEXEC : F_DUPFD, 3);
+      systemfd = fcntl(systemfd, flags ? F_DUPFD_CLOEXEC : F_DUPFD,
+                       kMinBlinkFd + fd2->fildes);
       if (systemfd != -1) {
         fildes = fd2->fildes;
         fd2->cb = fd1->cb;
         fd2->cloexec = !!flags;
+        fd2->systemfd = systemfd;
         fd2->oflags = fd1->oflags;
-        atomic_store_explicit(&fd2->systemfd, systemfd, memory_order_release);
       } else {
         fildes = -1;
       }

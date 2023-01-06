@@ -47,5 +47,6 @@ int CountFds(struct Fds *);
 void FreeFd(struct Fds *, struct Fd *);
 void UnlockFds(struct Fds *);
 void DestroyFds(struct Fds *);
+void NormalizeFds(struct Fds *);
 
 #endif /* BLINK_FDS_H_ */
