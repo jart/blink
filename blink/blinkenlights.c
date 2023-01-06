@@ -839,7 +839,10 @@ static int DrainInput(int fd) {
   for (;;) {
     fds[0].fd = fd;
     fds[0].events = POLLIN;
-    if (poll(fds, ARRAYLEN(fds), 0) == -1) return -1;
+#ifdef __COSMOPOLITAN__
+    if (!IsWindows())
+#endif
+      if (poll(fds, ARRAYLEN(fds), 0) == -1) return -1;
     if (!(fds[0].revents & POLLIN)) break;
     if (read(fd, buf, sizeof(buf)) == -1) return -1;
   }
@@ -2153,7 +2156,10 @@ static bool HasPendingInput(int fd) {
   fds[0].fd = fd;
   fds[0].events = POLLIN;
   fds[0].revents = 0;
-  poll(fds, ARRAYLEN(fds), 0);
+#ifdef __COSMOPOLITAN__
+  if (!IsWindows())
+#endif
+    poll(fds, ARRAYLEN(fds), 0);
   return fds[0].revents & (POLLIN | POLLERR);
 }
 
@@ -2982,7 +2988,10 @@ static bool HasPendingKeyboard(void) {
 }
 
 static void Sleep(int ms) {
-  poll((struct pollfd[]){{ttyin, POLLIN}}, 1, ms);
+#ifdef __COSMOPOLITAN__
+  if (!IsWindows())
+#endif
+    poll((struct pollfd[]){{ttyin, POLLIN}}, 1, ms);
 }
 
 static void OnMouseWheelUp(struct Panel *p, int y, int x) {
