@@ -172,13 +172,33 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/fseeko_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/fputs_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/pipe_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/2/fork_test.com.ok
+		o/$(MODE)/third_party/cosmo/2/fork_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/execve_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/arena_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/acos_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/getintegercoefficients8_test.com.ok		\
+		o/$(MODE)/third_party/cosmo/2/atan_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/bextra_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/cbrt_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/clock_getres_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/copysign_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/cos_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/cosh_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/complex_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/countbits_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/crc32c_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/cv_wait_example_test.com.ok			\
+		o/$(MODE)/third_party/cosmo/2/daemon_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/dtoa_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/expm1_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/fgetln_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/getcontext_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/getenv_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@
 
 DARWIN_PROBLEMATIC_TESTS =									\
-		o/$(MODE)/third_party/cosmo/2/sched_getaffinity_test.com.ok			\
-		o/$(MODE)/third_party/cosmo/2/execve_test.com.ok
+		o/$(MODE)/third_party/cosmo/2/sched_getaffinity_test.com.ok
 
 o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/2/intrin_test.com.emulates			\
