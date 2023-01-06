@@ -85,6 +85,7 @@ static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
 }
 
 static int Exec(char *prog, char **argv, char **envp) {
+  int i;
   struct Machine *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
   unassert((g_machine = NewMachine(NewSystem(), 0)));
@@ -96,9 +97,9 @@ static int Exec(char *prog, char **argv, char **envp) {
   g_machine->system->nolinear = FLAG_nolinear;
   if (!old) {
     LoadProgram(g_machine, prog, argv, envp);
-    AddStdFd(&g_machine->system->fds, 0);
-    AddStdFd(&g_machine->system->fds, 1);
-    AddStdFd(&g_machine->system->fds, 2);
+    for (i = 0; i < 10; ++i) {
+      AddStdFd(&g_machine->system->fds, i);
+    }
   } else {
     LoadProgram(g_machine, prog, argv, envp);
     LOCK(&old->system->fds.lock);
