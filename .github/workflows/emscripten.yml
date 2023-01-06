@@ -1,0 +1,46 @@
+name: Build with emscripten
+
+on:
+  push:
+    branches: [ emscripten ]
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          submodules: 'recursive'
+
+      - name: Install cached emscripten
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: 'emsdk'
+          key: 'emsdk'
+
+      - name: Install emscripten
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          curl -L https://github.com/emscripten-core/emsdk/archive/HEAD.tar.gz | tar xz
+          mv emsdk-* emsdk
+          ./emsdk/emsdk install latest
+          ./emsdk/emsdk activate latest
+
+      - name: Build blink
+        run: |
+          . ./emsdk/emsdk_env.sh
+          emmake make -j$(nproc)
+          emcc -O2 o//blink/blink.o o//blink/blink.a -lm -pthread -lrt -o o//blink/blink.html -s INVOKE_RUN=0 -s EXPORTED_RUNTIME_METHODS=callMain -s INITIAL_MEMORY=1073741824 -s EXIT_RUNTIME=1 --pre-js pre.js
+
+      - name: Upload zip
+        uses: actions/upload-artifact@v3
+        with:
+            name: blink-emscripten
+            path: |
+              o/blink/*.html
+              o/blink/*.js
+              o/blink/*.wasm
+            if-no-files-found: error
