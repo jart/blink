@@ -118,6 +118,10 @@ MICRO_OP static u8 *ResolveHost(i64 v) {
   return ToHost(v);
 }
 
+MICRO_OP static u8 *GetXmmPtr(struct Machine *m, long i) {
+  return m->xmm[i];
+}
+
 #if defined(__x86_64__) && defined(TRIVIALLY_RELOCATABLE)
 #define LOADSTORE "m"
 
@@ -1058,6 +1062,31 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "q"      // arg0 = machine
                  "m",     // call micro-op
                  Sego(rde) - 1, Seg);
+        }
+        break;
+
+      case 'P':  // res0 = GetXmmOrMemPointer(RexbRm)
+        if (IsModrmRegister(rde)) {
+          Jitter(A,
+                 "a1i"  // arg1 = register index
+                 "q"    // arg0 = machine
+                 "m",   // call micro-op
+                 RexbRm(rde), GetXmmPtr);
+        } else if (HasLinearMapping(m)) {
+          Jitter(A,
+                 "L"   // load effective address
+                 "t"   // arg0 = virtual address
+                 "m",  // res0 = call micro-op (turn virtual into pointer)
+                 ResolveHost);
+        } else {
+          Jitter(A,
+                 "L"      // load effective address
+                 "a3i"    // arg3 = false
+                 "a2i"    // arg2 = bytes to read
+                 "r0a1="  // arg1 = virtual address
+                 "q"      // arg0 = machine
+                 "c",     // res0 = call function (turn virtual into pointer)
+                 false, 1ul << log2sz, ReserveAddress);
         }
         break;
 

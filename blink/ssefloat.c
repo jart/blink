@@ -363,14 +363,29 @@ void OpComissVsWs(P) {
   }
 }
 
-static inline void OpPsd(P, float fs(float x, float y),
-                         double fd(double x, double y)) {
+static void OpPsd2(u8 *p, struct Machine *m, u64 reg,
+                   double fd(double, double)) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = fd(x.f, y.f);
+  Write64(m->xmm[reg], x.i);
+}
+
+static void OpPsd(P, float fs(float x, float y),
+                  double fd(double x, double y)) {
   if (Rep(rde) == 2) {
-    union DoublePun x, y;
-    y.i = Read64(GetModrmRegisterXmmPointerRead8(A));
-    x.i = Read64(XmmRexrReg(m, rde));
-    x.f = fd(x.f, y.f);
-    Write64(XmmRexrReg(m, rde), x.i);
+    OpPsd2(GetModrmRegisterXmmPointerRead8(A), m, RexrReg(rde), fd);
+    if (IsMakingPath(m)) {
+      Jitter(A,
+             "P"      // res0 = GetXmmOrMemPointer(RexbRm)
+             "a3i"    // arg3 = fd
+             "a2i"    // arg2 = RexrReg(rde)
+             "s0a1="  // arg1 = machine
+             "t"      // arg0 = res0
+             "c",     // call function (OpPsd2)
+             fd, RexrReg(rde), OpPsd2);
+    }
   } else if (Rep(rde) == 3) {
     union FloatPun x, y;
     y.i = Read32(GetModrmRegisterXmmPointerRead4(A));

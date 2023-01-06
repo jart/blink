@@ -77,10 +77,18 @@ void OpMovntiMdqpGdqp(P) {
 
 static void MovdqaVdqWdq(P) {
   memcpy(XmmRexrReg(m, rde), GetXmmAddress(A), 16);
+  if (IsMakingPath(m)) {
+    Jitter(A, "z4B"    // 128-bit GetRegOrMem
+              "z4C");  // 128-bit PutReg
+  }
 }
 
 static void MovdqaWdqVdq(P) {
   memcpy(GetXmmAddress(A), XmmRexrReg(m, rde), 16);
+  if (IsMakingPath(m)) {
+    Jitter(A, "z4A"    // 128-bit GetReg
+              "z4D");  // 128-bit PutRegOrMem
+  }
 }
 
 static void MovntdqMdqVdq(P) {
@@ -178,6 +186,13 @@ static void MovsdVpsWps(P) {
   } else {
     memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(A), 8);
     memset(XmmRexrReg(m, rde) + 8, 0, 8);
+    if (IsMakingPath(m)) {
+      Jitter(A,
+             "z3B"   // res0 = Get.....Mem[force64bit](RexbRm)
+             "r1i"   // res1 = 0
+             "z4C",  // 128-bit PutReg
+             0);
+    }
   }
 }
 

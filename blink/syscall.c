@@ -1328,6 +1328,11 @@ static int SysSetTidAddress(struct Machine *m, i64 ctid) {
   return m->tid;
 }
 
+static int SysFadvise(struct Machine *m, u32 fd, u64 offset, u64 len,
+                      i32 advice) {
+  return 0;
+}
+
 static int IoctlTiocgwinsz(struct Machine *m, int fd, i64 addr,
                            int fn(int, unsigned long, ...)) {
   int rc;
@@ -2642,6 +2647,7 @@ void OpSyscall(P) {
     SYSCALL(0x0CC, SysSchedGetaffinity, (m, di, si, dx));
     SYSCALL(0x0D9, SysGetdents, (m, di, si, dx));
     SYSCALL(0x0DA, SysSetTidAddress, (m, di));
+    SYSCALL(0x0DD, SysFadvise, (m, di, si, dx, r0));
     SYSCALL(0x0E4, SysClockGettime, (m, di, si));
     SYSCALL(0x0E5, SysClockGetres, (m, di, si));
     SYSCALL(0x0E6, SysClockNanosleep, (m, di, si, dx, r0));
