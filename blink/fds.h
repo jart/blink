@@ -22,11 +22,9 @@ struct FdCb {
 struct Fd {
   int fildes;
   int oflags;
-  int cloexec;
   DIR *dirstream;
   struct Dll elem;
   pthread_mutex_t lock;
-  _Atomic(int) systemfd;
   const struct FdCb *cb;
 };
 
@@ -39,7 +37,7 @@ extern const struct FdCb kFdCbHost;
 
 void InitFds(struct Fds *);
 void LockFds(struct Fds *);
-struct Fd *AllocateFd(struct Fds *, int, int);
+struct Fd *AddFd(struct Fds *, int, int);
 struct Fd *GetFd(struct Fds *, int);
 void LockFd(struct Fd *);
 void UnlockFd(struct Fd *);
@@ -47,6 +45,5 @@ int CountFds(struct Fds *);
 void FreeFd(struct Fds *, struct Fd *);
 void UnlockFds(struct Fds *);
 void DestroyFds(struct Fds *);
-void NormalizeFds(struct Fds *);
 
 #endif /* BLINK_FDS_H_ */

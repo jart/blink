@@ -32,7 +32,6 @@ _Noreturn void SysExit(struct Machine *, int);
 
 void AddStdFd(struct Fds *, int);
 int GetAfd(struct Machine *, int, struct Fd **);
-void DropFd(struct Machine *, struct Fd *);
 int GetFildes(struct Machine *, int);
 struct Fd *GetAndLockFd(struct Machine *, int);
 bool CheckInterrupt(struct Machine *);

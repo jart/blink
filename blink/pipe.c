@@ -22,35 +22,26 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/fds.h"
 #include "blink/syscall.h"
 
 int SysPipe(struct Machine *m, i64 pipefds_addr, i32 flags) {
-  u8 gpipefds[2][4];
-  int rc, hpipefds[2];
-  struct Fd *fd1, *fd2;
-  LockFds(&m->system->fds);
-  fd1 = AllocateFd(&m->system->fds, 0, O_RDONLY);
-  fd2 = AllocateFd(&m->system->fds, 0, O_WRONLY);
-  UnlockFds(&m->system->fds);
-  if (fd1 && fd2) {
-    if (pipe(hpipefds) != -1) {
-      Write32(gpipefds[0], hpipefds[0]);
-      Write32(gpipefds[1], hpipefds[1]);
-      CopyToUserWrite(m, pipefds_addr, gpipefds, sizeof(gpipefds));
-      atomic_store_explicit(&fd1->systemfd, hpipefds[0], memory_order_release);
-      atomic_store_explicit(&fd2->systemfd, hpipefds[1], memory_order_release);
-      rc = 0;
-    } else {
-      rc = -1;
-    }
+  int rc;
+  int fds[2];
+  u8 fds_linux[2][4];
+  if (pipe(fds) != -1) {
+    LockFds(&m->system->fds);
+    unassert(AddFd(&m->system->fds, fds[0], O_RDONLY));
+    unassert(AddFd(&m->system->fds, fds[1], O_WRONLY));
+    UnlockFds(&m->system->fds);
+    Write32(fds_linux[0], fds[0]);
+    Write32(fds_linux[1], fds[1]);
+    CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux));
+    rc = 0;
   } else {
     rc = -1;
-  }
-  if (rc == -1) {
-    DropFd(m, fd1);
-    DropFd(m, fd2);
   }
   return rc;
 }

@@ -209,11 +209,9 @@ void LoadDebugSymbols(struct Elf *elf) {
 
 void PrintFds(struct Fds *fds) {
   struct Dll *e;
-  LOGF("%-8s %-8s %-8s %-8s", "fildes", "systemfd", "oflags", "cloexec");
+  LOGF("%-8s %-8s %-8s", "fildes", "oflags");
   for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
-    LOGF("%-8d %-8d %-8x %-8s", FD_CONTAINER(e)->fildes,
-         FD_CONTAINER(e)->systemfd, FD_CONTAINER(e)->oflags,
-         FD_CONTAINER(e)->cloexec ? "true" : "false");
+    LOGF("%-8d %-8x", FD_CONTAINER(e)->fildes, FD_CONTAINER(e)->oflags);
   }
 }
 

@@ -29,7 +29,7 @@ static int OpE9Read(struct Machine *m) {
   struct Fd *fd;
   struct iovec t = {&b, 1};
   if (!(fd = GetAndLockFd(m, 0))) return -1;
-  if (fd->cb->readv(fd->systemfd, &t, 1) == 1) {
+  if (fd->cb->readv(fd->fildes, &t, 1) == 1) {
     return b;
   } else {
     return -1;
@@ -41,7 +41,7 @@ static int OpE9Write(struct Machine *m, u8 b) {
   struct Fd *fd;
   struct iovec t = {&b, 1};
   if (!(fd = GetAndLockFd(m, 1))) return -1;
-  rc = fd->cb->writev(fd->systemfd, &t, 1);
+  rc = fd->cb->writev(fd->fildes, &t, 1);
   UnlockFd(fd);
   return rc;
 }
@@ -51,7 +51,7 @@ static int OpE9Poll(struct Machine *m) {
   struct Fd *fd;
   struct pollfd pf;
   if (!(fd = GetAndLockFd(m, 0))) return -1;
-  pf.fd = fd->systemfd;
+  pf.fd = fd->fildes;
   pf.events = POLLIN | POLLOUT;
   rc = fd->cb->poll(&pf, 1, 20);
   if (rc > 0) rc = pf.revents;

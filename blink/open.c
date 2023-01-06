@@ -33,37 +33,34 @@
 int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
               i32 mode) {
   const char *path;
-  struct Fd *fd, *dirfd;
-  int rc, sf, fildes, sysdirfd;
+  struct Fd *dirfd;
+  int rc, sysdirfd, fildes = -1;
   if (!(path = LoadStr(m, pathaddr))) return efault();
   if ((oflags = XlatOpenFlags(oflags)) == -1) return -1;
   LockFds(&m->system->fds);
   if ((rc = GetAfd(m, dirfildes, &dirfd)) != -1) {
-    if (dirfd) LockFd(dirfd);
-    fd = AllocateFd(&m->system->fds, 0, oflags);
+    if (dirfd) {
+      LockFd(dirfd);
+    }
   } else {
     dirfd = 0;
-    fd = 0;
   }
   UnlockFds(&m->system->fds);
-  if (fd && rc != -1) {
+  if (rc != -1) {
     if (dirfd) {
-      sysdirfd = atomic_load_explicit(&dirfd->systemfd, memory_order_relaxed);
+      sysdirfd = dirfd->fildes;
     } else {
       sysdirfd = AT_FDCWD;
     }
-    INTERRUPTIBLE(sf = openat(sysdirfd, path, oflags, mode));
-    if (sf != -1) {
-      atomic_store_explicit(&fd->systemfd, sf, memory_order_release);
-      fildes = fd->fildes;
+    INTERRUPTIBLE(fildes = openat(sysdirfd, path, oflags, mode));
+    if (fildes != -1) {
+      LockFds(&m->system->fds);
+      unassert(AddFd(&m->system->fds, fildes, oflags));
+      UnlockFds(&m->system->fds);
     } else {
       SYS_LOGF("%s(%s) failed: %s", "openat", path, strerror(errno));
-      fildes = -1;
     }
-  } else {
-    fildes = -1;
   }
   if (dirfd) UnlockFd(dirfd);
-  if (fildes == -1 && fd) DropFd(m, fd);
   return fildes;
 }

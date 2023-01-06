@@ -171,13 +171,13 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/ftell_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/fseeko_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/fputs_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/pipe_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/fork_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@
 
 DARWIN_PROBLEMATIC_TESTS =									\
 		o/$(MODE)/third_party/cosmo/2/sched_getaffinity_test.com.ok			\
-		o/$(MODE)/third_party/cosmo/2/pipe_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/execve_test.com.ok
 
 o/$(MODE)/third_party/cosmo/emulates:								\

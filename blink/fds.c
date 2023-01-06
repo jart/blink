@@ -43,40 +43,22 @@ void LockFds(struct Fds *fds) {
   LOCK(&fds->lock);
 }
 
-struct Fd *AllocateFd(struct Fds *fds, int minfd, int oflags) {
+struct Fd *AddFd(struct Fds *fds, int fildes, int oflags) {
   struct Fd *fd;
-  struct Dll *e1, *e2;
-  if (minfd < 0) {
+  if (fildes >= 0) {
+    if ((fd = (struct Fd *)calloc(1, sizeof(*fd)))) {
+      dll_init(&fd->elem);
+      fd->cb = &kFdCbHost;
+      fd->fildes = fildes;
+      fd->oflags = oflags;
+      pthread_mutex_init(&fd->lock, 0);
+      dll_make_first(&fds->list, &fd->elem);
+    }
+    return fd;
+  } else {
     einval();
     return 0;
   }
-  if ((fd = (struct Fd *)calloc(1, sizeof(*fd)))) {
-    dll_init(&fd->elem);
-    fd->cb = &kFdCbHost;
-    fd->oflags = oflags & ~O_CLOEXEC;
-    fd->cloexec = !!(oflags & O_CLOEXEC);
-    pthread_mutex_init(&fd->lock, 0);
-    atomic_store_explicit(&fd->systemfd, -1, memory_order_release);
-    if (!(e1 = dll_first(fds->list)) || minfd < FD_CONTAINER(e1)->fildes) {
-      fd->fildes = minfd;
-      dll_make_first(&fds->list, &fd->elem);
-    } else {
-      for (;; e1 = e2) {
-        if ((!(e2 = dll_next(fds->list, e1)) ||
-             (FD_CONTAINER(e1)->fildes < minfd &&
-              minfd < FD_CONTAINER(e2)->fildes))) {
-          fd->fildes = MAX(FD_CONTAINER(e1)->fildes + 1, minfd);
-          if (e2) {
-            dll_splice_after(e1, &fd->elem);
-          } else {
-            dll_make_last(&fds->list, &fd->elem);
-          }
-          break;
-        }
-      }
-    }
-  }
-  return fd;
 }
 
 struct Fd *GetFd(struct Fds *fds, int fildes) {
@@ -84,12 +66,7 @@ struct Fd *GetFd(struct Fds *fds, int fildes) {
   if (fildes >= 0) {
     for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
       if (FD_CONTAINER(e)->fildes == fildes) {
-        if (atomic_load_explicit(&FD_CONTAINER(e)->systemfd,
-                                 memory_order_acquire) >= 0) {
-          return FD_CONTAINER(e);
-        } else {
-          break;
-        }
+        return FD_CONTAINER(e);
       }
     }
   }
@@ -134,23 +111,4 @@ void DestroyFds(struct Fds *fds) {
   }
   unassert(!fds->list);
   unassert(!pthread_mutex_destroy(&fds->lock));
-}
-
-void NormalizeFds(struct Fds *fds) {
-  int systemfd;
-  struct Fd *fd;
-  struct Dll *e;
-  for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
-    fd = FD_CONTAINER(e);
-    unassert(!fd->cloexec);  // close them before calling
-    systemfd = atomic_load_explicit(&fd->systemfd, memory_order_acquire);
-    if (systemfd >= 0) {
-      unassert(systemfd >= fd->fildes);  // invariant
-      if (fd->fildes != systemfd) {
-        unassert(dup2(systemfd, fd->fildes) == fd->fildes);
-        unassert(!close(systemfd));
-        atomic_store_explicit(&fd->systemfd, fd->fildes, memory_order_release);
-      }
-    }
-  }
 }

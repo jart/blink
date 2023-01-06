@@ -32,20 +32,16 @@
 #include "blink/syscall.h"
 
 static int CloseFd(struct System *s, struct Fd *fd) {
-  int sf, rc;
+  int rc;
   unassert(fd->cb);
-  if ((sf = atomic_load_explicit(&fd->systemfd, memory_order_acquire)) >= 0) {
-    if (fd->dirstream) {
-      rc = closedir(fd->dirstream);
-    } else {
-      rc = fd->cb->close(sf);
-    }
-    // EINTR shouldn't be possible since we don't support SO_LINGER
-    unassert(!(rc == -1 && errno == EINTR));
-    FreeFd(&s->fds, fd);
+  if (fd->dirstream) {
+    rc = closedir(fd->dirstream);
   } else {
-    rc = ebadf();
+    rc = fd->cb->close(fd->fildes);
   }
+  // EINTR shouldn't be possible since we don't support SO_LINGER
+  unassert(!(rc == -1 && errno == EINTR));
+  FreeFd(&s->fds, fd);
   return rc;
 }
 
@@ -88,7 +84,7 @@ void SysCloseExec(struct System *s) {
   for (e = dll_first(s->fds.list); e; e = e2) {
     fd = FD_CONTAINER(e);
     e2 = dll_next(s->fds.list, e);
-    if (fd->cloexec) {
+    if (fd->oflags & O_CLOEXEC) {
       CloseFd(s, fd);
     }
   }
