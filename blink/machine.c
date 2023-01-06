@@ -2173,16 +2173,22 @@ void GeneralDispatch(P) {
   opclass = ClassifyOp(rde);
   if (IsMakingPath(m) ||
       (opclass != kOpPrecious && CanJit(m) && CreatePath(A))) {
-    if (opclass == kOpNormal || opclass == kOpBranching) {
+    if (opclass == kOpPrecious) {
+      // we don't want to be constructing a path upon syscall entry
+      CompletePath(A);
+    } else {
+      // begin creating new element in jit path
+      unassert(opclass == kOpNormal || opclass == kOpBranching);
       ++m->path.elements;
       STATISTIC(++path_elements);
       AddPath_StartOp(A);
+      jitpc = GetJitPc(m->path.jb);
+      JIT_LOGF("adding [%s] from address %" PRIx64
+               " to path starting at %" PRIx64,
+               DescribeOp(m, GetPc(m)), GetPc(m), m->path.start);
     }
-    jitpc = GetJitPc(m->path.jb);
-    JIT_LOGF("adding [%s] from address %" PRIx64
-             " to path starting at %" PRIx64,
-             DescribeOp(m, GetPc(m)), GetPc(m), m->path.start);
   }
+  // call naive opcode implementation
   m->oplen = Oplength(rde);
   m->ip += Oplength(rde);
   GetOp(Mopcode(rde))(A);
@@ -2190,19 +2196,19 @@ void GeneralDispatch(P) {
     CommitStash(m);
   }
   if (IsMakingPath(m)) {
-    if (GetJitPc(m->path.jb) == jitpc) {
-      if (opclass == kOpNormal || opclass == kOpBranching) {
-        STATISTIC(++path_elements_auto);
-        AddPath(A);
-        AddPath_EndOp(A);
-      } else {
-        JIT_LOGF("won't add [%" PRIx64 " %s] so path started at %" PRIx64,
-                 GetPc(m), DescribeOp(m, GetPc(m)), m->path.start);
-      }
-    } else {
+    // finish creating new element in jit path
+    unassert(opclass == kOpNormal || opclass == kOpBranching);
+    if (GetJitPc(m->path.jb) != jitpc) {
+      // the op generated its jit code
       AddPath_EndOp(A);
+    } else {
+      // emit the "one size fits all" jit operation
+      AddPath(A);
+      AddPath_EndOp(A);
+      STATISTIC(++path_elements_auto);
     }
-    if (opclass == kOpPrecious || opclass == kOpBranching) {
+    if (opclass == kOpBranching) {
+      // branches, calls, and jumps always force end of path
       CompletePath(A);
     }
   }

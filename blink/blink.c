@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/case.h"
 #include "blink/debug.h"
 #include "blink/dll.h"
@@ -72,11 +73,14 @@ void TerminateSignal(struct Machine *m, int sig) {
 }
 
 static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
+  int sig_linux;
   RestoreIp(g_machine);
   g_machine->faultaddr = ToGuest(si->si_addr);
-  LOGF("SEGMENTATION FAULT AT ADDRESS %" PRIx64 "\n\t%s", g_machine->faultaddr,
-       GetBacktrace(g_machine));
-  DeliverSignalToUser(g_machine, SIGSEGV_LINUX);
+  LOGF("SEGMENTATION FAULT (%s) AT ADDRESS %" PRIx64 "\n\t%s", strsignal(sig),
+       g_machine->faultaddr, GetBacktrace(g_machine));
+  if ((sig_linux = UnXlatSignal(sig)) != -1) {
+    DeliverSignalToUser(g_machine, sig_linux);
+  }
   siglongjmp(g_machine->onhalt, kMachineSegmentationFault);
 }
 
@@ -150,9 +154,10 @@ static void HandleSigs(void) {
   sa.sa_flags = 0;
   sa.sa_handler = OnSigSys;
   unassert(!sigaction(SIGSYS, &sa, 0));
-#ifndef __SANITIZE_THREAD__
+#if !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_ADDRESS__)
   sa.sa_sigaction = OnSigSegv;
   sa.sa_flags = SA_SIGINFO;
+  unassert(!sigaction(SIGBUS, &sa, 0));
   unassert(!sigaction(SIGILL, &sa, 0));
   unassert(!sigaction(SIGSEGV, &sa, 0));
 #endif

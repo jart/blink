@@ -249,7 +249,8 @@ _Noreturn void SysExit(struct Machine *m, int rc) {
 }
 
 static int SysFork(struct Machine *m) {
-  int pid, newpid;
+  int pid, newpid = 0;
+  unassert(!m->path.jb);
   LOCK(&m->system->sig_lock);
   LOCK(&m->system->mmap_lock);
   LOCK(&m->system->futex_lock);
@@ -260,12 +261,11 @@ static int SysFork(struct Machine *m) {
   UNLOCK(&m->system->mmap_lock);
   UNLOCK(&m->system->sig_lock);
   if (!pid) {
+    m->tid = m->system->pid = newpid = getpid();
     InitBus();  // TODO(jart): use shared memory for g_bus
-    newpid = getpid();
     THR_LOGF("pid=%d tid=%d SysFork -> pid=%d tid=%d",  //
              m->system->pid, m->tid, newpid, newpid);
     m->system->isfork = true;
-    m->tid = m->system->pid = newpid;
     RemoveOtherThreads(m->system);
   }
   return pid;
@@ -1765,25 +1765,25 @@ static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
 
 static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   char *prog, **argv, **envp;
-  // TODO(jart): do native exec with fd->fildes mapped to fd->systemfd
+  prog = CopyStr(m, pa);
+  argv = CopyStrList(m, aa);
+  envp = CopyStrList(m, ea);
+  SYS_LOGF("execve(%s)", prog);
+  execve(prog, argv, envp);
   if (m->system->exec) {
-    prog = CopyStr(m, pa);
-    argv = CopyStrList(m, aa);
-    envp = CopyStrList(m, ea);
-    SYS_LOGF("execve(%s)", prog);
-    execve(prog, argv, envp);
     SYS_LOGF("m->system->exec(%s) due to %s", prog, strerror(errno));
     SysCloseExec(m->system);
     _Exit(m->system->exec(prog, argv, envp));
-  } else {
-    return enosys();
   }
+  return -1;
 }
 
 static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
                     int options, i64 opt_out_rusage_addr) {
   int rc;
-  i32 wstatus;
+  int wstatus;
+  i32 gwstatus;
+  u8 gwstatusb[4];
   struct rusage hrusage;
   struct rusage_linux grusage;
   if ((options = XlatWait(options)) == -1) return -1;
@@ -1795,7 +1795,17 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
 #endif
   if (rc != -1) {
     if (opt_out_wstatus_addr) {
-      CopyToUserWrite(m, opt_out_wstatus_addr, &wstatus, sizeof(wstatus));
+      if (WIFEXITED(wstatus)) {
+        gwstatus = (WEXITSTATUS(wstatus) & 255) << 8;
+      } else {
+        unassert(WIFSIGNALED(wstatus));
+        gwstatus = UnXlatSignal(WTERMSIG(wstatus)) & 127;
+        if (WCOREDUMP(wstatus)) {
+          gwstatus |= 128;
+        }
+      }
+      Write32(gwstatusb, gwstatus);
+      CopyToUserWrite(m, opt_out_wstatus_addr, gwstatusb, sizeof(gwstatusb));
     }
     if (opt_out_rusage_addr) {
       XlatRusageToLinux(&grusage, &hrusage);
