@@ -253,6 +253,22 @@ int GetFlagClobbers(u64 rde) {
       return CF | ZF | SF | AF | PF;
     case 0x09D:  // popf
       return 0x00ffffff;
+    case 0x2f5:
+      if (Rep(rde)) {
+        return 0;  // pdep, pext
+      } else if (!Osz(rde)) {
+        return CF | ZF | SF | OF | AF | PF;  // bzhi
+      } else {
+        return 0;
+      }
+    case 0x2f6:
+      if (Osz(rde)) {
+        return CF;  // adcx
+      } else if (Rep(rde) == 3) {
+        return OF;  // adox
+      } else {
+        return 0;
+      }
   }
 }
 
@@ -384,6 +400,14 @@ static int GetFlagDepsImpl(u64 rde) {
       return CF | AF;
     case 0x09C:  // pushf
       return 0x00ffffff;
+    case 0x2f6:
+      if (Osz(rde)) {
+        return CF;  // adcx
+      } else if (Rep(rde) == 3) {
+        return OF;  // adox
+      } else {
+        return 0;
+      }
   }
 }
 
