@@ -41,8 +41,8 @@ LDFLAGS_STATIC =			\
 	-fno-unwind-tables		\
 	-fno-asynchronous-unwind-tables	\
 	-Wl,-z,norelro			\
-	-Wl,-z,max-page-size=65536	\
-	-Wl,-z,common-page-size=65536	\
+	-Wl,-z,max-page-size=4096	\
+	-Wl,-z,common-page-size=4096	\
 	-Wl,-Ttext-segment=$(IMAGE_BASE_VIRTUAL)
 
 TAGSFLAGS =				\
