@@ -36,6 +36,7 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
   struct Fd *dirfd;
   int rc, sysdirfd, fildes = -1;
   if (!(path = LoadStr(m, pathaddr))) return efault();
+  SYS_LOGF("Openat(%s)", path);
   if ((oflags = XlatOpenFlags(oflags)) == -1) return -1;
   LockFds(&m->system->fds);
   if ((rc = GetAfd(m, dirfildes, &dirfd)) != -1) {

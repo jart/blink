@@ -1137,12 +1137,19 @@ static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
-  InitIovs(&iv);
-  if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
-    INTERRUPTIBLE(rc = readv_impl(fildes, iv.p, iv.i));
-    if (rc != -1) SetWriteAddr(m, addr, rc);
+  if (size) {
+    InitIovs(&iv);
+    if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
+      INTERRUPTIBLE(rc = readv_impl(fildes, iv.p, iv.i));
+      if (rc != -1) SetWriteAddr(m, addr, rc);
+    }
+    FreeIovs(&iv);
+  } else {
+    // Linux and Darwin behave inconsistently if iovcnt is zero. POSIX.1
+    // says, "[t]he iovcnt argument is valid if greater than 0 and less
+    // than or equal to {IOV_MAX}."
+    rc = 0;
   }
-  FreeIovs(&iv);
   return rc;
 }
 
@@ -1160,12 +1167,19 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
-  InitIovs(&iv);
-  if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
-    INTERRUPTIBLE(rc = writev_impl(fildes, iv.p, iv.i));
-    if (rc != -1) SetReadAddr(m, addr, rc);
+  if (size) {
+    InitIovs(&iv);
+    if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
+      INTERRUPTIBLE(rc = writev_impl(fildes, iv.p, iv.i));
+      if (rc != -1) SetReadAddr(m, addr, rc);
+    }
+    FreeIovs(&iv);
+  } else {
+    // Linux and Darwin behave inconsistently if iovcnt is zero. POSIX.1
+    // says, "[t]he iovcnt argument is valid if greater than 0 and less
+    // than or equal to {IOV_MAX}."
+    rc = 0;
   }
-  FreeIovs(&iv);
   return rc;
 }
 
@@ -1219,11 +1233,18 @@ static i64 SysReadv(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
-  InitIovs(&iv);
-  if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
-    INTERRUPTIBLE(rc = readv_impl(fildes, iv.p, iv.i));
+  if (iovlen) {
+    InitIovs(&iv);
+    if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+      INTERRUPTIBLE(rc = readv_impl(fildes, iv.p, iv.i));
+    }
+    FreeIovs(&iv);
+  } else {
+    // Linux and Darwin behave inconsistently if iovcnt is zero. POSIX.1
+    // says, "[t]he iovcnt argument is valid if greater than 0 and less
+    // than or equal to {IOV_MAX}."
+    rc = 0;
   }
-  FreeIovs(&iv);
   return rc;
 }
 
@@ -1241,11 +1262,18 @@ static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
-  InitIovs(&iv);
-  if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
-    INTERRUPTIBLE(rc = writev_impl(fildes, iv.p, iv.i));
+  if (iovlen) {
+    InitIovs(&iv);
+    if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+      INTERRUPTIBLE(rc = writev_impl(fildes, iv.p, iv.i));
+    }
+    FreeIovs(&iv);
+  } else {
+    // Linux and Darwin behave inconsistently if iovcnt is zero. POSIX.1
+    // says, "[t]he iovcnt argument is valid if greater than 0 and less
+    // than or equal to {IOV_MAX}."
+    rc = 0;
   }
-  FreeIovs(&iv);
   return rc;
 }
 
