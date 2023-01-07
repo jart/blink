@@ -924,12 +924,13 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         long len = GetMicroOpLength(fun);
         if (len > 0) {
           AppendJit(m->path.jb, fun, len);
-          break;
+        } else {
+          LOG_ONCE(LOGF("jit micro-operation at address %" PRIxPTR
+                        " has branches or static memory references",
+                        (intptr_t)fun));
+          AppendJitCall(m->path.jb, fun);
         }
-        LOG_ONCE(LOGF("jit micro-operation at address %" PRIxPTR
-                      " has branches or static memory references",
-                      (intptr_t)fun));
-        // fallthrough
+        break;
       }
 #endif
 
