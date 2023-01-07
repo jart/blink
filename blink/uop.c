@@ -123,6 +123,10 @@ MICRO_OP static u8 *GetXmmPtr(struct Machine *m, long i) {
   return m->xmm[i];
 }
 
+MICRO_OP void MovsdWpsVpsOp(u8 *p, struct Machine *m, long reg) {
+  Write64(p, Read64(m->xmm[reg]));
+}
+
 #if defined(__x86_64__) && defined(TRIVIALLY_RELOCATABLE)
 #define LOADSTORE "m"
 
@@ -464,6 +468,26 @@ const aluop_f kAluFast[8][4] = {
     {FastXor8, FastXor16, FastXor32, FastXor64},  //
     {FastSub8, FastSub16, FastSub32, FastSub64},  //
 };
+
+MICRO_OP i32 Imul32(i32 x, i32 y, struct Machine *m) {
+  int o;
+  i64 z;
+  z = (i64)x * y;
+  o = z != (i32)z;
+  m->flags = (m->flags & ~(CF | OF)) | o << FLAGS_CF | o << FLAGS_OF;
+  return z;
+}
+
+#ifdef HAVE_INT128
+MICRO_OP i64 Imul64(i64 x, i64 y, struct Machine *m) {
+  int o;
+  __int128 z;
+  z = (__int128)x * y;
+  o = z != (i64)z;
+  m->flags = (m->flags & ~(CF | OF)) | o << FLAGS_CF | o << FLAGS_OF;
+  return z;
+}
+#endif
 
 #ifdef HAVE_INT128
 MICRO_OP void Mulx64(u64 x,              //

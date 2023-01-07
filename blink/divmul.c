@@ -328,10 +328,10 @@ void OpMulRdxRaxEvqpSigned(P) {
     OpMulRdxRaxEvqpSigned64(m, Load64(p));
     if (IsMakingPath(m)) {
       Jitter(A,
-             "B"
-             "r0a1="
-             "q"
-             "c",
+             "B"      // res0 = GetRegOrMem(RexbRm)
+             "r0a1="  // arg1 = res0
+             "q"      // arg0 = sav0
+             "c",     // call function
              OpMulRdxRaxEvqpSigned64);
     }
   } else if (!Osz(rde)) {
@@ -387,20 +387,20 @@ void OpMulRdxRaxEvqpUnsigned(P) {
     OpMulRdxRaxEvqpUnsigned64(m, Load64(p));
     if (IsMakingPath(m)) {
       Jitter(A,
-             "B"
-             "r0a1="
-             "q"
-             "c",
+             "B"      // res0 = GetRegOrMem(RexbRm)
+             "r0a1="  // arg1 = res0
+             "q"      // arg0 = sav0
+             "c",     // call function
              OpMulRdxRaxEvqpUnsigned64);
     }
   } else if (!Osz(rde)) {
     OpMulRdxRaxEvqpUnsigned32(m, Load32(p));
     if (IsMakingPath(m)) {
       Jitter(A,
-             "B"
-             "r0a1="
-             "q"
-             "c",
+             "B"      // res0 = GetRegOrMem(RexbRm)
+             "r0a1="  // arg1 = res0
+             "q"      // arg0 = sav0
+             "c",     // call function
              OpMulRdxRaxEvqpUnsigned32);
     }
   } else {
@@ -444,12 +444,60 @@ static void AluImul(P, u8 *a, u8 *b) {
 
 void OpImulGvqpEvqp(P) {
   AluImul(A, RegRexrReg(m, rde), GetModrmRegisterWordPointerReadOszRexw(A));
+#ifdef HAVE_INT128
+  if (IsMakingPath(m) && Rexw(rde)) {
+    Jitter(A,
+           "z3A"     // res0 = GetReg[force64bit](RexrReg)
+           "r0s1="   // sav1 = res0
+           "z3B"     // res0 = GetRegOrMem[force64bit](RexbRm)
+           "s0a2="   // arg2 = machine
+           "s1a1="   // arg1 = sav1
+           "t"       // arg0 = res0
+           "m"       // res0 = Imul64(arg0, arg1, machine)
+           "r0z3C",  // PutReg[force64bit](RexrReg, res0)
+           Imul64);
+  }
+#endif
+  if (IsMakingPath(m) && !Rexw(rde) && !Osz(rde)) {
+    Jitter(A,
+           "z2A"     // res0 = GetReg[force32bit](RexrReg)
+           "r0s1="   // sav1 = res0
+           "z2B"     // res0 = GetRegOrMem[force32bit](RexbRm)
+           "s0a2="   // arg2 = machine
+           "s1a1="   // arg1 = sav1
+           "t"       // arg0 = res0
+           "m"       // res0 = Imul32(arg0, arg1, machine)
+           "r0z2C",  // PutReg[force32bit](RexrReg, res0)
+           Imul32);
+  }
 }
 
 void OpImulGvqpEvqpImm(P) {
   u8 b[8];
   Put64(b, uimm0);
   AluImul(A, GetModrmRegisterWordPointerReadOszRexw(A), b);
+#ifdef HAVE_INT128
+  if (IsMakingPath(m) && Rexw(rde)) {
+    Jitter(A,
+           "z3B"     // res0 = GetRegOrMem[force64bit](RexbRm)
+           "s0a2="   // arg2 = machine
+           "a1i"     // arg1 = uimm0
+           "t"       // arg0 = res0
+           "m"       // res0 = Imul64(arg0, arg1, machine)
+           "r0z3C",  // PutReg[force64bit](RexrReg, res0)
+           uimm0, Imul64);
+  }
+#endif
+  if (IsMakingPath(m) && !Rexw(rde) && !Osz(rde)) {
+    Jitter(A,
+           "z2B"     // res0 = GetRegOrMem[force32bit](RexbRm)
+           "s0a2="   // arg2 = machine
+           "a1i"     // arg1 = uimm0
+           "t"       // arg0 = res0
+           "m"       // res0 = Imul32(arg0, arg1, machine)
+           "r0z2C",  // PutReg[force32bit](RexrReg, res0)
+           uimm0, Imul32);
+  }
 }
 
 static void OpAdx(P, i64 op64(u64, u64, struct Machine *),

@@ -606,6 +606,9 @@ void OpTest(P);
 void OpAlui(P);
 i64 FastAnd8(struct Machine *, u64, u64);
 i64 FastSub8(struct Machine *, u64, u64);
+
+i32 Imul32(i32, i32, struct Machine *);
+i64 Imul64(i64, i64, struct Machine *);
 void Mulx64(u64, struct Machine *, long, long);
 
 void OpPsdMuld1(u8 *, struct Machine *, long);
@@ -617,5 +620,6 @@ void OpPsdMaxd1(u8 *, struct Machine *, long);
 
 void Int64ToDouble(i64, struct Machine *, long);
 void Int32ToDouble(i32, struct Machine *, long);
+void MovsdWpsVpsOp(u8 *, struct Machine *, long);
 
 #endif /* BLINK_MACHINE_H_ */

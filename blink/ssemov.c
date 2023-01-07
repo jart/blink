@@ -22,6 +22,7 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/stats.h"
 
 static u32 pmovmskb(const u8 p[16]) {
   u32 i, m;
@@ -198,6 +199,15 @@ static void MovsdVpsWps(P) {
 
 static void MovsdWpsVps(P) {
   memcpy(GetModrmRegisterXmmPointerWrite8(A), XmmRexrReg(m, rde), 8);
+  if (IsMakingPath(m)) {
+    Jitter(A,
+           "P"      // res0 = GetXmmOrMemPointer(RexbRm)
+           "a2i"    // arg2 = RexrReg(rde)
+           "s0a1="  // arg1 = machine
+           "t"      // arg0 = res0
+           "m",     // call function (d1)
+           RexrReg(rde), MovsdWpsVpsOp);
+  }
 }
 
 static void MovhlpsVqUq(P) {
@@ -309,7 +319,7 @@ void OpMovWpsVps(P) {
       MovupdWpsVps(A);
       break;
     case 2:
-      MovsdWpsVps(A);
+      MovsdWpsVps(A);  // hot
       break;
     case 3:
       MovssWpsVps(A);
