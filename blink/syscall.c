@@ -48,6 +48,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/loader.h"
 #include "blink/macros.h"
 #include "blink/mop.h"
 #include "blink/syscall.h"
@@ -1788,6 +1789,26 @@ static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
                   GetDirFildes(dstdirfd), LoadStr(m, dstpath));
 }
 
+static bool IsFileExecutable(const char *path) {
+  return !access(path, X_OK);
+}
+
+static bool CanEmulateExecutable(const char *prog) {
+  int fd;
+  bool res;
+  ssize_t rc;
+  char hdr[64];
+  if (!IsFileExecutable(prog)) return false;
+  if ((fd = open(prog, O_RDONLY | O_CLOEXEC)) == -1) return false;
+  if ((rc = pread(fd, hdr, 64, 0)) == 64) {
+    res = IsSupportedExecutable(prog, hdr);
+  } else {
+    res = false;
+  }
+  close(fd);
+  return res;
+}
+
 static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   char *prog, **argv, **envp;
   prog = CopyStr(m, pa);
@@ -1795,11 +1816,14 @@ static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   envp = CopyStrList(m, ea);
   SYS_LOGF("execve(%s)", prog);
   execve(prog, argv, envp);
-  if (m->system->exec) {
-    SYS_LOGF("m->system->exec(%s) due to %s", prog, strerror(errno));
+  if (errno != ENOEXEC) return -1;
+  if (m->system->exec && CanEmulateExecutable(prog)) {
+    // TODO(jart): Prevent possibility of stack overflow.
+    SYS_LOGF("m->system->exec(%s)", prog);
     SysCloseExec(m->system);
     _Exit(m->system->exec(prog, argv, envp));
   }
+  errno = ENOEXEC;
   return -1;
 }
 

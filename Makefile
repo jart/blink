@@ -45,7 +45,6 @@ check2:	o/$(MODE)/test/sse		\
 emulates:				\
 	o/$(MODE)/test/asm		\
 	o/$(MODE)/test/flat		\
-	o/$(MODE)/test/emulates		\
 	o/$(MODE)/third_party/cosmo/emulates
 
 tags: TAGS HTAGS

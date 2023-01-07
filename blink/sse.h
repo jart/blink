@@ -1,5 +1,6 @@
 #ifndef BLINK_SSE_H_
 #define BLINK_SSE_H_
+#include "blink/builtin.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 
@@ -99,12 +100,22 @@ void MmxPhaddsw(u8[8], const u8[8]);
 void MmxPhsubsw(u8[8], const u8[8]);
 void MmxPabsb(u8[8], const u8[8]);
 
-static inline void OpSse(P, void MmxKernel(u8[8], const u8[8]),
-                         void SseKernel(u8[16], const u8[16])) {
+static dontinline void OpSse(P, void MmxKernel(u8[8], const u8[8]),
+                             void SseKernel(u8[16], const u8[16])) {
   if (Osz(rde)) {
     SseKernel(XmmRexrReg(m, rde), GetXmmAddress(A));
   } else {
     MmxKernel(XmmRexrReg(m, rde), GetMmxAddress(A));
+  }
+  if (IsMakingPath(m)) {
+    Jitter(A,
+           "P"      // res0 = GetXmmOrMemPointer(RexbRm)
+           "r0s1="  // sav1 = res0
+           "Q"      // res0 = GetXmmPointer(RexrReg)
+           "s1a1="  // arg1 = sav1
+           "t"      // arg0 = res0
+           "c",     // call function
+           Osz(rde) ? SseKernel : MmxKernel);
   }
 }
 

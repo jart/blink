@@ -1153,6 +1153,14 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         }
         break;
 
+      case 'Q':  // res0 = GetXmmPointer(RexrReg)
+        Jitter(A,
+               "a1i"  // arg1 = register index
+               "q"    // arg0 = machine
+               "m",   // call micro-op
+               RexrReg(rde), GetXmmPtr);
+        break;
+
       case 'P':  // res0 = GetXmmOrMemPointer(RexbRm)
         if (IsModrmRegister(rde)) {
           Jitter(A,

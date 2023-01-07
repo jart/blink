@@ -4,7 +4,6 @@
 TAGS ?= /usr/bin/ctags
 
 IMAGE_BASE_VIRTUAL = 0x23000000
-# IMAGE_BASE_VIRTUAL = 0x7e0000000000
 
 CFLAGS +=				\
 	-g				\
@@ -72,9 +71,36 @@ CFLAGS +=				\
 	-Wno-unused-function
 endif
 
+ifeq ($(MODE), cosmo)
+CC = cosmocc
+endif
+
+ifeq ($(MODE), dbg)
+CFLAGS += -O0
+CPPFLAGS += -DDEBUG
+endif
+
 ifeq ($(MODE), rel)
 CPPFLAGS += -DNDEBUG
+CFLAGS += -O2 -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables
+endif
+
+ifeq ($(MODE), rel-llvm)
+CC = clang
+CPPFLAGS += -DNDEBUG
 CFLAGS += -O2 -mtune=generic
+endif
+
+ifeq ($(MODE), tiny)
+CPPFLAGS += -DNDEBUG -DTINY
+CFLAGS += -Os -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables
+LDFLAGS += #-Wl,--cref,-Map=$@.map
+endif
+
+ifeq ($(MODE), tiny-llvm)
+CC = clang
+CPPFLAGS += -DNDEBUG -DTINY
+CFLAGS += -Oz
 endif
 
 ifeq ($(MODE), opt)
@@ -82,20 +108,11 @@ CPPFLAGS += -DNDEBUG
 CFLAGS += -O3 -march=native
 endif
 
-# ifeq ($(MODE), opt)
-# CC = clang
-# CPPFLAGS += -DNDEBUG
-# CFLAGS += -O2
-# TARGET_ARCH = -march=native
-# endif
-
-ifeq ($(MODE), dbg)
-CFLAGS += -O0
-CPPFLAGS += -DDEBUG
-endif
-
-ifeq ($(MODE), cosmo)
-CC = cosmocc
+ifeq ($(MODE), opt-llvm)
+CC = clang
+CPPFLAGS += -DNDEBUG
+CFLAGS += -O2
+TARGET_ARCH = -march=native
 endif
 
 # make m=prof o/prof/blink
@@ -144,25 +161,6 @@ CPPFLAGS += -DDEBUG
 CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 CFLAGS += -fsanitize=memory
 LDLIBS += -fsanitize=memory
-endif
-
-ifeq ($(MODE), tiny)
-CPPFLAGS += -DNDEBUG -DTINY
-CFLAGS += -Os -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-pie -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables
-LDFLAGS += -no-pie -Wl,--cref,-Map=$@.map
-endif
-
-# ifeq ($(MODE), tiny)
-# CC = clang
-# CPPFLAGS += -DNDEBUG -DTINY
-# CFLAGS += -Oz -fno-pie
-# LDFLAGS += -no-pie -Wl,--cref,-Map=$@.map
-# endif
-
-ifeq ($(MODE), tiny-llvm)
-CC = clang
-CPPFLAGS += -DNDEBUG -DTINY
-CFLAGS += -Oz
 endif
 
 ifeq ($(MODE), llvm)

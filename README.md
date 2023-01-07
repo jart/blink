@@ -69,7 +69,7 @@ step, `c` for continue, and scroll wheel for reverse debugging.
 o//blink/blinkenlights third_party/cosmo/tinyhello.elf
 ```
 
-## Testing
+### Testing
 
 Blink is tested primarily using precompiled x86 binaries, which are
 downloaded automatically. You can check how well Blink works on your
@@ -91,7 +91,7 @@ make check2
 make emulates
 ```
 
-## Alternative Builds
+### Alternative Builds
 
 For maximum performance, use `MODE=rel` or `MODE=opt`. Please note the
 release mode builds will remove all the logging and assertion statements
@@ -118,6 +118,117 @@ You can hunt down bugs in Blink using the following build modes:
 - `MODE=tsan` helps find threading related bugs
 - `MODE=ubsan` to find violations of the C standard
 - `MODE=msan` helps find uninitialized memory errors
+
+## Compiling and Running Programs under Blink
+
+Blink is picky about which Linux executables it'll emulate, especially
+whilst running on platforms like Apple M1. For example, Apple M1 has a
+system page size of 16kb, and WASM's page size is 64kb. That makes
+perfect emulation of all Linux programs impossible, because Linux
+programs typically assume things like 4096 byte page. The most obvious
+obstacle this causes will happen in the ELF loading process, where Blink
+may complain about the vaddr offset skew:
+
+```
+I2023-01-06T18:12:51.007788:blink/loader.c:91:47550 p_vaddr p_offset skew unequal w.r.t. host page size
+```
+
+The solution is to recompile your program using the GCC flags:
+
+```
+gcc -static -Wl,-z,common-page-size=65536,-z,max-page-size=65536 ...
+```
+
+But that's just step one. The program should also be using APIs like
+`sysconf(_SC_PAGESIZE)` rather than assuming 4096, because that's the
+standard API for obtaining the page size. The C library gets this
+information from Blink, which supplies it to your C library via
+`getauxval(AT_PAGESZ)`.
+
+If you're using the Blinkenlights debugger TUI, then another important
+set of flags to use are the following:
+
+- `-fno-omit-frame-pointer`
+- `-mno-omit-leaf-frame-pointer`
+
+By default, GCC and Clang use the `%rbp` backtrace pointer as a general
+purpose register, and as such, Blinkenlights won't be able to display a
+frames panel visualizing your call stack. Using those flags solves that.
+However it's tricky sometimes to correctly specify them in a complex
+build environment, where other optimization flags might subsequently
+turn them back off again.
+
+The trick we recommend using for compiling your programs, is to create a
+shell script that wraps your compiler command, and then use the script
+in your `$CC` environment variable. The script should look something
+like the following:
+
+```sh
+#!/bin/sh
+exec cc \
+  -g \
+  -Os \
+  -no-pie \
+  -fno-pie \
+  -static \
+  "$@" \
+  -U_FORTIFY_SOURCE \
+  -fno-stack-protector \
+  -fno-omit-frame-pointer \
+  -mno-omit-leaf-frame-pointer \
+  -Wl,-z,common-page-size=65536 \
+  -Wl,-z,max-page-size=65536
+```
+
+Those flags will go a long way towards helping your Linux binaries be
+(1) capable of running under Blink on all of its supported operating
+systems and microprocessor architectures, and (2) trading away some of
+the modern security blankets in the interest of making the assembly
+panel more readable, and less likely to be picky about memory.
+
+If you're a Cosmopolitan Libc user, then Cosmopolitan already provides
+such a script, which is the `cosmocc` and `cosmoc++` toolchain. Please
+note that Cosmopolitan Libc uses a 64kb page size so it isn't impacted
+by many of these issues that Glibc and Musl users may experience.
+
+- [cosmopolitan/tool/scripts/cosmocc](https://github.com/jart/cosmopolitan/blob/master/tool/scripts/cosmocc)
+- [cosmopolitan/tool/scripts/cosmoc++](https://github.com/jart/cosmopolitan/blob/master/tool/scripts/cosmoc%2B%2B)
+
+If you're not a C / C++ developer, and you prefer to use high-level
+languages instead, then one program you might consider emulating is
+Actually Portable Python, which is an APE build of the CPython v3.6
+interpreter. It can be built from source, and then used as follows:
+
+```
+git clone https://github.com/jart/cosmopolitan/
+cd cosmopolitan
+make -j8 o//third_party/python/python.com
+blinkenlights -jm o//third_party/python/python.com
+```
+
+The `-jm` flags are helpful here, since they ask the Blinkenlights TUI
+to enable JIT and the linear memory optimization. It's helpful to have
+those flags because Python is a very complicated and compute intensive
+program, that would otherwise move too slowly under the Blinkenlights
+vizualization. You may also want to press the `CTRL-T` (TURBO) key a few
+times, to make Python emulate in the TUI even faster.
+
+Some other programs you can try, are SQLite and Antirez's Kilo editor.
+
+```
+git clone https://github.com/jart/cosmopolitan/
+cd cosmopolitan
+make -j8 o//third_party/sqlite3/sqlite3.com
+blinkenlights -jm o//third_party/sqlite3/sqlite3.com
+make -j8 o//examples/kilo.com
+blinkenlights -jm o//examples/kilo.com
+```
+
+For further details, please read [Getting Started with Cosmopolitan
+Libc](https://jeskin.net/blog/getting-started-with-cosmopolitan-libc/)
+which is a blog post explaining how you can write your own programs in
+the cosmopolitan mono-repo, which naturally will be guaranteed to work
+really well under Blink and Blinkenlights.
 
 ## Technical Details
 

@@ -160,6 +160,7 @@ static void HandleSigs(void) {
   sa.sa_flags = SA_SIGINFO;
   unassert(!sigaction(SIGBUS, &sa, 0));
   unassert(!sigaction(SIGILL, &sa, 0));
+  unassert(!sigaction(SIGTRAP, &sa, 0));
   unassert(!sigaction(SIGSEGV, &sa, 0));
 #endif
 }
