@@ -228,6 +228,7 @@ struct System {
   _Atomic(int) *fun;
   unsigned long codesize;
   struct MachineMemstat memstat;
+  pthread_cond_t machines_cond;
   pthread_mutex_t machines_lock;
   struct Dll *machines GUARDED_BY(machines_lock);
   unsigned next_tid GUARDED_BY(machines_lock);
@@ -373,6 +374,7 @@ _Noreturn void Actor(struct Machine *);
 void SetMachineMode(struct Machine *, int);
 void ChangeMachineMode(struct Machine *, int);
 struct Machine *NewMachine(struct System *, struct Machine *);
+bool IsOrphan(struct Machine *);
 void Jitter(P, const char *, ...);
 void FreeMachine(struct Machine *);
 void InvalidateSystem(struct System *, bool, bool);

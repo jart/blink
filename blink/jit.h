@@ -137,6 +137,7 @@ extern const u8 kJitRes[2];
 extern const u8 kJitSav[5];
 extern const u8 kJitArg[6];
 
+int ShutdownJit(void);
 int InitJit(struct Jit *);
 int DestroyJit(struct Jit *);
 int DisableJit(struct Jit *);

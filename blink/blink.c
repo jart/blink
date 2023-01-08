@@ -113,6 +113,9 @@ static int Exec(char *prog, char **argv, char **envp) {
       g_machine->canhalt = true;
       Actor(g_machine);
     }
+    if (IsMakingPath(g_machine)) {
+      AbandonPath(g_machine);
+    }
   }
 }
 

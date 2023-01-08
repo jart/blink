@@ -157,15 +157,31 @@ static struct JitJump *NewJitJump(void) {
   return (struct JitJump *)malloc(sizeof(struct JitJump));
 }
 
+static struct JitBlock *NewJitBlock(void) {
+  return (struct JitBlock *)calloc(1, sizeof(struct JitBlock));
+}
+
+static struct JitStage *NewJitStage(void) {
+  return (struct JitStage *)malloc(sizeof(struct JitStage));
+}
+
 static void FreeJitJump(struct JitJump *jj) {
   free(jj);
+}
+
+static void FreeJitBlock(struct JitBlock *jb) {
+  free(jb);
+}
+
+static void FreeJitStage(struct JitStage *js) {
+  free(js);
 }
 
 static void RelinquishJitBlock(struct JitBlock *jb) {
   struct Dll *e;
   while ((e = dll_first(jb->staged))) {
     dll_remove(&jb->staged, e);
-    free(JITSTAGE_CONTAINER(e));
+    FreeJitStage(JITSTAGE_CONTAINER(e));
   }
   while ((e = dll_first(jb->jumps))) {
     dll_remove(&jb->jumps, e);
@@ -253,6 +269,20 @@ int DestroyJit(struct Jit *jit) {
 }
 
 /**
+ * Releases global JIT resources at shutdown.
+ */
+int ShutdownJit(void) {
+  struct Dll *e;
+  struct JitBlock *jb;
+  while ((e = dll_first(g_jit.freeblocks))) {
+    dll_remove(&g_jit.freeblocks, e);
+    jb = JITBLOCK_CONTAINER(e);
+    FreeJitBlock(jb);
+  }
+  return 0;
+}
+
+/**
  * Disables Just-In-Time threader.
  */
 int DisableJit(struct Jit *jit) {
@@ -283,8 +313,7 @@ struct JitBlock *StartJit(struct Jit *jit) {
     if (e && (jb = JITBLOCK_CONTAINER(e)) &&
         jb->index + kJitFit <= jb->blocksize) {
       dll_remove(&jit->blocks, &jb->elem);
-    } else if (!(jb = ReclaimJitBlock()) &&
-               (jb = (struct JitBlock *)calloc(1, sizeof(struct JitBlock)))) {
+    } else if (!(jb = ReclaimJitBlock()) && (jb = NewJitBlock())) {
       for (;;) {
         jb->blocksize =
             atomic_load_explicit(&jit->blocksize, memory_order_relaxed);
@@ -318,7 +347,7 @@ struct JitBlock *StartJit(struct Jit *jit) {
                  jb, distance, IMAGE_END);
             unassert(!munmap(jb->addr, jb->blocksize));
             DisableJit(jit);
-            free(jb);
+            FreeJitBlock(jb);
             jb = 0;
             break;
           }
@@ -339,7 +368,7 @@ struct JitBlock *StartJit(struct Jit *jit) {
         } else {
           LOGF("mmap() error at %p is %s", brk, strerror(errno));
           DisableJit(jit);
-          free(jb);
+          FreeJitBlock(jb);
           jb = 0;
           break;
         }
@@ -435,25 +464,45 @@ static void SetJitHook(struct Jit *jit, hook_t *hook, u8 *addr) {
 }
 
 int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
+  u8 *addr;
+  size_t size;
   int count = 0;
   long blockoff;
-  struct Dll *e;
+  struct JitJump *jj;
   struct JitStage *js;
+  struct Dll *e, *e2, *rem;
   unassert(jb->start == jb->index);
   unassert(!(jb->committed & (jit->pagesize - 1)));
   if (!CanJitForImmediateEffect() &&
       (blockoff = ROUNDDOWN(jb->start, jit->pagesize)) > jb->committed) {
-    JIT_LOGF("jit activating [%p,%p) w/ %zu kb", jb->addr + jb->committed,
-             jb->addr + jb->committed + (blockoff - jb->committed),
-             (blockoff - jb->committed) / 1024);
-    unassert(!mprotect(jb->addr + jb->committed, blockoff - jb->committed,
-                       PROT_READ | PROT_EXEC));
+    addr = jb->addr + jb->committed;
+    size = blockoff - jb->committed;
+    JIT_LOGF("jit activating [%p,%p) w/ %zu kb", addr, addr + size,
+             size / 1024);
+    // abandon fixups pointing into the block being protected
+    LOCK(&jit->lock);
+    for (rem = 0, e = dll_first(jit->jumps); e; e = e2) {
+      e2 = dll_next(jit->jumps, e);
+      jj = JITJUMP_CONTAINER(e);
+      if (jj->code + 5 > addr && jj->code < addr + size) {
+        dll_remove(&jit->jumps, e);
+        dll_make_first(&rem, e);
+      }
+    }
+    UNLOCK(&jit->lock);
+    for (e = dll_first(rem); e; e = e2) {
+      e2 = dll_next(rem, e);
+      FreeJitJump(JITJUMP_CONTAINER(e));
+    }
+    // ask system to change the page memory protections
+    unassert(!mprotect(addr, size, PROT_READ | PROT_EXEC));
+    // update interpreter hooks so our new jit code goes live
     while ((e = dll_first(jb->staged))) {
       js = JITSTAGE_CONTAINER(e);
       if (js->index <= blockoff) {
         SetJitHook(jit, js->hook, jb->addr + js->start);
         dll_remove(&jb->staged, e);
-        free(js);
+        FreeJitStage(js);
         ++count;
       } else {
         break;
@@ -539,14 +588,12 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook) {
       if (CanJitForImmediateEffect()) {
         sys_icache_invalidate(addr, jb->index - jb->start);
         SetJitHook(jit, hook, addr);
-      } else {
-        if ((js = (struct JitStage *)calloc(1, sizeof(struct JitStage)))) {
-          dll_init(&js->elem);
-          js->hook = hook;
-          js->start = jb->start;
-          js->index = jb->index;
-          dll_make_last(&jb->staged, &js->elem);
-        }
+      } else if ((js = NewJitStage())) {
+        dll_init(&js->elem);
+        js->hook = hook;
+        js->start = jb->start;
+        js->index = jb->index;
+        dll_make_last(&jb->staged, &js->elem);
       }
     }
     if (jb->index + kJitFit > jb->blocksize) {
@@ -880,6 +927,7 @@ bool AppendJitTrap(struct JitBlock *jb) {
 #define STUB(RETURN, NAME, PARAMS, RESULT) RETURN NAME PARAMS { return RESULT; }
 STUB(int, InitJit, (struct Jit *jit), 0)
 STUB(int, DestroyJit, (struct Jit *jit), 0)
+STUB(int, ShutdownJit, (void), 0)
 STUB(int, DisableJit, (struct Jit *jit), 0)
 STUB(bool, AppendJit, (struct JitBlock *jb, const void *data, long size), 0)
 STUB(bool, AppendJitMovReg, (struct JitBlock *jb, int dst, int src), 0)

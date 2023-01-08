@@ -315,16 +315,16 @@ i64 ReadMemoryBW(u64 rde, u8 p[8]) {
 void WriteMemoryBW(u64 rde, u8 p[8], u64 x) {
   switch (RegLog2(rde)) {
     case 3:
-      Put64(p, x);
+      Store64(p, x);
       break;
     case 2:
-      Put32(p, x);
+      Store32(p, x);
       break;
     case 0:
-      Put8(p, x);
+      Store8(p, x);
       break;
     case 1:
-      Put16(p, x);
+      Store16(p, x);
       break;
     default:
       __builtin_unreachable();

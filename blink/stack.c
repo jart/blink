@@ -31,6 +31,7 @@ static const u8 kStackOsz[2][3] = {{4, 4, 8}, {2, 2, 2}};
 static const u8 kCallOsz[2][3] = {{4, 4, 8}, {2, 2, 8}};
 
 static void WriteStackWord(u8 *p, u64 rde, u32 osz, u64 x) {
+  IGNORE_RACES_START();
   if (osz == 8) {
     Write64(p, x);
   } else if (osz == 2) {
@@ -38,10 +39,12 @@ static void WriteStackWord(u8 *p, u64 rde, u32 osz, u64 x) {
   } else {
     Write32(p, x);
   }
+  IGNORE_RACES_END();
 }
 
 static u64 ReadStackWord(u8 *p, u32 osz) {
   u64 x;
+  IGNORE_RACES_START();
   if (osz == 8) {
     x = Read64(p);
   } else if (osz == 2) {
@@ -49,10 +52,21 @@ static u64 ReadStackWord(u8 *p, u32 osz) {
   } else {
     x = Read32(p);
   }
+  IGNORE_RACES_END();
   return x;
 }
 
-static u64 ReadMemoryWord(u8 *p, u32 osz) {
+static void WriteMemWord(u8 *p, u64 rde, u32 osz, u64 x) {
+  if (osz == 8) {
+    Store64(p, x);
+  } else if (osz == 2) {
+    Store16(p, x);
+  } else {
+    Store32(p, x);
+  }
+}
+
+static u64 ReadMemWord(u8 *p, u32 osz) {
   u64 x;
   if (osz == 8) {
     x = Load64(p);
@@ -174,7 +188,7 @@ void OpCallJvds(P) {
 
 static u64 LoadAddressFromMemory(P) {
   unsigned osz = kCallOsz[Osz(rde)][Mode(rde)];
-  return ReadMemoryWord(GetModrmRegisterWordPointerRead(A, osz), osz);
+  return ReadMemWord(GetModrmRegisterWordPointerRead(A, osz), osz);
 }
 
 void OpCallEq(P) {
@@ -236,12 +250,12 @@ relegated void OpRetIw(P) {
 
 void OpPushEvq(P) {
   unsigned osz = kStackOsz[Osz(rde)][Mode(rde)];
-  Push(A, ReadStackWord(GetModrmRegisterWordPointerRead(A, osz), osz));
+  Push(A, ReadMemWord(GetModrmRegisterWordPointerRead(A, osz), osz));
 }
 
 void OpPopEvq(P) {
   unsigned osz = kStackOsz[Osz(rde)][Mode(rde)];
-  WriteStackWord(GetModrmRegisterWordPointerWrite(A, osz), rde, osz, Pop(A, 0));
+  WriteMemWord(GetModrmRegisterWordPointerWrite(A, osz), rde, osz, Pop(A, 0));
 }
 
 static relegated void Pushaw(P) {

@@ -3348,6 +3348,9 @@ static void Exec(void) {
       }
     }
   } else {
+    if (IsMakingPath(m)) {
+      AbandonPath(m);
+    }
     if (OnHalt(interrupt)) {
       if (!tuimode) {
         goto KeepGoing;
@@ -3494,6 +3497,9 @@ static void Tui(void) {
       }
     } while (tuimode);
   } else {
+    if (IsMakingPath(m)) {
+      AbandonPath(m);
+    }
     if (OnHalt(interrupt)) {
       ReactiveDraw();
       ScrollMemoryViews();

@@ -44,11 +44,18 @@ struct Allocator {
 
 static void FillPage(void *p, int c) {
   memset(p, c, 4096);
-  FENCE;
 }
 
 static void ClearPage(void *p) {
   FillPage(p, 0);
+}
+
+static struct HostPage *NewHostPage(void) {
+  return (struct HostPage *)malloc(sizeof(struct HostPage));
+}
+
+static void FreeHostPage(struct HostPage *hp) {
+  free(hp);
 }
 
 static size_t GetBigSize(size_t n) {
@@ -65,7 +72,8 @@ void FreeBig(void *p, size_t n) {
 void *AllocateBig(size_t n) {
   void *p;
 #if defined(__EMSCRIPTEN__)
-  p = Mmap(NULL, n, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0, "big");
+  p = Mmap(NULL, n, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0,
+           "big");
   return p != MAP_FAILED ? p : 0;
 #else
   u8 *brk;
@@ -106,6 +114,7 @@ struct System *NewSystem(void) {
     pthread_mutex_init(&s->sig_lock, 0);
     pthread_mutex_init(&s->mmap_lock, 0);
     pthread_mutex_init(&s->futex_lock, 0);
+    pthread_cond_init(&s->machines_cond, 0);
     pthread_mutex_init(&s->machines_lock, 0);
     s->blinksigs = 1ull << (SIGSYS_LINUX - 1) |   //
                    1ull << (SIGILL_LINUX - 1) |   //
@@ -132,20 +141,37 @@ static void FreeMachineUnlocked(struct Machine *m) {
   free(m);
 }
 
-void KillOtherThreads(struct System *s) {
-  struct Dll *e, *g;
-  struct Machine *m;
-  LOCK(&s->machines_lock);
-  for (e = dll_first(s->machines); e; e = g) {
-    g = dll_next(s->machines, e);
-    m = MACHINE_CONTAINER(e);
-    if (m != g_machine) {
-      THR_LOGF("pid=%d tid=%d is killing tid %d", s->pid, g_machine->tid,
-               m->tid);
-      atomic_store_explicit(&m->killed, true, memory_order_relaxed);
-    }
+bool IsOrphan(struct Machine *m) {
+  bool res;
+  LOCK(&m->system->machines_lock);
+  if (m->system->machines == m->system->machines->next &&
+      m->system->machines == m->system->machines->prev) {
+    unassert(m == MACHINE_CONTAINER(m->system->machines));
+    res = true;
+  } else {
+    res = false;
   }
-  UNLOCK(&s->machines_lock);
+  UNLOCK(&m->system->machines_lock);
+  return res;
+}
+
+void KillOtherThreads(struct System *s) {
+  struct Dll *e;
+  struct Machine *m;
+  unassert(s == g_machine->system);
+  unassert(!dll_is_empty(s->machines));
+  while (!IsOrphan(g_machine)) {
+    LOCK(&s->machines_lock);
+    for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
+      if ((m = MACHINE_CONTAINER(e)) != g_machine) {
+        THR_LOGF("pid=%d tid=%d is killing tid %d", s->pid, g_machine->tid,
+                 m->tid);
+        atomic_store_explicit(&m->killed, true, memory_order_release);
+      }
+    }
+    unassert(!pthread_cond_wait(&s->machines_cond, &s->machines_lock));
+    UNLOCK(&s->machines_lock);
+  }
 }
 
 void RemoveOtherThreads(struct System *s) {
@@ -167,6 +193,7 @@ void FreeSystem(struct System *s) {
   unassert(dll_is_empty(s->machines));  // Use KillOtherThreads & FreeMachine
   FreeHostPages(s);
   unassert(!pthread_mutex_destroy(&s->machines_lock));
+  unassert(!pthread_cond_destroy(&s->machines_cond));
   unassert(!pthread_mutex_destroy(&s->futex_lock));
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));
@@ -234,7 +261,9 @@ void FreeMachine(struct Machine *m) {
     unassert((s = m->system));
     LOCK(&s->machines_lock);
     dll_remove(&s->machines, &m->elem);
-    orphan = dll_is_empty(s->machines);
+    if (!(orphan = dll_is_empty(s->machines))) {
+      unassert(!pthread_cond_signal(&s->machines_cond));
+    }
     UNLOCK(&s->machines_lock);
     FreeMachineUnlocked(m);
     if (orphan) {
@@ -254,8 +283,7 @@ u64 AllocatePage(struct System *s) {
     g_allocator.pages = h->next;
     UNLOCK(&g_allocator.lock);
     page = h->page;
-    free(h);
-    ClearPage(page);
+    FreeHostPage(h);
     --s->memstat.freed;
     ++s->memstat.committed;
     ++s->memstat.reclaimed;
@@ -270,7 +298,7 @@ u64 AllocatePage(struct System *s) {
   s->memstat.freed += n - 1;
   LOCK(&g_allocator.lock);
   for (i = 0; i + 1 < n; ++i, page += 4096) {
-    unassert((h = (struct HostPage *)malloc(sizeof(struct HostPage))));
+    unassert((h = NewHostPage()));
     h->page = page;
     h->next = g_allocator.pages;
     g_allocator.pages = h;
@@ -326,6 +354,7 @@ void InvalidateSystem(struct System *s, bool tlb, bool icache) {
 }
 
 static bool FreePage(struct System *s, u64 entry) {
+  u8 *page;
   struct HostPage *h;
   unassert(entry & PAGE_V);
   if (entry & PAGE_RSRV) {
@@ -334,9 +363,10 @@ static bool FreePage(struct System *s, u64 entry) {
   } else if ((entry & (PAGE_HOST | PAGE_MAP)) == PAGE_HOST) {
     ++s->memstat.freed;
     --s->memstat.committed;
-    unassert((h = (struct HostPage *)malloc(sizeof(struct HostPage))));
+    ClearPage((page = ToHost(entry & PAGE_TA)));
+    unassert((h = NewHostPage()));
     LOCK(&g_allocator.lock);
-    h->page = ToHost(entry & PAGE_TA);
+    h->page = page;
     h->next = g_allocator.pages;
     g_allocator.pages = h;
     UNLOCK(&g_allocator.lock);

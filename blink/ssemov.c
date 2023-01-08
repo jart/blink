@@ -23,6 +23,7 @@
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/stats.h"
+#include "blink/tsan.h"
 
 static u32 pmovmskb(const u8 p[16]) {
   u32 i, m;
@@ -33,7 +34,9 @@ static u32 pmovmskb(const u8 p[16]) {
 }
 
 static void MovdquVdqWdq(P) {
+  IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead16(A), 16);
+  IGNORE_RACES_END();
   if (IsMakingPath(m)) {
     Jitter(A, "z4B"    // 128-bit GetRegOrMem
               "z4C");  // 128-bit PutReg
@@ -41,7 +44,9 @@ static void MovdquVdqWdq(P) {
 }
 
 static void MovdquWdqVdq(P) {
+  IGNORE_RACES_START();
   memcpy(GetModrmRegisterXmmPointerWrite16(A), XmmRexrReg(m, rde), 16);
+  IGNORE_RACES_END();
   if (IsMakingPath(m)) {
     Jitter(A, "z4A"    // 128-bit GetReg
               "z4D");  // 128-bit PutRegOrMem
@@ -69,15 +74,19 @@ void OpLddquVdqMdq(P) {
 }
 
 void OpMovntiMdqpGdqp(P) {
+  IGNORE_RACES_START();
   if (Rexw(rde)) {
     memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde), 8);
   } else {
     memcpy(ComputeReserveAddressWrite4(A), XmmRexrReg(m, rde), 4);
   }
+  IGNORE_RACES_END();
 }
 
 static void MovdqaVdqWdq(P) {
+  IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde), GetXmmAddress(A), 16);
+  IGNORE_RACES_END();
   if (IsMakingPath(m)) {
     Jitter(A, "z4B"    // 128-bit GetRegOrMem
               "z4C");  // 128-bit PutReg
@@ -85,7 +94,9 @@ static void MovdqaVdqWdq(P) {
 }
 
 static void MovdqaWdqVdq(P) {
+  IGNORE_RACES_START();
   memcpy(GetXmmAddress(A), XmmRexrReg(m, rde), 16);
+  IGNORE_RACES_END();
   if (IsMakingPath(m)) {
     Jitter(A, "z4A"    // 128-bit GetReg
               "z4D");  // 128-bit PutRegOrMem
@@ -109,29 +120,41 @@ void OpMovntdqaVdqMdq(P) {
 }
 
 static void MovqPqQq(P) {
+  IGNORE_RACES_START();
   memcpy(MmReg(m, rde), GetModrmRegisterMmPointerRead8(A), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovqQqPq(P) {
+  IGNORE_RACES_START();
   memcpy(GetModrmRegisterMmPointerWrite8(A), MmReg(m, rde), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovqVdqEqp(P) {
+  IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde), GetModrmRegisterWordPointerRead8(A), 8);
+  IGNORE_RACES_END();
   memset(XmmRexrReg(m, rde) + 8, 0, 8);
 }
 
 static void MovdVdqEd(P) {
   memset(XmmRexrReg(m, rde), 0, 16);
+  IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde), GetModrmRegisterWordPointerRead4(A), 4);
+  IGNORE_RACES_END();
 }
 
 static void MovqPqEqp(P) {
+  IGNORE_RACES_START();
   memcpy(MmReg(m, rde), GetModrmRegisterWordPointerRead8(A), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovdPqEd(P) {
+  IGNORE_RACES_START();
   memcpy(MmReg(m, rde), GetModrmRegisterWordPointerRead4(A), 4);
+  IGNORE_RACES_END();
   memset(MmReg(m, rde) + 4, 0, 4);
 }
 
@@ -139,32 +162,44 @@ static void MovdEdVdq(P) {
   if (IsModrmRegister(rde)) {
     Put64(RegRexbRm(m, rde), Read32(XmmRexrReg(m, rde)));
   } else {
+    IGNORE_RACES_START();
     memcpy(ComputeReserveAddressWrite4(A), XmmRexrReg(m, rde), 4);
+    IGNORE_RACES_END();
   }
 }
 
 static void MovqEqpVdq(P) {
+  IGNORE_RACES_START();
   memcpy(GetModrmRegisterWordPointerWrite8(A), XmmRexrReg(m, rde), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovdEdPq(P) {
   if (IsModrmRegister(rde)) {
     Put64(RegRexbRm(m, rde), Read32(MmReg(m, rde)));
   } else {
+    IGNORE_RACES_START();
     memcpy(ComputeReserveAddressWrite4(A), MmReg(m, rde), 4);
+    IGNORE_RACES_END();
   }
 }
 
 static void MovqEqpPq(P) {
+  IGNORE_RACES_START();
   memcpy(GetModrmRegisterWordPointerWrite8(A), MmReg(m, rde), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovntqMqPq(P) {
+  IGNORE_RACES_START();
   memcpy(ComputeReserveAddressWrite8(A), MmReg(m, rde), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovqVqWq(P) {
+  IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead8(A), 8);
+  IGNORE_RACES_END();
   memset(XmmRexrReg(m, rde) + 8, 0, 8);
 }
 
@@ -172,20 +207,26 @@ static void MovssVpsWps(P) {
   if (IsModrmRegister(rde)) {
     memcpy(XmmRexrReg(m, rde), XmmRexbRm(m, rde), 4);
   } else {
+    IGNORE_RACES_START();
     memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead4(A), 4);
+    IGNORE_RACES_END();
     memset(XmmRexrReg(m, rde) + 4, 0, 12);
   }
 }
 
 static void MovssWpsVps(P) {
+  IGNORE_RACES_START();
   memcpy(GetModrmRegisterXmmPointerWrite4(A), XmmRexrReg(m, rde), 4);
+  IGNORE_RACES_END();
 }
 
 static void MovsdVpsWps(P) {
   if (IsModrmRegister(rde)) {
     memcpy(XmmRexrReg(m, rde), XmmRexbRm(m, rde), 8);
   } else {
+    IGNORE_RACES_START();
     memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(A), 8);
+    IGNORE_RACES_END();
     memset(XmmRexrReg(m, rde) + 8, 0, 8);
     if (IsMakingPath(m)) {
       Jitter(A,
@@ -198,7 +239,9 @@ static void MovsdVpsWps(P) {
 }
 
 static void MovsdWpsVps(P) {
+  IGNORE_RACES_START();
   memcpy(GetModrmRegisterXmmPointerWrite8(A), XmmRexrReg(m, rde), 8);
+  IGNORE_RACES_END();
   if (IsMakingPath(m)) {
     Jitter(A,
            "P"      // res0 = GetXmmOrMemPointer(RexbRm)
@@ -215,35 +258,47 @@ static void MovhlpsVqUq(P) {
 }
 
 static void MovlpsVqMq(P) {
+  IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(A), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovlpdVqMq(P) {
+  IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde), ComputeReserveAddressRead8(A), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovddupVqWq(P) {
   u8 *src = GetModrmRegisterXmmPointerRead8(A);
+  IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde) + 0, src, 8);
   memcpy(XmmRexrReg(m, rde) + 8, src, 8);
+  IGNORE_RACES_END();
 }
 
 static void MovsldupVqWq(P) {
   u8 *dst, *src;
   dst = XmmRexrReg(m, rde);
   src = GetModrmRegisterXmmPointerRead16(A);
+  IGNORE_RACES_START();
   memcpy(dst + 0 + 0, src + 0, 4);
   memcpy(dst + 0 + 4, src + 0, 4);
   memcpy(dst + 8 + 0, src + 8, 4);
   memcpy(dst + 8 + 4, src + 8, 4);
+  IGNORE_RACES_END();
 }
 
 static void MovlpsMqVq(P) {
+  IGNORE_RACES_START();
   memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovlpdMqVq(P) {
+  IGNORE_RACES_START();
   memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovlhpsVqUq(P) {
@@ -251,29 +306,39 @@ static void MovlhpsVqUq(P) {
 }
 
 static void MovhpsVqMq(P) {
+  IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde) + 8, ComputeReserveAddressRead8(A), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovhpdVqMq(P) {
+  IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde) + 8, ComputeReserveAddressRead8(A), 8);
+  IGNORE_RACES_END();
 }
 
 static void MovshdupVqWq(P) {
   u8 *dst, *src;
   dst = XmmRexrReg(m, rde);
   src = GetModrmRegisterXmmPointerRead16(A);
+  IGNORE_RACES_START();
   memcpy(dst + 0 + 0, src + 04, 4);
   memcpy(dst + 0 + 4, src + 04, 4);
   memcpy(dst + 8 + 0, src + 12, 4);
   memcpy(dst + 8 + 4, src + 12, 4);
+  IGNORE_RACES_END();
 }
 
 static void MovhpsMqVq(P) {
+  IGNORE_RACES_START();
   memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde) + 8, 8);
+  IGNORE_RACES_END();
 }
 
 static void MovhpdMqVq(P) {
+  IGNORE_RACES_START();
   memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde) + 8, 8);
+  IGNORE_RACES_END();
 }
 
 static void MovqWqVq(P) {
@@ -281,7 +346,9 @@ static void MovqWqVq(P) {
     memcpy(XmmRexbRm(m, rde), XmmRexrReg(m, rde), 8);
     memset(XmmRexbRm(m, rde) + 8, 0, 8);
   } else {
+    IGNORE_RACES_START();
     memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde), 8);
+    IGNORE_RACES_END();
   }
 }
 

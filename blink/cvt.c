@@ -374,6 +374,7 @@ static void OpVdqWpdCvtpd2dq(P) {
 }
 
 static void OpCvt(P, unsigned long op) {
+  IGNORE_RACES_START();
   switch (op | Rep(rde) | Osz(rde)) {
     case kOpCvt0f2a + 0:
       OpVpsQpiCvtpi2ps(A);
@@ -444,6 +445,7 @@ static void OpCvt(P, unsigned long op) {
     default:
       OpUdImpl(m);
   }
+  IGNORE_RACES_END();
 }
 
 void OpCvt0f2a(P) {

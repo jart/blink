@@ -43,9 +43,6 @@ void DeliverSignalToUser(struct Machine *m, int sig) {
 
 void HaltMachine(struct Machine *m, int code) {
   SIG_LOGF("HaltMachine(%d)", code);
-  if (IsMakingPath(m)) {
-    AbandonPath(m);
-  }
   switch (code) {
     case kMachineDivideError:
     case kMachineFpuException:

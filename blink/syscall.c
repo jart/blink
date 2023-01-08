@@ -126,22 +126,9 @@ struct Fd *GetAndLockFd(struct Machine *m, int fildes) {
   return fd;
 }
 
-static int GetDirFildes(int fildes) {
+int GetDirFildes(int fildes) {
   if (fildes == AT_FDCWD_LINUX) return AT_FDCWD;
   return fildes;
-}
-
-int GetAfd(struct Machine *m, int fildes, struct Fd **out_fd) {
-  struct Fd *fd;
-  if (fildes == AT_FDCWD_LINUX) {
-    *out_fd = 0;
-    return 0;
-  } else if ((fd = GetFd(&m->system->fds, fildes))) {
-    *out_fd = fd;
-    return 0;
-  } else {
-    return -1;
-  }
 }
 
 bool CheckInterrupt(struct Machine *m) {
@@ -153,20 +140,6 @@ bool CheckInterrupt(struct Machine *m) {
     TerminateSignal(m, sig);
   }
   return (m->interrupted = signals != m->signals);
-}
-
-static bool IsOrphan(struct Machine *m) {
-  bool res;
-  LOCK(&m->system->machines_lock);
-  if (m->system->machines == m->system->machines->next &&
-      m->system->machines == m->system->machines->prev) {
-    unassert(m == MACHINE_CONTAINER(m->system->machines));
-    res = true;
-  } else {
-    res = false;
-  }
-  UNLOCK(&m->system->machines_lock);
-  return res;
 }
 
 static struct Futex *FindFutex(struct Machine *m, i64 addr) {
@@ -234,6 +207,11 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
     _Exit(rc);
   } else {
     THR_LOGF("calling exit(%d)", rc);
+#if defined(__SANITIZE_ADDRESS__) || defined(DEBUG)
+    KillOtherThreads(m->system);
+    FreeMachine(m);
+    ShutdownJit();
+#endif
     exit(rc);
   }
 }
@@ -287,7 +265,7 @@ static void *OnSpawn(void *arg) {
     Actor(m);
   } else {
     LOGF("halting machine from thread: %d", rc);
-    exit(rc);
+    SysExitGroup(m, rc);
   }
 }
 
@@ -383,6 +361,7 @@ static struct Futex *NewFutex(i64 addr) {
     pthread_cond_init(&f->cond, 0);
     pthread_mutex_init(&f->lock, 0);
     dll_init(&f->elem);
+    f->waiters = 1;
     f->addr = addr;
   }
   return f;
@@ -402,7 +381,6 @@ static int SysFutexWait(struct Machine *m,  //
   int rc;
   u8 *mem;
   struct Futex *f;
-  bool is_last_waiter;
   struct timespec_linux gtimeout;
   struct timespec now, tick, timeout, deadline;
   now = tick = GetTime();
@@ -425,17 +403,17 @@ static int SysFutexWait(struct Machine *m,  //
   }
   if ((f = FindFutex(m, uaddr))) {
     LOCK(&f->lock);
+    ++f->waiters;
+    UNLOCK(&f->lock);
   }
   if (!f) {
     if ((f = NewFutex(uaddr))) {
       dll_make_first(&m->system->futexes, &f->elem);
-      LOCK(&f->lock);
     } else {
       UNLOCK(&m->system->futex_lock);
       return -1;
     }
   }
-  ++f->waiters;
   UNLOCK(&m->system->futex_lock);
   THR_LOGF("pid=%d tid=%d is waiting at address %#" PRIx64, m->system->pid,
            m->tid, uaddr);
@@ -448,28 +426,26 @@ static int SysFutexWait(struct Machine *m,  //
       rc = EFAULT;
       break;
     }
+    LOCK(&f->lock);
     if (Load32(mem) != expect) {
       rc = 0;
-      break;
-    }
-    tick = AddTime(tick, FromMilliseconds(kPollingMs));
-    if (CompareTime(tick, deadline) > 0) tick = deadline;
-    rc = pthread_cond_timedwait(&f->cond, &f->lock, &tick);
-  } while (rc == ETIMEDOUT && CompareTime(tick, deadline) < 0);
-  is_last_waiter = !--f->waiters;
-  UNLOCK(&f->lock);
-  // break the lock to avoid a lock graph cycle
-  if (is_last_waiter) {
-    LOCK(&m->system->futex_lock);
-    LOCK(&f->lock);
-    if ((is_last_waiter = !f->waiters)) {
-      dll_remove(&m->system->futexes, &f->elem);
+    } else {
+      tick = AddTime(tick, FromMilliseconds(kPollingMs));
+      if (CompareTime(tick, deadline) > 0) tick = deadline;
+      rc = pthread_cond_timedwait(&f->cond, &f->lock, &tick);
     }
     UNLOCK(&f->lock);
+  } while (rc == ETIMEDOUT && CompareTime(tick, deadline) < 0);
+  LOCK(&m->system->futex_lock);
+  LOCK(&f->lock);
+  if (!--f->waiters) {
+    dll_remove(&m->system->futexes, &f->elem);
+    UNLOCK(&f->lock);
     UNLOCK(&m->system->futex_lock);
-    if (is_last_waiter) {
-      FreeFutex(f);
-    }
+    FreeFutex(f);
+  } else {
+    UNLOCK(&f->lock);
+    UNLOCK(&m->system->futex_lock);
   }
   if (rc) {
     errno = rc;

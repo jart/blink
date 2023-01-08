@@ -1563,8 +1563,14 @@ int ClassifyOp(u64 rde) {
         default:
           return kOpNormal;
       }
+    case 0x0F1:  // OpInterrupt1
+    case 0x0CC:  // OpInterrupt3
+    case 0x0CD:  // OpInterruptImm
     case 0x105:  // OpSyscall
-      // We don't want clone() to fork JIT pathmaking.
+      // precious ops are excluded from jit pathmaking entirely. not
+      // doing this would be inviting disaster, since system calls and
+      // longjmp could do anything. for example, we don't want clone()
+      // to fork a jit path under construction.
       return kOpPrecious;
   }
 }
@@ -2262,7 +2268,12 @@ void ExecuteInstruction(struct Machine *m) {
 
 static void CheckForSignals(struct Machine *m) {
   int sig;
-  if (VERY_UNLIKELY(m->signals) && (sig = ConsumeSignal(m))) {
+  if (VERY_UNLIKELY(atomic_load_explicit(&m->killed, memory_order_relaxed))) {
+    SysExit(m, 0);
+  }
+  if (VERY_UNLIKELY(m->signals) &&   //
+      (m->signals & ~m->sigmask) &&  //
+      (sig = ConsumeSignal(m))) {
     TerminateSignal(m, sig);
   }
 }
@@ -2272,8 +2283,5 @@ void Actor(struct Machine *m) {
     STATISTIC(++interps);
     ExecuteInstruction(m);
     CheckForSignals(m);
-    if (VERY_UNLIKELY(atomic_load_explicit(&m->killed, memory_order_relaxed))) {
-      SysExit(m, 0);
-    }
   }
 }

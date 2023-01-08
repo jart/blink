@@ -77,6 +77,9 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   static struct fpstate_linux fp;
   static struct ucontext_linux uc;
   SIG_LOGF("delivering signal %s", DescribeSignal(sig));
+  if (IsMakingPath(g_machine)) {
+    AbandonPath(g_machine);
+  }
   Write32(si.si_signo, sig);
   Write32(si.si_code, code);
   Write64(uc.uc_sigmask, m->sigmask);

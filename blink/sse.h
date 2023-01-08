@@ -3,6 +3,7 @@
 #include "blink/builtin.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/tsan.h"
 
 void OpSsePabsb(P);
 void OpSsePabsd(P);
@@ -102,11 +103,13 @@ void MmxPabsb(u8[8], const u8[8]);
 
 static dontinline void OpSse(P, void MmxKernel(u8[8], const u8[8]),
                              void SseKernel(u8[16], const u8[16])) {
+  IGNORE_RACES_START();
   if (Osz(rde)) {
     SseKernel(XmmRexrReg(m, rde), GetXmmAddress(A));
   } else {
     MmxKernel(XmmRexrReg(m, rde), GetMmxAddress(A));
   }
+  IGNORE_RACES_END();
   if (IsMakingPath(m)) {
     Jitter(A,
            "P"      // res0 = GetXmmOrMemPointer(RexbRm)

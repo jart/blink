@@ -30,8 +30,8 @@ int SysPipe(struct Machine *, i64, i32);
 _Noreturn void SysExitGroup(struct Machine *, int);
 _Noreturn void SysExit(struct Machine *, int);
 
+int GetDirFildes(int);
 void AddStdFd(struct Fds *, int);
-int GetAfd(struct Machine *, int, struct Fd **);
 int GetFildes(struct Machine *, int);
 struct Fd *GetAndLockFd(struct Machine *, int);
 bool CheckInterrupt(struct Machine *);
