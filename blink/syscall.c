@@ -1440,6 +1440,8 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
     unassert(tcsetattr_impl = fd->cb->tcsetattr);
   } else {
     ioctl_impl = 0;
+    tcsetattr_impl = 0;
+    tcgetattr_impl = 0;
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
