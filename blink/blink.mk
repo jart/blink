@@ -6,6 +6,11 @@ BLINK_FILES := $(wildcard blink/*)
 BLINK_SRCS = $(filter %.c,$(BLINK_FILES))
 BLINK_HDRS = $(filter %.h,$(BLINK_FILES))
 
+# micro-ops are too mission critical to be slowed down here
+ifeq ($(MODE), dbg)
+o/$(MODE)/blink/uop.o: private CFLAGS += -O2
+endif
+
 # avoid static memory being placed in micro-operations
 o/$(MODE)/blink/uop.o: private CFLAGS += -fno-stack-protector
 

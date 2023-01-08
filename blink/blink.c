@@ -72,12 +72,15 @@ void TerminateSignal(struct Machine *m, int sig) {
   abort();
 }
 
-static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
+static void OnSigSegv(int sig, siginfo_t *si, void *ptr) {
   int sig_linux;
   RestoreIp(g_machine);
   g_machine->faultaddr = ToGuest(si->si_addr);
   LOGF("SEGMENTATION FAULT (%s) AT ADDRESS %" PRIx64 "\n\t%s", strsignal(sig),
        g_machine->faultaddr, GetBacktrace(g_machine));
+#ifdef DEBUG
+  PrintBacktrace();
+#endif
   if ((sig_linux = UnXlatSignal(sig)) != -1) {
     DeliverSignalToUser(g_machine, sig_linux);
   }
@@ -133,6 +136,12 @@ _Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   FLAG_nolinear = !CanHaveLinearMemory();
+#ifdef __COSMOPOLITAN__
+  if (IsWindows()) {
+    FLAG_nojit = true;
+    FLAG_nolinear = true;
+  }
+#endif
   while ((opt = GetOpt(argc, argv, OPTS)) != -1) {
     switch (opt) {
       case 'j':

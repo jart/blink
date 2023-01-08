@@ -216,6 +216,10 @@
 #endif
 #endif
 
+#if !defined(__SANITIZE_UNDEFINED__) && defined(UBSAN)
+#define __SANITIZE_UNDEFINED__
+#endif
+
 #if (defined(__x86_64__) || defined(__aarch64__)) &&                     \
     !defined(__SANITIZE_MEMORY__) && !defined(__SANITIZE_UNDEFINED__) && \
     !defined(__SANITIZE_THREAD__) && !defined(NOJIT)

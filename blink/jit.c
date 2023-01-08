@@ -351,7 +351,7 @@ struct JitBlock *StartJit(struct Jit *jit) {
             jb = 0;
             break;
           }
-        } else if (errno == MAP_DENIED) {
+        } else if (errno == MAP_DENIED || errno == EADDRNOTAVAIL) {
           // our fixed noreplace mmap request probably overlapped some
           // dso library, so let's try again with a different address.
           continue;

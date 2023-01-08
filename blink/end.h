@@ -1,13 +1,9 @@
 #ifndef BLINK_END_H_
 #define BLINK_END_H_
-#include "blink/jit.h"
-#include "blink/mop.h"
+#include "blink/machine.h"
 
-#if defined(__APPLE__) || defined(__EMSCRIPTEN__)
-#define IMAGE_END ((u8 *)&StartJit)
-#else
-extern u8 end[];
-#define IMAGE_END end
-#endif
+// many platforms complain about `end` / `_end` so we'll just pick some
+// arbitarry variable in the .bss section, which should be close enough
+#define IMAGE_END ((u8 *)&FLAG_noconnect)
 
 #endif /* BLINK_END_H_ */

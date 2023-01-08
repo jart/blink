@@ -6,6 +6,7 @@
 #include "blink/machine.h"
 #include "blink/types.h"
 
+void PrintBacktrace(void);
 void DumpHex(u8 *, size_t);
 void PrintFds(struct Fds *);
 void LogCpu(struct Machine *);

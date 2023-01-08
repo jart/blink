@@ -78,6 +78,13 @@ endif
 ifeq ($(MODE), dbg)
 CFLAGS += -O0
 CPPFLAGS += -DDEBUG
+ifeq ($(HOST_OS), Linux)
+CFLAGS += -fno-pie
+LDFLAGS += -static -no-pie
+endif
+ifneq ($(HOST_OS), Darwin)
+LDLIBS += -lunwind -llzma
+endif
 endif
 
 ifeq ($(MODE), rel)
@@ -141,7 +148,7 @@ endif
 
 ifeq ($(MODE), ubsan)
 CC = clang
-CPPFLAGS += -DDEBUG -DNOJIT
+CPPFLAGS += -DDEBUG -DNOJIT -DUBSAN
 CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 CFLAGS += -fsanitize=undefined
 LDLIBS += -fsanitize=undefined

@@ -595,19 +595,22 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   _Static_assert(PROT_READ == 1, "");
   _Static_assert(PROT_WRITE == 2, "");
   _Static_assert(PROT_EXEC == 4, "");
-  u64 i;
   int rc;
+  i64 i, beg, end;
   long gotsome = 0;
   if (!IsValidAddrSize(addr, size)) return einval();
   if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) return einval();
   LOCK(&m->system->mmap_lock);
   rc = ProtectVirtual(m->system, addr, size, prot);
   if (rc != -1 && (prot & PROT_EXEC)) {
-    // TODO(jart): Store jump edges to invalidate smarter.
-    for (i = m->codestart; i < m->codestart + m->codesize; ++i) {
-      if (GetHook(m, i) != GeneralDispatch) {
-        SetHook(m, i, 0);
-        ++gotsome;
+    beg = MAX(addr, m->codestart);
+    end = MIN(addr + size, m->codestart + m->codesize);
+    if (beg < end) {
+      for (i = m->codestart; i < m->codestart + m->codesize; ++i) {
+        if (GetHook(m, i) != GeneralDispatch) {
+          SetHook(m, i, 0);
+          ++gotsome;
+        }
       }
     }
   }

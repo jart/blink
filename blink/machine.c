@@ -1089,7 +1089,7 @@ static u64 AluLzcnt16(u64 x, struct Machine *m) {
 }
 static u64 AluBsf(u64 x, struct Machine *m) {
   m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
-  return bsf(x);
+  return x ? bsf(x) : 0;
 }
 
 static u64 AluTzcnt(u64 x, struct Machine *m, int bits) {
@@ -1109,7 +1109,7 @@ static u64 AluTzcnt16(u64 x, struct Machine *m) {
 }
 static u64 AluBsr(u64 x, struct Machine *m) {
   m->flags = SetFlag(m->flags, FLAGS_ZF, !x);
-  return bsr(x);
+  return x ? bsr(x) : 0;
 }
 
 static void Bitscan(P, u64 op(u64, struct Machine *)) {
