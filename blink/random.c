@@ -37,6 +37,12 @@
 #include "blink/errno.h"
 #include "blink/random.h"
 #include "blink/types.h"
+#if defined(__CYGWIN__)
+#include <stdbool.h>
+#include <w32api/_mingw.h>
+#define RtlGenRandom SystemFunction036
+bool __stdcall SystemFunction036(void* RandomBuffer, __LONG32 RandomBufferLength);
+#endif
 
 static ssize_t GetDevRandom(char *p, size_t n) {
   int fd;
@@ -77,6 +83,8 @@ ssize_t GetRandom(void *p, size_t n) {
     (defined(__FreeBSD__) || \
      (defined(__NetBSD__) && __NetBSD_Version__ >= 400000000))
   rc = GetKernArnd((char *)p, n);
+#elif defined(__CYGWIN__)
+  rc = RtlGenRandom(p, n) ? n : -1;
 #else
   rc = -1;
 #endif
