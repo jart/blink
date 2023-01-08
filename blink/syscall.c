@@ -958,11 +958,13 @@ static int XlatSendFlags(int flags) {
   int supported, hostflags;
   supported = MSG_OOB_LINUX |        //
               MSG_DONTROUTE_LINUX |  //
-              MSG_DONTWAIT_LINUX |   //
 #ifdef MSG_NOSIGNAL
               MSG_NOSIGNAL_LINUX |  //
 #endif
-              MSG_EOR_LINUX;
+#ifdef MSG_EOR
+              MSG_EOR_LINUX |
+#endif
+              MSG_DONTWAIT_LINUX;
   if (flags & ~supported) {
     LOGF("unsupported %s flags %#x", "send", flags & ~supported);
     return einval();
@@ -974,7 +976,9 @@ static int XlatSendFlags(int flags) {
 #ifdef MSG_NOSIGNAL
   if (flags & MSG_NOSIGNAL_LINUX) hostflags |= MSG_NOSIGNAL;
 #endif
+#ifdef MSG_EOR
   if (flags & MSG_EOR_LINUX) hostflags |= MSG_EOR;
+#endif
   return hostflags;
 }
 
