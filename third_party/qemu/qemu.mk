@@ -3,7 +3,7 @@
 
 third_party/qemu/%.xz: third_party/qemu/%.xz.sha256 o/tool/sha256sum
 	curl -so $@ https://justine.storage.googleapis.com/compilers/$(notdir $@)
-	o/tool/sha256sum $<
+	o/tool/sha256sum -c $<
 
 o/third_party/qemu/qemu-aarch64: third_party/qemu/qemu-aarch64-static.xz
 	@mkdir -p $(@D)

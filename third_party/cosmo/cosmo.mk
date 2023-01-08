@@ -3,7 +3,7 @@
 
 third_party/cosmo/%.gz: third_party/cosmo/%.gz.sha256 o/tool/sha256sum
 	curl -so $@ https://justine.storage.googleapis.com/cosmotests/$(subst third_party/cosmo/,,$@)
-	o/tool/sha256sum $<
+	o/tool/sha256sum -c $<
 
 .PRECIOUS: third_party/cosmo/%.com.dbg
 third_party/cosmo/%.com.dbg: third_party/cosmo/%.com.dbg.gz

@@ -3,7 +3,7 @@
 
 third_party/gcc/%.xz: third_party/gcc/%.xz.sha256 o/tool/sha256sum
 	curl -so $@ https://justine.storage.googleapis.com/compilers/$(notdir $@)
-	o/tool/sha256sum $<
+	o/tool/sha256sum -c $<
 
 o/$(MODE)/i486/%.o: %.c o/third_party/gcc/i486/bin/i486-linux-musl-gcc $(VM)
 	@mkdir -p $(@D)
