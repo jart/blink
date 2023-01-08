@@ -5,6 +5,7 @@
 #include <poll.h>
 #include <pthread.h>
 #include <sys/uio.h>
+#include <termios.h>
 
 #include "blink/dll.h"
 #include "blink/types.h"
@@ -17,6 +18,8 @@ struct FdCb {
   ssize_t (*writev)(int, const struct iovec *, int);
   int (*ioctl)(int, unsigned long, ...);
   int (*poll)(struct pollfd *, nfds_t, int);
+  int (*tcgetattr)(int, struct termios *);
+  int (*tcsetattr)(int, int, const struct termios *);
 };
 
 struct Fd {

@@ -713,11 +713,9 @@ static void TuiRejuvinate(void) {
   term.c_cflag &= ~(CSIZE | PARENB);
   term.c_cflag |= CS8 | CREAD;
   term.c_oflag |= OPOST | ONLCR;
+  term.c_lflag &= ~ECHOK;
 #ifdef IMAXBEL
   term.c_iflag &= ~IMAXBEL;
-#endif
-#ifdef ECHOK
-  term.c_lflag &= ~ECHOK;
 #endif
 #ifdef PENDIN
   term.c_lflag &= ~PENDIN;
@@ -725,7 +723,7 @@ static void TuiRejuvinate(void) {
 #ifdef IUTF8
   term.c_iflag |= IUTF8;
 #endif
-  ioctl(ttyout, TCSETS, &term);
+  tcsetattr(ttyout, TCSANOW, &term);
   memset(&sa, 0, sizeof(sa));
   sa.sa_handler = OnSigBusted;
   sa.sa_flags = SA_NODEFER;
@@ -775,7 +773,7 @@ static void TtyRestore1(void) {
 
 static void TtyRestore2(void) {
   LOGF("TtyRestore2");
-  ioctl(ttyout, TCSETS, &oldterm);
+  tcsetattr(ttyout, TCSANOW, &oldterm);
   DisableMouseTracking();
 }
 
@@ -896,7 +894,7 @@ void TuiSetup(void) {
   if (!once) {
     /* LOGF("loaded program %s\n%s", codepath, gc(FormatPml4t(m))); */
     CommonSetup();
-    ioctl(ttyout, TCGETS, &oldterm);
+    tcgetattr(ttyout, &oldterm);
     atexit(TtyRestore2);
     once = true;
     report = true;
@@ -2350,15 +2348,81 @@ static int OnPtyFdTiocgwinsz(int fd, struct winsize *ws) {
   return 0;
 }
 
-static int OnPtyFdTcgets(int fd, struct termios *c) {
+static int OnPtyFdTcsets(int fd, u64 request, struct termios *c) {
+  return 0;
+}
+
+static int OnPtyFdIoctl(int fd, unsigned long request, ...) {
+  va_list va;
+  struct winsize *ws;
+  if (request == TIOCGWINSZ) {
+    va_start(va, request);
+    ws = va_arg(va, struct winsize *);
+    va_end(va);
+    return OnPtyFdTiocgwinsz(fd, ws);
+  } else {
+    return einval();
+  }
+}
+
+static int OnPtyTcgetattr(int fd, struct termios *c) {
+  // TODO(jart): We should just use the Linux ABI for these.
   memset(c, 0, sizeof(*c));
+  c->c_iflag = ICRNL | IXON
+#ifdef IUTF8
+               | IUTF8
+#endif
+      ;
+  c->c_oflag = 0
+#ifdef ONLCR
+               | ONLCR
+#endif
+      ;
+  c->c_cflag = CREAD | CS8;
+  c->c_lflag = ISIG | ECHOE | IEXTEN | ECHOK
+#ifdef ECHOCTL
+               | ECHOCTL
+#endif
+#ifdef ECHOKE
+               | ECHOKE
+#endif
+      ;
+  c->c_cc[VMIN] = 1;
+  c->c_cc[VTIME] = 0;
+  c->c_cc[VINTR] = Ctrl('C');
+  c->c_cc[VQUIT] = Ctrl('\\');
+  c->c_cc[VERASE] = Ctrl('?');
+  c->c_cc[VKILL] = Ctrl('U');
+  c->c_cc[VEOF] = Ctrl('D');
+  c->c_cc[VSTART] = Ctrl('Q');
+  c->c_cc[VSTOP] = Ctrl('S');
+  c->c_cc[VSUSP] = Ctrl('Z');
+  c->c_cc[VEOL] = Ctrl('@');
+#ifdef VSWTC
+  c->c_cc[VSWTC] = Ctrl('@');
+#endif
+#ifdef VREPRINT
+  c->c_cc[VREPRINT] = Ctrl('R');
+#endif
+#ifdef VDISCARD
+  c->c_cc[VDISCARD] = Ctrl('O');
+#endif
+#ifdef VWERASE
+  c->c_cc[VWERASE] = Ctrl('W');
+#endif
+#ifdef VLNEXT
+  c->c_cc[VLNEXT] = Ctrl('V');
+#endif
+#ifdef VEOL2
+  c->c_cc[VEOL2] = Ctrl('@');
+#endif
   if (!(pty->conf & kPtyNocanon)) c->c_iflag |= ICANON;
   if (!(pty->conf & kPtyNoecho)) c->c_iflag |= ECHO;
   if (!(pty->conf & kPtyNoopost)) c->c_oflag |= OPOST;
   return 0;
 }
 
-static int OnPtyFdTcsets(int fd, u64 request, struct termios *c) {
+static int OnPtyTcsetattr(int fd, int cmd, const struct termios *c) {
   if (c->c_iflag & ICANON) {
     pty->conf &= ~kPtyNocanon;
   } else {
@@ -2377,29 +2441,14 @@ static int OnPtyFdTcsets(int fd, u64 request, struct termios *c) {
   return 0;
 }
 
-static int OnPtyFdIoctl(int fd, unsigned long request, ...) {
-  va_list va;
-  va_start(va, request);
-  if (request == TIOCGWINSZ) {
-    return OnPtyFdTiocgwinsz(fd, va_arg(va, struct winsize *));
-  } else if (request == TCGETS) {
-    return OnPtyFdTcgets(fd, va_arg(va, struct termios *));
-  } else if (request == TCSETS || request == TCSETSW || request == TCSETSF) {
-    return OnPtyFdTcsets(fd, request, va_arg(va, struct termios *));
-  } else {
-    errno = EINVAL;
-    return -1;
-  }
-  va_end(va);
-  return 0;
-}
-
 static const struct FdCb kFdCbPty = {
     .close = OnPtyFdClose,
     .readv = OnPtyFdReadv,
     .writev = OnPtyFdWritev,
     .ioctl = OnPtyFdIoctl,
     .poll = OnPtyFdPoll,
+    .tcgetattr = OnPtyTcgetattr,
+    .tcsetattr = OnPtyTcsetattr,
 };
 
 static void LaunchDebuggerReactively(void) {

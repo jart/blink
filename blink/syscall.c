@@ -109,6 +109,8 @@ const struct FdCb kFdCbHost = {
     .writev = writev,
     .ioctl = SystemIoctl,
     .poll = poll,
+    .tcgetattr = tcgetattr,
+    .tcsetattr = tcsetattr,
 };
 
 void AddStdFd(struct Fds *fds, int fildes) {
@@ -1330,19 +1332,19 @@ static int IoctlTiocgwinsz(struct Machine *m, int fd, i64 addr,
 }
 
 static int IoctlTcgets(struct Machine *m, int fd, i64 addr,
-                       int fn(int, unsigned long, ...)) {
+                       int fn(int, struct termios *)) {
   int rc;
   struct termios tio;
   struct termios_linux gtio;
-  if ((rc = fn(fd, TCGETS, &tio)) != -1) {
+  if ((rc = fn(fd, &tio)) != -1) {
     XlatTermiosToLinux(&gtio, &tio);
     CopyToUserWrite(m, addr, &gtio, sizeof(gtio));
   }
   return rc;
 }
 
-static int IoctlTcsets(struct Machine *m, int fd, unsigned long request,
-                       i64 addr, int fn(int, unsigned long, ...)) {
+static int IoctlTcsets(struct Machine *m, int fd, int request, i64 addr,
+                       int fn(int, int, const struct termios *)) {
   struct termios tio;
   struct termios_linux gtio;
   CopyFromUserRead(m, &gtio, addr, sizeof(gtio));
@@ -1429,10 +1431,14 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
   int rc;
   struct Fd *fd;
   int (*ioctl_impl)(int, unsigned long, ...);
+  int (*tcgetattr_impl)(int, struct termios *);
+  int (*tcsetattr_impl)(int, int, const struct termios *);
   LockFds(&m->system->fds);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
     unassert(ioctl_impl = fd->cb->ioctl);
+    unassert(tcgetattr_impl = fd->cb->tcgetattr);
+    unassert(tcsetattr_impl = fd->cb->tcsetattr);
   } else {
     ioctl_impl = 0;
   }
@@ -1443,16 +1449,16 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       rc = IoctlTiocgwinsz(m, fildes, addr, ioctl_impl);
       break;
     case TCGETS_LINUX:
-      rc = IoctlTcgets(m, fildes, addr, ioctl_impl);
+      rc = IoctlTcgets(m, fildes, addr, tcgetattr_impl);
       break;
     case TCSETS_LINUX:
-      rc = IoctlTcsets(m, fildes, TCSETS, addr, ioctl_impl);
+      rc = IoctlTcsets(m, fildes, TCSANOW, addr, tcsetattr_impl);
       break;
     case TCSETSW_LINUX:
-      rc = IoctlTcsets(m, fildes, TCSETSW, addr, ioctl_impl);
+      rc = IoctlTcsets(m, fildes, TCSADRAIN, addr, tcsetattr_impl);
       break;
     case TCSETSF_LINUX:
-      rc = IoctlTcsets(m, fildes, TCSETSF, addr, ioctl_impl);
+      rc = IoctlTcsets(m, fildes, TCSAFLUSH, addr, tcsetattr_impl);
       break;
     case SIOCGIFCONF_LINUX:
       rc = IoctlSiocgifconf(m, fildes, addr);
