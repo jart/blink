@@ -4,6 +4,15 @@
 
 #include "blink/types.h"
 
+#define DISABLE_HIGHLIGHT_BEGIN \
+  {                             \
+    bool high_;                 \
+    high_ = g_high.enabled;     \
+    g_high.enabled = false
+#define DISABLE_HIGHLIGHT_END \
+  g_high.enabled = high_;     \
+  }
+
 struct High {
   bool enabled;
   bool active;

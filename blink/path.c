@@ -17,18 +17,30 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
+#include <fcntl.h>
+#include <stdarg.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/debug.h"
+#include "blink/dis.h"
+#include "blink/high.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/stats.h"
 
+#define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
+
 void (*AddPath_StartOp_Hook)(P);
+
+#ifdef CLOG
+static int g_clog;
+static struct Dis g_dis;
+#endif
 
 static void StartPath(struct Machine *m) {
   JIX_LOGF("%" PRIx64 " <path>", m->ip);
@@ -109,11 +121,77 @@ long GetPrologueSize(void) {
 #endif
 }
 
+void SetupClog(struct Machine *m) {
+#ifdef CLOG
+  LoadDebugSymbols(&m->system->elf);
+  DisLoadElf(&g_dis, &m->system->elf);
+  g_clog = open("/tmp/blink.s", O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+  g_clog = fcntl(g_clog, F_DUPFD_CLOEXEC, kMinBlinkFd);
+#endif
+}
+
+static void WriteClog(const char *fmt, ...) {
+#ifdef CLOG
+  int n;
+  va_list va;
+  char buf[256];
+  if (!g_clog) return;
+  va_start(va, fmt);
+  n = vsnprintf(buf, sizeof(buf), fmt, va);
+  va_end(va);
+  write(g_clog, buf, MIN(n, sizeof(buf)));
+#endif
+}
+
+static void BeginClog(struct Machine *m, i64 pc) {
+#ifdef CLOG
+  char b[256];
+  char spec[64];
+  int i, o = 0, n = sizeof(b);
+  if (!g_clog) return;
+  DISABLE_HIGHLIGHT_BEGIN;
+  APPEND("/\t");
+  unassert(!GetInstruction(m, pc, g_dis.xedd));
+  DisInst(&g_dis, b + o, DisSpec(g_dis.xedd, spec));
+  o = strlen(b);
+  APPEND(" #");
+  for (i = 0; i < g_dis.xedd->length; ++i) {
+    APPEND(" %02x", g_dis.xedd->bytes[i]);
+  }
+  APPEND("\n");
+  write(g_clog, b, MIN(o, n));
+  DISABLE_HIGHLIGHT_END;
+#endif
+}
+
+static void FlushClog(struct JitBlock *jb) {
+#ifdef CLOG
+  char b[256];
+  char spec[64];
+  if (!g_clog) return;
+  if (jb->index == jb->blocksize + 1) {
+    WriteClog("/\tOOM!\n");
+    jb->clog = jb->index;
+    return;
+  }
+  DISABLE_HIGHLIGHT_BEGIN;
+  for (; jb->clog < jb->index; jb->clog += g_dis.xedd->length) {
+    unassert(!DecodeInstruction(g_dis.xedd, jb->addr + jb->clog,
+                                jb->index - jb->clog, XED_MODE_LONG));
+    g_dis.addr = (intptr_t)jb->addr + jb->clog;
+    DisInst(&g_dis, b, DisSpec(g_dis.xedd, spec));
+    WriteClog("\t%s\n", b);
+  }
+  DISABLE_HIGHLIGHT_END;
+#endif
+}
+
 static void InitPaths(struct System *s) {
 #ifdef HAVE_JIT
   struct JitBlock *jb;
   if (!s->ender) {
     unassert((jb = StartJit(&s->jit)));
+    WriteClog("\nJit_%" PRIx64 ":\n", jb->addr + jb->index);
     s->ender = GetJitPc(jb);
 #if LOG_JIX
     AppendJitMovReg(jb, kJitArg0, kJitSav0);
@@ -121,6 +199,7 @@ static void InitPaths(struct System *s) {
 #endif
     AppendJit(jb, kLeave, sizeof(kLeave));
     AppendJitRet(jb);
+    FlushClog(jb);
     unassert(FinishJit(&s->jit, jb, 0));
   }
 #endif
@@ -128,14 +207,16 @@ static void InitPaths(struct System *s) {
 
 bool CreatePath(P) {
 #ifdef HAVE_JIT
-  i64 pc;
   bool res;
+  i64 pc, jpc;
   unassert(!IsMakingPath(m));
   InitPaths(m->system);
   if ((pc = GetPc(m))) {
     if ((m->path.jb = StartJit(&m->system->jit))) {
       JIT_LOGF("starting new path jit_pc:%" PRIxPTR " at pc:%" PRIx64,
                GetJitPc(m->path.jb), pc);
+      FlushClog(m->path.jb);
+      jpc = (intptr_t)m->path.jb->addr + m->path.jb->index;
       AppendJit(m->path.jb, kEnter, sizeof(kEnter));
 #if LOG_JIX
       Jitter(A,
@@ -144,6 +225,8 @@ bool CreatePath(P) {
              "q",  // arg0 = machine
              StartPath);
 #endif
+      WriteClog("\nJit_%" PRIx64 "_%" PRIx64 ":\n", pc, jpc);
+      FlushClog(m->path.jb);
       m->path.start = pc;
       m->path.elements = 0;
       SetHook(m, pc, JitlessDispatch);
@@ -169,6 +252,7 @@ void CompletePath(P) {
 
 void FinishPath(struct Machine *m) {
   unassert(IsMakingPath(m));
+  FlushClog(m->path.jb);
   STATISTIC(path_longest_bytes =
                 MAX(path_longest_bytes, m->path.jb->index - m->path.jb->start));
   STATISTIC(path_longest = MAX(path_longest, m->path.elements));
@@ -186,6 +270,7 @@ void FinishPath(struct Machine *m) {
 }
 
 void AbandonPath(struct Machine *m) {
+  WriteClog("/\tABANDONED\n");
   unassert(IsMakingPath(m));
   STATISTIC(++path_abandoned);
   JIT_LOGF("abandoning path jit_pc:%" PRIxPTR " which started at pc:%" PRIx64,
@@ -196,6 +281,7 @@ void AbandonPath(struct Machine *m) {
 }
 
 void AddPath_StartOp(P) {
+  BeginClog(m, GetPc(m));
 #ifndef NDEBUG
   if (FLAG_statistics) {
     Jitter(A,
@@ -260,6 +346,7 @@ void AddPath_EndOp(P) {
          "c",  // call function (EndOp)
          EndOp);
 #endif
+  FlushClog(m->path.jb);
 }
 
 bool AddPath(P) {

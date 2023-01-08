@@ -624,4 +624,6 @@ void Int64ToDouble(i64, struct Machine *, long);
 void Int32ToDouble(i32, struct Machine *, long);
 void MovsdWpsVpsOp(u8 *, struct Machine *, long);
 
+void SetupClog(struct Machine *);
+
 #endif /* BLINK_MACHINE_H_ */

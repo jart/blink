@@ -115,6 +115,7 @@ struct JitStage {
 
 struct JitBlock {
   u8 *addr;
+  long clog;
   long start;
   long index;
   long committed;
