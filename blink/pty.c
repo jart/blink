@@ -925,7 +925,7 @@ static void PtySelectGraphicsRendition(struct Pty *pty) {
             pty->pr &= ~kPtyTrue;
             break;
           default:
-            abort();
+            Abort();
         }
         break;
       default:

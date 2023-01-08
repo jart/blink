@@ -277,7 +277,7 @@ const char *DisGetLine(struct Dis *d, struct Machine *m, int i) {
   err = GetInstruction(m, d->ops.p[i].addr, d->xedd);
   d->m = m;
   d->addr = d->ops.p[i].addr;
-  if (DisLineCode(d, d->buf, err) - d->buf >= (int)sizeof(d->buf)) abort();
+  if (DisLineCode(d, d->buf, err) - d->buf >= (int)sizeof(d->buf)) Abort();
   return d->buf;
 }
 

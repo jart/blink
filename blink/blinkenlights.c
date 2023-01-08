@@ -1629,7 +1629,7 @@ static void DrawMemoryUnzoomed(struct Panel *p, struct MemoryView *view,
           } else if (!sc || (sc > 0 && (k & 7) < sc)) {
             x = 22; /* GREEN: valid address */
           } else {
-            abort();
+            Abort();
           }
         }
         AppendFmt(&p->lines[i], "\033[38;5;253;48;5;%dm", x);
@@ -3725,6 +3725,7 @@ int main(int argc, char *argv[]) {
   int rc;
   struct System *s;
   static struct sigaction sa;
+  g_exitdontabort = true;
   SetupWeb();
   g_blink_path = argc > 0 ? argv[0] : 0;
   react = true;

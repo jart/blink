@@ -30,6 +30,7 @@
 #include "blink/mop.h"
 #include "blink/string.h"
 #include "blink/tsan.h"
+#include "blink/util.h"
 
 static u64 ReadInt(u8 p[8], unsigned long w) {
   switch (w) {
@@ -187,7 +188,7 @@ static void StringOp(P, int op) {
         EndStore(m, v, n, p, s[0]);
         break;
       default:
-        abort();
+        Abort();
     }
     if (Rep(rde)) {
       SubtractCx(A, 1);

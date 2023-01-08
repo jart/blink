@@ -69,7 +69,7 @@ void TerminateSignal(struct Machine *m, int sig) {
   sigemptyset(&sa.sa_mask);
   unassert(!sigaction(syssig, &sa, 0));
   unassert(!kill(getpid(), syssig));
-  abort();
+  Abort();
 }
 
 static void OnSigSegv(int sig, siginfo_t *si, void *ptr) {

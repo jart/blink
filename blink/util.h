@@ -12,7 +12,9 @@
 extern int optind_;
 extern char *optarg_;
 extern const short kCp437[256];
+extern bool g_exitdontabort;
 
+_Noreturn void Abort(void);
 int GetOpt(int, char *const[], const char *);
 u64 tpenc(wint_t);
 bool mulo(u64, u64, u64 *);

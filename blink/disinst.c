@@ -195,7 +195,7 @@ char *DisInst(struct Dis *d, char *p, const char *spec) {
     hasregister |= *s == '%';
     hasmemory |= *s == 'O';
     m = DisArg(d, args[n], s) - args[n];
-    if (m >= sizeof(args[n])) abort();
+    if (m >= sizeof(args[n])) Abort();
   }
   p = HighStart(p, g_high.keyword);
   p = DisName(d, p, name, hasarg && !hasregister && hasmemory);

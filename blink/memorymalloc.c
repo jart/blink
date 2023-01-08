@@ -33,6 +33,7 @@
 #include "blink/map.h"
 #include "blink/mop.h"
 #include "blink/types.h"
+#include "blink/util.h"
 
 struct Allocator {
   pthread_mutex_t lock;
@@ -642,7 +643,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
           if (mprotect(ToHost(mpstart), pagesize, prot & ~PROT_EXEC)) {
             LOGF("mprotect(%#" PRIx64 " [%p], %#" PRIx64 ", %d) failed",
                  mpstart, ToHost(mpstart), pagesize, prot);
-            abort();
+            Abort();
           }
         }
         pt &= ~(PAGE_U | PAGE_RW | PAGE_XD);
@@ -674,7 +675,7 @@ void SyncVirtual(struct Machine *m, i64 virt, i64 size, int fd, i64 offset) {
       LOGF("failed to read %zu bytes at offset %" PRId64
            " from fd %d into memory map: %s",
            size, offset, fd, strerror(errno));
-      abort();
+      Abort();
     }
   }
   CopyToUserWrite(m, virt, tmp, size);
