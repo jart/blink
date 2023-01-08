@@ -9,7 +9,7 @@ struct Lines {
 
 struct Lines *NewLines(void);
 void FreeLines(struct Lines *);
-void AppendLine(struct Lines *, const char *, unsigned);
+void AppendLine(struct Lines *, const char *, int);
 void AppendLines(struct Lines *, const char *);
 
 #endif /* BLINK_LINES_H_ */

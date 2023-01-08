@@ -111,13 +111,12 @@ const u8 kJitArg[6] = {kJitArg0, kJitArg1, kJitArg2,
 
 #ifdef HAVE_JIT
 
-// the maximum conceivable size of our blink program image
-#define kJitLeeway 1048576
-
 // how closely adjacent jit code needs to be, to our image
 #ifdef __x86_64__
+#define kJitLeeway    0x10000000
 #define kJitProximity 0x7fffffff
 #else
+#define kJitLeeway    0x00a00000
 #define kJitProximity (kArmDispMax * 4)
 #endif
 

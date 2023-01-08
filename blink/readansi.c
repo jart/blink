@@ -18,16 +18,19 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <ctype.h>
 #include <errno.h>
+#include <poll.h>
 #include <unistd.h>
 
 #include "blink/builtin.h"
 #include "blink/log.h"
+#include "blink/macros.h"
 #include "blink/thompike.h"
 #include "blink/util.h"
 
 ssize_t readansi(int fd, char *buf, size_t size) {
   u8 c;
-  int i, j;
+  int rc, i, j;
+  struct pollfd pfd[1];
   enum { kAscii, kUtf8, kEsc, kCsi, kSs } t;
   if (size) buf[0] = 0;
   for (j = i = 0, t = kAscii;;) {
@@ -35,7 +38,18 @@ ssize_t readansi(int fd, char *buf, size_t size) {
       errno = ENOMEM;
       return -1;
     }
-    if (read(fd, &c, 1) != 1) return -1;
+    if ((rc = read(fd, &c, 1)) != 1) {
+      if (rc == -1 && errno == EINTR && i) {
+        continue;
+      }
+      if (rc == -1 && errno == EAGAIN) {
+        pfd[0].fd = fd;
+        pfd[0].events = POLLIN;
+        poll(pfd, 1, 0);
+        continue;
+      }
+      return rc;
+    }
     buf[i++] = c;
     buf[i] = 0;
     switch (t) {

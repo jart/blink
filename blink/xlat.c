@@ -228,10 +228,16 @@ int XlatResource(int x) {
     XLAT(2, RLIMIT_DATA);
     XLAT(3, RLIMIT_STACK);
     XLAT(4, RLIMIT_CORE);
+#ifdef RLIMIT_RSS
     XLAT(5, RLIMIT_RSS);
+#endif
+#ifdef RLIMIT_NPROC
     XLAT(6, RLIMIT_NPROC);
+#endif
     XLAT(7, RLIMIT_NOFILE);
+#ifdef RLIMIT_MEMLOCK
     XLAT(8, RLIMIT_MEMLOCK);
+#endif
 #ifdef RLIMIT_AS
     XLAT(9, RLIMIT_AS);
 #endif
@@ -368,7 +374,9 @@ int XlatSocketOptname(int level, int optname) {
         XLAT(7, SO_SNDBUF);
         XLAT(8, SO_RCVBUF);
         XLAT(9, SO_KEEPALIVE);
+#ifdef SO_REUSEPORT
         XLAT(15, SO_REUSEPORT);
+#endif
         XLAT(20, SO_RCVTIMEO);
         XLAT(21, SO_SNDTIMEO);
 #ifdef SO_RCVLOWAT

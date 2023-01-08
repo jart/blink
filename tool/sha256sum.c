@@ -282,7 +282,7 @@ static bool IsSupportedPath(const char *path) {
       case '\r':
       case '\n':
       case '\\':
-        Write(2, PROG, ": ", path, ": unsupported path\n", 0);
+        Write(2, PROG, ": ", path, ": unsupported path\n", NULL);
         return false;
       default:
         break;
@@ -299,7 +299,7 @@ static bool GetDigest(const char *path, FILE *f, uint8_t digest[32]) {
     Sha256Update(&ctx, buf, got);
   }
   if (ferror(f)) {
-    Write(2, PROG, ": ", path, ": ", strerror(errno), "\n", 0);
+    Write(2, PROG, ": ", path, ": ", strerror(errno), "\n", NULL);
     return false;
   }
   Sha256Final(&ctx, digest);
@@ -323,7 +323,7 @@ static bool ProduceDigest(const char *path, FILE *f) {
   if (!IsSupportedPath(path)) return false;
   if (!GetDigest(path, f, digest)) return false;
   CopyHex(hexdigest, digest, 32);
-  Write(1, hexdigest, " ", mode, path, "\n", 0);
+  Write(1, hexdigest, " ", mode, path, "\n", NULL);
   return true;
 }
 
@@ -381,13 +381,13 @@ static bool CheckDigests(const char *path, FILE *f) {
           ++g_mismatches;
           k = false;
         }
-        Write(1, path2, ": ", status, "\n", 0);
+        Write(1, path2, ": ", status, "\n", NULL);
       } else {
         k = false;
       }
       fclose(f2);
     } else {
-      Write(2, PROG, ": ", path2, ": ", strerror(errno), "\n", 0);
+      Write(2, PROG, ": ", path2, ": ", strerror(errno), "\n", NULL);
       k = false;
     }
     continue;
@@ -396,11 +396,11 @@ static bool CheckDigests(const char *path, FILE *f) {
       char linestr[12];
       FormatInt32(linestr, line + 1);
       Write(2, PROG, ": ", path, ":", linestr, ": ",
-            "improperly formatted checksum line", "\n", 0);
+            "improperly formatted checksum line", "\n", NULL);
     }
   }
   if (ferror(f)) {
-    Write(2, PROG, ": ", path, ": ", strerror(errno), "\n", 0);
+    Write(2, PROG, ": ", path, ": ", strerror(errno), "\n", NULL);
     k = false;
   }
   return k;
@@ -428,7 +428,7 @@ int main(int argc, char *argv[]) {
         k &= Process(argv[i], f);
         fclose(f);
       } else {
-        Write(2, PROG, ": ", argv[i], ": ", strerror(errno), "\n", 0);
+        Write(2, PROG, ": ", argv[i], ": ", strerror(errno), "\n", NULL);
         k = false;
       }
     }
@@ -437,7 +437,7 @@ int main(int argc, char *argv[]) {
     char ibuf[12];
     FormatInt32(ibuf, g_mismatches);
     Write(2, PROG, ": WARNING: ", ibuf, " computed checksum did NOT match\n",
-          0);
+          NULL);
   }
   return !k;
 }

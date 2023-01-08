@@ -33,7 +33,8 @@ void FreeLines(struct Lines *lines) {
   free(lines);
 }
 
-void AppendLine(struct Lines *lines, const char *s, unsigned n) {
+void AppendLine(struct Lines *lines, const char *s, int n) {
+  if (n < 0) n = strlen(s);
   lines->p = (char **)realloc(lines->p, ++lines->n * sizeof(*lines->p));
   lines->p[lines->n - 1] = strndup(s, n);
 }
