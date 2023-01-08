@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,7 +30,6 @@
 #include "blink/endian.h"
 #include "blink/macros.h"
 #include "blink/pty.h"
-#include "blink/termios.h"
 #include "blink/thompike.h"
 #include "blink/util.h"
 
@@ -234,7 +234,11 @@ static wchar_t *GetXlatItalic(void) {
   static bool once;
   static wchar_t xlat[128];
   if (!once) {
+#if WCHAR_MAX > 0x10000
     XlatAlphabet(xlat, L'𝑎', L'𝐴');
+#else
+    XlatAlphabet(xlat, L'a', L'A');
+#endif
     once = true;
   }
   return xlat;
@@ -244,7 +248,11 @@ static wchar_t *GetXlatBoldItalic(void) {
   static bool once;
   static wchar_t xlat[128];
   if (!once) {
+#if WCHAR_MAX > 0x10000
     XlatAlphabet(xlat, L'𝒂', L'𝑨');
+#else
+    XlatAlphabet(xlat, L'a', L'A');
+#endif
     once = true;
   }
   return xlat;
@@ -254,7 +262,11 @@ static wchar_t *GetXlatBoldFraktur(void) {
   static bool once;
   static wchar_t xlat[128];
   if (!once) {
+#if WCHAR_MAX > 0x10000
     XlatAlphabet(xlat, L'𝖆', L'𝕬');
+#else
+    XlatAlphabet(xlat, L'a', L'A');
+#endif
     once = true;
   }
   return xlat;
@@ -265,6 +277,7 @@ static wchar_t *GetXlatFraktur(void) {
   static bool once;
   static wchar_t xlat[128];
   if (!once) {
+#if WCHAR_MAX > 0x10000
     for (i = 0; i < ARRAYLEN(xlat); ++i) {
       if ('A' <= i && i <= 'Z') {
         xlat[i] = L"𝔄𝔅ℭ𝔇𝔈𝔉𝔊ℌℑ𝔍𝔎𝔏𝔐𝔑𝔒𝔓𝔔ℜ𝔖𝔗𝔘𝔙𝔚𝔛𝔜ℨ"[i - 'A'];
@@ -274,6 +287,9 @@ static wchar_t *GetXlatFraktur(void) {
         xlat[i] = i;
       }
     }
+#else
+    XlatAlphabet(xlat, L'a', L'A');
+#endif
     once = true;
   }
   return xlat;

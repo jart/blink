@@ -64,7 +64,6 @@
 #include "blink/stats.h"
 #include "blink/strwidth.h"
 #include "blink/syscall.h"
-#include "blink/termios.h"
 #include "blink/thompike.h"
 #include "blink/timespec.h"
 #include "blink/tsan.h"

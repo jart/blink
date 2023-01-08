@@ -6,9 +6,9 @@
 #include <sys/resource.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <termios.h>
 
 #include "blink/linux.h"
-#include "blink/termios.h"
 
 int UnXlatOpenFlags(int);
 int UnXlatAccMode(int);
