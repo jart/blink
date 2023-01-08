@@ -25,7 +25,7 @@
 
 #include "blink/lock.h"
 
-#ifdef DEBUG
+#ifdef UNWIND
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 #endif
@@ -51,7 +51,7 @@ int ubsan_backtrace_memory[2];
 char *ubsan_backtrace_pointer = ((char *)ubsan_backtrace_memory) + 1;
 
 void PrintBacktrace(void) {
-#ifdef DEBUG
+#ifdef UNWIND
   char sym[256];
   unw_cursor_t cursor;
   unw_context_t context;
@@ -74,7 +74,7 @@ void PrintBacktrace(void) {
   x = asan_backtrace_buffer[asan_backtrace_index + 1];
   (void)x;
 #elif defined(__SANITIZE_UNDEFINED__)
-  (int *)ubsan_backtrace_pointer = 0;
+  *(int *)ubsan_backtrace_pointer = 0;
 #endif
 }
 

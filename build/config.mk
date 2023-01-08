@@ -77,7 +77,7 @@ endif
 
 ifeq ($(MODE), dbg)
 CFLAGS += -O0
-CPPFLAGS += -DDEBUG
+CPPFLAGS += -DDEBUG -DUNWIND
 ifeq ($(HOST_OS), Linux)
 CFLAGS += -fno-pie
 LDFLAGS += -static -no-pie
@@ -147,7 +147,6 @@ LDLIBS += -fsanitize=address
 endif
 
 ifeq ($(MODE), ubsan)
-CC = clang
 CPPFLAGS += -DDEBUG -DNOJIT -DUBSAN
 CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 CFLAGS += -fsanitize=undefined
