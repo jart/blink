@@ -272,7 +272,8 @@ int GetFlagClobbers(u64 rde) {
   }
 }
 
-static int GetFlagDepsImpl(u64 rde) {
+// returns bitset of flags read by operation
+int GetFlagDeps(u64 rde) {
   switch (Mopcode(rde)) {
     default:
       return 0;
@@ -409,11 +410,4 @@ static int GetFlagDepsImpl(u64 rde) {
         return 0;
       }
   }
-}
-
-// returns bitset of flags read by operation
-int GetFlagDeps(u64 rde) {
-  int flags = GetFlagDepsImpl(rde);
-  if (Rep(rde) >= 2) flags |= ZF;
-  return flags;
 }
