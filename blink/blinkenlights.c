@@ -3531,10 +3531,10 @@ static void GetOpts(int argc, char *argv[]) {
       case 'm':
         wantunsafe = true;
         if (!CanHaveLinearMemory()) {
-          fprintf(
-              stderr,
-              "linearization not possible on this system, page size is %ld\n",
-              sysconf(_SC_PAGESIZE));
+          fprintf(stderr,
+                  "linearization not possible on this system"
+                  " (word size is %d bits and page size is %ld)\n",
+                  LONG_BIT, sysconf(_SC_PAGESIZE));
           exit(1);
         }
         break;

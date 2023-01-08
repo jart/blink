@@ -27,6 +27,13 @@
  * e.g. registers; otherwise LoadN() and StoreN() should be used.
  */
 
+#if !defined(__SANITIZE_UNDEFINED__) && \
+    (defined(__aarch64__) || defined(__x86_64__) || defined(__i386__))
+#define CAN_ABUSE_POINTERS 1
+#else
+#define CAN_ABUSE_POINTERS 0
+#endif
+
 MICRO_OP_SAFE u8 Little8(u8 x) {
   return x;
 }
@@ -86,7 +93,7 @@ MICRO_OP_SAFE u8 Read8(const u8 *p) {
 }
 
 MICRO_OP_SAFE u16 Read16(const u8 *p) {
-#ifndef __SANITIZE_UNDEFINED__
+#if CAN_ABUSE_POINTERS
   return Get16(p);
 #else
   return p[1] << 8 | p[0];
@@ -94,7 +101,7 @@ MICRO_OP_SAFE u16 Read16(const u8 *p) {
 }
 
 MICRO_OP_SAFE u32 Read32(const u8 *p) {
-#ifndef __SANITIZE_UNDEFINED__
+#if CAN_ABUSE_POINTERS
   return Get32(p);
 #else
   return ((u32)p[0] << 000 |  //
@@ -105,7 +112,7 @@ MICRO_OP_SAFE u32 Read32(const u8 *p) {
 }
 
 MICRO_OP_SAFE u64 Read64(const u8 *p) {
-#ifndef __SANITIZE_UNDEFINED__
+#if CAN_ABUSE_POINTERS
   return Get64(p);
 #else
   return ((u64)p[0] << 000 |  //
@@ -124,7 +131,7 @@ MICRO_OP_SAFE void Write8(u8 *p, u8 v) {
 }
 
 MICRO_OP_SAFE void Write16(u8 *p, u16 v) {
-#ifndef __SANITIZE_UNDEFINED__
+#if CAN_ABUSE_POINTERS
   Put16(p, v);
 #else
   p[0] = (0x00FF & v) >> 000;
@@ -133,7 +140,7 @@ MICRO_OP_SAFE void Write16(u8 *p, u16 v) {
 }
 
 MICRO_OP_SAFE void Write32(u8 *p, u32 v) {
-#ifndef __SANITIZE_UNDEFINED__
+#if CAN_ABUSE_POINTERS
   Put32(p, v);
 #else
   p[0] = (0x000000FF & v) >> 000;
@@ -144,7 +151,7 @@ MICRO_OP_SAFE void Write32(u8 *p, u32 v) {
 }
 
 MICRO_OP_SAFE void Write64(u8 *p, u64 v) {
-#ifndef __SANITIZE_UNDEFINED__
+#if CAN_ABUSE_POINTERS
   Put64(p, v);
 #else
   p[0] = (0x00000000000000FF & v) >> 000;
