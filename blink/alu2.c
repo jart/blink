@@ -31,6 +31,34 @@
 #include "blink/stats.h"
 #include "blink/swap.h"
 
+void LoadAluArgs(P) {
+  if (IsModrmRegister(rde) && RexrReg(rde) == RexbRm(rde)) {
+    Jitter(A, "A"        // res0 = GetReg(RexrReg)
+              "r0a2="    // arg2 = res0
+              "r0a1=");  // arg1 = res0
+  } else {
+    Jitter(A, "B"        // res0 = GetRegOrMem(RexbRm)
+              "r0s1="    // sav1 = res0
+              "A"        // res0 = GetReg(RexrReg)
+              "r0a2="    // arg2 = res0
+              "s1a1=");  // arg1 = sav1
+  }
+}
+
+void LoadAluFlipArgs(P) {
+  if (IsModrmRegister(rde) && RexrReg(rde) == RexbRm(rde)) {
+    Jitter(A, "A"        // res0 = GetReg(RexrReg)
+              "r0a2="    // arg2 = res0
+              "r0a1=");  // arg1 = res0
+  } else {
+    Jitter(A, "B"        // res0 = GetRegOrMem(RexbRm)
+              "r0s1="    // sav1 = res0
+              "A"        // res0 = GetReg(RexrReg)
+              "s1a2="    // arg2 = sav1
+              "r0a1=");  // arg1 = res0
+  }
+}
+
 void OpAlub(P) {
   u8 x, y, z, *p, *q;
   aluop_f f;
@@ -56,8 +84,10 @@ void OpAlub(P) {
 void OpAluw(P) {
   u8 *p, *q;
   aluop_f f;
+  int t, flags;
   q = RegRexrReg(m, rde);
-  f = kAlu[(Opcode(rde) & 070) >> 3][RegLog2(rde)];
+  t = (Opcode(rde) & 070) >> 3;
+  f = kAlu[t][RegLog2(rde)];
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
 #if LONG_BIT >= 64
@@ -136,37 +166,44 @@ void OpAluw(P) {
   }
   if (IsMakingPath(m) && !Lock(rde)) {
     STATISTIC(++alu_ops);
-    Jitter(A, "B"        // res0 = GetRegOrMem(RexbR)m
-              "r0s1="    // sav1 = res0
-              "A"        // res0 = GetReg(RexrReg)
-              "r0a2="    // arg2 = res0
-              "s1a1=");  // arg1 = sav1
-    switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
-      case 0:
-        STATISTIC(++alu_unflagged);
-        if (GetFlagDeps(rde)) Jitter(A, "q");  // arg0 = machine
-        Jitter(A,
-               "m"     // call micro-op
-               "r0D",  // PutRegOrMem(RexbRm, res0)
-               kJustAlu[(Opcode(rde) & 070) >> 3]);
-        break;
-      case CF:
-      case ZF:
-      case CF | ZF:
-        STATISTIC(++alu_simplified);
-        Jitter(A,
-               "q"     // arg0 = machine
-               "m"     // call micro-op
-               "r0D",  // PutRegOrMem(RexbRm, res0)
-               kAluFast[(Opcode(rde) & 070) >> 3][RegLog2(rde)]);
-        break;
-      default:
-        Jitter(A,
-               "q"     // arg0 = machine
-               "c"     // call function
-               "r0D",  // PutRegOrMem(RexbRm, res0)
-               f);
-        break;
+    flags = GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF);
+    if (t == ALU_XOR &&          //
+        RegLog2(rde) >= 2 &&     //
+        IsModrmRegister(rde) &&  //
+        RexrReg(rde) == RexbRm(rde)) {
+      Jitter(A,
+             "a1i"  // arg1 = register index
+             "m",   // call micro-op
+             RexrReg(rde), flags ? ZeroRegFlags : ZeroReg);
+    } else {
+      LoadAluArgs(A);
+      switch (flags) {
+        case 0:
+          STATISTIC(++alu_unflagged);
+          if (GetFlagDeps(rde)) Jitter(A, "q");  // arg0 = machine
+          Jitter(A,
+                 "m"     // call micro-op
+                 "r0D",  // PutRegOrMem(RexbRm, res0)
+                 kJustAlu[t]);
+          break;
+        case CF:
+        case ZF:
+        case CF | ZF:
+          STATISTIC(++alu_simplified);
+          Jitter(A,
+                 "q"     // arg0 = machine
+                 "m"     // call micro-op
+                 "r0D",  // PutRegOrMem(RexbRm, res0)
+                 kAluFast[t][RegLog2(rde)]);
+          break;
+        default:
+          Jitter(A,
+                 "q"     // arg0 = machine
+                 "c"     // call function
+                 "r0D",  // PutRegOrMem(RexbRm, res0)
+                 f);
+          break;
+      }
     }
   }
 }

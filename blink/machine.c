@@ -587,6 +587,7 @@ static void AluRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
                     RegLog2(rde) ? RegRexrReg(m, rde) : ByteRexrReg(m, rde)));
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
+    LoadAluArgs(A);
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
       case CF:
@@ -594,24 +595,14 @@ static void AluRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
       case CF | ZF:
         STATISTIC(++alu_simplified);
         Jitter(A,
-               "B"      // res0 = GetRegOrMem(RexbRm)
-               "r0s1="  // sav1 = res0
-               "A"      // res0 = GetReg(RexrReg)
-               "r0a2="  // arg2 = res0
-               "s1a1="  // arg1 = sav1
-               "q"      // arg0 = sav0 (machine)
-               "m",     // call micro-op
+               "q"   // arg0 = sav0 (machine)
+               "m",  // call micro-op
                fops[RegLog2(rde)]);
         break;
       default:
         Jitter(A,
-               "B"      // res0 = GetRegOrMem(RexbRm)
-               "r0s1="  // sav1 = res0
-               "A"      // res0 = GetReg(RexrReg)
-               "r0a2="  // arg2 = res0
-               "s1a1="  // arg1 = sav1
-               "q"      // arg0 = sav0 (machine)
-               "c",     // call function
+               "q"   // arg0 = sav0 (machine)
+               "c",  // call function
                op);
         break;
     }
@@ -634,18 +625,14 @@ static void OpAluFlip(P) {
                      ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A))));
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
-    Jitter(A, "B"      // res0 = GetRegOrMem(RexbRm)
-              "r0s1="  // sav1 = res0
-              "A");    // res0 = GetReg(RexrReg)
+    LoadAluFlipArgs(A);
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
         STATISTIC(++alu_unflagged);
         if (GetFlagDeps(rde)) Jitter(A, "q");  // arg0 = sav0 (machine)
         Jitter(A,
-               "r0a1="  // arg1 = res0
-               "s1a2="  // arg2 = sav1
-               "m"      // call micro-op
-               "r0C",   // PutReg(RexrReg, res0)
+               "m"     // call micro-op
+               "r0C",  // PutReg(RexrReg, res0)
                kJustAlu[(Opcode(rde) & 070) >> 3]);
         break;
       case CF:
@@ -653,20 +640,16 @@ static void OpAluFlip(P) {
       case CF | ZF:
         STATISTIC(++alu_simplified);
         Jitter(A,
-               "r0a1="  // arg1 = res0
-               "s1a2="  // arg2 = sav1
-               "q"      // arg0 = sav0 (machine)
-               "m"      // call micro-op
-               "r0C",   // PutReg(RexrReg, res0)
+               "q"     // arg0 = sav0 (machine)
+               "m"     // call micro-op
+               "r0C",  // PutReg(RexrReg, res0)
                kAluFast[(Opcode(rde) & 070) >> 3][RegLog2(rde)]);
         break;
       default:
         Jitter(A,
-               "r0a1="  // arg1 = res0
-               "s1a2="  // arg2 = sav1
-               "q"      // arg0 = sav0 (machine)
-               "c"      // call function
-               "r0C",   // PutReg(RexrReg, res0)
+               "q"     // arg0 = sav0 (machine)
+               "c"     // call function
+               "r0C",  // PutReg(RexrReg, res0)
                op);
         break;
     }
@@ -679,6 +662,7 @@ static void OpAluFlipCmp(P) {
   op(m, ReadRegisterBW(rde, q), ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A)));
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
+    LoadAluFlipArgs(A);
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
       case CF:
@@ -686,24 +670,14 @@ static void OpAluFlipCmp(P) {
       case CF | ZF:
         STATISTIC(++alu_simplified);
         Jitter(A,
-               "B"      // res0 = GetRegOrMem(RexbRm)
-               "r0s1="  // sav1 = res0
-               "A"      // res0 = GetReg(RexrReg)
-               "r0a1="  // arg1 = res0
-               "s1a2="  // arg2 = sav1
-               "q"      // arg0 = sav0 (machine)
-               "m",     // call micro-op
+               "q"   // arg0 = sav0 (machine)
+               "m",  // call micro-op
                kAluFast[ALU_SUB][RegLog2(rde)]);
         break;
       default:
         Jitter(A,
-               "B"      // res0 = GetRegOrMem(RexbRm)
-               "r0s1="  // sav1 = res0
-               "A"      // res0 = GetReg(RexrReg)
-               "r0a1="  // arg1 = res0
-               "s1a2="  // arg2 = sav1
-               "q"      // arg0 = sav0 (machine)
-               "c",     // call function
+               "q"   // arg0 = sav0 (machine)
+               "c",  // call function
                op);
         break;
     }
@@ -921,7 +895,6 @@ static void OpInterrupt3(P) {
 
 void Terminate(P, void uop(struct Machine *, u64)) {
   if (IsMakingPath(m)) {
-    FlushSkew(A);
     Jitter(A,
            "a1i"  //
            "m"    // call micro-op

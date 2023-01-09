@@ -63,6 +63,10 @@ MICRO_OP void SkewIp(struct Machine *m, long oplen, long delta) {
   m->ip += delta;
 }
 
+MICRO_OP void AdvanceIp(struct Machine *m, long oplen) {
+  m->ip += oplen;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // READING FROM REGISTER FILE
 
@@ -91,6 +95,15 @@ static const getreg_f kGetReg[] = {GetReg8, GetReg16,   //
 
 ////////////////////////////////////////////////////////////////////////////////
 // WRITING TO REGISTER FILE
+
+MICRO_OP void ZeroReg(struct Machine *m, long i) {
+  Put64(m->weg[i], 0);
+}
+MICRO_OP void ZeroRegFlags(struct Machine *m, long i) {
+  Put64(m->weg[i], 0);
+  m->flags &= ~(CF | ZF | SF | OF | AF | 0xFF000000u);
+  m->flags |= 1 << FLAGS_ZF;
+}
 
 MICRO_OP static void PutReg8(struct Machine *m, long i, u64 x) {
   Put8(m->beg + i, x);

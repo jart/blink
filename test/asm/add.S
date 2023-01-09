@@ -3,7 +3,7 @@
 _start:
 
 //	make -j8 o//blink o//test/asm/add.elf
-//	o//blink/tui o//test/asm/add.elf
+//	o//blink/blinkenlights o//test/asm/add.elf
 
 	.test	"add64"
 	mov	$0x1234567812345678,%rax

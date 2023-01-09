@@ -605,12 +605,18 @@ long GetPrologueSize(void);
 void FinishPath(struct Machine *);
 void AbandonPath(struct Machine *);
 void AddIp(struct Machine *, long);
+void AdvanceIp(struct Machine *, long);
 void SkewIp(struct Machine *, long, long);
 
 void OpTest(P);
 void OpAlui(P);
+void LoadAluArgs(P);
+void LoadAluFlipArgs(P);
 i64 FastAnd8(struct Machine *, u64, u64);
 i64 FastSub8(struct Machine *, u64, u64);
+
+void ZeroReg(struct Machine *, long);
+void ZeroRegFlags(struct Machine *, long);
 
 i32 Imul32(i32, i32, struct Machine *);
 i64 Imul64(i64, i64, struct Machine *);
