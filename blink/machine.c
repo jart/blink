@@ -921,6 +921,7 @@ static void OpInterrupt3(P) {
 
 void Terminate(P, void uop(struct Machine *, u64)) {
   if (IsMakingPath(m)) {
+    FlushSkew(A);
     Jitter(A,
            "a1i"  //
            "m"    // call micro-op
@@ -949,6 +950,7 @@ static void OpJcc(P) {
   cc_f cc;
   cc = GetCc(A);
   if (IsMakingPath(m)) {
+    FlushSkew(A);
 #ifdef __x86_64__
     Jitter(A, "mq", cc);
     AlignJit(m->path.jb, 4);
@@ -2236,6 +2238,7 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
              " into previously created function %p",
              m->path.start, func);
     STATISTIC(++path_spliced);
+    FlushSkew(DISPATCH_NOTHING);
     AppendJitSetReg(m->path.jb, kJitArg0, kJitSav0);
     AppendJitJump(m->path.jb, (u8 *)func + GetPrologueSize());
     FinishPath(m);

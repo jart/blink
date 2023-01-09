@@ -58,6 +58,11 @@ MICRO_OP void AddIp(struct Machine *m, long oplen) {
   m->ip += oplen;
 }
 
+MICRO_OP void SkewIp(struct Machine *m, long oplen, long delta) {
+  m->oplen = oplen;
+  m->ip += delta;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // READING FROM REGISTER FILE
 

@@ -250,6 +250,7 @@ struct System {
 };
 
 struct JitPath {
+  int skew;
   i64 start;
   int elements;
   struct JitBlock *jb;
@@ -595,6 +596,7 @@ void OpMovmskpsd(P);
 extern void (*AddPath_StartOp_Hook)(P);
 
 bool AddPath(P);
+void FlushSkew(P);
 bool CreatePath(P);
 void CompletePath(P);
 void AddPath_EndOp(P);
@@ -603,6 +605,7 @@ long GetPrologueSize(void);
 void FinishPath(struct Machine *);
 void AbandonPath(struct Machine *);
 void AddIp(struct Machine *, long);
+void SkewIp(struct Machine *, long, long);
 
 void OpTest(P);
 void OpAlui(P);
