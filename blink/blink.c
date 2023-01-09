@@ -137,6 +137,10 @@ _Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   FLAG_nolinear = !CanHaveLinearMemory();
+#ifdef __CYGWIN__
+  FLAG_nojit = true;
+  FLAG_nolinear = true;
+#endif
 #ifdef __COSMOPOLITAN__
   if (IsWindows()) {
     FLAG_nojit = true;
