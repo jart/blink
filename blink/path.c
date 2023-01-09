@@ -130,7 +130,13 @@ void SetupClog(struct Machine *m) {
 #endif
 }
 
-static void WriteClog(const char *fmt, ...) {
+void(LogClogOp)(struct Machine *m, const char *s) {
+#ifdef CLOG
+  WriteClog("/\t%s\n", s);
+#endif
+}
+
+void WriteClog(const char *fmt, ...) {
 #ifdef CLOG
   int n;
   va_list va;
@@ -164,7 +170,7 @@ static void BeginClog(struct Machine *m, i64 pc) {
 #endif
 }
 
-static void FlushClog(struct JitBlock *jb) {
+void FlushClog(struct JitBlock *jb) {
 #ifdef CLOG
   char b[256];
   char spec[64];
@@ -356,6 +362,95 @@ static bool IsPure(u64 rde) {
     case 0x1BD:  // OpBsr
     case 0x1BE:  // OpMovsbGvqpEb
     case 0x1BF:  // OpMovswGvqpEw
+    case 0x110:  // sse moves
+    case 0x111:  // sse moves
+    case 0x112:  // sse moves
+    case 0x113:  // sse moves
+    case 0x114:  // unpcklpsd
+    case 0x115:  // unpckhpsd
+    case 0x116:  // sse moves
+    case 0x117:  // sse moves
+    case 0x128:  // sse moves
+    case 0x129:  // sse moves
+    case 0x12A:  // sse convs
+    case 0x12B:  // sse moves
+    case 0x12C:  // sse convs
+    case 0x12D:  // sse convs
+    case 0x160:  // OpSsePunpcklbw
+    case 0x161:  // OpSsePunpcklwd
+    case 0x162:  // OpSsePunpckldq
+    case 0x163:  // OpSsePacksswb
+    case 0x164:  // OpSsePcmpgtb
+    case 0x165:  // OpSsePcmpgtw
+    case 0x166:  // OpSsePcmpgtd
+    case 0x167:  // OpSsePackuswb
+    case 0x168:  // OpSsePunpckhbw
+    case 0x169:  // OpSsePunpckhwd
+    case 0x16A:  // OpSsePunpckhdq
+    case 0x16B:  // OpSsePackssdw
+    case 0x16C:  // OpSsePunpcklqdq
+    case 0x16D:  // OpSsePunpckhqdq
+    case 0x16E:  // OpMov0f6e
+    case 0x16F:  // OpMov0f6f
+    case 0x170:  // OpShuffle
+    case 0x171:  // Op171
+    case 0x172:  // Op172
+    case 0x173:  // Op173
+    case 0x174:  // OpSsePcmpeqb
+    case 0x175:  // OpSsePcmpeqw
+    case 0x176:  // OpSsePcmpeqd
+    case 0x1D1:  // OpSsePsrlwv
+    case 0x1D2:  // OpSsePsrldv
+    case 0x1D3:  // OpSsePsrlqv
+    case 0x1D4:  // OpSsePaddq
+    case 0x1D5:  // OpSsePmullw
+    case 0x1D8:  // OpSsePsubusb
+    case 0x1D9:  // OpSsePsubusw
+    case 0x1DA:  // OpSsePminub
+    case 0x1DB:  // OpSsePand
+    case 0x1DC:  // OpSsePaddusb
+    case 0x1DD:  // OpSsePaddusw
+    case 0x1DE:  // OpSsePmaxub
+    case 0x1DF:  // OpSsePandn
+    case 0x1E0:  // OpSsePavgb
+    case 0x1E1:  // OpSsePsrawv
+    case 0x1E2:  // OpSsePsradv
+    case 0x1E3:  // OpSsePavgw
+    case 0x1E4:  // OpSsePmulhuw
+    case 0x1E5:  // OpSsePmulhw
+    case 0x1E8:  // OpSsePsubsb
+    case 0x1E9:  // OpSsePsubsw
+    case 0x1EA:  // OpSsePminsw
+    case 0x1EB:  // OpSsePor
+    case 0x1EC:  // OpSsePaddsb
+    case 0x1ED:  // OpSsePaddsw
+    case 0x1EE:  // OpSsePmaxsw
+    case 0x1EF:  // OpSsePxor
+    case 0x1F1:  // OpSsePsllwv
+    case 0x1F2:  // OpSsePslldv
+    case 0x1F3:  // OpSsePsllqv
+    case 0x1F4:  // OpSsePmuludq
+    case 0x1F5:  // OpSsePmaddwd
+    case 0x1F6:  // OpSsePsadbw
+    case 0x1F8:  // OpSsePsubb
+    case 0x1F9:  // OpSsePsubw
+    case 0x1FA:  // OpSsePsubd
+    case 0x1FB:  // OpSsePsubq
+    case 0x1FC:  // OpSsePaddb
+    case 0x1FD:  // OpSsePaddw
+    case 0x1FE:  // OpSsePaddd
+    case 0x200:  // OpSsePshufb
+    case 0x201:  // OpSsePhaddw
+    case 0x202:  // OpSsePhaddd
+    case 0x203:  // OpSsePhaddsw
+    case 0x204:  // OpSsePmaddubsw
+    case 0x205:  // OpSsePhsubw
+    case 0x206:  // OpSsePhsubd
+    case 0x207:  // OpSsePhsubsw
+    case 0x208:  // OpSsePsignb
+    case 0x209:  // OpSsePsignw
+    case 0x20A:  // OpSsePsignd
+    case 0x20B:  // OpSsePmulhrsw
     case 0x2F6:  // adcx, adox, mulx
       return IsModrmRegister(rde);
     case 0x08D:  // OpLeaGvqpM
@@ -573,9 +668,11 @@ void AddPath_EndOp(P) {
 
 bool AddPath(P) {
   unassert(IsMakingPath(m));
-  AppendJitSetReg(m->path.jb, kJitArg[kArgRde], rde);
-  AppendJitSetReg(m->path.jb, kJitArg[kArgDisp], disp);
-  AppendJitSetReg(m->path.jb, kJitArg[kArgUimm0], uimm0);
-  AppendJitCall(m->path.jb, (void *)GetOp(Mopcode(rde)));
+  Jitter(A,
+         "a3i"  // arg2 = uimm0
+         "a2i"  // arg2 = disp
+         "a1i"  // arg1 = rde
+         "c",   // call function
+         uimm0, disp, rde, GetOp(Mopcode(rde)));
   return true;
 }

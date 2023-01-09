@@ -80,10 +80,10 @@ o/$(MODE)/m68k/%.runs: o/$(MODE)/m68k/% o/third_party/qemu/qemu-m68k $(VM)
 	$(VM) o/third_party/qemu/qemu-m68k $<
 	@touch $@
 o/$(MODE)/x86_64/%.runs: o/$(MODE)/x86_64/% o/third_party/qemu/qemu-x86_64 $(VM)
-	$(VM) o/third_party/qemu/qemu-x86_64 $<
+	$(VM) o/third_party/qemu/qemu-x86_64 -cpu core2duo $<
 	@touch $@
 o/$(MODE)/x86_64-gcc49/%.runs: o/$(MODE)/x86_64-gcc49/% o/third_party/qemu/qemu-x86_64 $(VM)
-	$(VM) o/third_party/qemu/qemu-x86_64 $<
+	$(VM) o/third_party/qemu/qemu-x86_64 -cpu core2duo $<
 	@touch $@
 o/$(MODE)/arm/%.runs: o/$(MODE)/arm/% o/third_party/qemu/qemu-arm $(VM)
 	$(VM) o/third_party/qemu/qemu-arm $<
@@ -129,11 +129,11 @@ o/$(MODE)/m68k/%.emulates: % o/$(MODE)/m68k/blink/blink o/third_party/qemu/qemu-
 	@touch $@
 o/$(MODE)/x86_64/%.emulates: % o/$(MODE)/x86_64/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-x86_64 o/$(MODE)/x86_64/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-x86_64 -cpu core2duo o/$(MODE)/x86_64/blink/blink $<
 	@touch $@
 o/$(MODE)/x86_64-gcc49/%.emulates: % o/$(MODE)/x86_64-gcc49/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-x86_64 o/$(MODE)/x86_64-gcc49/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-x86_64 -cpu core2duo o/$(MODE)/x86_64-gcc49/blink/blink $<
 	@touch $@
 o/$(MODE)/arm/%.emulates: % o/$(MODE)/arm/blink/blink o/third_party/qemu/qemu-arm $(VM)
 	@mkdir -p $(@D)
@@ -190,11 +190,11 @@ o/$(MODE)/m68k/%.emulates: o/$(MODE)/% o/$(MODE)/m68k/blink/blink o/third_party/
 	@touch $@
 o/$(MODE)/x86_64/%.emulates: o/$(MODE)/% o/$(MODE)/x86_64/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-x86_64 o/$(MODE)/x86_64/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-x86_64 -cpu core2duo o/$(MODE)/x86_64/blink/blink $<
 	@touch $@
 o/$(MODE)/x86_64-gcc49/%.emulates: o/$(MODE)/% o/$(MODE)/x86_64-gcc49/blink/blink o/third_party/qemu/qemu-x86_64 $(VM)
 	@mkdir -p $(@D)
-	$(VM) o/third_party/qemu/qemu-x86_64 o/$(MODE)/x86_64-gcc49/blink/blink $<
+	$(VM) o/third_party/qemu/qemu-x86_64 -cpu core2duo o/$(MODE)/x86_64-gcc49/blink/blink $<
 	@touch $@
 o/$(MODE)/arm/%.emulates: o/$(MODE)/% o/$(MODE)/arm/blink/blink o/third_party/qemu/qemu-arm $(VM)
 	@mkdir -p $(@D)

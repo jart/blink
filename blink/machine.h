@@ -621,6 +621,10 @@ void ZeroRegFlags(struct Machine *, long);
 i32 Imul32(i32, i32, struct Machine *);
 i64 Imul64(i64, i64, struct Machine *);
 void Mulx64(u64, struct Machine *, long, long);
+u32 JustMul32(u32, u32, struct Machine *);
+u64 JustMul64(u64, u64, struct Machine *);
+void MulAxDx(u64, struct Machine *);
+void JustMulAxDx(u64, struct Machine *);
 
 void OpPsdMuld1(u8 *, struct Machine *, long);
 void OpPsdAddd1(u8 *, struct Machine *, long);
@@ -633,6 +637,14 @@ void Int64ToDouble(i64, struct Machine *, long);
 void Int32ToDouble(i32, struct Machine *, long);
 void MovsdWpsVpsOp(u8 *, struct Machine *, long);
 
+// #define CLOG
 void SetupClog(struct Machine *);
+void WriteClog(const char *, ...);
+void FlushClog(struct JitBlock *);
+#ifdef CLOG
+void LogClogOp(struct Machine *, const char *);
+#else
+#define LogClogOp(m, s) (void)0
+#endif
 
 #endif /* BLINK_MACHINE_H_ */

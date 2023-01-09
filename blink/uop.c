@@ -93,6 +93,142 @@ static const getreg_f kGetReg[] = {GetReg8, GetReg16,   //
                                    GetReg32, GetReg64,  //
                                    (getreg_f)GetReg128};
 
+MICRO_OP static u64 GetReg32_0(struct Machine *m) {
+  return Get32(m->weg[0]);
+}
+MICRO_OP static u64 GetReg32_1(struct Machine *m) {
+  return Get32(m->weg[1]);
+}
+MICRO_OP static u64 GetReg32_2(struct Machine *m) {
+  return Get32(m->weg[2]);
+}
+MICRO_OP static u64 GetReg32_3(struct Machine *m) {
+  return Get32(m->weg[3]);
+}
+MICRO_OP static u64 GetReg32_4(struct Machine *m) {
+  return Get32(m->weg[4]);
+}
+MICRO_OP static u64 GetReg32_5(struct Machine *m) {
+  return Get32(m->weg[5]);
+}
+MICRO_OP static u64 GetReg32_6(struct Machine *m) {
+  return Get32(m->weg[6]);
+}
+MICRO_OP static u64 GetReg32_7(struct Machine *m) {
+  return Get32(m->weg[7]);
+}
+MICRO_OP static u64 GetReg32_8(struct Machine *m) {
+  return Get32(m->weg[8]);
+}
+MICRO_OP static u64 GetReg32_9(struct Machine *m) {
+  return Get32(m->weg[9]);
+}
+MICRO_OP static u64 GetReg32_10(struct Machine *m) {
+  return Get32(m->weg[10]);
+}
+MICRO_OP static u64 GetReg32_11(struct Machine *m) {
+  return Get32(m->weg[11]);
+}
+MICRO_OP static u64 GetReg32_12(struct Machine *m) {
+  return Get32(m->weg[12]);
+}
+MICRO_OP static u64 GetReg32_13(struct Machine *m) {
+  return Get32(m->weg[13]);
+}
+MICRO_OP static u64 GetReg32_14(struct Machine *m) {
+  return Get32(m->weg[14]);
+}
+MICRO_OP static u64 GetReg32_15(struct Machine *m) {
+  return Get32(m->weg[15]);
+}
+typedef u64 (*getreg32_f)(struct Machine *);
+const getreg32_f kGetReg32[] = {
+    GetReg32_0,   //
+    GetReg32_1,   //
+    GetReg32_2,   //
+    GetReg32_3,   //
+    GetReg32_4,   //
+    GetReg32_5,   //
+    GetReg32_6,   //
+    GetReg32_7,   //
+    GetReg32_8,   //
+    GetReg32_9,   //
+    GetReg32_10,  //
+    GetReg32_11,  //
+    GetReg32_12,  //
+    GetReg32_13,  //
+    GetReg32_14,  //
+    GetReg32_15,  //
+};
+
+MICRO_OP static u64 GetReg64_0(struct Machine *m) {
+  return Get64(m->weg[0]);
+}
+MICRO_OP static u64 GetReg64_1(struct Machine *m) {
+  return Get64(m->weg[1]);
+}
+MICRO_OP static u64 GetReg64_2(struct Machine *m) {
+  return Get64(m->weg[2]);
+}
+MICRO_OP static u64 GetReg64_3(struct Machine *m) {
+  return Get64(m->weg[3]);
+}
+MICRO_OP static u64 GetReg64_4(struct Machine *m) {
+  return Get64(m->weg[4]);
+}
+MICRO_OP static u64 GetReg64_5(struct Machine *m) {
+  return Get64(m->weg[5]);
+}
+MICRO_OP static u64 GetReg64_6(struct Machine *m) {
+  return Get64(m->weg[6]);
+}
+MICRO_OP static u64 GetReg64_7(struct Machine *m) {
+  return Get64(m->weg[7]);
+}
+MICRO_OP static u64 GetReg64_8(struct Machine *m) {
+  return Get64(m->weg[8]);
+}
+MICRO_OP static u64 GetReg64_9(struct Machine *m) {
+  return Get64(m->weg[9]);
+}
+MICRO_OP static u64 GetReg64_10(struct Machine *m) {
+  return Get64(m->weg[10]);
+}
+MICRO_OP static u64 GetReg64_11(struct Machine *m) {
+  return Get64(m->weg[11]);
+}
+MICRO_OP static u64 GetReg64_12(struct Machine *m) {
+  return Get64(m->weg[12]);
+}
+MICRO_OP static u64 GetReg64_13(struct Machine *m) {
+  return Get64(m->weg[13]);
+}
+MICRO_OP static u64 GetReg64_14(struct Machine *m) {
+  return Get64(m->weg[14]);
+}
+MICRO_OP static u64 GetReg64_15(struct Machine *m) {
+  return Get64(m->weg[15]);
+}
+typedef u64 (*getreg64_f)(struct Machine *);
+const getreg64_f kGetReg64[] = {
+    GetReg64_0,   //
+    GetReg64_1,   //
+    GetReg64_2,   //
+    GetReg64_3,   //
+    GetReg64_4,   //
+    GetReg64_5,   //
+    GetReg64_6,   //
+    GetReg64_7,   //
+    GetReg64_8,   //
+    GetReg64_9,   //
+    GetReg64_10,  //
+    GetReg64_11,  //
+    GetReg64_12,  //
+    GetReg64_13,  //
+    GetReg64_14,  //
+    GetReg64_15,  //
+};
+
 ////////////////////////////////////////////////////////////////////////////////
 // WRITING TO REGISTER FILE
 
@@ -126,6 +262,142 @@ typedef void (*putreg_f)(struct Machine *, long, u64);
 static const putreg_f kPutReg[] = {PutReg8, PutReg16,   //
                                    PutReg32, PutReg64,  //
                                    (putreg_f)PutReg128};
+
+MICRO_OP static void PutReg32_0(u64 x, struct Machine *m) {
+  Put64(m->weg[0], (u32)x);
+}
+MICRO_OP static void PutReg32_1(u64 x, struct Machine *m) {
+  Put64(m->weg[1], (u32)x);
+}
+MICRO_OP static void PutReg32_2(u64 x, struct Machine *m) {
+  Put64(m->weg[2], (u32)x);
+}
+MICRO_OP static void PutReg32_3(u64 x, struct Machine *m) {
+  Put64(m->weg[3], (u32)x);
+}
+MICRO_OP static void PutReg32_4(u64 x, struct Machine *m) {
+  Put64(m->weg[4], (u32)x);
+}
+MICRO_OP static void PutReg32_5(u64 x, struct Machine *m) {
+  Put64(m->weg[5], (u32)x);
+}
+MICRO_OP static void PutReg32_6(u64 x, struct Machine *m) {
+  Put64(m->weg[6], (u32)x);
+}
+MICRO_OP static void PutReg32_7(u64 x, struct Machine *m) {
+  Put64(m->weg[7], (u32)x);
+}
+MICRO_OP static void PutReg32_8(u64 x, struct Machine *m) {
+  Put64(m->weg[8], (u32)x);
+}
+MICRO_OP static void PutReg32_9(u64 x, struct Machine *m) {
+  Put64(m->weg[9], (u32)x);
+}
+MICRO_OP static void PutReg32_10(u64 x, struct Machine *m) {
+  Put64(m->weg[10], (u32)x);
+}
+MICRO_OP static void PutReg32_11(u64 x, struct Machine *m) {
+  Put64(m->weg[11], (u32)x);
+}
+MICRO_OP static void PutReg32_12(u64 x, struct Machine *m) {
+  Put64(m->weg[12], (u32)x);
+}
+MICRO_OP static void PutReg32_13(u64 x, struct Machine *m) {
+  Put64(m->weg[13], (u32)x);
+}
+MICRO_OP static void PutReg32_14(u64 x, struct Machine *m) {
+  Put64(m->weg[14], (u32)x);
+}
+MICRO_OP static void PutReg32_15(u64 x, struct Machine *m) {
+  Put64(m->weg[15], (u32)x);
+}
+typedef void (*putreg32_f)(u64, struct Machine *);
+const putreg32_f kPutReg32[] = {
+    PutReg32_0,   //
+    PutReg32_1,   //
+    PutReg32_2,   //
+    PutReg32_3,   //
+    PutReg32_4,   //
+    PutReg32_5,   //
+    PutReg32_6,   //
+    PutReg32_7,   //
+    PutReg32_8,   //
+    PutReg32_9,   //
+    PutReg32_10,  //
+    PutReg32_11,  //
+    PutReg32_12,  //
+    PutReg32_13,  //
+    PutReg32_14,  //
+    PutReg32_15,  //
+};
+
+MICRO_OP static void PutReg64_0(u64 x, struct Machine *m) {
+  Put64(m->weg[0], x);
+}
+MICRO_OP static void PutReg64_1(u64 x, struct Machine *m) {
+  Put64(m->weg[1], x);
+}
+MICRO_OP static void PutReg64_2(u64 x, struct Machine *m) {
+  Put64(m->weg[2], x);
+}
+MICRO_OP static void PutReg64_3(u64 x, struct Machine *m) {
+  Put64(m->weg[3], x);
+}
+MICRO_OP static void PutReg64_4(u64 x, struct Machine *m) {
+  Put64(m->weg[4], x);
+}
+MICRO_OP static void PutReg64_5(u64 x, struct Machine *m) {
+  Put64(m->weg[5], x);
+}
+MICRO_OP static void PutReg64_6(u64 x, struct Machine *m) {
+  Put64(m->weg[6], x);
+}
+MICRO_OP static void PutReg64_7(u64 x, struct Machine *m) {
+  Put64(m->weg[7], x);
+}
+MICRO_OP static void PutReg64_8(u64 x, struct Machine *m) {
+  Put64(m->weg[8], x);
+}
+MICRO_OP static void PutReg64_9(u64 x, struct Machine *m) {
+  Put64(m->weg[9], x);
+}
+MICRO_OP static void PutReg64_10(u64 x, struct Machine *m) {
+  Put64(m->weg[10], x);
+}
+MICRO_OP static void PutReg64_11(u64 x, struct Machine *m) {
+  Put64(m->weg[11], x);
+}
+MICRO_OP static void PutReg64_12(u64 x, struct Machine *m) {
+  Put64(m->weg[12], x);
+}
+MICRO_OP static void PutReg64_13(u64 x, struct Machine *m) {
+  Put64(m->weg[13], x);
+}
+MICRO_OP static void PutReg64_14(u64 x, struct Machine *m) {
+  Put64(m->weg[14], x);
+}
+MICRO_OP static void PutReg64_15(u64 x, struct Machine *m) {
+  Put64(m->weg[15], x);
+}
+typedef void (*putreg64_f)(u64, struct Machine *);
+const putreg64_f kPutReg64[] = {
+    PutReg64_0,   //
+    PutReg64_1,   //
+    PutReg64_2,   //
+    PutReg64_3,   //
+    PutReg64_4,   //
+    PutReg64_5,   //
+    PutReg64_6,   //
+    PutReg64_7,   //
+    PutReg64_8,   //
+    PutReg64_9,   //
+    PutReg64_10,  //
+    PutReg64_11,  //
+    PutReg64_12,  //
+    PutReg64_13,  //
+    PutReg64_14,  //
+    PutReg64_15,  //
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // MEMORY OPERATIONS
@@ -487,6 +759,13 @@ const aluop_f kAluFast[8][4] = {
     {FastSub8, FastSub16, FastSub32, FastSub64},  //
 };
 
+MICRO_OP u32 JustMul32(u32 x, u32 y, struct Machine *m) {
+  return x * y;
+}
+MICRO_OP u64 JustMul64(u64 x, u64 y, struct Machine *m) {
+  return x * y;
+}
+
 MICRO_OP i32 Imul32(i32 x, i32 y, struct Machine *m) {
   int o;
   i64 z;
@@ -495,7 +774,6 @@ MICRO_OP i32 Imul32(i32 x, i32 y, struct Machine *m) {
   m->flags = (m->flags & ~(CF | OF)) | o << FLAGS_CF | o << FLAGS_OF;
   return z;
 }
-
 #ifdef HAVE_INT128
 MICRO_OP i64 Imul64(i64 x, i64 y, struct Machine *m) {
   int o;
@@ -505,9 +783,21 @@ MICRO_OP i64 Imul64(i64 x, i64 y, struct Machine *m) {
   m->flags = (m->flags & ~(CF | OF)) | o << FLAGS_CF | o << FLAGS_OF;
   return z;
 }
-#endif
-
-#ifdef HAVE_INT128
+MICRO_OP void JustMulAxDx(u64 x, struct Machine *m) {
+  unsigned __int128 z;
+  z = (unsigned __int128)x * Get64(m->ax);
+  Put64(m->ax, z);
+  Put64(m->dx, z >> 64);
+}
+MICRO_OP void MulAxDx(u64 x, struct Machine *m) {
+  int o;
+  unsigned __int128 z;
+  z = (unsigned __int128)x * Get64(m->ax);
+  o = z != (u64)z;
+  m->flags = (m->flags & ~(CF | OF)) | o << FLAGS_CF | o << FLAGS_OF;
+  Put64(m->ax, z);
+  Put64(m->dx, z >> 64);
+}
 MICRO_OP void Mulx64(u64 x,              //
                      struct Machine *m,  //
                      long vreg,          //
@@ -715,9 +1005,26 @@ MICRO_OP static i64 Base(struct Machine *m, u64 d, long i) {
 MICRO_OP static i64 Index(struct Machine *m, u64 d, long i, int z) {
   return d + (Get64(m->weg[i]) << z);
 }
-MICRO_OP static i64 BaseIndex(struct Machine *m, u64 d, long b, int z, long i) {
-  return d + Get64(m->weg[b]) + (Get64(m->weg[i]) << z);
+MICRO_OP static i64 BaseIndex0(struct Machine *m, u64 d, long b, long i) {
+  return d + Get64(m->weg[b]) + Get64(m->weg[i]);
 }
+MICRO_OP static i64 BaseIndex1(struct Machine *m, u64 d, long b, long i) {
+  return d + Get64(m->weg[b]) + (Get64(m->weg[i]) << 1);
+}
+MICRO_OP static i64 BaseIndex2(struct Machine *m, u64 d, long b, long i) {
+  return d + Get64(m->weg[b]) + (Get64(m->weg[i]) << 2);
+}
+MICRO_OP static i64 BaseIndex3(struct Machine *m, u64 d, long b, long i) {
+  return d + Get64(m->weg[b]) + (Get64(m->weg[i]) << 3);
+}
+
+typedef i64 (*baseindex_f)(struct Machine *, u64, long, long);
+static const baseindex_f kBaseIndex[] = {
+    BaseIndex0,  //
+    BaseIndex1,  //
+    BaseIndex2,  //
+    BaseIndex3,  //
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // FLOATING POINT
@@ -898,10 +1205,93 @@ static inline unsigned CheckBelow(unsigned x, unsigned n) {
   return x;
 }
 
+static void GetReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
+  switch (log2sz) {
+    case 0:
+      Jitter(A,
+             "q"    // arg0 = machine
+             "a1i"  // arg1 = register index
+             "m",   // call micro-op
+             kByteReg[breg], kGetReg[0]);
+      break;
+    case 2:
+      Jitter(A,
+             "q"   // arg0 = machine
+             "m",  // call micro-op
+             kGetReg32[reg]);
+      break;
+    case 3:
+      Jitter(A,
+             "q"   // arg0 = machine
+             "m",  // call micro-op
+             kGetReg64[reg]);
+      break;
+    default:
+      Jitter(A,
+             "q"    // arg0 = machine
+             "a1i"  // arg1 = register index
+             "m",   // call micro-op
+             reg, kGetReg[log2sz]);
+      break;
+  }
+}
+
+static void PutReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
+  switch (log2sz) {
+    case 0:
+      ItemsRequired(1);
+      Jitter(A,
+             "a2="  // arg2 = <pop>
+             "a1i"  // arg1 = register index
+             "q"    // arg0 = machine
+             "m",   // call micro-op
+             kByteReg[breg], kPutReg[0]);
+      break;
+    case 1:
+      ItemsRequired(1);
+      Jitter(A,
+             "a2="  // arg2 = <pop>
+             "a1i"  // arg1 = register index
+             "q"    // arg0 = machine
+             "m",   // call micro-op
+             reg, kPutReg[1]);
+      break;
+    case 2:
+      ItemsRequired(1);
+      Jitter(A,
+             "s0a1="  // arg1 = machine
+             "a0="    // arg0 = <pop>
+             "m",     // call micro-op
+             kPutReg32[reg]);
+      break;
+    case 3:
+      ItemsRequired(1);
+      Jitter(A,
+             "s0a1="  // arg1 = machine
+             "a0="    // arg0 = <pop>
+             "m",     // call micro-op
+             kPutReg64[reg]);
+      break;
+    case 4:
+      Jitter(A,
+             "a4i"    // arg4 = register index
+             "s0a3="  // arg3 = machine
+             ""       // arg2 = undefined
+             "r1a1="  // arg1 = res1
+             "t"      // arg0 = res0
+             "m",     // call micro-op
+             reg, kPutReg[log2sz]);
+      break;
+    default:
+      __builtin_unreachable();
+  }
+}
+
 static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                            unsigned depth) {
   unsigned c, log2sz;
   log2sz = RegLog2(rde);
+  LogClogOp(m, fmt);
   while ((c = fmt[k++])) {
     switch (c) {
 
@@ -989,43 +1379,16 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         break;
 
       case 'A':  // res0 = GetReg(RexrReg)
-        Jitter(A,
-               "q"    // arg0 = machine
-               "a1i"  // arg1 = register index
-               "m",   // call micro-op
-               log2sz ? RexrReg(rde) : kByteReg[RexRexr(rde)], kGetReg[log2sz]);
+        GetReg(A, log2sz, RexrReg(rde), RexRexr(rde));
         break;
 
       case 'C':  // PutReg(RexrReg, <pop>)
-        if (log2sz < 4) {
-          ItemsRequired(1);
-          Jitter(A,
-                 "a2="  // arg2 = <pop>
-                 "a1i"  // arg1 = register index
-                 "q"    // arg0 = machine
-                 "m",   // call micro-op
-                 log2sz ? RexrReg(rde) : kByteReg[RexRexr(rde)],
-                 kPutReg[log2sz]);
-        } else {
-          Jitter(A,
-                 "a4i"    // arg4 = register index
-                 "s0a3="  // arg3 = machine
-                 ""       // arg2 = undefined
-                 "r1a1="  // arg1 = res1
-                 "t"      // arg0 = res0
-                 "m",     // call micro-op
-                 RexrReg(rde), kPutReg[log2sz]);
-        }
+        PutReg(A, log2sz, RexrReg(rde), RexRexr(rde));
         break;
 
       case 'B':  // res0 = GetRegOrMem(RexbRm)
         if (IsModrmRegister(rde)) {
-          Jitter(A,
-                 "a1i"  // arg1 = register index
-                 "q"    // arg0 = machine
-                 "m",   // call micro-op
-                 log2sz ? RexbRm(rde) : kByteReg[RexRexb(rde)],
-                 kGetReg[log2sz]);
+          GetReg(A, log2sz, RexbRm(rde), RexRexb(rde));
         } else if (HasLinearMapping(m)) {
           Jitter(A,
                  "L"         // load effective address
@@ -1052,13 +1415,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         if (log2sz < 4) {
           ItemsRequired(1);
           if (IsModrmRegister(rde)) {
-            Jitter(A,
-                   "a2="  // arg2 = <pop>
-                   "a1i"  // arg1 = register index
-                   "q"    // arg0 = machine
-                   "m",   // call micro-op
-                   log2sz ? RexbRm(rde) : kByteReg[RexRexb(rde)],
-                   kPutReg[log2sz]);
+            PutReg(A, log2sz, RexbRm(rde), RexRexb(rde));
           } else if (HasLinearMapping(m)) {
             Jitter(A,
                    "s3="       // sav3 = <pop>
@@ -1153,14 +1510,13 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  SibScale(rde), Rexx(rde) << 3 | SibIndex(rde), disp, Index);
         } else {
           Jitter(A,
-                 "a4i"  // arg4 = address index register index
-                 "a3i"  // arg3 = log2(address index scale)
+                 "a3i"  // arg4 = address index register index
                  "a2i"  // arg2 = address base register index
                  "a1i"  // arg1 = displacement
                  "q"    // arg0 = machine
                  "m",   // call micro-op
-                 Rexx(rde) << 3 | SibIndex(rde), SibScale(rde), RexbBase(rde),
-                 disp, BaseIndex);
+                 Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
+                 kBaseIndex[SibScale(rde)]);
         }
         if (Sego(rde)) {
           Jitter(A,
@@ -1206,43 +1562,19 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         break;
 
       case 'E':  // r0 = GetReg(RexbSrm)
-        Jitter(A,
-               "a1i"  // arg1 = index of register
-               "q"    // arg0 = machine
-               "m",   // call micro-op (get register)
-               log2sz ? RexbSrm(rde) : kByteReg[RexRexbSrm(rde)],
-               kGetReg[WordLog2(rde)]);
+        GetReg(A, log2sz, RexbSrm(rde), RexRexbSrm(rde));
         break;
 
       case 'F':  // PutReg(RexbSrm, <pop>)
-        ItemsRequired(1);
-        unassert(log2sz < 4);
-        Jitter(A,
-               "a2="  // arg2 = <pop>
-               "a1i"  // arg1 = index of register
-               "q"    // arg0 = machine
-               "m",   // call micro-op
-               log2sz ? RexbSrm(rde) : kByteReg[RexRexbSrm(rde)],
-               kPutReg[log2sz]);
+        PutReg(A, log2sz, RexbSrm(rde), RexRexbSrm(rde));
         break;
 
       case 'G':  // r0 = GetReg(AX)
-        Jitter(A,
-               "a1i"  // arg1 = index of register
-               "q"    // arg0 = machine
-               "m",   // call micro-op
-               0, kGetReg[log2sz]);
+        GetReg(A, log2sz, 0, 0);
         break;
 
       case 'H':  // PutReg(AX, <pop>)
-        ItemsRequired(1);
-        unassert(log2sz < 4);
-        Jitter(A,
-               "a2="  // arg2 = <pop>
-               "a1i"  // arg1 = 0
-               "q"    // arg0 = machine
-               "m",   // call micro-op
-               0, kPutReg[log2sz]);
+        PutReg(A, log2sz, 0, 0);
         break;
 
       case 'w':  // prevents byte operation

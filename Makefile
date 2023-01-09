@@ -3,7 +3,7 @@
 
 SHELL = /bin/sh
 MAKEFLAGS += --no-builtin-rules
-ARCHITECTURES = x86_64-gcc49 i486 aarch64 riscv64 arm mips s390x mipsel mips64 mips64el powerpc powerpc64le
+ARCHITECTURES = x86_64 x86_64-gcc49 i486 aarch64 riscv64 arm mips s390x mipsel mips64 mips64el powerpc powerpc64le
 
 .SUFFIXES:
 .DELETE_ON_ERROR:
