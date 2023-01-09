@@ -204,20 +204,6 @@ static bool IsPure(u64 rde) {
     case 0x035:  // OpAluRaxIvds
     case 0x03C:  // OpCmpAlIb
     case 0x03D:  // OpCmpRaxIvds
-    case 0x070:  // jo
-    case 0x071:  // jno
-    case 0x072:  // jb
-    case 0x073:  // jnb
-    case 0x074:  // jz
-    case 0x075:  // jnz
-    case 0x076:  // jbe
-    case 0x077:  // jnbe
-    case 0x078:  // js
-    case 0x079:  // jns
-    case 0x07c:  // jl
-    case 0x07d:  // jnl
-    case 0x07e:  // jle
-    case 0x07f:  // jnle
     case 0x090:  // OpNop
     case 0x091:  // OpXchgZvqp
     case 0x092:  // OpXchgZvqp
@@ -255,20 +241,6 @@ static bool IsPure(u64 rde) {
     case 0x0F8:  // OpClc
     case 0x0F9:  // OpStc
     case 0x11F:  // OpNopEv
-    case 0x180:  // jo
-    case 0x181:  // jno
-    case 0x182:  // jb
-    case 0x183:  // jnb
-    case 0x184:  // jz
-    case 0x185:  // jnz
-    case 0x186:  // jbe
-    case 0x187:  // jnbe
-    case 0x188:  // js
-    case 0x189:  // jns
-    case 0x18c:  // jl
-    case 0x18d:  // jnl
-    case 0x18e:  // jle
-    case 0x18f:  // jnle
     case 0x150:  // OpMovmskpsd
     case 0x1C8:  // OpBswapZvqp
     case 0x1C9:  // OpBswapZvqp
@@ -529,7 +501,7 @@ void AddPath_StartOp(P) {
          "a1i"  // arg1 = m->ip
          "q"    // arg0 = machine
          "c",   // call function (DebugOp)
-         m->ip, DebugOp);
+         m->ip - m->path.skew, DebugOp);
 #endif
 #if LOG_JIX
   Jitter(A,
