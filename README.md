@@ -33,7 +33,7 @@ following platforms:
 - FreeBSD
 - OpenBSD
 - NetBSD
-- Cygwin
+- Cygwin (no JIT on Windows yet)
 
 Blink depends on the following libraries:
 

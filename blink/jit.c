@@ -111,19 +111,12 @@ const u8 kJitArg[6] = {kJitArg0, kJitArg1, kJitArg2,
 
 #ifdef HAVE_JIT
 
-// how closely adjacent jit code needs to be, to our image
-#ifdef __x86_64__
-#define kJitLeeway    0x10000000
-#define kJitProximity 0x7fffffff
-#else
-#define kJitLeeway    0x00a00000
-#define kJitProximity (kArmDispMax * 4)
-#endif
+static u8 g_code[kJitMemorySize];
 
 static struct JitGlobals {
   pthread_mutex_t lock;
-  _Atomic(int) prot;
-  _Atomic(u8 *) brk;
+  atomic_long prot;
+  atomic_long brk;
   struct Dll *freeblocks GUARDED_BY(lock);
 } g_jit = {
     PTHREAD_MUTEX_INITIALIZER,
@@ -194,8 +187,64 @@ static void pthread_jit_write_protect_np_workaround(int enabled) {
 #endif
 }
 
+static struct JitJump *NewJitJump(void) {
+  struct JitJump *jj;
+  if ((jj = (struct JitJump *)calloc(1, sizeof(struct JitJump)))) {
+    dll_init(&jj->elem);
+  }
+  return jj;
+}
+
+static struct JitBlock *NewJitBlock(void) {
+  struct JitBlock *jb;
+  if ((jb = (struct JitBlock *)calloc(1, sizeof(struct JitBlock)))) {
+    STATISTIC(++jit_blocks);
+    dll_init(&jb->elem);
+  }
+  return jb;
+}
+
+static struct JitStage *NewJitStage(void) {
+  struct JitStage *js;
+  if ((js = (struct JitStage *)calloc(1, sizeof(struct JitStage)))) {
+    dll_init(&js->elem);
+  }
+  return js;
+}
+
+static void FreeJitJump(struct JitJump *jj) {
+  free(jj);
+}
+
+static void FreeJitBlock(struct JitBlock *jb) {
+  free(jb);
+}
+
+static void FreeJitStage(struct JitStage *js) {
+  free(js);
+}
+
 bool CanJitForImmediateEffect(void) {
   return atomic_load_explicit(&g_jit.prot, memory_order_relaxed) & PROT_EXEC;
+}
+
+static u8 *AllocateJitMemory(long align, long size) {
+  intptr_t p;
+  long i, brk;
+  unassert(size > 0);
+  unassert(IS2POW(align));
+  unassert(align <= kJitMemoryAlign);
+  brk = atomic_load_explicit(&g_jit.brk, memory_order_relaxed);
+  do {
+    p = (intptr_t)g_code;
+    i = ROUNDUP(p + brk, align) - p;
+    if (i + size > kJitMemorySize) {
+      LOG_ONCE(LOGF("ran out of jit memory"));
+      return 0;
+    }
+  } while (!atomic_compare_exchange_weak_explicit(
+      &g_jit.brk, &brk, i + size, memory_order_relaxed, memory_order_relaxed));
+  return g_code + i;
 }
 
 static int MakeJitJump(u8 buf[5], intptr_t pc, intptr_t addr) {
@@ -216,31 +265,31 @@ static int MakeJitJump(u8 buf[5], intptr_t pc, intptr_t addr) {
   return n;
 }
 
-static struct JitJump *NewJitJump(void) {
-  return (struct JitJump *)malloc(sizeof(struct JitJump));
+static struct JitBlock *AcquireJitBlock(struct Jit *jit) {
+  struct Dll *e;
+  long blocksize;
+  struct JitBlock *jb;
+  LOCK(&g_jit.lock);
+  if ((e = dll_first(g_jit.freeblocks))) {
+    dll_remove(&g_jit.freeblocks, e);
+    jb = JITBLOCK_CONTAINER(e);
+  } else {
+    jb = 0;
+  }
+  UNLOCK(&g_jit.lock);
+  if (!jb && (jb = NewJitBlock())) {
+    blocksize = atomic_load_explicit(&jit->blocksize, memory_order_relaxed);
+    if ((jb->addr = AllocateJitMemory(jit->pagesize, blocksize))) {
+      jb->blocksize = blocksize;
+    } else {
+      FreeJitBlock(jb);
+      jb = 0;
+    }
+  }
+  return jb;
 }
 
-static struct JitBlock *NewJitBlock(void) {
-  return (struct JitBlock *)calloc(1, sizeof(struct JitBlock));
-}
-
-static struct JitStage *NewJitStage(void) {
-  return (struct JitStage *)malloc(sizeof(struct JitStage));
-}
-
-static void FreeJitJump(struct JitJump *jj) {
-  free(jj);
-}
-
-static void FreeJitBlock(struct JitBlock *jb) {
-  free(jb);
-}
-
-static void FreeJitStage(struct JitStage *js) {
-  free(js);
-}
-
-static void RelinquishJitBlock(struct JitBlock *jb) {
+static void ReleaseJitBlock(struct JitBlock *jb) {
   struct Dll *e;
   while ((e = dll_first(jb->staged))) {
     dll_remove(&jb->staged, e);
@@ -258,25 +307,6 @@ static void RelinquishJitBlock(struct JitBlock *jb) {
   UNLOCK(&g_jit.lock);
 }
 
-static struct JitBlock *ReclaimJitBlock(void) {
-  struct Dll *e;
-  struct JitBlock *jb;
-  LOCK(&g_jit.lock);
-  if ((e = dll_first(g_jit.freeblocks))) {
-    dll_remove(&g_jit.freeblocks, e);
-    jb = JITBLOCK_CONTAINER(e);
-  } else {
-    jb = 0;
-  }
-  UNLOCK(&g_jit.lock);
-  if (jb && !CanJitForImmediateEffect()) {
-    unassert(
-        !mprotect(jb->addr, jb->blocksize,
-                  atomic_load_explicit(&g_jit.prot, memory_order_relaxed)));
-  }
-  return jb;
-}
-
 /**
  * Initializes memory object for Just-In-Time (JIT) threader.
  *
@@ -287,24 +317,11 @@ static struct JitBlock *ReclaimJitBlock(void) {
  * @return 0 on success
  */
 int InitJit(struct Jit *jit) {
-  u8 *brk;
   int blocksize;
   memset(jit, 0, sizeof(*jit));
   jit->pagesize = GetSystemPageSize();
   jit->blocksize = blocksize = ROUNDUP(kJitMinBlockSize, jit->pagesize);
   pthread_mutex_init(&jit->lock, 0);
-  if (!(brk = atomic_load_explicit(&g_jit.brk, memory_order_relaxed))) {
-    // we're going to politely ask the kernel for addresses starting
-    // arbitrary megabytes past the end of our own executable's .bss
-    // section. we'll cross our fingers, and hope that gives us room
-    // away from a brk()-based libc malloc() function which may have
-    // already allocated memory in this space. the reason it matters
-    // is because the x86 and arm isas impose limits on displacement
-    atomic_compare_exchange_strong_explicit(
-        &g_jit.brk, &brk,
-        (u8 *)ROUNDUP((intptr_t)IMAGE_END, blocksize) + kJitLeeway,
-        memory_order_relaxed, memory_order_relaxed);
-  }
   return 0;
 }
 
@@ -320,7 +337,7 @@ int DestroyJit(struct Jit *jit) {
   LOCK(&jit->lock);
   while ((e = dll_first(jit->blocks))) {
     dll_remove(&jit->blocks, e);
-    RelinquishJitBlock(JITBLOCK_CONTAINER(e));
+    ReleaseJitBlock(JITBLOCK_CONTAINER(e));
   }
   while ((e = dll_first(jit->jumps))) {
     dll_remove(&jit->jumps, e);
@@ -336,11 +353,9 @@ int DestroyJit(struct Jit *jit) {
  */
 int ShutdownJit(void) {
   struct Dll *e;
-  struct JitBlock *jb;
   while ((e = dll_first(g_jit.freeblocks))) {
     dll_remove(&g_jit.freeblocks, e);
-    jb = JITBLOCK_CONTAINER(e);
-    FreeJitBlock(jb);
+    FreeJitBlock(JITBLOCK_CONTAINER(e));
   }
   return 0;
 }
@@ -351,6 +366,52 @@ int ShutdownJit(void) {
 int DisableJit(struct Jit *jit) {
   atomic_store_explicit(&jit->disabled, true, memory_order_relaxed);
   return 0;
+}
+
+static bool CheckMmapResult(void *want, void *got) {
+  if (got == MAP_FAILED) {
+    LOGF("failed to mmap() jit block: %s", strerror(errno));
+    return false;
+  }
+  if (got != want) {
+    LOGF("jit block mmap(%p) returned unexpected address %p: %s", want, got,
+         strerror(errno));
+    return false;
+  }
+  return true;
+}
+
+static bool PrepareJitMemory(void *addr, size_t size) {
+#ifdef MAP_JIT
+  // Apple M1 only permits RWX memory if we use MAP_JIT, which Apple has
+  // chosen to make incompatible with MAP_FIXED.
+  if (munmap(addr, size)) {
+    LOGF("failed to munmap() jit block: %s", strerror(errno));
+    return false;
+  }
+  return CheckMmapResult(
+      addr, Mmap(addr, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+                 MAP_JIT | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0, "jit"));
+#else
+  int prot;
+  prot = atomic_load_explicit(&g_jit.prot, memory_order_relaxed);
+  if (!mprotect(addr, size, prot)) {
+    return true;
+  }
+  if (~prot & PROT_EXEC) {
+    LOGF("failed to mprotect() jit block: %s", strerror(errno));
+    return false;
+  }
+  // OpenBSD imposes a R^X invariant and raises ENOTSUP if RWX
+  // memory is requested. Since other OSes might exist, having
+  // this same requirement, and possible a different errno, we
+  // shall just clear the exec flag and try again.
+  prot &= ~PROT_EXEC;
+  atomic_store_explicit(&g_jit.prot, prot, memory_order_relaxed);
+  return CheckMmapResult(
+      addr, Mmap(addr, size, prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1,
+                 0, "jit"));
+#endif
 }
 
 /**
@@ -365,10 +426,7 @@ int DisableJit(struct Jit *jit) {
  * @return function builder object
  */
 struct JitBlock *StartJit(struct Jit *jit) {
-  u8 *brk;
-  int prot;
   struct Dll *e;
-  intptr_t distance;
   struct JitBlock *jb;
   if (!IsJitDisabled(jit)) {
     LOCK(&jit->lock);
@@ -376,66 +434,11 @@ struct JitBlock *StartJit(struct Jit *jit) {
     if (e && (jb = JITBLOCK_CONTAINER(e)) &&
         jb->index + kJitFit <= jb->blocksize) {
       dll_remove(&jit->blocks, &jb->elem);
-    } else if (!(jb = ReclaimJitBlock()) && (jb = NewJitBlock())) {
-      for (;;) {
-        jb->blocksize =
-            atomic_load_explicit(&jit->blocksize, memory_order_relaxed);
-        brk = atomic_fetch_add_explicit(&g_jit.brk, jb->blocksize,
-                                        memory_order_relaxed);
-        jb->addr = (u8 *)Mmap(
-            brk, jb->blocksize,
-            (prot = atomic_load_explicit(&g_jit.prot, memory_order_relaxed)),
-            MAP_JIT | MAP_PRIVATE | MAP_ANONYMOUS | MAP_DEMAND, -1, 0, "jit");
-        if (jb->addr != MAP_FAILED) {
-          distance = ABS(jb->addr - IMAGE_END);
-          if (distance <= kJitProximity - kJitLeeway) {
-            if (jb->addr != brk) {
-              atomic_store_explicit(&g_jit.brk, jb->addr + jb->blocksize,
-                                    memory_order_relaxed);
-            }
-            dll_init(&jb->elem);
-            STATISTIC(++jit_blocks);
-            break;
-          } else {
-            // we currently only support jitting when we're able to have
-            // the jit code adjacent to the blink image because our impl
-            // currently makes assumptions such as a call operation will
-            // have a fixed length (so it can be easily hopped over). if
-            // we're unable to acquire jit memory within proximity or if
-            // we run out of jit memory in proximity, then new jit paths
-            // won't be created anymore; and the program will still run.
-            LOGF("jit isn't supported in this environment because mmap()"
-                 " yielded an address %p that's too far away (%" PRIdPTR
-                 " bytes) from our program image (which ends near %p)",
-                 jb, distance, IMAGE_END);
-            unassert(!munmap(jb->addr, jb->blocksize));
-            DisableJit(jit);
-            FreeJitBlock(jb);
-            jb = 0;
-            break;
-          }
-        } else if (errno == MAP_DENIED || errno == EADDRNOTAVAIL) {
-          // our fixed noreplace mmap request probably overlapped some
-          // dso library, so let's try again with a different address.
-          continue;
-        } else if (prot & PROT_EXEC) {
-          // OpenBSD imposes a R^X invariant and raises ENOTSUP if RWX
-          // memory is requested. Since other OSes might exist, having
-          // this same requirement, and possible a different errno, we
-          // shall just clear the exec flag and try again.
-          JIT_LOGF("operating system doesn't permit rwx memory; your"
-                   " jit will have less predictable behavior");
-          atomic_store_explicit(&g_jit.prot, prot & ~PROT_EXEC,
-                                memory_order_relaxed);
-          continue;
-        } else {
-          LOGF("mmap() error at %p is %s", brk, strerror(errno));
-          DisableJit(jit);
-          FreeJitBlock(jb);
-          jb = 0;
-          break;
-        }
-      }
+    } else if ((jb = AcquireJitBlock(jit)) &&
+               !PrepareJitMemory(jb->addr, jb->blocksize)) {
+      ReleaseJitBlock(jb);
+      DisableJit(jit);
+      jb = 0;
     }
     UNLOCK(&jit->lock);
   } else {
@@ -609,9 +612,7 @@ bool RecordJitJump(struct JitBlock *jb, hook_t *hook, int addend) {
   if (!(jj = NewJitJump())) return false;
   jj->hook = hook;
   jj->code = (u8 *)GetJitPc(jb);
-  jj->tries = 0;
   jj->addend = addend;
-  dll_init(&jj->elem);
   dll_make_first(&jb->jumps, &jj->elem);
   STATISTIC(++jumps_recorded);
   return true;
@@ -636,7 +637,7 @@ bool RecordJitJump(struct JitBlock *jb, hook_t *hook, int addend) {
 bool FinishJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook) {
   bool ok;
   u8 *addr;
-  int blocksize;
+  long blocksize;
   struct JitStage *js;
   unassert(jb->index > jb->start);
   unassert(jb->start >= jb->committed);
@@ -652,7 +653,6 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook) {
         sys_icache_invalidate(addr, jb->index - jb->start);
         SetJitHook(jit, hook, addr);
       } else if ((js = NewJitStage())) {
-        dll_init(&js->elem);
         js->hook = hook;
         js->start = jb->start;
         js->index = jb->index;

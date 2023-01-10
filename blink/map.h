@@ -14,10 +14,6 @@
 #define MAP_NORESERVE 0
 #endif
 
-#ifndef MAP_JIT
-#define MAP_JIT 0
-#endif
-
 #if defined(__APPLE__) && defined(__aarch64__)
 #include <libkern/OSCacheControl.h>
 #else

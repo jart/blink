@@ -12,6 +12,8 @@
 #define kJitFit          1000
 #define kJitAlign        16
 #define kJitJumpTries    16
+#define kJitMemorySize   29360128
+#define kJitMemoryAlign  65536
 #define kJitMinBlockSize 262144
 
 #ifdef __x86_64__
@@ -127,8 +129,8 @@ struct JitBlock {
 
 struct Jit {
   long pagesize;
-  _Atomic(int) blocksize;
   _Atomic(bool) disabled;
+  _Atomic(long) blocksize;
   pthread_mutex_t lock;
   struct Dll *blocks;
   struct Dll *jumps;

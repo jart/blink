@@ -72,7 +72,7 @@ void FreeBig(void *p, size_t n) {
 
 void *AllocateBig(size_t n) {
   void *p;
-#if defined(__EMSCRIPTEN__)
+#if defined(__CYGWIN__) || defined(__EMSCRIPTEN__)
   p = Mmap(NULL, n, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0,
            "big");
   return p != MAP_FAILED ? p : 0;
