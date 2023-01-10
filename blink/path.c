@@ -515,7 +515,6 @@ bool CreatePath(P) {
       SetHook(m, pc, JitlessDispatch);
       res = true;
     } else {
-      LOGF("jit failed: %s", strerror(errno));
       res = false;
     }
   } else {

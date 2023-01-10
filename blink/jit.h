@@ -12,7 +12,7 @@
 #define kJitFit          1000
 #define kJitAlign        16
 #define kJitJumpTries    16
-#define kJitMemorySize   29360128
+#define kJitMemorySize   32505856
 #define kJitMemoryAlign  65536
 #define kJitMinBlockSize 262144
 
