@@ -1496,7 +1496,11 @@ static i64 SysLseek(struct Machine *m, i32 fildes, i64 offset, int whence) {
   if (!fd->dirstream) {
     rc = lseek(fd->fildes, offset, XlatWhence(whence));
   } else if (whence == SEEK_SET_LINUX) {
-    seekdir(fd->dirstream, offset);
+    if (!offset) {
+      rewinddir(fd->dirstream);
+    } else {
+      seekdir(fd->dirstream, offset);
+    }
     rc = 0;
   } else {
     rc = einval();

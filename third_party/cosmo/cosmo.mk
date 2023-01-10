@@ -137,7 +137,6 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/fmemopen_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/fmt_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/fputc_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/2/ftruncate_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/gamma_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/tgamma_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/gclongjmp_test.com.ok				\
@@ -193,9 +192,16 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/expm1_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/fgetln_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/getcontext_test.com.ok				\
-		o/$(MODE)/third_party/cosmo/2/getenv_test.com.ok
+		o/$(MODE)/third_party/cosmo/2/getenv_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/ftruncate_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@
+
+# pipe_test should check IsGenuineBlink() before checking IsFreebsd()
+# ftruncate_test needs to be updated to not make assumptions about block size
+COSMO_PROBLEMATIC_TESTS =									\
+		o/$(MODE)/third_party/cosmo/2/pipe_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/ftruncate_test.com.ok
 
 DARWIN_PROBLEMATIC_TESTS =									\
 		o/$(MODE)/third_party/cosmo/2/sched_getaffinity_test.com.ok
