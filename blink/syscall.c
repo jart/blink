@@ -1300,7 +1300,8 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
       continue;
     }
     type = UnXlatDt(ent->d_type);
-    reclen = 8 + 8 + 2 + 1 + len + 1;
+    reclen = ROUNDUP(8 + 8 + 2 + 1 + len + 1, 8);
+    memset(&rec, 0, sizeof(rec));
     Write64(rec.d_ino, 0);
     Write64(rec.d_off, off);
     Write16(rec.d_reclen, reclen);
