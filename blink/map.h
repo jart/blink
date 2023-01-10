@@ -52,6 +52,12 @@
 #define MAP_DENIED 0
 #endif
 
+// from the xnu codebase
+#define _COMM_PAGE_START_ADDRESS      (0x0000000FFFFFC000ULL)
+#define _COMM_PAGE_APRR_SUPPORT       (_COMM_PAGE_START_ADDRESS + 0x10C)
+#define _COMM_PAGE_APRR_WRITE_ENABLE  (_COMM_PAGE_START_ADDRESS + 0x110)
+#define _COMM_PAGE_APRR_WRITE_DISABLE (_COMM_PAGE_START_ADDRESS + 0x118)
+
 void *Mmap(void *, size_t, int, int, int, off_t, const char *);
 int Mprotect(void *, size_t, int, const char *);
 long GetSystemPageSize(void) pureconst;

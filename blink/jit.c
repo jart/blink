@@ -130,6 +130,70 @@ static struct JitGlobals {
     PROT_READ | PROT_WRITE | PROT_EXEC,
 };
 
+// apple forbids rwx memory on their new m1 macbooks and requires that
+// we use a non-posix api in order to have jit. the problem is the api
+// frequently flakes with "Trace/BPT trap: 5" errors. this fixes that.
+static void pthread_jit_write_protect_np_workaround(int enabled) {
+#if defined(__APPLE__) && defined(__aarch64__)
+  int count_start = 8192;
+  volatile int count = count_start;
+  uint64_t *addr, *other, val, val2, reread = -1;
+  addr = (uint64_t *)(!enabled ? _COMM_PAGE_APRR_WRITE_ENABLE
+                               : _COMM_PAGE_APRR_WRITE_DISABLE);
+  other = (uint64_t *)(enabled ? _COMM_PAGE_APRR_WRITE_ENABLE
+                               : _COMM_PAGE_APRR_WRITE_DISABLE);
+  switch (*(volatile uint8_t *)_COMM_PAGE_APRR_SUPPORT) {
+    case 1:
+      do {
+        val = *addr;
+        reread = -1;
+        asm volatile("msr S3_4_c15_c2_7, %0\n"
+                     "isb sy\n"
+                     : /* no outputs */
+                     : "r"(val)
+                     : "memory");
+        val2 = *addr;
+        asm volatile("mrs %0, S3_4_c15_c2_7\n"
+                     : "=r"(reread)
+                     : /* no inputs */
+                     : "memory");
+        if (val2 == reread) {
+          return;
+        }
+        usleep(10);
+      } while (count-- > 0);
+      break;
+    case 3:
+      do {
+        val = *addr;
+        reread = -1;
+        asm volatile("msr S3_6_c15_c1_5, %0\n"
+                     "isb sy\n"
+                     : /* no outputs */
+                     : "r"(val)
+                     : "memory");
+        val2 = *addr;
+        asm volatile("mrs %0, S3_6_c15_c1_5\n"
+                     : "=r"(reread)
+                     : /* no inputs */
+                     : "memory");
+        if (val2 == reread) {
+          return;
+        }
+        usleep(10);
+      } while (count-- > 0);
+      break;
+    default:
+      pthread_jit_write_protect_np_workaround(enabled);
+      return;
+  }
+  LOGF("failed to set jit write protection");
+  abort();
+#else
+  pthread_jit_write_protect_np_workaround(enabled);
+#endif
+}
+
 bool CanJitForImmediateEffect(void) {
   return atomic_load_explicit(&g_jit.prot, memory_order_relaxed) & PROT_EXEC;
 }
@@ -381,7 +445,7 @@ struct JitBlock *StartJit(struct Jit *jit) {
     unassert(!(jb->start & (kJitAlign - 1)));
     unassert(jb->start == jb->index);
     if (pthread_jit_write_protect_supported_np()) {
-      pthread_jit_write_protect_np(false);
+      pthread_jit_write_protect_np_workaround(false);
     }
   }
   return jb;
@@ -622,7 +686,7 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook) {
   ReinsertJitBlock_(jit, jb);
   UNLOCK(&jit->lock);
   if (pthread_jit_write_protect_supported_np()) {
-    pthread_jit_write_protect_np(true);
+    pthread_jit_write_protect_np_workaround(true);
   }
   return ok;
 }
@@ -639,7 +703,7 @@ int AbandonJit(struct Jit *jit, struct JitBlock *jb) {
   ReinsertJitBlock_(jit, jb);
   UNLOCK(&jit->lock);
   if (pthread_jit_write_protect_supported_np()) {
-    pthread_jit_write_protect_np(true);
+    pthread_jit_write_protect_np_workaround(true);
   }
   return 0;
 }
