@@ -232,9 +232,6 @@ const getreg64_f kGetReg64[] = {
 ////////////////////////////////////////////////////////////////////////////////
 // WRITING TO REGISTER FILE
 
-MICRO_OP void ZeroReg(struct Machine *m, long i) {
-  Put64(m->weg[i], 0);
-}
 MICRO_OP void ZeroRegFlags(struct Machine *m, long i) {
   Put64(m->weg[i], 0);
   m->flags &= ~(CF | ZF | SF | OF | AF | 0xFF000000u);
@@ -379,7 +376,6 @@ MICRO_OP static void PutReg64_14(u64 x, struct Machine *m) {
 MICRO_OP static void PutReg64_15(u64 x, struct Machine *m) {
   Put64(m->weg[15], x);
 }
-typedef void (*putreg64_f)(u64, struct Machine *);
 const putreg64_f kPutReg64[] = {
     PutReg64_0,   //
     PutReg64_1,   //
@@ -552,6 +548,58 @@ const aluop_f kJustBsu[8] = {
     (aluop_f)JustShr,  //
     (aluop_f)JustShl,  //
     (aluop_f)JustSar,  //
+};
+
+MICRO_OP i64 JustRolCl64(u64 x, struct Machine *m) {
+  return x << (m->cl & 63) | x >> ((64 - m->cl) & 63);
+}
+MICRO_OP i64 JustRorCl64(u64 x, struct Machine *m) {
+  return x >> (m->cl & 63) | x << ((64 - m->cl) & 63);
+}
+MICRO_OP i64 JustShlCl64(u64 x, struct Machine *m) {
+  return x << (m->cl & 63);
+}
+MICRO_OP i64 JustShrCl64(u64 x, struct Machine *m) {
+  return x >> (m->cl & 63);
+}
+MICRO_OP i64 JustSarCl64(u64 x, struct Machine *m) {
+  return (i64)x >> (m->cl & 63);
+}
+const aluop_f kJustBsuCl64[8] = {
+    (aluop_f)JustRolCl64,  //
+    (aluop_f)JustRorCl64,  //
+    0,                     //
+    0,                     //
+    (aluop_f)JustShlCl64,  //
+    (aluop_f)JustShrCl64,  //
+    (aluop_f)JustShlCl64,  //
+    (aluop_f)JustSarCl64,  //
+};
+
+MICRO_OP i32 JustRolCl32(u32 x, struct Machine *m) {
+  return x << (m->cl & 31) | x >> ((32 - m->cl) & 31);
+}
+MICRO_OP i32 JustRorCl32(u32 x, struct Machine *m) {
+  return x >> (m->cl & 31) | x << ((32 - m->cl) & 31);
+}
+MICRO_OP i32 JustShlCl32(u32 x, struct Machine *m) {
+  return x << (m->cl & 31);
+}
+MICRO_OP i32 JustShrCl32(u32 x, struct Machine *m) {
+  return x >> (m->cl & 31);
+}
+MICRO_OP i32 JustSarCl32(u32 x, struct Machine *m) {
+  return (i32)x >> (m->cl & 31);
+}
+const aluop_f kJustBsuCl32[8] = {
+    (aluop_f)JustRolCl32,  //
+    (aluop_f)JustRorCl32,  //
+    0,                     //
+    0,                     //
+    (aluop_f)JustShlCl32,  //
+    (aluop_f)JustShrCl32,  //
+    (aluop_f)JustShlCl32,  //
+    (aluop_f)JustSarCl32,  //
 };
 
 MICRO_OP i32 JustRol32(u32 x, int ign1, int ign2, u32 y) {
@@ -996,6 +1044,9 @@ const nexgen32e_f kConvert[] = {Convert16, Convert32, Convert64};
 ////////////////////////////////////////////////////////////////////////////////
 // ADDRESSING
 
+MICRO_OP static u64 Truncate32(u64 x) {
+  return (u32)x;
+}
 MICRO_OP static i64 Seg(struct Machine *m, u64 d, long s) {
   return d + m->seg[s];
 }
@@ -1485,21 +1536,35 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         if (!SibExists(rde) && IsRipRelative(rde)) {
           Jitter(A, "r0i", disp + m->ip);  // res0 = absolute
         } else if (!SibExists(rde)) {
-          Jitter(A,
-                 "a2i"  // arg2 = address base register index
-                 "a1i"  // arg1 = displacement
-                 "q"    // arg0 = machine
-                 "m",   // call micro-op
-                 RexbRm(rde), disp, Base);
+          if (disp) {
+            Jitter(A,
+                   "a2i"  // arg2 = address base register index
+                   "a1i"  // arg1 = displacement
+                   "q"    // arg0 = machine
+                   "m",   // call micro-op
+                   RexbRm(rde), disp, Base);
+          } else {
+            Jitter(A,
+                   "q"   // arg0 = machine
+                   "m",  // call micro-op
+                   kGetReg64[RexbRm(rde)]);
+          }
         } else if (!SibHasBase(rde) && !SibHasIndex(rde)) {
           Jitter(A, "r0i", disp);  // res0 = absolute
         } else if (SibHasBase(rde) && !SibHasIndex(rde)) {
-          Jitter(A,
-                 "a2i"  // arg2 = address base register index
-                 "a1i"  // arg1 = displacement
-                 "q"    // arg0 = machine
-                 "m",   // call micro-op
-                 RexbBase(rde), disp, Base);
+          if (disp) {
+            Jitter(A,
+                   "a2i"  // arg2 = address base register index
+                   "a1i"  // arg1 = displacement
+                   "q"    // arg0 = machine
+                   "m",   // call micro-op
+                   RexbBase(rde), disp, Base);
+          } else {
+            Jitter(A,
+                   "q"   // arg0 = machine
+                   "m",  // call micro-op
+                   kGetReg64[RexbBase(rde)]);
+          }
         } else if (!SibHasBase(rde) && SibHasIndex(rde)) {
           Jitter(A,
                  "a3i"  // arg3 = log2(address index scale)
@@ -1517,6 +1582,12 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "m",   // call micro-op
                  Rexx(rde) << 3 | SibIndex(rde), RexbBase(rde), disp,
                  kBaseIndex[SibScale(rde)]);
+        }
+        if (Eamode(rde) == XED_MODE_LEGACY) {
+          Jitter(A,
+                 "t"   // arg0 = res0
+                 "m",  // call micro-op
+                 Truncate32);
         }
         if (Sego(rde)) {
           Jitter(A,

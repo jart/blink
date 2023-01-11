@@ -118,13 +118,15 @@ void OpRorx(P) {
 #endif
   if (Rexw(rde)) {
     u64 x = Load64(GetModrmRegisterWordPointerRead8(A));
-    i = uimm0 & 63;
-    x = x >> i | x << (64 - i);
+    if ((i = uimm0 & 63)) {
+      x = x >> i | x << (64 - i);
+    }
     z = x;
   } else {
     u32 x = Load32(GetModrmRegisterWordPointerRead4(A));
-    i = uimm0 & 31;
-    x = x >> i | x << (32 - i);
+    if ((i = uimm0 & 31)) {
+      x = x >> i | x << (32 - i);
+    }
     z = x;
   }
   Put64(RegRexrReg(m, rde), z);

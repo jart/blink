@@ -458,12 +458,22 @@ static void OpMovZbIb(P) {
 static void OpMovZvqpIvqp(P) {
   WriteRegister(rde, RegRexbSrm(m, rde), uimm0);
   if (IsMakingPath(m)) {
-    Jitter(A,
-           "a2"   // push arg2
-           "i"    // <pop> = uimm0
-           "u"    // unpop
-           "wF",  // PutReg[force16+bit](RexbSrm, arg2)
-           uimm0);
+    if (!Rexw(rde) && !Osz(rde)) {
+      unassert(uimm0 == (u32)uimm0);
+      Jitter(A,
+             "a0"    // push arg2
+             "i"     // <pop> = uimm0
+             "u"     // unpop
+             "z3F",  // PutReg[kludge64bit](RexbSrm, arg2)
+             uimm0);
+    } else {
+      Jitter(A,
+             "a0"   // push arg2
+             "i"    // <pop> = uimm0
+             "u"    // unpop
+             "wF",  // PutReg[force16+bit](RexbSrm, arg2)
+             uimm0);
+    }
   }
 }
 
@@ -762,16 +772,36 @@ static void OpBsuwiCl(P) {
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   WriteRegisterOrMemory(rde, p, op(m, ReadMemory(rde, p), m->cl));
   if (IsMakingPath(m)) {
-    Jitter(A,
-           "B"      // res0 = GetRegOrMem(RexbRm)
-           "r0s1="  // sav1 = res0
-           "%cl"
-           "r0a2="  // arg2 = res0
-           "s1a1="  // arg1 = sav1
-           "q"      // arg0 = sav0 (machine)
-           "c"      // call function
-           "r0D",
-           op);
+    switch (ModrmReg(rde)) {
+      case BSU_ROL:
+      case BSU_ROR:
+      case BSU_SHL:
+      case BSU_SHR:
+      case BSU_SAL:
+      case BSU_SAR:
+        if (!GetNeededFlags(m, m->ip, GetFlagClobbers(rde))) {
+          if (Rexw(rde)) {
+            Jitter(A,
+                   "B"      // res0 = GetRegOrMem(RexbRm)
+                   "s0a1="  // arg1 = machine
+                   "t"      // arg0 = res0
+                   "m"      // call function
+                   "r0D",   // PutRegOrMem(RexbRm, res0)
+                   kJustBsuCl64[ModrmReg(rde)]);
+          } else if (!Osz(rde)) {
+            Jitter(A,
+                   "B"      // res0 = GetRegOrMem(RexbRm)
+                   "s0a1="  // arg1 = machine
+                   "t"      // arg0 = res0
+                   "m"      // call function
+                   "r0D",   // PutRegOrMem(RexbRm, res0)
+                   kJustBsuCl32[ModrmReg(rde)]);
+          }
+        }
+        break;
+      default:
+        break;
+    }
   }
 }
 

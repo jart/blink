@@ -18,6 +18,17 @@ _start:	mov	$10,%r15
 	cmp	$0xfff0000f,%ebx	# output value
 	.e
 
+	.test	"rorx $0 does nothing"
+	stc
+	mov	$0xf0000fff,%eax	# input value
+	mov	$0x31337133,%ebx	# random data
+	rorx	$0,%eax,%ebx
+	.c
+	cmp	$0xf0000fff,%eax	# unchanged
+	.e
+	cmp	$0xf0000fff,%ebx	# output value
+	.e
+
 	dec	%r15
 	jnz	"test jit too"
 "test succeeded":

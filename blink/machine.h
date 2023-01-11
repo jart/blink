@@ -454,6 +454,9 @@ void FastJmpAbs(u64, struct Machine *);
 void FastLeave(struct Machine *);
 void FastRet(struct Machine *);
 
+typedef void (*putreg64_f)(u64, struct Machine *);
+extern const putreg64_f kPutReg64[16];
+
 u64 Pick(u32, u64, u64);
 typedef u32 (*cc_f)(struct Machine *);
 extern const cc_f kConditionCode[16];
@@ -614,8 +617,6 @@ void LoadAluArgs(P);
 void LoadAluFlipArgs(P);
 i64 FastAnd8(struct Machine *, u64, u64);
 i64 FastSub8(struct Machine *, u64, u64);
-
-void ZeroReg(struct Machine *, long);
 void ZeroRegFlags(struct Machine *, long);
 
 i32 Imul32(i32, i32, struct Machine *);

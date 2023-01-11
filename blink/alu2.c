@@ -171,10 +171,18 @@ void OpAluw(P) {
         RegLog2(rde) >= 2 &&     //
         IsModrmRegister(rde) &&  //
         RexrReg(rde) == RexbRm(rde)) {
-      Jitter(A,
-             "a1i"  // arg1 = register index
-             "m",   // call micro-op
-             RexrReg(rde), flags ? ZeroRegFlags : ZeroReg);
+      if (flags) {
+        Jitter(A,
+               "a1i"  // arg1 = register index
+               "m",   // call micro-op
+               RexrReg(rde), ZeroRegFlags);
+      } else {
+        Jitter(A,
+               "s0a1="  // arg1 = machine
+               "a0i"    // arg0 = zero
+               "m",     // call micro-op
+               0, kPutReg64[RexrReg(rde)]);
+      }
     } else {
       LoadAluArgs(A);
       switch (flags) {
