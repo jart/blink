@@ -619,6 +619,7 @@ void BeginCod(struct Machine *, i64);
 void AdvanceIp(struct Machine *, long);
 void SkewIp(struct Machine *, long, long);
 
+void Op2f01(P);
 void OpTest(P);
 void OpAlui(P);
 void LoadAluArgs(P);

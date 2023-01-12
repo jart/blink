@@ -50,6 +50,8 @@ void OpCpuid(P) {
       dx |= 1 << 24;  // fxsave
       dx |= 1 << 25;  // sse
       dx |= 1 << 26;  // sse2
+      cx |= 0 << 19;  // sse4.1
+      cx |= 0 << 20;  // sse4.2
       break;
     case 7:
       switch (Get32(m->cx)) {
