@@ -253,6 +253,12 @@ int GetFlagClobbers(u64 rde) {
       return CF | ZF | SF | AF | PF;
     case 0x09D:  // popf
       return 0x00ffffff;
+    case 0x1b8:
+      if (Rep(rde) == 3) {
+        return CF | ZF | SF | OF | PF;  // popcnt
+      } else {
+        return 0;
+      }
     case 0x2f5:
       if (Rep(rde)) {
         return 0;  // pdep, pext
