@@ -7,6 +7,12 @@ _start:	mov	$10,%r15
 //	make -j8 o//blink o//test/asm/adx.elf
 //	o//blink/blinkenlights o//test/asm/adx.elf
 
+	mov	$7,%eax			# extended features
+	xor	%ecx,%ecx
+	cpuid
+	bt	$19,%ebx		# adx
+	jnc	"test not possible"
+
 	.test	"adcx"
 	mov	$0xF0000000,%eax
 	mov	$0x10000000,%ebx
@@ -19,4 +25,6 @@ _start:	mov	$10,%r15
 	dec	%r15
 	jnz	"test jit too"
 "test succeeded":
+	.exit
+"test not possible":
 	.exit

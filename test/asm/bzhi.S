@@ -7,6 +7,12 @@ _start:	mov	$10,%r15
 //	make -j8 o//blink o//test/asm/bzhi.elf
 //	o//blink/blinkenlights o//test/asm/bzhi.elf
 
+	mov	$7,%eax			# extended features
+	xor	%ecx,%ecx
+	cpuid
+	bt	$8,%ebx			# bmi2
+	jnc	"test not possible"
+
 	.test	"bzhi 1"
 	mov	$0xffffffff,%eax	# input value
 	mov	$0x31337133,%ebx	# random data
@@ -20,4 +26,6 @@ _start:	mov	$10,%r15
 	dec	%r15
 	jnz	"test jit too"
 "test succeeded":
+	.exit
+"test not possible":
 	.exit

@@ -7,6 +7,12 @@ _start:	mov	$10,%r15
 //	make -j8 o//blink o//test/asm/shx.elf
 //	o//blink/blinkenlights o//test/asm/shx.elf
 
+	mov	$7,%eax			# extended features
+	xor	%ecx,%ecx
+	cpuid
+	bt	$8,%ebx			# bmi2
+	jnc	"test not possible"
+
 	.test	"shlx 1"
 	stc
 	mov	$0xf0000fff,%eax	# input value
@@ -46,4 +52,6 @@ _start:	mov	$10,%r15
 	dec	%r15
 	jnz	"test jit too"
 "test succeeded":
+	.exit
+"test not possible":
 	.exit

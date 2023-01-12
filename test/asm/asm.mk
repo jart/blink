@@ -16,8 +16,7 @@ TEST_ASM_LINK =	$(VM)							\
 		-o $@
 
 o/$(MODE)/test/asm/%.com.ok:						\
-		o/$(MODE)/test/asm/%.com				\
-		o/$(MODE)/blink/blink
+		o/$(MODE)/test/asm/%.com
 	$<
 	@touch $@
 
@@ -36,6 +35,7 @@ $(TEST_ASM_OBJS): test/asm/asm.mk test/asm/mac.inc
 o/$(MODE)/test/asm/%.com:						\
 		o/$(MODE)/test/asm/%.elf				\
 		o/$(MODE)/blink/blink					\
+		o/third_party/qemu/qemu-x86_64				\
 		$(VM)
 	@mkdir -p $(@D)
 	@echo "#!/bin/sh" >$@
@@ -43,6 +43,8 @@ o/$(MODE)/test/asm/%.com:						\
 	@echo "$(VM) $< || exit" >>$@
 	@echo "echo testing o/$(MODE)/blink/blink $< >&2" >>$@
 	@echo "o/$(MODE)/blink/blink $< || exit" >>$@
+	@echo "echo testing o/third_party/qemu/qemu-x86_64 -cpu core2duo $< >&2" >>$@
+	@echo "o/third_party/qemu/qemu-x86_64 -cpu core2duo $< || exit" >>$@
 	@chmod +x $@
 
 .PHONY: o/$(MODE)/test/asm

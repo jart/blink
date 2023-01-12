@@ -77,6 +77,13 @@ _start:
 	cmp	%rdx,-9(%rbp)			# memory got swapped
 	.e
 
+"are we running in qemu":
+	mov	$0x40000001,%eax
+	cpuid
+	cmp	%ebx,qemu
+	je	"qemu cmpxchg 32 broken"
+	.exit
+
 	.test	"lock cmpxchg 32 taken"
 	mov	$0x7fffffff,%eax
 	add	$1,%eax
@@ -98,6 +105,8 @@ _start:
 	.e					# is NOT upper zerod
 	cmp	%r8,-8(%rbp)			# memory got swapped
 	.e
+
+"qemu cmpxchg 32 broken":
 
 	.test	"lock cmpxchg 32 not taken"
 	mov	$0x1234567812345678,%rax
@@ -224,3 +233,5 @@ _start:
 
 "test succeeded":
 	.exit
+
+qemu:	.ascii	"TCGTCGTCGTCG"
