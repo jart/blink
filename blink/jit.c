@@ -713,9 +713,10 @@ int AbandonJit(struct Jit *jit, struct JitBlock *jb) {
  *
  * @param align is byte alignment, which must be a two power
  */
-bool AlignJit(struct JitBlock *jb, int align) {
+bool AlignJit(struct JitBlock *jb, int align, int misalign) {
   unassert(align > 0 && IS2POW(align));
-  while (jb->index & (align - 1)) {
+  unassert(misalign >= 0 && misalign < align);
+  while ((jb->index & (align - 1)) != misalign) {
 #ifdef __x86_64__
     // Intel's Official Fat NOP Instructions
     //
@@ -731,7 +732,14 @@ bool AlignJit(struct JitBlock *jb, int align) {
     //
     // See Intel's Six Thousand Page Manual, Volume 2, Table 4-12:
     // "Recommended Multi-Byte Sequence of NOP Instruction".
-    switch (MIN(3, align - (jb->index & (align - 1)))) {
+    int skew, need;
+    skew = jb->index & (align - 1);
+    if (skew > misalign) {
+      need = align - skew + misalign;
+    } else {
+      need = misalign - skew;
+    }
+    switch (MIN(3, need)) {
       case 1:
         break;
       case 2:  // xchg %ax,%ax
@@ -754,6 +762,7 @@ bool AlignJit(struct JitBlock *jb, int align) {
       return false;
     }
   }
+  unassert((jb->index & (align - 1)) == misalign);
   return true;
 }
 
@@ -997,7 +1006,7 @@ STUB(bool, AppendJitMovReg, (struct JitBlock *jb, int dst, int src), 0)
 STUB(int, AbandonJit, (struct Jit *jit, struct JitBlock *jb), 0)
 STUB(int, FlushJit, (struct Jit *jit), 0)
 STUB(struct JitBlock *, StartJit, (struct Jit *jit), 0)
-STUB(bool, AlignJit, (struct JitBlock *jb, int align), 0)
+STUB(bool, AlignJit, (struct JitBlock *jb, int align, int misalign), 0)
 STUB(bool, FinishJit, (struct Jit *jit, struct JitBlock *jb, hook_t *hook), 0)
 STUB(bool, RecordJitJump, (struct JitBlock *jb, hook_t *hook, int addend), 0)
 STUB(bool, AppendJitJump, (struct JitBlock *jb, void *code), 0)

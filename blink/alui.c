@@ -172,7 +172,12 @@ static void Alui(P) {
 
 void OpAlui(P) {
   if (ModrmReg(rde) == ALU_CMP) {
-    AluiRo(A, kAlu[ALU_SUB], kAluFast[ALU_SUB]);
+    if (IsMakingPath(m) && FuseBranchCmp(A, true)) {
+      kAlu[ALU_SUB][RegLog2(rde)](
+          m, ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A)), uimm0);
+    } else {
+      AluiRo(A, kAlu[ALU_SUB], kAluFast[ALU_SUB]);
+    }
   } else {
     Alui(A);
   }

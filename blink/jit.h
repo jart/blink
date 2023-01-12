@@ -117,7 +117,7 @@ struct JitStage {
 
 struct JitBlock {
   u8 *addr;
-  long clog;
+  long cod;
   long start;
   long index;
   long committed;
@@ -149,7 +149,7 @@ bool AppendJit(struct JitBlock *, const void *, long);
 int AbandonJit(struct Jit *, struct JitBlock *);
 int FlushJit(struct Jit *);
 struct JitBlock *StartJit(struct Jit *);
-bool AlignJit(struct JitBlock *, int);
+bool AlignJit(struct JitBlock *, int, int);
 bool AppendJitRet(struct JitBlock *);
 bool AppendJitNop(struct JitBlock *);
 bool AppendJitTrap(struct JitBlock *);

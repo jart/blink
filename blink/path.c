@@ -37,13 +37,13 @@
 
 void (*AddPath_StartOp_Hook)(P);
 
-#ifdef CLOG
-static int g_clog;
+#if LOG_COD
+static int g_cod;
 static struct Dis g_dis;
 #endif
 
-static void StartPath(struct Machine *m) {
-  JIX_LOGF("%" PRIx64 " <path>", m->ip);
+static void StartPath(struct Machine *m, i64 pc) {
+  JIX_LOGF("%" PRIx64 ":%" PRIx64 " <path>", GetPc(m), pc);
 }
 
 static void DebugOp(struct Machine *m, i64 expected_ip) {
@@ -54,23 +54,29 @@ static void DebugOp(struct Machine *m, i64 expected_ip) {
   unassert(m->ip == expected_ip);
 }
 
-static void StartOp(struct Machine *m) {
-  JIX_LOGF("%" PRIx64 "   <op>", GetPc(m));
-  JIX_LOGF("%" PRIx64 "     %s", GetPc(m), DescribeOp(m, GetPc(m)));
+static void StartOp(struct Machine *m, i64 pc) {
+  JIX_LOGF("%" PRIx64 ":%" PRIx64 "   <op>", GetPc(m), pc);
+  JIX_LOGF("%" PRIx64 ":%" PRIx64 "     %s", GetPc(m), pc, DescribeOp(m, pc));
   unassert(!IsMakingPath(m));
 }
 
-static void EndOp(struct Machine *m) {
-  JIX_LOGF("%" PRIx64 "   </op>", GetPc(m));
+static void EndOp(struct Machine *m, i64 pc) {
+  JIX_LOGF("%" PRIx64 ":%" PRIx64 "   </op>", GetPc(m), pc);
   m->oplen = 0;
   if (m->stashaddr) {
     CommitStash(m);
   }
 }
 
-static void EndPath(struct Machine *m) {
-  JIX_LOGF("%" PRIx64 "   %s", GetPc(m), DescribeOp(m, GetPc(m)));
-  JIX_LOGF("%" PRIx64 " </path>", GetPc(m));
+static void EndPath(struct Machine *m, i64 pc) {
+  JIX_LOGF("%" PRIx64 ":%" PRIx64 "   %s", GetPc(m), GetPc(m),
+           DescribeOp(m, GetPc(m)));
+  JIX_LOGF("%" PRIx64 ":%" PRIx64 " </path>", GetPc(m), GetPc(m));
+}
+
+void FuseOp(struct Machine *m, i64 pc) {
+  JIX_LOGF("%" PRIx64 ":%" PRIx64 "     %s", GetPc(m), pc, DescribeOp(m, pc));
+  JIX_LOGF("%" PRIx64 ":%" PRIx64 "   </op>", GetPc(m), pc);
 }
 
 #ifdef HAVE_JIT
@@ -121,40 +127,40 @@ long GetPrologueSize(void) {
 #endif
 }
 
-void SetupClog(struct Machine *m) {
-#ifdef CLOG
+void SetupCod(struct Machine *m) {
+#if LOG_COD
   LoadDebugSymbols(&m->system->elf);
   DisLoadElf(&g_dis, &m->system->elf);
-  g_clog = open("/tmp/blink.s", O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-  g_clog = fcntl(g_clog, F_DUPFD_CLOEXEC, kMinBlinkFd);
+  g_cod = open("/tmp/blink.s", O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+  g_cod = fcntl(g_cod, F_DUPFD_CLOEXEC, kMinBlinkFd);
 #endif
 }
 
-void(LogClogOp)(struct Machine *m, const char *s) {
-#ifdef CLOG
-  WriteClog("/\t%s\n", s);
+void(LogCodOp)(struct Machine *m, const char *s) {
+#if LOG_COD
+  WriteCod("/\t%s\n", s);
 #endif
 }
 
-void WriteClog(const char *fmt, ...) {
-#ifdef CLOG
+void WriteCod(const char *fmt, ...) {
+#if LOG_COD
   int n;
   va_list va;
   char buf[256];
-  if (!g_clog) return;
+  if (!g_cod) return;
   va_start(va, fmt);
   n = vsnprintf(buf, sizeof(buf), fmt, va);
   va_end(va);
-  write(g_clog, buf, MIN(n, sizeof(buf)));
+  write(g_cod, buf, MIN(n, sizeof(buf)));
 #endif
 }
 
-static void BeginClog(struct Machine *m, i64 pc) {
-#ifdef CLOG
+void BeginCod(struct Machine *m, i64 pc) {
+#if LOG_COD
   char b[256];
   char spec[64];
   int i, o = 0, n = sizeof(b);
-  if (!g_clog) return;
+  if (!g_cod) return;
   DISABLE_HIGHLIGHT_BEGIN;
   APPEND("/\t");
   unassert(!GetInstruction(m, pc, g_dis.xedd));
@@ -164,29 +170,30 @@ static void BeginClog(struct Machine *m, i64 pc) {
   for (i = 0; i < g_dis.xedd->length; ++i) {
     APPEND(" %02x", g_dis.xedd->bytes[i]);
   }
+  APPEND(" @ %" PRIx64, m->ip);
   APPEND("\n");
-  write(g_clog, b, MIN(o, n));
+  write(g_cod, b, MIN(o, n));
   DISABLE_HIGHLIGHT_END;
 #endif
 }
 
-void FlushClog(struct JitBlock *jb) {
-#ifdef CLOG
+void FlushCod(struct JitBlock *jb) {
+#if LOG_COD
   char b[256];
   char spec[64];
-  if (!g_clog) return;
+  if (!g_cod) return;
   if (jb->index == jb->blocksize + 1) {
-    WriteClog("/\tOOM!\n");
-    jb->clog = jb->index;
+    WriteCod("/\tOOM!\n");
+    jb->cod = jb->index;
     return;
   }
   DISABLE_HIGHLIGHT_BEGIN;
-  for (; jb->clog < jb->index; jb->clog += g_dis.xedd->length) {
-    unassert(!DecodeInstruction(g_dis.xedd, jb->addr + jb->clog,
-                                jb->index - jb->clog, XED_MODE_LONG));
-    g_dis.addr = (intptr_t)jb->addr + jb->clog;
+  for (; jb->cod < jb->index; jb->cod += g_dis.xedd->length) {
+    unassert(!DecodeInstruction(g_dis.xedd, jb->addr + jb->cod,
+                                jb->index - jb->cod, XED_MODE_LONG));
+    g_dis.addr = (intptr_t)jb->addr + jb->cod;
     DisInst(&g_dis, b, DisSpec(g_dis.xedd, spec));
-    WriteClog("\t%s\n", b);
+    WriteCod("\t%s\n", b);
   }
   DISABLE_HIGHLIGHT_END;
 #endif
@@ -474,7 +481,7 @@ static void InitPaths(struct System *s) {
   struct JitBlock *jb;
   if (!s->ender) {
     unassert((jb = StartJit(&s->jit)));
-    WriteClog("\nJit_%" PRIx64 ":\n", jb->addr + jb->index);
+    WriteCod("\nJit_%" PRIx64 ":\n", jb->addr + jb->index);
     s->ender = GetJitPc(jb);
 #if LOG_JIX
     AppendJitMovReg(jb, kJitArg0, kJitSav0);
@@ -482,7 +489,7 @@ static void InitPaths(struct System *s) {
 #endif
     AppendJit(jb, kLeave, sizeof(kLeave));
     AppendJitRet(jb);
-    FlushClog(jb);
+    FlushCod(jb);
     unassert(FinishJit(&s->jit, jb, 0));
   }
 #endif
@@ -494,22 +501,27 @@ bool CreatePath(P) {
   i64 pc, jpc;
   unassert(!IsMakingPath(m));
   InitPaths(m->system);
+  if (m->path.skip > 0) {
+    --m->path.skip;
+    return false;
+  }
   if ((pc = GetPc(m))) {
     if ((m->path.jb = StartJit(&m->system->jit))) {
       JIT_LOGF("starting new path jit_pc:%" PRIxPTR " at pc:%" PRIx64,
                GetJitPc(m->path.jb), pc);
-      FlushClog(m->path.jb);
+      FlushCod(m->path.jb);
       jpc = (intptr_t)m->path.jb->addr + m->path.jb->index;
       AppendJit(m->path.jb, kEnter, sizeof(kEnter));
 #if LOG_JIX
       Jitter(A,
-             "q"   // arg0 = machine
-             "c"   // call function (StartPath)
-             "q",  // arg0 = machine
-             StartPath);
+             "a1i"  // arg1 = ip
+             "q"    // arg0 = machine
+             "c"    // call function (StartPath)
+             "q",   // arg0 = machine
+             GetPc(m), StartPath);
 #endif
-      WriteClog("\nJit_%" PRIx64 "_%" PRIx64 ":\n", pc, jpc);
-      FlushClog(m->path.jb);
+      WriteCod("\nJit_%" PRIx64 "_%" PRIx64 ":\n", pc, jpc);
+      FlushCod(m->path.jb);
       m->path.start = pc;
       m->path.elements = 0;
       SetHook(m, pc, JitlessDispatch);
@@ -535,7 +547,7 @@ void CompletePath(P) {
 
 void FinishPath(struct Machine *m) {
   unassert(IsMakingPath(m));
-  FlushClog(m->path.jb);
+  FlushCod(m->path.jb);
   STATISTIC(path_longest_bytes =
                 MAX(path_longest_bytes, m->path.jb->index - m->path.jb->start));
   STATISTIC(path_longest = MAX(path_longest, m->path.elements));
@@ -553,7 +565,7 @@ void FinishPath(struct Machine *m) {
 }
 
 void AbandonPath(struct Machine *m) {
-  WriteClog("/\tABANDONED\n");
+  WriteCod("/\tABANDONED\n");
   unassert(IsMakingPath(m));
   STATISTIC(++path_abandoned);
   JIT_LOGF("abandoning path jit_pc:%" PRIxPTR " which started at pc:%" PRIx64,
@@ -578,7 +590,10 @@ void FlushSkew(P) {
 }
 
 void AddPath_StartOp(P) {
-  BeginClog(m, GetPc(m));
+#if LOG_CPU
+  Jitter(A, "qmq", LogCpu);
+#endif
+  BeginCod(m, GetPc(m));
 #ifndef NDEBUG
   if (FLAG_statistics) {
     Jitter(A,
@@ -599,10 +614,10 @@ void AddPath_StartOp(P) {
 #endif
 #if LOG_JIX
   Jitter(A,
-         "a1i"  // arg1 = Oplength(rde)
+         "a1i"  // arg1 = pc
          "q"    // arg0 = machine
          "c",   // call function (StartOp)
-         Oplength(rde), StartOp);
+         m->ip, StartOp);
 #endif
   if (MustUpdateIp(A)) {
     if (!m->path.skew) {
@@ -632,7 +647,7 @@ void AddPath_StartOp(P) {
 void AddPath_EndOp(P) {
   _Static_assert(offsetof(struct Machine, stashaddr) < 128, "");
   if (m->reserving) {
-    WriteClog("/\tflush reserve\n");
+    WriteCod("/\tflush reserve\n");
   }
 #if !LOG_JIX && defined(__x86_64__)
   if (m->reserving) {
@@ -658,11 +673,12 @@ void AddPath_EndOp(P) {
   }
 #else
   Jitter(A,
-         "q"   // arg0 = machine
-         "c",  // call function (EndOp)
-         EndOp);
+         "a1i"  // arg1 = pc
+         "q"    // arg0 = machine
+         "c",   // call function (EndOp)
+         m->ip, EndOp);
 #endif
-  FlushClog(m->path.jb);
+  FlushCod(m->path.jb);
 }
 
 bool AddPath(P) {

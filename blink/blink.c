@@ -100,7 +100,7 @@ static int Exec(char *prog, char **argv, char **envp) {
   g_machine->system->nolinear = FLAG_nolinear;
   if (!old) {
     LoadProgram(g_machine, prog, argv, envp);
-    SetupClog(g_machine);
+    SetupCod(g_machine);
     for (i = 0; i < 10; ++i) {
       AddStdFd(&g_machine->system->fds, i);
     }

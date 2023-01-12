@@ -18,6 +18,8 @@
 #define LOG_THR 0  // multi-threaded operation logs
 #define LOG_ELF 0  // elf executable loader logging
 #define LOG_SPX 0  // speculative execution logging
+#define LOG_CPU 0  // produce txt file of registers
+#define LOG_COD 0  // produce asm file of jit codes
 
 #if LOG_ENABLED
 #define LOGF(...) Log(__FILE__, __LINE__, __VA_ARGS__)

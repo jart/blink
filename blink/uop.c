@@ -54,16 +54,19 @@ MICRO_OP void CountOp(long *instructions_jitted_ptr) {
 // PROGRAM COUNTER
 
 MICRO_OP void AddIp(struct Machine *m, long oplen) {
+  // LOGF("AddIp %" PRIx64 " %ld", m->ip, oplen);
   m->oplen = oplen;
   m->ip += oplen;
 }
 
 MICRO_OP void SkewIp(struct Machine *m, long oplen, long delta) {
+  // LOGF("SkewIp %" PRIx64 " %ld", m->ip, delta);
   m->oplen = oplen;
   m->ip += delta;
 }
 
 MICRO_OP void AdvanceIp(struct Machine *m, long oplen) {
+  // LOGF("AdvanceIp %" PRIx64 " %ld", m->ip, oplen);
   m->ip += oplen;
 }
 
@@ -1342,7 +1345,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                            unsigned depth) {
   unsigned c, log2sz;
   log2sz = RegLog2(rde);
-  LogClogOp(m, fmt);
+  LogCodOp(m, fmt);
   while ((c = fmt[k++])) {
     switch (c) {
 

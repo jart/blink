@@ -15,6 +15,7 @@
 #include "blink/fds.h"
 #include "blink/jit.h"
 #include "blink/linux.h"
+#include "blink/log.h"
 #include "blink/tsan.h"
 #include "blink/x86.h"
 
@@ -250,6 +251,7 @@ struct System {
 };
 
 struct JitPath {
+  int skip;
   int skew;
   i64 start;
   int elements;
@@ -601,13 +603,19 @@ extern void (*AddPath_StartOp_Hook)(P);
 bool AddPath(P);
 void FlushSkew(P);
 bool CreatePath(P);
+void Connect(P, u64);
 void CompletePath(P);
 void AddPath_EndOp(P);
+bool FuseBranchTest(P);
 void AddPath_StartOp(P);
 long GetPrologueSize(void);
+bool FuseBranchCmp(P, bool);
+i64 GetIp(struct Machine *);
 void FinishPath(struct Machine *);
+void FuseOp(struct Machine *, i64);
 void AbandonPath(struct Machine *);
 void AddIp(struct Machine *, long);
+void BeginCod(struct Machine *, i64);
 void AdvanceIp(struct Machine *, long);
 void SkewIp(struct Machine *, long, long);
 
@@ -638,14 +646,13 @@ void Int64ToDouble(i64, struct Machine *, long);
 void Int32ToDouble(i32, struct Machine *, long);
 void MovsdWpsVpsOp(u8 *, struct Machine *, long);
 
-// #define CLOG
-void SetupClog(struct Machine *);
-void WriteClog(const char *, ...);
-void FlushClog(struct JitBlock *);
-#ifdef CLOG
-void LogClogOp(struct Machine *, const char *);
+void SetupCod(struct Machine *);
+void WriteCod(const char *, ...);
+void FlushCod(struct JitBlock *);
+#if LOG_COD
+void LogCodOp(struct Machine *, const char *);
 #else
-#define LogClogOp(m, s) (void)0
+#define LogCodOp(m, s) (void)0
 #endif
 
 #endif /* BLINK_MACHINE_H_ */

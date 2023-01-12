@@ -571,7 +571,7 @@ static void OpMovslGdqpEd(P) {
   }
 }
 
-static void Connect(P, u64 pc) {
+void Connect(P, u64 pc) {
   void *jump;
   nexgen32e_f func;
   if (HasHook(m, pc)) {
@@ -591,10 +591,9 @@ static void Connect(P, u64 pc) {
 }
 
 static void AluRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
-  aluop_f op = ops[RegLog2(rde)];
-  op(m, ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A)),
-     ReadRegisterBW(rde,
-                    RegLog2(rde) ? RegRexrReg(m, rde) : ByteRexrReg(m, rde)));
+  ops[RegLog2(rde)](m, ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A)),
+                    ReadRegisterBW(rde, RegLog2(rde) ? RegRexrReg(m, rde)
+                                                     : ByteRexrReg(m, rde)));
   if (IsMakingPath(m)) {
     STATISTIC(++alu_ops);
     LoadAluArgs(A);
@@ -613,18 +612,32 @@ static void AluRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
         Jitter(A,
                "q"   // arg0 = sav0 (machine)
                "c",  // call function
-               op);
+               ops[RegLog2(rde)]);
         break;
     }
   }
 }
 
-static void OpAluCmp(P) {
-  AluRo(A, kAlu[ALU_SUB], kAluFast[ALU_SUB]);
+static void OpAluTest(P) {
+  if (IsMakingPath(m) && FuseBranchTest(A)) {
+    kAlu[ALU_AND][RegLog2(rde)](
+        m, ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A)),
+        ReadRegisterBW(
+            rde, RegLog2(rde) ? RegRexrReg(m, rde) : ByteRexrReg(m, rde)));
+    return;
+  }
+  AluRo(A, kAlu[ALU_AND], kAluFast[ALU_AND]);
 }
 
-static void OpAluTest(P) {
-  AluRo(A, kAlu[ALU_AND], kAluFast[ALU_AND]);
+static void OpAluCmp(P) {
+  if (IsMakingPath(m) && FuseBranchCmp(A, false)) {
+    kAlu[ALU_SUB][RegLog2(rde)](
+        m, ReadRegisterOrMemoryBW(rde, GetModrmReadBW(A)),
+        ReadRegisterBW(
+            rde, RegLog2(rde) ? RegRexrReg(m, rde) : ByteRexrReg(m, rde)));
+    return;
+  }
+  AluRo(A, kAlu[ALU_SUB], kAluFast[ALU_SUB]);
 }
 
 static void OpAluFlip(P) {
@@ -930,7 +943,7 @@ void Terminate(P, void uop(struct Machine *, u64)) {
            "m"    // call micro-op
            "q",   // arg0 = sav0 (machine)
            disp, uop);
-    AlignJit(m->path.jb, 4);
+    AlignJit(m->path.jb, 4, 0);
     Connect(A, m->ip);
     FinishPath(m);
   }
@@ -956,7 +969,7 @@ static void OpJcc(P) {
     FlushSkew(A);
 #ifdef __x86_64__
     Jitter(A, "mq", cc);
-    AlignJit(m->path.jb, 4);
+    AlignJit(m->path.jb, 4, 0);
     u8 code[] = {
         0x85, 0300 | kJitRes0 << 3 | kJitRes0,  // test %eax,%eax
         0x75, 5,                                // jnz  +5
@@ -968,7 +981,7 @@ static void OpJcc(P) {
            "q",     // arg0 = machine
            cc);
     u32 code[] = {
-        0xb5000000 | 2 << 5 | kJitArg2,  // cbnz x2,#8
+        0xb5000000 | (8 / 4) << 5 | kJitArg2,  // cbnz x2,#8
     };
 #endif
     AppendJit(m->path.jb, code, sizeof(code));
@@ -978,7 +991,7 @@ static void OpJcc(P) {
            "m"    // call micro-op
            "q",   // arg0 = machine
            disp, FastJmp);
-    AlignJit(m->path.jb, 4);
+    AlignJit(m->path.jb, 4, 0);
     Connect(A, m->ip + disp);
     FinishPath(m);
   }
@@ -2254,6 +2267,9 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
 }
 
 void ExecuteInstruction(struct Machine *m) {
+#if LOG_CPU
+  LogCpu(m);
+#endif
 #ifdef HAVE_JIT
   nexgen32e_f func;
   if (HasHook(m, m->ip)) {
@@ -2274,10 +2290,10 @@ void ExecuteInstruction(struct Machine *m) {
 
 static void CheckForSignals(struct Machine *m) {
   int sig;
-  if (VERY_UNLIKELY(atomic_load_explicit(&m->killed, memory_order_relaxed))) {
+  if (atomic_load_explicit(&m->killed, memory_order_relaxed)) {
     SysExit(m, 0);
   }
-  if (VERY_UNLIKELY(m->signals) &&   //
+  if (m->signals &&                  //
       (m->signals & ~m->sigmask) &&  //
       (sig = ConsumeSignal(m))) {
     TerminateSignal(m, sig);
