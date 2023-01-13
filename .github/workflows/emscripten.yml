@@ -2,17 +2,27 @@ name: Build with emscripten
 
 on:
   push:
-    branches: [ emscripten ]
+    branches:
+      - "master"
+      - "flake"
+      - "ga"
+  pull_request:
+    branches:
+      - "master"
+
+  # run workflow manually from the Actions tab
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          submodules: 'recursive'
 
       - name: Install cached emscripten
         id: cache
@@ -24,7 +34,7 @@ jobs:
       - name: Install emscripten
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
-          curl -L https://github.com/emscripten-core/emsdk/archive/HEAD.tar.gz | tar xz
+          curl -L https://github.com/emscripten-core/emsdk/archive/refs/tags/3.1.30.tar.gz | tar xz
           mv emsdk-* emsdk
           ./emsdk/emsdk install latest
           ./emsdk/emsdk activate latest
@@ -33,14 +43,24 @@ jobs:
         run: |
           . ./emsdk/emsdk_env.sh
           emmake make -j$(nproc)
-          emcc -O2 o//blink/blink.o o//blink/blink.a -lm -pthread -lrt -o o//blink/blink.html -s INVOKE_RUN=0 -s EXPORTED_RUNTIME_METHODS=callMain -s INITIAL_MEMORY=1073741824 -s EXIT_RUNTIME=1 --pre-js pre.js
+          mkdir o//blink/blink-web
+          cp third_party/coi-serviceworker/coi-serviceworker.js o//blink/blink-web/coi-serviceworker.js
+          emcc -O2 o//blink/blink.o o//blink/blink.a -lm -pthread -lrt -o o//blink/blink-web/blink.html \
+            --shell-file blink/blink-shell.html \
+            -s INVOKE_RUN=0 \
+            -s INITIAL_MEMORY=1073741824 \
+            -s EXPORTED_RUNTIME_METHODS=callMain \
+            -fno-builtin-exit \
+            -sASSERTIONS
 
-      - name: Upload zip
+      - name: Deploy sample to GitHub pages
+        uses: JamesIves/github-pages-deploy-action@ba1486788b0490a235422264426c45848eac35c6
+        if: ${{ github.ref == 'refs/heads/master' }}
+        with:
+          folder: o//blink/blink-web
+
+      - name: Upload blink artifact
         uses: actions/upload-artifact@v3
         with:
-            name: blink-emscripten
-            path: |
-              o/blink/*.html
-              o/blink/*.js
-              o/blink/*.wasm
-            if-no-files-found: error
+          name: blink-web
+          path: o//blink/blink-web
