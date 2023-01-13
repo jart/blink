@@ -32,9 +32,10 @@ int XlatSocketType(int);
 int XlatWait(int);
 int XlatWhence(int);
 
-int XlatSockaddrToHost(struct sockaddr_in *, const struct sockaddr_in_linux *);
-void XlatSockaddrToLinux(struct sockaddr_in_linux *,
-                         const struct sockaddr_in *);
+int XlatSockaddrToHost(struct sockaddr_storage *, const struct sockaddr_linux *,
+                       u32);
+int XlatSockaddrToLinux(struct sockaddr_storage_linux *,
+                        const struct sockaddr *, socklen_t);
 void XlatStatToLinux(struct stat_linux *, const struct stat *);
 void XlatRusageToLinux(struct rusage_linux *, const struct rusage *);
 void XlatItimervalToLinux(struct itimerval_linux *, const struct itimerval *);

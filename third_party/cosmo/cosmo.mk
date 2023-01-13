@@ -120,6 +120,8 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/test_suite_mpi.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/test_suite_md.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/crc32_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/crc32c_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/crc32z_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/lock2_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/lock_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/sigaction_test.com.ok				\
@@ -185,7 +187,6 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/cosh_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/complex_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/countbits_test.com.ok				\
-		o/$(MODE)/third_party/cosmo/2/crc32c_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/cv_wait_example_test.com.ok			\
 		o/$(MODE)/third_party/cosmo/2/daemon_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/dtoa_test.com.ok					\
@@ -193,7 +194,9 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/fgetln_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/getcontext_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/getenv_test.com.ok				\
-		o/$(MODE)/third_party/cosmo/3/ftruncate_test.com.ok
+		o/$(MODE)/third_party/cosmo/3/ftruncate_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/socket_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/3/unix_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@
 

@@ -22,6 +22,7 @@
 #include <netinet/tcp.h>
 #include <netinet/udp.h>
 #include <signal.h>
+#include <stddef.h>
 #include <string.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
@@ -29,6 +30,7 @@
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -39,6 +41,7 @@
 #include "blink/errno.h"
 #include "blink/linux.h"
 #include "blink/log.h"
+#include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/sigwinch.h"
 #include "blink/xlat.h"
@@ -318,6 +321,7 @@ int XlatSocketFamily(int x) {
     XLAT(AF_UNSPEC_LINUX, AF_UNSPEC);
     XLAT(AF_UNIX_LINUX, AF_UNIX);
     XLAT(AF_INET_LINUX, AF_INET);
+    XLAT(AF_INET6_LINUX, AF_INET6);
     default:
       LOGF("%s %d not supported yet", "socket family", x);
       errno = ENOPROTOOPT;
@@ -329,6 +333,7 @@ int UnXlatSocketFamily(int x) {
   if (x == AF_UNSPEC) return AF_UNSPEC_LINUX;
   if (x == AF_UNIX) return AF_UNIX_LINUX;
   if (x == AF_INET) return AF_INET_LINUX;
+  if (x == AF_INET6) return AF_INET6_LINUX;
   LOGF("don't know how to translate %s %d", "socket family", x);
   return x;
 }
@@ -638,23 +643,136 @@ int UnXlatOpenFlags(int x) {
   return res;
 }
 
-int XlatSockaddrToHost(struct sockaddr_in *dst,
-                       const struct sockaddr_in_linux *src) {
-  int family;
-  if ((family = XlatSocketFamily(Read16(src->sin_family))) == -1) return -1;
-  memset(dst, 0, sizeof(*dst));
-  dst->sin_family = family;
-  dst->sin_port = src->sin_port;
-  dst->sin_addr.s_addr = src->sin_addr;
-  return 0;
+int XlatSockaddrToHost(struct sockaddr_storage *dst,
+                       const struct sockaddr_linux *src, u32 srclen) {
+  if (srclen < 2) {
+    LOGF("sockaddr size too small for %s", "family");
+    return einval();
+  }
+  switch (Read16(src->sa_family)) {
+    case AF_UNIX_LINUX: {
+      size_t n;
+      struct sockaddr_un *dst_un;
+      const struct sockaddr_un_linux *src_un;
+      if (srclen < offsetof(struct sockaddr_un_linux, sun_path)) {
+        LOGF("sockaddr size too small for %s", "sockaddr_un_linux");
+        return einval();
+      }
+      dst_un = (struct sockaddr_un *)dst;
+      src_un = (const struct sockaddr_un_linux *)src;
+      n = strnlen(src_un->sun_path,
+                  MIN(srclen - offsetof(struct sockaddr_un_linux, sun_path),
+                      sizeof(src_un->sun_path)));
+      if (n >= sizeof(dst_un->sun_path)) {
+        LOGF("sockaddr_un path too long for host");
+        return einval();
+      }
+      memset(dst_un, 0, sizeof(*dst_un));
+      dst_un->sun_family = AF_UNIX;
+      if (n) memcpy(dst_un->sun_path, src_un->sun_path, n);
+      dst_un->sun_path[n] = 0;
+      return sizeof(struct sockaddr_un);
+    }
+    case AF_INET_LINUX: {
+      struct sockaddr_in *dst_in;
+      const struct sockaddr_in_linux *src_in;
+      if (srclen < sizeof(struct sockaddr_in_linux)) {
+        LOGF("sockaddr size too small for %s", "sockaddr_in_linux");
+        return einval();
+      }
+      dst_in = (struct sockaddr_in *)dst;
+      src_in = (const struct sockaddr_in_linux *)src;
+      memset(dst_in, 0, sizeof(*dst_in));
+      dst_in->sin_family = AF_INET;
+      dst_in->sin_port = src_in->sin_port;
+      dst_in->sin_addr.s_addr = src_in->sin_addr;
+      return sizeof(struct sockaddr_in);
+    }
+    case AF_INET6_LINUX: {
+      struct sockaddr_in6 *dst_in;
+      const struct sockaddr_in6_linux *src_in;
+      _Static_assert(sizeof(dst_in->sin6_addr) == 16, "");
+      _Static_assert(sizeof(src_in->sin6_addr) == 16, "");
+      if (srclen < sizeof(struct sockaddr_in6_linux)) {
+        LOGF("sockaddr size too small for %s", "sockaddr_in6_linux");
+        return einval();
+      }
+      dst_in = (struct sockaddr_in6 *)dst;
+      src_in = (const struct sockaddr_in6_linux *)src;
+      memset(dst_in, 0, sizeof(*dst_in));
+      dst_in->sin6_family = AF_INET6;
+      dst_in->sin6_port = src_in->sin6_port;
+      memcpy(&dst_in->sin6_addr, src_in->sin6_addr, 16);
+      return sizeof(struct sockaddr_in6);
+    }
+    default:
+      LOGF("%s %d not supported yet", "socket family", Read16(src->sa_family));
+      errno = ENOPROTOOPT;
+      return -1;
+  }
 }
 
-void XlatSockaddrToLinux(struct sockaddr_in_linux *dst,
-                         const struct sockaddr_in *src) {
-  memset(dst, 0, sizeof(*dst));
-  Write16(dst->sin_family, UnXlatSocketFamily(src->sin_family));
-  dst->sin_port = src->sin_port;
-  dst->sin_addr = src->sin_addr.s_addr;
+int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
+                        const struct sockaddr *src, socklen_t srclen) {
+  if (srclen < 2) {
+    LOGF("sockaddr size too small for %s", "family");
+    return einval();
+  }
+  if (src->sa_family == AF_UNIX) {
+    size_t n;
+    struct sockaddr_un_linux *dst_un;
+    const struct sockaddr_un *src_un;
+    if (srclen < offsetof(struct sockaddr_un, sun_path)) {
+      LOGF("sockaddr size too small for %s", "sockaddr_un");
+      return einval();
+    }
+    dst_un = (struct sockaddr_un_linux *)dst;
+    src_un = (const struct sockaddr_un *)src;
+    n = strnlen(src_un->sun_path,
+                MIN(srclen - offsetof(struct sockaddr_un, sun_path),
+                    sizeof(src_un->sun_path)));
+    if (n >= sizeof(dst_un->sun_path)) {
+      LOGF("sockaddr_un path too long for linux");
+      return einval();
+    }
+    memset(dst_un, 0, sizeof(*dst_un));
+    Write16(dst_un->sun_family, AF_UNIX_LINUX);
+    if (n) memcpy(dst_un->sun_path, src_un->sun_path, n);
+    dst_un->sun_path[n] = 0;
+    return offsetof(struct sockaddr_un, sun_path) + n + 1;
+  } else if (src->sa_family == AF_INET) {
+    struct sockaddr_in_linux *dst_in;
+    const struct sockaddr_in *src_in;
+    if (srclen < sizeof(struct sockaddr_in)) {
+      LOGF("sockaddr size too small for %s", "sockaddr_in");
+      return einval();
+    }
+    dst_in = (struct sockaddr_in_linux *)dst;
+    src_in = (const struct sockaddr_in *)src;
+    memset(dst_in, 0, sizeof(*dst_in));
+    Write16(dst_in->sin_family, AF_INET_LINUX);
+    dst_in->sin_port = src_in->sin_port;
+    dst_in->sin_addr = src_in->sin_addr.s_addr;
+    return sizeof(struct sockaddr_in_linux);
+  } else if (src->sa_family == AF_INET6) {
+    struct sockaddr_in6_linux *dst_in;
+    const struct sockaddr_in6 *src_in;
+    if (srclen < sizeof(struct sockaddr_in6)) {
+      LOGF("sockaddr size too small for %s", "sockaddr_in6");
+      return einval();
+    }
+    dst_in = (struct sockaddr_in6_linux *)dst;
+    src_in = (const struct sockaddr_in6 *)src;
+    memset(dst_in, 0, sizeof(*dst_in));
+    Write16(dst_in->sin6_family, AF_INET6_LINUX);
+    dst_in->sin6_port = src_in->sin6_port;
+    memcpy(dst_in->sin6_addr, &src_in->sin6_addr, 16);
+    return sizeof(struct sockaddr_in6_linux);
+  } else {
+    LOGF("%s %d not supported yet", "socket family", src->sa_family);
+    errno = ENOPROTOOPT;
+    return -1;
+  }
 }
 
 void XlatStatToLinux(struct stat_linux *dst, const struct stat *src) {

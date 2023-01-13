@@ -110,6 +110,7 @@
 #define O_NDELAY_LINUX    0x000800
 #define O_DIRECT_LINUX    0x004000
 #define O_DIRECTORY_LINUX 0x010000
+#define __O_TMPFILE_LINUX 0x400000
 #define O_NOFOLLOW_LINUX  0x020000
 #define O_CLOEXEC_LINUX   0x080000
 #define O_NOCTTY_LINUX    0x000100
@@ -264,6 +265,7 @@
 #define AF_UNSPEC_LINUX 0
 #define AF_UNIX_LINUX   1
 #define AF_INET_LINUX   2
+#define AF_INET6_LINUX  10
 
 #define SOL_SOCKET_LINUX 1
 #define SOL_TCP_LINUX    6
@@ -401,6 +403,10 @@ struct termios_linux {
   u8 c_ospeed[4];
 };
 
+struct sockaddr_linux {
+  u8 sa_family[2];
+};
+
 struct sockaddr_un_linux {
   u8 sun_family[2];
   char sun_path[108];
@@ -415,10 +421,17 @@ struct sockaddr_in_linux {
 
 struct sockaddr_in6_linux {
   u8 sin6_family[2];
-  u8 sin6_port[2];
+  u16 sin6_port;
   u8 sin6_flowinfo[4];
   u8 sin6_addr[16];
   u8 sin6_scope_id[4];
+};
+
+struct sockaddr_storage_linux {
+  union {
+    u8 ss_family[2];
+    char ss_storage[128];
+  };
 };
 
 struct stat_linux {

@@ -878,10 +878,12 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
 }
 
 static u32 LoadAddrSize(struct Machine *m, i64 asa) {
-  u8 buf[4];
-  if (!asa) return 0;
-  CopyFromUserRead(m, buf, asa, sizeof(buf));
-  return Read32(buf);
+  const u8 *p;
+  if (asa && (p = (const u8 *)Schlep(m, asa, 4))) {
+    return Read32(p);
+  } else {
+    return 0;
+  }
 }
 
 static void StoreAddrSize(struct Machine *m, i64 asa, socklen_t len) {
@@ -891,39 +893,43 @@ static void StoreAddrSize(struct Machine *m, i64 asa, socklen_t len) {
   CopyToUserWrite(m, asa, buf, sizeof(buf));
 }
 
-// TODO(jart): Support AF_UNIX and AF_INET6
-
-static int LoadSockaddr(struct Machine *m, i64 aa, u32 as,
-                        struct sockaddr_in *addr) {
-  struct sockaddr_in_linux gaddr;
-  if (as != sizeof(gaddr)) {
-    LOGF("sockaddr size param isn't sizeof(sockaddr_in)");
-    return einval();
+static int LoadSockaddr(struct Machine *m, i64 sockaddr_addr, u32 sockaddr_size,
+                        struct sockaddr_storage *out_sockaddr) {
+  const struct sockaddr_linux *sockaddr_linux;
+  if ((sockaddr_linux = (const struct sockaddr_linux *)Schlep(m, sockaddr_addr,
+                                                              sockaddr_size))) {
+    return XlatSockaddrToHost(out_sockaddr, sockaddr_linux, sockaddr_size);
+  } else {
+    return -1;
   }
-  CopyFromUserRead(m, &gaddr, aa, sizeof(gaddr));
-  if (XlatSockaddrToHost(addr, &gaddr) == -1) return -1;
-  return 0;
 }
 
-static void StoreSockaddr(struct Machine *m, i64 aa, u32 as, i64 asa,
-                          struct sockaddr_in *addr) {
-  struct sockaddr_in_linux gaddr;
-  if (!aa) return;
-  XlatSockaddrToLinux(&gaddr, addr);
-  StoreAddrSize(m, asa, sizeof(struct sockaddr_in_linux));
-  CopyToUserWrite(m, aa, &gaddr, MIN(as, sizeof(gaddr)));
+static void StoreSockaddr(struct Machine *m, i64 sockaddr_addr,
+                          i64 sockaddr_size_addr, const struct sockaddr *sa,
+                          socklen_t salen) {
+  int got;
+  u32 avail;
+  struct sockaddr_storage_linux ss;
+  if (!sockaddr_addr) return;
+  if (!sockaddr_size_addr) return;
+  avail = LoadAddrSize(m, sockaddr_size_addr);
+  if ((got = XlatSockaddrToLinux(&ss, sa, salen)) == -1) return;
+  StoreAddrSize(m, sockaddr_size_addr, got);
+  CopyToUserWrite(m, sockaddr_addr, &ss, MIN(got, avail));
 }
 
-static int SysSocketName(struct Machine *m, i32 fildes, i64 aa, i64 asa,
+static int SysSocketName(struct Machine *m, i32 fildes, i64 sockaddr_addr,
+                         i64 sockaddr_size_addr,
                          int SocketName(int, struct sockaddr *, socklen_t *)) {
   int rc;
-  u32 as;
   socklen_t addrlen;
-  struct sockaddr_in addr;
-  as = LoadAddrSize(m, asa);
+  struct sockaddr_storage addr;
   addrlen = sizeof(addr);
   rc = SocketName(fildes, (struct sockaddr *)&addr, &addrlen);
-  if (rc != -1) StoreSockaddr(m, aa, as, asa, &addr);
+  if (rc != -1) {
+    StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
+                  (struct sockaddr *)&addr, addrlen);
+  }
   return rc;
 }
 
@@ -935,17 +941,15 @@ static int SysGetpeername(struct Machine *m, int fd, i64 aa, i64 asa) {
   return SysSocketName(m, fd, aa, asa, getpeername);
 }
 
-static int SysAccept4(struct Machine *m, i32 fildes, i64 aa, i64 asa,
-                      i32 flags) {
-  u32 as;
+static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
+                      i64 sockaddr_size_addr, i32 flags) {
   int newfd;
-  socklen_t len;
-  struct sockaddr_in addr;
+  socklen_t addrlen;
+  struct sockaddr_storage addr;
   if (m->system->redraw) m->system->redraw(true);
   if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
-  as = LoadAddrSize(m, asa);
-  len = sizeof(addr);
-  INTERRUPTIBLE(newfd = accept(fildes, (struct sockaddr *)&addr, &len));
+  addrlen = sizeof(addr);
+  INTERRUPTIBLE(newfd = accept(fildes, (struct sockaddr *)&addr, &addrlen));
   if (newfd != -1) {
     FixupSock(newfd, flags);
     LockFds(&m->system->fds);
@@ -953,7 +957,8 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 aa, i64 asa,
                    O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
                        (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0)));
     UnlockFds(&m->system->fds);
-    StoreSockaddr(m, aa, as, asa, &addr);
+    StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
+                  (struct sockaddr *)&addr, addrlen);
   }
   return newfd;
 }
@@ -1011,27 +1016,29 @@ static i64 SysSendto(struct Machine *m,  //
                      i64 bufaddr,        //
                      u64 buflen,         //
                      i32 flags,          //
-                     i64 aa,             //
-                     u32 as) {
+                     i64 sockaddr_addr,  //
+                     u32 sockaddr_size) {
   i64 rc;
-  void *buf;
+  int len;
   int hostflags;
+  const void *mem;
   socklen_t addrlen;
   struct sockaddr *addrp;
-  struct sockaddr_in addr;
+  struct sockaddr_storage ss;
   if ((hostflags = XlatSendFlags(flags)) == -1) return -1;
-  if (aa) {
-    if (LoadSockaddr(m, aa, as, &addr) == -1) return -1;
-    addrlen = sizeof(addr);
-    addrp = (struct sockaddr *)&addr;
+  if (sockaddr_size) {
+    if ((len = LoadSockaddr(m, sockaddr_addr, sockaddr_size, &ss)) != -1) {
+      addrlen = len;
+    } else {
+      return -1;
+    }
+    addrp = (struct sockaddr *)&ss;
   } else {
     addrlen = 0;
     addrp = 0;
   }
-  if (!(buf = malloc(buflen))) return -1;
-  CopyFromUserRead(m, buf, bufaddr, buflen);
-  rc = sendto(fildes, buf, buflen, hostflags, addrp, addrlen);
-  free(buf);
+  mem = Schlep(m, bufaddr, buflen);
+  INTERRUPTIBLE(rc = sendto(fildes, mem, buflen, hostflags, addrp, addrlen));
   return rc;
 }
 
@@ -1040,33 +1047,39 @@ static i64 SysRecvfrom(struct Machine *m,  //
                        i64 bufaddr,        //
                        u64 buflen,         //
                        i32 flags,          //
-                       i64 aa,             //
-                       u32 asa) {
+                       i64 sockaddr_addr,  //
+                       i64 sockaddr_size_addr) {
   i64 rc;
-  u32 as;
   void *buf;
   int hostflags;
-  socklen_t len;
-  struct sockaddr_in addr;
-  as = LoadAddrSize(m, asa);
+  socklen_t addrlen;
+  struct sockaddr_storage addr;
   if ((hostflags = XlatRecvFlags(flags)) == -1) return -1;
   if (!(buf = malloc(buflen))) return -1;
-  len = sizeof(addr);
-  rc = recvfrom(fildes, buf, buflen, hostflags, (struct sockaddr *)&addr, &len);
+  addrlen = sizeof(addr);
+  rc = recvfrom(fildes, buf, buflen, hostflags, (struct sockaddr *)&addr,
+                &addrlen);
   if (rc != -1) {
-    StoreSockaddr(m, aa, as, asa, &addr);
     CopyToUserWrite(m, bufaddr, buf, rc);
+    StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
+                  (struct sockaddr *)&addr, addrlen);
   }
   free(buf);
   return rc;
 }
 
-static int SysConnectBind(struct Machine *m, i32 fildes, i64 aa, u32 as,
+static int SysConnectBind(struct Machine *m, i32 fildes, i64 sockaddr_addr,
+                          u32 sockaddr_size,
                           int impl(int, const struct sockaddr *, socklen_t)) {
-  int rc;
-  struct sockaddr_in addr;
-  if (LoadSockaddr(m, aa, as, &addr) == -1) return -1;
-  rc = impl(fildes, (const struct sockaddr *)&addr, sizeof(addr));
+  int rc, len;
+  socklen_t addrlen;
+  struct sockaddr_storage addr;
+  if ((len = LoadSockaddr(m, sockaddr_addr, sockaddr_size, &addr)) != -1) {
+    addrlen = len;
+  } else {
+    return -1;
+  }
+  rc = impl(fildes, (const struct sockaddr *)&addr, addrlen);
   return rc;
 }
 
@@ -1391,8 +1404,11 @@ static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
       memset(ifreq_linux.name, 0, sizeof(ifreq_linux.name));
       memcpy(ifreq_linux.name, ifreq->ifr_name,
              MIN(sizeof(ifreq_linux.name) - 1, sizeof(ifreq->ifr_name)));
-      XlatSockaddrToLinux(&ifreq_linux.addr,
-                          (struct sockaddr_in *)&ifreq->ifr_addr);
+      unassert(XlatSockaddrToLinux(
+                   (struct sockaddr_storage_linux *)&ifreq_linux.addr,
+                   (const struct sockaddr *)&ifreq->ifr_addr,
+                   sizeof(ifreq->ifr_addr)) ==
+               sizeof(struct sockaddr_in_linux));
       memcpy(buf_linux + len_linux, &ifreq_linux, sizeof(ifreq_linux));
       len_linux += sizeof(ifreq_linux);
     }
@@ -1416,12 +1432,18 @@ static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
   memcpy(ifreq.ifr_name, ifreq_linux.name,
          MIN(sizeof(ifreq_linux.name) - 1, sizeof(ifreq.ifr_name)));
   if (Read16(ifreq_linux.addr.sin_family) != AF_INET_LINUX) return einval();
-  XlatSockaddrToHost((struct sockaddr_in *)&ifreq.ifr_addr, &ifreq_linux.addr);
+  unassert(XlatSockaddrToHost((struct sockaddr_storage *)&ifreq.ifr_addr,
+                              (const struct sockaddr_linux *)&ifreq_linux.addr,
+                              sizeof(struct sockaddr_in_linux)) ==
+           sizeof(struct sockaddr_in));
   if (ioctl(systemfd, kind, &ifreq)) return -1;
   memset(ifreq_linux.name, 0, sizeof(ifreq_linux.name));
   memcpy(ifreq_linux.name, ifreq.ifr_name,
          MIN(sizeof(ifreq_linux.name) - 1, sizeof(ifreq.ifr_name)));
-  XlatSockaddrToLinux(&ifreq_linux.addr, (struct sockaddr_in *)&ifreq.ifr_addr);
+  unassert(XlatSockaddrToLinux(
+               (struct sockaddr_storage_linux *)&ifreq_linux.addr,
+               (struct sockaddr *)&ifreq.ifr_addr,
+               sizeof(ifreq.ifr_addr)) == sizeof(struct sockaddr_in_linux));
   CopyToUserWrite(m, ifreq_addr, &ifreq_linux, sizeof(ifreq_linux));
   return 0;
 }
