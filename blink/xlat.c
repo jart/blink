@@ -579,6 +579,13 @@ int XlatOpenFlags(int x) {
 #ifdef O_DIRECT
   if (x & O_DIRECT_LINUX) res |= O_DIRECT, x &= ~O_DIRECT_LINUX;
 #endif
+#ifdef O_TMPFILE
+  if ((x & O_TMPFILE_LINUX) == O_TMPFILE_LINUX) {
+    res |= O_TMPFILE;
+    x &= ~O_TMPFILE_LINUX;
+  }
+  // order matters: O_DIRECTORY ⊂ O_TMPFILE
+#endif
   if (x & O_DIRECTORY_LINUX) {
     res |= O_DIRECTORY;
     x &= ~O_DIRECTORY_LINUX;
@@ -624,6 +631,12 @@ int UnXlatOpenFlags(int x) {
 #endif
 #ifdef O_DIRECT
   if (x & O_DIRECT) res |= O_DIRECT_LINUX;
+#endif
+#ifdef O_TMPFILE
+  if ((x & O_TMPFILE) == O_TMPFILE) {
+    res |= O_TMPFILE_LINUX;
+  }
+  // order matters: O_DIRECTORY ⊂ O_TMPFILE
 #endif
   if (x & O_DIRECTORY) res |= O_DIRECTORY_LINUX;
 #ifdef O_NOFOLLOW
