@@ -52,6 +52,7 @@ $ o//blink/blink -h
 Usage: o//blink/blink [-hjms] PROG [ARGS...]
   -h        help
   -j        disable jit
+  -0        to specify argv[0]
   -m        enable memory safety
   -s        print statistics on exit
 ```
@@ -122,29 +123,29 @@ You can hunt down bugs in Blink using the following build modes:
 
 ## Compiling and Running Programs under Blink
 
-Blink is picky about which Linux executables it'll emulate, especially
-whilst running on platforms like Apple M1. For example, Apple M1 has a
-system page size of 16kb, and WASM's page size is 64kb. That makes
-perfect emulation of all Linux programs impossible, because Linux
-programs typically assume things like 4096 byte page. The most obvious
-obstacle this causes will happen in the ELF loading process, where Blink
-may complain about the vaddr offset skew:
+Blink is picky about which Linux executables it'll emulate. For example,
+right now only static binaries are supported. In other cases, the host
+system page size may cause problems. For example, Apple M1 has a system
+page size of 16kb, and WASM's page size is 64kb. On those platforms, you
+may encounter an error like this:
 
 ```
 I2023-01-06T18:12:51.007788:blink/loader.c:91:47550 p_vaddr p_offset skew unequal w.r.t. host page size
 ```
 
-The solution is to recompile your program using the GCC flags:
+In this case, you can disable the linear memory optimization (using the
+`-m` flag) but that'll slow down performance. Another option is simply
+recompiling your executable so that its ELF program headers will work on
+systems with a larger page size. You can do that using these GCC flags:
 
 ```
 gcc -static -Wl,-z,common-page-size=65536,-z,max-page-size=65536 ...
 ```
 
-But that's just step one. The program should also be using APIs like
-`sysconf(_SC_PAGESIZE)` rather than assuming 4096, because that's the
-standard API for obtaining the page size. The C library gets this
-information from Blink, which supplies it to your C library via
-`getauxval(AT_PAGESZ)`.
+However that's just step one. The program also needs to be using APIs
+like `sysconf(_SC_PAGESIZE)` which will return the true host page size,
+rather than naively assuming it's 4096 bytes. Your C library gets this
+information from Blink via `getauxval(AT_PAGESZ)`.
 
 If you're using the Blinkenlights debugger TUI, then another important
 set of flags to use are the following:
