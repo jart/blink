@@ -67,7 +67,11 @@ static size_t GetBigSize(size_t n) {
 
 void FreeBig(void *p, size_t n) {
   if (!p) return;
+#if defined(__CYGWIN__) || defined(__EMSCRIPTEN__)
+  unassert(!munmap(p, n));
+#else
   unassert(!munmap(p, GetBigSize(n)));
+#endif
 }
 
 void *AllocateBig(size_t n) {
