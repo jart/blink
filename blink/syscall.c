@@ -38,6 +38,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <sys/resource.h>
+#include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <sys/times.h>
@@ -2318,6 +2319,85 @@ static int SysUtimes(struct Machine *m, i64 pathaddr, i64 tvsaddr) {
   }
 }
 
+static int CopyFdSet(struct Machine *m, int nfds, fd_set *fds, i64 addr) {
+  int fd;
+  const u8 *p;
+  if ((p = (const u8 *)Schlep(m, addr, ROUNDUP(nfds, 8) / 8))) {
+    FD_ZERO(fds);
+    for (fd = 0; fd < nfds; ++fd) {
+      if (p[fd >> 3] & (1 << (fd & 7))) {
+        FD_SET(fd, fds);
+      }
+    }
+    return 0;
+  } else {
+    return -1;
+  }
+}
+
+static i32 SysSelect(struct Machine *m,   //
+                     i32 nfds,            //
+                     i64 readfds_addr,    //
+                     i64 writefds_addr,   //
+                     i64 exceptfds_addr,  //
+                     i64 timeout_addr) {
+  i32 setsize;
+  struct timeval timeout, *timeoutp;
+  fd_set readfds, writefds, exceptfds;
+  fd_set *readfdsp, *writefdsp, *exceptfdsp;
+  const struct timeval_linux *timeout_linux;
+  setsize = MIN(FD_SETSIZE, FD_SETSIZE_LINUX);
+  if (nfds < 0 || nfds > setsize) {
+    LOGF("select() nfds=%d can't exceed %d on this platform", nfds, setsize);
+    return einval();
+  }
+  if (readfds_addr) {
+    if (CopyFdSet(m, nfds, &readfds, readfds_addr) != -1) {
+      readfdsp = &readfds;
+    } else {
+      LOGF("select() bad %s memory", "readfds");
+      return -1;
+    }
+  } else {
+    readfdsp = 0;
+  }
+  if (writefds_addr) {
+    if (CopyFdSet(m, nfds, &writefds, writefds_addr) != -1) {
+      writefdsp = &writefds;
+    } else {
+      LOGF("select() bad %s memory", "writefds");
+      return -1;
+    }
+  } else {
+    writefdsp = 0;
+  }
+  if (exceptfds_addr) {
+    if (CopyFdSet(m, nfds, &exceptfds, exceptfds_addr) != -1) {
+      exceptfdsp = &exceptfds;
+    } else {
+      LOGF("select() bad %s memory", "exceptfds");
+      return -1;
+    }
+  } else {
+    exceptfdsp = 0;
+  }
+  if (timeout_addr) {
+    if ((timeout_linux = (const struct timeval_linux *)Schlep(
+             m, timeout_addr, sizeof(*timeout_linux)))) {
+      timeout.tv_sec = Read64(timeout_linux->tv_sec);
+      timeout.tv_usec = Read64(timeout_linux->tv_usec);
+      timeoutp = &timeout;
+    } else {
+      LOGF("select() bad %s memory", "timeout");
+      return -1;
+    }
+  } else {
+    timeoutp = 0;
+  }
+  if (CheckInterrupt(m)) return eintr();
+  return select(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp);
+}
+
 static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
   long i;
   u64 gfdssize;
@@ -2644,6 +2724,7 @@ void OpSyscall(P) {
     SYSCALL(0x009, SysMmap, (m, di, si, dx, r0, r8, r9));
     SYSCALL(0x011, SysPread, (m, di, si, dx, r0));
     SYSCALL(0x012, SysPwrite, (m, di, si, dx, r0));
+    SYSCALL(0x017, SysSelect, (m, di, si, dx, r0, r8));
     SYSCALL(0x01A, SysMsync, (m, di, si, dx));
     SYSCALL(0x00A, SysMprotect, (m, di, si, dx));
     SYSCALL(0x00B, SysMunmap, (m, di, si));

@@ -472,6 +472,8 @@
 #define PENDIN_LINUX  0040000
 #define IEXTEN_LINUX  0100000
 
+#define FD_SETSIZE_LINUX 1024
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];
