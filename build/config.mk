@@ -76,7 +76,7 @@ CC = cosmocc
 endif
 
 ifeq ($(MODE), dbg)
-CFLAGS += -O0
+CFLAGS += -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
 CPPFLAGS += -DDEBUG -DUNWIND
 ifeq ($(HOST_OS), Linux)
 CFLAGS += -fno-pie

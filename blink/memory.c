@@ -19,11 +19,14 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 
 #include "blink/assert.h"
 #include "blink/debug.h"
 #include "blink/endian.h"
+#include "blink/errno.h"
 #include "blink/likely.h"
+#include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/mop.h"
@@ -77,12 +80,14 @@ static u64 FindPageTableEntry(struct Machine *m, u64 page) {
   u64 entry, res;
   unsigned level, index;
   struct MachineTlb bubble;
-  for (i = 1; i < ARRAYLEN(m->tlb); ++i) {
+  for (i = 0; i < ARRAYLEN(m->tlb); ++i) {
     if (m->tlb[i].page == page && ((res = m->tlb[i].entry) & PAGE_V)) {
-      STATISTIC(++tlb_hits_2);
-      bubble = m->tlb[i - 1];
-      m->tlb[i - 1] = m->tlb[i];
-      m->tlb[i] = bubble;
+      if (i) {
+        STATISTIC(++tlb_hits_2);
+        bubble = m->tlb[i - 1];
+        m->tlb[i - 1] = m->tlb[i];
+        m->tlb[i] = bubble;
+      }
       return res;
     }
   }
@@ -116,19 +121,25 @@ u8 *LookupAddress(struct Machine *m, i64 virt) {
         ((entry = m->tlb[0].entry) & PAGE_V)) {
       STATISTIC(++tlb_hits_1);
     } else if (-0x800000000000 <= virt && virt < 0x800000000000) {
-      if (!(entry = FindPageTableEntry(m, page))) return 0;
+      if (!(entry = FindPageTableEntry(m, page))) {
+        efault();
+        return 0;
+      }
     } else {
+      efault();
       return 0;
     }
   } else if (virt >= 0 && virt <= 0xffffffff &&
              (virt & 0xffffffff) + 4095 < kRealSize) {
     return m->system->real + virt;
   } else {
+    efault();
     return 0;
   }
   if ((host = GetPageAddress(m->system, entry))) {
     return host + (virt & 4095);
   } else {
+    efault();
     return 0;
   }
 }
@@ -142,6 +153,39 @@ u8 *ResolveAddress(struct Machine *m, i64 v) {
   u8 *r;
   if ((r = GetAddress(m, v))) return r;
   ThrowSegmentationFault(m, v);
+}
+
+bool IsValidMemory(struct Machine *m, i64 virt, i64 size, int prot) {
+  i64 p, pe;
+  u64 pte, mask, need;
+  unassert(prot && !(prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)));
+  if ((-0x800000000000 <= virt && virt < 0x800000000000) &&
+      size <= 0x800000000000 && virt + size <= 0x800000000000) {
+    need = 0;
+    mask = 0;
+    if (prot & PROT_READ) {
+      mask |= PAGE_U;
+      need |= PAGE_U;
+    }
+    if (prot & PROT_WRITE) {
+      mask |= PAGE_RW;
+      need |= PAGE_RW;
+    }
+    if (prot & PROT_EXEC) {
+      mask |= PAGE_XD;
+    }
+    for (p = virt, pe = virt + size; p < pe; p += 4096) {
+      if (!(pte = FindPageTableEntry(m, p))) {
+        return false;
+      }
+      if ((pte & mask) != need) {
+        return false;
+      }
+    }
+    return true;
+  } else {
+    return false;
+  }
 }
 
 void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
@@ -282,9 +326,38 @@ void *AddToFreeList(struct Machine *m, void *mem) {
   }
 }
 
+// Returns pointer to memory in guest memory. If the memory overlaps a
+// page boundary, then it's copied, and the temporary memory is pushed
+// to the free list. Returns NULL w/ EFAULT or ENOMEM on error.
+const void *Schlep(struct Machine *m, i64 addr, size_t size) {
+  char *copy;
+  size_t have;
+  const void *res;
+  const void *page;
+  if (!size) return 0;
+  if (!(page = LookupAddress(m, addr))) return 0;
+  have = 4096 - (addr & 4095);
+  if (size <= have) {
+    res = page;
+  } else {
+    if (!(copy = (char *)malloc(size))) return 0;
+    memcpy(copy, page, have);
+    for (; have < size; have += 4096) {
+      if (!(page = LookupAddress(m, addr + have))) {
+        free(copy);
+        return 0;
+      }
+      memcpy(copy + have, page, MIN(4096, size - have));
+    }
+    res = AddToFreeList(m, copy);
+  }
+  SetReadAddr(m, addr, size);
+  return res;
+}
+
 // Returns pointer to string in guest memory. If the string overlaps a
 // page boundary, then it's copied, and the temporary memory is pushed
-// to the free list.
+// to the free list. Returns NULL w/ EFAULT or ENOMEM on error.
 char *LoadStr(struct Machine *m, i64 addr) {
   size_t have;
   char *copy, *page, *p;

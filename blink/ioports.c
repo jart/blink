@@ -27,9 +27,17 @@
 static int OpE9Read(struct Machine *m) {
   u8 b;
   struct Fd *fd;
+  int fildes = 0;
   struct iovec t = {&b, 1};
-  if (!(fd = GetAndLockFd(m, 0))) return -1;
-  if (fd->cb->readv(fd->fildes, &t, 1) == 1) {
+  ssize_t (*readv_impl)(int, const struct iovec *, int);
+  LockFds(&m->system->fds);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    readv_impl = fd->cb->readv;
+  } else {
+    readv_impl = 0;
+  }
+  UnlockFds(&m->system->fds);
+  if (readv_impl && readv_impl(fildes, &t, 1) == 1) {
     return b;
   } else {
     return -1;
@@ -37,25 +45,39 @@ static int OpE9Read(struct Machine *m) {
 }
 
 static int OpE9Write(struct Machine *m, u8 b) {
-  int rc;
   struct Fd *fd;
+  int fildes = 1;
   struct iovec t = {&b, 1};
-  if (!(fd = GetAndLockFd(m, 1))) return -1;
-  rc = fd->cb->writev(fd->fildes, &t, 1);
-  UnlockFd(fd);
-  return rc;
+  ssize_t (*writev_impl)(int, const struct iovec *, int);
+  LockFds(&m->system->fds);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    writev_impl = fd->cb->writev;
+  } else {
+    writev_impl = 0;
+  }
+  UnlockFds(&m->system->fds);
+  if (!writev_impl) return -1;
+  return writev_impl(fildes, &t, 1);
 }
 
 static int OpE9Poll(struct Machine *m) {
   int rc;
   struct Fd *fd;
+  int fildes = 0;
   struct pollfd pf;
-  if (!(fd = GetAndLockFd(m, 0))) return -1;
-  pf.fd = fd->fildes;
+  int (*poll_impl)(struct pollfd *, nfds_t, int);
+  LockFds(&m->system->fds);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    poll_impl = fd->cb->poll;
+  } else {
+    poll_impl = 0;
+  }
+  UnlockFds(&m->system->fds);
+  if (!poll_impl) return -1;
+  pf.fd = fildes;
   pf.events = POLLIN | POLLOUT;
-  rc = fd->cb->poll(&pf, 1, 20);
+  rc = poll_impl(&pf, 1, 20);
   if (rc > 0) rc = pf.revents;
-  UnlockFd(fd);
   return rc;
 }
 
@@ -66,7 +88,7 @@ static int OpSerialIn(struct Machine *m, int r) {
       if (!m->system->dlab) {
         return OpE9Read(m);
       } else {
-        return 0x01;
+        return 1;
       }
     case UART_LSR:
       if ((p = OpE9Poll(m)) == -1) return -1;
@@ -98,7 +120,14 @@ u64 OpIn(struct Machine *m, u16 p) {
   switch (p) {
     case 0xE9:
       return OpE9Read(m);
-    case 0x3F8 ... 0x3FF:
+    case 0x3F8:
+    case 0x3F9:
+    case 0x3FA:
+    case 0x3FB:
+    case 0x3FC:
+    case 0x3FD:
+    case 0x3FE:
+    case 0x3FF:
       return OpSerialIn(m, p - 0x3F8);
     default:
       return -1;
@@ -109,7 +138,14 @@ int OpOut(struct Machine *m, u16 p, u32 x) {
   switch (p) {
     case 0xE9:
       return OpE9Write(m, x);
-    case 0x3F8 ... 0x3FF:
+    case 0x3F8:
+    case 0x3F9:
+    case 0x3FA:
+    case 0x3FB:
+    case 0x3FC:
+    case 0x3FD:
+    case 0x3FE:
+    case 0x3FF:
       return OpSerialOut(m, p - 0x3F8, x);
     default:
       return -1;

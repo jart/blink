@@ -47,6 +47,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/errno.h"
 #include "blink/loader.h"
 #include "blink/macros.h"
 #include "blink/mop.h"
@@ -382,13 +383,16 @@ static int SysFutexWait(struct Machine *m,  //
   int rc;
   u8 *mem;
   struct Futex *f;
-  struct timespec_linux gtimeout;
+  const struct timespec_linux *gtimeout;
   struct timespec now, tick, timeout, deadline;
   now = tick = GetTime();
   if (timeout_addr) {
-    CopyFromUserRead(m, &gtimeout, timeout_addr, sizeof(gtimeout));
-    timeout.tv_sec = Read64(gtimeout.tv_sec);
-    timeout.tv_nsec = Read64(gtimeout.tv_nsec);
+    if (!(gtimeout = (const struct timespec_linux *)Schlep(
+              m, timeout_addr, sizeof(*gtimeout)))) {
+      return -1;
+    }
+    timeout.tv_sec = Read64(gtimeout->tv_sec);
+    timeout.tv_nsec = Read64(gtimeout->tv_nsec);
     if (!(0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000000)) {
       return einval();
     }
@@ -1187,18 +1191,9 @@ static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
 static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
                      u64 offset) {
   i64 rc;
-  void *buf;
-  if (size) {
-    if ((buf = malloc(size))) {
-      CopyFromUserRead(m, buf, addr, size);
-      INTERRUPTIBLE(rc = pwrite(fildes, buf, size, offset));
-      free(buf);
-    } else {
-      rc = -1;
-    }
-  } else {
-    rc = pwrite(fildes, 0, 0, offset);
-  }
+  const void *mem;
+  mem = Schlep(m, addr, size);
+  INTERRUPTIBLE(rc = pwrite(fildes, mem, size, offset));
   return rc;
 }
 
@@ -2171,6 +2166,55 @@ static int SysSigsuspend(struct Machine *m, i64 maskaddr, i64 sigsetsize) {
 }
 
 static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
+  bool isonstack;
+  int supported, unsupported;
+  const struct sigaltstack_linux *ss = 0;
+  supported = SS_ONSTACK_LINUX | SS_DISABLE_LINUX | SS_AUTODISARM_LINUX;
+  isonstack = (~Read32(m->sigaltstack.ss_flags) & SS_DISABLE_LINUX) &&
+              Read64(m->sp) >= Read64(m->sigaltstack.ss_sp) &&
+              Read64(m->sp) <=
+                  Read64(m->sigaltstack.ss_sp) + Read64(m->sigaltstack.ss_size);
+  if (newaddr) {
+    if (isonstack) {
+      LOGF("can't change sigaltstack whilst on sigaltstack");
+      return eperm();
+    }
+    if (!(ss = (const struct sigaltstack_linux *)Schlep(m, newaddr,
+                                                        sizeof(*ss)))) {
+      LOGF("couldn't schlep new sigaltstack: %#" PRIx64, newaddr);
+      return -1;
+    }
+    if ((unsupported = Read32(ss->ss_flags) & ~supported)) {
+      LOGF("unsupported sigaltstack flags: %#x", unsupported);
+      return einval();
+    }
+    if (~Read32(ss->ss_flags) & SS_DISABLE_LINUX) {
+      if (Read64(ss->ss_size) < MINSIGSTKSZ_LINUX) {
+        LOGF("sigaltstack ss_size=%#" PRIx64 " must be at least %#x",
+             Read64(ss->ss_size), MINSIGSTKSZ_LINUX);
+        return enomem();
+      }
+      if (!IsValidMemory(m, Read64(ss->ss_sp), Read64(ss->ss_size),
+                         PROT_READ | PROT_WRITE)) {
+        LOGF("sigaltstack ss_sp=%#" PRIx64 " ss_size=%#" PRIx64
+             " didn't exist with read+write permission",
+             Read64(ss->ss_sp), Read64(ss->ss_size));
+        return efault();
+      }
+    }
+  }
+  if (oldaddr) {
+    Write32(m->sigaltstack.ss_flags,
+            Read32(m->sigaltstack.ss_flags) & ~SS_ONSTACK_LINUX);
+    if (isonstack) {
+      Write32(m->sigaltstack.ss_flags,
+              Read32(m->sigaltstack.ss_flags) | SS_ONSTACK_LINUX);
+    }
+    CopyToUserWrite(m, oldaddr, &m->sigaltstack, sizeof(m->sigaltstack));
+  }
+  if (ss) {
+    memcpy(&m->sigaltstack, ss, sizeof(*ss));
+  }
   return 0;
 }
 

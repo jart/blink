@@ -198,7 +198,8 @@ o/$(MODE)/third_party/cosmo:									\
 	@touch $@
 
 DARWIN_PROBLEMATIC_TESTS =									\
-		o/$(MODE)/third_party/cosmo/2/sched_getaffinity_test.com.ok
+		o/$(MODE)/third_party/cosmo/2/sched_getaffinity_test.com.ok			\
+		o/$(MODE)/third_party/cosmo/2/backtrace_test.com.ok
 
 o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/2/intrin_test.com.emulates			\

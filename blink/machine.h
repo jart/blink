@@ -359,6 +359,7 @@ struct Machine {                           //
   bool metal;                              //
   bool interrupted;                        //
   sigjmp_buf onhalt;                       //
+  struct sigaltstack_linux sigaltstack;    //
   i64 ctid;                                //
   int tid;                                 //
   sigset_t spawn_sigmask;                  //
@@ -414,6 +415,8 @@ bool OverlapsPrecious(i64, i64) pureconst;
 char **CopyStrList(struct Machine *, i64);
 char *CopyStr(struct Machine *, i64);
 char *LoadStr(struct Machine *, i64);
+const void *Schlep(struct Machine *, i64, size_t);
+bool IsValidMemory(struct Machine *, i64, i64, int);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
 u8 *GetPageAddress(struct System *, u64);
 u8 *GetHostAddress(struct Machine *, u64, long);

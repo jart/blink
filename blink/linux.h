@@ -346,6 +346,11 @@
 
 #define RLIM_INFINITY_LINUX 0xffffffffffffffffull
 
+#define MINSIGSTKSZ_LINUX   2048
+#define SS_ONSTACK_LINUX    1
+#define SS_DISABLE_LINUX    2
+#define SS_AUTODISARM_LINUX 0x80000000u
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];
@@ -587,6 +592,13 @@ struct tms_linux {
   u8 tms_stime[8];   // system time
   u8 tms_cutime[8];  // user time of children
   u8 tms_cstime[8];  // system time of children
+};
+
+struct sigaltstack_linux {
+  u8 ss_sp[8];     // base address of stack
+  u8 ss_flags[4];  // SS_???_LINUX flags
+  u8 pad1_[4];     //
+  u8 ss_size[8];   // size of stack
 };
 
 int sysinfo_linux(struct sysinfo_linux *);
