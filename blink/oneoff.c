@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/linux.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
