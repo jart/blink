@@ -2034,8 +2034,10 @@ static i64 SysGetcwd(struct Machine *m, i64 bufaddr, size_t size) {
 static ssize_t SysGetrandom(struct Machine *m, i64 a, size_t n, int f) {
   char *p;
   ssize_t rc;
-  if (f) {
-    LOGF("getrandom() flags not supported yet");
+  int ignored;
+  ignored = GRND_NONBLOCK_LINUX | GRND_RANDOM_LINUX;
+  if ((f &= ~ignored)) {
+    LOGF("%s() flags %d not supported", "getrandom", f);
     return einval();
   }
   if (n) {
