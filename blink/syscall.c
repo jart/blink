@@ -2341,6 +2341,7 @@ static i32 SysSelect(struct Machine *m,   //
                      i64 writefds_addr,   //
                      i64 exceptfds_addr,  //
                      i64 timeout_addr) {
+  int rc;
   i32 setsize;
   struct timeval timeout, *timeoutp;
   fd_set readfds, writefds, exceptfds;
@@ -2395,7 +2396,8 @@ static i32 SysSelect(struct Machine *m,   //
     timeoutp = 0;
   }
   if (CheckInterrupt(m)) return eintr();
-  return select(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp);
+  INTERRUPTIBLE(rc = select(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp));
+  return rc;
 }
 
 static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
@@ -2535,11 +2537,11 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
   struct Dll *e;
   struct Machine *m2;
   if (!(1 <= sig && sig <= 64)) {
-    SYS_LOGF("tkill() failed due to bogus signal: %d", sig);
+    LOGF("tkill(%d, %d) failed due to bogus signal", tid, sig);
     return einval();
   }
   if (!IsValidThreadId(m->system, tid)) {
-    SYS_LOGF("tkill() failed due to bogus thread id: %d", tid);
+    LOGF("tkill(%d, %d) failed due to bogus thread id", tid, sig);
     return esrch();
   }
   err = 0;
@@ -2557,7 +2559,7 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
   if (!err) {
     return 0;
   } else {
-    LOGF("tkill() failed: %s", strerror(err));
+    LOGF("tkill(%d, %d) failed: %s", tid, sig, strerror(err));
     errno = err;
     return -1;
   }
