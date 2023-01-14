@@ -325,6 +325,7 @@ static void SetupDispatch(struct Machine *m) {
 void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
   int fd;
   i64 sp;
+  char ibuf[21];
   char ehdr[64];
   long pagesize;
   bool execstack;
@@ -341,9 +342,10 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
            (char *)Mmap(0, (elf->mapsize = st.st_size), PROT_READ | PROT_WRITE,
                         MAP_PRIVATE, fd, 0, "loader")) == MAP_FAILED) {
     WriteErrorString(prog);
-    WriteErrorString(": ");
-    WriteErrorString(strerror(errno));
-    WriteErrorString("\n");
+    WriteErrorString(": failed to load (errno ");
+    FormatInt64(ibuf, errno);
+    WriteErrorString(ibuf);
+    WriteErrorString(")\n");
     exit(127);
   };
   if (!IsSupportedExecutable(prog, elf->map)) {
