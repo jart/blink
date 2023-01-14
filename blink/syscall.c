@@ -947,7 +947,6 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
   int newfd;
   socklen_t addrlen;
   struct sockaddr_storage addr;
-  if (m->system->redraw) m->system->redraw(true);
   if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
   addrlen = sizeof(addr);
   INTERRUPTIBLE(newfd = accept(fildes, (struct sockaddr *)&addr, &addrlen));
@@ -2796,6 +2795,9 @@ static int SysSchedGetPriorityMin(struct Machine *m, int policy) {
 void OpSyscall(P) {
   u64 ax, di, si, dx, r0, r8, r9;
   STATISTIC(++syscalls);
+  if (m->system->redraw) {
+    m->system->redraw(true);
+  }
   ax = Get64(m->ax);
   di = Get64(m->di);
   si = Get64(m->si);

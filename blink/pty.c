@@ -1313,6 +1313,7 @@ ssize_t PtyWriteInput(struct Pty *pty, const void *data, size_t n) {
     pty->input.p = p;
     pty->input.n = m;
   }
+  // TODO(jart): Figure out how translation settings for these work.
   cr = i && p[i - 1] == '\r';
   for (j = 0; j < n; ++j) {
     c = q[j] & 255;
@@ -1326,9 +1327,9 @@ ssize_t PtyWriteInput(struct Pty *pty, const void *data, size_t n) {
     }
     p[i++] = c;
   }
-  if (cr) {
-    p[i++] = '\n';
-  }
+  /* if (cr) { */
+  /*   p[i++] = '\n'; */
+  /* } */
   if (!(pty->conf & kPtyNoecho)) {
     PtyWrite(pty, p + pty->input.i, i - pty->input.i);
   }
