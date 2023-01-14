@@ -96,7 +96,12 @@
 #define EMEDIUMTYPE_LINUX     124
 #define EBADFD_LINUX          77
 
-#define AT_FDCWD_LINUX -100
+#define AT_FDCWD_LINUX            -100
+#define AT_SYMLINK_NOFOLLOW_LINUX 0x0100
+#define AT_REMOVEDIR_LINUX        0x0200
+#define AT_EACCESS_LINUX          0x0200
+#define AT_SYMLINK_FOLLOW_LINUX   0x0400
+#define AT_EMPTY_PATH_LINUX       0x1000
 
 #define O_RDONLY_LINUX  0
 #define O_WRONLY_LINUX  1

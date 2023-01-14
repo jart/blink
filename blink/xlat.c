@@ -515,18 +515,6 @@ int XlatClock(int x) {
   }
 }
 
-int XlatAtf(int x) {
-  int res = 0;
-  if (x & 0x0100) res |= AT_SYMLINK_NOFOLLOW, x &= ~0x0100;
-  if (x & 0x0200) res |= AT_REMOVEDIR, x &= ~0x0200;
-  if (x & 0x0400) res |= AT_SYMLINK_FOLLOW, x &= ~0x0400;
-  if (x) {
-    LOGF("%s %d not supported yet", "atf", x);
-    return einval();
-  }
-  return res;
-}
-
 int XlatAccMode(int x) {
   switch (x & O_ACCMODE_LINUX) {
     case O_RDONLY_LINUX:

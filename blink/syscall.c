@@ -1533,23 +1533,27 @@ static i64 SysFtruncate(struct Machine *m, i32 fd, i64 size) {
   return rc;
 }
 
+static int XlatFaccessatFlags(int x) {
+  int res = 0;
+  if (x & AT_EACCESS_LINUX) {
+    res |= AT_EACCESS;
+    x &= ~AT_EACCESS_LINUX;
+  }
+  if (x & AT_SYMLINK_NOFOLLOW_LINUX) {
+    res |= AT_SYMLINK_NOFOLLOW;
+    x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
+  }
+  if (x) {
+    LOGF("%s() flags %d not supported", "faccessat", x);
+    return -1;
+  }
+  return res;
+}
+
 static int SysFaccessat(struct Machine *m, i32 dirfd, i64 path, i32 mode,
                         i32 flags) {
   return faccessat(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode),
-                   XlatAtf(flags));
-}
-
-static int SysFstatat(struct Machine *m, i32 dirfd, i64 path, i64 staddr,
-                      i32 flags) {
-  int rc;
-  struct stat st;
-  struct stat_linux gst;
-  if ((rc = fstatat(GetDirFildes(dirfd), LoadStr(m, path), &st,
-                    XlatAtf(flags))) != -1) {
-    XlatStatToLinux(&gst, &st);
-    CopyToUserWrite(m, staddr, &gst, sizeof(gst));
-  }
-  return rc;
+                   XlatFaccessatFlags(flags));
 }
 
 static int SysFstat(struct Machine *m, i32 fd, i64 staddr) {
@@ -1557,6 +1561,52 @@ static int SysFstat(struct Machine *m, i32 fd, i64 staddr) {
   struct stat st;
   struct stat_linux gst;
   if ((rc = fstat(fd, &st)) != -1) {
+    XlatStatToLinux(&gst, &st);
+    CopyToUserWrite(m, staddr, &gst, sizeof(gst));
+  }
+  return rc;
+}
+
+static int XlatFstatatFlags(int x) {
+  int res = 0;
+  if (x & AT_SYMLINK_NOFOLLOW_LINUX) {
+    res |= AT_SYMLINK_NOFOLLOW;
+    x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
+  }
+#ifdef AT_EMPTY_PATH
+  if (x & AT_EMPTY_PATH_LINUX) {
+    res |= AT_EMPTY_PATH;
+    x &= ~AT_EMPTY_PATH_LINUX;
+  }
+#endif
+  if (x) {
+    LOGF("%s() flags %d not supported", "fstatat", x);
+    return -1;
+  }
+  return res;
+}
+
+static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
+                      i32 flags) {
+  int rc;
+  struct stat st;
+  const char *path;
+  struct stat_linux gst;
+  if (!(path = LoadStr(m, pathaddr))) return -1;
+#ifndef AT_EMPTY_PATH
+  if (flags & AT_EMPTY_PATH_LINUX) {
+    flags &= AT_EMPTY_PATH_LINUX;
+    if (!*path) {
+      if (flags) {
+        LOGF("%s() flags %d not supported", "fstatat(AT_EMPTY_PATH)", x);
+        return -1;
+      }
+      return SysFstat(m, dirfd, staddr);
+    }
+  }
+#endif
+  if ((rc = fstatat(GetDirFildes(dirfd), path, &st, XlatFstatatFlags(flags))) !=
+      -1) {
     XlatStatToLinux(&gst, &st);
     CopyToUserWrite(m, staddr, &gst, sizeof(gst));
   }
@@ -1595,9 +1645,23 @@ static int SysFchmod(struct Machine *m, i32 fd, u32 mode) {
   return fchmod(fd, mode);
 }
 
+static int XlatFchmodatFlags(int x) {
+  int res = 0;
+  if (x & AT_SYMLINK_NOFOLLOW_LINUX) {
+    res |= AT_SYMLINK_NOFOLLOW;
+    x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
+  }
+  if (x) {
+    LOGF("%s() flags %d not supported", "fstatat", x);
+    return -1;
+  }
+  return res;
+}
+
 static int SysFchmodat(struct Machine *m, i32 dirfd, i64 path, u32 mode,
                        i32 flags) {
-  return fchmodat(GetDirFildes(dirfd), LoadStr(m, path), mode, XlatAtf(flags));
+  return fchmodat(GetDirFildes(dirfd), LoadStr(m, path), mode,
+                  XlatFchmodatFlags(flags));
 }
 
 int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
@@ -1795,8 +1859,22 @@ static int SysSetpriority(struct Machine *m, i32 which, u32 who, int prio) {
   return setpriority(XlatPrio(which), who, prio);
 }
 
+static int XlatUnlinkatFlags(int x) {
+  int res = 0;
+  if (x & AT_REMOVEDIR_LINUX) {
+    res |= AT_REMOVEDIR;
+    x &= ~AT_REMOVEDIR_LINUX;
+  }
+  if (x) {
+    LOGF("%s() flags %d not supported", "unlinkat", x);
+    return -1;
+  }
+  return res;
+}
+
 static int SysUnlinkat(struct Machine *m, i32 dirfd, i64 path, i32 flags) {
-  return unlinkat(GetDirFildes(dirfd), LoadStr(m, path), XlatAtf(flags));
+  return unlinkat(GetDirFildes(dirfd), LoadStr(m, path),
+                  XlatUnlinkatFlags(flags));
 }
 
 static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
