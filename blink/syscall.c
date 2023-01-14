@@ -1598,7 +1598,7 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
     flags &= AT_EMPTY_PATH_LINUX;
     if (!*path) {
       if (flags) {
-        LOGF("%s() flags %d not supported", "fstatat(AT_EMPTY_PATH)", x);
+        LOGF("%s() flags %d not supported", "fstatat(AT_EMPTY_PATH)", flags);
         return -1;
       }
       return SysFstat(m, dirfd, staddr);
@@ -2368,6 +2368,17 @@ static int SysGettimeofday(struct Machine *m, i64 tv, i64 tz) {
   return rc;
 }
 
+static i64 SysTime(struct Machine *m, i64 addr) {
+  u8 buf[8];
+  time_t secs;
+  if ((secs = time(0)) == (time_t)-1) return -1;
+  if (addr) {
+    Write64(buf, secs);
+    CopyToUserWrite(m, addr, buf, sizeof(buf));
+  }
+  return secs;
+}
+
 static i64 SysTimes(struct Machine *m, i64 bufaddr) {
   // no conversion needed thanks to getauxval(AT_CLKTCK)
   clock_t res;
@@ -2901,6 +2912,7 @@ void OpSyscall(P) {
     SYSCALL(0x09E, SysArchPrctl, (m, di, si));
     SYSCALL(0x0A0, SysSetrlimit, (m, di, si));
     SYSCALL(0x0C8, SysTkill, (m, di, si));
+    SYSCALL(0x0C9, SysTime, (m, di));
     SYSCALL(0x0CA, SysFutex, (m, di, si, dx, r0, r8, r9));
     SYSCALL(0x0CB, SysSchedSetaffinity, (m, di, si, dx));
     SYSCALL(0x0CC, SysSchedGetaffinity, (m, di, si, dx));
