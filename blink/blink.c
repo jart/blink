@@ -187,6 +187,12 @@ static void HandleSigs(void) {
 #endif
 }
 
+#if defined(__EMSCRIPTEN__)
+void exit(int status) {
+  EM_ASM({ throw new ExitStatus(status); });
+}
+#endif
+
 int main(int argc, char *argv[]) {
   SetupWeb();
   g_blink_path = argc > 0 ? argv[0] : 0;

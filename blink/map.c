@@ -28,6 +28,11 @@
 #include "blink/util.h"
 
 long GetSystemPageSize(void) {
+#ifdef __EMSCRIPTEN__
+  // "pages" in Emscripten only refer to the granularity the memory
+  // buffer can be grown at but does not affect functions like mmap.
+  return 4096;
+#endif
   long z;
   unassert((z = sysconf(_SC_PAGESIZE)) > 0);
   unassert(IS2POW(z));
