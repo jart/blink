@@ -202,7 +202,8 @@ static void HandleSigs(void) {
 
 #if defined(__EMSCRIPTEN__)
 void exit(int status) {
-  EM_ASM({ throw new ExitStatus(status); });
+  // main is called multiple times - don't perform cleanup
+  _exit(status);
 }
 #endif
 
