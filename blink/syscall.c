@@ -1690,7 +1690,9 @@ static i64 SysFtruncate(struct Machine *m, i32 fd, i64 size) {
 static int XlatFaccessatFlags(int x) {
   int res = 0;
   if (x & AT_EACCESS_LINUX) {
+#if !defined(__EMSCRIPTEN__) && !defined(__CYGWIN__)
     res |= AT_EACCESS;
+#endif
     x &= ~AT_EACCESS_LINUX;
   }
   if (x & AT_SYMLINK_FOLLOW_LINUX) {
@@ -3265,7 +3267,8 @@ void OpSyscall(P) {
       break;
   }
   if (!m->interrupted) {
-    SYS_LOGF("system call returned %" PRId64 " %s", ax, ax == -1 ? strerror(errno) : "");
+    SYS_LOGF("system call returned %" PRId64 " %s", ax,
+             ax == -1 ? strerror(errno) : "");
     Put64(m->ax, ax != -1 ? ax : -(XlatErrno(errno) & 0xfff));
   } else {
     SYS_LOGF("system call interrupted");
