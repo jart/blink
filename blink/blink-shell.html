@@ -178,9 +178,18 @@
             },
             flush: function(tty) {},
             fsync: function(tty) {},
+            poll: function(tty) {
+              if (stdinBuffer.length > 0) return 1|4; // POLLIN | POLLOUT
+              return 4; // POLLOUT
+            },
           };
+
           TTY.register(FS.makedev(5, 0), ops);
           TTY.register(FS.makedev(6, 0), ops);
+
+          // TTY doesn't handle poll. Set our own stream handler.
+          FS.devices[FS.makedev(5, 0)].stream_ops.poll = ops.poll;
+          FS.devices[FS.makedev(6, 0)].stream_ops.poll = ops.poll;
         }],
         postRun: [],
         canvas: (function() {

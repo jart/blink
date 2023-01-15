@@ -47,6 +47,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include "blink/assert.h"
 #include "blink/errno.h"
 #include "blink/loader.h"
@@ -105,12 +109,45 @@ static int SystemIoctl(int fd, unsigned long request, ...) {
   return ioctl(fd, request, arg);
 }
 
+#ifdef __EMSCRIPTEN__
+// If this runs on the main thread, the browser is blocked until we return
+// back to the main loop. Yield regularly when the process waits for some
+// user input.
+
+int em_poll(struct pollfd *fds, nfds_t nfds, int timeout) {
+  int ret = poll(fds, nfds, timeout);
+  if (ret == 0) emscripten_sleep(50);
+  return ret;
+}
+
+ssize_t em_readv(int fd, const struct iovec *iov, int iovcnt) {
+  // Handle blocking reads by waiting for POLLIN
+  if ((fcntl(fd, F_GETFL) & O_NONBLOCK) == 0) {
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+    while(em_poll(&pfd, 1, 50) == 0);
+  }
+  size_t ret = readv(fd, iov, iovcnt);
+  if (ret == -1 && errno == EAGAIN) emscripten_sleep(50);
+  return ret;
+}
+#endif
+
 const struct FdCb kFdCbHost = {
     .close = close,
+#ifdef __EMSCRIPTEN__
+    .readv = em_readv,
+#else
     .readv = readv,
+#endif
     .writev = writev,
     .ioctl = SystemIoctl,
+#ifdef __EMSCRIPTEN__
+    .poll = em_poll,
+#else
     .poll = poll,
+#endif
     .tcgetattr = tcgetattr,
     .tcsetattr = tcsetattr,
 };

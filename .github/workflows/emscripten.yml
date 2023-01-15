@@ -51,7 +51,8 @@ jobs:
             -s INITIAL_MEMORY=1073741824 \
             -s EXPORTED_RUNTIME_METHODS=callMain \
             -fno-builtin-exit \
-            -sASSERTIONS
+            -sASSERTIONS \
+            -sASYNCIFY
 
           emcc -O2 o//blink/blinkenlights.o o//blink/blink.a o//third_party/zlib/zlib.a -lm -pthread -lrt -o o//blink/blink-web/blinkenlights.html \
             --shell-file blink/blink-shell.html \
