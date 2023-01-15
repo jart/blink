@@ -7,11 +7,12 @@
     <!-- BLINK SPECIFIC STYLE -->
     <style>
       #controls { display: none!important }
+      #output { display: none!important }
       [class^="emscripten"]:has(canvas) { display: none!important }
 
       .blink { display: block; margin-top: 5px; margin-bottom: 5px; }
 
-      #argsInput {
+      .blink-terminal {
         width: 100%;
         margin: 0 auto;
         margin-top: 10px;
@@ -28,6 +29,8 @@
     </style>
     <!-- BLINK SPECIFIC: Enable SharedArrayBuffer -->
     <script src="coi-serviceworker.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.1.0/lib/xterm.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.1.0/css/xterm.css"/>
     <style>
       body {
         font-family: arial;
@@ -151,26 +154,36 @@
       var progressElement = document.getElementById('progress');
       var spinnerElement = document.getElementById('spinner');
 
+      var stdinBuffer = [];
+
+      var terminal = new Terminal({convertEol: true});
+      terminal.onData(function(data) {
+        for (var i = 0; i < data.length; ++i) {
+          stdinBuffer.push(data.charCodeAt(i));
+        }
+      });
+
       var Module = {
-        preRun: [],
-        postRun: [],
-        print: (function() {
-          var element = document.getElementById('output');
-          if (element) element.value = ''; // clear browser cache
-          return function(text) {
-            if (arguments.length > 1) text = Array.prototype.slice.call(arguments).join(' ');
-            // These replacements are necessary if you render to raw HTML
-            //text = text.replace(/&/g, "&amp;");
-            //text = text.replace(/</g, "&lt;");
-            //text = text.replace(/>/g, "&gt;");
-            //text = text.replace('\n', '<br>', 'g');
-            console.log(text);
-            if (element) {
-              element.value += text + "\n";
-              element.scrollTop = element.scrollHeight; // focus on bottom
+        preRun: [function() {
+          function stdin() {
+            if (stdinBuffer.length > 0) {
+              return stdinBuffer.shift();
+            } else {
+              return null;
             }
-          };
-        })(),
+          }
+
+          function stdout(code) {
+            terminal.write(new Uint8Array([code]));
+          }
+
+          function stderr(code) {
+            terminal.write(new Uint8Array([code]));
+          }
+
+          FS.init(stdin, stdout, stderr);
+        }],
+        postRun: [],
         canvas: (function() {
           var canvas = document.getElementById('canvas');
 
@@ -220,6 +233,18 @@
       };
     </script>
     {{{ SCRIPT }}}
+    <div class="blink blink-terminal" id="terminal">
+    </div>
+    <div class="blink">
+      Upload an executable file:
+    </div>
+    <div class="blink">
+      <input type="file" id="fileInput" onchange="fileLoad(event, 'executable')" />
+    </div>
+    <div class="blink">
+      <textarea class="blink-terminal" id="argsInput" rows="4" placeholder="Space-separated arguments for the target binary..."></textarea>
+    </div>
+    <button id="runButton" onclick="runExecutable()">Run</button>
     <!-- BLINK SPECIFIC: Load and run the assembly. -->
     <script type='text/javascript'>
       function fileLoad(event, filename) {
@@ -232,23 +257,12 @@
         reader.readAsArrayBuffer(file);
       }
 
-      // Also show stderr in the page
-      Module.printErr = (t) => { Module.print(t); };
-
       function runExecutable() {
         let args = ['executable'].concat(document.getElementById('argsInput').value.split(' '));
         let ret = Module.callMain(args);
       }
+
+      terminal.open(document.getElementById("terminal"));
     </script>
-    <div class="blink">
-      Upload an executable file:
-    </div>
-    <div class="blink">
-      <input type="file" id="fileInput" onchange="fileLoad(event, 'executable')" />
-    </div>
-    <div class="blink">
-      <textarea id="argsInput" rows="4" placeholder="Space-separated arguments for the target binary..."></textarea>
-    </div>
-    <button id="runButton" onclick="runExecutable()">Run</button>
   </body>
 </html>
