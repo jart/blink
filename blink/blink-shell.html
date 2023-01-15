@@ -165,23 +165,22 @@
 
       var Module = {
         preRun: [function() {
-          function stdin() {
-            if (stdinBuffer.length > 0) {
-              return stdinBuffer.shift();
-            } else {
-              return null;
-            }
-          }
-
-          function stdout(code) {
-            terminal.write(new Uint8Array([code]));
-          }
-
-          function stderr(code) {
-            terminal.write(new Uint8Array([code]));
-          }
-
-          FS.init(stdin, stdout, stderr);
+          let ops = {
+            get_char: function(tty) {
+              if (stdinBuffer.length > 0) {
+                return stdinBuffer.shift();
+              } else {
+                return undefined;
+              }
+            },
+            put_char: function(tty, val) {
+                terminal.write(new Uint8Array([val]));
+            },
+            flush: function(tty) {},
+            fsync: function(tty) {},
+          };
+          TTY.register(FS.makedev(5, 0), ops);
+          TTY.register(FS.makedev(6, 0), ops);
         }],
         postRun: [],
         canvas: (function() {

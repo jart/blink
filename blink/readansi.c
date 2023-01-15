@@ -21,6 +21,10 @@
 #include <poll.h>
 #include <unistd.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include "blink/builtin.h"
 #include "blink/log.h"
 #include "blink/macros.h"
@@ -43,9 +47,13 @@ ssize_t readansi(int fd, char *buf, size_t size) {
         continue;
       }
       if (rc == -1 && errno == EAGAIN) {
+#ifdef __EMSCRIPTEN__
+        emscripten_sleep(50);
+#else
         pfd[0].fd = fd;
         pfd[0].events = POLLIN;
         poll(pfd, 1, 0);
+#endif
         continue;
       }
       return rc;
