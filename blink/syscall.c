@@ -3265,7 +3265,7 @@ void OpSyscall(P) {
       break;
   }
   if (!m->interrupted) {
-    SYS_LOGF("system call returned %d %s", ax, ax == -1 ? strerror(errno) : "");
+    SYS_LOGF("system call returned %" PRId64 " %s", ax, ax == -1 ? strerror(errno) : "");
     Put64(m->ax, ax != -1 ? ax : -(XlatErrno(errno) & 0xfff));
   } else {
     SYS_LOGF("system call interrupted");
