@@ -285,6 +285,11 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   atomic_int *ctid_ptr;
   struct Machine *m2 = 0;
   THR_LOGF("pid=%d tid=%d SysSpawn", m->system->pid, m->tid);
+  if ((flags & 255) != 0 && (flags & 255) != SIGCHLD_LINUX) {
+    LOGF("unsupported clone() signal: %d", flags & 255);
+    return einval();
+  }
+  flags &= ~255;
   supported = CLONE_THREAD_LINUX | CLONE_VM_LINUX | CLONE_FS_LINUX |
               CLONE_FILES_LINUX | CLONE_SIGHAND_LINUX | CLONE_SETTLS_LINUX |
               CLONE_PARENT_SETTID_LINUX | CLONE_CHILD_CLEARTID_LINUX |
@@ -298,8 +303,8 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
     return einval();
   }
   if ((flags & mandatory) != mandatory) {
-    LOGF("missing mandatory clone() thread flags: %#x",
-         (flags & mandatory) ^ mandatory);
+    LOGF("missing mandatory clone() thread flags: %#x out of %#x",
+         (flags & mandatory) ^ mandatory, flags);
     return einval();
   }
   if (((flags & CLONE_PARENT_SETTID_LINUX) &&
@@ -1493,6 +1498,21 @@ static int IoctlTcsets(struct Machine *m, int fd, int request, i64 addr,
   return fn(fd, request, &tio);
 }
 
+static int IoctlTiocgpgrp(struct Machine *m, int fd, i64 addr) {
+  int rc;
+  u8 *pgrp;
+  if (!(pgrp = (u8 *)Schlep(m, addr, 4))) return -1;
+  if ((rc = tcgetpgrp(fd)) == -1) return -1;
+  Write32(pgrp, rc);
+  return 0;
+}
+
+static int IoctlTiocspgrp(struct Machine *m, int fd, i64 addr) {
+  u8 *pgrp;
+  if (!(pgrp = (u8 *)Schlep(m, addr, 4))) return -1;
+  return tcsetpgrp(fd, Read32(pgrp));
+}
+
 static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
   size_t i;
   char *buf;
@@ -1626,6 +1646,12 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       break;
     case SIOCGIFDSTADDR_LINUX:
       rc = IoctlSiocgifaddr(m, fildes, addr, SIOCGIFDSTADDR);
+      break;
+    case TIOCGPGRP_LINUX:
+      rc = IoctlTiocgpgrp(m, fildes, addr);
+      break;
+    case TIOCSPGRP_LINUX:
+      rc = IoctlTiocspgrp(m, fildes, addr);
       break;
     default:
       LOGF("missing ioctl %#" PRIx64, request);

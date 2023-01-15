@@ -142,6 +142,8 @@
 #define TCSETS_LINUX        0x5402
 #define TCSETSW_LINUX       0x5403
 #define TCSETSF_LINUX       0x5404
+#define TIOCGPGRP_LINUX     0x540f
+#define TIOCSPGRP_LINUX     0x5410
 #define ARCH_SET_GS_LINUX   0x1001
 #define ARCH_SET_FS_LINUX   0x1002
 #define ARCH_GET_FS_LINUX   0x1003
