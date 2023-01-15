@@ -1186,9 +1186,31 @@ static void Op1b8(P) {
 }
 
 static relegated void LoadFarPointer(P, u64 *seg) {
-  u32 fp = Load32(ComputeReserveAddressRead4(A));
-  *seg = (fp & 0x0000ffff) << 4;
-  Put16(RegRexrReg(m, rde), fp >> 16);
+  unsigned n;
+  u8 *p;
+  u64 fp;
+  switch (Eamode(rde)) {
+    case XED_MODE_LONG:
+    case XED_MODE_LEGACY:
+      OpUdImpl(m);
+      break;
+    case XED_MODE_REAL:
+      n = 1 << RegLog2(rde);
+      p = ComputeReserveAddressRead(A, n + 2);
+      LockBus(p);
+      fp = Load32(p);
+      if (n >= 4) {
+        fp |= (u64)Load16(p + 4) << 32;
+        *seg = (fp >> 32 & 0x0000ffff) << 4;
+      } else {
+        *seg = (fp >> 16 & 0x0000ffff) << 4;
+      }
+      UnlockBus(p);
+      WriteRegister(rde, RegRexrReg(m, rde), fp);  // offset portion
+      break;
+    default:
+      __builtin_unreachable();
+  }
 }
 
 static relegated void OpLes(P) {
