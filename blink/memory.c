@@ -329,11 +329,10 @@ void *AddToFreeList(struct Machine *m, void *mem) {
 // Returns pointer to memory in guest memory. If the memory overlaps a
 // page boundary, then it's copied, and the temporary memory is pushed
 // to the free list. Returns NULL w/ EFAULT or ENOMEM on error.
-const void *Schlep(struct Machine *m, i64 addr, size_t size) {
+void *Schlep(struct Machine *m, i64 addr, size_t size) {
   char *copy;
   size_t have;
-  const void *res;
-  const void *page;
+  void *res, *page;
   if (!size) return 0;
   if (!(page = LookupAddress(m, addr))) return 0;
   have = 4096 - (addr & 4095);

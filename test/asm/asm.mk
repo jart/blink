@@ -39,11 +39,11 @@ o/$(MODE)/test/asm/%.com:						\
 		$(VM)
 	@mkdir -p $(@D)
 	@echo "#!/bin/sh" >$@
-	@echo "echo testing $(VM) $< >&2" >>$@
+	@echo "echo [test] $(VM) $< >&2" >>$@
 	@echo "$(VM) $< || exit" >>$@
-	@echo "echo testing o/$(MODE)/blink/blink $< >&2" >>$@
+	@echo "echo [test] o/$(MODE)/blink/blink $< >&2" >>$@
 	@echo "o/$(MODE)/blink/blink $< || exit" >>$@
-	@echo "echo testing o/third_party/qemu/qemu-x86_64 -cpu core2duo $< >&2" >>$@
+	@echo "echo [test] o/third_party/qemu/qemu-x86_64 -cpu core2duo $< >&2" >>$@
 	@echo "$(VM) o/third_party/qemu/qemu-x86_64 -cpu core2duo $< || exit" >>$@
 	@chmod +x $@
 

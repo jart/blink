@@ -39,13 +39,13 @@ void OpXaddEbGb(P) {
     y = Little8(y);
     do {
       atomic_store_explicit((_Atomic(u8) *)q, x, memory_order_relaxed);
-      z = Little8(kAlu[ALU_ADD][ALU_INT8](m, Little8(x), y));
+      z = Little8(Add8(m, Little8(x), y));
     } while (!atomic_compare_exchange_weak_explicit(
         (_Atomic(u8) *)p, &x, z, memory_order_release, memory_order_acquire));
   } else {
     x = Load8(p);
     y = Get8(q);
-    z = kAlu[ALU_ADD][ALU_INT8](m, x, y);
+    z = Add8(m, x, y);
     Put8(q, x);
     Store8(p, z);
   }
@@ -64,7 +64,7 @@ void OpXaddEvqpGvqp(P) {
       y = Little64(y);
       do {
         atomic_store_explicit((_Atomic(u64) *)q, x, memory_order_relaxed);
-        z = Little64(kAlu[ALU_ADD][ALU_INT64](m, Little64(x), y));
+        z = Little64(Add64(m, Little64(x), y));
       } while (!atomic_compare_exchange_weak_explicit((_Atomic(u64) *)p, &x, z,
                                                       memory_order_release,
                                                       memory_order_acquire));
@@ -75,14 +75,14 @@ void OpXaddEvqpGvqp(P) {
       LockBus(p);
       x = Load64Unlocked(p);
       y = Get64(q);
-      z = kAlu[ALU_ADD][ALU_INT64](m, x, y);
+      z = Add64(m, x, y);
       Put64(q, x);
       Store64Unlocked(p, z);
       UnlockBus(p);
     } else {
       x = Load64(p);
       y = Get64(q);
-      z = kAlu[ALU_ADD][ALU_INT64](m, x, y);
+      z = Add64(m, x, y);
       Put64(q, x);
       Store64(p, z);
     }
@@ -94,7 +94,7 @@ void OpXaddEvqpGvqp(P) {
       y = Little32(y);
       do {
         atomic_store_explicit((_Atomic(u32) *)q, x, memory_order_relaxed);
-        z = Little32(kAlu[ALU_ADD][ALU_INT32](m, Little32(x), y));
+        z = Little32(Add32(m, Little32(x), y));
       } while (!atomic_compare_exchange_weak_explicit((_Atomic(u32) *)p, &x, z,
                                                       memory_order_release,
                                                       memory_order_acquire));
@@ -102,7 +102,7 @@ void OpXaddEvqpGvqp(P) {
       if (Lock(rde)) LockBus(p);
       x = Load32(p);
       y = Get32(q);
-      z = kAlu[ALU_ADD][ALU_INT32](m, x, y);
+      z = Add32(m, x, y);
       Put32(q, x);
       Store32(p, z);
       if (Lock(rde)) UnlockBus(p);
@@ -119,7 +119,7 @@ void OpXaddEvqpGvqp(P) {
       y = Little16(y);
       do {
         atomic_store_explicit((_Atomic(u16) *)q, x, memory_order_relaxed);
-        z = Little16(kAlu[ALU_ADD][ALU_INT16](m, Little16(x), y));
+        z = Little16(Add16(m, Little16(x), y));
       } while (!atomic_compare_exchange_weak_explicit((_Atomic(u16) *)p, &x, z,
                                                       memory_order_release,
                                                       memory_order_acquire));
@@ -127,7 +127,7 @@ void OpXaddEvqpGvqp(P) {
       if (Lock(rde)) LockBus(p);
       x = Load16(p);
       y = Get16(q);
-      z = kAlu[ALU_ADD][ALU_INT16](m, x, y);
+      z = Add16(m, x, y);
       Put16(q, x);
       Store16(p, z);
       if (Lock(rde)) UnlockBus(p);

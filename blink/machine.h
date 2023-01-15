@@ -360,6 +360,7 @@ struct Machine {                           //
   bool interrupted;                        //
   sigjmp_buf onhalt;                       //
   struct sigaltstack_linux sigaltstack;    //
+  i64 robust_list;                         //
   i64 ctid;                                //
   int tid;                                 //
   sigset_t spawn_sigmask;                  //
@@ -409,13 +410,14 @@ _Noreturn void OpUd(P);
 _Noreturn void OpHlt(P);
 void JitlessDispatch(P);
 void RestoreIp(struct Machine *);
+void UnlockRobustFutexes(struct Machine *);
 
 bool IsValidAddrSize(i64, i64) pureconst;
 bool OverlapsPrecious(i64, i64) pureconst;
 char **CopyStrList(struct Machine *, i64);
 char *CopyStr(struct Machine *, i64);
 char *LoadStr(struct Machine *, i64);
-const void *Schlep(struct Machine *, i64, size_t);
+void *Schlep(struct Machine *, i64, size_t);
 bool IsValidMemory(struct Machine *, i64, i64, int);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
 u8 *GetPageAddress(struct System *, u64);

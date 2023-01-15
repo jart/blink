@@ -479,6 +479,10 @@
 
 #define FD_SETSIZE_LINUX 1024
 
+#define FUTEX_WAITERS_LINUX    0x80000000
+#define FUTEX_OWNER_DIED_LINUX 0x40000000
+#define FUTEX_TID_MASK_LINUX   0x3fffffff
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];
@@ -746,6 +750,12 @@ struct pselect6_linux {
 
 struct sigset_linux {
   u8 sigmask[8];
+};
+
+struct robust_list_linux {
+  u8 next[8];
+  u8 offset[8];
+  u8 pending[8];
 };
 
 int sysinfo_linux(struct sysinfo_linux *);

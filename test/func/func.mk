@@ -40,7 +40,9 @@ o/$(MODE)/test/func/%.com:						\
 		o/$(MODE)/blink/blink
 	@mkdir -p $(@D)
 	@echo "#!/bin/sh" >$@
-	@echo "echo o/$(MODE)/blink/blink $< >&2" >>$@
+	@echo "echo [test] $(VM) $< >&2" >>$@
+	@echo "$(VM) $< || exit" >>$@
+	@echo "echo [test] o/$(MODE)/blink/blink $< >&2" >>$@
 	@echo "o/$(MODE)/blink/blink $<" >>$@
 	@chmod +x $@
 

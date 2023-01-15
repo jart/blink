@@ -68,8 +68,8 @@ void OpXchgGvqpEvqp(P) {
       Put64(p, x);
     } else {
       LockBus(p);
-      x = Get64(q);
       y = Load64Unlocked(p);
+      x = Get64(q);
       Put64(q, y);
       Store64Unlocked(p, x);
       UnlockBus(p);
@@ -86,8 +86,8 @@ void OpXchgGvqpEvqp(P) {
     } else {
       u32 x, y;
       if (!IsModrmRegister(rde)) LockBus(p);
-      x = Read32(q);
       y = Load32(p);
+      x = Read32(q);
       Write32(q, y);
       Store32(p, x);
       if (!IsModrmRegister(rde)) UnlockBus(p);
@@ -108,8 +108,8 @@ void OpXchgGvqpEvqp(P) {
     } else {
       u16 x, y;
       if (!IsModrmRegister(rde)) LockBus(p);
-      x = Read16(q);
       y = Load16(p);
+      x = Read16(q);
       Write16(q, y);
       Store16(p, x);
       if (!IsModrmRegister(rde)) UnlockBus(p);

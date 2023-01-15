@@ -135,6 +135,7 @@ struct System *NewSystem(void) {
 
 static void FreeMachineUnlocked(struct Machine *m) {
   THR_LOGF("pid=%d tid=%d FreeMachine", m->system->pid, m->tid);
+  UnlockRobustFutexes(m);
   if (g_machine == m) {
     g_machine = 0;
   }

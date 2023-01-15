@@ -211,11 +211,9 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
     _Exit(rc);
   } else {
     THR_LOGF("calling exit(%d)", rc);
-#if defined(__SANITIZE_ADDRESS__) || defined(DEBUG)
     KillOtherThreads(m->system);
     FreeMachine(m);
     ShutdownJit();
-#endif
     exit(rc);
   }
 }
@@ -244,10 +242,11 @@ static int SysFork(struct Machine *m) {
   UNLOCK(&m->system->mmap_lock);
   UNLOCK(&m->system->sig_lock);
   if (!pid) {
-    m->tid = m->system->pid = newpid = getpid();
+    newpid = getpid();
     InitBus();  // TODO(jart): use shared memory for g_bus
     THR_LOGF("pid=%d tid=%d SysFork -> pid=%d tid=%d",  //
              m->system->pid, m->tid, newpid, newpid);
+    m->tid = m->system->pid = newpid;
     m->system->isfork = true;
     RemoveOtherThreads(m->system);
   }
@@ -484,6 +483,135 @@ static int SysFutex(struct Machine *m,  //
       LOGF("unsupported futex op %#x", op);
       return einval();
   }
+}
+
+static void UnlockRobustFutex(struct Machine *m, u64 futex_addr,
+                              bool ispending) {
+  int owner;
+  u32 value, replace;
+  _Atomic(u32) *futex;
+  if (futex_addr & 3) {
+    LOGF("robust futex isn't aligned");
+    return;
+  }
+  if (!(futex = (_Atomic(u32) *)Schlep(m, futex_addr, 4))) {
+    LOGF("encountered efault in robust futex list");
+    return;
+  }
+  for (value = atomic_load_explicit(futex, memory_order_acquire);;) {
+    owner = value & FUTEX_TID_MASK_LINUX;
+    if (ispending && !owner) {
+      THR_LOGF("unlocking pending ownerless futex");
+      SysFutexWake(m, futex_addr, 1);
+      return;
+    }
+    if (owner && owner != m->tid) {
+      THR_LOGF("robust futex 0x%08" PRIx32
+               " was owned by %d but we're tid=%d pid=%d",
+               value, owner, m->tid, m->system->pid);
+      return;
+    }
+    replace = FUTEX_OWNER_DIED_LINUX | (value & FUTEX_WAITERS_LINUX);
+    if (atomic_compare_exchange_weak_explicit(futex, &value, replace,
+                                              memory_order_release,
+                                              memory_order_acquire)) {
+      THR_LOGF("successfully unlocked robust futex");
+      if (value & FUTEX_WAITERS_LINUX) {
+        THR_LOGF("waking robust futex waiters");
+        SysFutexWake(m, futex_addr, 1);
+      }
+      return;
+    } else {
+      THR_LOGF("robust futex cas failed");
+    }
+  }
+}
+
+void UnlockRobustFutexes(struct Machine *m) {
+  if (1) return;  // TODO: Figure out how these work.
+  int limit = 1000;
+  bool once = false;
+  u64 list, item, pending;
+  struct robust_list_linux *data;
+  if (!(item = list = m->robust_list)) return;
+  m->robust_list = 0;
+  pending = 0;
+  do {
+    if (!(data = (struct robust_list_linux *)Schlep(m, item, sizeof(*data)))) {
+      LOGF("encountered efault in robust futex list");
+      break;
+    }
+    THR_LOGF("unlocking robust futex %#" PRIx64 " {.next=%#" PRIx64
+             " .offset=%" PRId64 " .pending=%#" PRIx64 "}",
+             item, Read64(data->next), Read64(data->offset),
+             Read64(data->pending));
+    if (!once) {
+      pending = Read64(data->pending);
+      once = true;
+    }
+    if (!--limit) {
+      LOGF("encountered cycle or limit in robust futex list");
+      break;
+    }
+    if (item != pending) {
+      UnlockRobustFutex(m, item + Read64(data->offset), false);
+    }
+    item = Read64(data->next);
+  } while (item != list);
+  if (!pending) return;
+  if (!(data = (struct robust_list_linux *)Schlep(m, pending, sizeof(*data)))) {
+    LOGF("encountered efault in robust futex list");
+    return;
+  }
+  THR_LOGF("unlocking pending robust futex %#" PRIx64 " {.next=%#" PRIx64
+           " .offset=%" PRId64 " .pending=%#" PRIx64 "}",
+           Read64(data->next), Read64(data->offset), Read64(data->pending));
+  UnlockRobustFutex(m, pending + Read64(data->offset), true);
+}
+
+static i32 ReturnRobustList(struct Machine *m, i64 head_ptr_addr,
+                            i64 len_ptr_addr) {
+  u8 buf[8];
+  Write64(buf, m->robust_list);
+  CopyToUserWrite(m, head_ptr_addr, buf, sizeof(buf));
+  Write64(buf, sizeof(struct robust_list_linux));
+  CopyToUserWrite(m, len_ptr_addr, buf, sizeof(buf));
+  return 0;
+}
+
+static i32 SysGetRobustList(struct Machine *m, int pid, i64 head_ptr_addr,
+                            i64 len_ptr_addr) {
+  int rc;
+  struct Dll *e;
+  struct Machine *m2;
+  if (!pid || pid == m->tid) {
+    rc = ReturnRobustList(m, head_ptr_addr, len_ptr_addr);
+  } else {
+    rc = -1;
+    errno = ESRCH;
+    LOCK(&m->system->machines_lock);
+    for (e = dll_first(m->system->machines); e;
+         e = dll_next(m->system->machines, e)) {
+      m2 = MACHINE_CONTAINER(e);
+      if (m2->tid == pid) {
+        rc = ReturnRobustList(m2, head_ptr_addr, len_ptr_addr);
+        break;
+      }
+    }
+    UNLOCK(&m->system->machines_lock);
+  }
+  return rc;
+}
+
+static i32 SysSetRobustList(struct Machine *m, i64 head_addr, u64 len) {
+  if (len != sizeof(struct robust_list_linux)) {
+    return einval();
+  }
+  if (!IsValidMemory(m, head_addr, len, PROT_READ | PROT_WRITE)) {
+    return efault();
+  }
+  m->robust_list = head_addr;
+  return 0;
 }
 
 static int ValidateAffinityPid(struct Machine *m, int pid) {
@@ -1539,6 +1667,9 @@ static int XlatFaccessatFlags(int x) {
     res |= AT_EACCESS;
     x &= ~AT_EACCESS_LINUX;
   }
+  if (x & AT_SYMLINK_FOLLOW_LINUX) {
+    x &= ~AT_SYMLINK_FOLLOW_LINUX;  // default behavior
+  }
   if (x & AT_SYMLINK_NOFOLLOW_LINUX) {
     res |= AT_SYMLINK_NOFOLLOW;
     x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
@@ -1550,8 +1681,12 @@ static int XlatFaccessatFlags(int x) {
   return res;
 }
 
-static int SysFaccessat(struct Machine *m, i32 dirfd, i64 path, i32 mode,
-                        i32 flags) {
+static int SysFaccessat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
+  return faccessat(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode), 0);
+}
+
+static int SysFaccessat2(struct Machine *m, i32 dirfd, i64 path, i32 mode,
+                         i32 flags) {
   return faccessat(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode),
                    XlatFaccessatFlags(flags));
 }
@@ -1569,6 +1704,9 @@ static int SysFstat(struct Machine *m, i32 fd, i64 staddr) {
 
 static int XlatFstatatFlags(int x) {
   int res = 0;
+  if (x & AT_SYMLINK_FOLLOW_LINUX) {
+    x &= ~AT_SYMLINK_FOLLOW_LINUX;  // default behavior
+  }
   if (x & AT_SYMLINK_NOFOLLOW_LINUX) {
     res |= AT_SYMLINK_NOFOLLOW;
     x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
@@ -1647,6 +1785,9 @@ static int SysFchmod(struct Machine *m, i32 fd, u32 mode) {
 
 static int XlatFchmodatFlags(int x) {
   int res = 0;
+  if (x & AT_SYMLINK_FOLLOW_LINUX) {
+    x &= ~AT_SYMLINK_FOLLOW_LINUX;  // default behavior
+  }
   if (x & AT_SYMLINK_NOFOLLOW_LINUX) {
     res |= AT_SYMLINK_NOFOLLOW;
     x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
@@ -2051,7 +2192,7 @@ static ssize_t SysGetrandom(struct Machine *m, i64 a, size_t n, int f) {
   return rc;
 }
 
-static void OnSignal(int sig, siginfo_t *si, void *uc) {
+void OnSignal(int sig, siginfo_t *si, void *uc) {
   EnqueueSignal(g_machine, UnXlatSignal(sig));
 }
 
@@ -2746,7 +2887,7 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
 }
 
 static int SysKill(struct Machine *m, int pid, int sig) {
-  return kill(pid, XlatSignal(sig));
+  return kill(pid, sig ? XlatSignal(sig) : 0);
 }
 
 static bool IsValidThreadId(struct System *s, int tid) {
@@ -2756,9 +2897,10 @@ static bool IsValidThreadId(struct System *s, int tid) {
 
 static int SysTkill(struct Machine *m, int tid, int sig) {
   int err;
+  bool found;
   struct Dll *e;
   struct Machine *m2;
-  if (!(1 <= sig && sig <= 64)) {
+  if (!(0 <= sig && sig <= 64)) {
     LOGF("tkill(%d, %d) failed due to bogus signal", tid, sig);
     return einval();
   }
@@ -2772,12 +2914,18 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
        e = dll_next(m->system->machines, e)) {
     m2 = MACHINE_CONTAINER(e);
     if (m2->tid == tid) {
-      EnqueueSignal(m2, sig);
-      err = pthread_kill(m2->thread, SIGSYS);
+      if (sig) {
+        EnqueueSignal(m2, sig);
+        err = pthread_kill(m2->thread, SIGSYS);
+      } else {
+        err = pthread_kill(m2->thread, 0);
+      }
+      found = true;
       break;
     }
   }
   UNLOCK(&m->system->machines_lock);
+  if (!sig && !found) err = ESRCH;
   if (!err) {
     return 0;
   } else {
@@ -2873,7 +3021,7 @@ static int SysCreat(struct Machine *m, i64 path, int mode) {
 }
 
 static int SysAccess(struct Machine *m, i64 path, int mode) {
-  return SysFaccessat(m, AT_FDCWD_LINUX, path, mode, 0);
+  return SysFaccessat(m, AT_FDCWD_LINUX, path, mode);
 }
 
 static int SysStat(struct Machine *m, i64 path, i64 st) {
@@ -3067,8 +3215,11 @@ void OpSyscall(P) {
     SYSCALL(0x10A, SysSymlinkat, (m, di, si, dx));
     SYSCALL(0x10B, SysReadlinkat, (m, di, si, dx, r0));
     SYSCALL(0x10C, SysFchmodat, (m, di, si, dx, r0));
-    SYSCALL(0x10D, SysFaccessat, (m, di, si, dx, r0));
+    SYSCALL(0x10D, SysFaccessat, (m, di, si, dx));
+    SYSCALL(0x1b7, SysFaccessat2, (m, di, si, dx, r0));
     SYSCALL(0x120, SysAccept4, (m, di, si, dx, r0));
+    SYSCALL(0x111, SysSetRobustList, (m, di, si));
+    SYSCALL(0x112, SysGetRobustList, (m, di, si, dx));
     SYSCALL(0x12E, SysPrlimit, (m, di, si, dx, r0));
     SYSCALL(0x13E, SysGetrandom, (m, di, si, dx));
     SYSCALL(0x1B4, SysCloseRange, (m->system, di, si, dx));

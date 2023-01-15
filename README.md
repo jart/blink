@@ -360,19 +360,27 @@ flag may be passed to disable the linear translation optimization, and
 instead use only the memory safe full virtualization approach of the
 PML4T and TLB.
 
-Blink has an xterm-compatible ANSI teletypewriter display implementation
-which allows Blink's TUI interface to host other TUI programs, within an
-embedded terminal display. For example, it's possible to use Antirez's
-Kilo text editor inside Blink's TUI.
+## Pseudoteletypewriter
+
+Blink has an xterm-compatible ANSI pseudoteletypewriter display
+implementation which allows Blink's TUI interface to host other TUI
+programs, within an embedded terminal display. For example, it's
+possible to use Antirez's Kilo text editor inside Blink's TUI. For the
+complete list of ANSI sequences which are supported, please refer to
+[blink/pty.c](blink/pty.c).
+
+In real mode, Blink's PTY can be configured via `INT $0x16` to convert
+CGA memory stored at address `0xb0000` into UNICODE block characters,
+thereby making retro video gaming in the terminal possible.
+
+## Real Mode
 
 Blink supports 16-bit BIOS programs, such as SectorLISP. To boot real
 mode programs in Blink, the `o//blink/blinkenlights -r` flag may be
 passed, which puts the virtual machine in i8086 mode. Currently only a
 limited set of BIOS APIs are available. For example, Blink supports IBM
-PC Serial UART, CGA display, and the MDA display APIs which are rendered
-using block characters in the TUI interface. We hope to expand our real
-mode support in the near future, in order to run operating systems like
-ELKS.
+PC Serial UART, CGA, and MDA. We hope to expand our real mode support in
+the near future, in order to run operating systems like ELKS.
 
 Blink supports troubleshooting operating system bootloaders. Blink was
 designed for Cosmopolitan Libc, which embeds an operating system in each
@@ -382,6 +390,8 @@ modes a bootloader requires at various stages. In order to do that, we
 needed to implement some ring0 hardware instructions. Blink has enough
 to support Cosmopolitan, but it'll take much more time to get Blink to a
 point where it can boot something like Windows.
+
+## Executable Formats
 
 Blink supports several different executable formats, all of which are
 static. You can run:
@@ -401,3 +411,56 @@ static. You can run:
 - Real mode executables, which are loaded to the address `0x7c00`. These
   programs must be run using the `blinkenlights` command with the `-r`
   flag.
+
+## Quirks
+
+Here's the current list of quirks and known issues with Blink.
+
+### Futexes
+
+If futexes are shared between multiple processes then they'll have
+poorer latency, because Blink currently only supports condition
+variables between threads. Blink also currently doesn't unlock robust
+mutexes on process death. We're working on both these problems.
+
+### Signal Handling
+
+Blink uses `SIGSYS` to deliver signals internally. This signal is
+precious to Blink. It's currently not possible for guest applications to
+capture it from external processes.
+
+Blink's JIT currently doesn't have true asynchronous signal delivery.
+Right now Blink only checks for signals from its main interpreter loop.
+Under normal circumstances, Blink will drop back into the main
+interpreter loop occasionally, when returning from functions or
+executing system calls. However JIT'd code like the following:
+
+```c
+for (;;) {
+}
+```
+
+Can form a cycle in the JIT graph that prevents signal delivery and can
+even deadlock shutdown. This is something we plan to fix soon.
+
+### Self Modifying Code
+
+Blink supports self-modifying code, with some caveats.
+
+Blink currently only JITs the memory intervals declared by your ELF
+program headers as `PF_X`. If the code stored at these addresses is
+modified, then it must be invalidated by calling `mprotect(PROT_EXEC)`,
+which will atomically reset all JIT hooks if it overlaps an executable
+section. While this takes away some of the flexibility that's normally
+offered by the x86 architecture, the fact is that operating systems like
+OpenBSD already took that capability away. So in many respects, Blink is
+helping your code to be more portable. It's recommended that executables
+only morph themselves a few times during their lifecycle, because doing
+so leaks JIT memory. Blink sets aside only 31mb of .bss memory for JIT.
+Running out of JIT memory is harmless and causes Blink to safely fall
+back into interpreter mode.
+
+Memory that isn't declared by an ELF program header will be interpreted
+when executed. Blink's interpreter mode automatically invalidates any
+instruction caches when memory changes, so that code may modify itself
+freely. This upholds the same guarantees as the x86 architecture.
