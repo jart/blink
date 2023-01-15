@@ -739,6 +739,15 @@ struct sigaltstack_linux {
   u8 ss_size[8];   // size of stack
 };
 
+struct pselect6_linux {
+  u8 sigmaskaddr[8];
+  u8 sigmasksize[8];
+};
+
+struct sigset_linux {
+  u8 sigmask[8];
+};
+
 int sysinfo_linux(struct sysinfo_linux *);
 
 #endif /* BLINK_LINUX_H_ */

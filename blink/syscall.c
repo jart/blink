@@ -53,6 +53,7 @@
 #include "blink/macros.h"
 #include "blink/mop.h"
 #include "blink/syscall.h"
+#include "blink/timespec.h"
 #include "blink/util.h"
 
 #ifdef __linux
@@ -2409,7 +2410,7 @@ static int SysUtimes(struct Machine *m, i64 pathaddr, i64 tvsaddr) {
   }
 }
 
-static int CopyFdSet(struct Machine *m, int nfds, fd_set *fds, i64 addr) {
+static int LoadFdSet(struct Machine *m, int nfds, fd_set *fds, i64 addr) {
   int fd;
   const u8 *p;
   if ((p = (const u8 *)Schlep(m, addr, ROUNDUP(nfds, 8) / 8))) {
@@ -2425,25 +2426,48 @@ static int CopyFdSet(struct Machine *m, int nfds, fd_set *fds, i64 addr) {
   }
 }
 
-static i32 SysSelect(struct Machine *m,   //
-                     i32 nfds,            //
-                     i64 readfds_addr,    //
-                     i64 writefds_addr,   //
-                     i64 exceptfds_addr,  //
-                     i64 timeout_addr) {
+static int SaveFdSet(struct Machine *m, int nfds, const fd_set *fds, i64 addr) {
+  u8 *p;
+  int n, fd;
+  n = ROUNDUP(nfds, 8) / 8;
+  if (!(p = calloc(1, n))) return -1;
+  for (fd = 0; fd < nfds; ++fd) {
+    if (FD_ISSET(fd, fds)) {
+      p[fd >> 3] |= 1 << (fd & 7);
+    }
+  }
+  CopyToUserWrite(m, addr, p, n);
+  free(p);
+  return 0;
+}
+
+static i32 Select(struct Machine *m,          //
+                  i32 nfds,                   //
+                  i64 readfds_addr,           //
+                  i64 writefds_addr,          //
+                  i64 exceptfds_addr,         //
+                  struct timespec *timeoutp,  //
+                  const u64 *sigmaskp_guest) {
   int rc;
   i32 setsize;
-  struct timeval timeout, *timeoutp;
+  u64 oldmask_guest = 0;
+  sigset_t block, oldmask;
   fd_set readfds, writefds, exceptfds;
   fd_set *readfdsp, *writefdsp, *exceptfdsp;
-  const struct timeval_linux *timeout_linux;
+  struct timespec timeout, started, elapsed;
+  if (timeoutp) {
+    started = GetTime();
+    timeout = *timeoutp;
+  } else {
+    memset(&timeout, 0, sizeof(timeout));
+  }
   setsize = MIN(FD_SETSIZE, FD_SETSIZE_LINUX);
   if (nfds < 0 || nfds > setsize) {
     LOGF("select() nfds=%d can't exceed %d on this platform", nfds, setsize);
     return einval();
   }
   if (readfds_addr) {
-    if (CopyFdSet(m, nfds, &readfds, readfds_addr) != -1) {
+    if (LoadFdSet(m, nfds, &readfds, readfds_addr) != -1) {
       readfdsp = &readfds;
     } else {
       LOGF("select() bad %s memory", "readfds");
@@ -2453,7 +2477,7 @@ static i32 SysSelect(struct Machine *m,   //
     readfdsp = 0;
   }
   if (writefds_addr) {
-    if (CopyFdSet(m, nfds, &writefds, writefds_addr) != -1) {
+    if (LoadFdSet(m, nfds, &writefds, writefds_addr) != -1) {
       writefdsp = &writefds;
     } else {
       LOGF("select() bad %s memory", "writefds");
@@ -2463,7 +2487,7 @@ static i32 SysSelect(struct Machine *m,   //
     writefdsp = 0;
   }
   if (exceptfds_addr) {
-    if (CopyFdSet(m, nfds, &exceptfds, exceptfds_addr) != -1) {
+    if (LoadFdSet(m, nfds, &exceptfds, exceptfds_addr) != -1) {
       exceptfdsp = &exceptfds;
     } else {
       LOGF("select() bad %s memory", "exceptfds");
@@ -2472,21 +2496,129 @@ static i32 SysSelect(struct Machine *m,   //
   } else {
     exceptfdsp = 0;
   }
-  if (timeout_addr) {
-    if ((timeout_linux = (const struct timeval_linux *)Schlep(
-             m, timeout_addr, sizeof(*timeout_linux)))) {
-      timeout.tv_sec = Read64(timeout_linux->tv_sec);
-      timeout.tv_usec = Read64(timeout_linux->tv_usec);
-      timeoutp = &timeout;
+  unassert(!sigfillset(&block));
+  unassert(!pthread_sigmask(SIG_BLOCK, &block, &oldmask));
+  if (sigmaskp_guest) {
+    oldmask_guest = m->sigmask;
+    m->sigmask = *sigmaskp_guest;
+  }
+  if (!CheckInterrupt(m)) {
+    INTERRUPTIBLE(rc = pselect(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp,
+                               &oldmask));
+  } else {
+    rc = -1;
+  }
+  if (sigmaskp_guest) {
+    m->sigmask = oldmask_guest;
+  }
+  unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
+  if (rc != -1) {
+    if ((readfds_addr && SaveFdSet(m, nfds, &readfds, readfds_addr) == -1) ||
+        (writefds_addr && SaveFdSet(m, nfds, &writefds, writefds_addr) == -1) ||
+        (exceptfds_addr &&
+         SaveFdSet(m, nfds, &exceptfds, exceptfds_addr) == -1)) {
+      return -1;
+    }
+  }
+  if (timeoutp) {
+    elapsed = SubtractTime(GetTime(), started);
+    if (CompareTime(elapsed, timeout) < 0) {
+      *timeoutp = SubtractTime(timeout, elapsed);
     } else {
-      LOGF("select() bad %s memory", "timeout");
+      memset(timeoutp, 0, sizeof(*timeoutp));
+    }
+  }
+  return rc;
+}
+
+static i32 SysSelect(struct Machine *m, i32 nfds, i64 readfds_addr,
+                     i64 writefds_addr, i64 exceptfds_addr, i64 timeout_addr) {
+  i32 rc;
+  struct timespec timeout, *timeoutp;
+  struct timeval_linux timeout_linux;
+  const struct timeval_linux *timeoutp_linux;
+  if (timeout_addr) {
+    if ((timeoutp_linux = (const struct timeval_linux *)Schlep(
+             m, timeout_addr, sizeof(*timeoutp_linux)))) {
+      timeout.tv_sec = Read64(timeoutp_linux->tv_sec);
+      timeout.tv_nsec = Read64(timeoutp_linux->tv_usec);
+      if (0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000) {
+        timeout.tv_nsec *= 1000;
+        timeoutp = &timeout;
+      } else {
+        return einval();
+      }
+    } else {
       return -1;
     }
   } else {
     timeoutp = 0;
+    memset(&timeout, 0, sizeof(timeout));
   }
-  if (CheckInterrupt(m)) return eintr();
-  INTERRUPTIBLE(rc = select(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp));
+  rc =
+      Select(m, nfds, readfds_addr, writefds_addr, exceptfds_addr, timeoutp, 0);
+  if (timeout_addr && (rc != -1 || errno == EINTR)) {
+    Write64(timeout_linux.tv_sec, timeout.tv_sec);
+    Write64(timeout_linux.tv_usec, (timeout.tv_nsec + 999) / 1000);
+    CopyToUserWrite(m, timeout_addr, &timeout_linux, sizeof(timeout_linux));
+  }
+  return rc;
+}
+
+static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
+                      i64 writefds_addr, i64 exceptfds_addr, i64 timeout_addr,
+                      i64 pselect6_addr) {
+  i32 rc;
+  u64 sigmask, *sigmaskp;
+  const struct sigset_linux *sm;
+  const struct pselect6_linux *ps;
+  struct timespec timeout, *timeoutp;
+  struct timespec_linux timeout_linux;
+  const struct timespec_linux *timeoutp_linux;
+  if (timeout_addr) {
+    if ((timeoutp_linux = (const struct timespec_linux *)Schlep(
+             m, timeout_addr, sizeof(*timeoutp_linux)))) {
+      timeout.tv_sec = Read64(timeoutp_linux->tv_sec);
+      timeout.tv_nsec = Read64(timeoutp_linux->tv_nsec);
+      timeoutp = &timeout;
+    } else {
+      return -1;
+    }
+  } else {
+    timeoutp = 0;
+    memset(&timeout, 0, sizeof(timeout));
+  }
+  if (pselect6_addr) {
+    if ((ps = (const struct pselect6_linux *)Schlep(m, pselect6_addr,
+                                                    sizeof(*ps)))) {
+      if (Read64(ps->sigmaskaddr)) {
+        if (Read64(ps->sigmasksize) == 8) {
+          if ((sm = (const struct sigset_linux *)Schlep(
+                   m, Read64(ps->sigmaskaddr), sizeof(*sm)))) {
+            sigmask = Read64(sm->sigmask);
+            sigmaskp = &sigmask;
+          } else {
+            return -1;
+          }
+        } else {
+          return einval();
+        }
+      } else {
+        sigmaskp = 0;
+      }
+    } else {
+      return -1;
+    }
+  } else {
+    sigmaskp = 0;
+  }
+  rc = Select(m, nfds, readfds_addr, writefds_addr, exceptfds_addr, timeoutp,
+              sigmaskp);
+  if (timeout_addr && (rc != -1 || errno == EINTR)) {
+    Write64(timeout_linux.tv_sec, timeout.tv_sec);
+    Write64(timeout_linux.tv_nsec, timeout.tv_nsec);
+    CopyToUserWrite(m, timeout_addr, &timeout_linux, sizeof(timeout_linux));
+  }
   return rc;
 }
 
@@ -2820,6 +2952,7 @@ void OpSyscall(P) {
     SYSCALL(0x011, SysPread, (m, di, si, dx, r0));
     SYSCALL(0x012, SysPwrite, (m, di, si, dx, r0));
     SYSCALL(0x017, SysSelect, (m, di, si, dx, r0, r8));
+    SYSCALL(0x10E, SysPselect, (m, di, si, dx, r0, r8, r9));
     SYSCALL(0x01A, SysMsync, (m, di, si, dx));
     SYSCALL(0x00A, SysMprotect, (m, di, si, dx));
     SYSCALL(0x00B, SysMunmap, (m, di, si));
