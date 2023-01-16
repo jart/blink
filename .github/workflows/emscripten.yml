@@ -53,6 +53,15 @@ jobs:
             -fno-builtin-exit \
             -sASSERTIONS
 
+          emcc -O2 o//blink/blinkenlights.o o//blink/blink.a o//third_party/zlib/zlib.a -lm -pthread -lrt -o o//blink/blink-web/blinkenlights.html \
+            --shell-file blink/blink-shell.html \
+            -s INVOKE_RUN=0 \
+            -s INITIAL_MEMORY=1073741824 \
+            -s EXPORTED_RUNTIME_METHODS=callMain \
+            -fno-builtin-exit \
+            -sASSERTIONS \
+            -sASYNCIFY
+
       - name: Deploy sample to GitHub pages
         uses: JamesIves/github-pages-deploy-action@ba1486788b0490a235422264426c45848eac35c6
         if: ${{ github.ref == 'refs/heads/master' }}
