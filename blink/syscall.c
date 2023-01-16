@@ -1538,6 +1538,13 @@ static int IoctlTcsets(struct Machine *m, int fd, int request, i64 addr,
 static int IoctlTiocgpgrp(struct Machine *m, int fd, i64 addr) {
   int rc;
   u8 *pgrp;
+
+#ifdef __EMSCRIPTEN__
+  // Force shells to disable job control in emscripten
+  errno = ENOTTY;
+  return -1;
+#endif
+
   if (!(pgrp = (u8 *)Schlep(m, addr, 4))) return -1;
   if ((rc = tcgetpgrp(fd)) == -1) return -1;
   Write32(pgrp, rc);
