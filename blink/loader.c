@@ -393,7 +393,7 @@ error: unsupported executable; we need:\n\
     LoadArgv(m, prog, args, vars);
   }
   SetupDispatch(m);
-  pagesize = sysconf(_SC_PAGESIZE);
+  pagesize = GetSystemPageSize();
   pagesize = MAX(4096, pagesize);
   m->system->brk = ROUNDUP(m->system->brk, pagesize);
   unassert(!close(fd));
