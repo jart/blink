@@ -943,7 +943,7 @@ void Terminate(P, void uop(struct Machine *, u64)) {
            "m"    // call micro-op
            "q",   // arg0 = sav0 (machine)
            disp, uop);
-    AlignJit(m->path.jb, 4, 0);
+    AlignJit(m->path.jb, 8, 0);
     Connect(A, m->ip);
     FinishPath(m);
   }
@@ -969,7 +969,7 @@ static void OpJcc(P) {
     FlushSkew(A);
 #ifdef __x86_64__
     Jitter(A, "mq", cc);
-    AlignJit(m->path.jb, 4, 0);
+    AlignJit(m->path.jb, 8, 4);
     u8 code[] = {
         0x85, 0300 | kJitRes0 << 3 | kJitRes0,  // test %eax,%eax
         0x75, 5,                                // jnz  +5
@@ -991,7 +991,7 @@ static void OpJcc(P) {
            "m"    // call micro-op
            "q",   // arg0 = machine
            disp, FastJmp);
-    AlignJit(m->path.jb, 4, 0);
+    AlignJit(m->path.jb, 8, 0);
     Connect(A, m->ip + disp);
     FinishPath(m);
   }

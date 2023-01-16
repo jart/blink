@@ -504,7 +504,8 @@ static void FixupJitJumps(struct Dll *list, u8 *addr) {
   int n;
   union {
     u32 i;
-    u8 b[5];
+    u64 q;
+    u8 b[8];
   } u;
   struct Dll *e, *e2;
   struct JitJump *jj;
@@ -512,13 +513,22 @@ static void FixupJitJumps(struct Dll *list, u8 *addr) {
     STATISTIC(++jumps_applied);
     e2 = dll_next(list, e);
     jj = JITJUMP_CONTAINER(e);
+    u.q = 0;
     n = MakeJitJump(u.b, (intptr_t)jj->code, (intptr_t)addr + jj->addend);
     unassert(!((intptr_t)jj->code & 3));
-#ifdef __x86_64__
-    atomic_store_explicit((_Atomic(u8) *)jj->code + 4, u.b[4],
-                          memory_order_relaxed);
-#endif
+#if defined(__aarch64__)
     atomic_store_explicit((_Atomic(u32) *)jj->code, u.i, memory_order_release);
+#elif defined(__x86_64__)
+    u64 old, neu;
+    old = atomic_load_explicit((_Atomic(u64) *)jj->code, memory_order_relaxed);
+    do {
+      neu = (old & 0xffffff0000000000) | u.q;
+    } while (!atomic_compare_exchange_weak_explicit(
+        (_Atomic(u64) *)jj->code, &old, neu, memory_order_release,
+        memory_order_relaxed));
+#else
+#error "not supported"
+#endif
     sys_icache_invalidate(jj->code, n);
     FreeJitJump(jj);
   }
@@ -608,6 +618,10 @@ static void AbandonJitJumps(struct JitBlock *jb) {
 
 bool RecordJitJump(struct JitBlock *jb, hook_t *hook, int addend) {
   struct JitJump *jj;
+  if (jb->index > jb->blocksize) return false;
+#if defined(__x86_64__)
+  unassert(!(GetJitPc(jb) & 7));
+#endif
   if (!CanJitForImmediateEffect()) return false;
   if (!(jj = NewJitJump())) return false;
   jj->hook = hook;
@@ -739,7 +753,7 @@ bool AlignJit(struct JitBlock *jb, int align, int misalign) {
     } else {
       need = misalign - skew;
     }
-    switch (MIN(3, need)) {
+    switch (MIN(7, need)) {
       case 1:
         break;
       case 2:  // xchg %ax,%ax
@@ -750,6 +764,31 @@ bool AlignJit(struct JitBlock *jb, int align, int misalign) {
         }
       case 3:  // nopl (%rax)
         if (AppendJit(jb, (u8[]){0x0f, 0x1f, 0x00}, 3)) {
+          continue;
+        } else {
+          return false;
+        }
+      case 4:  // nopl 0x00(%rax)
+        if (AppendJit(jb, (u8[]){0x0f, 0x1f, 0x40, 0x00}, 4)) {
+          continue;
+        } else {
+          return false;
+        }
+      case 5:  // nopl 0x00(%rax,%rax,1)
+        if (AppendJit(jb, (u8[]){0x0f, 0x1f, 0x44, 0x00, 0x00}, 5)) {
+          continue;
+        } else {
+          return false;
+        }
+      case 6:  // nopw 0x00(%rax,%rax,1)
+        if (AppendJit(jb, (u8[]){0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00}, 6)) {
+          continue;
+        } else {
+          return false;
+        }
+      case 7:  // nopl 0x00000000(%rax)
+        if (AppendJit(jb, (u8[]){0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00},
+                      7)) {
           continue;
         } else {
           return false;

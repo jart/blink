@@ -105,9 +105,9 @@ bool FuseBranchTest(P) {
   Jitter(A, "A"    // res0 = GetReg(RexrReg)
             "q");  // arg0 = machine
   if (!Rexw(rde)) {
-    AlignJit(m->path.jb, 4, 0);
+    AlignJit(m->path.jb, 8, 4);
   } else {
-    AlignJit(m->path.jb, 4, 3);
+    AlignJit(m->path.jb, 8, 3);
     AppendJit(m->path.jb, (u8[]){0x48}, 1);  // rex.w
   }
   u8 code[] = {
@@ -135,7 +135,7 @@ bool FuseBranchTest(P) {
          "m"    // call micro-op
          "q",   // arg0 = machine
          bdisp, AdvanceIp);
-  AlignJit(m->path.jb, 4, 0);
+  AlignJit(m->path.jb, 8, 0);
   Connect(A, m->ip + jlen + bdisp);
   FinishPath(m);
   m->path.skip = 1;
@@ -250,7 +250,7 @@ bool FuseBranchCmp(P, bool imm) {
 #ifdef __x86_64__
   Jitter(A, "B"    // res0 = GetRegOrMem(RexbRm)
             "q");  // arg0 = machine
-  AlignJit(m->path.jb, 4, 3);
+  AlignJit(m->path.jb, 8, 3);
   u8 code[] = {
       // cmp %r12,%rax
       (Rexw(rde) ? kAmdRexw : 0) | (kJitSav1 > 7 ? kAmdRexr : 0),
@@ -335,7 +335,7 @@ bool FuseBranchCmp(P, bool imm) {
          "m"    // call micro-op
          "q",   // arg0 = machine
          bdisp, AdvanceIp);
-  AlignJit(m->path.jb, 4, 0);
+  AlignJit(m->path.jb, 8, 0);
   Connect(A, m->ip + jlen + bdisp);
   FinishPath(m);
   m->path.skip = 1;

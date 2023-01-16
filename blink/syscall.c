@@ -2599,7 +2599,7 @@ static int SaveFdSet(struct Machine *m, int nfds, const fd_set *fds, i64 addr) {
   u8 *p;
   int n, fd;
   n = ROUNDUP(nfds, 8) / 8;
-  if (!(p = calloc(1, n))) return -1;
+  if (!(p = (u8 *)calloc(1, n))) return -1;
   for (fd = 0; fd < nfds; ++fd) {
     if (FD_ISSET(fd, fds)) {
       p[fd >> 3] |= 1 << (fd & 7);

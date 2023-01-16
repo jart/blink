@@ -1451,9 +1451,9 @@ static void DrawXmm(struct Panel *p, i64 i, i64 r) {
         }
         if (xmmdisp == kXmmHex || xmmdisp == kXmmChar) {
           if (xmmdisp == kXmmChar && iswalnum(ival)) {
-            sprintf(buf, "%lc", ival);
+            sprintf(buf, "%lc", (wint_t)ival);
           } else {
-            sprintf(buf, "%.*x", xmmtype.size[r] * 8 / 4, ival);
+            sprintf(buf, "%.*x", xmmtype.size[r] * 8 / 4, (unsigned)ival);
           }
         } else {
           sprintf(buf, "%" PRId64, SignExtend(ival, xmmtype.size[r] * 8));
