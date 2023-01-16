@@ -266,7 +266,7 @@
       }
 
       function runExecutable() {
-        let args = ['executable'].concat(document.getElementById('argsInput').value.split(' '));
+        let args = ['executable'].concat(document.getElementById('argsInput').value.split(' ').filter((e) => e != ""));
         let ret = Module.callMain(args);
       }
 
