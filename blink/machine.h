@@ -44,7 +44,7 @@
 #define kMachineProtectionFault      -8
 #define kMachineSimdException        -9
 
-#if LONG_BIT == 64
+#if UINTPTR_MAX > 0xFFFFFFFF
 #ifndef __SANITIZE_ADDRESS__
 #define kSkew 0x088800000000
 #else
@@ -96,7 +96,7 @@
 #if defined(NOLINEAR) || defined(__SANITIZE_THREAD__)
 #define CanHaveLinearMemory() false
 #else
-#define CanHaveLinearMemory() (LONG_BIT == 64)
+#define CanHaveLinearMemory() (UINTPTR_MAX > 0xFFFFFFFF)
 #endif
 
 #ifdef HAVE_JIT
@@ -107,7 +107,7 @@
 
 #define HasLinearMapping(x) (CanHaveLinearMemory() && !(x)->nolinear)
 
-#if LONG_BIT >= 64
+#if UINTPTR_MAX > 0xFFFFFFFF
 #define _Atomicish(t) _Atomic(t)
 #else
 #define _Atomicish(t) t
@@ -130,11 +130,6 @@ static inline i64 ToGuest(void *r) {
 
 struct Machine;
 typedef void (*nexgen32e_f)(P);
-
-struct Xmm {
-  u64 lo;
-  u64 hi;
-};
 
 struct FreeList {
   int n;
@@ -252,9 +247,9 @@ struct System {
 
 struct JitPath {
   int skip;
-  int skew;
-  i64 start;
   int elements;
+  u64 skew;
+  i64 start;
   struct JitBlock *jb;
 };
 
@@ -653,7 +648,7 @@ void Int32ToDouble(i32, struct Machine *, long);
 void MovsdWpsVpsOp(u8 *, struct Machine *, long);
 
 void SetupCod(struct Machine *);
-void WriteCod(const char *, ...);
+void WriteCod(const char *, ...) printfesque(1);
 void FlushCod(struct JitBlock *);
 #if LOG_COD
 void LogCodOp(struct Machine *, const char *);

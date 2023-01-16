@@ -87,7 +87,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
   if (skew != (offset & (pagesize - 1))) {
     LOGF("p_vaddr p_offset skew unequal w.r.t. host page size; try "
          "rebuilding your program using the linker flags: -static "
-         "-Wl,-z,common-page-size=%d,-z,max-page-size=%d",
+         "-Wl,-z,common-page-size=%ld,-z,max-page-size=%ld",
          pagesize, pagesize);
     exit(127);
   }
@@ -318,6 +318,8 @@ static void SetupDispatch(struct Machine *m) {
     m->fun = 0;
     m->codestart = 0;
     m->codesize = 0;
+    m->system->codesize = 0;
+    m->system->codestart = 0;
   }
 #endif
 }

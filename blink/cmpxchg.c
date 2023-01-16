@@ -45,7 +45,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
   p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
     u64 x;
-#if LONG_BIT >= 64
+#if UINTPTR_MAX > 0xFFFFFFFF
     if (Lock(rde) && !((intptr_t)p & 7)) {
       x = atomic_load_explicit((_Atomic(u64) *)m->ax, memory_order_relaxed);
       atomic_compare_exchange_strong_explicit(

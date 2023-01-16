@@ -101,7 +101,7 @@ i64 Load32(const u8 p[4]) {
 
 i64 Load64(const u8 p[8]) {
   i64 z;
-#if LONG_BIT >= 64
+#if UINTPTR_MAX > 0xFFFFFFFF
 #if defined(__x86_64__) && !defined(__SANITIZE_UNDEFINED__)
   z = atomic_load_explicit((_Atomic(u64) *)p, memory_order_relaxed);
 #else
@@ -121,7 +121,7 @@ i64 Load64(const u8 p[8]) {
 
 i64 Load64Unlocked(const u8 p[8]) {
   i64 z;
-#if LONG_BIT >= 64
+#if UINTPTR_MAX > 0xFFFFFFFF
   z = Load64(p);
 #else
   z = Read64(p);
@@ -160,7 +160,7 @@ void Store32(u8 p[4], u64 x) {
 }
 
 void Store64(u8 p[8], u64 x) {
-#if LONG_BIT >= 64
+#if UINTPTR_MAX > 0xFFFFFFFF
 #if defined(__x86_64__) && !defined(__SANITIZE_UNDEFINED__)
   atomic_store_explicit((_Atomic(u64) *)p, x, memory_order_relaxed);
 #else
@@ -178,7 +178,7 @@ void Store64(u8 p[8], u64 x) {
 }
 
 void Store64Unlocked(u8 p[8], u64 x) {
-#if LONG_BIT >= 64
+#if UINTPTR_MAX > 0xFFFFFFFF
   Store64(p, x);
 #else
   Write64(p, x);

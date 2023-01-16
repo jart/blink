@@ -29,6 +29,7 @@
  */
 
 bool FuseBranchTest(P) {
+  if (1) return false;
 #ifdef HAVE_JIT
   int flags;
   i64 bdisp;
@@ -147,6 +148,7 @@ bool FuseBranchTest(P) {
 }
 
 bool FuseBranchCmp(P, bool imm) {
+  if (1) return false;
 #ifdef HAVE_JIT
   int flags;
   i64 bdisp;

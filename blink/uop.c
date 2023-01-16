@@ -36,6 +36,7 @@
 #include "blink/swap.h"
 #include "blink/types.h"
 #include "blink/x86.h"
+#include "blink/xmm.h"
 
 /**
  * @fileoverview X86 Micro-Operations w/ Printf RPN Glue-Generating DSL.
@@ -88,8 +89,8 @@ MICRO_OP static u64 GetReg32(struct Machine *m, long i) {
 MICRO_OP static u64 GetReg64(struct Machine *m, long i) {
   return Get64(m->weg[i]);
 }
-MICRO_OP static struct Xmm GetReg128(struct Machine *m, long i) {
-  return (struct Xmm){Get64(m->xmm[i]), Get64(m->xmm[i] + 8)};
+MICRO_OP static XMM_TYPE GetReg128(struct Machine *m, long i) {
+  RETURN_XMM(Get64(m->xmm[i]), Get64(m->xmm[i] + 8));
 }
 typedef u64 (*getreg_f)(struct Machine *, long);
 static const getreg_f kGetReg[] = {GetReg8, GetReg16,   //
@@ -430,11 +431,8 @@ MICRO_OP static i64 NativeLoad32(const u8 *p) {
 MICRO_OP static i64 NativeLoad64(const u8 *p) {
   return *(const u64 *)p;
 }
-MICRO_OP static struct Xmm NativeLoad128(u8 *p) {
-  return (struct Xmm){
-      ((const u64 *)p)[0],
-      ((const u64 *)p)[1],
-  };
+MICRO_OP static XMM_TYPE NativeLoad128(u8 *p) {
+  RETURN_XMM(((const u64 *)p)[0], ((const u64 *)p)[1]);
 }
 
 MICRO_OP static void NativeStore8(u8 *p, u64 x) {
@@ -473,8 +471,8 @@ static const store_f kStore[] = {
 #else
 #define LOADSTORE "c"
 
-MICRO_OP static struct Xmm Load128(u8 *p) {
-  return (struct Xmm){Read64(p), Read64(p + 8)};
+MICRO_OP static XMM_TYPE Load128(u8 *p) {
+  RETURN_XMM(Read64(p), Read64(p + 8));
 }
 
 MICRO_OP static void Store128(u8 *p, u64 x, u64 y) {
@@ -1154,7 +1152,7 @@ static pureconst bool UsesStaticMemory(u64 rde) {
 static void ClobberEverythingExceptResult(struct Machine *m) {
 #ifdef DEBUG
 // clobber everything except result registers
-#if defined(__x86_64__)
+#if defined(__x86_64__) && !defined(__CYGWIN__)
   AppendJitSetReg(m->path.jb, kAmdDi, 0x666);
   AppendJitSetReg(m->path.jb, kAmdSi, 0x666);
   AppendJitSetReg(m->path.jb, kAmdCx, 0x666);
@@ -1265,7 +1263,7 @@ static void GetReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
              "q"    // arg0 = machine
              "a1i"  // arg1 = register index
              "m",   // call micro-op
-             kByteReg[breg], kGetReg[0]);
+             (u64)kByteReg[breg], kGetReg[0]);
       break;
     case 2:
       Jitter(A,
@@ -1284,7 +1282,7 @@ static void GetReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
              "q"    // arg0 = machine
              "a1i"  // arg1 = register index
              "m",   // call micro-op
-             reg, kGetReg[log2sz]);
+             (u64)reg, kGetReg[log2sz]);
       break;
   }
 }
@@ -1298,7 +1296,7 @@ static void PutReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
              "a1i"  // arg1 = register index
              "q"    // arg0 = machine
              "m",   // call micro-op
-             kByteReg[breg], kPutReg[0]);
+             (u64)kByteReg[breg], kPutReg[0]);
       break;
     case 1:
       ItemsRequired(1);
@@ -1307,7 +1305,7 @@ static void PutReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
              "a1i"  // arg1 = register index
              "q"    // arg0 = machine
              "m",   // call micro-op
-             reg, kPutReg[1]);
+             (u64)reg, kPutReg[1]);
       break;
     case 2:
       ItemsRequired(1);
@@ -1326,13 +1324,17 @@ static void PutReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
              kPutReg64[reg]);
       break;
     case 4:
+      // note: r0 == a0 on aarch64
+      // note: r1 == a1 on aarch64
+      // note: r1 == a2 on system five
+      // note: r1 == a1 on cygwin
       Jitter(A,
              "a3i"    // arg3 = register index
              "r1a1="  // arg1 = res1
              "s0a2="  // arg2 = machine
              "t"      // arg0 = res0
              "m",     // call micro-op
-             reg, kPutReg[log2sz]);
+             (u64)reg, kPutReg[log2sz]);
       break;
     default:
       __builtin_unreachable();
@@ -1459,7 +1461,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "c"         // call function (turn virtual into pointer)
                  "t"         // arg0 = pointer
                  LOADSTORE,  // call micro-op (read vector shared memory)
-                 false, 1ul << log2sz, ReserveAddress, kLoad[log2sz]);
+                 (u64)0, (u64)(1 << log2sz), ReserveAddress, kLoad[log2sz]);
         }
         break;
 
@@ -1490,10 +1492,14 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "s3a1="     // arg1 = sav3
                    "t"         // arg0 = res0
                    LOADSTORE,  // call function (write word to shared memory)
-                   true, 1ul << log2sz, ReserveAddress, kStore[log2sz]);
+                   (u64)1, (u64)(1 << log2sz), ReserveAddress, kStore[log2sz]);
           }
         } else {
           if (IsModrmRegister(rde)) {
+            // note: r0 == a0 on aarch64
+            // note: r1 == a1 on aarch64
+            // note: r1 == a2 on system five
+            // note: r1 == a1 on cygwin
             Jitter(A,
                    "a3i"    // arg3 = index of register
                    "r1a1="  // arg1 = res1
@@ -1527,7 +1533,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "s3a1="     // arg1 = sav3
                    "t"         // arg0 = res0
                    LOADSTORE,  // call micro-op (store vector to shared memory)
-                   true, 1ul << log2sz, ReserveAddress, kStore[log2sz]);
+                   (u64)1, (u64)(1 << log2sz), ReserveAddress, kStore[log2sz]);
           }
         }
         break;
@@ -1628,7 +1634,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "r0a1="  // arg1 = virtual address
                  "q"      // arg0 = machine
                  "c",     // res0 = call function (turn virtual into pointer)
-                 false, 1ul << log2sz, ReserveAddress);
+                 (u64)0, (u64)(1 << log2sz), ReserveAddress);
         }
         break;
 

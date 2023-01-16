@@ -98,7 +98,7 @@ static void AluiUnlocked(P, u8 *p, aluop_f op) {
 static void AluiLocked(P, u8 *p, aluop_f op) {
   switch (RegLog2(rde)) {
     case 3:
-#if LONG_BIT >= 64
+#if UINTPTR_MAX > 0xFFFFFFFF
       if (!((intptr_t)p & 7)) {
         u64 x, z;
         x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);

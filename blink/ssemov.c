@@ -233,7 +233,7 @@ static void MovsdVpsWps(P) {
              "z3B"   // res0 = Get.....Mem[force64bit](RexbRm)
              "r1i"   // res1 = 0
              "z4C",  // 128-bit PutReg
-             0);
+             (u64)0);
     }
   }
 }

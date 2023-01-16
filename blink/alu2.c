@@ -90,7 +90,7 @@ void OpAluw(P) {
   f = kAlu[t][RegLog2(rde)];
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
-#if LONG_BIT >= 64
+#if UINTPTR_MAX > 0xFFFFFFFF
     if (Lock(rde) && !((intptr_t)p & 7)) {
       u64 x, y, z;
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
@@ -181,7 +181,7 @@ void OpAluw(P) {
                "s0a1="  // arg1 = machine
                "a0i"    // arg0 = zero
                "m",     // call micro-op
-               0, kPutReg64[RexrReg(rde)]);
+               (u64)0, kPutReg64[RexrReg(rde)]);
       }
     } else {
       LoadAluArgs(A);

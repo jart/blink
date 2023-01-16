@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/bitscan.h"
 #include "blink/linux.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -31,5 +32,6 @@
 #include "blink/util.h"
 
 int main(int argc, char *argv[]) {
+  printf("%d\n", bsr(UINTPTR_MAX));
   return 0;
 }

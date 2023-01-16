@@ -57,7 +57,7 @@ void OpXaddEvqpGvqp(P) {
   p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
     u64 x, y, z;
-#if LONG_BIT >= 64
+#if UINTPTR_MAX > 0xFFFFFFFF
     if (Lock(rde) && !((intptr_t)p & 7)) {
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
       y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);

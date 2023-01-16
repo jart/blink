@@ -105,9 +105,8 @@
  */
 
 const u8 kJitRes[2] = {kJitRes0, kJitRes1};
+const u8 kJitArg[4] = {kJitArg0, kJitArg1, kJitArg2, kJitArg3};
 const u8 kJitSav[5] = {kJitSav0, kJitSav1, kJitSav2, kJitSav3, kJitSav4};
-const u8 kJitArg[6] = {kJitArg0, kJitArg1, kJitArg2,
-                       kJitArg3, kJitArg4, kJitArg5};
 
 #ifdef HAVE_JIT
 

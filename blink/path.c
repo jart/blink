@@ -84,13 +84,23 @@ void FuseOp(struct Machine *m, i64 pc) {
 static const u8 kEnter[] = {
     0x55,                    // push %rbp
     0x48, 0x89, 0345,        // mov  %rsp,%rbp
+#ifdef __CYGWIN__            //
+    0x48, 0x83, 0354, 0x40,  // sub  $0x40,%rsp
+    0x48, 0x89, 0175, 0xc8,  // mov  %rdi,-0x38(%rbp)
+    0x48, 0x89, 0165, 0xd0,  // mov  %rsi,-0x30(%rbp)
+#else                        //
     0x48, 0x83, 0354, 0x30,  // sub  $0x30,%rsp
+#endif                       //
     0x48, 0x89, 0135, 0xd8,  // mov  %rbx,-0x28(%rbp)
     0x4c, 0x89, 0145, 0xe0,  // mov  %r12,-0x20(%rbp)
     0x4c, 0x89, 0155, 0xe8,  // mov  %r13,-0x18(%rbp)
     0x4c, 0x89, 0165, 0xf0,  // mov  %r14,-0x10(%rbp)
     0x4c, 0x89, 0175, 0xf8,  // mov  %r15,-0x08(%rbp)
-    0x48, 0x89, 0xfb,        // mov  %rdi,%rbx
+#ifdef __CYGWIN__            //
+    0x48, 0x89, 0313,        // mov  %rcx,%rbx
+#else                        //
+    0x48, 0x89, 0373,        // mov  %rdi,%rbx
+#endif
 };
 static const u8 kLeave[] = {
     0x4c, 0x8b, 0175, 0xf8,  // mov -0x08(%rbp),%r15
@@ -98,8 +108,14 @@ static const u8 kLeave[] = {
     0x4c, 0x8b, 0155, 0xe8,  // mov -0x18(%rbp),%r13
     0x4c, 0x8b, 0145, 0xe0,  // mov -0x20(%rbp),%r12
     0x48, 0x8b, 0135, 0xd8,  // mov -0x28(%rbp),%rbx
+#ifdef __CYGWIN__
+    0x48, 0x8b, 0165, 0xd0,  // mov -0x30(%rbp),%rsi
+    0x48, 0x8b, 0175, 0xc8,  // mov -0x38(%rbp),%rdi
+    0x48, 0x83, 0304, 0x40,  // add $0x40,%rsp
+#else
     0x48, 0x83, 0304, 0x30,  // add $0x30,%rsp
-    0x5d,                    // pop %rbp
+#endif
+    0x5d,  // pop %rbp
 };
 #elif defined(__aarch64__)
 static const u32 kEnter[] = {
@@ -116,8 +132,8 @@ static const u32 kLeave[] = {
     0xa94363f7,  // ldp x23, x24, [sp, #48]
     0xa8c47bfd,  // ldp x29, x30, [sp], #64
 };
-#endif
-#endif
+#endif /* __x86_64__ */
+#endif /* HAVE_JIT */
 
 long GetPrologueSize(void) {
 #ifdef HAVE_JIT
@@ -138,6 +154,7 @@ void SetupCod(struct Machine *m) {
 
 void(LogCodOp)(struct Machine *m, const char *s) {
 #if LOG_COD
+  // FlushCod(m->path.jb);
   WriteCod("/\t%s\n", s);
 #endif
 }
@@ -481,7 +498,7 @@ static void InitPaths(struct System *s) {
   struct JitBlock *jb;
   if (!s->ender) {
     unassert((jb = StartJit(&s->jit)));
-    WriteCod("\nJit_%" PRIx64 ":\n", jb->addr + jb->index);
+    WriteCod("\nJit_%p:\n", jb->addr + jb->index);
     s->ender = GetJitPc(jb);
 #if LOG_JIX
     AppendJitMovReg(jb, kJitArg0, kJitSav0);
@@ -579,7 +596,7 @@ void AbandonPath(struct Machine *m) {
 void FlushSkew(P) {
   unassert(IsMakingPath(m));
   if (m->path.skew) {
-    JIT_LOGF("adding %d to ip", m->path.skew);
+    JIT_LOGF("adding %" PRId64 " to ip", m->path.skew);
     Jitter(A,
            "a1i"  // arg1 = skew
            "q"    // arg0 = machine
@@ -621,14 +638,15 @@ void AddPath_StartOp(P) {
 #endif
   if (MustUpdateIp(A)) {
     if (!m->path.skew) {
-      JIT_LOGF("adding %d to ip", Oplength(rde));
+      JIT_LOGF("adding %" PRId64 " to ip", Oplength(rde));
       Jitter(A,
              "a1i"  // arg1 = Oplength(rde)
              "q"    // arg0 = machine
              "m",   // call micro-op (AddIp)
              Oplength(rde), AddIp);
     } else {
-      JIT_LOGF("adding %d+%d to ip", m->path.skew, Oplength(rde));
+      JIT_LOGF("adding %" PRId64 "+%" PRId64 " to ip", m->path.skew,
+               Oplength(rde));
       Jitter(A,
              "a2i"  // arg1 = program counter delta
              "a1i"  // arg1 = instruction length

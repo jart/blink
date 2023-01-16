@@ -69,7 +69,7 @@ void PrintMessageBox(int fd, const char *msg, long tyn, long txn) {
   AppendStr(&b, "╝ ");
   AppendFmt(&b, "\033[%d;%dH", y++, x);
   for (i = 0; i < w; ++i) AppendStr(&b, " ");
-  AppendFmt(&b, "\033[%d;%dH", tyn, txn);
+  AppendFmt(&b, "\033[%ld;%ldH", tyn, txn);
   UninterruptibleWrite(fd, b.p, b.i);
   free(b.p);
 }

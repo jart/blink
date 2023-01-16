@@ -19,12 +19,17 @@
 #ifdef __x86_64__
 #define kJitRes0 kAmdAx
 #define kJitRes1 kAmdDx
+#ifdef __CYGWIN__
+#define kJitArg0 kAmdCx
+#define kJitArg1 kAmdDx
+#define kJitArg2 8
+#define kJitArg3 9
+#else
 #define kJitArg0 kAmdDi
 #define kJitArg1 kAmdSi
 #define kJitArg2 kAmdDx
 #define kJitArg3 kAmdCx
-#define kJitArg4 8
-#define kJitArg5 9
+#endif
 #define kJitSav0 kAmdBx
 #define kJitSav1 12
 #define kJitSav2 13
@@ -37,8 +42,6 @@
 #define kJitArg1 1
 #define kJitArg2 2
 #define kJitArg3 3
-#define kJitArg4 4
-#define kJitArg5 5
 #define kJitSav0 19
 #define kJitSav1 20
 #define kJitSav2 21
@@ -138,7 +141,7 @@ struct Jit {
 
 extern const u8 kJitRes[2];
 extern const u8 kJitSav[5];
-extern const u8 kJitArg[6];
+extern const u8 kJitArg[4];
 
 int ShutdownJit(void);
 int InitJit(struct Jit *);

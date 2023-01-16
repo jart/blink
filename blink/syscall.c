@@ -286,7 +286,7 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   struct Machine *m2 = 0;
   THR_LOGF("pid=%d tid=%d SysSpawn", m->system->pid, m->tid);
   if ((flags & 255) != 0 && (flags & 255) != SIGCHLD_LINUX) {
-    LOGF("unsupported clone() signal: %d", flags & 255);
+    LOGF("unsupported clone() signal: %" PRId64, flags & 255);
     return einval();
   }
   flags &= ~255;
@@ -299,11 +299,12 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   ignored = CLONE_DETACHED_LINUX;
   flags &= ~ignored;
   if (flags & ~supported) {
-    LOGF("unsupported clone() flags: %#x", flags & ~supported);
+    LOGF("unsupported clone() flags: %#" PRIx64, flags & ~supported);
     return einval();
   }
   if ((flags & mandatory) != mandatory) {
-    LOGF("missing mandatory clone() thread flags: %#x out of %#x",
+    LOGF("missing mandatory clone() thread flags: %#" PRIx64
+         " out of %#" PRIx64,
          (flags & mandatory) ^ mandatory, flags);
     return einval();
   }
@@ -313,7 +314,7 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
       ((flags & CLONE_CHILD_SETTID_LINUX) &&
        ((ctid & (sizeof(int) - 1)) ||
         !(ctid_ptr = (atomic_int *)LookupAddress(m, ctid))))) {
-    LOGF("bad clone() ptid / ctid pointers: %#x", flags);
+    LOGF("bad clone() ptid / ctid pointers: %#" PRIx64, flags);
     return efault();
   }
   if (!(m2 = NewMachine(m->system, m))) {
@@ -570,7 +571,8 @@ void UnlockRobustFutexes(struct Machine *m) {
   }
   THR_LOGF("unlocking pending robust futex %#" PRIx64 " {.next=%#" PRIx64
            " .offset=%" PRId64 " .pending=%#" PRIx64 "}",
-           Read64(data->next), Read64(data->offset), Read64(data->pending));
+           item, Read64(data->next), Read64(data->offset),
+           Read64(data->pending));
   UnlockRobustFutex(m, pending + Read64(data->offset), true);
 }
 
@@ -852,6 +854,12 @@ static int SysDup1(struct Machine *m, i32 fildes) {
   int oflags;
   int newfildes;
   struct Fd *fd;
+#ifdef __CYGWIN__
+  if (fildes < 0) {
+    LOGF("dup() ebadf");
+    return ebadf();
+  }
+#endif
   if ((newfildes = dup(fildes)) != -1) {
     LockFds(&m->system->fds);
     if ((fd = GetFd(&m->system->fds, fildes))) {

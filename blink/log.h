@@ -3,6 +3,8 @@
 #include <stdatomic.h>
 #include <stdio.h>
 
+#include "blink/builtin.h"
+
 #ifndef NDEBUG
 #define LOG_ENABLED 1
 #else
@@ -96,7 +98,7 @@
 extern char *g_progname;
 
 void LogInit(const char *);
-void Log(const char *, int, const char *, ...);
+void Log(const char *, int, const char *, ...) printfesque(3);
 int WriteError(int, const char *, int);
 void WriteErrorInit(void);
 int WriteErrorString(const char *);

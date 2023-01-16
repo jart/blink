@@ -48,7 +48,7 @@ void OpXchgGvqpEvqp(P) {
   u8 *q = RegRexrReg(m, rde);
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
-#if LONG_BIT >= 64
+#if UINTPTR_MAX > 0xFFFFFFFF
     if (!IsModrmRegister(rde) && !((intptr_t)p & 7)) {
       atomic_store_explicit(
           (_Atomic(u64) *)q,

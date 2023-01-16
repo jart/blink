@@ -55,7 +55,7 @@ void *Mmap(void *addr,     //
              (u8 *)res + length);
   } else {
     MEM_LOGF("%s failed to create %s map [%p,%p) prot %#x flags %#x: %s "
-             "(system page size is %d)",
+             "(system page size is %ld)",
              owner, szbuf, (u8 *)addr, (u8 *)addr + length, prot, flags,
              strerror(errno), GetSystemPageSize());
   }

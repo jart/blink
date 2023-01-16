@@ -210,7 +210,17 @@
 #endif
 #endif
 
-#if LONG_BIT >= 64
+#if defined(__GNUC__) && !defined(__APPLE__)
+#define printfesque(n)   __attribute__((__format__(__gnu_printf__, n, n + 1)))
+#define scanfesque(n)    __attribute__((__format__(__gnu_scanf__, n, n + 1)))
+#define strftimeesque(n) __attribute__((__format__(__strftime__, n, 0)))
+#else
+#define printfesque(n)
+#define scanfesque(n)
+#define strftimeesque(n)
+#endif
+
+#if UINTPTR_MAX > 0xFFFFFFFF
 #if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 406 || defined(__llvm__)
 #define HAVE_INT128
 #endif
