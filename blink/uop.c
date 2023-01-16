@@ -253,8 +253,7 @@ MICRO_OP static void PutReg32(struct Machine *m, long i, u64 x) {
 MICRO_OP static void PutReg64(struct Machine *m, long i, u64 x) {
   Put64(m->weg[i], x);
 }
-MICRO_OP static void PutReg128(u64 x, u64 y, long dont_clobber_r1,
-                               struct Machine *m, long i) {
+MICRO_OP static void PutReg128(u64 x, u64 y, struct Machine *m, long i) {
   Put64(m->xmm[i], x);
   Put64(m->xmm[i] + 8, y);
 }
@@ -1328,10 +1327,9 @@ static void PutReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
       break;
     case 4:
       Jitter(A,
-             "a4i"    // arg4 = register index
-             "s0a3="  // arg3 = machine
-             ""       // arg2 = undefined
+             "a3i"    // arg3 = register index
              "r1a1="  // arg1 = res1
+             "s0a2="  // arg2 = machine
              "t"      // arg0 = res0
              "m",     // call micro-op
              reg, kPutReg[log2sz]);
@@ -1497,10 +1495,9 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         } else {
           if (IsModrmRegister(rde)) {
             Jitter(A,
-                   "a4i"    // arg4 = index of register
-                   "s0a3="  // arg3 = machine
-                   ""       // arg2 = undefined
+                   "a3i"    // arg3 = index of register
                    "r1a1="  // arg1 = res1
+                   "s0a3="  // arg2 = machine
                    "t"      // arg0 = res0
                    "m",     // call micro-op (xmm put register)
                    RexbRm(rde), kPutReg[log2sz]);

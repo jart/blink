@@ -746,6 +746,15 @@ bool AlignJit(struct JitBlock *jb, int align, int misalign) {
     //
     // See Intel's Six Thousand Page Manual, Volume 2, Table 4-12:
     // "Recommended Multi-Byte Sequence of NOP Instruction".
+    static const u8 kNops[7][8] = {
+        {1, 0x90},
+        {2, 0x66, 0x90},
+        {3, 0x0f, 0x1f, 0x00},
+        {4, 0x0f, 0x1f, 0x40, 0x00},
+        {5, 0x0f, 0x1f, 0x44, 0x00, 0x00},
+        {6, 0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00},
+        {7, 0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00},
+    };
     int skew, need;
     skew = jb->index & (align - 1);
     if (skew > misalign) {
@@ -753,53 +762,15 @@ bool AlignJit(struct JitBlock *jb, int align, int misalign) {
     } else {
       need = misalign - skew;
     }
-    switch (MIN(7, need)) {
-      case 1:
-        break;
-      case 2:  // xchg %ax,%ax
-        if (AppendJit(jb, (u8[]){0x66, 0x90}, 2)) {
-          continue;
-        } else {
-          return false;
-        }
-      case 3:  // nopl (%rax)
-        if (AppendJit(jb, (u8[]){0x0f, 0x1f, 0x00}, 3)) {
-          continue;
-        } else {
-          return false;
-        }
-      case 4:  // nopl 0x00(%rax)
-        if (AppendJit(jb, (u8[]){0x0f, 0x1f, 0x40, 0x00}, 4)) {
-          continue;
-        } else {
-          return false;
-        }
-      case 5:  // nopl 0x00(%rax,%rax,1)
-        if (AppendJit(jb, (u8[]){0x0f, 0x1f, 0x44, 0x00, 0x00}, 5)) {
-          continue;
-        } else {
-          return false;
-        }
-      case 6:  // nopw 0x00(%rax,%rax,1)
-        if (AppendJit(jb, (u8[]){0x66, 0x0f, 0x1f, 0x44, 0x00, 0x00}, 6)) {
-          continue;
-        } else {
-          return false;
-        }
-      case 7:  // nopl 0x00000000(%rax)
-        if (AppendJit(jb, (u8[]){0x0f, 0x1f, 0x80, 0x00, 0x00, 0x00, 0x00},
-                      7)) {
-          continue;
-        } else {
-          return false;
-        }
-      default:
-        __builtin_unreachable();
+    if (!AppendJit(jb, kNops[MIN(7, need) - 1] + 1,
+                   kNops[MIN(7, need) - 1][0])) {
+      return false;
     }
-#endif
+#else
     if (!AppendJitNop(jb)) {
       return false;
     }
+#endif
   }
   unassert((jb->index & (align - 1)) == misalign);
   return true;
