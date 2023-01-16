@@ -86,7 +86,7 @@ ssize_t GetRandom(void *p, size_t n) {
 #elif defined(__CYGWIN__)
   rc = RtlGenRandom(p, n) ? n : -1;
 #else
-  rc = -1;
+  rc = -1; errno = ENOSYS;
 #endif
   if (rc == -1 && errno == ENOSYS) {
     rc = GetDevRandom((char *)p, n);
