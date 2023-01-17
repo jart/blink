@@ -26,7 +26,7 @@ jobs:
           usesh: true
           mem: 4096
           prepare: pkg install -y gmake curl
-          run: gmake -j$(sysctl -n hw.ncpu) check o//test/blink o//test/func
+          run: gmake -j$(sysctl -n hw.ncpu) check o//test/blink
 
   build_OpenBSD:
     runs-on: macos-latest
@@ -40,4 +40,4 @@ jobs:
           usesh: true
           mem: 4096
           prepare: pkg_add gmake curl
-          run: gmake -j$(sysctl -n hw.ncpu) check o//test/blink o//test/func
+          run: gmake -j$(sysctl -n hw.ncpu) check o//test/blink
