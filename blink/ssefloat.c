@@ -148,17 +148,17 @@ void OpShuffle(P) {
     case 1:
       pshufd((i32 *)XmmRexrReg(m, rde),
              (i32 *)GetModrmRegisterXmmPointerRead16(A), uimm0);
-      kernel = pshufd;
+      kernel = (void *)pshufd;
       break;
     case 2:
       pshuflw((i16 *)XmmRexrReg(m, rde),
               (i16 *)GetModrmRegisterXmmPointerRead16(A), uimm0);
-      kernel = pshuflw;
+      kernel = (void *)pshuflw;
       break;
     case 3:
       pshufhw((i16 *)XmmRexrReg(m, rde),
               (i16 *)GetModrmRegisterXmmPointerRead16(A), uimm0);
-      kernel = pshufhw;
+      kernel = (void *)pshufhw;
       break;
     default:
       __builtin_unreachable();

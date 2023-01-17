@@ -62,14 +62,14 @@ void OpCpuid(P) {
     case 0x80000000:
       unassert(m->system->brand);
       ax = 7;
-      bx = Read32((const u8 *)(m->system->brand + 0));
-      dx = Read32((const u8 *)(m->system->brand + 4));
-      cx = Read32((const u8 *)(m->system->brand + 8));
+      bx = Read32((const u8 *)m->system->brand + 0);
+      dx = Read32((const u8 *)m->system->brand + 4);
+      cx = Read32((const u8 *)m->system->brand + 8);
       break;
     case 0x40000000:
-      bx = Read32((const u8 *)(OS + 0));
-      cx = Read32((const u8 *)(OS + 4));
-      dx = Read32((const u8 *)(OS + 8));
+      bx = Read32((const u8 *)OS + 0);
+      cx = Read32((const u8 *)OS + 4);
+      dx = Read32((const u8 *)OS + 8);
       break;
     case 1:
       cx |= 1 << 0;    // sse3

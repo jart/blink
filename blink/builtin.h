@@ -211,9 +211,9 @@
 #endif
 #endif
 
-#if defined(__GNUC__) && !defined(__APPLE__) && !defined(__cplusplus)
-#define printfesque(n)   __attribute__((__format__(__gnu_printf__, n, n + 1)))
-#define scanfesque(n)    __attribute__((__format__(__gnu_scanf__, n, n + 1)))
+#ifdef __GNUC__
+#define printfesque(n)   __attribute__((__format__(__printf__, n, n + 1)))
+#define scanfesque(n)    __attribute__((__format__(__scanf__, n, n + 1)))
 #define strftimeesque(n) __attribute__((__format__(__strftime__, n, 0)))
 #else
 #define printfesque(n)

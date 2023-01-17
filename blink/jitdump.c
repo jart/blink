@@ -122,4 +122,6 @@ int CloseJitDump(int fd) {
   return 0;
 }
 
+#else
+int jitdump_symbol_;  // squash llvm ar warning
 #endif

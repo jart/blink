@@ -176,13 +176,13 @@ static void pthread_jit_write_protect_np_workaround(int enabled) {
       } while (count-- > 0);
       break;
     default:
-      pthread_jit_write_protect_np_workaround(enabled);
+      pthread_jit_write_protect_np(enabled);
       return;
   }
   LOGF("failed to set jit write protection");
   abort();
 #else
-  pthread_jit_write_protect_np_workaround(enabled);
+  pthread_jit_write_protect_np(enabled);
 #endif
 }
 

@@ -1363,12 +1363,10 @@ static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
   return rc;
 }
 
-static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
-                     u64 offset) {
-  i64 rc;
+static long CheckFdWritable(struct Machine *m, i32 fildes,
+                            int errno_if_not_writable) {
   int oflags;
   struct Fd *fd;
-  const void *mem;
   LockFds(&m->system->fds);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     oflags = fd->oflags;
@@ -1377,9 +1375,19 @@ static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
-  if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();  // due to cygwin
-  mem = Schlep(m, addr, size);
-  INTERRUPTIBLE(rc = pwrite(fildes, mem, size, offset));
+  // cygwin generally doesn't perform this check the same as linux
+  if ((oflags & O_ACCMODE) == O_RDONLY) {
+    errno = errno_if_not_writable;
+    return -1;
+  }
+  return 0;
+}
+
+static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
+                     u64 offset) {
+  i64 rc;
+  if (CheckFdWritable(m, fildes, EBADF) == -1) return -1;
+  INTERRUPTIBLE(rc = pwrite(fildes, Schlep(m, addr, size), size, offset));
   return rc;
 }
 
@@ -1726,9 +1734,10 @@ static i64 SysLseek(struct Machine *m, i32 fildes, i64 offset, int whence) {
   return rc;
 }
 
-static i64 SysFtruncate(struct Machine *m, i32 fd, i64 size) {
+static i64 SysFtruncate(struct Machine *m, i32 fildes, i64 size) {
   i64 rc;
-  INTERRUPTIBLE(rc = ftruncate(fd, size));
+  if (CheckFdWritable(m, fildes, EINVAL) == -1) return -1;
+  INTERRUPTIBLE(rc = ftruncate(fildes, size));
   return rc;
 }
 
