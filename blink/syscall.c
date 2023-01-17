@@ -1388,6 +1388,7 @@ static i64 SysReadv(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   struct Fd *fd;
   struct Iovs iv;
   ssize_t (*readv_impl)(int, const struct iovec *, int);
+  if (iovlen <= 0 || iovlen > IOV_MAX) return einval();
   LockFds(&m->system->fds);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
@@ -1397,24 +1398,25 @@ static i64 SysReadv(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
-  if (iovlen > 0) {
-    InitIovs(&iv);
-    if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+  InitIovs(&iv);
+  if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+    if (iv.i) {
       INTERRUPTIBLE(rc = readv_impl(fildes, iv.p, iv.i));
+    } else {
+      rc = 0;
     }
-    FreeIovs(&iv);
-  } else {
-    rc = einval();
   }
+  FreeIovs(&iv);
   return rc;
 }
 
-static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
+static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen) {
   i64 rc;
   int oflags;
   struct Fd *fd;
   struct Iovs iv;
   ssize_t (*writev_impl)(int, const struct iovec *, int);
+  if (iovlen <= 0 || iovlen > IOV_MAX) return einval();
   LockFds(&m->system->fds);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
@@ -1427,15 +1429,15 @@ static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
   if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();  // due to cygwin
-  if (iovlen > 0) {
-    InitIovs(&iv);
-    if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+  InitIovs(&iv);
+  if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+    if (iv.i) {
       INTERRUPTIBLE(rc = writev_impl(fildes, iv.p, iv.i));
+    } else {
+      rc = 0;
     }
-    FreeIovs(&iv);
-  } else {
-    rc = einval();
   }
+  FreeIovs(&iv);
   return rc;
 }
 

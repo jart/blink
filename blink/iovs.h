@@ -9,10 +9,9 @@
 struct Iovs {
   unsigned i, n;
   struct iovec *p;
-  struct iovec init[2];
+  struct iovec init[8];
 };
 
-int AppendIovs(struct Iovs *, void *, size_t);
 void FreeIovs(struct Iovs *);
 void InitIovs(struct Iovs *);
 int AppendIovsReal(struct Machine *, struct Iovs *, i64, u64);

@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -42,7 +43,7 @@ void FreeIovs(struct Iovs *ib) {
 /**
  * Appends memory region to i/o vector builder.
  */
-int AppendIovs(struct Iovs *ib, void *base, size_t len) {
+static int AppendIovs(struct Iovs *ib, void *base, size_t len) {
   unsigned i, n;
   struct iovec *p;
   if (len) {
@@ -76,7 +77,7 @@ int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr, u64 size) {
   void *real;
   unsigned got;
   u64 have;
-  while (size) {
+  while (size && ib->i < IOV_MAX) {
     if (!(real = LookupAddress(m, addr))) return efault();
     have = 4096 - (addr & 4095);
     got = MIN(size, have);
@@ -92,22 +93,20 @@ int AppendIovsGuest(struct Machine *m, struct Iovs *iv, i64 iovaddr,
   int rc;
   size_t i;
   u64 iovsize;
-  struct iovec_linux *guestiovs;
+  const struct iovec_linux *guestiovs;
   if (!mulo(iovlen, sizeof(struct iovec_linux), &iovsize) &&
       (0 <= iovsize && iovsize <= 0x7ffff000)) {
-    if ((guestiovs = (struct iovec_linux *)malloc(iovsize))) {
-      CopyFromUserRead(m, guestiovs, iovaddr, iovsize);
-      for (rc = i = 0; i < iovlen; ++i) {
+    if ((guestiovs = (const struct iovec_linux *)Schlep(m, iovaddr, iovsize))) {
+      for (rc = i = 0; i < iovlen && iv->i < IOV_MAX; ++i) {
         if (AppendIovsReal(m, iv, Read64(guestiovs[i].iov_base),
                            Read64(guestiovs[i].iov_len)) == -1) {
           rc = -1;
           break;
         }
       }
-      free(guestiovs);
       return rc;
     } else {
-      return enomem();
+      return -1;
     }
   } else {
     return eoverflow();

@@ -157,7 +157,7 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/clone_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/dup_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/cv_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/2/writev_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/4/writev_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/setsockopt_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/3/sqlite_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/sched_yield_test.com.ok				\
