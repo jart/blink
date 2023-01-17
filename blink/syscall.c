@@ -51,6 +51,10 @@
 #include <emscripten.h>
 #endif
 
+#ifdef __HAIKU__
+#include <sys/sockio.h>
+#endif
+
 #include "blink/assert.h"
 #include "blink/errno.h"
 #include "blink/loader.h"
@@ -1073,7 +1077,9 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
   gethostname(u.host, sizeof(u.host) - 1);
   strcpy(uts.nodename, u.host);
   memset(u.domain, 0, sizeof(u.domain));
+#ifndef __HAIKU__
   getdomainname(u.domain, sizeof(u.domain) - 1);
+#endif
   strcpy(uts.domainname, u.domain);
   CopyToUser(m, utsaddr, &uts, sizeof(uts));
   return 0;
@@ -1526,6 +1532,9 @@ static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen) {
 }
 
 static int UnXlatDt(int x) {
+#ifndef DT_UNKNOWN
+  return DT_UNKNOWN_LINUX;
+#else
   switch (x) {
     XLAT(DT_UNKNOWN, DT_UNKNOWN_LINUX);
     XLAT(DT_FIFO, DT_FIFO_LINUX);
@@ -1538,6 +1547,7 @@ static int UnXlatDt(int x) {
     default:
       __builtin_unreachable();
   }
+#endif
 }
 
 static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
@@ -1570,7 +1580,11 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
       reclen = 0;
       continue;
     }
+#ifdef DT_UNKNOWN
     type = UnXlatDt(ent->d_type);
+#else
+    type = DT_UNKNOWN_LINUX;
+#endif
     reclen = ROUNDUP(8 + 8 + 2 + 1 + len + 1, 8);
     memset(&rec, 0, sizeof(rec));
     Write64(rec.ino, ent->d_ino);
@@ -1996,6 +2010,9 @@ static int SysFdatasync(struct Machine *m, i32 fildes) {
   // correctly so currently we default to the macro that redefines
   // fdatasync() to fsync(). ──Quoth SQLite (os_unix.c)
   return fsync(fildes);
+#elif defined(__HAIKU__)
+  // Haiku doesn't have fdatasync() yet
+  return fsync(fildes);
 #else
   return fdatasync(fildes);
 #endif
@@ -2313,9 +2330,11 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
       } else {
         unassert(WIFSIGNALED(wstatus));
         gwstatus = UnXlatSignal(WTERMSIG(wstatus)) & 127;
+#ifdef WCOREDUMP
         if (WCOREDUMP(wstatus)) {
           gwstatus |= 128;
         }
+#endif
       }
       Write32(gwstatusb, gwstatus);
       CopyToUserWrite(m, opt_out_wstatus_addr, gwstatusb, sizeof(gwstatusb));
