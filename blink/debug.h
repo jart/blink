@@ -10,6 +10,7 @@ void PrintBacktrace(void);
 void DumpHex(u8 *, size_t);
 void PrintFds(struct Fds *);
 void LogCpu(struct Machine *);
+const char *DescribeProt(int);
 const char *DescribeFlags(int);
 const char *DescribeSignal(int);
 const char *DescribeMopcode(int);

@@ -67,7 +67,7 @@ static size_t GetBigSize(size_t n) {
 
 void FreeBig(void *p, size_t n) {
   if (!p) return;
-  unassert(!munmap(p, n));
+  unassert(!Munmap(p, n));
 }
 
 void *AllocateBig(size_t n, int prot, int flags, int fd, off_t off) {
@@ -386,7 +386,7 @@ static bool FreePage(struct System *s, u64 entry) {
     --s->memstat.allocated;
     --s->memstat.committed;
     pagesize = GetSystemPageSize();
-    unassert(!munmap((void *)ROUNDDOWN((intptr_t)(entry & PAGE_TA), pagesize),
+    unassert(!Munmap((void *)ROUNDDOWN((intptr_t)(entry & PAGE_TA), pagesize),
                      pagesize));
     return false;
   } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
@@ -627,7 +627,7 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
   //             end when size isn't a multiple of platform page size
   if (RemoveVirtual(s, virt, size) &&
       (HasLinearMapping(s) && !(virt & (pagesize - 1)))) {
-    unassert(!munmap(ToHost(virt & PAGE_TA), size));
+    unassert(!Munmap(ToHost(virt & PAGE_TA), size));
   }
   InvalidateSystem(s, true, false);
   return 0;
@@ -679,6 +679,7 @@ int CheckVirtual(struct System *s, i64 virt, i64 size) {
 }
 
 int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
+  int sysprot;
   u64 pt, key;
   u8 *mi, *real;
   long pagesize;
@@ -710,13 +711,24 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
       }
       for (;;) {
         unassert(pt & PAGE_V);
+        // some operating systems, e.g. OpenBSD and Apple M1, impose a
+        // W^X invariant. we don't actually execute guest memory, thus
+        sysprot = prot & ~PROT_EXEC;
         // TODO(jart): have fewer system calls
         if (HasLinearMapping(s) &&
             (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                 (PAGE_HOST | PAGE_MAP) &&
             (mpstart = ROUNDDOWN(virt, pagesize)) != last) {
           last = mpstart;
-          if (mprotect(ToHost(mpstart), pagesize, prot & ~PROT_EXEC)) {
+          // in linear mode, the guest might try to do something like
+          // set a 4096 byte guard page to PROT_NONE at the bottom of
+          // its 64kb stack. if the host operating system has a 64 kb
+          // page size, then that would be bad. we can't satisfy prot
+          // unless the guest takes the page size into consideration.
+          if (virt != mpstart || end - virt < pagesize) {
+            sysprot = PROT_READ | PROT_WRITE;
+          }
+          if (Mprotect(ToHost(mpstart), pagesize, sysprot, "linear")) {
             LOGF("mprotect(%#" PRIx64 " [%p], %#lx, %d) failed: %s", mpstart,
                  ToHost(mpstart), pagesize, prot, strerror(errno));
             Abort();
@@ -724,7 +736,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
         } else if ((pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                    (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
           real = (u8 *)ROUNDDOWN((intptr_t)(pt & PAGE_TA), pagesize);
-          if (mprotect(real, pagesize, prot & ~PROT_EXEC)) {
+          if (Mprotect(real, pagesize, sysprot, "mug")) {
             LOGF("mprotect(pt=%#" PRIx64
                  ", real=%p, size=%#lx, prot=%d) failed: %s",
                  pt, real, pagesize, prot, strerror(errno));

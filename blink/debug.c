@@ -121,6 +121,38 @@ int GetInstruction(struct Machine *m, i64 pc, struct XedDecodedInst *x) {
   }
 }
 
+const char *DescribeProt(int prot) {
+  char *p;
+  bool gotsome;
+  _Thread_local static char buf[64];
+  if (!prot) return "PROT_NONE";
+  p = buf;
+  gotsome = false;
+  if (prot & PROT_READ) {
+    if (gotsome) *p++ = '|';
+    p = stpcpy(p, "PROT_READ");
+    prot &= ~PROT_READ;
+    gotsome = true;
+  }
+  if (prot & PROT_WRITE) {
+    if (gotsome) *p++ = '|';
+    p = stpcpy(p, "PROT_WRITE");
+    prot &= ~PROT_WRITE;
+    gotsome = true;
+  }
+  if (prot & PROT_EXEC) {
+    if (gotsome) *p++ = '|';
+    p = stpcpy(p, "PROT_EXEC");
+    prot &= ~PROT_EXEC;
+    gotsome = true;
+  }
+  if (prot) {
+    if (gotsome) *p++ = '|';
+    p = FormatInt64(p, prot);
+  }
+  return buf;
+}
+
 const char *DescribeSignal(int sig) {
   _Thread_local static char buf[21];
   switch (sig) {

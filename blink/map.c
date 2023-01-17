@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/debug.h"
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/map.h"
@@ -31,7 +32,7 @@
 long GetSystemPageSize(void) {
 #ifdef __EMSCRIPTEN__
   // "pages" in Emscripten only refer to the granularity the memory
-  // buffer can be grown at but does not affect functions like mmap.
+  // buffer can be grown at but does not affect functions like mmap
   return 4096;
 #endif
   long z;
@@ -52,14 +53,51 @@ void *Mmap(void *addr,     //
   char szbuf[16];
   FormatSize(szbuf, length, 1024);
   if (res != MAP_FAILED) {
-    MEM_LOGF("%s created %s byte %smap [%p,%p) fd=%d offset=%#" PRIx64, owner,
-             szbuf, (flags & MAP_SHARED) ? "shared " : "", res,
-             (u8 *)res + length, fd, (i64)offset);
+    MEM_LOGF("%s created %s byte %smap [%p,%p) as %s flags=%#x fd=%d "
+             "offset=%#" PRIx64,
+             owner, szbuf, (flags & MAP_SHARED) ? "shared " : "", res,
+             (u8 *)res + length, DescribeProt(prot), flags, fd, (i64)offset);
   } else {
-    MEM_LOGF("%s failed to create %s map [%p,%p) prot %#x flags %#x: %s "
+    MEM_LOGF("%s failed to create %s map [%p,%p) as %s flags %#x: %s "
              "(system page size is %ld)",
-             owner, szbuf, (u8 *)addr, (u8 *)addr + length, prot, flags,
-             strerror(errno), GetSystemPageSize());
+             owner, szbuf, (u8 *)addr, (u8 *)addr + length, DescribeProt(prot),
+             flags, strerror(errno), GetSystemPageSize());
+  }
+#endif
+  return res;
+}
+
+int Munmap(void *addr, size_t length) {
+  int rc;
+  rc = munmap(addr, length);
+#if LOG_MEM
+  char szbuf[16];
+  FormatSize(szbuf, length, 1024);
+  if (!rc) {
+    MEM_LOGF("unmapped %s bytes at [%p,%p)", szbuf, addr, (u8 *)addr + length);
+  } else {
+    MEM_LOGF("failed to unmap %s bytes at [%p,%p): %s", szbuf, addr,
+             (u8 *)addr + length, strerror(errno));
+  }
+#endif
+  return rc;
+}
+
+int Mprotect(void *addr,     //
+             size_t length,  //
+             int prot,       //
+             const char *owner) {
+  int res = mprotect(addr, length, prot);
+#if LOG_MEM
+  char szbuf[16];
+  FormatSize(szbuf, length, 1024);
+  if (res != -1) {
+    MEM_LOGF("%s protected %s byte map [%p,%p) as %s", owner, szbuf, addr,
+             (u8 *)addr + length, DescribeProt(prot));
+  } else {
+    MEM_LOGF("%s failed to protect %s byte map [%p,%p) as %s: %s", owner, szbuf,
+             (u8 *)addr, (u8 *)addr + length, DescribeProt(prot),
+             strerror(errno));
   }
 #endif
   return res;

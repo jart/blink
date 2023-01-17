@@ -384,7 +384,7 @@ static bool PrepareJitMemory(void *addr, size_t size) {
 #ifdef MAP_JIT
   // Apple M1 only permits RWX memory if we use MAP_JIT, which Apple has
   // chosen to make incompatible with MAP_FIXED.
-  if (munmap(addr, size)) {
+  if (Munmap(addr, size)) {
     LOGF("failed to munmap() jit block: %s", strerror(errno));
     return false;
   }
@@ -394,7 +394,7 @@ static bool PrepareJitMemory(void *addr, size_t size) {
 #else
   int prot;
   prot = atomic_load_explicit(&g_jit.prot, memory_order_relaxed);
-  if (!mprotect(addr, size, prot)) {
+  if (!Mprotect(addr, size, prot, "jit")) {
     return true;
   }
   if (~prot & PROT_EXEC) {
@@ -570,7 +570,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
       FreeJitJump(JITJUMP_CONTAINER(e));
     }
     // ask system to change the page memory protections
-    unassert(!mprotect(addr, size, PROT_READ | PROT_EXEC));
+    unassert(!Mprotect(addr, size, PROT_READ | PROT_EXEC, "jit"));
     // update interpreter hooks so our new jit code goes live
     while ((e = dll_first(jb->staged))) {
       js = JITSTAGE_CONTAINER(e);

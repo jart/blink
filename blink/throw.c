@@ -27,6 +27,7 @@
 #include "blink/endian.h"
 #include "blink/linux.h"
 #include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/signal.h"
 
 void RestoreIp(struct Machine *m) {
@@ -88,7 +89,9 @@ void ThrowProtectionFault(struct Machine *m) {
 void ThrowSegmentationFault(struct Machine *m, i64 va) {
   RestoreIp(m);
   m->faultaddr = va;
-  LOGF("SEGMENTATION FAULT AT ADDRESS %" PRIx64 "\n\t%s", va, GetBacktrace(m));
+  // TODO: Fix memory leak with FormatPml4t()
+  LOGF("SEGMENTATION FAULT AT ADDRESS %" PRIx64 "\n\t%s\n%s", va,
+       GetBacktrace(m), FormatPml4t(m));
   HaltMachine(m, kMachineSegmentationFault);
 }
 

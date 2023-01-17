@@ -54,6 +54,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/map.h"
 #include "blink/mda.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
@@ -3687,7 +3688,7 @@ int VirtualMachine(int argc, char *argv[]) {
     } while (!(action & (RESTART | EXIT)));
   } while (action & RESTART);
   if (m->system->elf.ehdr) {
-    unassert(!munmap(m->system->elf.ehdr, m->system->elf.size));
+    unassert(!Munmap(m->system->elf.ehdr, m->system->elf.size));
   }
   DisFree(dis);
   return exitcode;
