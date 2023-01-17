@@ -44,7 +44,8 @@ jobs:
           . ./emsdk/emsdk_env.sh
           emmake make -j$(nproc)
           mkdir o//blink/blink-web
-          cp third_party/coi-serviceworker/coi-serviceworker.js o//blink/blink-web/coi-serviceworker.js
+          cp third_party/coi-serviceworker/coi-serviceworker.js o//blink/blink-web/
+          cp third_party/xterm.js/{xterm.min.js,xterm.css} o//blink/blink-web/
           emcc -O2 o//blink/blink.o o//blink/blink.a -lm -pthread -lrt -o o//blink/blink-web/blink.html \
             --shell-file blink/blink-shell.html \
             -s INVOKE_RUN=0 \
