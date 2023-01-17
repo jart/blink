@@ -157,6 +157,8 @@
 #define POLLNVAL_LINUX      0x20
 #define TIMER_ABSTIME_LINUX 0x01
 
+#define MAP_TYPE_LINUX            0x0000000f
+#define MAP_FILE_LINUX            0x00000000
 #define MAP_SHARED_LINUX          0x00000001
 #define MAP_PRIVATE_LINUX         0x00000002
 #define MAP_FIXED_LINUX           0x00000010

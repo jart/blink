@@ -759,7 +759,7 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   UNLOCK(&m->system->mmap_lock);
   if (gotsome) {
     STATISTIC(++smc_resets);
-    LOGF("mprotect(PROT_EXEC) reset %ld JIT hooks", gotsome);
+    JIT_LOGF("mprotect(PROT_EXEC) reset %ld JIT hooks", gotsome);
     InvalidateSystem(m->system, false, true);
   }
   return rc;
@@ -805,14 +805,36 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
                    int flags, int fildes, i64 offset) {
   u64 key;
   ssize_t rc;
+  int oflags;
+  struct Fd *fd;
   long pagesize;
   if (!IsValidAddrSize(virt, size)) return einval();
   if (flags & MAP_GROWSDOWN_LINUX) return enotsup();
   if ((key = Prot2Page(prot)) == -1) return einval();
   if (flags & MAP_FIXED_NOREPLACE_LINUX) return enotsup();
-  if (fildes != -1) {
-    if (flags & MAP_ANONYMOUS_LINUX) {
+  if (flags & MAP_ANONYMOUS_LINUX) {
+    fildes = -1;
+    if ((flags & MAP_TYPE_LINUX) == MAP_FILE_LINUX) {
       return einval();
+    }
+  }
+  if (fildes != -1) {
+    LockFds(&m->system->fds);
+    if ((fd = GetFd(&m->system->fds, fildes))) {
+      oflags = fd->oflags;
+    } else {
+      oflags = 0;
+    }
+    UnlockFds(&m->system->fds);
+    if (!fd) return -1;
+    if ((oflags & O_ACCMODE) == O_WRONLY ||  //
+        ((prot & PROT_WRITE) &&              //
+         (oflags & O_APPEND)) ||             //
+        ((prot & PROT_WRITE) &&              //
+         (flags & MAP_SHARED_LINUX) &&       //
+         (oflags & O_ACCMODE) != O_RDWR)) {  //
+      errno = EACCES;
+      return -1;
     }
   }
   LOCK(&m->system->mmap_lock);
@@ -834,13 +856,7 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
   rc = ReserveVirtual(m->system, virt, size, key, fildes, offset,
                       !!(flags & MAP_SHARED_LINUX));
   UNLOCK(&m->system->mmap_lock);
-  if (rc != -1) {
-    if (!HasLinearMapping(m->system) && fildes != -1) {
-      SyncVirtual(m, virt, size, fildes, offset);
-    }
-  } else {
-    virt = -1;
-  }
+  if (rc == -1) virt = -1;
 Finished:
   return virt;
 }
@@ -1300,6 +1316,7 @@ static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
 
 static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   i64 rc;
+  int oflags;
   struct Fd *fd;
   struct Iovs iv;
   ssize_t (*writev_impl)(int, const struct iovec *, int);
@@ -1307,11 +1324,14 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
     unassert(writev_impl = fd->cb->writev);
+    oflags = fd->oflags;
   } else {
     writev_impl = 0;
+    oflags = 0;
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
+  if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();  // due to cygwin
   if (size) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
@@ -1346,7 +1366,18 @@ static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
 static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
                      u64 offset) {
   i64 rc;
+  int oflags;
+  struct Fd *fd;
   const void *mem;
+  LockFds(&m->system->fds);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    oflags = fd->oflags;
+  } else {
+    oflags = 0;
+  }
+  UnlockFds(&m->system->fds);
+  if (!fd) return -1;
+  if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();  // due to cygwin
   mem = Schlep(m, addr, size);
   INTERRUPTIBLE(rc = pwrite(fildes, mem, size, offset));
   return rc;
@@ -1380,6 +1411,7 @@ static i64 SysReadv(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
 
 static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   i64 rc;
+  int oflags;
   struct Fd *fd;
   struct Iovs iv;
   ssize_t (*writev_impl)(int, const struct iovec *, int);
@@ -1387,11 +1419,14 @@ static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
     unassert(writev_impl = fd->cb->writev);
+    oflags = fd->oflags;
   } else {
     writev_impl = 0;
+    oflags = 0;
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
+  if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();  // due to cygwin
   if (iovlen > 0) {
     InitIovs(&iv);
     if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
@@ -1445,7 +1480,7 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
     if (!(ent = readdir(fd->dirstream))) break;
     len = strlen(ent->d_name);
     if (len + 1 > sizeof(rec.d_name)) {
-      LOGF("ignoring %ld byte d_name: %s", len, ent->d_name);
+      LOGF("ignoring %zu byte d_name: %s", len, ent->d_name);
       reclen = 0;
       continue;
     }
@@ -2257,6 +2292,9 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
     CopyFromUserRead(m, &hand, act, sizeof(hand));
     flags = Read64(hand.flags);
     handler = Read64(hand.handler);
+    if (handler == SIG_IGN_LINUX) {
+      flags &= ~SA_NOCLDWAIT_LINUX;
+    }
     if (flags & ~supported) {
       LOGF("unrecognized sigaction() flags: %#" PRIx64, flags & ~supported);
       return einval();
@@ -2269,6 +2307,10 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
         isignored = true;
         break;
       default:
+        if (!(flags & SA_RESTORER_LINUX)) {
+          LOGF("sigaction() flags missing SA_RESTORER");
+          return einval();
+        }
         break;
     }
   }

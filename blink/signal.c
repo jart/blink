@@ -109,14 +109,15 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   Write64(fp.rdp, m->fpu.dp);
   memcpy(fp.st, m->fpu.st, 128);
   memcpy(fp.xmm, m->xmm, 256);
-  if (Read32(m->sigaltstack.ss_flags) & SS_DISABLE_LINUX) {
-    sp = Read64(m->sp);
-  } else {
+  if ((Read64(m->system->hands[sig - 1].flags) & SA_ONSTACK_LINUX) &&
+      !(Read32(m->sigaltstack.ss_flags) & SS_DISABLE_LINUX)) {
     sp = Read64(m->sigaltstack.ss_sp) + Read64(m->sigaltstack.ss_size);
     if (Read32(m->sigaltstack.ss_flags) & SS_AUTODISARM_LINUX) {
       Write32(m->sigaltstack.ss_flags,
               Read32(m->sigaltstack.ss_flags) & ~SS_AUTODISARM_LINUX);
     }
+  } else {
+    sp = Read64(m->sp);
   }
   sp = ROUNDDOWN(sp - sizeof(si), 16);
   CopyToUserWrite(m, sp, &si, sizeof(si));

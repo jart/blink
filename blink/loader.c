@@ -50,7 +50,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
   i64 memsz = Read64(phdr->p_memsz);
   i64 offset = Read64(phdr->p_offset);
   i64 filesz = Read64(phdr->p_filesz);
-  long pagesize = GetSystemPageSize();
+  long pagesize = HasLinearMapping(m) ? GetSystemPageSize() : 4096;
   i64 start = ROUNDDOWN(vaddr, pagesize);
   i64 end = ROUNDUP(vaddr + memsz, pagesize);
   long skew = vaddr & (pagesize - 1);
@@ -85,9 +85,10 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
     exit(127);
   }
   if (skew != (offset & (pagesize - 1))) {
-    LOGF("p_vaddr p_offset skew unequal w.r.t. host page size; try "
-         "rebuilding your program using the linker flags: -static "
-         "-Wl,-z,common-page-size=%ld,-z,max-page-size=%ld",
+    LOGF("p_vaddr p_offset skew unequal w.r.t. page size; try either "
+         "(1) rebuilding your program using the linker flags: -static "
+         "-Wl,-z,common-page-size=%ld,-z,max-page-size=%ld or (2) "
+         "using `blink -m` to disable the linear memory optimization",
          pagesize, pagesize);
     exit(127);
   }
@@ -143,9 +144,6 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
       if (ReserveVirtual(s, start, bulk, key, fd, offset, 0) == -1) {
         LOGF("failed to map elf program header file data");
         exit(127);
-      }
-      if (!HasLinearMapping(m->system) && fd != -1) {
-        SyncVirtual(m, start, bulk, fd, offset);
       }
     }
     start += bulk;
@@ -307,7 +305,9 @@ static void SetupDispatch(struct Machine *m) {
   if (m->mode != XED_MODE_LONG ||        //
       IsJitDisabled(&m->system->jit) ||  //
       !(n = m->system->codesize) ||      //
-      !(m->system->fun = (atomic_int *)AllocateBig(n * sizeof(atomic_int)))) {
+      !(m->system->fun = (atomic_int *)AllocateBig(
+            n * sizeof(atomic_int), PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
     m->system->fun = 0;
   }
   if (m->system->fun) {

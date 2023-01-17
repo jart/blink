@@ -3651,8 +3651,9 @@ int VirtualMachine(int argc, char *argv[]) {
     action = 0;
     LoadProgram(m, codepath, argv + optind_ - 1, environ);
     if (m->system->codesize) {
-      ophits = (unsigned long *)AllocateBig(m->system->codesize *
-                                            sizeof(unsigned long));
+      ophits = (unsigned long *)AllocateBig(
+          m->system->codesize * sizeof(unsigned long), PROT_READ | PROT_WRITE,
+          MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     }
     ScrollMemoryViews();
     AddStdFd(&m->system->fds, 0);
@@ -3714,6 +3715,7 @@ void TerminateSignal(struct Machine *m, int sig) {
 static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
   LOGF("OnSigSegv(%p)", si->si_addr);
   RestoreIp(g_machine);
+  // TODO(jart): Fix address translation in non-linear mode.
   g_machine->faultaddr = ToGuest(si->si_addr);
   LOGF("SIGSEGV AT ADDRESS %" PRIx64 " (OR %p)\n\t%s", g_machine->faultaddr,
        si->si_addr, GetBacktrace(g_machine));

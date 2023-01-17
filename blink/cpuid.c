@@ -20,6 +20,40 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 
+#define LINUX_   "Linux\0\0\0\0\0\0\0"
+#define FREEBSD_ "FreeBSD\0\0\0\0\0\0"
+#define NETBSD_  "NetBSD\0\0\0\0\0\0"
+#define OPENBSD_ "OpenBSD\0\0\0\0\0"
+#define XNU_     "XNU\0\0\0\0\0\0\0\0\0"
+#define WINDOWS_ "Windows\0\0\0\0\0"
+#define CYGWIN_  "Cygwin\0\0\0\0\0\0"
+#define UNKNOWN_ "Unknown\0\0\0\0\0\0"
+
+#ifdef __COSMOPOLITAN__
+#define OS                  \
+  (IsLinux()     ? LINUX_   \
+   : IsFreebsd() ? FREEBSD_ \
+   : IsNetbsd()  ? NETBSD_  \
+   : IsOpenbsd() ? OPENBSD_ \
+   : IsXnu()     ? XNU_     \
+   : IsWindows() ? WINDOWS_ \
+                 : UNKNOWN_)
+#elif defined(__linux)
+#define OS LINUX_
+#elif defined(__FreeBSD__)
+#define OS FREEBSD_
+#elif defined(__NetBSD__)
+#define OS NETBSD_
+#elif defined(__OpenBSD__)
+#define OS OPENBSD_
+#elif defined(__APPLE__)
+#define OS XNU_
+#elif defined(__CYGWIN__)
+#define OS CYGWIN_
+#else
+#define OS UNKNOWN_
+#endif
+
 void OpCpuid(P) {
   u32 ax, bx, cx, dx, jit;
   ax = bx = cx = dx = 0;
@@ -28,30 +62,36 @@ void OpCpuid(P) {
     case 0x80000000:
       unassert(m->system->brand);
       ax = 7;
-      bx = Read32((u8 *)(m->system->brand + 0));
-      dx = Read32((u8 *)(m->system->brand + 4));
-      cx = Read32((u8 *)(m->system->brand + 8));
+      bx = Read32((const u8 *)(m->system->brand + 0));
+      dx = Read32((const u8 *)(m->system->brand + 4));
+      cx = Read32((const u8 *)(m->system->brand + 8));
+      break;
+    case 0x40000000:
+      bx = Read32((const u8 *)(OS + 0));
+      cx = Read32((const u8 *)(OS + 4));
+      dx = Read32((const u8 *)(OS + 8));
       break;
     case 1:
-      cx |= 1 << 0;   // sse3
-      cx |= 1 << 1;   // pclmulqdq
-      cx |= 1 << 9;   // ssse3
-      cx |= 1 << 23;  // popcnt
-      cx |= 1 << 30;  // rdrnd
-      cx |= 0 << 25;  // aes
-      cx |= 1 << 13;  // cmpxchg16b
-      dx |= 1 << 0;   // fpu
-      dx |= 1 << 4;   // tsc
-      dx |= 1 << 6;   // pae
-      dx |= 1 << 8;   // cmpxchg8b
-      dx |= 1 << 15;  // cmov
-      dx |= 1 << 19;  // clflush
-      dx |= 1 << 23;  // mmx
-      dx |= 1 << 24;  // fxsave
-      dx |= 1 << 25;  // sse
-      dx |= 1 << 26;  // sse2
-      cx |= 0 << 19;  // sse4.1
-      cx |= 0 << 20;  // sse4.2
+      cx |= 1 << 0;    // sse3
+      cx |= 1 << 1;    // pclmulqdq
+      cx |= 1 << 9;    // ssse3
+      cx |= 1 << 23;   // popcnt
+      cx |= 1 << 30;   // rdrnd
+      cx |= 0 << 25;   // aes
+      cx |= 1 << 13;   // cmpxchg16b
+      cx |= 1u << 31;  // hypervisor
+      dx |= 1 << 0;    // fpu
+      dx |= 1 << 4;    // tsc
+      dx |= 1 << 6;    // pae
+      dx |= 1 << 8;    // cmpxchg8b
+      dx |= 1 << 15;   // cmov
+      dx |= 1 << 19;   // clflush
+      dx |= 1 << 23;   // mmx
+      dx |= 1 << 24;   // fxsave
+      dx |= 1 << 25;   // sse
+      dx |= 1 << 26;   // sse2
+      cx |= 0 << 19;   // sse4.1
+      cx |= 0 << 20;   // sse4.2
       break;
     case 7:
       switch (Get32(m->cx)) {

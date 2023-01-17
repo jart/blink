@@ -79,9 +79,10 @@
 #define PAGE_2MB  0x0180
 #define PAGE_1GB  0x0180
 #define PAGE_RSRV 0x0200  // no actual memory associated
-#define PAGE_HOST 0x0400  // PAGE_TA bits point to host memory
+#define PAGE_HOST 0x0400  // PAGE_TA bits point to host (not real) memory
 #define PAGE_MAP  0x0800  // PAGE_TA bits were mmmap()'d
 #define PAGE_EOF  0x0010000000000000
+#define PAGE_MUG  0x0020000000000000  // each 4096 byte page is a system page
 #define PAGE_XD   0x8000000000000000
 #define PAGE_TA   0x00007ffffffff000
 
@@ -440,7 +441,6 @@ void SetReadAddr(struct Machine *, i64, u32);
 void SetWriteAddr(struct Machine *, i64, u32);
 int ProtectVirtual(struct System *, i64, i64, int);
 int CheckVirtual(struct System *, i64, i64);
-void SyncVirtual(struct Machine *, i64, i64, int, i64);
 int GetProtection(u64);
 u64 SetProtection(int);
 int ClassifyOp(u64) pureconst;
@@ -534,8 +534,8 @@ void Op2f6(P);
 void OpShx(P);
 void OpRorx(P);
 
-void *AllocateBig(size_t);
 void FreeBig(void *, size_t);
+void *AllocateBig(size_t, int, int, int, off_t);
 
 bool HasHook(struct Machine *, u64);
 nexgen32e_f GetHook(struct Machine *, u64);

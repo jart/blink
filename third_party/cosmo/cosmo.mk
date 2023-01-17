@@ -124,7 +124,7 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/crc32z_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/lock2_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/lock_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/2/sigaction_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/4/sigaction_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/sigsetjmp_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/sigsuspend_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/escapehtml_test.com.ok				\
@@ -172,7 +172,7 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/ftell_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/fseeko_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/fputs_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/3/pipe_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/4/pipe_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/fork_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/execve_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/arena_test.com.ok					\

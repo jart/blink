@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
+#include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -51,8 +52,9 @@ void *Mmap(void *addr,     //
   char szbuf[16];
   FormatSize(szbuf, length, 1024);
   if (res != MAP_FAILED) {
-    MEM_LOGF("%s created %s map [%p,%p)", owner, szbuf, res,
-             (u8 *)res + length);
+    MEM_LOGF("%s created %s byte %smap [%p,%p) fd=%d offset=%#" PRIx64, owner,
+             szbuf, (flags & MAP_SHARED) ? "shared " : "", res,
+             (u8 *)res + length, fd, (i64)offset);
   } else {
     MEM_LOGF("%s failed to create %s map [%p,%p) prot %#x flags %#x: %s "
              "(system page size is %ld)",

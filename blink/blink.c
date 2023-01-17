@@ -82,6 +82,7 @@ void TerminateSignal(struct Machine *m, int sig) {
 static void OnSigSegv(int sig, siginfo_t *si, void *ptr) {
   int sig_linux;
   RestoreIp(g_machine);
+  // TODO(jart): Fix address translation in non-linear mode.
   g_machine->faultaddr = ToGuest(si->si_addr);
   LOGF("SEGMENTATION FAULT (%s) AT ADDRESS %" PRIx64 "\n\t%s", strsignal(sig),
        g_machine->faultaddr, GetBacktrace(g_machine));
