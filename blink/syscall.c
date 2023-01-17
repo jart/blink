@@ -870,12 +870,10 @@ static int SysDup1(struct Machine *m, i32 fildes) {
   int oflags;
   int newfildes;
   struct Fd *fd;
-#ifdef __CYGWIN__
   if (fildes < 0) {
     LOGF("dup() ebadf");
     return ebadf();
   }
-#endif
   if ((newfildes = dup(fildes)) != -1) {
     LockFds(&m->system->fds);
     if ((fd = GetFd(&m->system->fds, fildes))) {
