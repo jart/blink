@@ -20,6 +20,7 @@
 #include <stdatomic.h>
 
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/lock.h"
 #include "blink/machine.h"
@@ -48,7 +49,7 @@ void OpXchgGvqpEvqp(P) {
   u8 *q = RegRexrReg(m, rde);
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
-#if UINTPTR_MAX > 0xFFFFFFFF
+#if CAN_64BIT
     if (!IsModrmRegister(rde) && !((intptr_t)p & 7)) {
       atomic_store_explicit(
           (_Atomic(u64) *)q,

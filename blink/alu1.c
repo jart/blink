@@ -21,6 +21,7 @@
 
 #include "blink/alu.h"
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/lock.h"
@@ -69,7 +70,7 @@ static void AluEvqp(P, const aluop_f ops[4]) {
   f = ops[RegLog2(rde)];
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
-#if UINTPTR_MAX > 0xFFFFFFFF
+#if CAN_64BIT
     if (Lock(rde) && !((intptr_t)p & 7)) {
       u64 x, z;
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);

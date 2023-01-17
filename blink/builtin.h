@@ -1,5 +1,6 @@
 #ifndef BLINK_BUILTIN_H_
 #define BLINK_BUILTIN_H_
+#include <limits.h>
 
 #if __GNUC__ + 0 < 2
 #undef __GNUC__
@@ -210,7 +211,7 @@
 #endif
 #endif
 
-#if defined(__GNUC__) && !defined(__APPLE__)
+#if defined(__GNUC__) && !defined(__APPLE__) && !defined(__cplusplus)
 #define printfesque(n)   __attribute__((__format__(__gnu_printf__, n, n + 1)))
 #define scanfesque(n)    __attribute__((__format__(__gnu_scanf__, n, n + 1)))
 #define strftimeesque(n) __attribute__((__format__(__strftime__, n, 0)))
@@ -220,7 +221,15 @@
 #define strftimeesque(n)
 #endif
 
-#if UINTPTR_MAX > 0xFFFFFFFF
+#ifdef __x86_64__
+#define CAN_64BIT 1
+#elif LONG_BIT >= 64
+#define CAN_64BIT 1
+#else
+#define CAN_64BIT 0
+#endif
+
+#if CAN_64BIT
 #if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 406 || defined(__llvm__)
 #define HAVE_INT128
 #endif

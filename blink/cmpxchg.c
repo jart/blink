@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/alu.h"
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/lock.h"
@@ -45,7 +46,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
   p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
     u64 x;
-#if UINTPTR_MAX > 0xFFFFFFFF
+#if CAN_64BIT
     if (Lock(rde) && !((intptr_t)p & 7)) {
       x = atomic_load_explicit((_Atomic(u64) *)m->ax, memory_order_relaxed);
       atomic_compare_exchange_strong_explicit(

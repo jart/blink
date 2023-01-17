@@ -44,7 +44,7 @@
 #define kMachineProtectionFault      -8
 #define kMachineSimdException        -9
 
-#if UINTPTR_MAX > 0xFFFFFFFF
+#if CAN_64BIT
 #ifndef __SANITIZE_ADDRESS__
 #define kSkew 0x088800000000
 #else
@@ -96,7 +96,7 @@
 #if defined(NOLINEAR) || defined(__SANITIZE_THREAD__)
 #define CanHaveLinearMemory() false
 #else
-#define CanHaveLinearMemory() (UINTPTR_MAX > 0xFFFFFFFF)
+#define CanHaveLinearMemory() CAN_64BIT
 #endif
 
 #ifdef HAVE_JIT
@@ -107,7 +107,7 @@
 
 #define HasLinearMapping(x) (CanHaveLinearMemory() && !(x)->nolinear)
 
-#if UINTPTR_MAX > 0xFFFFFFFF
+#if CAN_64BIT
 #define _Atomicish(t) _Atomic(t)
 #else
 #define _Atomicish(t) t

@@ -136,34 +136,45 @@ void OpPinsrwVdqEwIb(P) {
 
 void OpShuffle(P) {
   i16 q16[4];
-  i16 x16[8];
-  i32 x32[4];
+  void *kernel;
   IGNORE_RACES_START();
   switch (Rep(rde) | Osz(rde)) {
     case 0:
       memcpy(q16, GetModrmRegisterXmmPointerRead8(A), 8);
       pshufw(q16, q16, uimm0);
       memcpy(XmmRexrReg(m, rde), q16, 8);
+      kernel = 0;
       break;
     case 1:
-      memcpy(x32, GetModrmRegisterXmmPointerRead16(A), 16);
-      pshufd(x32, x32, uimm0);
-      memcpy(XmmRexrReg(m, rde), x32, 16);
+      pshufd((i32 *)XmmRexrReg(m, rde),
+             (i32 *)GetModrmRegisterXmmPointerRead16(A), uimm0);
+      kernel = pshufd;
       break;
     case 2:
-      memcpy(x16, GetModrmRegisterXmmPointerRead16(A), 16);
-      pshuflw(x16, x16, uimm0);
-      memcpy(XmmRexrReg(m, rde), x16, 16);
+      pshuflw((i16 *)XmmRexrReg(m, rde),
+              (i16 *)GetModrmRegisterXmmPointerRead16(A), uimm0);
+      kernel = pshuflw;
       break;
     case 3:
-      memcpy(x16, GetModrmRegisterXmmPointerRead16(A), 16);
-      pshufhw(x16, x16, uimm0);
-      memcpy(XmmRexrReg(m, rde), x16, 16);
+      pshufhw((i16 *)XmmRexrReg(m, rde),
+              (i16 *)GetModrmRegisterXmmPointerRead16(A), uimm0);
+      kernel = pshufhw;
       break;
     default:
       __builtin_unreachable();
   }
   IGNORE_RACES_END();
+  if (IsMakingPath(m) && kernel) {
+    Jitter(A,
+           "P"      // res0 = GetXmmOrMemPointer(RexbRm)
+           "r0s1="  // sav1 = res0
+           "Q"      // res0 = GetXmmPointer(RexrReg)
+           "a2i"    // arg2 = uimm0
+           "s1a1="  // arg1 = sav1
+           "t"      // arg0 = res0
+           "c",     // call function
+           uimm0, kernel);
+  }
 }
 
 static void Shufps(P) {
