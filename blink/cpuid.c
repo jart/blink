@@ -93,6 +93,12 @@ void OpCpuid(P) {
       cx |= 0 << 19;   // sse4.1
       cx |= 0 << 20;   // sse4.2
       break;
+    case 2:  // Cache and TLB information
+      ax = 0x76035a01;
+      bx = 0x00f0b0ff;
+      cx = 0x00000000;
+      dx = 0x00ca0000;
+      break;
     case 7:
       switch (Get32(m->cx)) {
         case 0:
@@ -122,6 +128,50 @@ void OpCpuid(P) {
       break;
     case 0x80000007:
       dx |= 1 << 8;  // invtsc
+      break;
+    case 4:  // cpu cache information
+      // - Level 1 data 8-way 32,768 byte cache w/ 64 sets of 64 byte
+      //   lines shared across 2 threads
+      // - Level 1 code 8-way 32,768 byte cache w/ 64 sets of 64 byte
+      //   lines shared across 2 threads
+      // - Level 2 8-way 262,144 byte cache w/ 512 sets of 64 byte lines
+      //   shared across 2 threads
+      // - Level 3 complexly-indexed 16-way 8,388,608 byte cache w/ 8,192
+      //   sets of 64 byte lines shared across 16 threads
+      switch (Get32(m->cx)) {
+        case 0:
+          ax = 0x1c004121;
+          bx = 0x01c0003f;
+          cx = 0x0000003f;
+          dx = 0x00000000;
+          break;
+        case 1:
+          ax = 0x1c004122;
+          bx = 0x01c0003f;
+          cx = 0x0000003f;
+          dx = 0x00000000;
+          break;
+        case 2:
+          ax = 0x1c004143;
+          bx = 0x01c0003f;
+          cx = 0x000001ff;
+          dx = 0x00000000;
+          break;
+        case 3:
+          ax = 0x1c03c163;
+          bx = 0x03c0003f;
+          cx = 0x00001fff;
+          dx = 0x00000006;
+          break;
+        default:
+          break;
+      }
+      break;
+    case 6:  // thermal and power management leaf
+      ax = 0x00000077;
+      bx = 0x00000002;
+      cx = 0x0000000b;
+      dx = 0x00000000;
       break;
     default:
       break;

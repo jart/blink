@@ -1649,7 +1649,6 @@ static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
 }
 
 static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
-  int rc;
   struct Fd *fd;
   int (*ioctl_impl)(int, unsigned long, ...);
   int (*tcgetattr_impl)(int, struct termios *);
@@ -1669,47 +1668,33 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
   if (!fd) return -1;
   switch (request) {
     case TIOCGWINSZ_LINUX:
-      rc = IoctlTiocgwinsz(m, fildes, addr, ioctl_impl);
-      break;
+      return IoctlTiocgwinsz(m, fildes, addr, ioctl_impl);
     case TCGETS_LINUX:
-      rc = IoctlTcgets(m, fildes, addr, tcgetattr_impl);
-      break;
+      return IoctlTcgets(m, fildes, addr, tcgetattr_impl);
     case TCSETS_LINUX:
-      rc = IoctlTcsets(m, fildes, TCSANOW, addr, tcsetattr_impl);
-      break;
+      return IoctlTcsets(m, fildes, TCSANOW, addr, tcsetattr_impl);
     case TCSETSW_LINUX:
-      rc = IoctlTcsets(m, fildes, TCSADRAIN, addr, tcsetattr_impl);
-      break;
+      return IoctlTcsets(m, fildes, TCSADRAIN, addr, tcsetattr_impl);
     case TCSETSF_LINUX:
-      rc = IoctlTcsets(m, fildes, TCSAFLUSH, addr, tcsetattr_impl);
-      break;
+      return IoctlTcsets(m, fildes, TCSAFLUSH, addr, tcsetattr_impl);
     case SIOCGIFCONF_LINUX:
-      rc = IoctlSiocgifconf(m, fildes, addr);
-      break;
+      return IoctlSiocgifconf(m, fildes, addr);
     case SIOCGIFADDR_LINUX:
-      rc = IoctlSiocgifaddr(m, fildes, addr, SIOCGIFADDR);
-      break;
+      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFADDR);
     case SIOCGIFNETMASK_LINUX:
-      rc = IoctlSiocgifaddr(m, fildes, addr, SIOCGIFNETMASK);
-      break;
+      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFNETMASK);
     case SIOCGIFBRDADDR_LINUX:
-      rc = IoctlSiocgifaddr(m, fildes, addr, SIOCGIFBRDADDR);
-      break;
+      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFBRDADDR);
     case SIOCGIFDSTADDR_LINUX:
-      rc = IoctlSiocgifaddr(m, fildes, addr, SIOCGIFDSTADDR);
-      break;
+      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFDSTADDR);
     case TIOCGPGRP_LINUX:
-      rc = IoctlTiocgpgrp(m, fildes, addr);
-      break;
+      return IoctlTiocgpgrp(m, fildes, addr);
     case TIOCSPGRP_LINUX:
-      rc = IoctlTiocspgrp(m, fildes, addr);
-      break;
+      return IoctlTiocspgrp(m, fildes, addr);
     default:
       LOGF("missing ioctl %#" PRIx64, request);
-      rc = einval();
-      break;
+      return einval();
   }
-  return rc;
 }
 
 static i64 SysLseek(struct Machine *m, i32 fildes, i64 offset, int whence) {
