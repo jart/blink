@@ -1,5 +1,10 @@
 ![Screenshot of Blink running GCC 9.4.0](blink/blink-gcc.png)
 
+[![Test Status](https://github.com/jart/blink/actions/workflows/build.yml/badge.svg)](https://github.com/jart/blink/actions/workflows/build.yml)
+[![MacOS Test Status](https://github.com/jart/blink/actions/workflows/macos.yml/badge.svg)](https://github.com/jart/blink/actions/workflows/macos.yml)
+[![Cygwin Test Status](https://github.com/jart/blink/actions/workflows/cygwin.yml/badge.svg)](https://github.com/jart/blink/actions/workflows/cygwin.yml)
+[![Emscripten Test Status](https://github.com/jart/blink/actions/workflows/emscripten.yml/badge.svg)](https://github.com/jart/blink/actions/workflows/emscripten.yml)
+[![FreeBSD / OpenBSD Test Status](https://github.com/jart/blink/actions/workflows/bsd.yml/badge.svg)](https://github.com/jart/blink/actions/workflows/bsd.yml)
 # Blinkenlights
 
 This project contains two programs:
