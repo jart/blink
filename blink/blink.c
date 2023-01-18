@@ -104,7 +104,6 @@ static int Exec(char *prog, char **argv, char **envp) {
   unassert((g_machine = NewMachine(NewSystem(), 0)));
   if (FLAG_nojit) DisableJit(&g_machine->system->jit);
   SetMachineMode(g_machine, XED_MODE_LONG);
-  g_machine->system->brand = "GenuineBlink";
   g_machine->system->exec = Exec;
   g_machine->nolinear = FLAG_nolinear;
   g_machine->system->nolinear = FLAG_nolinear;

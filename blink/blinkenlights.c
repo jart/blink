@@ -2579,7 +2579,7 @@ static void OnDiskServiceReadSectors(void) {
     }
   } else {
     LOGF("bios read sector failed 0 <= %" PRId64 " && %" PRIx64 " + %" PRIx64
-         " <= %" PRIx64 "",
+         " <= %lx",
          sector, offset, size, m->system->elf.mapsize);
     m->al = 0x00;
     m->ah = 0x0d;

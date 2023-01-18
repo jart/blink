@@ -189,7 +189,7 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/countbits_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/cv_wait_example_test.com.ok			\
 		o/$(MODE)/third_party/cosmo/2/daemon_test.com.ok				\
-		o/$(MODE)/third_party/cosmo/2/dtoa_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/4/dtoa_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/expm1_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/fgetln_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/getcontext_test.com.ok				\

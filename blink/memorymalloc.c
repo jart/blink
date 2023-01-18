@@ -124,7 +124,6 @@ struct System *NewSystem(void) {
                    1ull << (SIGSEGV_LINUX - 1) |  //
                    1ull << (SIGTRAP_LINUX - 1);
     s->automap = kAutomapStart;
-    s->brand = "GenuineCosmo";
     s->pid = getpid();
   }
   return s;

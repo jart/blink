@@ -996,10 +996,12 @@ static void FixupSock(int fd, int flags) {
 }
 
 static int SysUname(struct Machine *m, i64 utsaddr) {
+  // glibc binaries won't run unless we report blink as a
+  // modern linux kernel on top of genuine intel hardware
   struct utsname_linux uts = {
       .sysname = "blink",
-      .release = "4.0",        // or glibc whines
-      .version = "blink 4.0",  // or glibc whines
+      .release = "4.0",
+      .version = "blink 4.0",
       .machine = "x86_64",
   };
   union {
@@ -1287,6 +1289,7 @@ static int SysGetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
 
 static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   i64 rc;
+  int oflags;
   struct Fd *fd;
   struct Iovs iv;
   ssize_t (*readv_impl)(int, const struct iovec *, int);
@@ -1294,11 +1297,14 @@ static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
     unassert(readv_impl = fd->cb->readv);
+    oflags = fd->oflags;
   } else {
     readv_impl = 0;
+    oflags = 0;
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
+  if ((oflags & O_ACCMODE) == O_WRONLY) return ebadf();
   if (size) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
@@ -1329,7 +1335,7 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
-  if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();  // due to cygwin
+  if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();
   if (size) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
@@ -1343,10 +1349,33 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   return rc;
 }
 
+// FreeBSD doesn't do access mode check on read/write to pipes.
+// Cygwin generally doesn't do access checks or is inconsistent.
+static long CheckFdAccess(struct Machine *m, i32 fildes, bool writable,
+                          int errno_if_check_fails) {
+  int oflags;
+  struct Fd *fd;
+  LockFds(&m->system->fds);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    oflags = fd->oflags;
+  } else {
+    oflags = 0;
+  }
+  UnlockFds(&m->system->fds);
+  if (!fd) return -1;
+  if ((writable && ((oflags & O_ACCMODE) == O_RDONLY)) ||
+      (!writable && ((oflags & O_ACCMODE) == O_WRONLY))) {
+    errno = errno_if_check_fails;
+    return -1;
+  }
+  return 0;
+}
+
 static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
                     u64 offset) {
   void *buf;
   ssize_t rc;
+  if (CheckFdAccess(m, fildes, false, EBADF) == -1) return -1;
   if (size) {
     if ((buf = malloc(size))) {
       INTERRUPTIBLE(rc = pread(fildes, buf, size, offset));
@@ -1361,36 +1390,17 @@ static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
   return rc;
 }
 
-static long CheckFdWritable(struct Machine *m, i32 fildes,
-                            int errno_if_not_writable) {
-  int oflags;
-  struct Fd *fd;
-  LockFds(&m->system->fds);
-  if ((fd = GetFd(&m->system->fds, fildes))) {
-    oflags = fd->oflags;
-  } else {
-    oflags = 0;
-  }
-  UnlockFds(&m->system->fds);
-  if (!fd) return -1;
-  // cygwin generally doesn't perform this check the same as linux
-  if ((oflags & O_ACCMODE) == O_RDONLY) {
-    errno = errno_if_not_writable;
-    return -1;
-  }
-  return 0;
-}
-
 static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
                      u64 offset) {
   i64 rc;
-  if (CheckFdWritable(m, fildes, EBADF) == -1) return -1;
+  if (CheckFdAccess(m, fildes, true, EBADF) == -1) return -1;
   INTERRUPTIBLE(rc = pwrite(fildes, Schlep(m, addr, size), size, offset));
   return rc;
 }
 
 static i64 SysReadv(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   i64 rc;
+  int oflags;
   struct Fd *fd;
   struct Iovs iv;
   ssize_t (*readv_impl)(int, const struct iovec *, int);
@@ -1399,11 +1409,14 @@ static i64 SysReadv(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
     unassert(readv_impl = fd->cb->readv);
+    oflags = fd->oflags;
   } else {
     readv_impl = 0;
+    oflags = 0;
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
+  if ((oflags & O_ACCMODE) == O_WRONLY) return ebadf();
   InitIovs(&iv);
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
     if (iv.i) {
@@ -1434,7 +1447,7 @@ static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen) {
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
-  if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();  // due to cygwin
+  if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();
   InitIovs(&iv);
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
     if (iv.i) {
@@ -1719,7 +1732,7 @@ static i64 SysLseek(struct Machine *m, i32 fildes, i64 offset, int whence) {
 
 static i64 SysFtruncate(struct Machine *m, i32 fildes, i64 size) {
   i64 rc;
-  if (CheckFdWritable(m, fildes, EINVAL) == -1) return -1;
+  if (CheckFdAccess(m, fildes, true, EINVAL) == -1) return -1;
   INTERRUPTIBLE(rc = ftruncate(fildes, size));
   return rc;
 }

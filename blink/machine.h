@@ -221,7 +221,6 @@ struct System {
   i64 brk;
   i64 automap;
   i64 codestart;
-  const char *brand;
   _Atomic(int) *fun;
   unsigned long codesize;
   struct MachineMemstat memstat;

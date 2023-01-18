@@ -20,6 +20,8 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 
+#define INTEL    "GenuineIntel"
+#define BLINK    "GenuineBlink"
 #define LINUX_   "Linux\0\0\0\0\0\0\0"
 #define FREEBSD_ "FreeBSD\0\0\0\0\0\0"
 #define NETBSD_  "NetBSD\0\0\0\0\0\0"
@@ -60,13 +62,19 @@ void OpCpuid(P) {
   switch (Get32(m->ax)) {
     case 0:
     case 0x80000000:
-      unassert(m->system->brand);
       ax = 7;
-      bx = Read32((const u8 *)m->system->brand + 0);
-      dx = Read32((const u8 *)m->system->brand + 4);
-      cx = Read32((const u8 *)m->system->brand + 8);
+      // glibc binaries won't run unless we report blink as a
+      // modern linux kernel on top of genuine intel hardware
+      bx = Read32((const u8 *)INTEL + 0);
+      dx = Read32((const u8 *)INTEL + 4);
+      cx = Read32((const u8 *)INTEL + 8);
       break;
     case 0x40000000:
+      bx = Read32((const u8 *)BLINK + 0);
+      cx = Read32((const u8 *)BLINK + 4);
+      dx = Read32((const u8 *)BLINK + 8);
+      break;
+    case 0x40031337:
       bx = Read32((const u8 *)OS + 0);
       cx = Read32((const u8 *)OS + 4);
       dx = Read32((const u8 *)OS + 8);
