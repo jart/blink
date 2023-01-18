@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <fcntl.h>
+#include <sys/auxv.h>
 #include <sys/mman.h>
 
 #include "blink/macros.h"
@@ -25,7 +26,8 @@
 long pagesize;
 
 void SetUp(void) {
-  pagesize = sysconf(_SC_PAGESIZE);
+  // older versions of musl don't pass this along to sysconf(_SC_PAGESIZE)
+  pagesize = getauxval(AT_PAGESZ);
 }
 
 void TearDown(void) {

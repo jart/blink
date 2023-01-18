@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/auxv.h>
 #include <sys/mman.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -55,7 +56,7 @@ int main(int argc, char *argv[]) {
   int rc, pid;
   pthread_mutexattr_t attr;
   if (1) return 0;  // TODO: Figure out how robust list works.
-  SCHECK(shared = mmap(0, sysconf(_SC_PAGESIZE), PROT_READ | PROT_WRITE,
+  SCHECK(shared = mmap(0, getauxval(AT_PAGESZ), PROT_READ | PROT_WRITE,
                        MAP_SHARED | MAP_ANONYMOUS, -1, 0));
   PCHECK(pthread_mutexattr_init(&attr));
   PCHECK(pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST));

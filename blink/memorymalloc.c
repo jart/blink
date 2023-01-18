@@ -687,17 +687,24 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
   if (!IsValidAddrSize(virt, size)) {
     return einval();
   }
-  if (HasLinearMapping(s) && (virt & (pagesize - 1))) {
-    prot = PROT_READ | PROT_WRITE;
-    size += virt & (pagesize - 1);
-    virt = ROUNDDOWN(virt, pagesize);
-  }
   if (CheckVirtual(s, virt, size) == -1) {
     LOGF("mprotect(%#" PRIx64 ", %#" PRIx64 ") interval has unmapped pages",
          virt, size);
     return -1;
   }
   key = SetProtection(prot);
+  // some operating systems e.g. openbsd and apple M1, have a
+  // W^X invariant. we don't need to execute guest memory so:
+  sysprot = prot & ~PROT_EXEC;
+  // in linear mode, the guest might try to do something like
+  // set a 4096 byte guard page to PROT_NONE at the bottom of
+  // its 64kb stack. if the host operating system has a 64 kb
+  // page size, then that would be bad. we can't satisfy prot
+  // unless the guest takes the page size into consideration.
+  if (HasLinearMapping(s) &&
+      ((virt & (pagesize - 1)) && (size & (pagesize - 1)))) {
+    sysprot = PROT_READ | PROT_WRITE;
+  }
   for (end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
@@ -709,23 +716,11 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
       }
       for (;;) {
         unassert(pt & PAGE_V);
-        // some operating systems, e.g. OpenBSD and Apple M1, impose a
-        // W^X invariant. we don't actually execute guest memory, thus
-        sysprot = prot & ~PROT_EXEC;
-        // TODO(jart): have fewer system calls
         if (HasLinearMapping(s) &&
             (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                 (PAGE_HOST | PAGE_MAP) &&
             (mpstart = ROUNDDOWN(virt, pagesize)) != last) {
           last = mpstart;
-          // in linear mode, the guest might try to do something like
-          // set a 4096 byte guard page to PROT_NONE at the bottom of
-          // its 64kb stack. if the host operating system has a 64 kb
-          // page size, then that would be bad. we can't satisfy prot
-          // unless the guest takes the page size into consideration.
-          if (virt != mpstart || end - virt < pagesize) {
-            sysprot = PROT_READ | PROT_WRITE;
-          }
           if (Mprotect(ToHost(mpstart), pagesize, sysprot, "linear")) {
             LOGF("mprotect(%#" PRIx64 " [%p], %#lx, %d) failed: %s", mpstart,
                  ToHost(mpstart), pagesize, prot, strerror(errno));

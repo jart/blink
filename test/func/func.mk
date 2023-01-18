@@ -14,6 +14,7 @@ TEST_FUNC_LINK =							\
 		$(VM)							\
 		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc	\
 		-static							\
+		-Wl,-z,common-page-size=65536,-z,max-page-size=65536	\
 		$<							\
 		-o $@
 
