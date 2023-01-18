@@ -2532,7 +2532,7 @@ static int SysGetitimer(struct Machine *m, int which, i64 curvaladdr) {
   int rc;
   struct itimerval it;
   struct itimerval_linux git;
-  if ((rc = getitimer(which, &it)) != -1) {
+  if ((rc = getitimer(UnXlatItimer(which), &it)) != -1) {
     XlatItimervalToLinux(&git, &it);
     CopyToUserWrite(m, curvaladdr, &git, sizeof(git));
   }
@@ -2546,7 +2546,7 @@ static int SysSetitimer(struct Machine *m, int which, i64 neuaddr,
   struct itimerval_linux git;
   CopyFromUserRead(m, &git, neuaddr, sizeof(git));
   XlatLinuxToItimerval(&neu, &git);
-  if ((rc = setitimer(which, &neu, &old)) != -1) {
+  if ((rc = setitimer(UnXlatItimer(which), &neu, &old)) != -1) {
     if (oldaddr) {
       XlatItimervalToLinux(&git, &old);
       CopyToUserWrite(m, oldaddr, &git, sizeof(git));
