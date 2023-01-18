@@ -172,7 +172,7 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/2/ftell_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/fseeko_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/fputs_test.com.ok					\
-		o/$(MODE)/third_party/cosmo/4/pipe_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/5/pipe_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/fork_test.com.ok					\
 		o/$(MODE)/third_party/cosmo/2/execve_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/arena_test.com.ok					\

@@ -34,7 +34,6 @@ o/$(MODE)/test/func/%.elf:						\
 
 $(TEST_FUNC_OBJS): test/func/func.mk
 
-# the .com extension is for cosmo/tool/emacs/ integration
 .PRECIOUS: o/$(MODE)/test/func/%.com
 o/$(MODE)/test/func/%.com:						\
 		o/$(MODE)/test/func/%.elf				\
@@ -51,6 +50,18 @@ o/$(MODE)/test/func/%.com:						\
 	@echo "o/$(MODE)/blink/blink -m $< || exit" >>$@
 	@echo "echo [test] o/$(MODE)/blink/blink -j $< >&2" >>$@
 	@echo "o/$(MODE)/blink/blink -j $< || exit" >>$@
+	@chmod +x $@
+
+.PRECIOUS: o/$(MODE)/test/func/mmap4096_test.com
+o/$(MODE)/test/func/mmap4096_test.com:					\
+		o/$(MODE)/test/func/mmap4096_test.elf			\
+		o/$(MODE)/blink/blink
+	@mkdir -p $(@D)
+	@echo "#!/bin/sh" >$@
+	@echo "echo [test] o/$(MODE)/blink/blink -jm $< >&2" >>$@
+	@echo "o/$(MODE)/blink/blink -jm $< || exit" >>$@
+	@echo "echo [test] o/$(MODE)/blink/blink -m $< >&2" >>$@
+	@echo "o/$(MODE)/blink/blink -m $< || exit" >>$@
 	@chmod +x $@
 
 .PHONY: o/$(MODE)/test/func
