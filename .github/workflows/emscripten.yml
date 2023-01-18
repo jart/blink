@@ -44,14 +44,25 @@ jobs:
           . ./emsdk/emsdk_env.sh
           emmake make -j$(nproc)
           mkdir o//blink/blink-web
-          cp third_party/coi-serviceworker/coi-serviceworker.js o//blink/blink-web/coi-serviceworker.js
+          cp third_party/coi-serviceworker/coi-serviceworker.js o//blink/blink-web/
+          cp third_party/xterm.js/{xterm.min.js,xterm.css} o//blink/blink-web/
           emcc -O2 o//blink/blink.o o//blink/blink.a -lm -pthread -lrt -o o//blink/blink-web/blink.html \
             --shell-file blink/blink-shell.html \
             -s INVOKE_RUN=0 \
             -s INITIAL_MEMORY=1073741824 \
             -s EXPORTED_RUNTIME_METHODS=callMain \
             -fno-builtin-exit \
-            -sASSERTIONS
+            -sASSERTIONS \
+            -sASYNCIFY
+
+          emcc -O2 o//blink/blinkenlights.o o//blink/blink.a o//third_party/zlib/zlib.a -lm -pthread -lrt -o o//blink/blink-web/blinkenlights.html \
+            --shell-file blink/blink-shell.html \
+            -s INVOKE_RUN=0 \
+            -s INITIAL_MEMORY=1073741824 \
+            -s EXPORTED_RUNTIME_METHODS=callMain \
+            -fno-builtin-exit \
+            -sASSERTIONS \
+            -sASYNCIFY
 
       - name: Deploy sample to GitHub pages
         uses: JamesIves/github-pages-deploy-action@ba1486788b0490a235422264426c45848eac35c6

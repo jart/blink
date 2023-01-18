@@ -47,6 +47,10 @@
 #include <time.h>
 #include <unistd.h>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 #include "blink/assert.h"
 #include "blink/errno.h"
 #include "blink/loader.h"
@@ -105,12 +109,45 @@ static int SystemIoctl(int fd, unsigned long request, ...) {
   return ioctl(fd, request, arg);
 }
 
+#ifdef __EMSCRIPTEN__
+// If this runs on the main thread, the browser is blocked until we return
+// back to the main loop. Yield regularly when the process waits for some
+// user input.
+
+int em_poll(struct pollfd *fds, nfds_t nfds, int timeout) {
+  int ret = poll(fds, nfds, timeout);
+  if (ret == 0) emscripten_sleep(50);
+  return ret;
+}
+
+ssize_t em_readv(int fd, const struct iovec *iov, int iovcnt) {
+  // Handle blocking reads by waiting for POLLIN
+  if ((fcntl(fd, F_GETFL) & O_NONBLOCK) == 0) {
+    struct pollfd pfd;
+    pfd.fd = fd;
+    pfd.events = POLLIN;
+    while(em_poll(&pfd, 1, 50) == 0);
+  }
+  size_t ret = readv(fd, iov, iovcnt);
+  if (ret == -1 && errno == EAGAIN) emscripten_sleep(50);
+  return ret;
+}
+#endif
+
 const struct FdCb kFdCbHost = {
     .close = close,
+#ifdef __EMSCRIPTEN__
+    .readv = em_readv,
+#else
     .readv = readv,
+#endif
     .writev = writev,
     .ioctl = SystemIoctl,
+#ifdef __EMSCRIPTEN__
+    .poll = em_poll,
+#else
     .poll = poll,
+#endif
     .tcgetattr = tcgetattr,
     .tcsetattr = tcsetattr,
 };
@@ -1508,7 +1545,7 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
     type = UnXlatDt(ent->d_type);
     reclen = ROUNDUP(8 + 8 + 2 + 1 + len + 1, 8);
     memset(&rec, 0, sizeof(rec));
-    Write64(rec.d_ino, 0);
+    Write64(rec.d_ino, ent->d_ino);
     Write64(rec.d_off, off);
     Write16(rec.d_reclen, reclen);
     Write8(rec.d_type, type);
@@ -1565,6 +1602,13 @@ static int IoctlTcsets(struct Machine *m, int fd, int request, i64 addr,
 static int IoctlTiocgpgrp(struct Machine *m, int fd, i64 addr) {
   int rc;
   u8 *pgrp;
+
+#ifdef __EMSCRIPTEN__
+  // Force shells to disable job control in emscripten
+  errno = ENOTTY;
+  return -1;
+#endif
+
   if (!(pgrp = (u8 *)Schlep(m, addr, 4))) return -1;
   if ((rc = tcgetpgrp(fd)) == -1) return -1;
   Write32(pgrp, rc);
