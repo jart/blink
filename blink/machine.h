@@ -221,8 +221,10 @@ struct System {
   i64 brk;
   i64 automap;
   i64 codestart;
+  i64 codestart_prof;
   _Atomic(int) *fun;
   unsigned long codesize;
+  unsigned long codesize_prof;
   struct MachineMemstat memstat;
   pthread_cond_t machines_cond;
   pthread_mutex_t machines_lock;

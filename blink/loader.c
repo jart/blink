@@ -299,6 +299,8 @@ static int GetElfHeader(char ehdr[64], const char *prog, const char *image) {
 }
 
 static void SetupDispatch(struct Machine *m) {
+  m->system->codesize_prof = m->system->codesize;
+  m->system->codestart_prof = m->system->codestart;
 #ifdef HAVE_JIT
   size_t n;
   free(m->system->fun);
