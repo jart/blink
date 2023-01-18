@@ -20,17 +20,22 @@
 
 #include "blink/builtin.h"
 #include "blink/endian.h"
+#include "blink/intrin.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/stats.h"
 #include "blink/tsan.h"
 
 static u32 pmovmskb(const u8 p[16]) {
+#if X86_INTRINSICS
+  return __builtin_ia32_pmovmskb128(*(char_xmma_t *)p);
+#else
   u32 i, m;
   for (m = i = 0; i < 16; ++i) {
     if (p[i] & 0x80) m |= 1 << i;
   }
   return m;
+#endif
 }
 
 static void MovdquVdqWdq(P) {

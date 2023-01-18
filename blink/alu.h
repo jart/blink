@@ -38,11 +38,13 @@ extern const aluop_f kAlu[12][4];
 extern const aluop_f kBsu[8][4];
 extern const aluop_f kJustAlu[8];
 extern const aluop_f kJustBsu[8];
+extern const aluop_f kFastDec[4];
 extern const aluop_f kJustBsu32[8];
 extern const aluop_f kAluFast[8][4];
 extern const aluop_f kJustBsuCl32[8];
 extern const aluop_f kJustBsuCl64[8];
 
+i64 JustDec(u64);
 i64 JustAdd(struct Machine *, u64, u64);
 i64 JustOr(struct Machine *, u64, u64);
 i64 JustAdc(struct Machine *, u64, u64);

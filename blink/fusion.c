@@ -30,7 +30,6 @@
 
 bool FuseBranchTest(P) {
 #ifdef HAVE_JIT
-  int flags;
   i64 bdisp;
   u8 *p, jcc, jlen;
   if (RegLog2(rde) < 2) {
@@ -72,15 +71,12 @@ bool FuseBranchTest(P) {
       return false;
   }
 #endif
-  if ((flags = GetNeededFlags(m, m->ip + jlen + bdisp,
-                              CF | ZF | SF | OF | AF | PF))) {
-    LogCodOp(m, "can't fuse test: loop carries:");
-    LogCodOp(m, DescribeFlags(flags));
+  if (GetNeededFlags(m, m->ip + jlen + bdisp, CF | ZF | SF | OF | AF | PF)) {
+    LogCodOp(m, "can't fuse test: loop carries");
     return false;
   }
-  if ((flags = GetNeededFlags(m, m->ip + jlen, CF | ZF | SF | OF | AF | PF))) {
-    LogCodOp(m, "can't fuse test: loop exit carries:");
-    LogCodOp(m, DescribeFlags(flags));
+  if (GetNeededFlags(m, m->ip + jlen, CF | ZF | SF | OF | AF | PF)) {
+    LogCodOp(m, "can't fuse test: loop exit carries");
     return false;
   }
 #if LOG_CPU
@@ -148,7 +144,6 @@ bool FuseBranchTest(P) {
 
 bool FuseBranchCmp(P, bool imm) {
 #ifdef HAVE_JIT
-  int flags;
   i64 bdisp;
   u8 *p, jcc, jlen;
   if (RegLog2(rde) < 2) {
@@ -175,6 +170,7 @@ bool FuseBranchCmp(P, bool imm) {
     LogCodOp(m, "can't fuse cmp: not followed by jump");
     return false;
   }
+#ifndef __x86_64__
   switch (jcc) {
     case 0x0:  // jo
       break;
@@ -204,15 +200,13 @@ bool FuseBranchCmp(P, bool imm) {
       LogCodOp(m, "can't fuse cmp: unsupported jump operation");
       return false;
   }
-  if ((flags = GetNeededFlags(m, m->ip + jlen + bdisp,
-                              CF | ZF | SF | OF | AF | PF))) {
-    LogCodOp(m, "can't fuse cmp: loop carries:");
-    LogCodOp(m, DescribeFlags(flags));
+#endif
+  if (GetNeededFlags(m, m->ip + jlen + bdisp, CF | ZF | SF | OF | AF | PF)) {
+    LogCodOp(m, "can't fuse cmp: loop carries");
     return false;
   }
-  if ((flags = GetNeededFlags(m, m->ip + jlen, CF | ZF | SF | OF | AF | PF))) {
-    LogCodOp(m, "can't fuse cmp: loop exit carries:");
-    LogCodOp(m, DescribeFlags(flags));
+  if (GetNeededFlags(m, m->ip + jlen, CF | ZF | SF | OF | AF | PF)) {
+    LogCodOp(m, "can't fuse cmp: loop exit carries");
     return false;
   }
 #if LOG_CPU

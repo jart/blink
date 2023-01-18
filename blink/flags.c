@@ -20,6 +20,7 @@
 #include "blink/debug.h"
 #include "blink/flags.h"
 #include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/stats.h"
 
@@ -76,15 +77,25 @@ static int CrawlFlags(struct Machine *m,  //
                       int myflags,        //
                       int look,           //
                       int depth) {
-  int need = 0;
-  for (;;) {
+  u64 place;
+  int need, deps;
+  for (need = 0;;) {
+    place = pc;
     SPX_LOGF("%" PRIx64 " %*s%s", pc, depth * 2, "", DescribeOp(m, pc));
-    if (LoadInstruction2(m, pc)) return -1;
+    if (LoadInstruction2(m, place)) {
+      WriteCod("/\tfailed to speculate instruction at %" PRIx64 "\n", place);
+      return -1;
+    }
     pc += Oplength(m->xedd->op.rde);
-    need |= GetFlagDeps(m->xedd->op.rde) & myflags;
+    deps = GetFlagDeps(m->xedd->op.rde);
+    if (deps) {
+      WriteCod("/\top at %" PRIx64 " needs %s\n", place, DescribeFlags(deps));
+    }
+    need |= deps & myflags;
     if (!(myflags &= ~GetFlagClobbers(m->xedd->op.rde))) {
       return need;
     } else if (!--look) {
+      WriteCod("/\tgiving up on speculation\n");
       return -1;
     } else if (IsJump(m->xedd->op.rde)) {
       pc += m->xedd->op.disp;
@@ -92,6 +103,7 @@ static int CrawlFlags(struct Machine *m,  //
       need |= CrawlFlags(m, pc + m->xedd->op.disp, myflags, look, depth + 1);
       if (need == -1) return -1;
     } else if (ClassifyOp(m->xedd->op.rde) != kOpNormal) {
+      WriteCod("/\tspeculated abnormal op at %" PRIx64 "\n", place);
       return -1;
     }
   }
@@ -99,7 +111,10 @@ static int CrawlFlags(struct Machine *m,  //
 
 // returns bitset of flags read by code at pc, or -1 if unknown
 int GetNeededFlags(struct Machine *m, i64 pc, int myflags) {
-  return CrawlFlags(m, pc, myflags, 16, 0);
+  int rc;
+  rc = CrawlFlags(m, pc, myflags, 16, 0);
+  WriteCod("/\t%" PRIx64 " needs flags %s\n", pc, DescribeFlags(rc));
+  return rc;
 }
 
 // returns bitset of flags set or undefined by operation

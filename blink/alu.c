@@ -48,22 +48,6 @@ const aluop_f kBsu[8][4] = {
     {Sar8, Sar16, Sar32, Sar64},  //
 };
 
-i64 Not8(struct Machine *m, u64 x, u64 y) {
-  return ~x & 0xFF;
-}
-
-i64 Not16(struct Machine *m, u64 x, u64 y) {
-  return ~x & 0xFFFF;
-}
-
-i64 Not32(struct Machine *m, u64 x, u64 y) {
-  return ~x & 0xFFFFFFFF;
-}
-
-i64 Not64(struct Machine *m, u64 x, u64 y) {
-  return ~x & 0xFFFFFFFFFFFFFFFF;
-}
-
 static i64 AluFlags(struct Machine *m, u64 x, u32 af, u32 of, u32 cf, u32 sf) {
   m->flags &= ~(CF | ZF | SF | OF | AF | 0xFF000000u);
   m->flags |= sf << FLAGS_SF | cf << FLAGS_CF | !x << FLAGS_ZF |

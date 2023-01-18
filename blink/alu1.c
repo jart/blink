@@ -67,7 +67,7 @@ void Op0fe(P) {
 static void AluEvqp(P, const aluop_f ops[4]) {
   u8 *p;
   aluop_f f;
-  f = ops[RegLog2(rde)];
+  f = ops[WordLog2(rde)];
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
 #if CAN_64BIT
@@ -123,6 +123,23 @@ static void AluEvqp(P, const aluop_f ops[4]) {
       if (Lock(rde)) UnlockBus(p);
     }
   }
+}
+
+void OpNotEvqp(P) {
+  AluEvqp(A, kAlu[ALU_NOT]);
+  if (IsMakingPath(m) && !Lock(rde)) {
+    Jitter(A,
+           "B"      // res0 = GetRegOrMem(RexbRm)
+           "r0a1="  // arg1 = res0
+           "q"      // arg0 = machine
+           "m"      // call function
+           "r0D",   // PutRegOrMem(RexbRm, res0)
+           kAlu[ALU_NOT][WordLog2(rde)]);
+  }
+}
+
+void OpNegEvqp(P) {
+  AluEvqp(A, kAlu[ALU_NEG]);
   if (IsMakingPath(m) && !Lock(rde)) {
     Jitter(A,
            "B"      // res0 = GetRegOrMem(RexbRm)
@@ -130,22 +147,56 @@ static void AluEvqp(P, const aluop_f ops[4]) {
            "q"      // arg0 = machine
            "c"      // call function
            "r0D",   // PutRegOrMem(RexbRm, res0)
-           f);
+           kAlu[ALU_NEG][WordLog2(rde)]);
   }
-}
-
-void OpNotEvqp(P) {
-  AluEvqp(A, kAlu[ALU_NOT]);
-}
-
-void OpNegEvqp(P) {
-  AluEvqp(A, kAlu[ALU_NEG]);
 }
 
 void OpIncEvqp(P) {
   AluEvqp(A, kAlu[ALU_INC]);
+  if (IsMakingPath(m) && !Lock(rde)) {
+    Jitter(A,
+           "B"      // res0 = GetRegOrMem(RexbRm)
+           "r0a1="  // arg1 = res0
+           "q"      // arg0 = machine
+           "c"      // call function
+           "r0D",   // PutRegOrMem(RexbRm, res0)
+           kAlu[ALU_INC][WordLog2(rde)]);
+  }
 }
 
 void OpDecEvqp(P) {
   AluEvqp(A, kAlu[ALU_DEC]);
+  if (IsMakingPath(m) && !Lock(rde)) {
+    STATISTIC(++alu_ops);
+    switch (GetNeededFlags(m, m->ip, ZF | SF | OF | AF | PF)) {
+      case 0:
+        STATISTIC(++alu_unflagged);
+        Jitter(A,
+               "B"     // res0 = GetRegOrMem(RexbRm)
+               "t"     // arg0 = res0
+               "m"     // call micro-op
+               "r0D",  // PutRegOrMem(RexbRm, res0)
+               JustDec);
+        break;
+      case ZF:
+        STATISTIC(++alu_simplified);
+        Jitter(A,
+               "B"      // res0 = GetRegOrMem(RexbRm)
+               "s0a1="  // arg1 = machine
+               "t"      // arg0 = res0
+               "m"      // call micro-op
+               "r0D",   // PutRegOrMem(RexbRm, res0)
+               kFastDec[WordLog2(rde)]);
+        break;
+      default:
+        Jitter(A,
+               "B"      // res0 = GetRegOrMem(RexbRm)
+               "r0a1="  // arg1 = res0
+               "q"      // arg0 = machine
+               "c"      // call function
+               "r0D",   // PutRegOrMem(RexbRm, res0)
+               kAlu[ALU_DEC][WordLog2(rde)]);
+        break;
+    }
+  }
 }

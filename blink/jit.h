@@ -125,6 +125,7 @@ struct JitBlock {
   long index;
   long committed;
   long blocksize;
+  long lastaction;
   struct Dll elem;
   struct Dll *jumps;
   struct Dll *staged;

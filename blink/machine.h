@@ -647,12 +647,13 @@ void Int32ToDouble(i32, struct Machine *, long);
 void MovsdWpsVpsOp(u8 *, struct Machine *, long);
 
 void SetupCod(struct Machine *);
-void WriteCod(const char *, ...) printfesque(1);
 void FlushCod(struct JitBlock *);
 #if LOG_COD
+void WriteCod(const char *, ...) printfesque(1);
 void LogCodOp(struct Machine *, const char *);
 #else
 #define LogCodOp(m, s) (void)0
+#define WriteCod(...)  (void)0
 #endif
 
 #endif /* BLINK_MACHINE_H_ */

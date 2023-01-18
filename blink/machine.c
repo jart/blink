@@ -398,10 +398,6 @@ static void OpBswapZvqp(P) {
   }
 }
 
-static void OpMovEbIb(P) {
-  Store8(GetModrmRegisterBytePointerWrite1(A), uimm0);
-}
-
 static void OpMovAlOb(P) {
   i64 addr = AddressOb(A);
   SetWriteAddr(m, addr, 1);
@@ -493,8 +489,8 @@ static relegated void OpDecZv(P) {
   }
 }
 
-static void OpMovEvqpIvds(P) {
-  WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A), uimm0);
+static void OpMovImm(P) {
+  WriteRegisterOrMemoryBW(rde, GetModrmReadBW(A), uimm0);
   if (IsMakingPath(m)) {
     Jitter(A,
            "a3"  // push arg3
@@ -1814,8 +1810,8 @@ static const nexgen32e_f kNexgen32e[] = {
     /*0C3*/ OpRet,                   // #24   (0.422698%)
     /*0C4*/ OpLes,                   //
     /*0C5*/ OpLds,                   //
-    /*0C6*/ OpMovEbIb,               // #90   (0.004525%)
-    /*0C7*/ OpMovEvqpIvds,           // #45   (0.161349%)
+    /*0C6*/ OpMovImm,                // #90   (0.004525%)
+    /*0C7*/ OpMovImm,                // #45   (0.161349%)
     /*0C8*/ OpUd,                    //
     /*0C9*/ OpLeave,                 // #116  (0.001237%)
     /*0CA*/ OpRetf,                  //

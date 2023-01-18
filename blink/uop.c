@@ -492,6 +492,19 @@ static const store_f kStore[] = {Store8, Store16,   //
 ////////////////////////////////////////////////////////////////////////////////
 // ARITHMETIC
 
+MICRO_OP i64 Not8(struct Machine *m, u64 x, u64 y) {
+  return ~x & 0xFF;
+}
+MICRO_OP i64 Not16(struct Machine *m, u64 x, u64 y) {
+  return ~x & 0xFFFF;
+}
+MICRO_OP i64 Not32(struct Machine *m, u64 x, u64 y) {
+  return ~x & 0xFFFFFFFF;
+}
+MICRO_OP i64 Not64(struct Machine *m, u64 x, u64 y) {
+  return ~x & 0xFFFFFFFFFFFFFFFF;
+}
+
 MICRO_OP i64 JustAdd(struct Machine *m, u64 x, u64 y) {
   return x + y;
 }
@@ -886,6 +899,45 @@ MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
   m->flags = (m->flags & ~OF) | c << FLAGS_OF;
   return z;
 }
+
+MICRO_OP i64 JustDec(u64 x) {
+  return x - 1;
+}
+
+MICRO_OP static i64 FastDec64(u64 x, struct Machine *m) {
+  u64 z;
+  z = x - 1;
+  m->flags = (m->flags & ~ZF) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastDec32(u64 x64, struct Machine *m) {
+  u32 x, z;
+  x = x64;
+  z = x - 1;
+  m->flags = (m->flags & ~ZF) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastDec16(u64 x64, struct Machine *m) {
+  u16 x, z;
+  x = x64;
+  z = x - 1;
+  m->flags = (m->flags & ~ZF) | !z << FLAGS_ZF;
+  return z;
+}
+MICRO_OP static i64 FastDec8(u64 x64, struct Machine *m) {
+  u8 x, z;
+  x = x64;
+  z = x - 1;
+  m->flags = (m->flags & ~ZF) | !z << FLAGS_ZF;
+  return z;
+}
+
+const aluop_f kFastDec[4] = {
+    (void *)FastDec8,   //
+    (void *)FastDec16,  //
+    (void *)FastDec32,  //
+    (void *)FastDec64,  //
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 // STACK OPERATIONS
@@ -1396,10 +1448,14 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
       }
 #endif
 
-      case 'c':  // call
-        AppendJitCall(m->path.jb, va_arg(va, void *));
+      case 'c': {  // call
+        void *fun = va_arg(va, void *);
+        if (fun == (void *)Sub64) LogCodOp(m, "Sub64");
+        if (fun == (void *)Add64) LogCodOp(m, "Add64");
+        AppendJitCall(m->path.jb, fun);
         ClobberEverythingExceptResult(m);
         break;
+      }
 
       case 'r':  // push res reg
         stack[i++] = kJitRes[CheckBelow(fmt[k++] - '0', ARRAYLEN(kJitRes))];
