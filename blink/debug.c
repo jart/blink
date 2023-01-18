@@ -272,7 +272,7 @@ void LoadDebugSymbols(struct Elf *elf) {
     if (fstat(fd, &st) != -1 &&
         (elfmap = Mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0,
                        "debug")) != MAP_FAILED) {
-      elf->ehdr = (Elf64_Ehdr *)elfmap;
+      elf->ehdr = (Elf64_Ehdr_ *)elfmap;
       elf->size = st.st_size;
     }
     close(fd);

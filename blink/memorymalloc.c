@@ -688,10 +688,9 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
     return einval();
   }
   if (HasLinearMapping(s) && (virt & (pagesize - 1))) {
-    LOGF("mprotect(%#" PRIx64 ", %#" PRIx64 ", %d)"
-         " not aligned to host page size while using linear mode",
-         virt, size, prot);
-    return einval();
+    prot = PROT_READ | PROT_WRITE;
+    size += virt & (pagesize - 1);
+    virt = ROUNDDOWN(virt, pagesize);
   }
   if (CheckVirtual(s, virt, size) == -1) {
     LOGF("mprotect(%#" PRIx64 ", %#" PRIx64 ") interval has unmapped pages",

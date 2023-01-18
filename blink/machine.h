@@ -178,7 +178,7 @@ struct MachineState {
 
 struct Elf {
   const char *prog;
-  Elf64_Ehdr *ehdr;
+  Elf64_Ehdr_ *ehdr;
   long size;
   i64 base;
   char *map;
