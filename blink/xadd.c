@@ -21,6 +21,7 @@
 
 #include "blink/alu.h"
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/lock.h"
 #include "blink/log.h"
@@ -57,7 +58,7 @@ void OpXaddEvqpGvqp(P) {
   p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
     u64 x, y, z;
-#if UINTPTR_MAX > 0xFFFFFFFF
+#if CAN_64BIT
     if (Lock(rde) && !((intptr_t)p & 7)) {
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
       y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);

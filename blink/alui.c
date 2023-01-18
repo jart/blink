@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/alu.h"
+#include "blink/builtin.h"
 #include "blink/flags.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
@@ -98,7 +99,7 @@ static void AluiUnlocked(P, u8 *p, aluop_f op) {
 static void AluiLocked(P, u8 *p, aluop_f op) {
   switch (RegLog2(rde)) {
     case 3:
-#if UINTPTR_MAX > 0xFFFFFFFF
+#if CAN_64BIT
       if (!((intptr_t)p & 7)) {
         u64 x, z;
         x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
