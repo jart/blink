@@ -1,0 +1,40 @@
+name: Build with Cygwin
+
+on:
+  push:
+    branches:
+      - "master"
+      - "flake"
+      - "ga"
+  pull_request:
+    branches:
+      - "master"
+
+  # run workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Install cached Cygwin
+        id: cache
+        uses: actions/cache@v3
+        with:
+          path: C:\tools\cygwin
+          key: 'cygwin'
+
+      - name: Install Cygwin
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: egor-tensin/setup-cygwin@v4.0.1
+        with:
+          packages: gcc-core make chere
+
+      - name: make matrix
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          make -j$(nproc) check o//test/blink
+        shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'

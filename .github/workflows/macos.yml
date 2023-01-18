@@ -1,0 +1,24 @@
+name: Build on macOS
+
+on:
+  push:
+    branches:
+      - "master"
+      - "flake"
+      - "ga"
+  pull_request:
+    branches:
+      - "master"
+
+  # run workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: make matrix
+        run: make -j$(nproc) check o//test/blink o//test/func
