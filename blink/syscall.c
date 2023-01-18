@@ -1583,7 +1583,31 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
 #ifdef DT_UNKNOWN
     type = UnXlatDt(ent->d_type);
 #else
-    type = DT_UNKNOWN_LINUX;
+    struct stat st;
+    if (fstatat(fd->fildes, ent->d_name, &st, AT_SYMLINK_NOFOLLOW) == -1) {
+      LOGF("fstatat(%d, %s) failed: %s", fd->fildes, ent->d_name,
+           strerror(errno));
+      type = DT_UNKNOWN_LINUX;
+    } else {
+      if (S_ISDIR(st.st_mode)) {
+        type = DT_DIR_LINUX;
+      } else if (S_ISCHR(st.st_mode)) {
+        type = DT_CHR_LINUX;
+      } else if (S_ISBLK(st.st_mode)) {
+        type = DT_BLK_LINUX;
+      } else if (S_ISFIFO(st.st_mode)) {
+        type = DT_FIFO_LINUX;
+      } else if (S_ISLNK(st.st_mode)) {
+        type = DT_LNK_LINUX;
+      } else if (S_ISSOCK(st.st_mode)) {
+        type = DT_SOCK_LINUX;
+      } else if (S_ISREG(st.st_mode)) {
+        type = DT_REG_LINUX;
+      } else {
+        LOGF("unknown st_mode %d", st.st_mode);
+        type = DT_UNKNOWN_LINUX;
+      }
+    }
 #endif
     reclen = ROUNDUP(8 + 8 + 2 + 1 + len + 1, 8);
     memset(&rec, 0, sizeof(rec));
