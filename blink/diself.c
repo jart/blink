@@ -48,7 +48,7 @@ static void DisLoadElfLoads(struct Dis *d, struct Elf *elf) {
   long i, j, n;
   Elf64_Phdr_ *phdr;
   j = 0;
-  n = Read16(elf->ehdr->e_phnum);
+  n = Read16(elf->ehdr->phnum);
   if (d->loads.n < n) {
     d->loads.n = n;
     d->loads.p =
@@ -56,10 +56,10 @@ static void DisLoadElfLoads(struct Dis *d, struct Elf *elf) {
   }
   for (i = 0; i < n; ++i) {
     phdr = GetElfSegmentHeaderAddress(elf->ehdr, elf->size, i);
-    if (Read32(phdr->p_type) != PT_LOAD_) continue;
-    d->loads.p[j].addr = Read64(phdr->p_vaddr);
-    d->loads.p[j].size = Read64(phdr->p_memsz);
-    d->loads.p[j].istext = (Read32(phdr->p_flags) & PF_X_) == PF_X_;
+    if (Read32(phdr->type) != PT_LOAD_) continue;
+    d->loads.p[j].addr = Read64(phdr->vaddr);
+    d->loads.p[j].size = Read64(phdr->memsz);
+    d->loads.p[j].istext = (Read32(phdr->flags) & PF_X_) == PF_X_;
     ++j;
   }
   d->loads.i = j;
@@ -81,30 +81,29 @@ static void DisLoadElfSyms(struct Dis *d, struct Elf *elf) {
           (struct DisSym *)realloc(d->syms.p, d->syms.n * sizeof(*d->syms.p));
     }
     for (i = 0; i < n; ++i) {
-      if (ELF64_ST_TYPE_(st[i].st_info) == STT_SECTION_ ||
-          ELF64_ST_TYPE_(st[i].st_info) == STT_FILE_ ||
-          !Read32(st[i].st_name) ||
-          startswith(d->syms.stab + Read32(st[i].st_name), "v_") ||
-          !(0 <= Read32(st[i].st_name) && Read32(st[i].st_name) < stablen) ||
-          !Read64(st[i].st_value) ||
-          !(-0x800000000000 <= (i64)Read64(st[i].st_value) &&
-            (i64)Read64(st[i].st_value) < 0x800000000000)) {
+      if (ELF64_ST_TYPE_(st[i].info) == STT_SECTION_ ||
+          ELF64_ST_TYPE_(st[i].info) == STT_FILE_ || !Read32(st[i].name) ||
+          startswith(d->syms.stab + Read32(st[i].name), "v_") ||
+          !(0 <= Read32(st[i].name) && Read32(st[i].name) < stablen) ||
+          !Read64(st[i].value) ||
+          !(-0x800000000000 <= (i64)Read64(st[i].value) &&
+            (i64)Read64(st[i].value) < 0x800000000000)) {
         continue;
       }
-      isabs = Read16(st[i].st_shndx) == SHN_ABS_;
-      isweak = ELF64_ST_BIND_(st[i].st_info) == STB_WEAK_;
-      islocal = ELF64_ST_BIND_(st[i].st_info) == STB_LOCAL_;
-      isprotected = st[i].st_other == STV_PROTECTED_;
-      isfunc = ELF64_ST_TYPE_(st[i].st_info) == STT_FUNC_;
-      isobject = ELF64_ST_TYPE_(st[i].st_info) == STT_OBJECT_;
+      isabs = Read16(st[i].shndx) == SHN_ABS_;
+      isweak = ELF64_ST_BIND_(st[i].info) == STB_WEAK_;
+      islocal = ELF64_ST_BIND_(st[i].info) == STB_LOCAL_;
+      isprotected = st[i].other == STV_PROTECTED_;
+      isfunc = ELF64_ST_TYPE_(st[i].info) == STT_FUNC_;
+      isobject = ELF64_ST_TYPE_(st[i].info) == STT_OBJECT_;
       d->syms.p[j].unique = i;
-      d->syms.p[j].size = Read64(st[i].st_size);
-      d->syms.p[j].name = Read32(st[i].st_name);
-      d->syms.p[j].addr = Read64(st[i].st_value);
+      d->syms.p[j].size = Read64(st[i].size);
+      d->syms.p[j].name = Read32(st[i].name);
+      d->syms.p[j].addr = Read64(st[i].value);
       d->syms.p[j].rank =
           -islocal + -isweak + -isabs + isprotected + isobject + isfunc;
       d->syms.p[j].iscode =
-          DisIsText(d, Read64(st[i].st_value)) ? !isobject : isfunc;
+          DisIsText(d, Read64(st[i].value)) ? !isobject : isfunc;
       d->syms.p[j].isabs = isabs;
       ++j;
     }

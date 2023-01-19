@@ -520,106 +520,106 @@
 #define R_BPF_MAP_FD_ 1
 
 typedef struct Elf64_Ehdr_ {
-  u8 e_ident[EI_NIDENT_];
-  u8 e_type[2];       // u16
-  u8 e_machine[2];    // u16
-  u8 e_version[4];    // u32
-  u8 e_entry[8];      // u64
-  u8 e_phoff[8];      // u64
-  u8 e_shoff[8];      // u64
-  u8 e_flags[4];      // u32
-  u8 e_ehsize[2];     // u16
-  u8 e_phentsize[2];  // u16
-  u8 e_phnum[2];      // u16
-  u8 e_shentsize[2];  // u16
-  u8 e_shnum[2];      // u16
-  u8 e_shstrndx[2];   // u16
+  u8 ident[EI_NIDENT_];
+  u8 type[2];       // u16
+  u8 machine[2];    // u16
+  u8 version[4];    // u32
+  u8 entry[8];      // u64
+  u8 phoff[8];      // u64
+  u8 shoff[8];      // u64
+  u8 flags[4];      // u32
+  u8 ehsize[2];     // u16
+  u8 phentsize[2];  // u16
+  u8 phnum[2];      // u16
+  u8 shentsize[2];  // u16
+  u8 shnum[2];      // u16
+  u8 shstrndx[2];   // u16
 } Elf64_Ehdr_;
 
 typedef struct Elf64_Phdr_ {
-  u8 p_type[4];    // u32
-  u8 p_flags[4];   // u32
-  u8 p_offset[8];  // u64
-  u8 p_vaddr[8];   // u64
-  u8 p_paddr[8];   // u64
-  u8 p_filesz[8];  // u64
-  u8 p_memsz[8];   // u64
-  u8 p_align[8];   // u64
+  u8 type[4];    // u32
+  u8 flags[4];   // u32
+  u8 offset[8];  // u64
+  u8 vaddr[8];   // u64
+  u8 paddr[8];   // u64
+  u8 filesz[8];  // u64
+  u8 memsz[8];   // u64
+  u8 align[8];   // u64
 } Elf64_Phdr_;
 
 typedef struct Elf64_Shdr_ {
-  u8 sh_name[4];       // u32
-  u8 sh_type[4];       // u32
-  u8 sh_flags[8];      // u64
-  u8 sh_addr[8];       // u64
-  u8 sh_offset[8];     // u64
-  u8 sh_size[8];       // u64
-  u8 sh_link[4];       // u32
-  u8 sh_info[4];       // u32
-  u8 sh_addralign[8];  // u64
-  u8 sh_entsize[8];    // u64
+  u8 name[4];       // u32
+  u8 type[4];       // u32
+  u8 flags[8];      // u64
+  u8 addr[8];       // u64
+  u8 offset[8];     // u64
+  u8 size[8];       // u64
+  u8 link[4];       // u32
+  u8 info[4];       // u32
+  u8 addralign[8];  // u64
+  u8 entsize[8];    // u64
 } Elf64_Shdr_;
 
 typedef struct Elf64_Rel_ {
-  u8 r_offset[8];  // u64
-  u8 r_info[8];    // u64
+  u8 offset[8];  // u64
+  u8 info[8];    // u64
 } Elf64_Rel_;
 
 typedef struct Elf64_Rela_ {
-  u8 r_offset[8];  // u64
-  u8 r_info[8];    // u64
-  u8 r_addend[8];  // i64
+  u8 offset[8];  // u64
+  u8 info[8];    // u64
+  u8 addend[8];  // i64
 } Elf64_Rela_;
 
 typedef struct Elf64_Sym_ {
-  u8 st_name[4];  // u32
-  u8 st_info;
-  u8 st_other;
-  u8 st_shndx[2];  // u16
-  u8 st_value[8];  // u64
-  u8 st_size[8];   // u64
+  u8 name[4];  // u32
+  u8 info;
+  u8 other;
+  u8 shndx[2];  // u16
+  u8 value[8];  // u64
+  u8 size[8];   // u64
 } Elf64_Sym_;
 
 typedef struct Elf64_Syminfo_ {
-  u8 si_boundto[2];  // u16
-  u8 si_flags[2];    // u16
+  u8 boundto[2];  // u16
+  u8 flags[2];    // u16
 } Elf64_Syminfo_;
 
 typedef struct Elf64_Chdr_ {
-  u8 ch_type[4];       // u32
-  u8 ch_reserved[4];   // u32
-  u8 ch_size[8];       // u64
-  u8 ch_addralign[8];  // u64
+  u8 type[4];       // u32
+  u8 reserved[4];   // u32
+  u8 size[8];       // u64
+  u8 addralign[8];  // u64
 } Elf64_Chdr_;
 
 typedef struct Elf64_Dyn_ {
-  u8 d_tag[8];  // i64
+  u8 tag[8];  // i64
   union {
-    u8 d_val[8];  // u64
-    u8 d_ptr[8];  // u64
-  } d_un;
+    u8 val[8];  // u64
+    u8 ptr[8];  // u64
+  };
 } Elf64_Dyn_;
 
 typedef struct Elf64_Lib_ {
-  u8 l_name[4];        // u32
-  u8 l_time_stamp[4];  // u32
-  u8 l_checksum[4];    // u32
-  u8 l_version[4];     // u32
-  u8 l_flags[4];       // u32
+  u8 name[4];        // u32
+  u8 time_stamp[4];  // u32
+  u8 checksum[4];    // u32
+  u8 version[4];     // u32
+  u8 flags[4];       // u32
 } Elf64_Lib_;
 
 typedef struct Elf64_Move_ {
-  u8 m_value[8];    // u64
-  u8 m_info[8];     // u64
-  u8 m_poffset[8];  // u64
-  u8 m_repeat[2];   // u16
-  u8 m_stride[2];   // u16
+  u8 value[8];    // u64
+  u8 info[8];     // u64
+  u8 poffset[8];  // u64
+  u8 repeat[2];   // u16
+  u8 stride[2];   // u16
 } Elf64_Move_;
 
 typedef struct Elf64_Nhdr_ {
-  u8 n_namesz[4];  // u32
-  u8 n_descsz[4];  // u32
-  u8 n_type[4];    // u32
+  u8 namesz[4];  // u32
+  u8 descsz[4];  // u32
+  u8 type[4];    // u32
 } Elf64_Nhdr_;
 
 void CheckElfAddress(const Elf64_Ehdr_ *, size_t, intptr_t, size_t);

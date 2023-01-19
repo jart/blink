@@ -98,8 +98,8 @@ int AppendIovsGuest(struct Machine *m, struct Iovs *iv, i64 iovaddr,
       (0 <= iovsize && iovsize <= 0x7ffff000)) {
     if ((guestiovs = (const struct iovec_linux *)Schlep(m, iovaddr, iovsize))) {
       for (rc = i = 0; i < iovlen && iv->i < IOV_MAX; ++i) {
-        if (AppendIovsReal(m, iv, Read64(guestiovs[i].iov_base),
-                           Read64(guestiovs[i].iov_len)) == -1) {
+        if (AppendIovsReal(m, iv, Read64(guestiovs[i].base),
+                           Read64(guestiovs[i].len)) == -1) {
           rc = -1;
           break;
         }

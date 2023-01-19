@@ -143,7 +143,7 @@ static int Exec(char *prog, char **argv, char **envp) {
 }
 
 static void Print(int fd, const char *s) {
-  write(fd, s, strlen(s));
+  (void)write(fd, s, strlen(s));
 }
 
 _Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {

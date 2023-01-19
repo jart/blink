@@ -656,27 +656,27 @@ int XlatSockaddrToHost(struct sockaddr_storage *dst,
     LOGF("sockaddr size too small for %s", "family");
     return einval();
   }
-  switch (Read16(src->sa_family)) {
+  switch (Read16(src->family)) {
     case AF_UNIX_LINUX: {
       size_t n;
       struct sockaddr_un *dst_un;
       const struct sockaddr_un_linux *src_un;
-      if (srclen < offsetof(struct sockaddr_un_linux, sun_path)) {
+      if (srclen < offsetof(struct sockaddr_un_linux, path)) {
         LOGF("sockaddr size too small for %s", "sockaddr_un_linux");
         return einval();
       }
       dst_un = (struct sockaddr_un *)dst;
       src_un = (const struct sockaddr_un_linux *)src;
-      n = strnlen(src_un->sun_path,
-                  MIN(srclen - offsetof(struct sockaddr_un_linux, sun_path),
-                      sizeof(src_un->sun_path)));
+      n = strnlen(src_un->path,
+                  MIN(srclen - offsetof(struct sockaddr_un_linux, path),
+                      sizeof(src_un->path)));
       if (n >= sizeof(dst_un->sun_path)) {
         LOGF("sockaddr_un path too long for host");
         return einval();
       }
       memset(dst_un, 0, sizeof(*dst_un));
       dst_un->sun_family = AF_UNIX;
-      if (n) memcpy(dst_un->sun_path, src_un->sun_path, n);
+      if (n) memcpy(dst_un->sun_path, src_un->path, n);
       dst_un->sun_path[n] = 0;
       return sizeof(struct sockaddr_un);
     }
@@ -691,15 +691,15 @@ int XlatSockaddrToHost(struct sockaddr_storage *dst,
       src_in = (const struct sockaddr_in_linux *)src;
       memset(dst_in, 0, sizeof(*dst_in));
       dst_in->sin_family = AF_INET;
-      dst_in->sin_port = src_in->sin_port;
-      dst_in->sin_addr.s_addr = src_in->sin_addr;
+      dst_in->sin_port = src_in->port;
+      dst_in->sin_addr.s_addr = src_in->addr;
       return sizeof(struct sockaddr_in);
     }
     case AF_INET6_LINUX: {
       struct sockaddr_in6 *dst_in;
       const struct sockaddr_in6_linux *src_in;
       _Static_assert(sizeof(dst_in->sin6_addr) == 16, "");
-      _Static_assert(sizeof(src_in->sin6_addr) == 16, "");
+      _Static_assert(sizeof(src_in->addr) == 16, "");
       if (srclen < sizeof(struct sockaddr_in6_linux)) {
         LOGF("sockaddr size too small for %s", "sockaddr_in6_linux");
         return einval();
@@ -708,12 +708,12 @@ int XlatSockaddrToHost(struct sockaddr_storage *dst,
       src_in = (const struct sockaddr_in6_linux *)src;
       memset(dst_in, 0, sizeof(*dst_in));
       dst_in->sin6_family = AF_INET6;
-      dst_in->sin6_port = src_in->sin6_port;
-      memcpy(&dst_in->sin6_addr, src_in->sin6_addr, 16);
+      dst_in->sin6_port = src_in->port;
+      memcpy(&dst_in->sin6_addr, src_in->addr, 16);
       return sizeof(struct sockaddr_in6);
     }
     default:
-      LOGF("%s %d not supported yet", "socket family", Read16(src->sa_family));
+      LOGF("%s %d not supported yet", "socket family", Read16(src->family));
       errno = ENOPROTOOPT;
       return -1;
   }
@@ -738,14 +738,14 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
     n = strnlen(src_un->sun_path,
                 MIN(srclen - offsetof(struct sockaddr_un, sun_path),
                     sizeof(src_un->sun_path)));
-    if (n >= sizeof(dst_un->sun_path)) {
+    if (n >= sizeof(dst_un->path)) {
       LOGF("sockaddr_un path too long for linux");
       return einval();
     }
     memset(dst_un, 0, sizeof(*dst_un));
-    Write16(dst_un->sun_family, AF_UNIX_LINUX);
-    if (n) memcpy(dst_un->sun_path, src_un->sun_path, n);
-    dst_un->sun_path[n] = 0;
+    Write16(dst_un->family, AF_UNIX_LINUX);
+    if (n) memcpy(dst_un->path, src_un->sun_path, n);
+    dst_un->path[n] = 0;
     return offsetof(struct sockaddr_un, sun_path) + n + 1;
   } else if (src->sa_family == AF_INET) {
     struct sockaddr_in_linux *dst_in;
@@ -757,9 +757,9 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
     dst_in = (struct sockaddr_in_linux *)dst;
     src_in = (const struct sockaddr_in *)src;
     memset(dst_in, 0, sizeof(*dst_in));
-    Write16(dst_in->sin_family, AF_INET_LINUX);
-    dst_in->sin_port = src_in->sin_port;
-    dst_in->sin_addr = src_in->sin_addr.s_addr;
+    Write16(dst_in->family, AF_INET_LINUX);
+    dst_in->port = src_in->sin_port;
+    dst_in->addr = src_in->sin_addr.s_addr;
     return sizeof(struct sockaddr_in_linux);
   } else if (src->sa_family == AF_INET6) {
     struct sockaddr_in6_linux *dst_in;
@@ -771,9 +771,9 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
     dst_in = (struct sockaddr_in6_linux *)dst;
     src_in = (const struct sockaddr_in6 *)src;
     memset(dst_in, 0, sizeof(*dst_in));
-    Write16(dst_in->sin6_family, AF_INET6_LINUX);
-    dst_in->sin6_port = src_in->sin6_port;
-    memcpy(dst_in->sin6_addr, &src_in->sin6_addr, 16);
+    Write16(dst_in->family, AF_INET6_LINUX);
+    dst_in->port = src_in->sin6_port;
+    memcpy(dst_in->addr, &src_in->sin6_addr, 16);
     return sizeof(struct sockaddr_in6_linux);
   } else {
     LOGF("%s %d not supported yet", "socket family", src->sa_family);
@@ -789,39 +789,39 @@ void XlatStatToLinux(struct stat_linux *dst, const struct stat *src) {
   Write32(dst->mode, src->st_mode);
   Write32(dst->uid, src->st_uid);
   Write32(dst->gid, src->st_gid);
-  Write32(dst->__pad, 0);
+  Write32(dst->pad_, 0);
   Write64(dst->rdev, src->st_rdev);
   Write64(dst->size, src->st_size);
   Write64(dst->blksize, src->st_blksize);
   Write64(dst->blocks, src->st_blocks);
   Write64(dst->dev, src->st_dev);
-  Write64(dst->atim.tv_sec, src->st_atim.tv_sec);
-  Write64(dst->atim.tv_nsec, src->st_atim.tv_nsec);
-  Write64(dst->mtim.tv_sec, src->st_mtim.tv_sec);
-  Write64(dst->mtim.tv_nsec, src->st_mtim.tv_nsec);
-  Write64(dst->ctim.tv_sec, src->st_ctim.tv_sec);
-  Write64(dst->ctim.tv_nsec, src->st_ctim.tv_nsec);
+  Write64(dst->atim.sec, src->st_atim.tv_sec);
+  Write64(dst->atim.nsec, src->st_atim.tv_nsec);
+  Write64(dst->mtim.sec, src->st_mtim.tv_sec);
+  Write64(dst->mtim.nsec, src->st_mtim.tv_nsec);
+  Write64(dst->ctim.sec, src->st_ctim.tv_sec);
+  Write64(dst->ctim.nsec, src->st_ctim.tv_nsec);
 }
 
 void XlatRusageToLinux(struct rusage_linux *dst, const struct rusage *src) {
-  Write64(dst->ru_utime.tv_sec, src->ru_utime.tv_sec);
-  Write64(dst->ru_utime.tv_usec, src->ru_utime.tv_usec);
-  Write64(dst->ru_stime.tv_sec, src->ru_stime.tv_sec);
-  Write64(dst->ru_stime.tv_usec, src->ru_stime.tv_usec);
-  Write64(dst->ru_maxrss, src->ru_maxrss);
-  Write64(dst->ru_ixrss, src->ru_ixrss);
-  Write64(dst->ru_idrss, src->ru_idrss);
-  Write64(dst->ru_isrss, src->ru_isrss);
-  Write64(dst->ru_minflt, src->ru_minflt);
-  Write64(dst->ru_majflt, src->ru_majflt);
-  Write64(dst->ru_nswap, src->ru_nswap);
-  Write64(dst->ru_inblock, src->ru_inblock);
-  Write64(dst->ru_oublock, src->ru_oublock);
-  Write64(dst->ru_msgsnd, src->ru_msgsnd);
-  Write64(dst->ru_msgrcv, src->ru_msgrcv);
-  Write64(dst->ru_nsignals, src->ru_nsignals);
-  Write64(dst->ru_nvcsw, src->ru_nvcsw);
-  Write64(dst->ru_nivcsw, src->ru_nivcsw);
+  Write64(dst->utime.sec, src->ru_utime.tv_sec);
+  Write64(dst->utime.usec, src->ru_utime.tv_usec);
+  Write64(dst->stime.sec, src->ru_stime.tv_sec);
+  Write64(dst->stime.usec, src->ru_stime.tv_usec);
+  Write64(dst->maxrss, src->ru_maxrss);
+  Write64(dst->ixrss, src->ru_ixrss);
+  Write64(dst->idrss, src->ru_idrss);
+  Write64(dst->isrss, src->ru_isrss);
+  Write64(dst->minflt, src->ru_minflt);
+  Write64(dst->majflt, src->ru_majflt);
+  Write64(dst->nswap, src->ru_nswap);
+  Write64(dst->inblock, src->ru_inblock);
+  Write64(dst->oublock, src->ru_oublock);
+  Write64(dst->msgsnd, src->ru_msgsnd);
+  Write64(dst->msgrcv, src->ru_msgrcv);
+  Write64(dst->nsignals, src->ru_nsignals);
+  Write64(dst->nvcsw, src->ru_nvcsw);
+  Write64(dst->nivcsw, src->ru_nivcsw);
 }
 
 static u64 XlatRlimitToLinuxScalar(u64 x) {
@@ -830,8 +830,8 @@ static u64 XlatRlimitToLinuxScalar(u64 x) {
 }
 
 void XlatRlimitToLinux(struct rlimit_linux *dst, const struct rlimit *src) {
-  Write64(dst->rlim_cur, XlatRlimitToLinuxScalar(src->rlim_cur));
-  Write64(dst->rlim_max, XlatRlimitToLinuxScalar(src->rlim_max));
+  Write64(dst->cur, XlatRlimitToLinuxScalar(src->rlim_cur));
+  Write64(dst->max, XlatRlimitToLinuxScalar(src->rlim_max));
 }
 
 static u64 XlatLinuxToRlimitScalar(int r, u64 x) {
@@ -855,30 +855,30 @@ static u64 XlatLinuxToRlimitScalar(int r, u64 x) {
 
 void XlatLinuxToRlimit(int sysresource, struct rlimit *dst,
                        const struct rlimit_linux *src) {
-  dst->rlim_cur = XlatLinuxToRlimitScalar(sysresource, Read64(src->rlim_cur));
-  dst->rlim_max = XlatLinuxToRlimitScalar(sysresource, Read64(src->rlim_max));
+  dst->rlim_cur = XlatLinuxToRlimitScalar(sysresource, Read64(src->cur));
+  dst->rlim_max = XlatLinuxToRlimitScalar(sysresource, Read64(src->max));
 }
 
 void XlatItimervalToLinux(struct itimerval_linux *dst,
                           const struct itimerval *src) {
-  Write64(dst->it_interval.tv_sec, src->it_interval.tv_sec);
-  Write64(dst->it_interval.tv_usec, src->it_interval.tv_usec);
-  Write64(dst->it_value.tv_sec, src->it_value.tv_sec);
-  Write64(dst->it_value.tv_usec, src->it_value.tv_usec);
+  Write64(dst->interval.sec, src->it_interval.tv_sec);
+  Write64(dst->interval.usec, src->it_interval.tv_usec);
+  Write64(dst->value.sec, src->it_value.tv_sec);
+  Write64(dst->value.usec, src->it_value.tv_usec);
 }
 
 void XlatLinuxToItimerval(struct itimerval *dst,
                           const struct itimerval_linux *src) {
-  dst->it_interval.tv_sec = Read64(src->it_interval.tv_sec);
-  dst->it_interval.tv_usec = Read64(src->it_interval.tv_usec);
-  dst->it_value.tv_sec = Read64(src->it_value.tv_sec);
-  dst->it_value.tv_usec = Read64(src->it_value.tv_usec);
+  dst->it_interval.tv_sec = Read64(src->interval.sec);
+  dst->it_interval.tv_usec = Read64(src->interval.usec);
+  dst->it_value.tv_sec = Read64(src->value.sec);
+  dst->it_value.tv_usec = Read64(src->value.usec);
 }
 
 void XlatWinsizeToLinux(struct winsize_linux *dst, const struct winsize *src) {
   memset(dst, 0, sizeof(*dst));
-  Write16(dst->ws_row, src->ws_row);
-  Write16(dst->ws_col, src->ws_col);
+  Write16(dst->row, src->ws_row);
+  Write16(dst->col, src->ws_col);
 }
 
 void XlatSigsetToLinux(u8 dst[8], const sigset_t *src) {
@@ -1238,85 +1238,85 @@ static int UnXlatTermiosOflag(int x) {
 
 static void XlatTermiosCc(struct termios *dst,
                           const struct termios_linux *src) {
-  dst->c_cc[VINTR] = src->c_cc[VINTR_LINUX];
-  dst->c_cc[VQUIT] = src->c_cc[VQUIT_LINUX];
-  dst->c_cc[VERASE] = src->c_cc[VERASE_LINUX];
-  dst->c_cc[VKILL] = src->c_cc[VKILL_LINUX];
-  dst->c_cc[VEOF] = src->c_cc[VEOF_LINUX];
-  dst->c_cc[VTIME] = src->c_cc[VTIME_LINUX];
-  dst->c_cc[VMIN] = src->c_cc[VMIN_LINUX];
-  dst->c_cc[VSTART] = src->c_cc[VSTART_LINUX];
-  dst->c_cc[VSTOP] = src->c_cc[VSTOP_LINUX];
-  dst->c_cc[VSUSP] = src->c_cc[VSUSP_LINUX];
-  dst->c_cc[VEOL] = src->c_cc[VEOL_LINUX];
+  dst->c_cc[VINTR] = src->cc[VINTR_LINUX];
+  dst->c_cc[VQUIT] = src->cc[VQUIT_LINUX];
+  dst->c_cc[VERASE] = src->cc[VERASE_LINUX];
+  dst->c_cc[VKILL] = src->cc[VKILL_LINUX];
+  dst->c_cc[VEOF] = src->cc[VEOF_LINUX];
+  dst->c_cc[VTIME] = src->cc[VTIME_LINUX];
+  dst->c_cc[VMIN] = src->cc[VMIN_LINUX];
+  dst->c_cc[VSTART] = src->cc[VSTART_LINUX];
+  dst->c_cc[VSTOP] = src->cc[VSTOP_LINUX];
+  dst->c_cc[VSUSP] = src->cc[VSUSP_LINUX];
+  dst->c_cc[VEOL] = src->cc[VEOL_LINUX];
 #ifdef VSWTC
-  dst->c_cc[VSWTC] = src->c_cc[VSWTC_LINUX];
+  dst->c_cc[VSWTC] = src->cc[VSWTC_LINUX];
 #endif
 #ifdef VREPRINT
-  dst->c_cc[VREPRINT] = src->c_cc[VREPRINT_LINUX];
+  dst->c_cc[VREPRINT] = src->cc[VREPRINT_LINUX];
 #endif
 #ifdef VDISCARD
-  dst->c_cc[VDISCARD] = src->c_cc[VDISCARD_LINUX];
+  dst->c_cc[VDISCARD] = src->cc[VDISCARD_LINUX];
 #endif
 #ifdef VWERASE
-  dst->c_cc[VWERASE] = src->c_cc[VWERASE_LINUX];
+  dst->c_cc[VWERASE] = src->cc[VWERASE_LINUX];
 #endif
 #ifdef VLNEXT
-  dst->c_cc[VLNEXT] = src->c_cc[VLNEXT_LINUX];
+  dst->c_cc[VLNEXT] = src->cc[VLNEXT_LINUX];
 #endif
 #ifdef VEOL2
-  dst->c_cc[VEOL2] = src->c_cc[VEOL2_LINUX];
+  dst->c_cc[VEOL2] = src->cc[VEOL2_LINUX];
 #endif
 }
 
 static void UnXlatTermiosCc(struct termios_linux *dst,
                             const struct termios *src) {
-  dst->c_cc[VINTR_LINUX] = src->c_cc[VINTR];
-  dst->c_cc[VQUIT_LINUX] = src->c_cc[VQUIT];
-  dst->c_cc[VERASE_LINUX] = src->c_cc[VERASE];
-  dst->c_cc[VKILL_LINUX] = src->c_cc[VKILL];
-  dst->c_cc[VEOF_LINUX] = src->c_cc[VEOF];
-  dst->c_cc[VTIME_LINUX] = src->c_cc[VTIME];
-  dst->c_cc[VMIN_LINUX] = src->c_cc[VMIN];
-  dst->c_cc[VSTART_LINUX] = src->c_cc[VSTART];
-  dst->c_cc[VSTOP_LINUX] = src->c_cc[VSTOP];
-  dst->c_cc[VSUSP_LINUX] = src->c_cc[VSUSP];
-  dst->c_cc[VEOL_LINUX] = src->c_cc[VEOL];
+  dst->cc[VINTR_LINUX] = src->c_cc[VINTR];
+  dst->cc[VQUIT_LINUX] = src->c_cc[VQUIT];
+  dst->cc[VERASE_LINUX] = src->c_cc[VERASE];
+  dst->cc[VKILL_LINUX] = src->c_cc[VKILL];
+  dst->cc[VEOF_LINUX] = src->c_cc[VEOF];
+  dst->cc[VTIME_LINUX] = src->c_cc[VTIME];
+  dst->cc[VMIN_LINUX] = src->c_cc[VMIN];
+  dst->cc[VSTART_LINUX] = src->c_cc[VSTART];
+  dst->cc[VSTOP_LINUX] = src->c_cc[VSTOP];
+  dst->cc[VSUSP_LINUX] = src->c_cc[VSUSP];
+  dst->cc[VEOL_LINUX] = src->c_cc[VEOL];
 #ifdef VSWTC
-  dst->c_cc[VSWTC_LINUX] = src->c_cc[VSWTC];
+  dst->cc[VSWTC_LINUX] = src->c_cc[VSWTC];
 #endif
 #ifdef VREPRINT
-  dst->c_cc[VREPRINT_LINUX] = src->c_cc[VREPRINT];
+  dst->cc[VREPRINT_LINUX] = src->c_cc[VREPRINT];
 #endif
 #ifdef VDISCARD
-  dst->c_cc[VDISCARD_LINUX] = src->c_cc[VDISCARD];
+  dst->cc[VDISCARD_LINUX] = src->c_cc[VDISCARD];
 #endif
 #ifdef VWERASE
-  dst->c_cc[VWERASE_LINUX] = src->c_cc[VWERASE];
+  dst->cc[VWERASE_LINUX] = src->c_cc[VWERASE];
 #endif
 #ifdef VLNEXT
-  dst->c_cc[VLNEXT_LINUX] = src->c_cc[VLNEXT];
+  dst->cc[VLNEXT_LINUX] = src->c_cc[VLNEXT];
 #endif
 #ifdef VEOL2
-  dst->c_cc[VEOL2_LINUX] = src->c_cc[VEOL2];
+  dst->cc[VEOL2_LINUX] = src->c_cc[VEOL2];
 #endif
 }
 
 void XlatLinuxToTermios(struct termios *dst, const struct termios_linux *src) {
   memset(dst, 0, sizeof(*dst));
-  dst->c_iflag = XlatTermiosIflag(Read32(src->c_iflag));
-  dst->c_oflag = XlatTermiosOflag(Read32(src->c_oflag));
-  dst->c_cflag = XlatTermiosCflag(Read32(src->c_cflag));
-  dst->c_lflag = XlatTermiosLflag(Read32(src->c_lflag));
+  dst->c_iflag = XlatTermiosIflag(Read32(src->iflag));
+  dst->c_oflag = XlatTermiosOflag(Read32(src->oflag));
+  dst->c_cflag = XlatTermiosCflag(Read32(src->cflag));
+  dst->c_lflag = XlatTermiosLflag(Read32(src->lflag));
   XlatTermiosCc(dst, src);
 }
 
 void XlatTermiosToLinux(struct termios_linux *dst, const struct termios *src) {
   memset(dst, 0, sizeof(*dst));
-  Write32(dst->c_iflag, UnXlatTermiosIflag(src->c_iflag));
-  Write32(dst->c_oflag, UnXlatTermiosOflag(src->c_oflag));
-  Write32(dst->c_cflag, UnXlatTermiosCflag(src->c_cflag));
-  Write32(dst->c_lflag, UnXlatTermiosLflag(src->c_lflag));
+  Write32(dst->iflag, UnXlatTermiosIflag(src->c_iflag));
+  Write32(dst->oflag, UnXlatTermiosOflag(src->c_oflag));
+  Write32(dst->cflag, UnXlatTermiosCflag(src->c_cflag));
+  Write32(dst->lflag, UnXlatTermiosLflag(src->c_lflag));
   UnXlatTermiosCc(dst, src);
 }
 

@@ -45,11 +45,11 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
                               const Elf64_Phdr_ *phdr, i64 last_end, int fd) {
   i64 bulk;
   struct System *s = m->system;
-  u32 flags = Read32(phdr->p_flags);
-  i64 vaddr = Read64(phdr->p_vaddr);
-  i64 memsz = Read64(phdr->p_memsz);
-  i64 offset = Read64(phdr->p_offset);
-  i64 filesz = Read64(phdr->p_filesz);
+  u32 flags = Read32(phdr->flags);
+  i64 vaddr = Read64(phdr->vaddr);
+  i64 memsz = Read64(phdr->memsz);
+  i64 offset = Read64(phdr->offset);
+  i64 filesz = Read64(phdr->filesz);
   long pagesize = HasLinearMapping(m) ? GetSystemPageSize() : 4096;
   i64 start = ROUNDDOWN(vaddr, pagesize);
   i64 end = ROUNDUP(vaddr + memsz, pagesize);
@@ -188,9 +188,9 @@ bool IsSupportedExecutable(const char *path, void *image) {
   Elf64_Ehdr_ *ehdr;
   if (READ32(image) == READ32("\177ELF")) {
     ehdr = (Elf64_Ehdr_ *)image;
-    return Read16(ehdr->e_type) == ET_EXEC_ &&
-           ehdr->e_ident[EI_CLASS_] == ELFCLASS64_ &&
-           Read16(ehdr->e_machine) == EM_NEXGEN32E_;
+    return Read16(ehdr->type) == ET_EXEC_ &&
+           ehdr->ident[EI_CLASS_] == ELFCLASS64_ &&
+           Read16(ehdr->machine) == EM_NEXGEN32E_;
   }
   return READ64(image) == READ64("MZqFpD='") ||  //
          READ64(image) == READ64("jartsr='") ||  //
@@ -201,12 +201,12 @@ static void LoadFlatExecutable(struct Machine *m, intptr_t base,
                                const char *prog, void *image, size_t imagesize,
                                int fd) {
   Elf64_Phdr_ phdr;
-  Write32(phdr.p_type, PT_LOAD_);
-  Write32(phdr.p_flags, PF_X_ | PF_R_ | PF_W_);
-  Write64(phdr.p_offset, 0);
-  Write64(phdr.p_vaddr, base);
-  Write64(phdr.p_filesz, imagesize);
-  Write64(phdr.p_memsz, ROUNDUP(imagesize + kRealSize, 4096));
+  Write32(phdr.type, PT_LOAD_);
+  Write32(phdr.flags, PF_X_ | PF_R_ | PF_W_);
+  Write64(phdr.offset, 0);
+  Write64(phdr.vaddr, base);
+  Write64(phdr.filesz, imagesize);
+  Write64(phdr.memsz, ROUNDUP(imagesize + kRealSize, 4096));
   LoadElfLoadSegment(m, image, imagesize, &phdr, 0, fd);
   m->ip = base;
 }
@@ -216,12 +216,12 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, int fd) {
   Elf64_Phdr_ *phdr;
   i64 end = INT64_MIN;
   bool execstack = true;
-  m->ip = elf->base = Read64(elf->ehdr->e_entry);
-  for (i = 0; i < Read16(elf->ehdr->e_phnum); ++i) {
+  m->ip = elf->base = Read64(elf->ehdr->entry);
+  for (i = 0; i < Read16(elf->ehdr->phnum); ++i) {
     phdr = GetElfSegmentHeaderAddress(elf->ehdr, elf->size, i);
-    switch (Read32(phdr->p_type)) {
+    switch (Read32(phdr->type)) {
       case PT_LOAD_:
-        elf->base = MIN(elf->base, (i64)Read64(phdr->p_vaddr));
+        elf->base = MIN(elf->base, (i64)Read64(phdr->vaddr));
         end = LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, end, fd);
         break;
       case PT_GNU_STACK_:
@@ -248,7 +248,7 @@ static void BootProgram(struct Machine *m, struct Elf *elf, size_t codesize) {
   if (memcmp(elf->map, "\177ELF", 4) == 0) {
     elf->ehdr = (Elf64_Ehdr_ *)elf->map;
     elf->size = codesize;
-    elf->base = Read64(elf->ehdr->e_entry);
+    elf->base = Read64(elf->ehdr->entry);
   } else {
     elf->base = 0x7c00;
     elf->ehdr = NULL;

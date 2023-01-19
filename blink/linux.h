@@ -491,8 +491,8 @@
 #define UTIME_OMIT_LINUX ((1l << 30) - 2l)
 
 struct iovec_linux {
-  u8 iov_base[8];
-  u8 iov_len[8];
+  u8 base[8];
+  u8 len[8];
 };
 
 struct pollfd_linux {
@@ -502,18 +502,18 @@ struct pollfd_linux {
 };
 
 struct timeval_linux {
-  u8 tv_sec[8];
-  u8 tv_usec[8];
+  u8 sec[8];
+  u8 usec[8];
 };
 
 struct timespec_linux {
-  u8 tv_sec[8];
-  u8 tv_nsec[8];
+  u8 sec[8];
+  u8 nsec[8];
 };
 
 struct timezone_linux {
-  u8 tz_minuteswest[4];
-  u8 tz_dsttime[4];
+  u8 minuteswest[4];
+  u8 dsttime[4];
 };
 
 struct sigaction_linux {
@@ -524,49 +524,49 @@ struct sigaction_linux {
 };
 
 struct winsize_linux {
-  u8 ws_row[2];
-  u8 ws_col[2];
-  u8 ws_xpixel[2];
-  u8 ws_ypixel[2];
+  u8 row[2];
+  u8 col[2];
+  u8 xpixel[2];
+  u8 ypixel[2];
 };
 
 struct termios_linux {
-  u8 c_iflag[4];
-  u8 c_oflag[4];
-  u8 c_cflag[4];
-  u8 c_lflag[4];
-  u8 c_line;
-  u8 c_cc[NCCS_LINUX];
+  u8 iflag[4];
+  u8 oflag[4];
+  u8 cflag[4];
+  u8 lflag[4];
+  u8 line;
+  u8 cc[NCCS_LINUX];
 };
 
 struct sockaddr_linux {
-  u8 sa_family[2];
+  u8 family[2];
 };
 
 struct sockaddr_un_linux {
-  u8 sun_family[2];
-  char sun_path[108];
+  u8 family[2];
+  char path[108];
 };
 
 struct sockaddr_in_linux {
-  u8 sin_family[2];
-  u16 sin_port;
-  u32 sin_addr;
-  u8 sin_zero[8];
+  u8 family[2];
+  u16 port;
+  u32 addr;
+  u8 zero[8];
 };
 
 struct sockaddr_in6_linux {
-  u8 sin6_family[2];
-  u16 sin6_port;
-  u8 sin6_flowinfo[4];
-  u8 sin6_addr[16];
-  u8 sin6_scope_id[4];
+  u8 family[2];
+  u16 port;
+  u8 flowinfo[4];
+  u8 addr[16];
+  u8 scope_id[4];
 };
 
 struct sockaddr_storage_linux {
   union {
-    u8 ss_family[2];
-    char ss_storage[128];
+    u8 family[2];
+    char storage[128];
   };
 };
 
@@ -577,7 +577,7 @@ struct stat_linux {
   u8 mode[4];
   u8 uid[4];
   u8 gid[4];
-  u8 __pad[4];
+  u8 pad_[4];
   u8 rdev[8];
   u8 size[8];
   u8 blksize[8];
@@ -588,34 +588,34 @@ struct stat_linux {
 };
 
 struct itimerval_linux {
-  struct timeval_linux it_interval;
-  struct timeval_linux it_value;
+  struct timeval_linux interval;
+  struct timeval_linux value;
 };
 
 struct rusage_linux {
-  struct timeval_linux ru_utime;
-  struct timeval_linux ru_stime;
-  u8 ru_maxrss[8];
-  u8 ru_ixrss[8];
-  u8 ru_idrss[8];
-  u8 ru_isrss[8];
-  u8 ru_minflt[8];
-  u8 ru_majflt[8];
-  u8 ru_nswap[8];
-  u8 ru_inblock[8];
-  u8 ru_oublock[8];
-  u8 ru_msgsnd[8];
-  u8 ru_msgrcv[8];
-  u8 ru_nsignals[8];
-  u8 ru_nvcsw[8];
-  u8 ru_nivcsw[8];
+  struct timeval_linux utime;
+  struct timeval_linux stime;
+  u8 maxrss[8];
+  u8 ixrss[8];
+  u8 idrss[8];
+  u8 isrss[8];
+  u8 minflt[8];
+  u8 majflt[8];
+  u8 nswap[8];
+  u8 inblock[8];
+  u8 oublock[8];
+  u8 msgsnd[8];
+  u8 msgrcv[8];
+  u8 nsignals[8];
+  u8 nvcsw[8];
+  u8 nivcsw[8];
 };
 
 struct siginfo_linux {
   u8 si_signo[4];
   u8 si_errno[4];
   u8 si_code[4];
-  u8 __pad[4];
+  u8 pad_[4];
   u8 payload[112];
 };
 
@@ -630,15 +630,15 @@ struct fpstate_linux {
   u8 mxcr_mask[4];
   u8 st[8][16];
   u8 xmm[16][16];
-  u8 __padding[96];
+  u8 padding_[96];
 };
 
 struct ucontext_linux {
-  u8 uc_flags[8];
-  u8 uc_link[8];
-  u8 ss_sp[8];
-  u8 ss_flags[4];
-  u8 __pad0[4];
+  u8 uc__flags[8];
+  u8 uc__link[8];
+  u8 ss__sp[8];
+  u8 ss__flags[4];
+  u8 pad0_[4];
   u8 ss_size[8];
   u8 r8[8];
   u8 r9[8];
@@ -667,8 +667,8 @@ struct ucontext_linux {
   u8 oldmask[8];
   u8 cr2[8];
   u8 fpstate[8];
-  u8 __pad1[64];
-  u8 uc_sigmask[8];
+  u8 pad1_[64];
+  u8 sigmask[8];
 };
 
 struct utsname_linux {
@@ -681,16 +681,16 @@ struct utsname_linux {
 };
 
 struct rlimit_linux {
-  u8 rlim_cur[8];
-  u8 rlim_max[8];
+  u8 cur[8];
+  u8 max[8];
 };
 
 struct dirent_linux {
-  u8 d_ino[8];       // inode number
-  u8 d_off[8];       // implementation-dependent location number
-  u8 d_reclen[2];    // byte length of this whole struct and string
-  u8 d_type[1];      // DT_REG, DT_DIR, DT_UNKNOWN, DT_BLK, etc.
-  char d_name[256];  // NUL-terminated basename
+  u8 ino[8];       // inode number
+  u8 off[8];       // implementation-dependent location number
+  u8 reclen[2];    // byte length of this whole struct and string
+  u8 type[1];      // DT_REG, DT_DIR, DT_UNKNOWN, DT_BLK, etc.
+  char name[256];  // NUL-terminated basename
 };
 
 struct ifconf_linux {
@@ -711,12 +711,12 @@ struct ifreq_linux {
 };
 
 struct flock_linux {
-  u8 l_type[2];
-  u8 l_whence[2];
+  u8 type[2];
+  u8 whence[2];
   u8 pad1_[4];
-  u8 l_start[8];
-  u8 l_len[8];
-  u8 l_pid[4];
+  u8 start[8];
+  u8 len[8];
+  u8 pid[4];
   u8 pad2_[4];
 };
 
@@ -730,24 +730,24 @@ struct sysinfo_linux {
   u8 totalswap[8];  // size of emergency memory
   u8 freeswap[8];   // hopefully equal to totalswap
   u8 procs[2];      // number of processes
-  u8 __ignore[6];   // padding
+  u8 ignore_[6];    // padding
   u8 totalhigh[8];  // wut
   u8 freehigh[8];   // wut
   u8 mem_unit[4];   // ram stuff above is multiples of this
 };
 
 struct tms_linux {
-  u8 tms_utime[8];   // user time
-  u8 tms_stime[8];   // system time
-  u8 tms_cutime[8];  // user time of children
-  u8 tms_cstime[8];  // system time of children
+  u8 utime[8];   // user time
+  u8 stime[8];   // system time
+  u8 cutime[8];  // user time of children
+  u8 cstime[8];  // system time of children
 };
 
 struct sigaltstack_linux {
-  u8 ss_sp[8];     // base address of stack
-  u8 ss_flags[4];  // SS_???_LINUX flags
-  u8 pad1_[4];     //
-  u8 ss_size[8];   // size of stack
+  u8 sp[8];     // base address of stack
+  u8 flags[4];  // SS_???_LINUX flags
+  u8 pad1_[4];  //
+  u8 size[8];   // size of stack
 };
 
 struct pselect6_linux {

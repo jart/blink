@@ -42,7 +42,7 @@ void SigRestore(struct Machine *m) {
   CopyFromUserRead(m, &u.uc, m->siguc, sizeof(u.uc));
   m->ip = Read64(u.uc.rip);
   m->flags = Read64(u.uc.eflags);
-  m->sigmask = Read64(u.uc.uc_sigmask);
+  m->sigmask = Read64(u.uc.sigmask);
   memcpy(m->r8, u.uc.r8, 8);
   memcpy(m->r9, u.uc.r9, 8);
   memcpy(m->r10, u.uc.r10, 8);
@@ -82,7 +82,7 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   }
   Write32(si.si_signo, sig);
   Write32(si.si_code, code);
-  Write64(uc.uc_sigmask, m->sigmask);
+  Write64(uc.sigmask, m->sigmask);
   memcpy(uc.r8, m->r8, 8);
   memcpy(uc.r9, m->r9, 8);
   memcpy(uc.r10, m->r10, 8);
@@ -110,11 +110,11 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   memcpy(fp.st, m->fpu.st, 128);
   memcpy(fp.xmm, m->xmm, 256);
   if ((Read64(m->system->hands[sig - 1].flags) & SA_ONSTACK_LINUX) &&
-      !(Read32(m->sigaltstack.ss_flags) & SS_DISABLE_LINUX)) {
-    sp = Read64(m->sigaltstack.ss_sp) + Read64(m->sigaltstack.ss_size);
-    if (Read32(m->sigaltstack.ss_flags) & SS_AUTODISARM_LINUX) {
-      Write32(m->sigaltstack.ss_flags,
-              Read32(m->sigaltstack.ss_flags) & ~SS_AUTODISARM_LINUX);
+      !(Read32(m->sigaltstack.flags) & SS_DISABLE_LINUX)) {
+    sp = Read64(m->sigaltstack.sp) + Read64(m->sigaltstack.size);
+    if (Read32(m->sigaltstack.flags) & SS_AUTODISARM_LINUX) {
+      Write32(m->sigaltstack.flags,
+              Read32(m->sigaltstack.flags) & ~SS_AUTODISARM_LINUX);
     }
   } else {
     sp = Read64(m->sp);

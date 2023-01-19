@@ -444,8 +444,8 @@ static int SysFutexWait(struct Machine *m,  //
               m, timeout_addr, sizeof(*gtimeout)))) {
       return -1;
     }
-    timeout.tv_sec = Read64(gtimeout->tv_sec);
-    timeout.tv_nsec = Read64(gtimeout->tv_nsec);
+    timeout.tv_sec = Read64(gtimeout->sec);
+    timeout.tv_nsec = Read64(gtimeout->nsec);
     if (!(0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000000)) {
       return einval();
     }
@@ -1565,7 +1565,7 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
     off = tell;
     if (!(ent = readdir(fd->dirstream))) break;
     len = strlen(ent->d_name);
-    if (len + 1 > sizeof(rec.d_name)) {
+    if (len + 1 > sizeof(rec.name)) {
       LOGF("ignoring %zu byte d_name: %s", len, ent->d_name);
       reclen = 0;
       continue;
@@ -1573,11 +1573,11 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
     type = UnXlatDt(ent->d_type);
     reclen = ROUNDUP(8 + 8 + 2 + 1 + len + 1, 8);
     memset(&rec, 0, sizeof(rec));
-    Write64(rec.d_ino, ent->d_ino);
-    Write64(rec.d_off, off);
-    Write16(rec.d_reclen, reclen);
-    Write8(rec.d_type, type);
-    strcpy(rec.d_name, ent->d_name);
+    Write64(rec.ino, ent->d_ino);
+    Write64(rec.off, off);
+    Write16(rec.reclen, reclen);
+    Write8(rec.type, type);
+    strcpy(rec.name, ent->d_name);
     CopyToUserWrite(m, addr + i, &rec, reclen);
   }
   UnlockFd(fd);
@@ -1716,7 +1716,7 @@ static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
   memset(ifreq.ifr_name, 0, sizeof(ifreq.ifr_name));
   memcpy(ifreq.ifr_name, ifreq_linux.name,
          MIN(sizeof(ifreq_linux.name) - 1, sizeof(ifreq.ifr_name)));
-  if (Read16(ifreq_linux.addr.sin_family) != AF_INET_LINUX) return einval();
+  if (Read16(ifreq_linux.addr.family) != AF_INET_LINUX) return einval();
   unassert(XlatSockaddrToHost((struct sockaddr_storage *)&ifreq.ifr_addr,
                               (const struct sockaddr_linux *)&ifreq_linux.addr,
                               sizeof(struct sockaddr_in_linux)) ==
@@ -2052,38 +2052,38 @@ int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
     syscmd = F_GETLK;
   }
   memset(&flock, 0, sizeof(flock));
-  if (Read16(flock_linux.l_type) == F_RDLCK_LINUX) {
+  if (Read16(flock_linux.type) == F_RDLCK_LINUX) {
     flock.l_type = F_RDLCK;
-  } else if (Read16(flock_linux.l_type) == F_WRLCK_LINUX) {
+  } else if (Read16(flock_linux.type) == F_WRLCK_LINUX) {
     flock.l_type = F_WRLCK;
-  } else if (Read16(flock_linux.l_type) == F_UNLCK_LINUX) {
+  } else if (Read16(flock_linux.type) == F_UNLCK_LINUX) {
     flock.l_type = F_UNLCK;
   } else {
     return einval();
   }
-  if ((whence = XlatWhence(Read16(flock_linux.l_whence))) == -1) return -1;
+  if ((whence = XlatWhence(Read16(flock_linux.whence))) == -1) return -1;
   flock.l_whence = whence;
-  flock.l_start = Read64(flock_linux.l_start);
-  flock.l_len = Read64(flock_linux.l_len);
+  flock.l_start = Read64(flock_linux.start);
+  flock.l_len = Read64(flock_linux.len);
   INTERRUPTIBLE(rc = fcntl(systemfd, syscmd, &flock));
   if (rc != -1 && syscmd == F_GETLK) {
     if (flock.l_type == F_RDLCK) {
-      Write16(flock_linux.l_type, F_RDLCK_LINUX);
+      Write16(flock_linux.type, F_RDLCK_LINUX);
     } else if (flock.l_type == F_WRLCK) {
-      Write16(flock_linux.l_type, F_WRLCK_LINUX);
+      Write16(flock_linux.type, F_WRLCK_LINUX);
     } else {
-      Write16(flock_linux.l_type, F_UNLCK_LINUX);
+      Write16(flock_linux.type, F_UNLCK_LINUX);
     }
     if (flock.l_whence == SEEK_END) {
-      Write16(flock_linux.l_whence, SEEK_END_LINUX);
+      Write16(flock_linux.whence, SEEK_END_LINUX);
     } else if (flock.l_whence == SEEK_CUR) {
-      Write16(flock_linux.l_whence, SEEK_CUR_LINUX);
+      Write16(flock_linux.whence, SEEK_CUR_LINUX);
     } else {
-      Write16(flock_linux.l_whence, SEEK_SET_LINUX);
+      Write16(flock_linux.whence, SEEK_SET_LINUX);
     }
-    Write64(flock_linux.l_start, flock.l_start);
-    Write64(flock_linux.l_len, flock.l_len);
-    Write32(flock_linux.l_pid, flock.l_pid);
+    Write64(flock_linux.start, flock.l_start);
+    Write64(flock_linux.len, flock.l_len);
+    Write32(flock_linux.pid, flock.l_pid);
     CopyToUserWrite(m, arg, &flock_linux, sizeof(flock_linux));
   }
   return rc;
@@ -2541,15 +2541,15 @@ static int SysNanosleep(struct Machine *m, i64 req, i64 rem) {
   struct timespec hreq, hrem;
   struct timespec_linux gtimespec;
   CopyFromUserRead(m, &gtimespec, req, sizeof(gtimespec));
-  hreq.tv_sec = Read64(gtimespec.tv_sec);
-  hreq.tv_nsec = Read64(gtimespec.tv_nsec);
+  hreq.tv_sec = Read64(gtimespec.sec);
+  hreq.tv_nsec = Read64(gtimespec.nsec);
 TryAgain:
   rc = nanosleep(&hreq, &hrem);
   if (rc == -1 && errno == EINTR) {
     if (CheckInterrupt(m)) {
       if (rem) {
-        Write64(gtimespec.tv_sec, hrem.tv_sec);
-        Write64(gtimespec.tv_nsec, hrem.tv_nsec);
+        Write64(gtimespec.sec, hrem.tv_sec);
+        Write64(gtimespec.nsec, hrem.tv_nsec);
         CopyToUserWrite(m, rem, &gtimespec, sizeof(gtimespec));
       }
     } else {
@@ -2568,8 +2568,8 @@ static int SysClockNanosleep(struct Machine *m, int clock, int flags,
   if ((clock = XlatClock(clock)) == -1) return -1;
   if (flags & ~TIMER_ABSTIME_LINUX) return einval();
   CopyFromUserRead(m, &gtimespec, reqaddr, sizeof(gtimespec));
-  req.tv_sec = Read64(gtimespec.tv_sec);
-  req.tv_nsec = Read64(gtimespec.tv_nsec);
+  req.tv_sec = Read64(gtimespec.sec);
+  req.tv_nsec = Read64(gtimespec.nsec);
 TryAgain:
 #if defined(TIMER_ABSTIME) && !defined(__OpenBSD__)
   flags = flags & TIMER_ABSTIME_LINUX ? TIMER_ABSTIME : 0;
@@ -2599,8 +2599,8 @@ TryAgain:
   if (rc == -1 && errno == EINTR) {
     if (CheckInterrupt(m)) {
       if (!flags && remaddr) {
-        Write64(gtimespec.tv_sec, rem.tv_sec);
-        Write64(gtimespec.tv_nsec, rem.tv_nsec);
+        Write64(gtimespec.sec, rem.tv_sec);
+        Write64(gtimespec.nsec, rem.tv_nsec);
         CopyToUserWrite(m, remaddr, &gtimespec, sizeof(gtimespec));
       }
     } else {
@@ -2650,10 +2650,10 @@ static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
   int supported, unsupported;
   const struct sigaltstack_linux *ss = 0;
   supported = SS_ONSTACK_LINUX | SS_DISABLE_LINUX | SS_AUTODISARM_LINUX;
-  isonstack = (~Read32(m->sigaltstack.ss_flags) & SS_DISABLE_LINUX) &&
-              Read64(m->sp) >= Read64(m->sigaltstack.ss_sp) &&
-              Read64(m->sp) <=
-                  Read64(m->sigaltstack.ss_sp) + Read64(m->sigaltstack.ss_size);
+  isonstack =
+      (~Read32(m->sigaltstack.flags) & SS_DISABLE_LINUX) &&
+      Read64(m->sp) >= Read64(m->sigaltstack.sp) &&
+      Read64(m->sp) <= Read64(m->sigaltstack.sp) + Read64(m->sigaltstack.size);
   if (newaddr) {
     if (isonstack) {
       LOGF("can't change sigaltstack whilst on sigaltstack");
@@ -2664,31 +2664,31 @@ static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
       LOGF("couldn't schlep new sigaltstack: %#" PRIx64, newaddr);
       return -1;
     }
-    if ((unsupported = Read32(ss->ss_flags) & ~supported)) {
+    if ((unsupported = Read32(ss->flags) & ~supported)) {
       LOGF("unsupported sigaltstack flags: %#x", unsupported);
       return einval();
     }
-    if (~Read32(ss->ss_flags) & SS_DISABLE_LINUX) {
-      if (Read64(ss->ss_size) < MINSIGSTKSZ_LINUX) {
+    if (~Read32(ss->flags) & SS_DISABLE_LINUX) {
+      if (Read64(ss->size) < MINSIGSTKSZ_LINUX) {
         LOGF("sigaltstack ss_size=%#" PRIx64 " must be at least %#x",
-             Read64(ss->ss_size), MINSIGSTKSZ_LINUX);
+             Read64(ss->size), MINSIGSTKSZ_LINUX);
         return enomem();
       }
-      if (!IsValidMemory(m, Read64(ss->ss_sp), Read64(ss->ss_size),
+      if (!IsValidMemory(m, Read64(ss->sp), Read64(ss->size),
                          PROT_READ | PROT_WRITE)) {
         LOGF("sigaltstack ss_sp=%#" PRIx64 " ss_size=%#" PRIx64
              " didn't exist with read+write permission",
-             Read64(ss->ss_sp), Read64(ss->ss_size));
+             Read64(ss->sp), Read64(ss->size));
         return efault();
       }
     }
   }
   if (oldaddr) {
-    Write32(m->sigaltstack.ss_flags,
-            Read32(m->sigaltstack.ss_flags) & ~SS_ONSTACK_LINUX);
+    Write32(m->sigaltstack.flags,
+            Read32(m->sigaltstack.flags) & ~SS_ONSTACK_LINUX);
     if (isonstack) {
-      Write32(m->sigaltstack.ss_flags,
-              Read32(m->sigaltstack.ss_flags) | SS_ONSTACK_LINUX);
+      Write32(m->sigaltstack.flags,
+              Read32(m->sigaltstack.flags) | SS_ONSTACK_LINUX);
     }
     CopyToUserWrite(m, oldaddr, &m->sigaltstack, sizeof(m->sigaltstack));
   }
@@ -2704,8 +2704,8 @@ static int SysClockGettime(struct Machine *m, int clock, i64 ts) {
   struct timespec_linux gtimespec;
   if ((rc = clock_gettime(XlatClock(clock), &htimespec)) != -1) {
     if (ts) {
-      Write64(gtimespec.tv_sec, htimespec.tv_sec);
-      Write64(gtimespec.tv_nsec, htimespec.tv_nsec);
+      Write64(gtimespec.sec, htimespec.tv_sec);
+      Write64(gtimespec.nsec, htimespec.tv_nsec);
       CopyToUserWrite(m, ts, &gtimespec, sizeof(gtimespec));
     }
   }
@@ -2718,8 +2718,8 @@ static int SysClockGetres(struct Machine *m, int clock, i64 ts) {
   struct timespec_linux gtimespec;
   if ((rc = clock_getres(XlatClock(clock), &htimespec)) != -1) {
     if (ts) {
-      Write64(gtimespec.tv_sec, htimespec.tv_sec);
-      Write64(gtimespec.tv_nsec, htimespec.tv_nsec);
+      Write64(gtimespec.sec, htimespec.tv_sec);
+      Write64(gtimespec.nsec, htimespec.tv_nsec);
       CopyToUserWrite(m, ts, &gtimespec, sizeof(gtimespec));
     }
   }
@@ -2733,12 +2733,12 @@ static int SysGettimeofday(struct Machine *m, i64 tv, i64 tz) {
   struct timeval_linux gtimeval;
   struct timezone_linux gtimezone;
   if ((rc = gettimeofday(&htimeval, tz ? &htimezone : 0)) != -1) {
-    Write64(gtimeval.tv_sec, htimeval.tv_sec);
-    Write64(gtimeval.tv_usec, htimeval.tv_usec);
+    Write64(gtimeval.sec, htimeval.tv_sec);
+    Write64(gtimeval.usec, htimeval.tv_usec);
     CopyToUserWrite(m, tv, &gtimeval, sizeof(gtimeval));
     if (tz) {
-      Write32(gtimezone.tz_minuteswest, htimezone.tz_minuteswest);
-      Write32(gtimezone.tz_dsttime, htimezone.tz_dsttime);
+      Write32(gtimezone.minuteswest, htimezone.tz_minuteswest);
+      Write32(gtimezone.dsttime, htimezone.tz_dsttime);
       CopyToUserWrite(m, tz, &gtimezone, sizeof(gtimezone));
     }
   }
@@ -2762,17 +2762,17 @@ static i64 SysTimes(struct Machine *m, i64 bufaddr) {
   struct tms tms;
   struct tms_linux gtms;
   if ((res = times(&tms)) == (clock_t)-1) return -1;
-  Write64(gtms.tms_utime, tms.tms_utime);
-  Write64(gtms.tms_stime, tms.tms_stime);
-  Write64(gtms.tms_cutime, tms.tms_cutime);
-  Write64(gtms.tms_cstime, tms.tms_cstime);
+  Write64(gtms.utime, tms.tms_utime);
+  Write64(gtms.stime, tms.tms_stime);
+  Write64(gtms.cutime, tms.tms_cutime);
+  Write64(gtms.cstime, tms.tms_cstime);
   CopyToUserWrite(m, bufaddr, &gtms, sizeof(gtms));
   return res;
 }
 
 static struct timespec ConvertUtimeTimespec(const struct timespec_linux *tv) {
   struct timespec ts;
-  switch (Read64(tv->tv_nsec)) {
+  switch (Read64(tv->nsec)) {
     case UTIME_NOW_LINUX:
       ts.tv_sec = 0;
       ts.tv_nsec = UTIME_NOW;
@@ -2782,8 +2782,8 @@ static struct timespec ConvertUtimeTimespec(const struct timespec_linux *tv) {
       ts.tv_nsec = UTIME_OMIT;
       return ts;
     default:
-      ts.tv_sec = Read64(tv->tv_sec);
-      ts.tv_nsec = Read64(tv->tv_nsec);
+      ts.tv_sec = Read64(tv->sec);
+      ts.tv_nsec = Read64(tv->nsec);
       return ts;
   }
 }
@@ -2791,7 +2791,7 @@ static struct timespec ConvertUtimeTimespec(const struct timespec_linux *tv) {
 static struct timespec ConvertUtimeTimeval(const struct timeval_linux *tv) {
   i64 x;
   struct timespec ts;
-  switch ((x = Read64(tv->tv_usec))) {
+  switch ((x = Read64(tv->usec))) {
     case UTIME_NOW_LINUX:
       ts.tv_sec = 0;
       ts.tv_nsec = UTIME_NOW;
@@ -2801,7 +2801,7 @@ static struct timespec ConvertUtimeTimeval(const struct timeval_linux *tv) {
       ts.tv_nsec = UTIME_OMIT;
       return ts;
     default:
-      ts.tv_sec = Read64(tv->tv_sec);
+      ts.tv_sec = Read64(tv->sec);
       if (0 <= x && x < 1000000) {
         ts.tv_nsec = x * 1000;
       } else {
@@ -3052,8 +3052,8 @@ static i32 SysSelect(struct Machine *m, i32 nfds, i64 readfds_addr,
   if (timeout_addr) {
     if ((timeoutp_linux = (const struct timeval_linux *)Schlep(
              m, timeout_addr, sizeof(*timeoutp_linux)))) {
-      timeout.tv_sec = Read64(timeoutp_linux->tv_sec);
-      timeout.tv_nsec = Read64(timeoutp_linux->tv_usec);
+      timeout.tv_sec = Read64(timeoutp_linux->sec);
+      timeout.tv_nsec = Read64(timeoutp_linux->usec);
       if (0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000) {
         timeout.tv_nsec *= 1000;
         timeoutp = &timeout;
@@ -3070,8 +3070,8 @@ static i32 SysSelect(struct Machine *m, i32 nfds, i64 readfds_addr,
   rc =
       Select(m, nfds, readfds_addr, writefds_addr, exceptfds_addr, timeoutp, 0);
   if (timeout_addr && (rc != -1 || errno == EINTR)) {
-    Write64(timeout_linux.tv_sec, timeout.tv_sec);
-    Write64(timeout_linux.tv_usec, (timeout.tv_nsec + 999) / 1000);
+    Write64(timeout_linux.sec, timeout.tv_sec);
+    Write64(timeout_linux.usec, (timeout.tv_nsec + 999) / 1000);
     CopyToUserWrite(m, timeout_addr, &timeout_linux, sizeof(timeout_linux));
   }
   return rc;
@@ -3090,8 +3090,8 @@ static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
   if (timeout_addr) {
     if ((timeoutp_linux = (const struct timespec_linux *)Schlep(
              m, timeout_addr, sizeof(*timeoutp_linux)))) {
-      timeout.tv_sec = Read64(timeoutp_linux->tv_sec);
-      timeout.tv_nsec = Read64(timeoutp_linux->tv_nsec);
+      timeout.tv_sec = Read64(timeoutp_linux->sec);
+      timeout.tv_nsec = Read64(timeoutp_linux->nsec);
       timeoutp = &timeout;
     } else {
       return -1;
@@ -3127,8 +3127,8 @@ static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
   rc = Select(m, nfds, readfds_addr, writefds_addr, exceptfds_addr, timeoutp,
               sigmaskp);
   if (timeout_addr && (rc != -1 || errno == EINTR)) {
-    Write64(timeout_linux.tv_sec, timeout.tv_sec);
-    Write64(timeout_linux.tv_nsec, timeout.tv_nsec);
+    Write64(timeout_linux.sec, timeout.tv_sec);
+    Write64(timeout_linux.nsec, timeout.tv_nsec);
     CopyToUserWrite(m, timeout_addr, &timeout_linux, sizeof(timeout_linux));
   }
   return rc;
