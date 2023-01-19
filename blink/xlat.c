@@ -1317,20 +1317,255 @@ static void UnXlatTermiosCc(struct termios_linux *dst,
 }
 
 void XlatLinuxToTermios(struct termios *dst, const struct termios_linux *src) {
+  speed_t speed;
   memset(dst, 0, sizeof(*dst));
   dst->c_iflag = XlatTermiosIflag(Read32(src->iflag));
   dst->c_oflag = XlatTermiosOflag(Read32(src->oflag));
   dst->c_cflag = XlatTermiosCflag(Read32(src->cflag));
   dst->c_lflag = XlatTermiosLflag(Read32(src->lflag));
+  switch ((speed = Read32(src->cflag) & CBAUD_LINUX)) {
+    case B0_LINUX:
+      speed = B0;
+      break;
+    case B50_LINUX:
+      speed = B50;
+      break;
+    case B75_LINUX:
+      speed = B75;
+      break;
+    case B110_LINUX:
+      speed = B110;
+      break;
+    case B134_LINUX:
+      speed = B134;
+      break;
+    case B150_LINUX:
+      speed = B150;
+      break;
+    case B200_LINUX:
+      speed = B200;
+      break;
+    case B300_LINUX:
+      speed = B300;
+      break;
+    case B600_LINUX:
+      speed = B600;
+      break;
+    case B1200_LINUX:
+      speed = B1200;
+      break;
+    case B1800_LINUX:
+      speed = B1800;
+      break;
+    case B2400_LINUX:
+      speed = B2400;
+      break;
+    case B4800_LINUX:
+      speed = B4800;
+      break;
+    case B9600_LINUX:
+      speed = B9600;
+      break;
+    case B19200_LINUX:
+      speed = B19200;
+      break;
+    case B38400_LINUX:
+      speed = B38400;
+      break;
+#ifdef B57600
+    case B57600_LINUX:
+      speed = B57600;
+      break;
+#endif
+#ifdef B115200
+    case B115200_LINUX:
+      speed = B115200;
+      break;
+#endif
+#ifdef B230400
+    case B230400_LINUX:
+      speed = B230400;
+      break;
+#endif
+#ifdef B460800
+    case B460800_LINUX:
+      speed = B460800;
+      break;
+#endif
+#ifdef B500000
+    case B500000_LINUX:
+      speed = B500000;
+      break;
+#endif
+#ifdef B576000
+    case B576000_LINUX:
+      speed = B576000;
+      break;
+#endif
+#ifdef B921600
+    case B921600_LINUX:
+      speed = B921600;
+      break;
+#endif
+#ifdef B1000000
+    case B1000000_LINUX:
+      speed = B1000000;
+      break;
+#endif
+#ifdef B1152000
+    case B1152000_LINUX:
+      speed = B1152000;
+      break;
+#endif
+#ifdef B1500000
+    case B1500000_LINUX:
+      speed = B1500000;
+      break;
+#endif
+#ifdef B2000000
+    case B2000000_LINUX:
+      speed = B2000000;
+      break;
+#endif
+#ifdef B2500000
+    case B2500000_LINUX:
+      speed = B2500000;
+      break;
+#endif
+#ifdef B3000000
+    case B3000000_LINUX:
+      speed = B3000000;
+      break;
+#endif
+#ifdef B3500000
+    case B3500000_LINUX:
+      speed = B3500000;
+      break;
+#endif
+#ifdef B4000000
+    case B4000000_LINUX:
+      speed = B4000000;
+      break;
+#endif
+    default:
+      LOGF("unknown baud rate: %#x", (int)speed);
+      speed = B38400;
+      break;
+  }
+  cfsetispeed(dst, speed);
+  cfsetospeed(dst, speed);
   XlatTermiosCc(dst, src);
 }
 
 void XlatTermiosToLinux(struct termios_linux *dst, const struct termios *src) {
+  speed_t speed;
   memset(dst, 0, sizeof(*dst));
   Write32(dst->iflag, UnXlatTermiosIflag(src->c_iflag));
   Write32(dst->oflag, UnXlatTermiosOflag(src->c_oflag));
   Write32(dst->cflag, UnXlatTermiosCflag(src->c_cflag));
   Write32(dst->lflag, UnXlatTermiosLflag(src->c_lflag));
+  if ((speed = cfgetospeed(src)) != (speed_t)-1) {
+    if (speed == B0) {
+      speed = B0_LINUX;
+    } else if (speed == B50) {
+      speed = B50_LINUX;
+    } else if (speed == B75) {
+      speed = B75_LINUX;
+    } else if (speed == B110) {
+      speed = B110_LINUX;
+    } else if (speed == B134) {
+      speed = B134_LINUX;
+    } else if (speed == B150) {
+      speed = B150_LINUX;
+    } else if (speed == B200) {
+      speed = B200_LINUX;
+    } else if (speed == B300) {
+      speed = B300_LINUX;
+    } else if (speed == B600) {
+      speed = B600_LINUX;
+    } else if (speed == B1200) {
+      speed = B1200_LINUX;
+    } else if (speed == B1800) {
+      speed = B1800_LINUX;
+    } else if (speed == B2400) {
+      speed = B2400_LINUX;
+    } else if (speed == B4800) {
+      speed = B4800_LINUX;
+    } else if (speed == B9600) {
+      speed = B9600_LINUX;
+    } else if (speed == B19200) {
+      speed = B19200_LINUX;
+    } else if (speed == B38400) {
+      speed = B38400_LINUX;
+#ifdef B57600
+    } else if (speed == B57600) {
+      speed = B57600_LINUX;
+#endif
+#ifdef B115200
+    } else if (speed == B115200) {
+      speed = B115200_LINUX;
+#endif
+#ifdef B230400
+    } else if (speed == B230400) {
+      speed = B230400_LINUX;
+#endif
+#ifdef B460800
+    } else if (speed == B460800) {
+      speed = B460800_LINUX;
+#endif
+#ifdef B500000
+    } else if (speed == B500000) {
+      speed = B500000_LINUX;
+#endif
+#ifdef B576000
+    } else if (speed == B576000) {
+      speed = B576000_LINUX;
+#endif
+#ifdef B921600
+    } else if (speed == B921600) {
+      speed = B921600_LINUX;
+#endif
+#ifdef B1000000
+    } else if (speed == B1000000) {
+      speed = B1000000_LINUX;
+#endif
+#ifdef B1152000
+    } else if (speed == B1152000) {
+      speed = B1152000_LINUX;
+#endif
+#ifdef B1500000
+    } else if (speed == B1500000) {
+      speed = B1500000_LINUX;
+#endif
+#ifdef B2000000
+    } else if (speed == B2000000) {
+      speed = B2000000_LINUX;
+#endif
+#ifdef B2500000
+    } else if (speed == B2500000) {
+      speed = B2500000_LINUX;
+#endif
+#ifdef B3000000
+    } else if (speed == B3000000) {
+      speed = B3000000_LINUX;
+#endif
+#ifdef B3500000
+    } else if (speed == B3500000) {
+      speed = B3500000_LINUX;
+#endif
+#ifdef B4000000
+    } else if (speed == B4000000) {
+      speed = B4000000_LINUX;
+#endif
+    } else {
+      LOGF("unrecognized baud rate: %d", (int)speed);
+      speed = B38400;
+    }
+  } else {
+    LOGF("failed to get baud rate: %s", strerror(errno));
+    speed = B38400;
+  }
+  Write32(dst->cflag, (Read32(dst->cflag) & ~CBAUD_LINUX) | speed);
   UnXlatTermiosCc(dst, src);
 }
 

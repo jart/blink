@@ -2122,7 +2122,7 @@ static int SysFchmodat(struct Machine *m, i32 dirfd, i64 path, u32 mode) {
   return fchmodat(GetDirFildes(dirfd), LoadStr(m, path), mode, 0);
 }
 
-int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
+static int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
   int rc;
   int whence;
   int syscmd;
