@@ -46,6 +46,12 @@
 #include "blink/sigwinch.h"
 #include "blink/xlat.h"
 
+#if defined(__APPLE__) || defined(__NetBSD__)
+#define st_atim st_atimespec
+#define st_ctim st_ctimespec
+#define st_mtim st_mtimespec
+#endif
+
 int XlatErrno(int x) {
   if (x == EPERM) return EPERM_LINUX;
   if (x == ENOENT) return ENOENT_LINUX;
@@ -777,24 +783,24 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
 }
 
 void XlatStatToLinux(struct stat_linux *dst, const struct stat *src) {
-  Write64(dst->st_dev, src->st_dev);
-  Write64(dst->st_ino, src->st_ino);
-  Write64(dst->st_nlink, src->st_nlink);
-  Write32(dst->st_mode, src->st_mode);
-  Write32(dst->st_uid, src->st_uid);
-  Write32(dst->st_gid, src->st_gid);
+  Write64(dst->dev, src->st_dev);
+  Write64(dst->ino, src->st_ino);
+  Write64(dst->nlink, src->st_nlink);
+  Write32(dst->mode, src->st_mode);
+  Write32(dst->uid, src->st_uid);
+  Write32(dst->gid, src->st_gid);
   Write32(dst->__pad, 0);
-  Write64(dst->st_rdev, src->st_rdev);
-  Write64(dst->st_size, src->st_size);
-  Write64(dst->st_blksize, src->st_blksize);
-  Write64(dst->st_blocks, src->st_blocks);
-  Write64(dst->st_dev, src->st_dev);
-  Write64(dst->st_atim.tv_sec, src->st_atime);
-  Write64(dst->st_atim.tv_nsec, 0);
-  Write64(dst->st_mtim.tv_sec, src->st_mtime);
-  Write64(dst->st_mtim.tv_nsec, 0);
-  Write64(dst->st_ctim.tv_sec, src->st_ctime);
-  Write64(dst->st_ctim.tv_nsec, 0);
+  Write64(dst->rdev, src->st_rdev);
+  Write64(dst->size, src->st_size);
+  Write64(dst->blksize, src->st_blksize);
+  Write64(dst->blocks, src->st_blocks);
+  Write64(dst->dev, src->st_dev);
+  Write64(dst->atim.tv_sec, src->st_atim.tv_sec);
+  Write64(dst->atim.tv_nsec, src->st_atim.tv_nsec);
+  Write64(dst->mtim.tv_sec, src->st_mtim.tv_sec);
+  Write64(dst->mtim.tv_nsec, src->st_mtim.tv_nsec);
+  Write64(dst->ctim.tv_sec, src->st_ctim.tv_sec);
+  Write64(dst->ctim.tv_nsec, src->st_ctim.tv_nsec);
 }
 
 void XlatRusageToLinux(struct rusage_linux *dst, const struct rusage *src) {

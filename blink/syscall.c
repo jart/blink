@@ -122,11 +122,12 @@ int em_poll(struct pollfd *fds, nfds_t nfds, int timeout) {
 
 ssize_t em_readv(int fd, const struct iovec *iov, int iovcnt) {
   // Handle blocking reads by waiting for POLLIN
-  if ((fcntl(fd, F_GETFL) & O_NONBLOCK) == 0) {
+  if ((fcntl(fd, F_GETFL, 0) & O_NONBLOCK) == 0) {
     struct pollfd pfd;
     pfd.fd = fd;
     pfd.events = POLLIN;
-    while(em_poll(&pfd, 1, 50) == 0);
+    while (em_poll(&pfd, 1, 50) == 0) {
+    }
   }
   size_t ret = readv(fd, iov, iovcnt);
   if (ret == -1 && errno == EAGAIN) emscripten_sleep(50);
@@ -154,7 +155,7 @@ const struct FdCb kFdCbHost = {
 
 void AddStdFd(struct Fds *fds, int fildes) {
   int flags;
-  if ((flags = fcntl(fildes, F_GETFL)) >= 0) {
+  if ((flags = fcntl(fildes, F_GETFL, 0)) >= 0) {
     unassert(AddFd(fds, fildes, flags));
   }
 }
@@ -269,6 +270,12 @@ _Noreturn void SysExit(struct Machine *m, int rc) {
 static int SysFork(struct Machine *m) {
   int pid, newpid = 0;
   unassert(!m->path.jb);
+  // NOTES ON LOCKING HIERARCHY
+  // exec_lock must come before sig_lock (see dup3)
+  // exec_lock must come before fds.lock (see dup3)
+  // exec_lock must come before fds.lock (see execve)
+  LOCK(&m->system->exec_lock);
+  LockFds(&m->system->fds);
   LOCK(&m->system->sig_lock);
   LOCK(&m->system->mmap_lock);
   LOCK(&m->system->futex_lock);
@@ -278,6 +285,8 @@ static int SysFork(struct Machine *m) {
   UNLOCK(&m->system->futex_lock);
   UNLOCK(&m->system->mmap_lock);
   UNLOCK(&m->system->sig_lock);
+  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->exec_lock);
   if (!pid) {
     newpid = getpid();
     InitBus();  // TODO(jart): use shared memory for g_bus
@@ -467,6 +476,10 @@ static int SysFutexWait(struct Machine *m,  //
   THR_LOGF("pid=%d tid=%d is waiting at address %#" PRIx64, m->system->pid,
            m->tid, uaddr);
   do {
+    if (m->killed) {
+      rc = EAGAIN;
+      break;
+    }
     if (CheckInterrupt(m)) {
       rc = EINTR;
       break;
@@ -926,6 +939,15 @@ static int SysDup1(struct Machine *m, i32 fildes) {
   return newfildes;
 }
 
+static int Dup2(struct Machine *m, int fildes, int newfildes) {
+  int rc;
+  // POSIX.1-2007 lists dup2() as raising EINTR which seems impossible
+  // so it'd be wonderful to learn what kernel(s) actually return this
+  // noting Linux reproduces that in both its dup(2) and dup(3) manual
+  INTERRUPTIBLE(rc = dup2(fildes, newfildes));
+  return rc;
+}
+
 static int SysDup2(struct Machine *m, i32 fildes, i32 newfildes) {
   int rc;
   int oflags;
@@ -943,7 +965,7 @@ static int SysDup2(struct Machine *m, i32 fildes, i32 newfildes) {
       rc = -1;
     }
     UnlockFds(&m->system->fds);
-  } else if ((rc = dup2(fildes, newfildes)) != -1) {
+  } else if ((rc = Dup2(m, fildes, newfildes)) != -1) {
     LockFds(&m->system->fds);
     if ((fd = GetFd(&m->system->fds, newfildes))) {
       FreeFd(&m->system->fds, fd);
@@ -977,7 +999,8 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
     LOGF("dup3() unsupported flags");
     return einval();
   }
-  if ((rc = dup2(fildes, newfildes)) != -1) {
+  if (flags) LOCK(&m->system->exec_lock);
+  if ((rc = Dup2(m, fildes, newfildes)) != -1) {
     if (flags & O_CLOEXEC_LINUX) {
       unassert(!fcntl(newfildes, F_SETFD, FD_CLOEXEC));
     }
@@ -998,6 +1021,7 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
   } else {
     LOGF("dup2() failed %s", strerror(errno));
   }
+  if (flags) UNLOCK(&m->system->exec_lock);
   return rc;
 }
 
@@ -1062,6 +1086,7 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
   if ((type = XlatSocketType(type)) == -1) return -1;
   if ((family = XlatSocketFamily(family)) == -1) return -1;
   if ((protocol = XlatSocketProtocol(protocol)) == -1) return -1;
+  if (flags) LOCK(&m->system->exec_lock);
   if ((fildes = socket(family, type, protocol)) != -1) {
     FixupSock(fildes, flags);
     LockFds(&m->system->fds);
@@ -1070,6 +1095,7 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
                        (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0)));
     UnlockFds(&m->system->fds);
   }
+  if (flags) UNLOCK(&m->system->exec_lock);
   return fildes;
 }
 
@@ -1144,6 +1170,7 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
   struct sockaddr_storage addr;
   if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
   addrlen = sizeof(addr);
+  if (flags) LOCK(&m->system->exec_lock);
   INTERRUPTIBLE(newfd = accept(fildes, (struct sockaddr *)&addr, &addrlen));
   if (newfd != -1) {
     FixupSock(newfd, flags);
@@ -1155,6 +1182,7 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
     StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
                   (struct sockaddr *)&addr, addrlen);
   }
+  if (flags) UNLOCK(&m->system->exec_lock);
   return newfd;
 }
 
@@ -1873,16 +1901,112 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
   return rc;
 }
 
-static int SysFsync(struct Machine *m, i32 fd) {
-  return fsync(fd);
+static int XlatFchownatFlags(int x) {
+  int res = 0;
+  if (x & AT_SYMLINK_FOLLOW_LINUX) {
+    x &= ~AT_SYMLINK_FOLLOW_LINUX;  // default behavior
+  }
+  if (x & AT_SYMLINK_NOFOLLOW_LINUX) {
+    res |= AT_SYMLINK_NOFOLLOW;
+    x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
+  }
+#ifdef AT_EMPTY_PATH
+  if (x & AT_EMPTY_PATH_LINUX) {
+    res |= AT_EMPTY_PATH;
+    x &= ~AT_EMPTY_PATH_LINUX;
+  }
+#endif
+  if (x) {
+    LOGF("%s() flags %d not supported", "fchownat", x);
+    return -1;
+  }
+  return res;
 }
 
-static int SysFdatasync(struct Machine *m, i32 fd) {
-  return fdatasync(fd);
+static int SysFchown(struct Machine *m, i32 fildes, u32 uid, u32 gid) {
+  return fchown(fildes, uid, gid);
+}
+
+static int SysFchownat(struct Machine *m, i32 dirfd, i64 pathaddr, u32 uid,
+                       u32 gid, i32 flags) {
+  const char *path;
+  if (!(path = LoadStr(m, pathaddr))) return -1;
+#ifndef AT_EMPTY_PATH
+  if (flags & AT_EMPTY_PATH_LINUX) {
+    flags &= AT_EMPTY_PATH_LINUX;
+    if (!*path) {
+      if (flags) {
+        LOGF("%s() flags %d not supported", "fchownat(AT_EMPTY_PATH)", flags);
+        return -1;
+      }
+      return SysFchown(m, dirfd, uid, gid);
+    }
+  }
+#endif
+  return fchownat(GetDirFildes(dirfd), path, uid, gid,
+                  XlatFchownatFlags(flags));
+}
+
+static int SysChown(struct Machine *m, i64 pathaddr, u32 uid, u32 gid) {
+  return SysFchownat(m, AT_FDCWD_LINUX, pathaddr, uid, gid, 0);
+}
+
+static int SysLchown(struct Machine *m, i64 pathaddr, u32 uid, u32 gid) {
+  return SysFchownat(m, AT_FDCWD_LINUX, pathaddr, uid, gid,
+                     AT_SYMLINK_NOFOLLOW_LINUX);
+}
+
+static int SysSync(struct Machine *m) {
+  sync();
+  return 0;
+}
+
+static int SysFsync(struct Machine *m, i32 fildes) {
+#ifdef F_FULLSYNC
+  int rc;
+  // MacOS fsync() provides weaker guarantees than Linux fsync()
+  // https://mjtsai.com/blog/2022/02/17/apple-ssd-benchmarks-and-f_fullsync/
+  if ((rc = fcntl(fildes, F_FULLFSYNC, 0))) {
+    // If the FULLFSYNC failed, fall back to attempting an fsync(). It
+    // shouldn't be possible for fullfsync to fail on the local file
+    // system (on OSX), so failure indicates that FULLFSYNC isn't
+    // supported for this file system. So, attempt an fsync and (for
+    // now) ignore the overhead of a superfluous fcntl call. It'd be
+    // better to detect fullfsync support once and avoid the fcntl call
+    // every time sync is called. ──Quoth SQLite (os_unix.c) It's also
+    // possible for F_FULLFSYNC to fail on Cosmopolitan Libc when our
+    // binary isn't running on MacOS.
+    rc = fsync(fildes);
+  }
+  return rc;
+#else
+  return fsync(fildes);
+#endif
+}
+
+static int SysFdatasync(struct Machine *m, i32 fildes) {
+#ifdef F_FULLSYNC
+  int rc;
+  if ((rc = fcntl(fildes, F_FULLFSYNC, 0))) {
+    rc = fsync(fildes);
+  }
+  return rc;
+#elif defined(__APPLE__)
+  // fdatasync() on HFS+ doesn't yet flush the file size if it changed
+  // correctly so currently we default to the macro that redefines
+  // fdatasync() to fsync(). ──Quoth SQLite (os_unix.c)
+  return fsync(fildes);
+#else
+  return fdatasync(fildes);
+#endif
 }
 
 static int SysChdir(struct Machine *m, i64 path) {
   return chdir(LoadStr(m, path));
+}
+
+static int SysFchdir(struct Machine *m, i32 fildes) {
+  return fchdir(fildes);
 }
 
 static int SysFlock(struct Machine *m, i32 fd, i32 lock) {
@@ -1897,34 +2021,20 @@ static int SysListen(struct Machine *m, i32 fd, i32 backlog) {
   return listen(fd, backlog);
 }
 
+static int SysMkdirat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
+  return mkdirat(GetDirFildes(dirfd), LoadStr(m, path), mode);
+}
+
 static int SysMkdir(struct Machine *m, i64 path, i32 mode) {
-  return mkdir(LoadStr(m, path), mode);
+  return SysMkdirat(m, AT_FDCWD_LINUX, path, mode);
 }
 
 static int SysFchmod(struct Machine *m, i32 fd, u32 mode) {
   return fchmod(fd, mode);
 }
 
-static int XlatFchmodatFlags(int x) {
-  int res = 0;
-  if (x & AT_SYMLINK_FOLLOW_LINUX) {
-    x &= ~AT_SYMLINK_FOLLOW_LINUX;  // default behavior
-  }
-  if (x & AT_SYMLINK_NOFOLLOW_LINUX) {
-    res |= AT_SYMLINK_NOFOLLOW;
-    x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
-  }
-  if (x) {
-    LOGF("%s() flags %d not supported", "fstatat", x);
-    return -1;
-  }
-  return res;
-}
-
-static int SysFchmodat(struct Machine *m, i32 dirfd, i64 path, u32 mode,
-                       i32 flags) {
-  return fchmodat(GetDirFildes(dirfd), LoadStr(m, path), mode,
-                  XlatFchmodatFlags(flags));
+static int SysFchmodat(struct Machine *m, i32 dirfd, i64 path, u32 mode) {
+  return fchmodat(GetDirFildes(dirfd), LoadStr(m, path), mode, 0);
 }
 
 int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
@@ -2041,7 +2151,6 @@ static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
   char *buf;
   ssize_t rc;
   if (size < 0) return einval();
-  if (size > PATH_MAX) return enomem();
   if (!(buf = (char *)malloc(size))) return -1;
   if ((rc = readlinkat(GetDirFildes(dirfd), LoadStr(m, path), buf, size)) !=
       -1) {
@@ -2064,7 +2173,7 @@ static int SysRename(struct Machine *m, i64 srcpath, i64 dstpath) {
 }
 
 static int SysChmod(struct Machine *m, i64 path, u32 mode) {
-  return chmod(LoadStr(m, path), mode);
+  return SysFchmodat(m, AT_FDCWD_LINUX, path, mode);
 }
 
 static int SysTruncate(struct Machine *m, i64 path, u64 length) {
@@ -2085,10 +2194,6 @@ static int SysSymlinkat(struct Machine *m, i64 targetpath, i32 newdirfd,
 
 static int SysReadlink(struct Machine *m, i64 path, i64 bufaddr, u64 size) {
   return SysReadlinkat(m, AT_FDCWD_LINUX, path, bufaddr, size);
-}
-
-static int SysMkdirat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
-  return mkdirat(GetDirFildes(dirfd), LoadStr(m, path), mode);
 }
 
 static int SysLink(struct Machine *m, i64 existingpath, i64 newpath) {
@@ -2171,6 +2276,7 @@ static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   prog = CopyStr(m, pa);
   argv = CopyStrList(m, aa);
   envp = CopyStrList(m, ea);
+  LOCK(&m->system->exec_lock);
   SYS_LOGF("execve(%s)", prog);
   execve(prog, argv, envp);
   if (errno != ENOEXEC) return -1;
@@ -2180,6 +2286,7 @@ static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
     SysCloseExec(m->system);
     _Exit(m->system->exec(prog, argv, envp));
   }
+  UNLOCK(&m->system->exec_lock);
   errno = ENOEXEC;
   return -1;
 }
@@ -2663,20 +2770,155 @@ static i64 SysTimes(struct Machine *m, i64 bufaddr) {
   return res;
 }
 
+static struct timespec ConvertUtimeTimespec(const struct timespec_linux *tv) {
+  struct timespec ts;
+  switch (Read64(tv->tv_nsec)) {
+    case UTIME_NOW_LINUX:
+      ts.tv_sec = 0;
+      ts.tv_nsec = UTIME_NOW;
+      return ts;
+    case UTIME_OMIT_LINUX:
+      ts.tv_sec = 0;
+      ts.tv_nsec = UTIME_OMIT;
+      return ts;
+    default:
+      ts.tv_sec = Read64(tv->tv_sec);
+      ts.tv_nsec = Read64(tv->tv_nsec);
+      return ts;
+  }
+}
+
+static struct timespec ConvertUtimeTimeval(const struct timeval_linux *tv) {
+  i64 x;
+  struct timespec ts;
+  switch ((x = Read64(tv->tv_usec))) {
+    case UTIME_NOW_LINUX:
+      ts.tv_sec = 0;
+      ts.tv_nsec = UTIME_NOW;
+      return ts;
+    case UTIME_OMIT_LINUX:
+      ts.tv_sec = 0;
+      ts.tv_nsec = UTIME_OMIT;
+      return ts;
+    default:
+      ts.tv_sec = Read64(tv->tv_sec);
+      if (0 <= x && x < 1000000) {
+        ts.tv_nsec = x * 1000;
+      } else {
+        // make sure system call will einval
+        // should not overlap with magnums above
+        ts.tv_nsec = 1000000666;
+      }
+      return ts;
+  }
+}
+
+static void ConvertUtimeTimespecs(struct timespec *ts,
+                                  const struct timespec_linux *tv) {
+  ts[0] = ConvertUtimeTimespec(tv + 0);
+  ts[1] = ConvertUtimeTimespec(tv + 1);
+}
+
+static void ConvertUtimeTimevals(struct timespec *ts,
+                                 const struct timeval_linux *tv) {
+  ts[0] = ConvertUtimeTimeval(tv + 0);
+  ts[1] = ConvertUtimeTimeval(tv + 1);
+}
+
+static int XlatUtimensatFlags(int x) {
+  int res = 0;
+  if (x & AT_SYMLINK_FOLLOW_LINUX) {
+    x &= ~AT_SYMLINK_FOLLOW_LINUX;  // default behavior
+  }
+  if (x & AT_SYMLINK_NOFOLLOW_LINUX) {
+    res |= AT_SYMLINK_NOFOLLOW;
+    x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
+  }
+  if (x) {
+    LOGF("%s() flags %d not supported", "utimensat", x);
+    return -1;
+  }
+  return res;
+}
+
+static int SysUtime(struct Machine *m, i64 pathaddr, i64 timesaddr) {
+  const char *path;
+  struct timespec ts[2];
+  const struct utimbuf_linux *t;
+  if (!(path = LoadStr(m, pathaddr))) return -1;
+  if (!timesaddr) return utimensat(AT_FDCWD, path, 0, 0);
+  if ((t = (const struct utimbuf_linux *)Schlep(m, timesaddr, sizeof(*t)))) {
+    ts[0].tv_sec = Read64(t->actime);
+    ts[0].tv_nsec = 0;
+    ts[1].tv_sec = Read64(t->modtime);
+    ts[1].tv_nsec = 0;
+    return utimensat(AT_FDCWD, path, ts, 0);
+  } else {
+    return -1;
+  }
+}
+
 static int SysUtimes(struct Machine *m, i64 pathaddr, i64 tvsaddr) {
   const char *path;
-  struct timeval tvs[2];
-  struct timeval_linux gtvs[2];
-  path = LoadStr(m, pathaddr);
-  if (tvsaddr) {
-    CopyFromUserRead(m, gtvs, tvsaddr, sizeof(gtvs));
-    tvs[0].tv_sec = Read64(gtvs[0].tv_sec);
-    tvs[0].tv_usec = Read64(gtvs[0].tv_usec);
-    tvs[1].tv_sec = Read64(gtvs[1].tv_sec);
-    tvs[1].tv_usec = Read64(gtvs[1].tv_usec);
-    return utimes(path, tvs);
+  struct timespec ts[2];
+  const struct timeval_linux *tv;
+  if (!(path = LoadStr(m, pathaddr))) return -1;
+  if (!tvsaddr) return utimensat(AT_FDCWD, path, 0, 0);
+  if ((tv = (const struct timeval_linux *)Schlep(
+           m, tvsaddr, sizeof(struct timeval_linux) * 2))) {
+    ConvertUtimeTimevals(ts, tv);
+    return utimensat(AT_FDCWD, path, ts, 0);
   } else {
-    return utimes(path, 0);
+    return -1;
+  }
+}
+
+static int SysFutimesat(struct Machine *m, i32 dirfd, i64 pathaddr,
+                        i64 tvsaddr) {
+  const char *path;
+  struct timespec ts[2];
+  const struct timeval_linux *tv;
+  if (!(path = LoadStr(m, pathaddr))) return -1;
+  if (!tvsaddr) return utimensat(GetDirFildes(dirfd), path, 0, 0);
+  if ((tv = (const struct timeval_linux *)Schlep(
+           m, tvsaddr, sizeof(struct timeval_linux) * 2))) {
+    ConvertUtimeTimevals(ts, tv);
+    return utimensat(GetDirFildes(dirfd), path, ts, 0);
+  } else {
+    return -1;
+  }
+}
+
+static int SysUtimensat(struct Machine *m, i32 fd, i64 pathaddr, i64 tvsaddr,
+                        i32 flags) {
+  const char *path;
+  struct timespec ts[2], *tsp;
+  const struct timespec_linux *tv;
+  if (!pathaddr) {
+    path = 0;
+  } else if (!(path = LoadStr(m, pathaddr))) {
+    return -1;
+  }
+  if (tvsaddr) {
+    if ((tv = (const struct timespec_linux *)Schlep(
+             m, tvsaddr, sizeof(struct timespec_linux) * 2))) {
+      ConvertUtimeTimespecs(ts, tv);
+      tsp = ts;
+    } else {
+      return -1;
+    }
+  } else {
+    tsp = 0;
+  }
+  if ((flags = XlatUtimensatFlags(flags)) == -1) return -1;
+  if (path) {
+    return utimensat(GetDirFildes(fd), path, tsp, flags);
+  } else {
+    if (flags) {
+      LOGF("%s() flags %d not supported", "utimensat(path=null)", flags);
+      return einval();
+    }
+    return futimens(fd, tsp);
   }
 }
 
@@ -3281,6 +3523,7 @@ void OpSyscall(P) {
     SYSCALL(0x04D, SysFtruncate, (m, di, si));
     SYSCALL(0x04F, SysGetcwd, (m, di, si));
     SYSCALL(0x050, SysChdir, (m, di));
+    SYSCALL(0x051, SysFchdir, (m, di));
     SYSCALL(0x052, SysRename, (m, di, si));
     SYSCALL(0x053, SysMkdir, (m, di, si));
     SYSCALL(0x054, SysRmdir, (m, di));
@@ -3291,6 +3534,10 @@ void OpSyscall(P) {
     SYSCALL(0x059, SysReadlink, (m, di, si, dx));
     SYSCALL(0x05A, SysChmod, (m, di, si));
     SYSCALL(0x05B, SysFchmod, (m, di, si));
+    SYSCALL(0x05C, SysChown, (m, di, si, dx));
+    SYSCALL(0x05D, SysFchown, (m, di, si, dx));
+    SYSCALL(0x05E, SysLchown, (m, di, si, dx));
+    SYSCALL(0x104, SysFchownat, (m, di, si, dx, r0, r8));
     SYSCALL(0x05F, SysUmask, (m, di));
     SYSCALL(0x060, SysGettimeofday, (m, di, si));
     SYSCALL(0x061, SysGetrlimit, (m, di, si));
@@ -3323,6 +3570,7 @@ void OpSyscall(P) {
     SYSCALL(0x09D, SysPrctl, (m, di, si, dx, r0, r8));
     SYSCALL(0x09E, SysArchPrctl, (m, di, si));
     SYSCALL(0x0A0, SysSetrlimit, (m, di, si));
+    SYSCALL(0x0A2, SysSync, (m));
     SYSCALL(0x0C8, SysTkill, (m, di, si));
     SYSCALL(0x0C9, SysTime, (m, di));
     SYSCALL(0x0CA, SysFutex, (m, di, si, dx, r0, r8, r9));
@@ -3335,7 +3583,10 @@ void OpSyscall(P) {
     SYSCALL(0x0E5, SysClockGetres, (m, di, si));
     SYSCALL(0x0E6, SysClockNanosleep, (m, di, si, dx, r0));
     SYSCALL(0x0EA, SysTgkill, (m, di, si, dx));
+    SYSCALL(0x084, SysUtime, (m, di, si));
     SYSCALL(0x0EB, SysUtimes, (m, di, si));
+    SYSCALL(0x105, SysFutimesat, (m, di, si, dx));
+    SYSCALL(0x118, SysUtimensat, (m, di, si, dx, r0));
     SYSCALL(0x101, SysOpenat, (m, di, si, dx, r0));
     SYSCALL(0x102, SysMkdirat, (m, di, si, dx));
     SYSCALL(0x106, SysFstatat, (m, di, si, dx, r0));
@@ -3343,7 +3594,7 @@ void OpSyscall(P) {
     SYSCALL(0x108, SysRenameat, (m, di, si, dx, r0));
     SYSCALL(0x10A, SysSymlinkat, (m, di, si, dx));
     SYSCALL(0x10B, SysReadlinkat, (m, di, si, dx, r0));
-    SYSCALL(0x10C, SysFchmodat, (m, di, si, dx, r0));
+    SYSCALL(0x10C, SysFchmodat, (m, di, si, dx));
     SYSCALL(0x10D, SysFaccessat, (m, di, si, dx));
     SYSCALL(0x1b7, SysFaccessat2, (m, di, si, dx, r0));
     SYSCALL(0x120, SysAccept4, (m, di, si, dx, r0));

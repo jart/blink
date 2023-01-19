@@ -117,6 +117,7 @@ struct System *NewSystem(void) {
     InitFds(&s->fds);
     pthread_mutex_init(&s->sig_lock, 0);
     pthread_mutex_init(&s->mmap_lock, 0);
+    pthread_mutex_init(&s->exec_lock, 0);
     pthread_mutex_init(&s->futex_lock, 0);
     pthread_cond_init(&s->machines_cond, 0);
     pthread_mutex_init(&s->machines_lock, 0);
@@ -199,6 +200,7 @@ void FreeSystem(struct System *s) {
   unassert(!pthread_mutex_destroy(&s->machines_lock));
   unassert(!pthread_cond_destroy(&s->machines_cond));
   unassert(!pthread_mutex_destroy(&s->futex_lock));
+  unassert(!pthread_mutex_destroy(&s->exec_lock));
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));
   DestroyFds(&s->fds);

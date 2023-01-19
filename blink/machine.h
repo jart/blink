@@ -236,6 +236,7 @@ struct System {
   struct Elf elf;
   struct Dll *futexes;
   pthread_mutex_t futex_lock;
+  pthread_mutex_t exec_lock;
   pthread_mutex_t sig_lock;
   struct sigaction_linux hands[64] GUARDED_BY(sig_lock);
   u64 blinksigs;  // signals blink itself handles

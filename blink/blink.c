@@ -125,6 +125,8 @@ static int Exec(char *prog, char **argv, char **envp) {
     g_machine->system->fds.list = old->system->fds.list;
     old->system->fds.list = 0;
     UNLOCK(&old->system->fds.lock);
+    // releasing the execve() lock must come after unlocking fds
+    UNLOCK(&old->system->exec_lock);
     // freeing the last machine in a system will free its system too
     FreeMachine(old);
   }

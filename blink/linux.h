@@ -487,6 +487,9 @@
 #define FUTEX_OWNER_DIED_LINUX 0x40000000
 #define FUTEX_TID_MASK_LINUX   0x3fffffff
 
+#define UTIME_NOW_LINUX  ((1l << 30) - 1l)
+#define UTIME_OMIT_LINUX ((1l << 30) - 2l)
+
 struct iovec_linux {
   u8 iov_base[8];
   u8 iov_len[8];
@@ -568,20 +571,20 @@ struct sockaddr_storage_linux {
 };
 
 struct stat_linux {
-  u8 st_dev[8];
-  u8 st_ino[8];
-  u8 st_nlink[8];
-  u8 st_mode[4];
-  u8 st_uid[4];
-  u8 st_gid[4];
+  u8 dev[8];
+  u8 ino[8];
+  u8 nlink[8];
+  u8 mode[4];
+  u8 uid[4];
+  u8 gid[4];
   u8 __pad[4];
-  u8 st_rdev[8];
-  u8 st_size[8];
-  u8 st_blksize[8];
-  u8 st_blocks[8];
-  struct timespec_linux st_atim;
-  struct timespec_linux st_mtim;
-  struct timespec_linux st_ctim;
+  u8 rdev[8];
+  u8 size[8];
+  u8 blksize[8];
+  u8 blocks[8];
+  struct timespec_linux atim;
+  struct timespec_linux mtim;
+  struct timespec_linux ctim;
 };
 
 struct itimerval_linux {
@@ -760,6 +763,11 @@ struct robust_list_linux {
   u8 next[8];
   u8 offset[8];
   u8 pending[8];
+};
+
+struct utimbuf_linux {
+  u8 actime[8];
+  u8 modtime[8];
 };
 
 int sysinfo_linux(struct sysinfo_linux *);
