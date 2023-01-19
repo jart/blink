@@ -1573,7 +1573,7 @@ int ClassifyOp(u64 rde) {
     case 0x0E9:  // OpJmp
     case 0x0EA:  // OpJmpf
     case 0x0EB:  // OpJmp
-    case 0x0cf:  // OpIret
+    case 0x0CF:  // OpIret
     case 0x180:  // OpJo
     case 0x181:  // OpJno
     case 0x182:  // OpJb
@@ -1603,6 +1603,7 @@ int ClassifyOp(u64 rde) {
     case 0x0CC:  // OpInterrupt3
     case 0x0CD:  // OpInterruptImm
     case 0x105:  // OpSyscall
+      // case 0x1AE:  // Op1ae (mfence, lfence, clflush, etc.)
       // precious ops are excluded from jit pathmaking entirely. not
       // doing this would be inviting disaster, since system calls and
       // longjmp could do anything. for example, we don't want clone()

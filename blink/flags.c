@@ -102,9 +102,7 @@ static int CrawlFlags(struct Machine *m,  //
     } else if (IsConditionalJump(m->xedd->op.rde)) {
       need |= CrawlFlags(m, pc + m->xedd->op.disp, myflags, look, depth + 1);
       if (need == -1) return -1;
-    } else if (ClassifyOp(m->xedd->op.rde) != kOpNormal &&
-               Mopcode(m->xedd->op.rde) != 0xC3 &&  // ret
-               Mopcode(m->xedd->op.rde) != 0xE8) {  // call
+    } else if (ClassifyOp(m->xedd->op.rde) != kOpNormal) {
       WriteCod("/\tspeculated abnormal op at %" PRIx64 "\n", place);
       return -1;
     }
@@ -113,8 +111,7 @@ static int CrawlFlags(struct Machine *m,  //
 
 // returns bitset of flags read by code at pc, or -1 if unknown
 int GetNeededFlags(struct Machine *m, i64 pc, int myflags) {
-  int rc;
-  rc = CrawlFlags(m, pc, myflags, 16, 0);
+  int rc = CrawlFlags(m, pc, myflags, 32, 0);
   WriteCod("/\t%" PRIx64 " needs flags %s\n", pc, DescribeFlags(rc));
   return rc;
 }
@@ -124,6 +121,10 @@ int GetFlagClobbers(u64 rde) {
   switch (Mopcode(rde)) {
     default:
       return 0;
+    case 0xE8:   // call
+    case 0xC3:   // ret
+    case 0x105:  // syscall
+      return -1;
     case 0x000:  // add byte
     case 0x001:  // add word
     case 0x002:  // add byte flip
@@ -226,8 +227,8 @@ int GetFlagClobbers(u64 rde) {
       }
     case 0x0DB:  // fpu
     case 0x0DF:  // fpu
-      if (ModrmReg(rde) == 5 || ModrmReg(rde) == 6) {
-        return OF | SF | AF;
+      if (IsModrmRegister(rde) && (ModrmReg(rde) == 5 || ModrmReg(rde) == 6)) {
+        return OF | SF | AF;  // fucomip, fcomip
       } else {
         return 0;
       }
@@ -257,6 +258,8 @@ int GetFlagClobbers(u64 rde) {
         case 0:  // inc
         case 1:  // dec
           return ZF | SF | OF | AF | PF;
+        case 2:  // call Ev
+          return -1;
         default:  // call, callf, jmp, jmpf, push
           return 0;
       }
