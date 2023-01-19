@@ -141,6 +141,13 @@ static void MovqVdqEqp(P) {
   memcpy(XmmRexrReg(m, rde), GetModrmRegisterWordPointerRead8(A), 8);
   IGNORE_RACES_END();
   memset(XmmRexrReg(m, rde) + 8, 0, 8);
+  if (IsMakingPath(m)) {
+    Jitter(A,
+           "z3B"   // res0 = GetRegOrMem[force64bit](RexbRm)
+           "r1i"   // res1 = zero
+           "z4C",  // PutReg[force128bit](RexrReg, res0, res1)
+           0);
+  }
 }
 
 static void MovdVdqEd(P) {
@@ -177,6 +184,10 @@ static void MovqEqpVdq(P) {
   IGNORE_RACES_START();
   memcpy(GetModrmRegisterWordPointerWrite8(A), XmmRexrReg(m, rde), 8);
   IGNORE_RACES_END();
+  if (IsMakingPath(m)) {
+    Jitter(A, "z4A"      // res0,res1 = GetReg[force128bit](RexrReg)
+              "r0z3D");  // PutRegOrMem[force64bit](RexbRm, res0)
+  }
 }
 
 static void MovdEdPq(P) {

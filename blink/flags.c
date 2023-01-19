@@ -102,7 +102,9 @@ static int CrawlFlags(struct Machine *m,  //
     } else if (IsConditionalJump(m->xedd->op.rde)) {
       need |= CrawlFlags(m, pc + m->xedd->op.disp, myflags, look, depth + 1);
       if (need == -1) return -1;
-    } else if (ClassifyOp(m->xedd->op.rde) != kOpNormal) {
+    } else if (ClassifyOp(m->xedd->op.rde) != kOpNormal &&
+               Mopcode(m->xedd->op.rde) != 0xC3 &&  // ret
+               Mopcode(m->xedd->op.rde) != 0xE8) {  // call
       WriteCod("/\tspeculated abnormal op at %" PRIx64 "\n", place);
       return -1;
     }

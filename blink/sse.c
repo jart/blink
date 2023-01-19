@@ -20,6 +20,7 @@
 
 #include "blink/case.h"
 #include "blink/endian.h"
+#include "blink/intrin.h"
 #include "blink/likely.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -595,34 +596,55 @@ static void SsePalignr(u8 x[16], const u8 y[16], unsigned k) {
 }
 
 static void SsePsubd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psubd\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   for (i = 0; i < 4; ++i) {
     Put32(x + i * 4, Get32(x + i * 4) - Get32(y + i * 4));
   }
+#endif
 }
 
 static void SsePaddd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("paddd\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   for (i = 0; i < 4; ++i) {
     Put32(x + i * 4, Get32(x + i * 4) + Get32(y + i * 4));
   }
+#endif
 }
 
 static void SsePaddq(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("paddq\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   for (i = 0; i < 2; ++i) {
     Put64(x + i * 8, Get64(x + i * 8) + Get64(y + i * 8));
   }
+#endif
 }
 
 static void SsePsubq(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psubq\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   for (i = 0; i < 2; ++i) {
     Put64(x + i * 8, Get64(x + i * 8) - Get64(y + i * 8));
   }
+#endif
 }
 
 static void SsePackuswb(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("packuswb\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   u8 t[16];
   for (i = 0; i < 8; ++i) {
@@ -632,9 +654,15 @@ static void SsePackuswb(u8 x[16], const u8 y[16]) {
     t[i + 8] = MIN(255, MAX(0, (i16)Get16(y + i * 2)));
   }
   memcpy(x, t, 16);
+#endif
 }
 
 static void SsePacksswb(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("packsswb\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   u8 t[16];
   for (i = 0; i < 8; ++i) {
@@ -644,9 +672,15 @@ static void SsePacksswb(u8 x[16], const u8 y[16]) {
     t[i + 8] = MAX(-128, MIN(127, (i16)Get16(y + i * 2)));
   }
   memcpy(x, t, 16);
+#endif
 }
 
 static void SsePackssdw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("packssdw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   u8 t[16];
   for (i = 0; i < 4; ++i) {
@@ -656,51 +690,87 @@ static void SsePackssdw(u8 x[16], const u8 y[16]) {
     Put16(t + i * 2 + 8, MAX(-32768, MIN(32767, (i32)Get32(y + i * 4))));
   }
   memcpy(x, t, 16);
+#endif
 }
 
 static void SsePsadbw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psadbw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i, s, t;
   for (s = i = 0; i < 8; ++i) s += ABS(x[i] - y[i]);
   for (t = 0; i < 16; ++i) t += ABS(x[i] - y[i]);
   Put64(x + 0, s);
   Put64(x + 8, t);
+#endif
 }
 
 static void SsePmuludq(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pmuludq\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   for (i = 0; i < 2; ++i) {
     Put64(x + i * 8, (u64)Get32(x + i * 8) * Get32(y + i * 8));
   }
+#endif
 }
 
 static void SsePshufb(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pshufb\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   u8 t[16];
   unsigned i;
   for (i = 0; i < 16; ++i) {
     t[i] = (y[i] & 128) ? 0 : x[y[i] & 15];
   }
   memcpy(x, t, 16);
+#endif
 }
 
 static void SsePhaddd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("phaddd\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   u8 t[16];
   Put32(t + 0 * 4, Get32(x + 0 * 4) + Get32(x + 1 * 4));
   Put32(t + 1 * 4, Get32(x + 2 * 4) + Get32(x + 3 * 4));
   Put32(t + 2 * 4, Get32(y + 0 * 4) + Get32(y + 1 * 4));
   Put32(t + 3 * 4, Get32(y + 2 * 4) + Get32(y + 3 * 4));
   memcpy(x, t, 16);
+#endif
 }
 
 static void SsePhsubd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("phsubd\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   u8 t[16];
   Put32(t + 0 * 4, Get32(x + 0 * 4) - Get32(x + 1 * 4));
   Put32(t + 1 * 4, Get32(x + 2 * 4) - Get32(x + 3 * 4));
   Put32(t + 2 * 4, Get32(y + 0 * 4) - Get32(y + 1 * 4));
   Put32(t + 3 * 4, Get32(y + 2 * 4) - Get32(y + 3 * 4));
   memcpy(x, t, 16);
+#endif
 }
 
 static void SsePhaddw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("phaddw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   u8 t[16];
   Put16(t + 0 * 2, Get16(x + 0 * 2) + Get16(x + 1 * 2));
   Put16(t + 1 * 2, Get16(x + 2 * 2) + Get16(x + 3 * 2));
@@ -711,9 +781,15 @@ static void SsePhaddw(u8 x[16], const u8 y[16]) {
   Put16(t + 6 * 2, Get16(y + 4 * 2) + Get16(y + 5 * 2));
   Put16(t + 7 * 2, Get16(y + 6 * 2) + Get16(y + 7 * 2));
   memcpy(x, t, 16);
+#endif
 }
 
 static void SsePhsubw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("phsubw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   u8 t[16];
   Put16(t + 0 * 2, Get16(x + 0 * 2) - Get16(x + 1 * 2));
   Put16(t + 1 * 2, Get16(x + 2 * 2) - Get16(x + 3 * 2));
@@ -724,9 +800,15 @@ static void SsePhsubw(u8 x[16], const u8 y[16]) {
   Put16(t + 6 * 2, Get16(y + 4 * 2) - Get16(y + 5 * 2));
   Put16(t + 7 * 2, Get16(y + 6 * 2) - Get16(y + 7 * 2));
   memcpy(x, t, 16);
+#endif
 }
 
 static void SsePunpcklbw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("punpcklbw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   x[0xf] = y[0x7];
   x[0xe] = x[0x7];
   x[0xd] = y[0x6];
@@ -743,9 +825,15 @@ static void SsePunpcklbw(u8 x[16], const u8 y[16]) {
   x[0x2] = x[0x1];
   x[0x1] = y[0x0];
   x[0x0] = x[0x0];
+#endif
 }
 
 static void SsePunpckhbw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("punpckhbw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   x[0x0] = x[0x8];
   x[0x1] = y[0x8];
   x[0x2] = x[0x9];
@@ -762,9 +850,15 @@ static void SsePunpckhbw(u8 x[16], const u8 y[16]) {
   x[0xd] = y[0xe];
   x[0xe] = x[0xf];
   x[0xf] = y[0xf];
+#endif
 }
 
 static void SsePunpcklwd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("punpcklwd\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   x[0xe] = y[0x6];
   x[0xf] = y[0x7];
   x[0xc] = x[0x6];
@@ -781,9 +875,15 @@ static void SsePunpcklwd(u8 x[16], const u8 y[16]) {
   x[0x3] = y[0x1];
   x[0x0] = x[0x0];
   x[0x1] = x[0x1];
+#endif
 }
 
 static void SsePunpckldq(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("punpckldq\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   x[0xc] = y[0x4];
   x[0xd] = y[0x5];
   x[0xe] = y[0x6];
@@ -800,9 +900,15 @@ static void SsePunpckldq(u8 x[16], const u8 y[16]) {
   x[0x1] = x[0x1];
   x[0x2] = x[0x2];
   x[0x3] = x[0x3];
+#endif
 }
 
 static void SsePunpckhwd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("punpckhwd\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   x[0x0] = x[0x8];
   x[0x1] = x[0x9];
   x[0x2] = y[0x8];
@@ -819,9 +925,15 @@ static void SsePunpckhwd(u8 x[16], const u8 y[16]) {
   x[0xd] = x[0xf];
   x[0xe] = y[0xe];
   x[0xf] = y[0xf];
+#endif
 }
 
 static void SsePunpckhdq(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("punpckhdq\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   x[0x0] = x[0x8];
   x[0x1] = x[0x9];
   x[0x2] = x[0xa];
@@ -838,9 +950,15 @@ static void SsePunpckhdq(u8 x[16], const u8 y[16]) {
   x[0xd] = y[0xd];
   x[0xe] = y[0xe];
   x[0xf] = y[0xf];
+#endif
 }
 
 static void SsePunpcklqdq(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("punpcklqdq\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   x[0x8] = y[0x0];
   x[0x9] = y[0x1];
   x[0xa] = y[0x2];
@@ -857,9 +975,15 @@ static void SsePunpcklqdq(u8 x[16], const u8 y[16]) {
   x[0x5] = x[0x5];
   x[0x6] = x[0x6];
   x[0x7] = x[0x7];
+#endif
 }
 
 static void SsePunpckhqdq(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("punpckhqdq\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   x[0x0] = x[0x8];
   x[0x1] = x[0x9];
   x[0x2] = x[0xa];
@@ -876,6 +1000,7 @@ static void SsePunpckhqdq(u8 x[16], const u8 y[16]) {
   x[0xd] = y[0xd];
   x[0xe] = y[0xe];
   x[0xf] = y[0xf];
+#endif
 }
 
 static void SsePsrlw(u8 x[16], unsigned k) {
@@ -919,6 +1044,11 @@ static void SsePsllq(u8 x[16], unsigned k) {
 }
 
 static void SsePsubsb(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psubsb\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
@@ -927,9 +1057,15 @@ static void SsePsubsb(u8 x[16], const u8 y[16]) {
     X[i] = MAX(-128, MIN(127, X[i] - Y[i]));
   }
   memcpy(x, X, 16);
+#endif
 }
 
 static void SsePaddsb(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("paddsb\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   i8 X[16], Y[16];
   memcpy(X, x, 16);
@@ -938,9 +1074,15 @@ static void SsePaddsb(u8 x[16], const u8 y[16]) {
     X[i] = MAX(-128, MIN(127, X[i] + Y[i]));
   }
   memcpy(x, X, 16);
+#endif
 }
 
 static void SsePaddusb(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("paddusb\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   u8 X[16], Y[16];
   memcpy(X, x, 16);
@@ -949,9 +1091,15 @@ static void SsePaddusb(u8 x[16], const u8 y[16]) {
     X[i] = MIN(255, X[i] + Y[i]);
   }
   memcpy(x, X, 16);
+#endif
 }
 
 static void SsePsubusb(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psubusb\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   u8 X[16], Y[16];
   memcpy(X, x, 16);
@@ -960,114 +1108,226 @@ static void SsePsubusb(u8 x[16], const u8 y[16]) {
     X[i] = MIN(255, MAX(0, X[i] - Y[i]));
   }
   memcpy(x, X, 16);
+#endif
 }
 
 static void SsePsubusw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psubusw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsubusw(x + 0, y + 0);
   MmxPsubusw(x + 8, y + 8);
+#endif
 }
 
 static void SsePminsw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pminsw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPminsw(x + 0, y + 0);
   MmxPminsw(x + 8, y + 8);
+#endif
 }
 
 static void SsePmaxsw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pmaxsw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPmaxsw(x + 0, y + 0);
   MmxPmaxsw(x + 8, y + 8);
+#endif
 }
 
 static void SsePsignb(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psignb\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsignb(x + 0, y + 0);
   MmxPsignb(x + 8, y + 8);
+#endif
 }
 
 static void SsePsignw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psignw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsignw(x + 0, y + 0);
   MmxPsignw(x + 8, y + 8);
+#endif
 }
 
 static void SsePsignd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psignd\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsignd(x + 0, y + 0);
   MmxPsignd(x + 8, y + 8);
+#endif
 }
 
 static void SsePmulhrsw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pmulhrsw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPmulhrsw(x + 0, y + 0);
   MmxPmulhrsw(x + 8, y + 8);
+#endif
 }
 
 static void SsePabsw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pabsw\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPabsw(x + 0, y + 0);
   MmxPabsw(x + 8, y + 8);
+#endif
 }
 
 static void SsePabsd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pabsd\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPabsd(x + 0, y + 0);
   MmxPabsd(x + 8, y + 8);
+#endif
 }
 
 static void SsePcmpgtd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pcmpgtd\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPcmpgtd(x + 0, y + 0);
   MmxPcmpgtd(x + 8, y + 8);
+#endif
 }
 
 static void SsePcmpeqd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pcmpeqd\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPcmpeqd(x + 0, y + 0);
   MmxPcmpeqd(x + 8, y + 8);
+#endif
 }
 
 static void SsePsrawv(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psraw\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsrawv(x + 0, y);
   MmxPsrawv(x + 8, y);
+#endif
 }
 
 static void SsePsradv(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psrad\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsradv(x + 0, y);
   MmxPsradv(x + 8, y);
+#endif
 }
 
 static void SsePsrlwv(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psrlw\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsrlwv(x + 0, y);
   MmxPsrlwv(x + 8, y);
+#endif
 }
 
 static void SsePsllwv(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psllw\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsllwv(x + 0, y);
   MmxPsllwv(x + 8, y);
+#endif
 }
 
 static void SsePsrldv(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psrld\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsrldv(x + 0, y);
   MmxPsrldv(x + 8, y);
+#endif
 }
 
 static void SsePslldv(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pslld\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPslldv(x + 0, y);
   MmxPslldv(x + 8, y);
+#endif
 }
 
 static void SsePsrlqv(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psrlq\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsrlqv(x + 0, y);
   MmxPsrlqv(x + 8, y);
+#endif
 }
 
 static void SsePsllqv(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psllq\t%1,%0" : "+x"(*(char_xmma_t *)x) : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPsllqv(x + 0, y);
   MmxPsllqv(x + 8, y);
+#endif
 }
 
 static void SsePmaddwd(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pmaddwd\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPmaddwd(x + 0, y + 0);
   MmxPmaddwd(x + 8, y + 8);
+#endif
 }
 
 static void SsePmulhuw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pmulhuw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPmulhuw(x + 0, y + 0);
   MmxPmulhuw(x + 8, y + 8);
+#endif
 }
 
 static void SsePmulld(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pmulld\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   int i;
   u32 X[4] = {Get32(x), Get32(x + 4), Get32(x + 8), Get32(x + 12)};
   u32 Y[4] = {Get32(y), Get32(y + 4), Get32(y + 8), Get32(y + 12)};
@@ -1077,11 +1337,18 @@ static void SsePmulld(u8 x[16], const u8 y[16]) {
   for (i = 0; i < 4; ++i) {
     Put32(x + i * 4, X[i]);
   }
+#endif
 }
 
 static void SsePmaddubsw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pmaddubsw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   MmxPmaddubsw(x + 0, y + 0);
   MmxPmaddubsw(x + 8, y + 8);
+#endif
 }
 
 static void OpPsb(P, void MmxKernel(u8[8], unsigned),

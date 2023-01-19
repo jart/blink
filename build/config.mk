@@ -28,10 +28,16 @@ LDLIBS +=				\
 	-lm				\
 	-pthread
 
-ifneq ($(HOST_OS), Darwin)
-ifneq ($(HOST_OS), OpenBSD)
+ifneq ($(HOST_SYSTEM), Darwin)
+ifneq ($(HOST_SYSTEM), OpenBSD)
 LDLIBS += -lrt
 endif
+endif
+
+# FreeBSD loads executables to 0x200000 by default which is likely to
+# overlap the static Linux guest binary, we usually load to 0x400000.
+ifeq ($(HOST_SYSTEM), FreeBSD)
+LDFLAGS += -Wl,--image-base=$(IMAGE_BASE_VIRTUAL)
 endif
 
 LDFLAGS_STATIC =			\
@@ -77,13 +83,16 @@ endif
 
 ifeq ($(MODE), dbg)
 CFLAGS += -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
-CPPFLAGS += -DDEBUG -DUNWIND
-ifeq ($(HOST_OS), Linux)
+CPPFLAGS += -DDEBUG
+ifeq ($(HOST_SYSTEM), Linux)
 CFLAGS += -fno-pie
 LDFLAGS += -static -no-pie
 endif
-ifneq ($(HOST_OS), Darwin)
+ifneq ($(HOST_SYSTEM), Darwin)
+ifneq ($(HOST_SYSTEM), FreeBSD)
+CPPFLAGS += -DUNWIND
 LDLIBS += -lunwind -llzma
+endif
 endif
 endif
 

@@ -272,6 +272,7 @@ static bool IsPure(u64 rde) {
     case 0x0F9:  // OpStc
     case 0x11F:  // OpNopEv
     case 0x150:  // OpMovmskpsd
+    case 0x1D7:  // OpPmovmskbGdqpNqUdq
     case 0x1C8:  // OpBswapZvqp
     case 0x1C9:  // OpBswapZvqp
     case 0x1CA:  // OpBswapZvqp
@@ -280,6 +281,22 @@ static bool IsPure(u64 rde) {
     case 0x1CD:  // OpBswapZvqp
     case 0x1CE:  // OpBswapZvqp
     case 0x1CF:  // OpBswapZvqp
+    case 0x050:  // OpPushZvq
+    case 0x051:  // OpPushZvq
+    case 0x052:  // OpPushZvq
+    case 0x053:  // OpPushZvq
+    case 0x054:  // OpPushZvq
+    case 0x055:  // OpPushZvq
+    case 0x056:  // OpPushZvq
+    case 0x057:  // OpPushZvq
+    case 0x058:  // OpPopZvq
+    case 0x059:  // OpPopZvq
+    case 0x05A:  // OpPopZvq
+    case 0x05B:  // OpPopZvq
+    case 0x05C:  // OpPopZvq
+    case 0x05D:  // OpPopZvq
+    case 0x05E:  // OpPopZvq
+    case 0x05F:  // OpPopZvq
       return true;
     case 0x000:  // OpAlub
     case 0x001:  // OpAluw
@@ -423,6 +440,8 @@ static bool IsPure(u64 rde) {
     case 0x174:  // OpSsePcmpeqb
     case 0x175:  // OpSsePcmpeqw
     case 0x176:  // OpSsePcmpeqd
+    case 0x17E:  // OpMov0f7e
+    case 0x17F:  // OpMov0f7f
     case 0x1D1:  // OpSsePsrlwv
     case 0x1D2:  // OpSsePsrldv
     case 0x1D3:  // OpSsePsrlqv
@@ -476,6 +495,7 @@ static bool IsPure(u64 rde) {
     case 0x20A:  // OpSsePsignd
     case 0x20B:  // OpSsePmulhrsw
     case 0x2F6:  // adcx, adox, mulx
+    case 0x344:  // pclmulqdq
       return IsModrmRegister(rde);
     case 0x08D:  // OpLeaGvqpM
       return !IsRipRelative(rde);

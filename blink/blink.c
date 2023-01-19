@@ -108,19 +108,27 @@ static int Exec(char *prog, char **argv, char **envp) {
   g_machine->nolinear = FLAG_nolinear;
   g_machine->system->nolinear = FLAG_nolinear;
   if (!old) {
+    // this is the first time a program is being loaded
     LoadProgram(g_machine, prog, argv, envp);
     SetupCod(g_machine);
     for (i = 0; i < 10; ++i) {
       AddStdFd(&g_machine->system->fds, i);
     }
   } else {
+    // execve() was called and emulation has been requested.
+    // we don't currently wipe out all the mappings that the last
+    // program made so we need to disable the fixed map safety check
+    g_wasteland = true;
     LoadProgram(g_machine, prog, argv, envp);
+    // locks are only superficially required since we killed everything
     LOCK(&old->system->fds.lock);
     g_machine->system->fds.list = old->system->fds.list;
     old->system->fds.list = 0;
     UNLOCK(&old->system->fds.lock);
+    // freeing the last machine in a system will free its system too
     FreeMachine(old);
   }
+  // meta interpreter loop
   for (;;) {
     if (!sigsetjmp(g_machine->onhalt, 1)) {
       g_machine->canhalt = true;

@@ -31,6 +31,7 @@
 #endif
 #endif
 
+// MAP_DEMAND means use MAP_FIXED only if it won't clobber other maps
 #if defined(MAP_FIXED_NOREPLACE) && !defined(__SANITIZE_THREAD__)
 // The mmap() address parameter without MAP_FIXED is documented by
 // Linux as a hint for locality. However our testing indicates the
@@ -44,6 +45,7 @@
 #define MAP_DEMAND (MAP_FIXED | MAP_EXCL)
 #define MAP_DENIED EINVAL
 #else
+// Otherwise detect overlap when mmap() returns an unexpected address
 #define MAP_DEMAND 0
 #define MAP_DENIED 0
 #endif

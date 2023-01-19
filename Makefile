@@ -16,10 +16,11 @@ MODE := $(m)
 endif
 endif
 
-HOST_OS := $(shell uname -s)
+HOST_SYSTEM := $(shell uname -s)
 HOST_ARCH := $(shell uname -m)
+HOST_OS := $(shell uname -o 2>/dev/null)
 
-ifneq ($(HOST_OS), Linux)
+ifneq ($(HOST_SYSTEM), Linux)
 VM = o/$(MODE)/blink/blink
 endif
 ifneq ($(HOST_ARCH), x86_64)

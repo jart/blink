@@ -141,13 +141,22 @@ void OpNotEvqp(P) {
 void OpNegEvqp(P) {
   AluEvqp(A, kAlu[ALU_NEG]);
   if (IsMakingPath(m) && !Lock(rde)) {
-    Jitter(A,
-           "B"      // res0 = GetRegOrMem(RexbRm)
-           "r0a1="  // arg1 = res0
-           "q"      // arg0 = machine
-           "c"      // call function
-           "r0D",   // PutRegOrMem(RexbRm, res0)
-           kAlu[ALU_NEG][WordLog2(rde)]);
+    if (!GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
+      Jitter(A,
+             "B"     // res0 = GetRegOrMem(RexbRm)
+             "t"     // arg0 = res0
+             "m"     // call micro-op
+             "r0D",  // PutRegOrMem(RexbRm, res0)
+             JustNeg);
+    } else {
+      Jitter(A,
+             "B"      // res0 = GetRegOrMem(RexbRm)
+             "r0a1="  // arg1 = res0
+             "q"      // arg0 = machine
+             "c"      // call function
+             "r0D",   // PutRegOrMem(RexbRm, res0)
+             kAlu[ALU_NEG][WordLog2(rde)]);
+    }
   }
 }
 

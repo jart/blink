@@ -900,6 +900,10 @@ MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
   return z;
 }
 
+MICRO_OP i64 JustNeg(u64 x) {
+  return -x;
+}
+
 MICRO_OP i64 JustDec(u64 x) {
   return x - 1;
 }
@@ -933,10 +937,10 @@ MICRO_OP static i64 FastDec8(u64 x64, struct Machine *m) {
 }
 
 const aluop_f kFastDec[4] = {
-    (void *)FastDec8,   //
-    (void *)FastDec16,  //
-    (void *)FastDec32,  //
-    (void *)FastDec64,  //
+    (aluop_f)FastDec8,   //
+    (aluop_f)FastDec16,  //
+    (aluop_f)FastDec32,  //
+    (aluop_f)FastDec64,  //
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1500,13 +1504,21 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         if (IsModrmRegister(rde)) {
           GetReg(A, log2sz, RexbRm(rde), RexRexb(rde));
         } else if (HasLinearMapping(m)) {
-          Jitter(A,
-                 "L"         // load effective address
-                 "t"         // arg0 = virtual address
-                 "m"         // call micro-op (turn virtual into pointer)
-                 "t"         // arg0 = pointer
-                 LOADSTORE,  // call function (read word shared memory)
-                 ResolveHost, kLoad[log2sz]);
+          if (!kSkew) {
+            Jitter(A,
+                   "L"         // load effective address
+                   "t"         // arg0 = pointer
+                   LOADSTORE,  // call function (read word shared memory)
+                   kLoad[log2sz]);
+          } else {
+            Jitter(A,
+                   "L"         // load effective address
+                   "t"         // arg0 = virtual address
+                   "m"         // call micro-op (turn virtual into pointer)
+                   "t"         // arg0 = pointer
+                   LOADSTORE,  // call function (read word shared memory)
+                   ResolveHost, kLoad[log2sz]);
+          }
         } else {
           Jitter(A,
                  "L"         // load effective address
@@ -1527,15 +1539,25 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
           if (IsModrmRegister(rde)) {
             PutReg(A, log2sz, RexbRm(rde), RexRexb(rde));
           } else if (HasLinearMapping(m)) {
-            Jitter(A,
-                   "s3="       // sav3 = <pop>
-                   "L"         // load effective address
-                   "t"         // arg0 = virtual address
-                   "m"         // call micro-op
-                   "s3a1="     // arg1 = sav3
-                   "t"         // arg0 = res0
-                   LOADSTORE,  // call micro-op (write word to shared memory)
-                   ResolveHost, kStore[log2sz]);
+            if (!kSkew) {
+              Jitter(A,
+                     "s3="       // sav3 = <pop>
+                     "L"         // load effective address
+                     "s3a1="     // arg1 = sav3
+                     "t"         // arg0 = res0
+                     LOADSTORE,  // call micro-op (write word to shared memory)
+                     kStore[log2sz]);
+            } else {
+              Jitter(A,
+                     "s3="       // sav3 = <pop>
+                     "L"         // load effective address
+                     "t"         // arg0 = virtual address
+                     "m"         // call micro-op
+                     "s3a1="     // arg1 = sav3
+                     "t"         // arg0 = res0
+                     LOADSTORE,  // call micro-op (write word to shared memory)
+                     ResolveHost, kStore[log2sz]);
+            }
           } else {
             Jitter(A,
                    "s3="       // sav3 = <pop>
@@ -1564,17 +1586,31 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "m",     // call micro-op (xmm put register)
                    RexbRm(rde), kPutReg[log2sz]);
           } else if (HasLinearMapping(m)) {
-            Jitter(A,
-                   "r1s4="     // sav4 = res1
-                   "r0s3="     // sav3 = res0
-                   "L"         // load effective address
-                   "t"         // arg0 = virtual address
-                   "m"         // call micro-op
-                   "s4a2="     // arg2 = sav4
-                   "s3a1="     // arg1 = sav3
-                   "t"         // arg0 = res0
-                   LOADSTORE,  // call micro-op (store vector to shared memory)
-                   ResolveHost, kStore[log2sz]);
+            if (!kSkew) {
+              Jitter(
+                  A,
+                  "r1s4="     // sav4 = res1
+                  "r0s3="     // sav3 = res0
+                  "L"         // load effective address
+                  "s4a2="     // arg2 = sav4
+                  "s3a1="     // arg1 = sav3
+                  "t"         // arg0 = res0
+                  LOADSTORE,  // call micro-op (store vector to shared memory)
+                  kStore[log2sz]);
+            } else {
+              Jitter(
+                  A,
+                  "r1s4="     // sav4 = res1
+                  "r0s3="     // sav3 = res0
+                  "L"         // load effective address
+                  "t"         // arg0 = virtual address
+                  "m"         // call micro-op
+                  "s4a2="     // arg2 = sav4
+                  "s3a1="     // arg1 = sav3
+                  "t"         // arg0 = res0
+                  LOADSTORE,  // call micro-op (store vector to shared memory)
+                  ResolveHost, kStore[log2sz]);
+            }
           } else {
             Jitter(A,
                    "r1s4="     // sav4 = res1
@@ -1677,11 +1713,15 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  "m",   // call micro-op
                  RexbRm(rde), GetXmmPtr);
         } else if (HasLinearMapping(m)) {
-          Jitter(A,
-                 "L"   // load effective address
-                 "t"   // arg0 = virtual address
-                 "m",  // res0 = call micro-op (turn virtual into pointer)
-                 ResolveHost);
+          if (!kSkew) {
+            Jitter(A, "L");  // load effective address
+          } else {
+            Jitter(A,
+                   "L"   // load effective address
+                   "t"   // arg0 = virtual address
+                   "m",  // res0 = call micro-op (turn virtual into pointer)
+                   ResolveHost);
+          }
         } else {
           Jitter(A,
                  "L"      // load effective address

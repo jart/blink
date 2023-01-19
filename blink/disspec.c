@@ -1127,6 +1127,23 @@ const char *DisSpecMap3(struct XedDecodedInst *x, char *p) {
   switch (Opcode(x->op.rde)) {
     RCASE(0x0F, DisOpPqQqIbVdqWdqIb(x, p, "palignr"));
     RCASE(0xF0, "rorx %Gdqp Edqp Ib");
+    case 0x44:  // pclmulqdq
+      if (Osz(x->op.rde)) {
+        switch (x->op.uimm0) {
+          case 0x00:
+            return "pclmullqlqdq Wdq %Vdq";
+          case 0x01:
+            return "pclmulhqlqdq Wdq %Vdq";
+          case 0x10:
+            return "pclmullqhqdq Wdq %Vdq";
+          case 0x11:
+            return "pclmulhqhqdq Wdq %Vdq";
+          default:
+            return "wut";
+        }
+      } else {
+        return "wut";
+      }
     default:
       return UNKNOWN;
   }

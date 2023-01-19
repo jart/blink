@@ -43,6 +43,8 @@ struct Allocator {
     PTHREAD_MUTEX_INITIALIZER,
 };
 
+bool g_wasteland;
+
 static void FillPage(void *p, int c) {
   memset(p, c, 4096);
 }
@@ -399,7 +401,10 @@ static bool FreePage(struct System *s, u64 entry) {
   }
 }
 
-static bool RemoveVirtual(struct System *s, i64 virt, i64 size) {
+#define IS_EMPTY_SPACE             1
+#define IS_COMPLETE_LINEAR_MAPPING 2
+
+static int RemoveVirtual(struct System *s, i64 virt, i64 size) {
   u8 *mi;
   i64 end;
   u64 i, pt;
@@ -419,16 +424,23 @@ static bool RemoveVirtual(struct System *s, i64 virt, i64 size) {
       }
     }
   }
-  return got_some && is_mapped;
+  if (!got_some) {
+    return IS_EMPTY_SPACE;
+  } else if (got_some && is_mapped) {
+    unassert(HasLinearMapping(s));
+    return IS_COMPLETE_LINEAR_MAPPING;
+  } else {
+    return 0;
+  }
 }
 
 _Noreturn static void PanicDueToMmap(void) {
 #ifndef NDEBUG
   WriteErrorString(
-      "Unrecoverable mmap() crisis: see log for further details\n");
+      "unrecoverable mmap() crisis: see log for further details\n");
 #else
   WriteErrorString(
-      "Unrecoverable mmap() crisis: Blink was built with NDEBUG\n");
+      "unrecoverable mmap() crisis: Blink was built with NDEBUG\n");
 #endif
   exit(250);
 }
@@ -438,6 +450,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   u8 *mi;
   int prot;
   long pagesize;
+  int greenfield;
   i64 ti, pt, end, level, entry;
 
   // we determine these
@@ -489,20 +502,32 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   MEM_LOGF("reserving virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
            virt, virt + size, size / 1024);
 
-  RemoveVirtual(s, virt, size);
+  // remove existing mapping
+  // this is the point of no return
+  greenfield = RemoveVirtual(s, virt, size) == IS_EMPTY_SPACE;
 
   prot = ((flags & PAGE_U ? PROT_READ : 0) |
           ((flags & PAGE_RW) || fd == -1 ? PROT_WRITE : 0));
 
   if (HasLinearMapping(s)) {
-    if (Mmap(ToHost(virt), size,                     //
-             prot,                                   //
-             (MAP_FIXED |                            //
-              (fd == -1 ? MAP_ANONYMOUS : 0) |       //
-              (shared ? MAP_SHARED : MAP_PRIVATE)),  //
+    // create a linear mapping. doing this runs the risk of destroying
+    // things the kernel put into our address space that blink doesn't
+    // know about. systems like linux and freebsd have a feature which
+    // lets us report a friendly error to the user, when that happens.
+    // the solution is most likely to rebuild with -Wl,-Ttext-segment=
+    // please note we need to take off the seatbelt after an execve().
+    if (g_wasteland) greenfield = false;
+    if (Mmap(ToHost(virt), size,                                          //
+             prot,                                                        //
+             ((greenfield && MAP_DEMAND != 0 ? MAP_DEMAND : MAP_FIXED) |  //
+              (fd == -1 ? MAP_ANONYMOUS : 0) |                            //
+              (shared ? MAP_SHARED : MAP_PRIVATE)),                       //
              fd, offset, "linear") == MAP_FAILED) {
       LOGF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ") crisis: %s", virt,
-           ToHost(virt), size, strerror(errno));
+           ToHost(virt), size,
+           (greenfield && MAP_DEMAND != 0 && errno == MAP_DENIED)
+               ? "requested memory overlapped blink image or system memory"
+               : strerror(errno));
       PanicDueToMmap();
     }
     s->memstat.allocated += size / 4096;
@@ -624,7 +649,7 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
            virt, virt + size, size / 1024);
   // TODO(jart): We should probably validate a PAGE_EOF exists at the
   //             end when size isn't a multiple of platform page size
-  if (RemoveVirtual(s, virt, size) &&
+  if (RemoveVirtual(s, virt, size) == IS_COMPLETE_LINEAR_MAPPING &&
       (HasLinearMapping(s) && !(virt & (pagesize - 1)))) {
     unassert(!Munmap(ToHost(virt & PAGE_TA), size));
   }

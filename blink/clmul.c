@@ -38,9 +38,13 @@ static struct clmul clmul(u64 a, u64 b) {
 
 void OpSsePclmulqdq(P) {
   struct clmul res;
-  res = clmul(
-      Get64(XmmRexrReg(m, rde) + ((uimm0 & 0x01) << 3)),
-      Read64(GetModrmRegisterXmmPointerRead16(A) + ((uimm0 & 0x10) >> 1)));
-  Put64(XmmRexrReg(m, rde) + 0, res.x);
-  Put64(XmmRexrReg(m, rde) + 8, res.y);
+  if (Osz(rde)) {
+    res = clmul(
+        Get64(XmmRexrReg(m, rde) + ((uimm0 & 0x01) << 3)),
+        Read64(GetModrmRegisterXmmPointerRead16(A) + ((uimm0 & 0x10) >> 1)));
+    Put64(XmmRexrReg(m, rde) + 0, res.x);
+    Put64(XmmRexrReg(m, rde) + 8, res.y);
+  } else {
+    OpUdImpl(m);
+  }
 }

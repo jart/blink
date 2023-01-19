@@ -303,12 +303,32 @@ ring-0 system instructions, since Blink is primarily a user-mode VM, and
 therefore only has limited support for bare metal operating system
 software (which we'll discuss more in-depth in a later section).
 
-Blink itself may be detected via `CPUID` by checking for the vendor
-string `GenuineBlink` (rather than the `GenuineIntel` / `AuthenticAMD`
-brands that get reported normally). Please note that old versions of
-Blinkenlights use the brand `GenuineCosmo`. Blink also identifies itself
-as `blink 4.0` via the `uname()` system call. We report a false version
-because otherwise, every program that links Glibc will refuse to run.
+Blink advertises itself as `blink 4.0` in the `uname()` system call.
+Programs may detect they're running in Blink by issuing a `CPUID` where
+`EAX` is set to the leaf number:
+
+- Leaf `0x0` (or `0x80000000`) report `GenuineIntel` in
+  `EBX ‖ EDX ‖ ECX`
+
+- Leaf `0x1` bit `31` in `ECX` reports that Blink is a hypervisor
+
+- Leaf `0x40000000` reports `GenuineBlink` as the hypervisor name in
+  `EBX ‖ ECX ‖ EDX`
+
+- Leaf `0x40031337` reports the underlying operating system name in
+  `EBX ‖ ECX ‖ EDX` with zero filling for strings shorter than 12:
+
+  - `Linux` for Linux
+  - `XNU` for MacOS
+  - `FreeBSD` for FreeBSD
+  - `NetBSD` for NetBSD
+  - `OpenBSD` for OpenBSD
+  - `Linux` for Linux
+  - `Cygwin` for Windows under Cygwin
+  - `Windows` for Windows under Cosmopolitan
+  - `Unknown` if compiled on unrecognized platform
+
+- Leaf `0x80000001` bit `31` in `ECX` tells if Blink's JIT is enabled
 
 ### JIT
 
@@ -419,14 +439,36 @@ static. You can run:
 
 ## Quirks
 
-Here's the current list of quirks and known issues with Blink.
+Here's the current list of Blink's known quirks and tradeoffs.
+
+### Flags
+
+Flag dependencies may not carry across function call boundaries under
+long mode. This is because when Blink's JIT is speculating whether or
+not it's necessary for an arithmetic instruction to compute flags, it
+considers `RET` and `CALL` terminal ops that break the chain. As such
+64-bit code shouldn't do things we did in the DOS days, such as using
+carry flag as a return value to indicate error. This should work fine
+when `STC` is used to set the carry flag, but if the code computes it
+cleverly using instructions like `SUB`, then EFLAGS might not change.
+
+### Faults
+
+Blink may not report the precise program counter where a fault occurred
+in `ucontext_t::uc_mcontext::rip` when signalling a segmentation fault.
+This is currently only possible when `PUSH` or `POP` access bad memory.
+That's because Blink's JIT tries to avoid updating `Machine::ip` on ops
+it considers "pure" such as those that only access registers, which for
+reasons of performance is defined to include pushing and popping.
 
 ### Futexes
 
 If futexes are shared between multiple processes then they'll have
-poorer latency, because Blink currently only supports condition
-variables between threads. Blink also currently doesn't unlock robust
-mutexes on process death. We're working on both these problems.
+poorer latency, because Blink currently only supports true condition
+variables between threads. However such code won't deadlock, since the
+POSIX threads API requires that Blink periodically poll the futex. Blink
+also currently doesn't unlock robust mutexes on process death. We're
+working on both these problems.
 
 ### Signal Handling
 

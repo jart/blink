@@ -45,7 +45,7 @@
 #define kMachineSimdException        -9
 
 #if CAN_64BIT
-#ifndef __SANITIZE_ADDRESS__
+#ifdef __APPLE__
 #define kSkew 0x088800000000
 #else
 #define kSkew 0x000000000000
@@ -369,6 +369,7 @@ extern _Thread_local struct Machine *g_machine;
 extern const nexgen32e_f kConvert[3];
 extern const nexgen32e_f kSax[3];
 extern bool FLAG_noconnect;
+extern bool g_wasteland;
 
 struct System *NewSystem(void);
 void FreeSystem(struct System *);
