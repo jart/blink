@@ -519,15 +519,15 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     // the solution is most likely to rebuild with -Wl,-Ttext-segment=
     // please note we need to take off the seatbelt after an execve().
     if (g_wasteland) greenfield = false;
-    if (Mmap(ToHost(virt), size,                                          //
-             prot,                                                        //
-             ((greenfield && MAP_DEMAND != 0 ? MAP_DEMAND : MAP_FIXED) |  //
-              (fd == -1 ? MAP_ANONYMOUS : 0) |                            //
-              (shared ? MAP_SHARED : MAP_PRIVATE)),                       //
-             fd, offset, "linear") == MAP_FAILED) {
+    errno = 0;
+    if (Mmap(ToHost(virt), size, prot,                 //
+             ((greenfield ? MAP_DEMAND : MAP_FIXED) |  //
+              (fd == -1 ? MAP_ANONYMOUS : 0) |         //
+              (shared ? MAP_SHARED : MAP_PRIVATE)),    //
+             fd, offset, "linear") != ToHost(virt)) {
       LOGF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ") crisis: %s", virt,
            ToHost(virt), size,
-           (greenfield && MAP_DEMAND != 0 && errno == MAP_DENIED)
+           (greenfield && errno == MAP_DENIED)
                ? "requested memory overlapped blink image or system memory"
                : strerror(errno));
       PanicDueToMmap();
