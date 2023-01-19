@@ -92,6 +92,25 @@
 #include "blink/util.h"
 #include "blink/xlat.h"
 
+#ifdef O_ASYNC
+#define O_ASYNC_SETFL O_ASYNC
+#else
+#define O_ASYNC_SETFL 0
+#endif
+#ifdef O_DIRECT
+#define O_DIRECT_SETFL O_DIRECT
+#else
+#define O_DIRECT_SETFL 0
+#endif
+#ifdef O_NOATIME
+#define O_NOATIME_SETFL O_NOATIME
+#else
+#define O_NOATIME_SETFL 0
+#endif
+
+#define SETFL_FLAGS \
+  (O_APPEND | O_NDELAY | O_ASYNC_SETFL | O_DIRECT_SETFL | O_NOATIME_SETFL)
+
 #define ASSIGN(D, S) memcpy(&D, &S, MIN(sizeof(S), sizeof(D)))
 #define SYSCALL(x, name, args)                                              \
   CASE(x, SYS_LOGF("%s(%#" PRIx64 ", %#" PRIx64 ", %#" PRIx64 ", %#" PRIx64 \
@@ -855,12 +874,24 @@ static int SysMunmap(struct Machine *m, i64 virt, u64 size) {
   return rc;
 }
 
+static int GetOflags(struct Machine *m, int fildes) {
+  int oflags;
+  struct Fd *fd;
+  LockFds(&m->system->fds);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    oflags = fd->oflags;
+  } else {
+    oflags = -1;
+  }
+  UnlockFds(&m->system->fds);
+  return oflags;
+}
+
 static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
                    int flags, int fildes, i64 offset) {
   u64 key;
-  ssize_t rc;
   int oflags;
-  struct Fd *fd;
+  ssize_t rc;
   long pagesize;
   if (!IsValidAddrSize(virt, size)) return einval();
   if (flags & MAP_GROWSDOWN_LINUX) return enotsup();
@@ -873,14 +904,7 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
     }
   }
   if (fildes != -1) {
-    LockFds(&m->system->fds);
-    if ((fd = GetFd(&m->system->fds, fildes))) {
-      oflags = fd->oflags;
-    } else {
-      oflags = 0;
-    }
-    UnlockFds(&m->system->fds);
-    if (!fd) return -1;
+    if ((oflags = GetOflags(m, fildes)) == -1) return -1;
     if ((oflags & O_ACCMODE) == O_WRONLY ||  //
         ((prot & PROT_WRITE) &&              //
          (oflags & O_APPEND)) ||             //
@@ -1771,6 +1795,20 @@ static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
   return 0;
 }
 
+static int IoctlFionbio(struct Machine *m, int fildes) {
+  int oflags;
+  if ((oflags = GetOflags(m, fildes)) == -1) return -1;
+  return fcntl(fildes, F_SETFL, (oflags & SETFL_FLAGS) | O_NDELAY);
+}
+
+static int IoctlFioclex(struct Machine *m, int fildes) {
+  return fcntl(fildes, F_SETFD, FD_CLOEXEC);
+}
+
+static int IoctlFionclex(struct Machine *m, int fildes) {
+  return fcntl(fildes, F_SETFD, 0);
+}
+
 static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
   struct Fd *fd;
   int (*ioctl_impl)(int, unsigned long, ...);
@@ -1814,6 +1852,12 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlTiocgpgrp(m, fildes, addr);
     case TIOCSPGRP_LINUX:
       return IoctlTiocspgrp(m, fildes, addr);
+    case FIONBIO_LINUX:
+      return IoctlFionbio(m, fildes);
+    case FIOCLEX_LINUX:
+      return IoctlFioclex(m, fildes);
+    case FIONCLEX_LINUX:
+      return IoctlFionclex(m, fildes);
     default:
       LOGF("missing ioctl %#" PRIx64, request);
       return einval();
@@ -2159,17 +2203,7 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
     fl = XlatOpenFlags(arg & (O_APPEND_LINUX | O_ASYNC_LINUX | O_DIRECT_LINUX |
                               O_NOATIME_LINUX | O_NDELAY_LINUX));
     if (fcntl(fd->fildes, F_SETFL, fl) != -1) {
-      fd->oflags &= ~(O_APPEND |
-#ifdef O_ASYNC
-                      O_ASYNC |
-#endif
-#ifdef O_DIRECT
-                      O_DIRECT |
-#endif
-#ifdef O_NOATIME
-                      O_NOATIME |
-#endif
-                      O_NDELAY);
+      fd->oflags &= ~SETFL_FLAGS;
       fd->oflags |= fl;
       rc = 0;
     } else {
