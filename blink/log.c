@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <signal.h>
@@ -86,9 +87,10 @@ static char *GetTimestamp(void) {
 }
 
 void Log(const char *file, int line, const char *fmt, ...) {
-  int n = 0;
   va_list va;
+  int err, n = 0;
   char b[PIPE_BUF];
+  err = errno;
   va_start(va, fmt);
   APPEND(snprintf, "I%s:%s:%d:%d ", GetTimestamp(), file, line,
          g_machine ? g_machine->tid : 0);
@@ -103,6 +105,7 @@ void Log(const char *file, int line, const char *fmt, ...) {
     b[--n] = '.';
   }
   WriteError(g_log, b, n);
+  errno = err;
 }
 
 void LogInit(const char *path) {

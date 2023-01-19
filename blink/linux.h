@@ -2,7 +2,6 @@
 #define BLINK_LINUX_H_
 #include "blink/types.h"
 
-#define ENOSYS_LINUX          38
 #define EPERM_LINUX           1
 #define ENOENT_LINUX          2
 #define ESRCH_LINUX           3
@@ -31,7 +30,6 @@
 #define ETXTBSY_LINUX         26
 #define EFBIG_LINUX           27
 #define ENOSPC_LINUX          28
-#define EDQUOT_LINUX          122
 #define ESPIPE_LINUX          29
 #define EROFS_LINUX           30
 #define EMLINK_LINUX          31
@@ -41,13 +39,25 @@
 #define EDEADLK_LINUX         35
 #define ENAMETOOLONG_LINUX    36
 #define ENOLCK_LINUX          37
+#define ENOSYS_LINUX          38
 #define ENOTEMPTY_LINUX       39
 #define ELOOP_LINUX           40
 #define ENOMSG_LINUX          42
 #define EIDRM_LINUX           43
+#define ENOSTR_LINUX          60
+#define ENODATA_LINUX         61
+#define ETIME_LINUX           62
+#define ENOSR_LINUX           63
+#define ENONET_LINUX          64
+#define EREMOTE_LINUX         66
+#define ENOLINK_LINUX         67
 #define EPROTO_LINUX          71
+#define EMULTIHOP_LINUX       72
+#define EBADMSG_LINUX         74
 #define EOVERFLOW_LINUX       75
+#define EBADFD_LINUX          77
 #define EILSEQ_LINUX          84
+#define ERESTART_LINUX        85
 #define EUSERS_LINUX          87
 #define ENOTSOCK_LINUX        88
 #define EDESTADDRREQ_LINUX    89
@@ -73,28 +83,20 @@
 #define ESHUTDOWN_LINUX       108
 #define ETOOMANYREFS_LINUX    109
 #define ETIMEDOUT_LINUX       110
-#define ETIME_LINUX           62
 #define ECONNREFUSED_LINUX    111
 #define EHOSTDOWN_LINUX       112
 #define EHOSTUNREACH_LINUX    113
 #define EALREADY_LINUX        114
 #define EINPROGRESS_LINUX     115
 #define ESTALE_LINUX          116
-#define EREMOTE_LINUX         66
-#define EBADMSG_LINUX         74
+#define EDQUOT_LINUX          122
+#define ENOMEDIUM_LINUX       123
+#define EMEDIUMTYPE_LINUX     124
 #define ECANCELED_LINUX       125
 #define EOWNERDEAD_LINUX      130
 #define ENOTRECOVERABLE_LINUX 131
-#define ENONET_LINUX          64
-#define ERESTART_LINUX        85
-#define ENODATA_LINUX         61
-#define ENOSR_LINUX           63
-#define ENOSTR_LINUX          60
-#define EMULTIHOP_LINUX       72
-#define ENOLINK_LINUX         67
-#define ENOMEDIUM_LINUX       123
-#define EMEDIUMTYPE_LINUX     124
-#define EBADFD_LINUX          77
+#define ERFKILL_LINUX         132
+#define EHWPOISON_LINUX       133
 
 #define AT_FDCWD_LINUX            -100
 #define AT_SYMLINK_NOFOLLOW_LINUX 0x0100

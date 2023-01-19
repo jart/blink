@@ -99,22 +99,37 @@ static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
 int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
               i32 mode) {
   int fildes;
+  int sysflags;
   const char *path;
 #ifndef O_TMPFILE
   if ((oflags & O_TMPFILE_LINUX) == O_TMPFILE_LINUX) {
     return SysTmpfile(m, dirfildes, pathaddr, oflags & ~O_TMPFILE_LINUX, mode);
   }
 #endif
-  if ((oflags = XlatOpenFlags(oflags)) == -1) return -1;
+  if ((sysflags = XlatOpenFlags(oflags)) == -1) return -1;
   if (!(path = LoadStr(m, pathaddr))) return efault();
   SYS_LOGF("Openat(%s)", path);
-  INTERRUPTIBLE(fildes = openat(GetDirFildes(dirfildes), path, oflags, mode));
+  INTERRUPTIBLE(fildes = openat(GetDirFildes(dirfildes), path, sysflags, mode));
   if (fildes != -1) {
     LockFds(&m->system->fds);
-    unassert(AddFd(&m->system->fds, fildes, oflags));
+    unassert(AddFd(&m->system->fds, fildes, sysflags));
     UnlockFds(&m->system->fds);
   } else {
     SYS_LOGF("%s(%s) failed: %s", "openat", path, strerror(errno));
+#ifdef __FreeBSD__
+    // Address FreeBSD divergence from IEEE Std 1003.1-2008 (POSIX.1)
+    // in the case when O_NOFOLLOW is used, but fails due to symlink.
+    if (errno == EMLINK) {
+      errno = ELOOP;
+    }
+#endif
+#ifdef __NetBSD__
+    // Address NetBSD divergence from IEEE Std 1003.1-2008 (POSIX.1)
+    // in the case when O_NOFOLLOW is used but fails due to symlink.
+    if (errno == EFTYPE) {
+      errno = ELOOP;
+    }
+#endif
   }
   return fildes;
 }
