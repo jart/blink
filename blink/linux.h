@@ -492,6 +492,10 @@
 #define UTIME_NOW_LINUX  ((1l << 30) - 1l)
 #define UTIME_OMIT_LINUX ((1l << 30) - 2l)
 
+#define ITIMER_REAL_LINUX     0
+#define ITIMER_VIRTUAL_LINUX  1
+#define ITIMER_PROF_LINUX     2
+
 struct iovec_linux {
   u8 base[8];
   u8 len[8];

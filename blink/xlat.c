@@ -650,6 +650,20 @@ int UnXlatOpenFlags(int x) {
   return res;
 }
 
+int UnXlatItimer(int x) {
+  switch (x) {
+    case ITIMER_REAL_LINUX:
+      return ITIMER_REAL;
+    case ITIMER_VIRTUAL_LINUX:
+      return ITIMER_VIRTUAL;
+    case ITIMER_PROF_LINUX:
+      return ITIMER_PROF;
+    default:
+      LOGF("%s %#x not supported", "itimer", x);
+      return einval();
+  }
+}
+
 int XlatSockaddrToHost(struct sockaddr_storage *dst,
                        const struct sockaddr_linux *src, u32 srclen) {
   if (srclen < 2) {

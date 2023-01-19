@@ -51,6 +51,10 @@
 #include <emscripten.h>
 #endif
 
+#ifdef __HAIKU__
+#include <sys/sockio.h>
+#endif
+
 #include "blink/assert.h"
 #include "blink/errno.h"
 #include "blink/loader.h"
@@ -1073,7 +1077,9 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
   gethostname(u.host, sizeof(u.host) - 1);
   strcpy(uts.nodename, u.host);
   memset(u.domain, 0, sizeof(u.domain));
+#ifndef __HAIKU__
   getdomainname(u.domain, sizeof(u.domain) - 1);
+#endif
   strcpy(uts.domainname, u.domain);
   CopyToUser(m, utsaddr, &uts, sizeof(uts));
   return 0;
@@ -1526,6 +1532,9 @@ static i64 SysWritev(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen) {
 }
 
 static int UnXlatDt(int x) {
+#ifndef DT_UNKNOWN
+  return DT_UNKNOWN_LINUX;
+#else
   switch (x) {
     XLAT(DT_UNKNOWN, DT_UNKNOWN_LINUX);
     XLAT(DT_FIFO, DT_FIFO_LINUX);
@@ -1538,6 +1547,7 @@ static int UnXlatDt(int x) {
     default:
       __builtin_unreachable();
   }
+#endif
 }
 
 static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
@@ -1570,7 +1580,35 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
       reclen = 0;
       continue;
     }
+#ifdef DT_UNKNOWN
     type = UnXlatDt(ent->d_type);
+#else
+    struct stat st;
+    if (fstatat(fd->fildes, ent->d_name, &st, AT_SYMLINK_NOFOLLOW) == -1) {
+      LOGF("fstatat(%d, %s) failed: %s", fd->fildes, ent->d_name,
+           strerror(errno));
+      type = DT_UNKNOWN_LINUX;
+    } else {
+      if (S_ISDIR(st.st_mode)) {
+        type = DT_DIR_LINUX;
+      } else if (S_ISCHR(st.st_mode)) {
+        type = DT_CHR_LINUX;
+      } else if (S_ISBLK(st.st_mode)) {
+        type = DT_BLK_LINUX;
+      } else if (S_ISFIFO(st.st_mode)) {
+        type = DT_FIFO_LINUX;
+      } else if (S_ISLNK(st.st_mode)) {
+        type = DT_LNK_LINUX;
+      } else if (S_ISSOCK(st.st_mode)) {
+        type = DT_SOCK_LINUX;
+      } else if (S_ISREG(st.st_mode)) {
+        type = DT_REG_LINUX;
+      } else {
+        LOGF("unknown st_mode %d", st.st_mode);
+        type = DT_UNKNOWN_LINUX;
+      }
+    }
+#endif
     reclen = ROUNDUP(8 + 8 + 2 + 1 + len + 1, 8);
     memset(&rec, 0, sizeof(rec));
     Write64(rec.ino, ent->d_ino);
@@ -1996,6 +2034,9 @@ static int SysFdatasync(struct Machine *m, i32 fildes) {
   // correctly so currently we default to the macro that redefines
   // fdatasync() to fsync(). ──Quoth SQLite (os_unix.c)
   return fsync(fildes);
+#elif defined(__HAIKU__)
+  // Haiku doesn't have fdatasync() yet
+  return fsync(fildes);
 #else
   return fdatasync(fildes);
 #endif
@@ -2313,9 +2354,11 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
       } else {
         unassert(WIFSIGNALED(wstatus));
         gwstatus = UnXlatSignal(WTERMSIG(wstatus)) & 127;
+#ifdef WCOREDUMP
         if (WCOREDUMP(wstatus)) {
           gwstatus |= 128;
         }
+#endif
       }
       Write32(gwstatusb, gwstatus);
       CopyToUserWrite(m, opt_out_wstatus_addr, gwstatusb, sizeof(gwstatusb));
@@ -2513,7 +2556,7 @@ static int SysGetitimer(struct Machine *m, int which, i64 curvaladdr) {
   int rc;
   struct itimerval it;
   struct itimerval_linux git;
-  if ((rc = getitimer(which, &it)) != -1) {
+  if ((rc = getitimer(UnXlatItimer(which), &it)) != -1) {
     XlatItimervalToLinux(&git, &it);
     CopyToUserWrite(m, curvaladdr, &git, sizeof(git));
   }
@@ -2527,7 +2570,7 @@ static int SysSetitimer(struct Machine *m, int which, i64 neuaddr,
   struct itimerval_linux git;
   CopyFromUserRead(m, &git, neuaddr, sizeof(git));
   XlatLinuxToItimerval(&neu, &git);
-  if ((rc = setitimer(which, &neu, &old)) != -1) {
+  if ((rc = setitimer(UnXlatItimer(which), &neu, &old)) != -1) {
     if (oldaddr) {
       XlatItimervalToLinux(&git, &old);
       CopyToUserWrite(m, oldaddr, &git, sizeof(git));

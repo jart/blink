@@ -8,11 +8,14 @@ IMAGE_BASE_VIRTUAL = 0x23000000
 CFLAGS +=				\
 	-g				\
 	-O2				\
-	-pthread			\
 	-fno-ident			\
 	-fno-common			\
 	-fstrict-aliasing		\
 	-fstrict-overflow
+
+ifneq ($(HOST_OS), Haiku)
+CFLAGS += -pthread
+endif
 
 CPPFLAGS +=				\
 	-iquote.			\
@@ -26,12 +29,21 @@ CPPFLAGS +=				\
 
 LDLIBS +=				\
 	-lm				\
-	-pthread
 
 ifneq ($(HOST_SYSTEM), Darwin)
 ifneq ($(HOST_SYSTEM), OpenBSD)
+ifneq ($(HOST_SYSTEM), Haiku)
 LDLIBS += -lrt
 endif
+endif
+endif
+
+ifneq ($(HOST_SYSTEM), Haiku)
+LDLIBS += -pthread
+endif
+
+ifeq ($(HOST_SYSTEM), Haiku)
+LDLIBS += -lroot -lnetwork -lbsd
 endif
 
 # FreeBSD loads executables to 0x200000 by default which is likely to
