@@ -1972,6 +1972,7 @@ static void RewindHistory(int delta) {
       g_history.viewing = 0;
     }
   }
+  g_history.viewing = MIN(g_history.viewing, g_history.count);
   // clear the crash dialog box if it exists.
   action &= ~FAILURE;
 }
