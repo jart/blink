@@ -42,11 +42,12 @@
 #define READ32(p) Read32((const u8 *)(p))
 
 static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
-                              const Elf64_Phdr_ *phdr, i64 last_end, int fd) {
+                              const Elf64_Phdr_ *phdr, i64 last_end, u64 aslr,
+                              int fd) {
   i64 bulk;
   struct System *s = m->system;
   u32 flags = Read32(phdr->flags);
-  i64 vaddr = Read64(phdr->vaddr);
+  i64 vaddr = Read64(phdr->vaddr) + aslr;
   i64 memsz = Read64(phdr->memsz);
   i64 offset = Read64(phdr->offset);
   i64 filesz = Read64(phdr->filesz);
@@ -81,7 +82,8 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
     exit(127);
   }
   if (end < last_end) {
-    LOGF("program headers aren't ordered");
+    LOGF("program headers aren't ordered, expected %" PRIx64 " >= %" PRIx64,
+         end, last_end);
     exit(127);
   }
   if (skew != (offset & (pagesize - 1))) {
@@ -177,8 +179,8 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
     } else if (vaddr == s->codestart + s->codesize) {
       s->codesize += memsz;
     } else {
-      LOGF("elf has multiple executable program headers at noncontiguous "
-           "addresses; only the first region will benefit from jitting");
+      ELF_LOGF("elf has multiple executable program headers at noncontiguous "
+               "addresses; only the first region will benefit from jitting");
     }
   }
 
@@ -189,7 +191,8 @@ bool IsSupportedExecutable(const char *path, void *image) {
   Elf64_Ehdr_ *ehdr;
   if (READ32(image) == READ32("\177ELF")) {
     ehdr = (Elf64_Ehdr_ *)image;
-    return Read16(ehdr->type) == ET_EXEC_ &&
+    return (Read16(ehdr->type) == ET_EXEC_ ||  //
+            Read16(ehdr->type) == ET_DYN_) &&
            ehdr->ident[EI_CLASS_] == ELFCLASS64_ &&
            Read16(ehdr->machine) == EM_NEXGEN32E_;
   }
@@ -208,29 +211,114 @@ static void LoadFlatExecutable(struct Machine *m, intptr_t base,
   Write64(phdr.vaddr, base);
   Write64(phdr.filesz, imagesize);
   Write64(phdr.memsz, ROUNDUP(imagesize + kRealSize, 4096));
-  LoadElfLoadSegment(m, image, imagesize, &phdr, 0, fd);
+  LoadElfLoadSegment(m, image, imagesize, &phdr, 0, 0, fd);
   m->ip = base;
 }
 
-static bool LoadElf(struct Machine *m, struct Elf *elf, int fd) {
-  int i;
-  Elf64_Phdr_ *phdr;
-  i64 end = INT64_MIN;
-  bool execstack = true;
-  m->ip = elf->base = Read64(elf->ehdr->entry);
-  for (i = 0; i < Read16(elf->ehdr->phnum); ++i) {
-    phdr = GetElfSegmentHeaderAddress(elf->ehdr, elf->size, i);
-    switch (Read32(phdr->type)) {
-      case PT_LOAD_:
-        elf->base = MIN(elf->base, (i64)Read64(phdr->vaddr));
-        end = LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, end, fd);
-        break;
-      case PT_GNU_STACK_:
-        execstack = false;
+static void ApplyRelocations(struct Machine *m, Elf64_Ehdr_ *ehdr, size_t esize,
+                             u64 base, u64 aslr, u64 dt_rela, u64 dt_relasz,
+                             u64 dt_relaent) {
+  u64 addr;
+  u8 word[8];
+  Elf64_Rela_ *rela;
+  if (!aslr) return;
+  if (!dt_rela) return;
+  dt_relaent = MAX(dt_relaent, sizeof(Elf64_Rela_));
+  CheckElfAddress(ehdr, esize, (intptr_t)ehdr + dt_rela, dt_relasz);
+  for (rela = (Elf64_Rela_ *)((intptr_t)ehdr + (intptr_t)dt_rela);
+       rela < (Elf64_Rela_ *)((intptr_t)ehdr + (intptr_t)dt_rela +
+                              (intptr_t)dt_relasz - sizeof(Elf64_Rela_));
+       rela = (Elf64_Rela_ *)((intptr_t)rela + (intptr_t)dt_relaent)) {
+    switch (ELF64_R_TYPE_(Read64(rela->info))) {
+      case R_X86_64_RELATIVE_:
+        addr = base + Read64(rela->offset);
+        if (CopyFromUser(m, word, addr, 8)) {
+          LOGF("failed to read relocation at %" PRIx64, addr);
+          exit(127);
+        }
+        unassert(!CopyToUser(m, addr, word, 8));
         break;
       default:
         break;
     }
+  }
+}
+
+static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
+  int i;
+  Elf64_Phdr_ *phdr;
+  i64 end = INT64_MIN;
+  bool execstack = true;
+  const char *interpreter = 0;
+  elf->aslr = aslr;
+  m->ip = elf->base = elf->at_entry = Read64(elf->ehdr->entry) + aslr;
+  elf->at_phent = Read16(elf->ehdr->phentsize);
+  elf->at_phnum = 0;
+  for (i = 0; i < Read16(elf->ehdr->phnum); ++i) {
+    ++elf->at_phnum;
+    phdr = GetElfSegmentHeaderAddress(elf->ehdr, elf->size, i);
+    CheckElfAddress(elf->ehdr, elf->size,
+                    (intptr_t)elf->ehdr + Read64(phdr->offset),
+                    Read64(phdr->filesz));
+    switch (Read32(phdr->type)) {
+      case PT_GNU_STACK_:
+        execstack = false;
+        break;
+      case PT_LOAD_:
+        elf->base = MIN(elf->base, (i64)Read64(phdr->vaddr) + aslr);
+        end = LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, end, aslr, fd);
+        break;
+      case PT_INTERP_:
+        elf->at_execfd = fd;
+        interpreter = (char *)elf->ehdr + Read64(phdr->offset);
+        if (interpreter[Read64(phdr->filesz) - 1]) {
+          ELF_LOGF("elf interpreter not nul terminated");
+          exit(127);
+        }
+        break;
+      default:
+        break;
+    }
+  }
+  elf->at_phdr = elf->base + Read64(elf->ehdr->phoff);
+  if (interpreter) {
+    int fd;
+    char ibuf[21];
+    struct stat st;
+    Elf64_Ehdr_ *ehdr;
+    end = INT64_MIN;
+    ELF_LOGF("loading elf interpreter %s", interpreter);
+    aslr = Read16(elf->ehdr->type) == ET_DYN_ ? 0x200000 : 0;
+    errno = 0;
+    if ((fd = open(interpreter, O_RDONLY)) == -1 ||
+        (fstat(fd, &st) == -1 || !st.st_size) ||
+        (ehdr = (Elf64_Ehdr_ *)Mmap(0, st.st_size, PROT_READ | PROT_WRITE,
+                                    MAP_PRIVATE, fd, 0, "loader")) ==
+            MAP_FAILED ||
+        !IsSupportedExecutable(interpreter, ehdr)) {
+      WriteErrorString(interpreter);
+      WriteErrorString(": failed to load interpreter (errno ");
+      FormatInt64(ibuf, errno);
+      WriteErrorString(ibuf);
+      WriteErrorString(")\n");
+      exit(127);
+    }
+    elf->at_base = m->ip = Read64(ehdr->entry) + aslr;
+    for (i = 0; i < Read16(ehdr->phnum); ++i) {
+      phdr = GetElfSegmentHeaderAddress(ehdr, st.st_size, i);
+      CheckElfAddress(ehdr, st.st_size, (intptr_t)ehdr + Read64(phdr->offset),
+                      Read64(phdr->filesz));
+      switch (Read32(phdr->type)) {
+        case PT_LOAD_:
+          elf->at_base = MIN(elf->at_base, (i64)Read64(phdr->vaddr) + aslr);
+          end = LoadElfLoadSegment(m, ehdr, st.st_size, phdr, end, aslr, fd);
+          break;
+        default:
+          break;
+      }
+    }
+    unassert(!Munmap(ehdr, st.st_size));
+    unassert(!close(fd));
   }
   return execstack;
 }
@@ -339,6 +427,10 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
   unassert(prog);
   elf = &m->system->elf;
   elf->prog = prog;
+  elf->at_execfd = -1;
+  elf->at_phdr = 0;
+  elf->at_base = 0;
+  elf->at_phent = 56;
   free(g_progname);
   g_progname = strdup(prog);
   if ((fd = open(prog, O_RDONLY)) == -1 ||
@@ -347,18 +439,19 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
            (char *)Mmap(0, (elf->mapsize = st.st_size), PROT_READ | PROT_WRITE,
                         MAP_PRIVATE, fd, 0, "loader")) == MAP_FAILED) {
     WriteErrorString(prog);
-    WriteErrorString(": failed to load (errno ");
+    WriteErrorString(": failed to load executable (errno ");
     FormatInt64(ibuf, errno);
     WriteErrorString(ibuf);
     WriteErrorString(")\n");
     exit(127);
-  };
+  }
+  // TODO(jart): Punt shell scripts to _PATH_BSHELL
   if (!IsSupportedExecutable(prog, elf->map)) {
     WriteErrorString("\
 error: unsupported executable; we need:\n\
+- x86_64-linux elf executables\n\
 - flat executables (.bin files)\n\
-- actually portable executables (MZqFpD/jartsr)\n\
-- statically-linked x86_64-linux elf executables\n");
+- actually portable executables (MZqFpD/jartsr)\n");
     exit(127);
   }
   ResetCpu(m);
@@ -372,14 +465,15 @@ error: unsupported executable; we need:\n\
     if (READ32(elf->map) == READ32("\177ELF")) {
       elf->ehdr = (Elf64_Ehdr_ *)elf->map;
       elf->size = elf->mapsize;
-      execstack = LoadElf(m, elf, fd);
+      execstack = LoadElf(
+          m, elf, Read16(elf->ehdr->type) == ET_DYN_ ? 0x400000 : 0, fd);
     } else if (READ64(elf->map) == READ64("MZqFpD='") ||
                READ64(elf->map) == READ64("jartsr='")) {
       if (GetElfHeader(ehdr, prog, elf->map) == -1) exit(127);
       memcpy(elf->map, ehdr, 64);
       elf->ehdr = (Elf64_Ehdr_ *)elf->map;
       elf->size = elf->mapsize;
-      execstack = LoadElf(m, elf, fd);
+      execstack = LoadElf(m, elf, 0, fd);
     } else {
       elf->base = 0x400000;
       elf->ehdr = NULL;
@@ -401,5 +495,7 @@ error: unsupported executable; we need:\n\
   pagesize = GetSystemPageSize();
   pagesize = MAX(4096, pagesize);
   m->system->brk = ROUNDUP(m->system->brk, pagesize);
-  unassert(!close(fd));
+  if (elf->at_execfd == -1) {
+    unassert(!close(fd));
+  }
 }

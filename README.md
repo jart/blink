@@ -8,14 +8,14 @@
 
 This project contains two programs:
 
-`blink` is a virtual machine that runs statically-compiled x86-64-linux
-programs on different operating systems and hardware architectures. It's
-designed to do the same thing as the `qemu-x86_64` command, except (a)
-rather than being a 4mb binary, Blink only has a ~170kb footprint; and
-(b) Blink goes 2x faster than Qemu on some benchmarks such as emulating
-GCC. The tradeoff is Blink doesn't have as many features as Qemu. Blink
-is a great fit when you want a virtual machine that's extremely small
-and runs ephemeral programs much faster. For further details on the
+`blink` is a virtual machine that runs x86-64-linux programs on
+different operating systems and hardware architectures. It's designed to
+do the same thing as the `qemu-x86_64` command, except (a) rather than
+being a 4mb binary, Blink only has a ~174kb footprint; and (b) Blink
+goes 2x faster than Qemu on some benchmarks such as emulating GCC. The
+tradeoff is Blink doesn't have as many features as Qemu. Blink is a
+great fit when you want a virtual machine that's extremely small and
+runs ephemeral programs much faster. For further details on the
 motivations for this tool, please read <https://justine.lol/ape.html>.
 
 [`blinkenlights`](https://justine.lol/blinkenlights) is a TUI interface
@@ -127,20 +127,20 @@ You can hunt down bugs in Blink using the following build modes:
 
 ## Compiling and Running Programs under Blink
 
-Blink is picky about which Linux executables it'll emulate. For example,
-right now only static binaries are supported. In other cases, the host
-system page size may cause problems. For example, Apple M1 has a system
-page size of 16kb, and WASM's page size is 64kb. On those platforms, you
+Blink can be picky about which Linux executables it'll execute. For
+example the host system page size may cause problems on non-Linux
+platforms like Apple M1 (16kb) and Cygwin (64kb). On such platforms, you
 may encounter an error like this:
 
 ```
 I2023-01-06T18:12:51.007788:blink/loader.c:91:47550 p_vaddr p_offset skew unequal w.r.t. host page size
 ```
 
-In this case, you can disable the linear memory optimization (using the
-`-m` flag) but that'll slow down performance. Another option is simply
-recompiling your executable so that its ELF program headers will work on
-systems with a larger page size. You can do that using these GCC flags:
+The simplest way to solve that is by disabling the linear memory
+optimization (using the `blink -m` flag) but that'll slow down
+performance. Another option is to try recompiling your executable so
+that its ELF program headers will work on systems with a larger page
+size. You can do that using these GCC flags:
 
 ```
 gcc -static -Wl,-z,common-page-size=65536,-z,max-page-size=65536 ...
@@ -417,14 +417,12 @@ point where it can boot something like Windows.
 
 ## Executable Formats
 
-Blink supports several different executable formats, all of which are
-static. You can run:
+Blink supports several different executable formats. You can run:
+
+- x86-64-linux ELF executables (both static and dynamic).
 
 - Actually Portable Executables, which have either the `MZqFpD` or
   `jartsr` magic.
-
-- Statically-compiled x86-64-linux ELF executables, so long as they
-  don't use PIC/PIE or require a interpreter.
 
 - Flat executables, which must end with the file extension `.bin`. In
   this case, you can make executables as small as 10 bytes in size,

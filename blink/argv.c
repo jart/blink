@@ -33,6 +33,7 @@
 #define STACKALIGN 16
 
 #define PUSH_AUXV(k, v) \
+  --naux;               \
   *--p = v;             \
   *--p = k
 
@@ -68,13 +69,21 @@ static long GetGuestPageSize(struct Machine *m) {
 void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
   u8 *bytes;
   char rng[16];
+  struct Elf *elf;
   i64 sp, *p, *bloc;
   size_t i, narg, nenv, naux, nall;
   GetRandom(rng, 16);
-  naux = 9;
+  elf = &m->system->elf;
+  naux = 10;
+  if (elf->at_entry) {
+    naux += 4;
+    if (elf->at_execfd != -1) {
+      naux += 2;
+    }
+  }
   nenv = GetArgListLen(vars);
   narg = GetArgListLen(args);
-  nall = 1 + narg + 1 + nenv + 1 + (naux + 1) * 2;
+  nall = 1 + narg + 1 + nenv + 1 + naux * 2;
   bloc = (i64 *)malloc(sizeof(i64) * nall);
   p = bloc + nall;
   PUSH_AUXV(0, 0);
@@ -87,6 +96,17 @@ void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
   PUSH_AUXV(AT_CLKTCK_LINUX, sysconf(_SC_CLK_TCK));
   PUSH_AUXV(AT_RANDOM_LINUX, PushBuffer(m, rng, 16));
   PUSH_AUXV(AT_EXECFN_LINUX, PushString(m, g_blink_path));
+  if (elf->at_entry) {
+    PUSH_AUXV(AT_PHDR_LINUX, elf->at_phdr);
+    PUSH_AUXV(AT_PHENT_LINUX, elf->at_phent);
+    PUSH_AUXV(AT_PHNUM_LINUX, elf->at_phnum);
+    PUSH_AUXV(AT_ENTRY_LINUX, elf->at_entry);
+    if (elf->at_execfd != -1) {
+      PUSH_AUXV(AT_BASE_LINUX, elf->at_base);
+      PUSH_AUXV(AT_EXECFD_LINUX, elf->at_execfd);
+    }
+  }
+  unassert(!naux);
   for (*--p = 0, i = nenv; i--;) *--p = PushString(m, vars[i]);
   for (*--p = 0, i = narg; i--;) *--p = PushString(m, args[i]);
   *--p = narg;

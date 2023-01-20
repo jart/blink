@@ -57,7 +57,7 @@ static void DisLoadElfLoads(struct Dis *d, struct Elf *elf) {
   for (i = 0; i < n; ++i) {
     phdr = GetElfSegmentHeaderAddress(elf->ehdr, elf->size, i);
     if (Read32(phdr->type) != PT_LOAD_) continue;
-    d->loads.p[j].addr = Read64(phdr->vaddr);
+    d->loads.p[j].addr = Read64(phdr->vaddr) + elf->aslr;
     d->loads.p[j].size = Read64(phdr->memsz);
     d->loads.p[j].istext = (Read32(phdr->flags) & PF_X_) == PF_X_;
     ++j;
@@ -72,41 +72,48 @@ static void DisLoadElfSyms(struct Dis *d, struct Elf *elf) {
   const Elf64_Sym_ *st;
   bool isabs, isweak, islocal, isprotected, isfunc, isobject;
   j = 0;
-  if ((d->syms.stab = GetElfStringTable(elf->ehdr, elf->size)) &&
-      (st = GetElfSymbolTable(elf->ehdr, elf->size, &n))) {
-    stablen = (intptr_t)elf->ehdr + elf->size - (intptr_t)d->syms.stab;
-    if (d->syms.n < n) {
-      d->syms.n = n;
-      d->syms.p =
-          (struct DisSym *)realloc(d->syms.p, d->syms.n * sizeof(*d->syms.p));
-    }
-    for (i = 0; i < n; ++i) {
-      if (ELF64_ST_TYPE_(st[i].info) == STT_SECTION_ ||
-          ELF64_ST_TYPE_(st[i].info) == STT_FILE_ || !Read32(st[i].name) ||
-          startswith(d->syms.stab + Read32(st[i].name), "v_") ||
-          !(0 <= Read32(st[i].name) && Read32(st[i].name) < stablen) ||
-          !Read64(st[i].value) ||
-          !(-0x800000000000 <= (i64)Read64(st[i].value) &&
-            (i64)Read64(st[i].value) < 0x800000000000)) {
-        continue;
+  if ((d->syms.stab = GetElfStringTable(elf->ehdr, elf->size))) {
+    if ((st = GetElfSymbolTable(elf->ehdr, elf->size, &n))) {
+      stablen = (intptr_t)elf->ehdr + elf->size - (intptr_t)d->syms.stab;
+      if (d->syms.n < n) {
+        d->syms.n = n;
+        d->syms.p =
+            (struct DisSym *)realloc(d->syms.p, d->syms.n * sizeof(*d->syms.p));
       }
-      isabs = Read16(st[i].shndx) == SHN_ABS_;
-      isweak = ELF64_ST_BIND_(st[i].info) == STB_WEAK_;
-      islocal = ELF64_ST_BIND_(st[i].info) == STB_LOCAL_;
-      isprotected = st[i].other == STV_PROTECTED_;
-      isfunc = ELF64_ST_TYPE_(st[i].info) == STT_FUNC_;
-      isobject = ELF64_ST_TYPE_(st[i].info) == STT_OBJECT_;
-      d->syms.p[j].unique = i;
-      d->syms.p[j].size = Read64(st[i].size);
-      d->syms.p[j].name = Read32(st[i].name);
-      d->syms.p[j].addr = Read64(st[i].value);
-      d->syms.p[j].rank =
-          -islocal + -isweak + -isabs + isprotected + isobject + isfunc;
-      d->syms.p[j].iscode =
-          DisIsText(d, Read64(st[i].value)) ? !isobject : isfunc;
-      d->syms.p[j].isabs = isabs;
-      ++j;
+      for (i = 0; i < n; ++i) {
+        if (ELF64_ST_TYPE_(st[i].info) == STT_SECTION_ ||
+            ELF64_ST_TYPE_(st[i].info) == STT_FILE_ || !Read32(st[i].name) ||
+            startswith(d->syms.stab + Read32(st[i].name), "v_") ||
+            !(0 <= Read32(st[i].name) && Read32(st[i].name) < stablen) ||
+            !Read64(st[i].value) ||
+            !(-0x800000000000 <= (i64)Read64(st[i].value) &&
+              (i64)Read64(st[i].value) < 0x800000000000)) {
+          continue;
+        }
+        isabs = Read16(st[i].shndx) == SHN_ABS_;
+        isweak = ELF64_ST_BIND_(st[i].info) == STB_WEAK_;
+        islocal = ELF64_ST_BIND_(st[i].info) == STB_LOCAL_;
+        isprotected = st[i].other == STV_PROTECTED_;
+        isfunc = ELF64_ST_TYPE_(st[i].info) == STT_FUNC_;
+        isobject = ELF64_ST_TYPE_(st[i].info) == STT_OBJECT_;
+        d->syms.p[j].unique = i;
+        d->syms.p[j].size = Read64(st[i].size);
+        d->syms.p[j].name = Read32(st[i].name);
+        d->syms.p[j].addr = Read64(st[i].value) + elf->aslr;
+        ELF_LOGF("SYMBOL %" PRIx64 " %" PRIx64 " %s", elf->aslr,
+                 d->syms.p[j].addr, d->syms.stab + d->syms.p[j].name);
+        d->syms.p[j].rank =
+            -islocal + -isweak + -isabs + isprotected + isobject + isfunc;
+        d->syms.p[j].iscode =
+            DisIsText(d, Read64(st[i].value)) ? !isobject : isfunc;
+        d->syms.p[j].isabs = isabs;
+        ++j;
+      }
+    } else {
+      LOGF("could not load elf symbol table");
     }
+  } else {
+    LOGF("could not load elf string table");
   }
   d->syms.i = j;
 }

@@ -256,15 +256,30 @@
 #define SIGRTMIN_LINUX  32
 #define SIGRTMAX_LINUX  64
 
-#define AT_PAGESZ_LINUX 6
-#define AT_UID_LINUX    11
-#define AT_EUID_LINUX   12
-#define AT_GID_LINUX    13
-#define AT_EGID_LINUX   14
-#define AT_CLKTCK_LINUX 17
-#define AT_SECURE_LINUX 23
-#define AT_RANDOM_LINUX 25
-#define AT_EXECFN_LINUX 31
+#define AT_NULL_LINUX          0
+#define AT_IGNORE_LINUX        1
+#define AT_EXECFD_LINUX        2
+#define AT_PHDR_LINUX          3
+#define AT_PHENT_LINUX         4
+#define AT_PHNUM_LINUX         5
+#define AT_PAGESZ_LINUX        6
+#define AT_BASE_LINUX          7
+#define AT_FLAGS_LINUX         8
+#define AT_ENTRY_LINUX         9
+#define AT_NOTELF_LINUX        10
+#define AT_UID_LINUX           11
+#define AT_EUID_LINUX          12
+#define AT_GID_LINUX           13
+#define AT_EGID_LINUX          14
+#define AT_PLATFORM_LINUX      15
+#define AT_HWCAP_LINUX         16
+#define AT_CLKTCK_LINUX        17
+#define AT_SECURE_LINUX        23
+#define AT_BASE_PLATFORM_LINUX 24
+#define AT_RANDOM_LINUX        25
+#define AT_HWCAP2_LINUX        26
+#define AT_EXECFN_LINUX        31
+#define AT_MINSIGSTKSZ_LINUX   51
 
 #define IFNAMSIZ_LINUX 16
 

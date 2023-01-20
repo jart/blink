@@ -127,9 +127,9 @@
 
 #define PN_XNUM_ 0xffff
 
-#define PF_X_        (1 << 0)
-#define PF_W_        (1 << 1)
-#define PF_R_        (1 << 2)
+#define PF_X_        1
+#define PF_W_        2
+#define PF_R_        4
 #define PF_MASKOS_   0x0ff00000
 #define PF_MASKPROC_ 0xf0000000
 
@@ -172,8 +172,8 @@
 #define R_X86_64_TLSDESC_         36
 #define R_X86_64_IRELATIVE_       37
 #define R_X86_64_RELATIVE64_      38
-#define R_X86_64_GOTPCRELX_       41 /* 6 bytes */
-#define R_X86_64_REX_GOTPCRELX_   42 /* 7 bytes */
+#define R_X86_64_GOTPCRELX_       41  // 6 bytes
+#define R_X86_64_REX_GOTPCRELX_   42  // 7 bytes
 #define R_X86_64_NUM_             43
 
 #define STB_LOCAL_      0
@@ -594,10 +594,7 @@ typedef struct Elf64_Chdr_ {
 
 typedef struct Elf64_Dyn_ {
   u8 tag[8];  // i64
-  union {
-    u8 val[8];  // u64
-    u8 ptr[8];  // u64
-  };
+  u8 val[8];  // u64
 } Elf64_Dyn_;
 
 typedef struct Elf64_Lib_ {

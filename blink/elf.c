@@ -84,7 +84,8 @@ Elf64_Shdr_ *GetElfSectionHeaderAddress(const Elf64_Ehdr_ *elf, size_t mapsize,
   return (Elf64_Shdr_ *)addr;
 }
 
-char *GetElfStringTable(const Elf64_Ehdr_ *elf, size_t mapsize) {
+static char *GetElfStringTableImpl(const Elf64_Ehdr_ *elf, size_t mapsize,
+                                   const char *kind) {
   int i;
   const char *name;
   Elf64_Shdr_ *shdr;
@@ -93,21 +94,29 @@ char *GetElfStringTable(const Elf64_Ehdr_ *elf, size_t mapsize) {
     if (Read32(shdr->type) == SHT_STRTAB_) {
       name = GetElfSectionName(elf, mapsize,
                                GetElfSectionHeaderAddress(elf, mapsize, i));
-      if (name && !strcmp(name, ".strtab")) {
+      if (name && !strcmp(name, kind)) {
         return (char *)GetElfSectionAddress(elf, mapsize, shdr);
       }
     }
   }
-  return NULL;
+  return 0;
 }
 
-Elf64_Sym_ *GetElfSymbolTable(const Elf64_Ehdr_ *elf, size_t mapsize,
-                              int *out_count) {
+char *GetElfStringTable(const Elf64_Ehdr_ *elf, size_t mapsize) {
+  char *res;
+  if (!(res = GetElfStringTableImpl(elf, mapsize, ".strtab"))) {
+    res = GetElfStringTableImpl(elf, mapsize, ".dynstr");
+  }
+  return res;
+}
+
+static Elf64_Sym_ *GetElfSymbolTableImpl(const Elf64_Ehdr_ *elf, size_t mapsize,
+                                         int *out_count, int kind) {
   int i;
   Elf64_Shdr_ *shdr;
   for (i = Read16(elf->shnum); i > 0; --i) {
     shdr = GetElfSectionHeaderAddress(elf, mapsize, i - 1);
-    if (Read32(shdr->type) == SHT_SYMTAB_) {
+    if (Read32(shdr->type) == kind) {
       if (Read64(shdr->entsize) != sizeof(Elf64_Sym_)) continue;
       if (out_count) {
         *out_count = Read64(shdr->size) / Read64(shdr->entsize);
@@ -115,5 +124,14 @@ Elf64_Sym_ *GetElfSymbolTable(const Elf64_Ehdr_ *elf, size_t mapsize,
       return (Elf64_Sym_ *)GetElfSectionAddress(elf, mapsize, shdr);
     }
   }
-  return NULL;
+  return 0;
+}
+
+Elf64_Sym_ *GetElfSymbolTable(const Elf64_Ehdr_ *elf, size_t mapsize,
+                              int *out_count) {
+  Elf64_Sym_ *res;
+  if (!(res = GetElfSymbolTableImpl(elf, mapsize, out_count, SHT_SYMTAB_))) {
+    res = GetElfSymbolTableImpl(elf, mapsize, out_count, SHT_DYNSYM_);
+  }
+  return res;
 }

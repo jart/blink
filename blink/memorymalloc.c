@@ -484,7 +484,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
 
   if (HasLinearMapping(s)) {
     if (virt <= 0) {
-      LOGF("app attempted to map null or negative in linear mode");
+      LOGF("app attempted to map %#" PRIx64 " in linear mode", virt);
       return enotsup();
     }
     if (virt & (pagesize - 1)) {

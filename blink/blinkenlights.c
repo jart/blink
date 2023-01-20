@@ -2079,7 +2079,7 @@ static void Redraw(bool force) {
 
 static void ReactiveDraw(void) {
   if (tuimode) {
-    LOGF("%" PRIx64 " %s ReactiveDraw", GetPc(m), tuimode ? "TUI" : "EXEC");
+    // LOGF("%" PRIx64 " %s ReactiveDraw", GetPc(m), tuimode ? "TUI" : "EXEC");
     Redraw(true);
     tick = speed;
   }
@@ -3149,7 +3149,7 @@ static void OnHelp(void) {
 
 static void HandleKeyboard(const char *k) {
   const char *p = k;
-  LOGF("HandleKeyboard(%#x [%c])", *k, isprint(*k) ? *k : '.');
+  // LOGF("HandleKeyboard(%#x [%c])", *k, isprint(*k) ? *k : '.');
   switch (*p++) {
     CASE('q', OnQ());
     CASE('v', OnV());
@@ -3219,7 +3219,7 @@ static void HandleKeyboard(const char *k) {
 
 static void ReadKeyboard(void) {
   char buf[64];
-  LOGF("ReadKeyboard");
+  // LOGF("ReadKeyboard");
   memset(buf, 0, sizeof(buf));
   dialog = NULL;
   if (readansi(ttyin, buf, sizeof(buf)) == -1) {

@@ -181,9 +181,16 @@ struct Elf {
   Elf64_Ehdr_ *ehdr;
   long size;
   i64 base;
+  u64 aslr;
   char *map;
   long mapsize;
   bool debugonce;
+  int at_execfd;
+  i64 at_base;
+  i64 at_phdr;
+  i64 at_phent;
+  i64 at_entry;
+  i64 at_phnum;
 };
 
 struct OpCache {
