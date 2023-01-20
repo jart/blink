@@ -18,6 +18,10 @@ ifneq ($(HOST_OS), Haiku)
 CFLAGS += -pthread
 endif
 
+ifeq ($(HOST_SYSTEM), Haiku)
+CFLAGS += -fpic
+endif
+
 CPPFLAGS +=				\
 	-iquote.			\
 	-D_POSIX_C_SOURCE=200809L	\
