@@ -55,15 +55,6 @@
 #include <sys/sockio.h>
 #endif
 
-#include "blink/assert.h"
-#include "blink/errno.h"
-#include "blink/loader.h"
-#include "blink/macros.h"
-#include "blink/mop.h"
-#include "blink/syscall.h"
-#include "blink/timespec.h"
-#include "blink/util.h"
-
 #ifdef __linux
 #include <sched.h>
 #endif
@@ -75,6 +66,7 @@
 #include "blink/errno.h"
 #include "blink/iovs.h"
 #include "blink/linux.h"
+#include "blink/loader.h"
 #include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -821,10 +813,14 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   _Static_assert(PROT_WRITE == 2, "");
   _Static_assert(PROT_EXEC == 4, "");
   int rc;
+  int unsupported;
   i64 i, beg, end;
   long gotsome = 0;
   if (!IsValidAddrSize(addr, size)) return einval();
-  if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) return einval();
+  if ((unsupported = prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))) {
+    LOGF("unsupported mprotect() protection: %#x", unsupported);
+    return einval();
+  }
   LOCK(&m->system->mmap_lock);
   rc = ProtectVirtual(m->system, addr, size, prot);
   if (rc != -1 && (prot & PROT_EXEC)) {

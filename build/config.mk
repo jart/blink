@@ -8,6 +8,7 @@ IMAGE_BASE_VIRTUAL = 0x23000000
 CFLAGS +=				\
 	-g				\
 	-O2				\
+	-fpie				\
 	-fno-ident			\
 	-fno-common			\
 	-fstrict-aliasing		\
