@@ -16,7 +16,7 @@ int UnXlatAccMode(int);
 int UnXlatSignal(int);
 int UnXlatItimer(int);
 int XlatAccess(int);
-int XlatClock(int);
+int XlatClock(int, clock_t *);
 int XlatErrno(int);
 int XlatLock(int);
 int XlatOpenFlags(int);

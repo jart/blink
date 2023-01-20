@@ -488,37 +488,41 @@ int XlatWait(int x) {
   return r;
 }
 
-int XlatClock(int x) {
+int XlatClock(int x, clock_t *clock) {
+  // Haiku defines CLOCK_REALTIME as -1
+  clock_t res;
   switch (x) {
-    XLAT(0, CLOCK_REALTIME);
-    XLAT(1, CLOCK_MONOTONIC);
-    XLAT(2, CLOCK_PROCESS_CPUTIME_ID);
-    XLAT(3, CLOCK_THREAD_CPUTIME_ID);
+    CASE(0, res = CLOCK_REALTIME);
+    CASE(1, res = CLOCK_MONOTONIC);
+    CASE(2, res = CLOCK_PROCESS_CPUTIME_ID);
+    CASE(3, res = CLOCK_THREAD_CPUTIME_ID);
 #ifdef CLOCK_REALTIME_COARSE
-    XLAT(5, CLOCK_REALTIME_COARSE);
+    CASE(5, res = CLOCK_REALTIME_COARSE);
 #elif defined(CLOCK_REALTIME_FAST)
-    XLAT(5, CLOCK_REALTIME_FAST);
+    CASE(5, res = CLOCK_REALTIME_FAST);
 #endif
 #ifdef CLOCK_MONOTONIC_COARSE
-    XLAT(6, CLOCK_MONOTONIC_COARSE);
+    CASE(6, res = CLOCK_MONOTONIC_COARSE);
 #elif defined(CLOCK_REALTIME_FAST)
-    XLAT(6, CLOCK_MONOTONIC_FAST);
+    CASE(6, res = CLOCK_MONOTONIC_FAST);
 #endif
 #ifdef CLOCK_MONOTONIC_RAW
-    XLAT(4, CLOCK_MONOTONIC_RAW);
+    CASE(4, res = CLOCK_MONOTONIC_RAW);
 #else
-    XLAT(4, CLOCK_MONOTONIC);
+    CASE(4, res = CLOCK_MONOTONIC);
 #endif
 #ifdef CLOCK_BOOTTIME
-    XLAT(7, CLOCK_BOOTTIME);
+    CASE(7, res = CLOCK_BOOTTIME);
 #endif
 #ifdef CLOCK_TAI
-    XLAT(11, CLOCK_TAI);
+    CASE(11, res = CLOCK_TAI);
 #endif
     default:
       LOGF("%s %d not supported yet", "clock", x);
       return einval();
   }
+  *clock = res;
+  return 0;
 }
 
 int XlatAccMode(int x) {

@@ -2724,9 +2724,10 @@ TryAgain:
 static int SysClockNanosleep(struct Machine *m, int clock, int flags,
                              i64 reqaddr, i64 remaddr) {
   int rc;
+  clock_t sysclock;
   struct timespec req, rem;
   struct timespec_linux gtimespec;
-  if ((clock = XlatClock(clock)) == -1) return -1;
+  if (XlatClock(clock, &sysclock) == -1) return -1;
   if (flags & ~TIMER_ABSTIME_LINUX) return einval();
   CopyFromUserRead(m, &gtimespec, reqaddr, sizeof(gtimespec));
   req.tv_sec = Read64(gtimespec.sec);
@@ -2861,9 +2862,11 @@ static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
 
 static int SysClockGettime(struct Machine *m, int clock, i64 ts) {
   int rc;
+  clock_t sysclock;
   struct timespec htimespec;
   struct timespec_linux gtimespec;
-  if ((rc = clock_gettime(XlatClock(clock), &htimespec)) != -1) {
+  if (XlatClock(clock, &sysclock) == -1) return -1;
+  if ((rc = clock_gettime(sysclock, &htimespec)) != -1) {
     if (ts) {
       Write64(gtimespec.sec, htimespec.tv_sec);
       Write64(gtimespec.nsec, htimespec.tv_nsec);
@@ -2875,9 +2878,11 @@ static int SysClockGettime(struct Machine *m, int clock, i64 ts) {
 
 static int SysClockGetres(struct Machine *m, int clock, i64 ts) {
   int rc;
+  clock_t sysclock;
   struct timespec htimespec;
   struct timespec_linux gtimespec;
-  if ((rc = clock_getres(XlatClock(clock), &htimespec)) != -1) {
+  if (XlatClock(clock, &sysclock) == -1) return -1;
+  if ((rc = clock_getres(sysclock, &htimespec)) != -1) {
     if (ts) {
       Write64(gtimespec.sec, htimespec.tv_sec);
       Write64(gtimespec.nsec, htimespec.tv_nsec);
