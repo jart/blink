@@ -289,8 +289,12 @@ static relegated void Pushad(P) {
 }
 
 static relegated void Popaw(P) {
+  u64 addr;
   u8 b[8][2];
-  CopyFromUser(m, b, m->ss + Read16(m->sp), sizeof(b));
+  addr = m->ss + Read16(m->sp);
+  if (CopyFromUser(m, b, addr, sizeof(b)) == -1) {
+    ThrowSegmentationFault(m, addr);
+  }
   Put16(m->sp, (Get32(m->sp) + sizeof(b)) & 0xffff);
   memcpy(m->di, b[0], 2);
   memcpy(m->si, b[1], 2);
@@ -303,8 +307,12 @@ static relegated void Popaw(P) {
 }
 
 static relegated void Popad(P) {
+  u64 addr;
   u8 b[8][4];
-  CopyFromUser(m, b, m->ss + Get32(m->sp), sizeof(b));
+  addr = m->ss + Get32(m->sp);
+  if (CopyFromUser(m, b, addr, sizeof(b)) == -1) {
+    ThrowSegmentationFault(m, addr);
+  }
   Put64(m->sp, (Get32(m->sp) + sizeof(b)) & 0xffffffff);
   memcpy(m->di, b[0], 4);
   memcpy(m->si, b[1], 4);

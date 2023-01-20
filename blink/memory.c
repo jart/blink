@@ -188,13 +188,13 @@ bool IsValidMemory(struct Machine *m, i64 virt, i64 size, int prot) {
   }
 }
 
-void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
+int VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
   u8 *p;
   u64 k;
   k = 4096 - (v & 4095);
   while (n) {
     k = MIN(k, n);
-    p = ResolveAddress(m, v);
+    if (!(p = LookupAddress(m, v))) return -1;
     if (d) {
       memcpy(r, p, k);
     } else {
@@ -205,25 +205,27 @@ void VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
     v += k;
     k = 4096;
   }
+  return 0;
 }
 
-u8 *CopyFromUser(struct Machine *m, void *dst, i64 src, u64 n) {
-  VirtualCopy(m, src, (char *)dst, n, true);
-  return (u8 *)dst;
+int CopyFromUser(struct Machine *m, void *dst, i64 src, u64 n) {
+  return VirtualCopy(m, src, (char *)dst, n, true);
 }
 
-void CopyFromUserRead(struct Machine *m, void *dst, i64 addr, u64 n) {
-  CopyFromUser(m, dst, addr, n);
+int CopyFromUserRead(struct Machine *m, void *dst, i64 addr, u64 n) {
+  if (CopyFromUser(m, dst, addr, n) == -1) return -1;
   SetReadAddr(m, addr, n);
+  return 0;
 }
 
-void CopyToUser(struct Machine *m, i64 dst, void *src, u64 n) {
-  VirtualCopy(m, dst, (char *)src, n, false);
+int CopyToUser(struct Machine *m, i64 dst, void *src, u64 n) {
+  return VirtualCopy(m, dst, (char *)src, n, false);
 }
 
-void CopyToUserWrite(struct Machine *m, i64 addr, void *src, u64 n) {
-  CopyToUser(m, addr, src, n);
+int CopyToUserWrite(struct Machine *m, i64 addr, void *src, u64 n) {
+  if (CopyToUser(m, addr, src, n) == -1) return -1;
   SetWriteAddr(m, addr, n);
+  return 0;
 }
 
 void CommitStash(struct Machine *m) {

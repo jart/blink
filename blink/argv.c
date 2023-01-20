@@ -20,6 +20,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/linux.h"
 #include "blink/log.h"
@@ -44,7 +45,7 @@ static size_t GetArgListLen(char **p) {
 static i64 PushBuffer(struct Machine *m, void *s, size_t n) {
   i64 sp = Get64(m->sp) - n;
   Put64(m->sp, sp);
-  CopyToUser(m, sp, s, n);
+  unassert(!CopyToUser(m, sp, s, n));
   return sp;
 }
 
@@ -98,7 +99,7 @@ void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
   for (i = 0; i < nall; ++i) {
     Write64(bytes + i * 8, bloc[i]);
   }
-  CopyToUser(m, sp, bytes, nall * 8);
+  unassert(!CopyToUser(m, sp, bytes, nall * 8));
   free(bytes);
   free(bloc);
 }

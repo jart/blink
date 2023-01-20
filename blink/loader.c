@@ -121,7 +121,8 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
     ELF_LOGF("copy %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64, vaddr,
              vaddr + (pagesize - skew), offset,
              offset + MIN(filesz, pagesize - skew));
-    CopyToUser(m, vaddr, (u8 *)image + offset, MIN(filesz, pagesize - skew));
+    unassert(!CopyToUser(m, vaddr, (u8 *)image + offset,
+                         MIN(filesz, pagesize - skew)));
     vaddr += pagesize - skew;
     offset += pagesize - skew;
     filesz -= MIN(filesz, pagesize - skew);
@@ -160,7 +161,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
       if (filesz) {
         ELF_LOGF("copy %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64,
                  start, start + filesz, offset, offset + filesz);
-        CopyToUser(m, start, (u8 *)image + offset, filesz);
+        unassert(!CopyToUser(m, start, (u8 *)image + offset, filesz));
       }
     } else {
       unassert(!filesz);

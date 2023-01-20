@@ -31,9 +31,6 @@
 #include "blink/log.h"
 #include "blink/macros.h"
 
-// TODO(jart): We should track the first hole.
-// TODO(jart): We should track recently used fds.
-
 void InitFds(struct Fds *fds) {
   fds->list = 0;
   pthread_mutex_init(&fds->lock, 0);

@@ -713,7 +713,10 @@ static int SysSchedSetaffinity(struct Machine *m,  //
   GetCpuCount();  // call for effect
   n = MIN(cpusetsize, CPU_SETSIZE / 8) * 8;
   if (!(mask = (u8 *)malloc(n / 8))) return -1;
-  CopyFromUserRead(m, mask, maskaddr, n / 8);
+  if (CopyFromUserRead(m, mask, maskaddr, n / 8) == -1) {
+    free(mask);
+    return -1;
+  }
   CPU_ZERO(&sysmask);
   for (i = 0; i < n; ++i) {
     if (mask[i / 8] & (1 << (i % 8))) {
@@ -750,7 +753,7 @@ static int SysSchedGetaffinity(struct Machine *m,  //
         mask[i / 8] |= 1 << (i % 8);
       }
     }
-    CopyToUserWrite(m, maskaddr, mask, n / 8);
+    if (CopyToUserWrite(m, maskaddr, mask, n / 8) == -1) rc = -1;
   }
   free(mask);
   return rc;
@@ -765,7 +768,7 @@ static int SysSchedGetaffinity(struct Machine *m,  //
   for (i = 0; i < count; ++i) {
     mask[i / 8] |= 1 << (i % 8);
   }
-  CopyToUserWrite(m, maskaddr, mask, rc);
+  if (CopyToUserWrite(m, maskaddr, mask, rc) == -1) rc = -1;
   free(mask);
   return rc;
 #endif
@@ -786,12 +789,10 @@ static int SysArchPrctl(struct Machine *m, int code, i64 addr) {
       return 0;
     case ARCH_GET_GS_LINUX:
       Write64(buf, m->gs);
-      CopyToUserWrite(m, addr, buf, 8);
-      return 0;
+      return CopyToUserWrite(m, addr, buf, 8);
     case ARCH_GET_FS_LINUX:
       Write64(buf, m->fs);
-      CopyToUserWrite(m, addr, buf, 8);
-      return 0;
+      return CopyToUserWrite(m, addr, buf, 8);
     default:
       return einval();
   }
@@ -1105,8 +1106,7 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
   getdomainname(u.domain, sizeof(u.domain) - 1);
 #endif
   strcpy(uts.domainname, u.domain);
-  CopyToUser(m, utsaddr, &uts, sizeof(uts));
-  return 0;
+  return CopyToUser(m, utsaddr, &uts, sizeof(uts));
 }
 
 static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
@@ -1138,11 +1138,11 @@ static u32 LoadAddrSize(struct Machine *m, i64 asa) {
   }
 }
 
-static void StoreAddrSize(struct Machine *m, i64 asa, socklen_t len) {
+static int StoreAddrSize(struct Machine *m, i64 asa, socklen_t len) {
   u8 buf[4];
-  if (!asa) return;
+  if (!asa) return 0;
   Write32(buf, len);
-  CopyToUserWrite(m, asa, buf, sizeof(buf));
+  return CopyToUserWrite(m, asa, buf, sizeof(buf));
 }
 
 static int LoadSockaddr(struct Machine *m, i64 sockaddr_addr, u32 sockaddr_size,
@@ -1156,18 +1156,18 @@ static int LoadSockaddr(struct Machine *m, i64 sockaddr_addr, u32 sockaddr_size,
   }
 }
 
-static void StoreSockaddr(struct Machine *m, i64 sockaddr_addr,
-                          i64 sockaddr_size_addr, const struct sockaddr *sa,
-                          socklen_t salen) {
+static int StoreSockaddr(struct Machine *m, i64 sockaddr_addr,
+                         i64 sockaddr_size_addr, const struct sockaddr *sa,
+                         socklen_t salen) {
   int got;
   u32 avail;
   struct sockaddr_storage_linux ss;
-  if (!sockaddr_addr) return;
-  if (!sockaddr_size_addr) return;
+  if (!sockaddr_addr) return 0;
+  if (!sockaddr_size_addr) return 0;
   avail = LoadAddrSize(m, sockaddr_size_addr);
-  if ((got = XlatSockaddrToLinux(&ss, sa, salen)) == -1) return;
-  StoreAddrSize(m, sockaddr_size_addr, got);
-  CopyToUserWrite(m, sockaddr_addr, &ss, MIN(got, avail));
+  if ((got = XlatSockaddrToLinux(&ss, sa, salen)) == -1) return -1;
+  if (StoreAddrSize(m, sockaddr_size_addr, got) == -1) return -1;
+  return CopyToUserWrite(m, sockaddr_addr, &ss, MIN(got, avail));
 }
 
 static int SysSocketName(struct Machine *m, i32 fildes, i64 sockaddr_addr,
@@ -1179,8 +1179,10 @@ static int SysSocketName(struct Machine *m, i32 fildes, i64 sockaddr_addr,
   addrlen = sizeof(addr);
   rc = SocketName(fildes, (struct sockaddr *)&addr, &addrlen);
   if (rc != -1) {
-    StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
-                  (struct sockaddr *)&addr, addrlen);
+    if (StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
+                      (struct sockaddr *)&addr, addrlen) == -1) {
+      rc = -1;
+    }
   }
   return rc;
 }
@@ -1353,8 +1355,9 @@ static int SysSetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   if ((syslevel = XlatSocketLevel(level)) == -1) return -1;
   if ((sysoptname = XlatSocketOptname(level, optname)) == -1) return -1;
   if (!(optval = calloc(1, optvalsize))) return -1;
-  CopyFromUserRead(m, optval, optvaladdr, optvalsize);
-  rc = setsockopt(fildes, syslevel, sysoptname, optval, optvalsize);
+  if ((rc = CopyFromUserRead(m, optval, optvaladdr, optvalsize)) != -1) {
+    rc = setsockopt(fildes, syslevel, sysoptname, optval, optvalsize);
+  }
   free(optval);
   return rc;
 }
@@ -1368,8 +1371,10 @@ static int SysGetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   int syslevel, sysoptname;
   if ((syslevel = XlatSocketLevel(level)) == -1) return -1;
   if ((sysoptname = XlatSocketOptname(level, optname)) == -1) return -1;
-  CopyFromUserRead(m, optvalsize_linux, optvalsizeaddr,
-                   sizeof(optvalsize_linux));
+  if (CopyFromUserRead(m, optvalsize_linux, optvalsizeaddr,
+                       sizeof(optvalsize_linux)) == -1) {
+    return -1;
+  }
   optvalsize = Read32(optvalsize_linux);
   if (optvalsize > 256) return einval();
   if (!(optval = calloc(1, optvalsize))) return -1;
@@ -1471,6 +1476,7 @@ static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
   void *buf;
   ssize_t rc;
   if (CheckFdAccess(m, fildes, false, EBADF) == -1) return -1;
+  if (!IsValidMemory(m, addr, size, PROT_WRITE)) return efault();
   if (size) {
     if ((buf = malloc(size))) {
       INTERRUPTIBLE(rc = pread(fildes, buf, size, offset));
@@ -1587,6 +1593,7 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
   dlz = sizeof(struct dirent_linux);
   if (size < dlz) return einval();
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
+  if (!IsValidMemory(m, addr, size, PROT_WRITE)) return efault();
   if (!fd->dirstream && !(fd->dirstream = fdopendir(fd->fildes))) {
     UnlockFd(fd);
     return -1;
@@ -1663,7 +1670,7 @@ static int IoctlTiocgwinsz(struct Machine *m, int fd, i64 addr,
   struct winsize_linux gws;
   if ((rc = fn(fd, TIOCGWINSZ, &ws)) != -1) {
     XlatWinsizeToLinux(&gws, &ws);
-    CopyToUserWrite(m, addr, &gws, sizeof(gws));
+    if (CopyToUserWrite(m, addr, &gws, sizeof(gws)) == -1) rc = -1;
   }
   return rc;
 }
@@ -1675,7 +1682,7 @@ static int IoctlTcgets(struct Machine *m, int fd, i64 addr,
   struct termios_linux gtio;
   if ((rc = fn(fd, &tio)) != -1) {
     XlatTermiosToLinux(&gtio, &tio);
-    CopyToUserWrite(m, addr, &gtio, sizeof(gtio));
+    if (CopyToUserWrite(m, addr, &gtio, sizeof(gtio)) == -1) rc = -1;
   }
   return rc;
 }
@@ -1684,7 +1691,7 @@ static int IoctlTcsets(struct Machine *m, int fd, int request, i64 addr,
                        int fn(int, int, const struct termios *)) {
   struct termios tio;
   struct termios_linux gtio;
-  CopyFromUserRead(m, &gtio, addr, sizeof(gtio));
+  if (CopyFromUserRead(m, &gtio, addr, sizeof(gtio)) == -1) return -1;
   XlatLinuxToTermios(&tio, &gtio);
   return fn(fd, request, &tio);
 }
@@ -1692,13 +1699,11 @@ static int IoctlTcsets(struct Machine *m, int fd, int request, i64 addr,
 static int IoctlTiocgpgrp(struct Machine *m, int fd, i64 addr) {
   int rc;
   u8 *pgrp;
-
 #ifdef __EMSCRIPTEN__
   // Force shells to disable job control in emscripten
   errno = ENOTTY;
   return -1;
 #endif
-
   if (!(pgrp = (u8 *)Schlep(m, addr, 4))) return -1;
   if ((rc = tcgetpgrp(fd)) == -1) return -1;
   Write32(pgrp, rc);
@@ -1723,7 +1728,10 @@ static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
   struct ifreq_linux ifreq_linux;
   struct ifconf_linux ifconf_linux;
   memset(&ifreq_linux, 0, sizeof(ifreq_linux));
-  CopyFromUserRead(m, &ifconf_linux, ifconf_addr, sizeof(ifconf_linux));
+  if (CopyFromUserRead(m, &ifconf_linux, ifconf_addr, sizeof(ifconf_linux)) ==
+      -1) {
+    return -1;
+  }
   bufsize = MIN(16384, Read64(ifconf_linux.len));
   if (!(buf = (char *)malloc(bufsize))) return -1;
   if (!(buf_linux = (char *)malloc(bufsize))) {
@@ -1774,7 +1782,10 @@ static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
                             unsigned long kind) {
   struct ifreq ifreq;
   struct ifreq_linux ifreq_linux;
-  CopyFromUserRead(m, &ifreq_linux, ifreq_addr, sizeof(ifreq_linux));
+  if (CopyFromUserRead(m, &ifreq_linux, ifreq_addr, sizeof(ifreq_linux)) ==
+      -1) {
+    return -1;
+  }
   memset(ifreq.ifr_name, 0, sizeof(ifreq.ifr_name));
   memcpy(ifreq.ifr_name, ifreq_linux.name,
          MIN(sizeof(ifreq_linux.name) - 1, sizeof(ifreq.ifr_name)));
@@ -1807,6 +1818,16 @@ static int IoctlFioclex(struct Machine *m, int fildes) {
 
 static int IoctlFionclex(struct Machine *m, int fildes) {
   return fcntl(fildes, F_SETFD, 0);
+}
+
+static int IoctlTcsbrk(struct Machine *m, int fildes, int drain) {
+  int rc;
+  if (drain) {
+    INTERRUPTIBLE(rc = tcdrain(fildes));
+  } else {
+    rc = tcsendbreak(fildes, 0);
+  }
+  return rc;
 }
 
 static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
@@ -1858,6 +1879,8 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlFioclex(m, fildes);
     case FIONCLEX_LINUX:
       return IoctlFionclex(m, fildes);
+    case TCSBRK_LINUX:
+      return IoctlTcsbrk(m, fildes, addr);
     default:
       LOGF("missing ioctl %#" PRIx64, request);
       return einval();
@@ -1929,7 +1952,7 @@ static int SysFstat(struct Machine *m, i32 fd, i64 staddr) {
   struct stat_linux gst;
   if ((rc = fstat(fd, &st)) != -1) {
     XlatStatToLinux(&gst, &st);
-    CopyToUserWrite(m, staddr, &gst, sizeof(gst));
+    if (CopyToUserWrite(m, staddr, &gst, sizeof(gst)) == -1) rc = -1;
   }
   return rc;
 }
@@ -1978,7 +2001,7 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
   if ((rc = fstatat(GetDirFildes(dirfd), path, &st, XlatFstatatFlags(flags))) !=
       -1) {
     XlatStatToLinux(&gst, &st);
-    CopyToUserWrite(m, staddr, &gst, sizeof(gst));
+    if (CopyToUserWrite(m, staddr, &gst, sizeof(gst)) == -1) rc = -1;
   }
   return rc;
 }
@@ -2128,7 +2151,9 @@ static int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
   int syscmd;
   struct flock flock;
   struct flock_linux flock_linux;
-  CopyFromUserRead(m, &flock_linux, arg, sizeof(flock_linux));
+  if (CopyFromUserRead(m, &flock_linux, arg, sizeof(flock_linux))) {
+    return -1;
+  }
   if (cmd == F_SETLK_LINUX) {
     syscmd = F_SETLK;
   } else if (cmd == F_SETLKW_LINUX) {
@@ -2229,7 +2254,7 @@ static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
   if (!(buf = (char *)malloc(size))) return -1;
   if ((rc = readlinkat(GetDirFildes(dirfd), LoadStr(m, path), buf, size)) !=
       -1) {
-    CopyToUserWrite(m, bufaddr, buf, rc);
+    if (CopyToUserWrite(m, bufaddr, buf, rc) == -1) rc = -1;
   }
   free(buf);
   return rc;
@@ -2348,9 +2373,9 @@ static bool CanEmulateExecutable(const char *prog) {
 
 static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   char *prog, **argv, **envp;
-  prog = CopyStr(m, pa);
-  argv = CopyStrList(m, aa);
-  envp = CopyStrList(m, ea);
+  if (!(prog = CopyStr(m, pa))) return -1;
+  if (!(argv = CopyStrList(m, aa))) return -1;
+  if (!(envp = CopyStrList(m, ea))) return -1;
   LOCK(&m->system->exec_lock);
   SYS_LOGF("execve(%s)", prog);
   execve(prog, argv, envp);
@@ -2375,7 +2400,13 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
   struct rusage hrusage;
   struct rusage_linux grusage;
   if ((options = XlatWait(options)) == -1) return -1;
-#if !defined(__EMSCRIPTEN__)
+  if ((opt_out_wstatus_addr && !IsValidMemory(m, opt_out_wstatus_addr,
+                                              sizeof(gwstatusb), PROT_WRITE)) ||
+      (opt_out_rusage_addr &&
+       !IsValidMemory(m, opt_out_rusage_addr, sizeof(grusage), PROT_WRITE))) {
+    return efault();
+  }
+#ifndef __EMSCRIPTEN__
   INTERRUPTIBLE(rc = wait4(pid, &wstatus, options, &hrusage));
 #else
   memset(&hrusage, 0, sizeof(hrusage));
@@ -2411,7 +2442,9 @@ static int SysGetrusage(struct Machine *m, i32 resource, i64 rusageaddr) {
   struct rusage_linux grusage;
   if ((rc = getrusage(XlatRusage(resource), &hrusage)) != -1) {
     XlatRusageToLinux(&grusage, &hrusage);
-    CopyToUserWrite(m, rusageaddr, &grusage, sizeof(grusage));
+    if (CopyToUserWrite(m, rusageaddr, &grusage, sizeof(grusage)) == -1) {
+      rc = -1;
+    }
   }
   return rc;
 }
@@ -2422,7 +2455,7 @@ static int SysGetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
   struct rlimit_linux lux;
   if ((rc = getrlimit(XlatResource(resource), &rlim)) != -1) {
     XlatRlimitToLinux(&lux, &rlim);
-    CopyToUserWrite(m, rlimitaddr, &lux, sizeof(lux));
+    if (CopyToUserWrite(m, rlimitaddr, &lux, sizeof(lux)) == -1) rc = -1;
   }
   return rc;
 }
@@ -2432,7 +2465,7 @@ static int SysSetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
   struct rlimit rlim;
   struct rlimit_linux lux;
   if ((sysresource = XlatResource(resource)) == -1) return -1;
-  CopyFromUserRead(m, &lux, rlimitaddr, sizeof(lux));
+  if (CopyFromUserRead(m, &lux, rlimitaddr, sizeof(lux)) == -1) return -1;
   XlatLinuxToRlimit(sysresource, &rlim, &lux);
   return setrlimit(sysresource, &rlim);
 }
@@ -2443,6 +2476,10 @@ static int SysPrlimit(struct Machine *m, i32 pid, i32 resource,
   struct rlimit old;
   struct rlimit_linux lux;
   if (pid && pid != m->system->pid) return eperm();
+  if ((old_rlimit_addr &&
+       !IsValidMemory(m, old_rlimit_addr, sizeof(lux), PROT_WRITE))) {
+    return efault();
+  }
   if ((rc = getrlimit(XlatResource(resource), &old)) != -1) {
     if (new_rlimit_addr) {
       rc = SysSetrlimit(m, XlatResource(resource), new_rlimit_addr);
@@ -2812,11 +2849,15 @@ static int SysGettimeofday(struct Machine *m, i64 tv, i64 tz) {
   if ((rc = gettimeofday(&htimeval, tz ? &htimezone : 0)) != -1) {
     Write64(gtimeval.sec, htimeval.tv_sec);
     Write64(gtimeval.usec, htimeval.tv_usec);
-    CopyToUserWrite(m, tv, &gtimeval, sizeof(gtimeval));
+    if (CopyToUserWrite(m, tv, &gtimeval, sizeof(gtimeval)) == -1) {
+      return -1;
+    }
     if (tz) {
       Write32(gtimezone.minuteswest, htimezone.tz_minuteswest);
       Write32(gtimezone.dsttime, htimezone.tz_dsttime);
-      CopyToUserWrite(m, tz, &gtimezone, sizeof(gtimezone));
+      if (CopyToUserWrite(m, tz, &gtimezone, sizeof(gtimezone)) == -1) {
+        return -1;
+      }
     }
   }
   return rc;
@@ -2828,7 +2869,7 @@ static i64 SysTime(struct Machine *m, i64 addr) {
   if ((secs = time(0)) == (time_t)-1) return -1;
   if (addr) {
     Write64(buf, secs);
-    CopyToUserWrite(m, addr, buf, sizeof(buf));
+    if (CopyToUserWrite(m, addr, buf, sizeof(buf)) == -1) return -1;
   }
   return secs;
 }
@@ -2843,7 +2884,7 @@ static i64 SysTimes(struct Machine *m, i64 bufaddr) {
   Write64(gtms.stime, tms.tms_stime);
   Write64(gtms.cutime, tms.tms_cutime);
   Write64(gtms.cstime, tms.tms_cstime);
-  CopyToUserWrite(m, bufaddr, &gtms, sizeof(gtms));
+  if (CopyToUserWrite(m, bufaddr, &gtms, sizeof(gtms)) == -1) return -1;
   return res;
 }
 

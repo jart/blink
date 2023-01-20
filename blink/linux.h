@@ -499,6 +499,7 @@
 #define FIONBIO_LINUX  0x5421
 #define FIOCLEX_LINUX  0x5451
 #define FIONCLEX_LINUX 0x5450
+#define TCSBRK_LINUX   0x5409
 
 struct iovec_linux {
   u8 base[8];
