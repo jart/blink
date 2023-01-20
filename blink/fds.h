@@ -12,14 +12,17 @@
 
 #define FD_CONTAINER(e) DLL_CONTAINER(struct Fd, elem, e)
 
+struct winsize;
+
 struct FdCb {
   int (*close)(int);
   ssize_t (*readv)(int, const struct iovec *, int);
   ssize_t (*writev)(int, const struct iovec *, int);
-  int (*ioctl)(int, unsigned long, ...);
   int (*poll)(struct pollfd *, nfds_t, int);
   int (*tcgetattr)(int, struct termios *);
   int (*tcsetattr)(int, int, const struct termios *);
+  int (*tcgetwinsize)(int, struct winsize *);
+  int (*tcsetwinsize)(int, const struct winsize *);
 };
 
 struct Fd {

@@ -158,6 +158,14 @@ ssize_t em_readv(int fd, const struct iovec *iov, int iovcnt) {
 }
 #endif
 
+static int my_tcgetwinsize(int fd, struct winsize *ws) {
+  return ioctl(fd, TIOCGWINSZ, ws);
+}
+
+static int my_tcsetwinsize(int fd, const struct winsize *ws) {
+  return ioctl(fd, TIOCSWINSZ, ws);
+}
+
 const struct FdCb kFdCbHost = {
     .close = close,
 #ifdef __EMSCRIPTEN__
@@ -166,7 +174,6 @@ const struct FdCb kFdCbHost = {
     .readv = readv,
 #endif
     .writev = writev,
-    .ioctl = SystemIoctl,
 #ifdef __EMSCRIPTEN__
     .poll = em_poll,
 #else
@@ -174,6 +181,8 @@ const struct FdCb kFdCbHost = {
 #endif
     .tcgetattr = tcgetattr,
     .tcsetattr = tcsetattr,
+    .tcgetwinsize = my_tcgetwinsize,
+    .tcsetwinsize = my_tcsetwinsize,
 };
 
 void AddStdFd(struct Fds *fds, int fildes) {
@@ -1129,6 +1138,34 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
   return fildes;
 }
 
+static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
+                         i64 pipefds_addr) {
+  u8 fds_linux[2][4];
+  int rc, flags, sysflags, fds[2];
+  flags = type & (SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
+  type &= ~(SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
+  if ((type = XlatSocketType(type)) == -1) return -1;
+  if ((family = XlatSocketFamily(family)) == -1) return -1;
+  if ((protocol = XlatSocketProtocol(protocol)) == -1) return -1;
+  if (flags) LOCK(&m->system->exec_lock);
+  if ((rc = socketpair(family, type, protocol, fds)) != -1) {
+    FixupSock(fds[0], flags);
+    FixupSock(fds[1], flags);
+    LockFds(&m->system->fds);
+    sysflags = O_RDWR;
+    if (flags & SOCK_CLOEXEC_LINUX) sysflags |= O_CLOEXEC;
+    if (flags & SOCK_NONBLOCK_LINUX) sysflags |= O_NDELAY;
+    unassert(AddFd(&m->system->fds, fds[0], sysflags));
+    unassert(AddFd(&m->system->fds, fds[1], sysflags));
+    UnlockFds(&m->system->fds);
+    Write32(fds_linux[0], fds[0]);
+    Write32(fds_linux[1], fds[1]);
+    CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux));
+  }
+  if (flags) UNLOCK(&m->system->exec_lock);
+  return rc;
+}
+
 static u32 LoadAddrSize(struct Machine *m, i64 asa) {
   const u8 *p;
   if (asa && (p = (const u8 *)Schlep(m, asa, 4))) {
@@ -1664,15 +1701,24 @@ static int SysFadvise(struct Machine *m, u32 fd, u64 offset, u64 len,
 }
 
 static int IoctlTiocgwinsz(struct Machine *m, int fd, i64 addr,
-                           int fn(int, unsigned long, ...)) {
+                           int fn(int, struct winsize *)) {
   int rc;
   struct winsize ws;
   struct winsize_linux gws;
-  if ((rc = fn(fd, TIOCGWINSZ, &ws)) != -1) {
+  if ((rc = fn(fd, &ws)) != -1) {
     XlatWinsizeToLinux(&gws, &ws);
     if (CopyToUserWrite(m, addr, &gws, sizeof(gws)) == -1) rc = -1;
   }
   return rc;
+}
+
+static int IoctlTiocswinsz(struct Machine *m, int fd, i64 addr,
+                           int fn(int, const struct winsize *)) {
+  struct winsize ws;
+  struct winsize_linux gws;
+  if (CopyFromUserRead(m, &gws, addr, sizeof(gws)) == -1) return -1;
+  XlatWinsizeToHost(&ws, &gws);
+  return fn(fd, &ws);
 }
 
 static int IoctlTcgets(struct Machine *m, int fd, i64 addr,
@@ -1832,25 +1878,30 @@ static int IoctlTcsbrk(struct Machine *m, int fildes, int drain) {
 
 static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
   struct Fd *fd;
-  int (*ioctl_impl)(int, unsigned long, ...);
   int (*tcgetattr_impl)(int, struct termios *);
   int (*tcsetattr_impl)(int, int, const struct termios *);
+  int (*tcgetwinsize_impl)(int, struct winsize *);
+  int (*tcsetwinsize_impl)(int, const struct winsize *);
   LockFds(&m->system->fds);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
-    unassert(ioctl_impl = fd->cb->ioctl);
     unassert(tcgetattr_impl = fd->cb->tcgetattr);
     unassert(tcsetattr_impl = fd->cb->tcsetattr);
+    unassert(tcgetwinsize_impl = fd->cb->tcgetwinsize);
+    unassert(tcsetwinsize_impl = fd->cb->tcsetwinsize);
   } else {
-    ioctl_impl = 0;
     tcsetattr_impl = 0;
     tcgetattr_impl = 0;
+    tcgetwinsize_impl = 0;
+    tcsetwinsize_impl = 0;
   }
   UnlockFds(&m->system->fds);
   if (!fd) return -1;
   switch (request) {
     case TIOCGWINSZ_LINUX:
-      return IoctlTiocgwinsz(m, fildes, addr, ioctl_impl);
+      return IoctlTiocgwinsz(m, fildes, addr, tcgetwinsize_impl);
+    case TIOCSWINSZ_LINUX:
+      return IoctlTiocswinsz(m, fildes, addr, tcsetwinsize_impl);
     case TCGETS_LINUX:
       return IoctlTcgets(m, fildes, addr, tcgetattr_impl);
     case TCSETS_LINUX:
@@ -3624,6 +3675,7 @@ void OpSyscall(P) {
     SYSCALL(0x032, SysListen, (m, di, si));
     SYSCALL(0x033, SysGetsockname, (m, di, si, dx));
     SYSCALL(0x034, SysGetpeername, (m, di, si, dx));
+    SYSCALL(0x035, SysSocketpair, (m, di, si, dx, r0));
     SYSCALL(0x036, SysSetsockopt, (m, di, si, dx, r0, r8));
     SYSCALL(0x037, SysGetsockopt, (m, di, si, dx, r0, r8));
     SYSCALL(0x038, SysClone, (m, di, si, dx, r0, r8, r9));

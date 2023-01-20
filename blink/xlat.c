@@ -895,6 +895,12 @@ void XlatWinsizeToLinux(struct winsize_linux *dst, const struct winsize *src) {
   Write16(dst->col, src->ws_col);
 }
 
+void XlatWinsizeToHost(struct winsize *dst, const struct winsize_linux *src) {
+  memset(dst, 0, sizeof(*dst));
+  dst->ws_row = Read16(src->row);
+  dst->ws_col = Read16(src->col);
+}
+
 void XlatSigsetToLinux(u8 dst[8], const sigset_t *src) {
   u64 set = 0;
   int syssig, linuxsig;

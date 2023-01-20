@@ -77,8 +77,8 @@ void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
   naux = 10;
   if (elf->at_entry) {
     naux += 4;
-    if (elf->at_execfd != -1) {
-      naux += 2;
+    if (elf->at_base != -1) {
+      naux += 1;
     }
   }
   nenv = GetArgListLen(vars);
@@ -101,9 +101,8 @@ void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
     PUSH_AUXV(AT_PHENT_LINUX, elf->at_phent);
     PUSH_AUXV(AT_PHNUM_LINUX, elf->at_phnum);
     PUSH_AUXV(AT_ENTRY_LINUX, elf->at_entry);
-    if (elf->at_execfd != -1) {
+    if (elf->at_base != -1) {
       PUSH_AUXV(AT_BASE_LINUX, elf->at_base);
-      PUSH_AUXV(AT_EXECFD_LINUX, elf->at_execfd);
     }
   }
   unassert(!naux);

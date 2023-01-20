@@ -50,6 +50,7 @@
 #include "blink/flags.h"
 #include "blink/fpu.h"
 #include "blink/high.h"
+#include "blink/linux.h"
 #include "blink/loader.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -2351,21 +2352,12 @@ static int OnPtyFdTiocgwinsz(int fd, struct winsize *ws) {
   return 0;
 }
 
-static int OnPtyFdTcsets(int fd, u64 request, struct termios *c) {
+static int OnPtyFdTiocswinsz(int fd, const struct winsize *ws) {
   return 0;
 }
 
-static int OnPtyFdIoctl(int fd, unsigned long request, ...) {
-  va_list va;
-  struct winsize *ws;
-  if (request == TIOCGWINSZ) {
-    va_start(va, request);
-    ws = va_arg(va, struct winsize *);
-    va_end(va);
-    return OnPtyFdTiocgwinsz(fd, ws);
-  } else {
-    return einval();
-  }
+static int OnPtyFdTcsets(int fd, u64 request, struct termios *c) {
+  return 0;
 }
 
 static int OnPtyTcgetattr(int fd, struct termios *c) {
@@ -2448,10 +2440,11 @@ static const struct FdCb kFdCbPty = {
     .close = OnPtyFdClose,
     .readv = OnPtyFdReadv,
     .writev = OnPtyFdWritev,
-    .ioctl = OnPtyFdIoctl,
     .poll = OnPtyFdPoll,
     .tcgetattr = OnPtyTcgetattr,
     .tcsetattr = OnPtyTcsetattr,
+    .tcgetwinsize = OnPtyFdTiocgwinsz,
+    .tcsetwinsize = OnPtyFdTiocswinsz,
 };
 
 static void LaunchDebuggerReactively(void) {

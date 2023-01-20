@@ -215,35 +215,6 @@ static void LoadFlatExecutable(struct Machine *m, intptr_t base,
   m->ip = base;
 }
 
-static void ApplyRelocations(struct Machine *m, Elf64_Ehdr_ *ehdr, size_t esize,
-                             u64 base, u64 aslr, u64 dt_rela, u64 dt_relasz,
-                             u64 dt_relaent) {
-  u64 addr;
-  u8 word[8];
-  Elf64_Rela_ *rela;
-  if (!aslr) return;
-  if (!dt_rela) return;
-  dt_relaent = MAX(dt_relaent, sizeof(Elf64_Rela_));
-  CheckElfAddress(ehdr, esize, (intptr_t)ehdr + dt_rela, dt_relasz);
-  for (rela = (Elf64_Rela_ *)((intptr_t)ehdr + (intptr_t)dt_rela);
-       rela < (Elf64_Rela_ *)((intptr_t)ehdr + (intptr_t)dt_rela +
-                              (intptr_t)dt_relasz - sizeof(Elf64_Rela_));
-       rela = (Elf64_Rela_ *)((intptr_t)rela + (intptr_t)dt_relaent)) {
-    switch (ELF64_R_TYPE_(Read64(rela->info))) {
-      case R_X86_64_RELATIVE_:
-        addr = base + Read64(rela->offset);
-        if (CopyFromUser(m, word, addr, 8)) {
-          LOGF("failed to read relocation at %" PRIx64, addr);
-          exit(127);
-        }
-        unassert(!CopyToUser(m, addr, word, 8));
-        break;
-      default:
-        break;
-    }
-  }
-}
-
 static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
   int i;
   Elf64_Phdr_ *phdr;
@@ -269,7 +240,6 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
         end = LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, end, aslr, fd);
         break;
       case PT_INTERP_:
-        elf->at_execfd = fd;
         interpreter = (char *)elf->ehdr + Read64(phdr->offset);
         if (interpreter[Read64(phdr->filesz) - 1]) {
           ELF_LOGF("elf interpreter not nul terminated");
@@ -427,9 +397,8 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
   unassert(prog);
   elf = &m->system->elf;
   elf->prog = prog;
-  elf->at_execfd = -1;
   elf->at_phdr = 0;
-  elf->at_base = 0;
+  elf->at_base = -1;
   elf->at_phent = 56;
   free(g_progname);
   g_progname = strdup(prog);
@@ -495,7 +464,5 @@ error: unsupported executable; we need:\n\
   pagesize = GetSystemPageSize();
   pagesize = MAX(4096, pagesize);
   m->system->brk = ROUNDUP(m->system->brk, pagesize);
-  if (elf->at_execfd == -1) {
-    unassert(!close(fd));
-  }
+  unassert(!close(fd));
 }

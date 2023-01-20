@@ -185,7 +185,6 @@ struct Elf {
   char *map;
   long mapsize;
   bool debugonce;
-  int at_execfd;
   i64 at_base;
   i64 at_phdr;
   i64 at_phent;
