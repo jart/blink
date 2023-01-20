@@ -55,6 +55,7 @@ extern char **environ;
 static bool FLAG_zero;
 static bool FLAG_nojit;
 static bool FLAG_nolinear;
+static char g_pathbuf[PATH_MAX];
 
 static void OnSigSys(int sig) {
   // do nothing
@@ -226,5 +227,12 @@ int main(int argc, char *argv[]) {
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
   WriteErrorInit();
   HandleSigs();
-  return Exec(argv[optind_], argv + optind_ + FLAG_zero, environ);
+  if (!Commandv(argv[optind_], g_pathbuf, sizeof(g_pathbuf))) {
+    WriteErrorString(argv[0]);
+    WriteErrorString(": command not found: ");
+    WriteErrorString(argv[optind_]);
+    WriteErrorString("\n");
+    exit(127);
+  }
+  return Exec(g_pathbuf, argv + optind_ + FLAG_zero, environ);
 }

@@ -438,6 +438,12 @@ Blink supports several different executable formats. You can run:
 
 Here's the current list of Blink's known quirks and tradeoffs.
 
+### DSOs
+
+Blink works best if you use static executables, because only the main
+executable image is currently able to benefit from JIT. See the self
+modifying code section below and note that DSOs count as SMC.
+
 ### Flags
 
 Flag dependencies may not carry across function call boundaries under

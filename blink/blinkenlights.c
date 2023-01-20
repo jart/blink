@@ -347,6 +347,7 @@ static struct timespec statusexpires;
 static struct termios oldterm;
 static char systemfailure[128];
 static struct sigaction oldsig[4];
+static char pathbuf[PATH_MAX];
 struct History g_history;
 
 static void Redraw(bool);
@@ -3642,7 +3643,12 @@ static void AddPath_StartOp_Tui(P) {
 
 int VirtualMachine(int argc, char *argv[]) {
   struct Dll *e;
-  codepath = argv[optind_++];
+  if (!Commandv(argv[optind_], pathbuf, sizeof(pathbuf))) {
+    fprintf(stderr, "%s: command not found: %s\n", argv[0], argv[optind_]);
+    exit(127);
+  }
+  codepath = pathbuf;
+  optind_++;
   do {
     action = 0;
     LoadProgram(m, codepath, argv + optind_ - 1, environ);
