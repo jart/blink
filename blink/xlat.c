@@ -1333,7 +1333,7 @@ void XlatLinuxToTermios(struct termios *dst, const struct termios_linux *src) {
   dst->c_oflag = XlatTermiosOflag(Read32(src->oflag));
   dst->c_cflag = XlatTermiosCflag(Read32(src->cflag));
   dst->c_lflag = XlatTermiosLflag(Read32(src->lflag));
-  switch ((speed = Read32(src->cflag) & CBAUD_LINUX)) {
+  switch (Read32(src->cflag) & CBAUD_LINUX) {
     case B0_LINUX:
       speed = B0;
       break;
@@ -1468,103 +1468,104 @@ void XlatLinuxToTermios(struct termios *dst, const struct termios_linux *src) {
 }
 
 void XlatTermiosToLinux(struct termios_linux *dst, const struct termios *src) {
-  speed_t speed;
+  int speed;
+  speed_t srcspeed;
   memset(dst, 0, sizeof(*dst));
   Write32(dst->iflag, UnXlatTermiosIflag(src->c_iflag));
   Write32(dst->oflag, UnXlatTermiosOflag(src->c_oflag));
   Write32(dst->cflag, UnXlatTermiosCflag(src->c_cflag));
   Write32(dst->lflag, UnXlatTermiosLflag(src->c_lflag));
-  if ((speed = cfgetospeed(src)) != (speed_t)-1) {
-    if (speed == B0) {
+  if ((srcspeed = cfgetospeed(src)) != (speed_t)-1) {
+    if (srcspeed == B0) {
       speed = B0_LINUX;
-    } else if (speed == B50) {
+    } else if (srcspeed == B50) {
       speed = B50_LINUX;
-    } else if (speed == B75) {
+    } else if (srcspeed == B75) {
       speed = B75_LINUX;
-    } else if (speed == B110) {
+    } else if (srcspeed == B110) {
       speed = B110_LINUX;
-    } else if (speed == B134) {
+    } else if (srcspeed == B134) {
       speed = B134_LINUX;
-    } else if (speed == B150) {
+    } else if (srcspeed == B150) {
       speed = B150_LINUX;
-    } else if (speed == B200) {
+    } else if (srcspeed == B200) {
       speed = B200_LINUX;
-    } else if (speed == B300) {
+    } else if (srcspeed == B300) {
       speed = B300_LINUX;
-    } else if (speed == B600) {
+    } else if (srcspeed == B600) {
       speed = B600_LINUX;
-    } else if (speed == B1200) {
+    } else if (srcspeed == B1200) {
       speed = B1200_LINUX;
-    } else if (speed == B1800) {
+    } else if (srcspeed == B1800) {
       speed = B1800_LINUX;
-    } else if (speed == B2400) {
+    } else if (srcspeed == B2400) {
       speed = B2400_LINUX;
-    } else if (speed == B4800) {
+    } else if (srcspeed == B4800) {
       speed = B4800_LINUX;
-    } else if (speed == B9600) {
+    } else if (srcspeed == B9600) {
       speed = B9600_LINUX;
-    } else if (speed == B19200) {
+    } else if (srcspeed == B19200) {
       speed = B19200_LINUX;
-    } else if (speed == B38400) {
+    } else if (srcspeed == B38400) {
       speed = B38400_LINUX;
 #ifdef B57600
-    } else if (speed == B57600) {
+    } else if (srcspeed == B57600) {
       speed = B57600_LINUX;
 #endif
 #ifdef B115200
-    } else if (speed == B115200) {
+    } else if (srcspeed == B115200) {
       speed = B115200_LINUX;
 #endif
 #ifdef B230400
-    } else if (speed == B230400) {
+    } else if (srcspeed == B230400) {
       speed = B230400_LINUX;
 #endif
 #ifdef B460800
-    } else if (speed == B460800) {
+    } else if (srcspeed == B460800) {
       speed = B460800_LINUX;
 #endif
 #ifdef B500000
-    } else if (speed == B500000) {
+    } else if (srcspeed == B500000) {
       speed = B500000_LINUX;
 #endif
 #ifdef B576000
-    } else if (speed == B576000) {
+    } else if (srcspeed == B576000) {
       speed = B576000_LINUX;
 #endif
 #ifdef B921600
-    } else if (speed == B921600) {
+    } else if (srcspeed == B921600) {
       speed = B921600_LINUX;
 #endif
 #ifdef B1000000
-    } else if (speed == B1000000) {
+    } else if (srcspeed == B1000000) {
       speed = B1000000_LINUX;
 #endif
 #ifdef B1152000
-    } else if (speed == B1152000) {
+    } else if (srcspeed == B1152000) {
       speed = B1152000_LINUX;
 #endif
 #ifdef B1500000
-    } else if (speed == B1500000) {
+    } else if (srcspeed == B1500000) {
       speed = B1500000_LINUX;
 #endif
 #ifdef B2000000
-    } else if (speed == B2000000) {
+    } else if (srcspeed == B2000000) {
       speed = B2000000_LINUX;
 #endif
 #ifdef B2500000
-    } else if (speed == B2500000) {
+    } else if (srcspeed == B2500000) {
       speed = B2500000_LINUX;
 #endif
 #ifdef B3000000
-    } else if (speed == B3000000) {
+    } else if (srcspeed == B3000000) {
       speed = B3000000_LINUX;
 #endif
 #ifdef B3500000
-    } else if (speed == B3500000) {
+    } else if (srcspeed == B3500000) {
       speed = B3500000_LINUX;
 #endif
 #ifdef B4000000
-    } else if (speed == B4000000) {
+    } else if (srcspeed == B4000000) {
       speed = B4000000_LINUX;
 #endif
     } else {
