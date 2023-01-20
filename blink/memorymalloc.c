@@ -530,7 +530,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
            (greenfield && errno == MAP_DENIED)
                ? "requested memory overlapped blink image or system memory. "
                  "try using `blink -m` to disable memory optimizations, or "
-                 "try compliing blink using -Wl,--image-base=0x23000000 or "
+                 "try compiling blink using -Wl,--image-base=0x23000000 or "
                  "possibly -Wl,-Ttext-segment=0x23000000 in LDFLAGS"
                : strerror(errno));
       PanicDueToMmap();
