@@ -408,6 +408,14 @@ MICRO_OP static u8 *ResolveHost(i64 v) {
   return ToHost(v);
 }
 
+MICRO_OP static u8 *GetBegPtr(struct Machine *m, long i) {
+  return m->beg + i;
+}
+
+MICRO_OP static u8 *GetWegPtr(struct Machine *m, long i) {
+  return m->weg[i];
+}
+
 MICRO_OP static u8 *GetXmmPtr(struct Machine *m, long i) {
   return m->xmm[i];
 }
@@ -1697,21 +1705,27 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         }
         break;
 
-      case 'Q':  // res0 = GetXmmPointer(RexrReg)
+      case 'Q':  // res0 = GetRegPointer(RexrReg)
         Jitter(A,
                "a1i"  // arg1 = register index
                "q"    // arg0 = machine
                "m",   // call micro-op
-               RexrReg(rde), GetXmmPtr);
+               !log2sz ? (u64)kByteReg[RexrReg(rde)] : RexrReg(rde),
+               !log2sz      ? GetBegPtr
+               : log2sz < 4 ? GetWegPtr
+                            : GetXmmPtr);
         break;
 
-      case 'P':  // res0 = GetXmmOrMemPointer(RexbRm)
+      case 'P':  // res0 = GetRegOrMemPointer(RexbRm)
         if (IsModrmRegister(rde)) {
           Jitter(A,
                  "a1i"  // arg1 = register index
                  "q"    // arg0 = machine
                  "m",   // call micro-op
-                 RexbRm(rde), GetXmmPtr);
+                 !log2sz ? (u64)kByteReg[RexbRm(rde)] : RexbRm(rde),
+                 !log2sz      ? GetBegPtr
+                 : log2sz < 4 ? GetWegPtr
+                              : GetXmmPtr);
         } else if (HasLinearMapping(m)) {
           if (!kSkew) {
             Jitter(A, "L");  // load effective address

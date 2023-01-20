@@ -166,9 +166,9 @@ void OpShuffle(P) {
   IGNORE_RACES_END();
   if (IsMakingPath(m) && kernel) {
     Jitter(A,
-           "P"      // res0 = GetXmmOrMemPointer(RexbRm)
+           "z4P"    // res0 = GetXmmOrMemPointer(RexbRm)
            "r0s1="  // sav1 = res0
-           "Q"      // res0 = GetXmmPointer(RexrReg)
+           "z4Q"    // res0 = GetXmmPointer(RexrReg)
            "a2i"    // arg2 = uimm0
            "s1a1="  // arg1 = sav1
            "t"      // arg0 = res0
@@ -407,7 +407,7 @@ static void OpPsd(P, float fs(float x, float y), double fd(double x, double y),
     d1(GetModrmRegisterXmmPointerRead8(A), m, RexrReg(rde));
     if (IsMakingPath(m)) {
       Jitter(A,
-             "P"      // res0 = GetXmmOrMemPointer(RexbRm)
+             "z4P"    // res0 = GetXmmOrMemPointer(RexbRm)
              "a2i"    // arg2 = RexrReg(rde)
              "s0a1="  // arg1 = machine
              "t"      // arg0 = res0

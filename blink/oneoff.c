@@ -32,6 +32,5 @@
 #include "blink/util.h"
 
 int main(int argc, char *argv[]) {
-  printf("%d\n", bsr(UINTPTR_MAX));
   return 0;
 }

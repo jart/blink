@@ -112,9 +112,9 @@ static dontinline void OpSse(P, void MmxKernel(u8[8], const u8[8]),
   IGNORE_RACES_END();
   if (IsMakingPath(m)) {
     Jitter(A,
-           "P"      // res0 = GetXmmOrMemPointer(RexbRm)
+           "z4P"    // res0 = GetXmmOrMemPointer(RexbRm)
            "r0s1="  // sav1 = res0
-           "Q"      // res0 = GetXmmPointer(RexrReg)
+           "z4Q"    // res0 = GetXmmPointer(RexrReg)
            "s1a1="  // arg1 = sav1
            "t"      // arg0 = res0
            "c",     // call function

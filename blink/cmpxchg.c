@@ -39,11 +39,39 @@ void OpCmpxchgEbAlGb(P) {
   atomic_store_explicit((_Atomic(u8) *)m->ax, ax, memory_order_relaxed);
 }
 
-void OpCmpxchgEvqpRaxGvqp(P) {
-  u8 *p, *q;
+static void LockCmpxchgMem32(struct Machine *m, u64 rde, u8 *p) {
+  u8 *q;
+  int c;
+  u32 x, z;
   bool didit;
   q = RegRexrReg(m, rde);
-  p = GetModrmRegisterWordPointerWriteOszRexw(A);
+  if (!((intptr_t)p & 3)) {
+    x = atomic_load_explicit((_Atomic(u32) *)m->ax, memory_order_relaxed);
+    didit = atomic_compare_exchange_strong_explicit(
+        (_Atomic(u32) *)p, &x,
+        atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed),
+        memory_order_acq_rel, memory_order_acquire);
+    z = Get32(m->ax) - Little32(x);
+    c = Get32(m->ax) < z;
+    m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+    if (!didit) Put64(m->ax, Little32(x));
+  } else {
+    LockBus(p);
+    x = Load32(p);
+    Sub32(m, Get32(m->ax), x);
+    if ((didit = x == Get32(m->ax))) {
+      Store32(p, Get32(q));
+    } else {
+      Put64(m->ax, x);
+    }
+    UnlockBus(p);
+  }
+}
+
+static void Cmpxchg(struct Machine *m, u64 rde, u8 *p) {
+  u8 *q;
+  bool didit;
+  q = RegRexrReg(m, rde);
   if (Rexw(rde)) {
     u64 x;
 #if CAN_64BIT
@@ -122,5 +150,23 @@ void OpCmpxchgEvqpRaxGvqp(P) {
       }
       if (Lock(rde)) UnlockBus(p);
     }
+  }
+}
+
+void OpCmpxchgEvqpRaxGvqp(P) {
+  Cmpxchg(m, rde, GetModrmRegisterWordPointerWriteOszRexw(A));
+  if (IsMakingPath(m)) {
+    Jitter(A,
+           "P"      // res0 = GetRegOrMemPointer(RexbRm)
+           "r0a2="  // arg2 = res0
+           "a1i"    // arg1 = rde
+           "q"      // arg0 = m
+           "c",     // call function
+           rde,
+           (Lock(rde) && !IsModrmRegister(rde) && !Rexw(rde) && !Osz(rde) &&
+            !(GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF) &
+              (SF | OF | AF | PF)))
+               ? LockCmpxchgMem32
+               : Cmpxchg);
   }
 }
