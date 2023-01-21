@@ -260,7 +260,7 @@
         var reader = new FileReader();
         reader.onloadend = function(event) {
           if(event.target.readyState == FileReader.DONE)
-            FS.writeFile(filename, new Uint8Array(event.target.result), {encoding: 'binary'});
+            FS.writeFile(filename, new Uint8Array(event.target.result), {encoding: 'binary', mode: 0o755});
         };
         reader.readAsArrayBuffer(file);
       }
