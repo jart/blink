@@ -1462,7 +1462,7 @@ void XlatLinuxToTermios(struct termios *dst, const struct termios_linux *src) {
       break;
 #endif
     default:
-      LOGF("unknown baud rate: %#x", (int)speed);
+      LOGF("unknown baud rate: %#x", Read32(src->cflag) & CBAUD_LINUX);
       speed = B38400;
       break;
   }
@@ -1573,7 +1573,7 @@ void XlatTermiosToLinux(struct termios_linux *dst, const struct termios *src) {
       speed = B4000000_LINUX;
 #endif
     } else {
-      LOGF("unrecognized baud rate: %d", (int)speed);
+      LOGF("unrecognized baud rate: %ld", (long)srcspeed);
       speed = B38400;
     }
   } else {
