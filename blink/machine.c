@@ -129,9 +129,9 @@ static relegated void OpMovEvqpSw(P) {
 
 static relegated int GetDescriptor(struct Machine *m, int selector,
                                    u64 *out_descriptor) {
-  unassert(m->system->gdt_base + m->system->gdt_limit <= kRealSize);
+  unassert(m->system->gdt_base + m->system->gdt_limit < kRealSize);
   selector &= -8;
-  if (8 <= selector && selector + 8 <= m->system->gdt_limit) {
+  if (8 <= selector && selector + 7 <= m->system->gdt_limit) {
     SetReadAddr(m, m->system->gdt_base + selector, 8);
     *out_descriptor = Load64(m->system->real + m->system->gdt_base + selector);
     return 0;
