@@ -1449,6 +1449,13 @@ static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   } else {
     rc = 0;
   }
+  // POSIX allows ETIMEDOUT for sockets, and some systems
+  // (Haiku) does set the errno to ETIMEDOUT. However,
+  // the Linux man pages does not mention read returning
+  // ETIMEDOUT.
+  if (errno == ETIMEDOUT) {
+    errno = EAGAIN;
+  }
   return rc;
 }
 
@@ -1561,6 +1568,10 @@ static i64 SysReadv(struct Machine *m, i32 fildes, i64 iovaddr, i32 iovlen) {
     }
   }
   FreeIovs(&iv);
+  // Same workaround as in SysRead
+  if (errno == ETIMEDOUT) {
+    errno = EAGAIN;
+  }
   return rc;
 }
 
