@@ -53,6 +53,7 @@
 
 #ifdef __HAIKU__
 #include <sys/sockio.h>
+#include <OS.h>
 #endif
 
 #ifdef __linux
@@ -1385,7 +1386,7 @@ static int SysSetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   void *optval;
   int syslevel, sysoptname;
   if (optvalsize > 256) return einval();
-  if ((syslevel = XlatSocketLevel(level)) == -1) return -1;
+  if (XlatSocketLevel(level, &syslevel) == -1) return -1;
   if ((sysoptname = XlatSocketOptname(level, optname)) == -1) return -1;
   if (!(optval = calloc(1, optvalsize))) return -1;
   if ((rc = CopyFromUserRead(m, optval, optvaladdr, optvalsize)) != -1) {
@@ -1402,7 +1403,7 @@ static int SysGetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   socklen_t optvalsize;
   u8 optvalsize_linux[4];
   int syslevel, sysoptname;
-  if ((syslevel = XlatSocketLevel(level)) == -1) return -1;
+  if (XlatSocketLevel(level, &syslevel) == -1) return -1;
   if ((sysoptname = XlatSocketOptname(level, optname)) == -1) return -1;
   if (CopyFromUserRead(m, optvalsize_linux, optvalsizeaddr,
                        sizeof(optvalsize_linux)) == -1) {
@@ -2426,7 +2427,18 @@ static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   LOCK(&m->system->exec_lock);
   SYS_LOGF("execve(%s)", prog);
   execve(prog, argv, envp);
-  if (errno != ENOEXEC) return -1;
+  if (
+    (errno != ENOEXEC)
+#ifdef __HAIKU__
+    // Haiku is strictly following POSIX here. ENOEXEC is only returned
+    // when "The new process image file has the appropriate access permission
+    // but has an _unrecognized_ format."
+    // For Cosmopolitan executables, Haiku actually does recognizes it as PE,
+    // but cannot execute it.
+    // https://xref.landonf.org/source/xref/haiku/src/system/runtime_loader/runtime_loader.cpp#462
+    && (errno != B_UNKNOWN_EXECUTABLE)
+#endif
+  ) return -1;
   if (m->system->exec && CanEmulateExecutable(prog)) {
     // TODO(jart): Prevent possibility of stack overflow.
     SYS_LOGF("m->system->exec(%s)", prog);

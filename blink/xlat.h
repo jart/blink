@@ -26,7 +26,7 @@ int XlatRusage(int);
 int XlatShutdown(int);
 int XlatSignal(int);
 int XlatSocketFamily(int);
-int XlatSocketLevel(int);
+int XlatSocketLevel(int, int *);
 int XlatSocketOptname(int, int);
 int XlatSocketProtocol(int);
 int XlatSocketType(int);

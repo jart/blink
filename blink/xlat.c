@@ -365,15 +365,19 @@ int XlatSocketProtocol(int x) {
   }
 }
 
-int XlatSocketLevel(int x) {
+int XlatSocketLevel(int x, int *level) {
+  // Haiku defines SOL_SOCKET as -1
+  int res;
   switch (x) {
-    XLAT(1, SOL_SOCKET);
-    XLAT(6, IPPROTO_TCP);
-    XLAT(17, IPPROTO_UDP);
+    CASE(1, res = SOL_SOCKET);
+    CASE(6, res = IPPROTO_TCP);
+    CASE(17, res = IPPROTO_UDP);
     default:
       LOGF("%s %d not supported yet", "socket level", x);
       return einval();
   }
+  *level = res;
+  return 0;
 }
 
 int XlatSocketOptname(int level, int optname) {
