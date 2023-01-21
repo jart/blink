@@ -2425,28 +2425,15 @@ static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   if (!(argv = CopyStrList(m, aa))) return -1;
   if (!(envp = CopyStrList(m, ea))) return -1;
   LOCK(&m->system->exec_lock);
-  SYS_LOGF("execve(%s)", prog);
-  execve(prog, argv, envp);
-  if (
-    (errno != ENOEXEC)
-#ifdef __HAIKU__
-    // Haiku is strictly following POSIX here. ENOEXEC is only returned
-    // when "The new process image file has the appropriate access permission
-    // but has an _unrecognized_ format."
-    // For Cosmopolitan executables, Haiku actually does recognizes it as PE,
-    // but cannot execute it.
-    // https://xref.landonf.org/source/xref/haiku/src/system/runtime_loader/runtime_loader.cpp#462
-    && (errno != B_UNKNOWN_EXECUTABLE)
-#endif
-  ) return -1;
   if (m->system->exec && CanEmulateExecutable(prog)) {
     // TODO(jart): Prevent possibility of stack overflow.
     SYS_LOGF("m->system->exec(%s)", prog);
     SysCloseExec(m->system);
     _Exit(m->system->exec(prog, argv, envp));
   }
+  SYS_LOGF("execve(%s)", prog);
+  execve(prog, argv, envp);
   UNLOCK(&m->system->exec_lock);
-  errno = ENOEXEC;
   return -1;
 }
 
