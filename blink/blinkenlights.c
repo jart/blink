@@ -2012,6 +2012,7 @@ static void Redraw(bool force) {
   size_t size;
   double execsecs;
   struct timespec start_draw, end_draw;
+  if (!tuimode) return;
   if (g_history.viewing) {
     ShowHistory();
     return;
