@@ -1191,7 +1191,7 @@ static relegated void LoadFarPointer(P, u64 *seg) {
       OpUdImpl(m);
       break;
     case XED_MODE_REAL:
-      n = 1 << RegLog2(rde);
+      n = 1 << WordLog2(rde);
       p = ComputeReserveAddressRead(A, n + 2);
       LockBus(p);
       fp = Load32(p);

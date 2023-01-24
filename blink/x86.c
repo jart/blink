@@ -489,6 +489,7 @@ static int xed_vex_c5_scanner(struct XedDecodedInst *x, int *vexvalid) {
 
 static int xed_vex_scanner(struct XedDecodedInst *x, int *imm_width,
                            int *vexvalid) {
+  if (Mode(x->op.rde) != XED_MODE_LONG) return 0;
   switch (x->bytes[x->length]) {
     case 0xC5:
       return xed_vex_c5_scanner(x, vexvalid);

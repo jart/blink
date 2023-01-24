@@ -46,6 +46,7 @@ check2:	o/$(MODE)/test/sse		\
 emulates:				\
 	o/$(MODE)/test/asm		\
 	o/$(MODE)/test/flat		\
+	o/$(MODE)/test/metal		\
 	o/$(MODE)/third_party/cosmo/emulates
 
 tags: TAGS HTAGS
@@ -61,6 +62,7 @@ include test/test.mk
 include test/asm/asm.mk
 include test/func/func.mk
 include test/flat/flat.mk
+include test/metal/metal.mk
 include test/blink/test.mk
 include third_party/gcc/gcc.mk
 include third_party/qemu/qemu.mk
