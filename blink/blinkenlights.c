@@ -2584,6 +2584,66 @@ static void OnDiskServiceReadSectors(void) {
   }
 }
 
+static void OnDiskServiceProbeExtended(void) {
+  u8 drive = m->dl;
+  u16 magic = Get16(m->bx);
+  (void)drive;
+  if (magic == 0x55AA) {
+    Put16(m->bx, 0xAA55);
+    m->ah = 0x30;
+    SetCarry(false);
+  } else {
+    m->ah = 0x01;
+    SetCarry(true);
+  }
+}
+
+static void OnDiskServiceReadSectorsExtended(void) {
+  u8 drive = m->dl;
+  i64 pkt_addr = m->ds + Get16(m->si), addr, sectors, size, lba, offset;
+  u8 pkt_size, *pkt;
+  (void)drive;
+  SetReadAddr(m, pkt_addr, 1);
+  pkt = m->system->real + pkt_addr;
+  pkt_size = Get8(pkt);
+  if ((pkt_size != 0x10 && pkt_size != 0x18) || Get8(pkt + 1) != 0) {
+    m->ah = 0x01;
+    SetCarry(true);
+  } else {
+    SetReadAddr(m, pkt_addr, pkt_size);
+    addr = Read32(pkt + 4);
+    if (addr == 0xFFFFFFFF && pkt_size == 0x18) {
+      addr = Read64(pkt + 0x10);
+    } else {
+      addr = (addr >> 16 << 4) + (addr & 0xFFFF);
+    }
+    sectors = Read16(pkt + 2);
+    size = sectors * 512;
+    lba = Read32(pkt + 8);
+    offset = lba * 512;
+    LOGF("bios read sector ext 0 <= %" PRId64 " && %" PRIx64 " + %" PRIx64
+         " <= %lx", lba, offset, size, m->system->elf.mapsize);
+    if (offset >= m->system->elf.mapsize ||
+        offset + size > m->system->elf.mapsize) {
+      LOGF("bios read sector failed 0 <= %" PRId64 " && %" PRIx64 " <= %lx",
+           lba, offset, m->system->elf.mapsize);
+      SetWriteAddr(m, pkt_addr + 2, 2);
+      Write16(pkt + 2, 0);
+      m->ah = 0x0d;
+    } else if (addr >= kRealSize || addr + size > kRealSize) {
+      SetWriteAddr(m, pkt_addr + 2, 2);
+      Write16(pkt + 2, 0);
+      m->ah = 0x02;
+      SetCarry(true);
+    } else {
+      SetWriteAddr(m, addr, size);
+      memcpy(m->system->real + addr, m->system->elf.map + offset, size);
+      m->ah = 0x00;
+      SetCarry(false);
+    }
+  }
+}
+
 static void OnDiskService(void) {
   switch (m->ah) {
     case 0x00:
@@ -2594,6 +2654,12 @@ static void OnDiskService(void) {
       break;
     case 0x08:
       OnDiskServiceGetParams();
+      break;
+    case 0x41:
+      OnDiskServiceProbeExtended();
+      break;
+    case 0x42:
+      OnDiskServiceReadSectorsExtended();
       break;
     default:
       OnDiskServiceBadCommand();
