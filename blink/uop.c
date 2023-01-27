@@ -1112,7 +1112,7 @@ MICRO_OP static u64 Truncate32(u64 x) {
   return (u32)x;
 }
 MICRO_OP static i64 Seg(struct Machine *m, u64 d, long s) {
-  return d + m->seg[s];
+  return d + m->seg[s].base;
 }
 MICRO_OP static i64 Base(struct Machine *m, u64 d, long i) {
   return d + Get64(m->weg[i]);

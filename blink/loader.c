@@ -294,7 +294,7 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
 }
 
 static void BootProgram(struct Machine *m, struct Elf *elf, size_t codesize) {
-  m->cs = 0;
+  m->cs.sel = m->cs.base = 0;
   m->ip = 0x7c00;
   elf->base = 0x7c00;
   memset(m->system->real, 0, 0x00f00000);

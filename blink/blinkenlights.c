@@ -484,9 +484,9 @@ static i64 GetSp(void) {
     case 8:
       return Read64(m->sp);
     case 4:
-      return m->ss + Read32(m->sp);
+      return m->ss.base + Read32(m->sp);
     case 2:
-      return m->ss + Read16(m->sp);
+      return m->ss.base + Read16(m->sp);
   }
 }
 
@@ -958,7 +958,7 @@ static bool IsXmmNonZero(i64 start, i64 end) {
 static bool IsSegNonZero(void) {
   unsigned i;
   for (i = 0; i < 6; ++i) {
-    if (*GetSegment(DISPATCH_NOTHING, i)) {
+    if (GetSegmentBase(DISPATCH_NOTHING, i)) {
       return true;
     }
   }
@@ -1006,7 +1006,7 @@ static int GetAddrHexWidth(void) {
     case XED_MODE_LEGACY:
       return 8;
     case XED_MODE_REAL:
-      if (m->fs >= 0x10fff0 || m->gs >= 0x10fff0) {
+      if (m->fs.base >= 0x10fff0 || m->gs.base >= 0x10fff0) {
         return 8;
       } else {
         return 6;
@@ -1344,17 +1344,18 @@ static void DrawRegister(struct Panel *p, i64 i, i64 r) {
   AppendPanel(p, i, "  ");
 }
 
-static void DrawSegment(struct Panel *p, i64 i, u64 value, u64 previous,
-                        const char *name) {
+static void DrawSegment(struct Panel *p, i64 i, struct DescriptorCache value,
+                        struct DescriptorCache previous, const char *name) {
+  bool changed = value.sel != previous.sel || value.base != previous.base;
   char buf[32];
-  if (value != previous) AppendPanel(p, i, "\033[7m");
+  if (changed) AppendPanel(p, i, "\033[7m");
   snprintf(buf, sizeof(buf), "%-3s", name);
   AppendPanel(p, i, buf);
   AppendPanel(p, i, " ");
-  snprintf(buf, sizeof(buf), "%0*" PRIx64, GetRegHexWidth(),
-           value >> (4 * (m->mode == XED_MODE_REAL)));
+  snprintf(buf, sizeof(buf), "%04" PRIx16 " (@%08" PRIx64 ")",
+           value.sel, value.base);
   AppendPanel(p, i, buf);
-  if (value != previous) AppendPanel(p, i, "\033[27m");
+  if (changed) AppendPanel(p, i, "\033[27m");
   AppendPanel(p, i, "  ");
 }
 
@@ -1754,7 +1755,7 @@ static void DrawFrames(struct Panel *p) {
     name = sym != -1 ? dis->syms.stab + dis->syms.p[sym].name : "UNKNOWN";
     s = line;
     s += sprintf(s, "%0*" PRIx64 " %0*" PRIx64 " ", GetAddrHexWidth(),
-                 m->ss + bp, GetAddrHexWidth(), rp);
+                 m->ss.base + bp, GetAddrHexWidth(), rp);
     s = Demangle(s, name, DIS_MAX_SYMBOL_LENGTH);
     AppendPanel(p, i - framesstart, line);
     if (sym != -1 && rp != dis->syms.p[sym].addr) {
@@ -1772,8 +1773,8 @@ static void DrawFrames(struct Panel *p) {
       AppendPanel(p, i - framesstart, " [MISALIGN]");
     }
     ++i;
-    if (((m->ss + bp) & 0xfff) > 0xff0) break;
-    if (!(r = LookupAddress(m, m->ss + bp))) {
+    if (((m->ss.base + bp) & 0xfff) > 0xff0) break;
+    if (!(r = LookupAddress(m, m->ss.base + bp))) {
       AppendPanel(p, i - framesstart, "CORRUPT FRAME POINTER");
       break;
     }
@@ -1792,7 +1793,7 @@ static void CheckFramePointerImpl(void) {
   lastbp = bp;
   rp = m->ip;
   while (bp) {
-    if (!(r = LookupAddress(m, m->ss + bp))) {
+    if (!(r = LookupAddress(m, m->ss.base + bp))) {
       LOGF("corrupt frame: %0*" PRIx64 "", GetAddrHexWidth(), bp);
       ThrowProtectionFault(m);
     }
@@ -2542,7 +2543,7 @@ static void OnDiskServiceGetParams(void) {
   m->cl = lastcylinder >> 8 << 6 | lastsector;
   m->ch = lastcylinder;
   m->ah = 0;
-  m->es = 0;
+  m->es.sel = m->es.base = 0;
   Put16(m->di, 0);
   SetCarry(false);
 }
@@ -2563,7 +2564,7 @@ static void OnDiskServiceReadSectors(void) {
        " drive %" PRId64 " offset %#" PRIx64 "",
        sectors, sector, cylinder, head, drive, offset);
   if (0 <= sector && offset + size <= m->system->elf.mapsize) {
-    addr = m->es + Get16(m->bx);
+    addr = m->es.base + Get16(m->bx);
     if (addr + size <= kRealSize) {
       SetWriteAddr(m, addr, size);
       memcpy(m->system->real + addr, m->system->elf.map + offset, size);
@@ -2600,7 +2601,7 @@ static void OnDiskServiceProbeExtended(void) {
 
 static void OnDiskServiceReadSectorsExtended(void) {
   u8 drive = m->dl;
-  i64 pkt_addr = m->ds + Get16(m->si), addr, sectors, size, lba, offset;
+  i64 pkt_addr = m->ds.base + Get16(m->si), addr, sectors, size, lba, offset;
   u8 pkt_size, *pkt;
   (void)drive;
   SetReadAddr(m, pkt_addr, 1);
@@ -2837,7 +2838,7 @@ static void OnApmService(void) {
 static void OnE820(void) {
   i64 addr;
   u8 p[20];
-  addr = m->es + Get16(m->di);
+  addr = m->es.base + Get16(m->di);
   if (Get32(m->dx) == 0x534D4150 && Get32(m->cx) == 24 &&
       addr + (int)sizeof(p) <= kRealSize) {
     if (!Get32(m->bx)) {
@@ -3344,8 +3345,8 @@ static void LogInstruction(void) {
        m->ip, Get64(m->sp) & 0xffffffffffff, Get64(m->ax), Get64(m->cx),
        Get64(m->dx), Get64(m->bx), Get64(m->bp), Get64(m->si), Get64(m->di),
        Get64(m->r8), Get64(m->r9), Get64(m->r10), Get64(m->r11), Get64(m->r12),
-       Get64(m->r13), Get64(m->r14), Get64(m->r15), m->fs & 0xffffffffffff,
-       m->gs & 0xffffffffffff);
+       Get64(m->r13), Get64(m->r14), Get64(m->r15),
+       m->fs.base & 0xffffffffffff, m->gs.base & 0xffffffffffff);
 }
 
 static void EnterWatchpoint(long bp) {

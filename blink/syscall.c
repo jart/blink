@@ -395,7 +395,7 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   unassert(!pthread_sigmask(SIG_SETMASK, &ss, &oldss));
   tid = m2->tid;
   if (flags & CLONE_SETTLS_LINUX) {
-    m2->fs = tls;
+    m2->fs.base = tls;
   }
   if (flags & CLONE_CHILD_CLEARTID_LINUX) {
     m2->ctid = ctid;
@@ -784,16 +784,16 @@ static int SysArchPrctl(struct Machine *m, int code, i64 addr) {
   u8 buf[8];
   switch (code) {
     case ARCH_SET_GS_LINUX:
-      m->gs = addr;
+      m->gs.base = addr;
       return 0;
     case ARCH_SET_FS_LINUX:
-      m->fs = addr;
+      m->fs.base = addr;
       return 0;
     case ARCH_GET_GS_LINUX:
-      Write64(buf, m->gs);
+      Write64(buf, m->gs.base);
       return CopyToUserWrite(m, addr, buf, 8);
     case ARCH_GET_FS_LINUX:
-      Write64(buf, m->fs);
+      Write64(buf, m->fs.base);
       return CopyToUserWrite(m, addr, buf, 8);
     default:
       return einval();

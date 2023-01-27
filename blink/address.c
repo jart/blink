@@ -24,7 +24,7 @@
 #include "blink/x86.h"
 
 i64 GetPc(struct Machine *m) {
-  return m->cs + GetIp(m);
+  return m->cs.base + GetIp(m);
 }
 
 i64 GetIp(struct Machine *m) {
@@ -46,24 +46,24 @@ i64 AddSegment(P, u64 i, u64 s) {
   if (!Sego(rde)) {
     return i + s;
   } else {
-    return i + m->seg[Sego(rde) - 1];
+    return i + m->seg[Sego(rde) - 1].base;
   }
 }
 
 u64 AddressOb(P) {
-  return AddSegment(A, disp, m->ds);
+  return AddSegment(A, disp, m->ds.base);
 }
 
-u64 *GetSegment(P, unsigned s) {
+u64 GetSegmentBase(P, unsigned s) {
   if (s < 6) {
-    return m->seg + s;
+    return m->seg[s].base;
   } else {
     OpUdImpl(m);
   }
 }
 
 i64 DataSegment(P, u64 i) {
-  return AddSegment(A, i, m->ds);
+  return AddSegment(A, i, m->ds.base);
 }
 
 i64 AddressSi(P) {
@@ -80,7 +80,7 @@ i64 AddressSi(P) {
 }
 
 u64 AddressDi(P) {
-  u64 i = m->es;
+  u64 i = m->es.base;
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       return i + Get64(m->di);

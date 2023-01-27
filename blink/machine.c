@@ -112,19 +112,12 @@ static void OpLeaGvqpM(P) {
   }
 }
 
-static relegated void OpPushSeg(P) {
-  u8 seg = (Opcode(rde) & 070) >> 3;
-  Push(A, *GetSegment(A, seg) >> 4);
-}
-
-static relegated void OpPopSeg(P) {
-  u8 seg = (Opcode(rde) & 070) >> 3;
-  *GetSegment(A, seg) = Pop(A, 0) << 4;
-}
-
-static relegated void OpMovEvqpSw(P) {
-  WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
-                        *GetSegment(A, ModrmReg(rde)) >> 4);
+static relegated const struct DescriptorCache *GetSegment(P, unsigned s) {
+  if (s < 6) {
+    return m->seg + s;
+  } else {
+    OpUdImpl(m);
+  }
 }
 
 static relegated int GetDescriptor(struct Machine *m, int selector,
@@ -161,17 +154,44 @@ static relegated bool IsProtectedMode(struct Machine *m) {
   return m->system->cr0 & 1;
 }
 
-static relegated void OpMovSwEvqp(P) {
-  u64 x, d;
-  x = ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A));
+static relegated void SetSegment(P, unsigned sr, u16 sel, bool jumping) {
+  u64 descriptor;
+  if (sr == 1 && !jumping) OpUdImpl(m);
   if (!IsProtectedMode(m)) {
-    x <<= 4;
-  } else if (GetDescriptor(m, x, &d) != -1) {
-    x = GetDescriptorBase(d);
+    m->seg[sr].sel = sel;
+    m->seg[sr].base = sel << 4;
+  } else if (GetDescriptor(m, sel, &descriptor) != -1) {
+    m->seg[sr].sel = sel;
+    m->seg[sr].base = GetDescriptorBase(descriptor);
+    if (sr == 1) ChangeMachineMode(m, GetDescriptorMode(descriptor));
   } else {
     ThrowProtectionFault(m);
   }
-  *GetSegment(A, ModrmReg(rde)) = x;
+}
+
+relegated void SetCs(P, u16 sel) {
+  SetSegment(A, 1, sel, true);
+}
+
+static relegated void OpPushSeg(P) {
+  u8 seg = (Opcode(rde) & 070) >> 3;
+  Push(A, GetSegment(A, seg)->sel);
+}
+
+static relegated void OpPopSeg(P) {
+  u8 seg = (Opcode(rde) & 070) >> 3;
+  SetSegment(A, seg, Pop(A, 0), false);
+}
+
+static relegated void OpMovEvqpSw(P) {
+  WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
+                        GetSegment(A, ModrmReg(rde))->sel);
+}
+
+static relegated void OpMovSwEvqp(P) {
+  u64 x, d;
+  x = ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A));
+  SetSegment(A, ModrmReg(rde), x, false);
 }
 
 static relegated void OpLsl(P) {
@@ -198,16 +218,8 @@ void ChangeMachineMode(struct Machine *m, int mode) {
 
 static relegated void OpJmpf(P) {
   u64 descriptor;
-  if (!IsProtectedMode(m)) {
-    m->cs = uimm0 << 4;
-    m->ip = disp;
-  } else if (GetDescriptor(m, uimm0, &descriptor) != -1) {
-    m->cs = GetDescriptorBase(descriptor);
-    m->ip = disp;
-    ChangeMachineMode(m, GetDescriptorMode(descriptor));
-  } else {
-    ThrowProtectionFault(m);
-  }
+  SetCs(A, uimm0);
+  m->ip = disp;
   if (m->system->onlongbranch) {
     m->system->onlongbranch(m);
   }
@@ -1185,7 +1197,7 @@ static void Op1b8(P) {
   }
 }
 
-static relegated void LoadFarPointer(P, u64 *seg) {
+static relegated void LoadFarPointer(P, unsigned sr) {
   unsigned n;
   u8 *p;
   u64 fp;
@@ -1201,9 +1213,9 @@ static relegated void LoadFarPointer(P, u64 *seg) {
       fp = Load32(p);
       if (n >= 4) {
         fp |= (u64)Load16(p + 4) << 32;
-        *seg = (fp >> 32 & 0x0000ffff) << 4;
+        SetSegment(A, sr, fp >> 32 & 0x0000ffff, false);
       } else {
-        *seg = (fp >> 16 & 0x0000ffff) << 4;
+        SetSegment(A, sr, fp >> 16 & 0x0000ffff, false);
       }
       UnlockBus(p);
       WriteRegister(rde, RegRexrReg(m, rde), fp);  // offset portion
@@ -1214,11 +1226,11 @@ static relegated void LoadFarPointer(P, u64 *seg) {
 }
 
 static relegated void OpLes(P) {
-  LoadFarPointer(A, &m->es);
+  LoadFarPointer(A, 0);
 }
 
 static relegated void OpLds(P) {
-  LoadFarPointer(A, &m->ds);
+  LoadFarPointer(A, 3);
 }
 
 static relegated void Loop(P, bool cond) {
@@ -1351,19 +1363,19 @@ static void OpStmxcsr(P) {
 }
 
 static void OpRdfsbase(P) {
-  WriteRegister(rde, RegRexbRm(m, rde), m->fs);
+  WriteRegister(rde, RegRexbRm(m, rde), m->fs.base);
 }
 
 static void OpRdgsbase(P) {
-  WriteRegister(rde, RegRexbRm(m, rde), m->gs);
+  WriteRegister(rde, RegRexbRm(m, rde), m->gs.base);
 }
 
 static void OpWrfsbase(P) {
-  m->fs = ReadRegister(rde, RegRexbRm(m, rde));
+  m->fs.base = ReadRegister(rde, RegRexbRm(m, rde));
 }
 
 static void OpWrgsbase(P) {
-  m->gs = ReadRegister(rde, RegRexbRm(m, rde));
+  m->gs.base = ReadRegister(rde, RegRexbRm(m, rde));
 }
 
 static void OpMfence(P) {

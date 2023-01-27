@@ -112,7 +112,8 @@ static u64 FindPageTableEntry(struct Machine *m, u64 page) {
 u8 *LookupAddress(struct Machine *m, i64 virt) {
   u8 *host;
   u64 entry, page;
-  if (m->mode != XED_MODE_REAL) {
+  if (m->mode == XED_MODE_LONG ||
+      (m->mode != XED_MODE_REAL && (m->system->cr0 & 0x80000000) != 0)) {
     if (atomic_load_explicit(&m->invalidated, memory_order_relaxed)) {
       ResetTlb(m);
       atomic_store_explicit(&m->invalidated, false, memory_order_relaxed);
