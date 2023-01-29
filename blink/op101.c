@@ -29,15 +29,12 @@ static void StoreDescriptorTable(P, u16 limit, u64 base) {
   l = ComputeAddress(A);
   if (l + 10 <= kRealSize) {
     Write16(m->system->real + l, limit);
-    if (Rexw(rde)) {
+    if (m->mode == XED_MODE_LONG) {
       Write64(m->system->real + l + 2, base);
       SetWriteAddr(m, l, 10);
-    } else if (!Osz(rde)) {
+    } else {
       Write32(m->system->real + l + 2, base);
       SetWriteAddr(m, l, 6);
-    } else {
-      Write16(m->system->real + l + 2, base);
-      SetWriteAddr(m, l, 4);
     }
   } else {
     ThrowSegmentationFault(m, l);
@@ -50,22 +47,24 @@ static void LoadDescriptorTable(P, u16 *out_limit, u64 *out_base) {
   l = ComputeAddress(A);
   if (l + 10 <= kRealSize) {
     limit = Read16(m->system->real + l);
-    if (Rexw(rde)) {
-      base = Read64(m->system->real + l + 2) & 0x00ffffff;
+    // Intel Manual Volume 2A:
+    // - "If the operand-size attribute is 16 bits, a 16-bit limit (lower 2
+    //   bytes) and a 24-bit base address (third, fourth, and fifth byte) are
+    //   loaded."
+    // - "In 64-bit mode, the instruction’s operand size is fixed at 8 + 2
+    //   bytes (an 8-byte base and a 2-byte limit)."
+    if (m->mode == XED_MODE_LONG) {
+      base = Read64(m->system->real + l + 2);
       SetReadAddr(m, l, 10);
     } else if (!Osz(rde)) {
       base = Read32(m->system->real + l + 2);
       SetReadAddr(m, l, 6);
     } else {
-      base = Read16(m->system->real + l + 2);
-      SetReadAddr(m, l, 4);
+      base = Read32(m->system->real + l + 2) & 0x00ffffff;
+      SetReadAddr(m, l, 6);
     }
-    if (base + limit <= kRealSize) {
-      *out_limit = limit;
-      *out_base = base;
-    } else {
-      ThrowProtectionFault(m);
-    }
+    *out_limit = limit;
+    *out_base = base;
   } else {
     ThrowSegmentationFault(m, l);
   }
