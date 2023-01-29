@@ -147,7 +147,9 @@ static relegated u64 GetDescriptorBase(u64 d) {
 }
 
 static relegated u64 GetDescriptorLimit(u64 d) {
-  return (d & 0x000f000000000000) >> 32 | (d & 0xffff);
+  u64 lim = (d & 0x000f000000000000) >> 32 | (d & 0xffff);
+  if ((d & 0x0080000000000000) != 0) lim = (lim << 12) | 0xfff;
+  return lim;
 }
 
 static relegated int GetDescriptorMode(u64 d) {
