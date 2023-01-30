@@ -72,6 +72,18 @@
 #define kBusCount   256       // # load balanced semaphores in virtual bus
 #define kBusRegion  kSemSize  // 16 is sufficient for 8-byte loads/stores
 
+#define CR0_PE 0x01       // protected mode enabled
+#define CR0_MP 0x02       // monitor coprocessor
+#define CR0_EM 0x04       // no x87 fpu present if set
+#define CR0_TS 0x08       // task switched x87
+#define CR0_ET 0x10       // extension type 287 or 387
+#define CR0_NE 0x20       // enable x87 error reporting
+#define CR0_WP 0x00010000 // write protect read-only pages @pl0
+#define CR0_AM 0x00040000 // alignment mask
+#define CR0_NW 0x20000000 // global write-through cache disable
+#define CR0_CD 0x40000000 // global cache disable
+#define CR0_PG 0x80000000 // paging enabled
+
 #define PAGE_V    0x0001  // valid
 #define PAGE_RW   0x0002  // writeable
 #define PAGE_U    0x0004  // permit user-mode access
@@ -161,14 +173,23 @@ struct MachineMemstat {
   memstat_t pagetables;
 };
 
+// Segment descriptor cache
+// @see Intel Manual V3A §3.4.3
+// Currently only the base address for each segment register is maintained;
+// a full implementation will also cache its limit & access rights
+struct DescriptorCache {
+  u16 sel;   // visible selector value (or paragraph value in real mode)
+  u64 base;  // base linear address
+};
+
 struct MachineState {
   u64 ip;
-  u64 cs;
-  u64 ss;
-  u64 es;
-  u64 ds;
-  u64 fs;
-  u64 gs;
+  struct DescriptorCache cs;
+  struct DescriptorCache ss;
+  struct DescriptorCache es;
+  struct DescriptorCache ds;
+  struct DescriptorCache fs;
+  struct DescriptorCache gs;
   u8 weg[16][8];
   u8 xmm[16][16];
   u32 mxcsr;
@@ -336,14 +357,14 @@ struct Machine {                           //
   u32 readsize;                            // bytes length of last read op
   u32 writesize;                           // byte length of last write op
   union {                                  //
-    u64 seg[8];                            //
+    struct DescriptorCache seg[8];         //
     struct {                               //
-      u64 es;                              // xtra segment (legacy / real)
-      u64 cs;                              // code segment (legacy / real)
-      u64 ss;                              // stak segment (legacy / real)
-      u64 ds;                              // data segment (legacy / real)
-      u64 fs;                              // thred-local segment register
-      u64 gs;                              // winple thread-local register
+      struct DescriptorCache es;           // xtra segment (legacy / real)
+      struct DescriptorCache cs;           // code segment (legacy / real)
+      struct DescriptorCache ss;           // stak segment (legacy / real)
+      struct DescriptorCache ds;           // data segment (legacy / real)
+      struct DescriptorCache fs;           // thred-local segment register
+      struct DescriptorCache gs;           // winple thread-local register
     };                                     //
   };                                       //
   struct MachineFpu fpu;                   // FLOATING-POINT REGISTER FILE
@@ -556,7 +577,8 @@ i64 GetPc(struct Machine *);
 u64 AddressOb(P);
 u64 AddressDi(P);
 i64 AddressSi(P);
-u64 *GetSegment(P, unsigned);
+u64 GetSegmentBase(P, unsigned);
+void SetCs(P, u16);
 i64 DataSegment(P, u64);
 i64 AddSegment(P, u64, u64);
 

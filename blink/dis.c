@@ -204,7 +204,7 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
   long n, symbol;
   struct DisOp op;
   n = 15;
-  ip = addr - m->cs;
+  ip = addr - m->cs.base;
   if ((symbol = DisFindSym(d, ip)) != -1) {
     if (d->syms.p[symbol].addr <= ip &&
         ip < d->syms.p[symbol].addr + d->syms.p[symbol].size) {

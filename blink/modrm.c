@@ -25,7 +25,7 @@
 
 struct AddrSeg LoadEffectiveAddress(const P) {
   u64 i = disp;
-  u64 s = m->ds;
+  u64 s = m->ds.base;
   struct AddrSeg res;
   unassert(!IsModrmRegister(rde));
   if (Eamode(rde) != XED_MODE_REAL) {
@@ -37,14 +37,14 @@ struct AddrSeg LoadEffectiveAddress(const P) {
       } else {
         i += Get64(RegRexbRm(m, rde));
         if (RexbRm(rde) == 4 || RexbRm(rde) == 5) {
-          s = m->ss;
+          s = m->ss.base;
         }
       }
     } else {
       if (SibHasBase(rde)) {
         i += Get64(RegRexbBase(m, rde));
         if (RexbBase(rde) == 4 || RexbBase(rde) == 5) {
-          s = m->ss;
+          s = m->ss.base;
         }
       }
       if (SibHasIndex(rde)) {
@@ -65,12 +65,12 @@ struct AddrSeg LoadEffectiveAddress(const P) {
         i += Get16(m->di);
         break;
       case 2:
-        s = m->ss;
+        s = m->ss.base;
         i += Get16(m->bp);
         i += Get16(m->si);
         break;
       case 3:
-        s = m->ss;
+        s = m->ss.base;
         i += Get16(m->bp);
         i += Get16(m->di);
         break;
@@ -82,7 +82,7 @@ struct AddrSeg LoadEffectiveAddress(const P) {
         break;
       case 6:
         if (ModrmMod(rde)) {
-          s = m->ss;
+          s = m->ss.base;
           i += Get16(m->bp);
         }
         break;

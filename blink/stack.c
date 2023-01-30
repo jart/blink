@@ -87,12 +87,12 @@ static void PushN(P, u64 x, unsigned mode, unsigned osz) {
     case XED_MODE_REAL:
       v = (Get32(m->sp) - osz) & 0xffff;
       Put16(m->sp, v);
-      v += m->ss;
+      v += m->ss.base;
       break;
     case XED_MODE_LEGACY:
       v = (Get32(m->sp) - osz) & 0xffffffff;
       Put64(m->sp, v);
-      v += m->ss;
+      v += m->ss.base;
       break;
     case XED_MODE_LONG:
       v = (Get64(m->sp) - osz) & 0xffffffffffffffff;
@@ -133,12 +133,12 @@ static u64 PopN(P, u16 extra, unsigned osz) {
     case XED_MODE_LEGACY:
       v = Get32(m->sp);
       Put64(m->sp, (v + osz + extra) & 0xffffffff);
-      v += m->ss;
+      v += m->ss.base;
       break;
     case XED_MODE_REAL:
       v = Get16(m->sp);
       Put16(m->sp, v + osz + extra);
-      v += m->ss;
+      v += m->ss.base;
       break;
     default:
       __builtin_unreachable();
@@ -270,7 +270,7 @@ static relegated void Pushaw(P) {
   memcpy(b[6], m->cx, 2);
   memcpy(b[7], m->ax, 2);
   Put16(m->sp, (v = (Read16(m->sp) - sizeof(b)) & 0xffff));
-  CopyToUser(m, m->ss + v, b, sizeof(b));
+  CopyToUser(m, m->ss.base + v, b, sizeof(b));
 }
 
 static relegated void Pushad(P) {
@@ -285,13 +285,13 @@ static relegated void Pushad(P) {
   memcpy(b[6], m->cx, 4);
   memcpy(b[7], m->ax, 4);
   Put64(m->sp, (v = (Get32(m->sp) - sizeof(b)) & 0xffffffff));
-  CopyToUser(m, m->ss + v, b, sizeof(b));
+  CopyToUser(m, m->ss.base + v, b, sizeof(b));
 }
 
 static relegated void Popaw(P) {
   u64 addr;
   u8 b[8][2];
-  addr = m->ss + Read16(m->sp);
+  addr = m->ss.base + Read16(m->sp);
   if (CopyFromUser(m, b, addr, sizeof(b)) == -1) {
     ThrowSegmentationFault(m, addr);
   }
@@ -309,7 +309,7 @@ static relegated void Popaw(P) {
 static relegated void Popad(P) {
   u64 addr;
   u8 b[8][4];
-  addr = m->ss + Get32(m->sp);
+  addr = m->ss.base + Get32(m->sp);
   if (CopyFromUser(m, b, addr, sizeof(b)) == -1) {
     ThrowSegmentationFault(m, addr);
   }
@@ -355,9 +355,9 @@ relegated void OpPopa(P) {
 }
 
 relegated void OpCallf(P) {
-  Push(A, m->cs >> 4);
+  Push(A, m->cs.sel);
   Push(A, m->ip);
-  m->cs = uimm0 << 4;
+  SetCs(A, uimm0);
   m->ip = disp & (Osz(rde) ? 0xffff : 0xffffffff);
   if (m->system->onlongbranch) {
     m->system->onlongbranch(m);
@@ -365,8 +365,9 @@ relegated void OpCallf(P) {
 }
 
 relegated void OpRetf(P) {
-  m->ip = Pop(A, 0);
-  m->cs = Pop(A, uimm0) << 4;
+  u64 ip = ip = Pop(A, 0);
+  SetCs(A, Pop(A, uimm0));
+  m->ip = ip;
   if (m->system->onlongbranch) {
     m->system->onlongbranch(m);
   }

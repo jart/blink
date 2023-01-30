@@ -321,11 +321,11 @@ const char *GetBacktrace(struct Machine *m) {
          "OPS %-16ld "
          "JIT %-16ld\n\t"
          "%s\n\t",
-         m->cs + MaskAddress(m->mode, m->ip), DescribeOp(m, GetPc(m)),
+         m->cs.base + MaskAddress(m->mode, m->ip), DescribeOp(m, GetPc(m)),
          Get64(m->ax), Get64(m->cx), Get64(m->dx), Get64(m->bx), Get64(m->sp),
          Get64(m->bp), Get64(m->si), Get64(m->di), Get64(m->r8), Get64(m->r9),
          Get64(m->r10), Get64(m->r11), Get64(m->r12), Get64(m->r13),
-         Get64(m->r14), Get64(m->r15), m->fs, m->gs,
+         Get64(m->r14), Get64(m->r15), m->fs.base, m->gs.base,
          GET_COUNTER(instructions_decoded), GET_COUNTER(instructions_jitted),
          g_progname);
 
@@ -335,7 +335,7 @@ const char *GetBacktrace(struct Machine *m) {
   for (i = 0; i < MAX_BACKTRACE_LINES;) {
     if (i) APPEND("\n\t");
     sym = DisFindSym(&dis, rp);
-    APPEND("%012" PRIx64 " %012" PRIx64 " %s", m->ss + bp, rp,
+    APPEND("%012" PRIx64 " %012" PRIx64 " %s", m->ss.base + bp, rp,
            sym != -1 ? dis.syms.stab + dis.syms.p[sym].name : "UNKNOWN");
     if (sym != -1 && rp != dis.syms.p[sym].addr) {
       APPEND("+%#" PRIx64 "", rp - dis.syms.p[sym].addr);
@@ -350,8 +350,8 @@ const char *GetBacktrace(struct Machine *m) {
       APPEND(" [MISALIGN]");
     }
     ++i;
-    if (((m->ss + bp) & 0xfff) > 0xff0) break;
-    if (!(r = LookupAddress(m, m->ss + bp))) {
+    if (((m->ss.base + bp) & 0xfff) > 0xff0) break;
+    if (!(r = LookupAddress(m, m->ss.base + bp))) {
       APPEND(" [CORRUPT FRAME POINTER]");
       break;
     }
