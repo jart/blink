@@ -72,6 +72,18 @@
 #define kBusCount   256       // # load balanced semaphores in virtual bus
 #define kBusRegion  kSemSize  // 16 is sufficient for 8-byte loads/stores
 
+#define CR0_PE 0x01       // protected mode enabled
+#define CR0_MP 0x02       // monitor coprocessor
+#define CR0_EM 0x04       // no x87 fpu present if set
+#define CR0_TS 0x08       // task switched x87
+#define CR0_ET 0x10       // extension type 287 or 387
+#define CR0_NE 0x20       // enable x87 error reporting
+#define CR0_WP 0x00010000 // write protect read-only pages @pl0
+#define CR0_AM 0x00040000 // alignment mask
+#define CR0_NW 0x20000000 // global write-through cache disable
+#define CR0_CD 0x40000000 // global cache disable
+#define CR0_PG 0x80000000 // paging enabled
+
 #define PAGE_V    0x0001  // valid
 #define PAGE_RW   0x0002  // writeable
 #define PAGE_U    0x0004  // permit user-mode access

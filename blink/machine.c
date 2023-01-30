@@ -151,7 +151,7 @@ static relegated int GetDescriptorMode(u64 d) {
 }
 
 static relegated bool IsProtectedMode(struct Machine *m) {
-  return m->system->cr0 & 1;
+  return m->system->cr0 & CR0_PE;
 }
 
 static relegated void SetSegment(P, unsigned sr, u16 sel, bool jumping) {
