@@ -64,8 +64,11 @@ void OpCpuid(P) {
   ax = bx = cx = dx = 0;
   switch (Get32(m->ax)) {
     case 0:
-    case 0x80000000:
       ax = 7;
+      goto vendor;
+    case 0x80000000:
+      ax = 0x80000001;
+    vendor:
       // glibc binaries won't run unless we report blink as a
       // modern linux kernel on top of genuine intel hardware
       bx = Read32((const u8 *)INTEL + 0);
