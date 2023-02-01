@@ -931,6 +931,15 @@ Finished:
   return virt;
 }
 
+static i64 SysMremap(struct Machine *m, i64 old_address, u64 old_size,
+                     u64 new_size, int flags, i64 new_address) {
+  // would be nice to have
+  // avoid being noisy in the logs
+  // hope program has fallback for failure
+  LOG_ONCE(MEM_LOGF("mremap() not supported yet"));
+  return enomem();
+}
+
 static int SysMsync(struct Machine *m, i64 virt, size_t size, int flags) {
   // TODO(jart): Is this safe on all platforms?
   return 0;
@@ -3625,6 +3634,7 @@ void OpSyscall(P) {
     SYSCALL(0x011, SysPread, (m, di, si, dx, r0));
     SYSCALL(0x012, SysPwrite, (m, di, si, dx, r0));
     SYSCALL(0x017, SysSelect, (m, di, si, dx, r0, r8));
+    SYSCALL(0x019, SysMremap, (m, di, si, dx, r0, r8));
     SYSCALL(0x10E, SysPselect, (m, di, si, dx, r0, r8, r9));
     SYSCALL(0x01A, SysMsync, (m, di, si, dx));
     SYSCALL(0x00A, SysMprotect, (m, di, si, dx));
