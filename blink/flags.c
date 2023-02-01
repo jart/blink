@@ -317,6 +317,8 @@ int GetFlagDeps(u64 rde) {
     case 0x01D:  // sbb %rax $ivds
     case 0x072:  // jb
     case 0x073:  // jae
+    case 0x142:  // cmovb
+    case 0x143:  // cmovnb
     case 0x182:  // jb
     case 0x183:  // jae
     case 0x192:  // setb
