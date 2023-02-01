@@ -72,17 +72,17 @@
 #define kBusCount   256       // # load balanced semaphores in virtual bus
 #define kBusRegion  kSemSize  // 16 is sufficient for 8-byte loads/stores
 
-#define CR0_PE 0x01       // protected mode enabled
-#define CR0_MP 0x02       // monitor coprocessor
-#define CR0_EM 0x04       // no x87 fpu present if set
-#define CR0_TS 0x08       // task switched x87
-#define CR0_ET 0x10       // extension type 287 or 387
-#define CR0_NE 0x20       // enable x87 error reporting
-#define CR0_WP 0x00010000 // write protect read-only pages @pl0
-#define CR0_AM 0x00040000 // alignment mask
-#define CR0_NW 0x20000000 // global write-through cache disable
-#define CR0_CD 0x40000000 // global cache disable
-#define CR0_PG 0x80000000 // paging enabled
+#define CR0_PE 0x01        // protected mode enabled
+#define CR0_MP 0x02        // monitor coprocessor
+#define CR0_EM 0x04        // no x87 fpu present if set
+#define CR0_TS 0x08        // task switched x87
+#define CR0_ET 0x10        // extension type 287 or 387
+#define CR0_NE 0x20        // enable x87 error reporting
+#define CR0_WP 0x00010000  // write protect read-only pages @pl0
+#define CR0_AM 0x00040000  // alignment mask
+#define CR0_NW 0x20000000  // global write-through cache disable
+#define CR0_CD 0x40000000  // global cache disable
+#define CR0_PG 0x80000000  // paging enabled
 
 #define PAGE_V    0x0001  // valid
 #define PAGE_RW   0x0002  // writeable
@@ -248,10 +248,7 @@ struct System {
   i64 brk;
   i64 automap;
   i64 codestart;
-  i64 codestart_prof;
-  _Atomic(int) *fun;
   unsigned long codesize;
-  unsigned long codesize_prof;
   struct MachineMemstat memstat;
   pthread_cond_t machines_cond;
   pthread_mutex_t machines_lock;
@@ -298,10 +295,7 @@ struct Machine {                           //
   i64 stashaddr;                           // page overlap buffer
   _Atomic(bool) invalidated;               // the tlb must be flushed
   _Atomic(bool) killed;                    // used to send a soft SIGKILL
-  _Atomic(int) *fun;                       // [dup] jit hooks for code bytes
   _Atomicish(u64) signals;                 // signals waiting for delivery
-  unsigned long codesize;                  // [dup] size of exe code section
-  i64 codestart;                           // [dup] virt of exe code section
   union {                                  // GENERAL REGISTER FILE
     u64 align8_;                           //
     u8 beg[128];                           //
@@ -566,10 +560,6 @@ void OpRorx(P);
 
 void FreeBig(void *, size_t);
 void *AllocateBig(size_t, int, int, int, off_t);
-
-bool HasHook(struct Machine *, u64);
-nexgen32e_f GetHook(struct Machine *, u64);
-void SetHook(struct Machine *, u64, nexgen32e_f);
 
 u64 MaskAddress(u32, u64);
 i64 GetIp(struct Machine *);

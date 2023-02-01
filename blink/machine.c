@@ -189,7 +189,7 @@ static relegated void OpMovEvqpSw(P) {
 }
 
 static relegated void OpMovSwEvqp(P) {
-  u64 x, d;
+  u64 x;
   x = ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A));
   SetSegment(A, ModrmReg(rde), x, false);
 }
@@ -217,7 +217,6 @@ void ChangeMachineMode(struct Machine *m, int mode) {
 }
 
 static relegated void OpJmpf(P) {
-  u64 descriptor;
   SetCs(A, uimm0);
   m->ip = disp;
   if (m->system->onlongbranch) {
@@ -585,18 +584,14 @@ static void OpMovslGdqpEd(P) {
 
 void Connect(P, u64 pc) {
   void *jump;
-  nexgen32e_f func;
-  if (HasHook(m, pc)) {
-    func = GetHook(m, pc);
-    if (func != JitlessDispatch && func != GeneralDispatch) {
-      jump = (u8 *)func + GetPrologueSize();
-    } else {
-      if (!FLAG_noconnect) {
-        RecordJitJump(m->path.jb, m->fun + pc, GetPrologueSize());
-      }
-      jump = (void *)m->system->ender;
-    }
+  nexgen32e_f f;
+  f = (nexgen32e_f)GetJitHook(&m->system->jit, pc, (intptr_t)GeneralDispatch);
+  if (f != JitlessDispatch && f != GeneralDispatch) {
+    jump = (u8 *)f + GetPrologueSize();
   } else {
+    if (!FLAG_noconnect) {
+      RecordJitJump(m->path.jb, pc, GetPrologueSize());
+    }
     jump = (void *)m->system->ender;
   }
   AppendJitJump(m->path.jb, jump);
@@ -2184,30 +2179,7 @@ nexgen32e_f GetOp(long op) {
 }
 
 static bool CanJit(struct Machine *m) {
-  return !IsJitDisabled(&m->system->jit) && HasHook(m, m->ip);
-}
-
-bool HasHook(struct Machine *m, u64 pc) {
-  return pc - m->codestart < m->codesize;
-}
-
-nexgen32e_f GetHook(struct Machine *m, u64 pc) {
-  int off = atomic_load_explicit(m->fun + (uintptr_t)pc, memory_order_relaxed);
-  return off ? (nexgen32e_f)(IMAGE_END + off) : GeneralDispatch;
-}
-
-void SetHook(struct Machine *m, u64 pc, nexgen32e_f func) {
-  u8 *f;
-  int off;
-  if (func) {
-    f = (u8 *)func;
-    unassert(f - IMAGE_END);
-    unassert(INT_MIN <= f - IMAGE_END && f - IMAGE_END <= INT_MAX);
-    off = f - IMAGE_END;
-  } else {
-    off = 0;
-  }
-  atomic_store_explicit(m->fun + pc, off, memory_order_relaxed);
+  return !IsJitDisabled(&m->system->jit);
 }
 
 void JitlessDispatch(P) {
@@ -2313,8 +2285,9 @@ void ExecuteInstruction(struct Machine *m) {
 #endif
 #ifdef HAVE_JIT
   nexgen32e_f func;
-  if (HasHook(m, m->ip)) {
-    func = GetHook(m, m->ip);
+  if (CanJit(m)) {
+    func = (nexgen32e_f)GetJitHook(&m->system->jit, m->ip,
+                                   (intptr_t)GeneralDispatch);
     if (!IsMakingPath(m)) {
       STATISTIC(++instructions_dispatched);
       func(DISPATCH_NOTHING);

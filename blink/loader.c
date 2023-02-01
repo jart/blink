@@ -178,9 +178,6 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
       s->codesize = memsz;
     } else if (vaddr == s->codestart + s->codesize) {
       s->codesize += memsz;
-    } else {
-      ELF_LOGF("elf has multiple executable program headers at noncontiguous "
-               "addresses; only the first region will benefit from jitting");
     }
   }
 
@@ -357,34 +354,6 @@ static int GetElfHeader(char ehdr[64], const char *prog, const char *image) {
   return -1;
 }
 
-static void SetupDispatch(struct Machine *m) {
-  m->system->codesize_prof = m->system->codesize;
-  m->system->codestart_prof = m->system->codestart;
-#ifdef HAVE_JIT
-  size_t n;
-  free(m->system->fun);
-  if (m->mode != XED_MODE_LONG ||        //
-      IsJitDisabled(&m->system->jit) ||  //
-      !(n = m->system->codesize) ||      //
-      !(m->system->fun = (atomic_int *)AllocateBig(
-            n * sizeof(atomic_int), PROT_READ | PROT_WRITE,
-            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0))) {
-    m->system->fun = 0;
-  }
-  if (m->system->fun) {
-    m->fun = m->system->fun - m->system->codestart;
-    m->codestart = m->system->codestart;
-    m->codesize = m->system->codesize;
-  } else {
-    m->fun = 0;
-    m->codestart = 0;
-    m->codesize = 0;
-    m->system->codesize = 0;
-    m->system->codestart = 0;
-  }
-#endif
-}
-
 void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
   int fd;
   i64 sp;
@@ -460,7 +429,6 @@ error: unsupported executable; we need:\n\
     }
     LoadArgv(m, prog, args, vars);
   }
-  SetupDispatch(m);
   pagesize = GetSystemPageSize();
   pagesize = MAX(4096, pagesize);
   m->system->brk = ROUNDUP(m->system->brk, pagesize);

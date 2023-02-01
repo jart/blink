@@ -27,6 +27,7 @@
 #include "blink/debug.h"
 #include "blink/dis.h"
 #include "blink/high.h"
+#include "blink/jit.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -512,8 +513,7 @@ static bool MustUpdateIp(P) {
   u64 next;
   if (!IsPure(rde)) return true;
   next = m->ip + Oplength(rde);
-  if (!HasHook(m, next)) return true;
-  if (GetHook(m, next) != GeneralDispatch) return true;
+  if (GetJitHook(&m->system->jit, next, 0)) return true;
   return false;
 }
 
@@ -566,7 +566,7 @@ bool CreatePath(P) {
       FlushCod(m->path.jb);
       m->path.start = pc;
       m->path.elements = 0;
-      SetHook(m, pc, JitlessDispatch);
+      SetJitHook(&m->system->jit, pc, (intptr_t)JitlessDispatch);
       res = true;
     } else {
       res = false;
@@ -595,13 +595,13 @@ void FinishPath(struct Machine *m) {
   STATISTIC(path_longest = MAX(path_longest, m->path.elements));
   STATISTIC(AVERAGE(path_average_elements, m->path.elements));
   STATISTIC(AVERAGE(path_average_bytes, m->path.jb->index - m->path.jb->start));
-  if (FinishJit(&m->system->jit, m->path.jb, m->fun + m->path.start)) {
+  if (FinishJit(&m->system->jit, m->path.jb, m->path.start)) {
     STATISTIC(++path_count);
     JIT_LOGF("staged path to %" PRIx64, m->path.start);
   } else {
     STATISTIC(++path_ooms);
     JIT_LOGF("path starting at %" PRIx64 " ran out of space", m->path.start);
-    SetHook(m, m->path.start, 0);
+    SetJitHook(&m->system->jit, m->path.start, 0);
   }
   m->path.jb = 0;
 }
@@ -613,7 +613,7 @@ void AbandonPath(struct Machine *m) {
   JIT_LOGF("abandoning path jit_pc:%" PRIxPTR " which started at pc:%" PRIx64,
            GetJitPc(m->path.jb), m->path.start);
   AbandonJit(&m->system->jit, m->path.jb);
-  SetHook(m, m->path.start, 0);
+  SetJitHook(&m->system->jit, m->path.start, 0);
   m->path.skew = 0;
   m->path.jb = 0;
 }

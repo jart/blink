@@ -52,8 +52,8 @@
 #endif
 
 #ifdef __HAIKU__
-#include <sys/sockio.h>
 #include <OS.h>
+#include <sys/sockio.h>
 #endif
 
 #ifdef __linux
@@ -815,8 +815,6 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   _Static_assert(PROT_EXEC == 4, "");
   int rc;
   int unsupported;
-  i64 i, beg, end;
-  long gotsome = 0;
   if (!IsValidAddrSize(addr, size)) return einval();
   if ((unsupported = prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))) {
     LOGF("unsupported mprotect() protection: %#x", unsupported);
@@ -825,23 +823,10 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   LOCK(&m->system->mmap_lock);
   rc = ProtectVirtual(m->system, addr, size, prot);
   if (rc != -1 && (prot & PROT_EXEC)) {
-    beg = MAX(addr, m->codestart);
-    end = MIN(addr + size, m->codestart + m->codesize);
-    if (beg < end) {
-      for (i = m->codestart; i < m->codestart + m->codesize; ++i) {
-        if (GetHook(m, i) != GeneralDispatch) {
-          SetHook(m, i, 0);
-          ++gotsome;
-        }
-      }
-    }
+    ClearJitHooks(&m->system->jit);
   }
   UNLOCK(&m->system->mmap_lock);
-  if (gotsome) {
-    STATISTIC(++smc_resets);
-    JIT_LOGF("mprotect(PROT_EXEC) reset %ld JIT hooks", gotsome);
-    InvalidateSystem(m->system, false, true);
-  }
+  InvalidateSystem(m->system, false, true);
   return rc;
 }
 

@@ -25,6 +25,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/bitscan.h"
 #include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/end.h"
@@ -116,6 +117,8 @@ const u8 kJitSav[5] = {kJitSav0, kJitSav1, kJitSav2, kJitSav3, kJitSav4};
 #define MOVE_DST(a)    ((0x0000ff & (a)) >> 0)
 #define MOVE_SRC(a)    ((0x00ff00 & (a)) >> 8)
 
+#define HASH(virt) (virt)
+
 static u8 g_code[kJitMemorySize];
 
 static struct JitGlobals {
@@ -127,6 +130,10 @@ static struct JitGlobals {
     PTHREAD_MUTEX_INITIALIZER,
     PROT_READ | PROT_WRITE | PROT_EXEC,
 };
+
+static u64 RoundupTwoPow(u64 x) {
+  return x > 1 ? (u64)2 << bsr(x - 1) : x ? 1 : 0;
+}
 
 // apple forbids rwx memory on their new m1 macbooks and requires that
 // we use a non-posix api in order to have jit. the problem is the api
@@ -327,6 +334,9 @@ int InitJit(struct Jit *jit) {
   jit->pagesize = GetSystemPageSize();
   jit->blocksize = blocksize = ROUNDUP(kJitMinBlockSize, jit->pagesize);
   pthread_mutex_init(&jit->lock, 0);
+  jit->hooks.n = RoundupTwoPow(kJitMemorySize / kJitAveragePath * 2);
+  unassert(jit->hooks.virt = calloc(jit->hooks.n, sizeof(*jit->hooks.virt)));
+  unassert(jit->hooks.func = calloc(jit->hooks.n, sizeof(*jit->hooks.func)));
   return 0;
 }
 
@@ -350,6 +360,8 @@ int DestroyJit(struct Jit *jit) {
   }
   UNLOCK(&jit->lock);
   unassert(!pthread_mutex_destroy(&jit->lock));
+  free(jit->hooks.func);
+  free(jit->hooks.virt);
   return 0;
 }
 
@@ -370,6 +382,80 @@ int ShutdownJit(void) {
  */
 int DisableJit(struct Jit *jit) {
   atomic_store_explicit(&jit->disabled, true, memory_order_relaxed);
+  return 0;
+}
+
+bool SetJitHook(struct Jit *jit, u64 virt, intptr_t func) {
+  int offset;
+  unsigned i;
+  intptr_t base, key;
+  unsigned hash, spot, step;
+  unassert(virt);
+  // reduce function pointer to four bytes
+  if (func) {
+    base = (intptr_t)IMAGE_END;
+    unassert(func - base);
+    unassert(INT_MIN <= func - base && func - base <= INT_MAX);
+    offset = func - base;
+  } else {
+    offset = 0;
+  }
+  // ensure there's room to add this hook
+  unassert(IS2POW(jit->hooks.n));
+  i = atomic_load_explicit(&jit->hooks.i, memory_order_relaxed);
+  do {
+    if (i == jit->hooks.n / 2) {
+      LOGF("ran out of jit hooks");
+      return false;
+    }
+  } while (!atomic_compare_exchange_weak_explicit(
+      &jit->hooks.i, &i, i + 1, memory_order_release, memory_order_relaxed));
+  // probe for spot in hash table. this is guaranteed to halt since we
+  // never place more than jit->hooks.n/2 items within this hash table
+  spot = 0;
+  step = 0;
+  hash = HASH(virt);
+  do {
+    spot = (hash + step * ((step + 1) >> 1)) & (jit->hooks.n - 1);
+    key = atomic_load_explicit(jit->hooks.virt + spot, memory_order_acquire);
+    ++step;
+  } while (key && key != virt);
+  // store hook
+  atomic_store_explicit(jit->hooks.func + spot, offset, memory_order_release);
+  atomic_store_explicit(jit->hooks.virt + spot, virt, memory_order_release);
+  return true;
+}
+
+intptr_t GetJitHook(struct Jit *jit, u64 virt, intptr_t dflt) {
+  int offset;
+  uintptr_t key;
+  unsigned hash, spot, step;
+  unassert(virt);
+  unassert(IS2POW(jit->hooks.n));
+  hash = HASH(virt);
+  for (spot = step = 0;; ++step) {
+    spot = (hash + step * ((step + 1) >> 1)) & (jit->hooks.n - 1);
+    offset = atomic_load_explicit(jit->hooks.func + spot, memory_order_acquire);
+    key = atomic_load_explicit(jit->hooks.virt + spot, memory_order_acquire);
+    if (key == virt) {
+      if (offset) {
+        return (intptr_t)IMAGE_END + offset;
+      } else {
+        return dflt;
+      }
+    }
+    if (!key) {
+      return dflt;
+    }
+  }
+}
+
+int ClearJitHooks(struct Jit *jit) {
+  unsigned i;
+  for (i = 0; i < jit->hooks.n; ++i) {
+    atomic_store_explicit(jit->hooks.func + i, 0, memory_order_release);
+    atomic_store_explicit(jit->hooks.virt + i, 0, memory_order_release);
+  }
   return 0;
 }
 
@@ -483,14 +569,14 @@ inline bool AppendJit(struct JitBlock *jb, const void *data, long size) {
   }
 }
 
-static struct Dll *GetJitJumps(struct Jit *jit, hook_t *hook) {
+static struct Dll *GetJitJumps(struct Jit *jit, u64 virt) {
   struct JitJump *jj;
   struct Dll *res, *rem, *e, *e2;
   LOCK(&jit->lock);
   for (rem = res = 0, e = dll_first(jit->jumps); e; e = e2) {
     e2 = dll_next(jit->jumps, e);
     jj = JITJUMP_CONTAINER(e);
-    if (jj->hook == hook) {
+    if (jj->virt == virt) {
       dll_remove(&jit->jumps, e);
       dll_make_first(&res, e);
     } else if (++jj->tries == kJitJumpTries) {
@@ -506,7 +592,7 @@ static struct Dll *GetJitJumps(struct Jit *jit, hook_t *hook) {
   return res;
 }
 
-static void FixupJitJumps(struct Dll *list, u8 *addr) {
+static void FixupJitJumps(struct Dll *list, intptr_t addr) {
   int n;
   union {
     u32 i;
@@ -520,7 +606,7 @@ static void FixupJitJumps(struct Dll *list, u8 *addr) {
     e2 = dll_next(list, e);
     jj = JITJUMP_CONTAINER(e);
     u.q = 0;
-    n = MakeJitJump(u.b, (intptr_t)jj->code, (intptr_t)addr + jj->addend);
+    n = MakeJitJump(u.b, (intptr_t)jj->code, addr + jj->addend);
     unassert(!((intptr_t)jj->code & 3));
 #if defined(__aarch64__)
     atomic_store_explicit((_Atomic(u32) *)jj->code, u.i, memory_order_release);
@@ -540,9 +626,9 @@ static void FixupJitJumps(struct Dll *list, u8 *addr) {
   }
 }
 
-static void SetJitHook(struct Jit *jit, hook_t *hook, u8 *addr) {
-  FixupJitJumps(GetJitJumps(jit, hook), addr);
-  atomic_store_explicit(hook, addr - IMAGE_END, memory_order_release);
+static void UpdateJitHook(struct Jit *jit, u64 virt, intptr_t addr) {
+  FixupJitJumps(GetJitJumps(jit, virt), addr);
+  SetJitHook(jit, virt, addr);
 }
 
 int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
@@ -582,7 +668,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
     while ((e = dll_first(jb->staged))) {
       js = JITSTAGE_CONTAINER(e);
       if (js->index <= blockoff) {
-        SetJitHook(jit, js->hook, jb->addr + js->start);
+        UpdateJitHook(jit, js->virt, (intptr_t)jb->addr + js->start);
         dll_remove(&jb->staged, e);
         FreeJitStage(js);
         ++count;
@@ -622,7 +708,7 @@ static void AbandonJitJumps(struct JitBlock *jb) {
   jb->jumps = 0;
 }
 
-bool RecordJitJump(struct JitBlock *jb, hook_t *hook, int addend) {
+bool RecordJitJump(struct JitBlock *jb, u64 virt, int addend) {
   struct JitJump *jj;
   if (jb->index > jb->blocksize) return false;
 #if defined(__x86_64__)
@@ -630,7 +716,7 @@ bool RecordJitJump(struct JitBlock *jb, hook_t *hook, int addend) {
 #endif
   if (!CanJitForImmediateEffect()) return false;
   if (!(jj = NewJitJump())) return false;
-  jj->hook = hook;
+  jj->virt = virt;
   jj->code = (u8 *)GetJitPc(jb);
   jj->addend = addend;
   dll_make_first(&jb->jumps, &jj->elem);
@@ -648,13 +734,11 @@ bool RecordJitJump(struct JitBlock *jb, hook_t *hook, int addend) {
  * @param jb is function builder object that was returned by StartJit();
  *     this function always relinquishes the calling thread's ownership
  *     of this object, even if this function returns an error
- * @param hook points to a function pointer where the address of the JIT
- *     code chunk will be stored once it becomes active
  * @return true if the function was generated, otherwise false if we ran
  *     out of room in the block while building the function, in which
  *     case the caller should simply try again
  */
-bool FinishJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook) {
+bool FinishJit(struct Jit *jit, struct JitBlock *jb, u64 virt) {
   bool ok;
   u8 *addr;
   long blocksize;
@@ -667,13 +751,13 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb, hook_t *hook) {
   }
   if (jb->index <= jb->blocksize) {
     CommitJitJumps(jit, jb);
-    if (hook) {
+    if (virt) {
       addr = jb->addr + jb->start;
       if (CanJitForImmediateEffect()) {
         sys_icache_invalidate(addr, jb->index - jb->start);
-        SetJitHook(jit, hook, addr);
+        UpdateJitHook(jit, virt, (intptr_t)addr);
       } else if ((js = NewJitStage())) {
-        js->hook = hook;
+        js->virt = virt;
         js->start = jb->start;
         js->index = jb->index;
         dll_make_last(&jb->staged, &js->elem);
@@ -1033,8 +1117,8 @@ STUB(int, AbandonJit, (struct Jit *jit, struct JitBlock *jb), 0)
 STUB(int, FlushJit, (struct Jit *jit), 0)
 STUB(struct JitBlock *, StartJit, (struct Jit *jit), 0)
 STUB(bool, AlignJit, (struct JitBlock *jb, int align, int misalign), 0)
-STUB(bool, FinishJit, (struct Jit *jit, struct JitBlock *jb, hook_t *hook), 0)
-STUB(bool, RecordJitJump, (struct JitBlock *jb, hook_t *hook, int addend), 0)
+STUB(bool, FinishJit, (struct Jit *jit, struct JitBlock *jb, u64 virt), 0)
+STUB(bool, RecordJitJump, (struct JitBlock *jb, u64 virt, int addend), 0)
 STUB(bool, AppendJitJump, (struct JitBlock *jb, void *code), 0)
 STUB(bool, AppendJitCall, (struct JitBlock *jb, void *func), 0)
 STUB(bool, AppendJitSetReg, (struct JitBlock *jb, int reg, u64 value), 0)
@@ -1042,4 +1126,7 @@ STUB(bool, AppendJitRet, (struct JitBlock *jb), 0)
 STUB(bool, AppendJitNop, (struct JitBlock *jb), 0)
 STUB(bool, AppendJitTrap, (struct JitBlock *jb), 0)
 STUB(bool, CanJitForImmediateEffect, (void), 0)
+STUB(bool, SetJitHook, (struct Jit *jit, u64 virt, intptr_t func), 0)
+STUB(intptr_t, GetJitHook, (struct Jit *jit, u64 virt, intptr_t dflt), dflt)
+STUB(int, ClearJitHooks, (struct Jit *jit), 0)
 #endif

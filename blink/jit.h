@@ -14,6 +14,7 @@
 #define kJitJumpTries    16
 #define kJitMemorySize   32505856
 #define kJitMemoryAlign  65536
+#define kJitAveragePath  300
 #define kJitMinBlockSize 262144
 
 #ifdef __x86_64__
@@ -101,11 +102,9 @@
 #define JITBLOCK_CONTAINER(e) DLL_CONTAINER(struct JitBlock, elem, e)
 #define JITJUMP_CONTAINER(e)  DLL_CONTAINER(struct JitJump, elem, e)
 
-typedef _Atomic(int) hook_t;
-
 struct JitJump {
-  hook_t *hook;
   u8 *code;
+  u64 virt;
   long tries;
   long addend;
   struct Dll elem;
@@ -114,7 +113,7 @@ struct JitJump {
 struct JitStage {
   long start;
   long index;
-  hook_t *hook;
+  u64 virt;
   struct Dll elem;
 };
 
@@ -131,11 +130,19 @@ struct JitBlock {
   struct Dll *staged;
 };
 
+struct JitHooks {
+  unsigned n;
+  _Atomic(unsigned) i;
+  _Atomic(int) *func;
+  _Atomic(intptr_t) *virt;
+};
+
 struct Jit {
   long pagesize;
   _Atomic(bool) disabled;
   _Atomic(long) blocksize;
   pthread_mutex_t lock;
+  struct JitHooks hooks;
   struct Dll *blocks;
   struct Dll *jumps;
 };
@@ -161,8 +168,11 @@ bool AppendJitJump(struct JitBlock *, void *);
 bool AppendJitCall(struct JitBlock *, void *);
 bool AppendJitSetReg(struct JitBlock *, int, u64);
 bool AppendJitMovReg(struct JitBlock *, int, int);
-bool FinishJit(struct Jit *, struct JitBlock *, hook_t *);
-bool RecordJitJump(struct JitBlock *, hook_t *, int);
+bool FinishJit(struct Jit *, struct JitBlock *, u64);
+bool RecordJitJump(struct JitBlock *, u64, int);
+intptr_t GetJitHook(struct Jit *, u64, intptr_t);
+bool SetJitHook(struct Jit *, u64, intptr_t);
+int ClearJitHooks(struct Jit *);
 
 int CommitJit_(struct Jit *, struct JitBlock *);
 void ReinsertJitBlock_(struct Jit *, struct JitBlock *);

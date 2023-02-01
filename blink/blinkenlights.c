@@ -278,8 +278,8 @@ static const char kRipName[3][4] = {"IP", "EIP", "RIP"};
 static const char kRegisterNames[3][16][4] = {
     {"AX", "CX", "DX", "BX", "SP", "BP", "SI", "DI"},
     {"EAX", "ECX", "EDX", "EBX", "ESP", "EBP", "ESI", "EDI"},
-    {"RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI", "R8", "R9", "R10",
-     "R11", "R12", "R13", "R14", "R15"},
+    {"RAX", "RCX", "RDX", "RBX", "RSP", "RBP", "RSI", "RDI",  //
+     "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"},
 };
 
 extern char **environ;
@@ -535,7 +535,7 @@ static unsigned long TallyHits(i64 addr, int size) {
   i64 pc;
   unsigned long hits;
   for (hits = 0, pc = addr; pc < addr + size; ++pc) {
-    hits += ophits[pc - m->system->codestart_prof];
+    hits += ophits[pc - m->system->codestart];
   }
   return hits;
 }
@@ -543,13 +543,12 @@ static unsigned long TallyHits(i64 addr, int size) {
 static void GenerateProfile(void) {
   int sym;
   profsyms.i = 0;
-  profsyms.toto =
-      TallyHits(m->system->codestart_prof, m->system->codesize_prof);
+  profsyms.toto = TallyHits(m->system->codestart, m->system->codesize);
   if (!ophits) return;
   for (sym = 0; sym < dis->syms.i; ++sym) {
-    if (dis->syms.p[sym].addr >= m->system->codestart_prof &&
+    if (dis->syms.p[sym].addr >= m->system->codestart &&
         dis->syms.p[sym].addr + dis->syms.p[sym].size <
-            m->system->codestart_prof + m->system->codesize_prof) {
+            m->system->codestart + m->system->codesize) {
       AddProfSym(sym, TallyHits(dis->syms.p[sym].addr, dis->syms.p[sym].size));
     }
   }
@@ -1352,8 +1351,8 @@ static void DrawSegment(struct Panel *p, i64 i, struct DescriptorCache value,
   snprintf(buf, sizeof(buf), "%-3s", name);
   AppendPanel(p, i, buf);
   AppendPanel(p, i, " ");
-  snprintf(buf, sizeof(buf), "%04" PRIx16 " (@%08" PRIx64 ")",
-           value.sel, value.base);
+  snprintf(buf, sizeof(buf), "%04" PRIx16 " (@%08" PRIx64 ")", value.sel,
+           value.base);
   AppendPanel(p, i, buf);
   if (changed) AppendPanel(p, i, "\033[27m");
   AppendPanel(p, i, "  ");
@@ -2623,7 +2622,8 @@ static void OnDiskServiceReadSectorsExtended(void) {
     lba = Read32(pkt + 8);
     offset = lba * 512;
     LOGF("bios read sector ext 0 <= %" PRId64 " && %" PRIx64 " + %" PRIx64
-         " <= %lx", lba, offset, size, m->system->elf.mapsize);
+         " <= %lx",
+         lba, offset, size, m->system->elf.mapsize);
     if (offset >= m->system->elf.mapsize ||
         offset + size > m->system->elf.mapsize) {
       LOGF("bios read sector failed 0 <= %" PRId64 " && %" PRIx64 " <= %lx",
@@ -3345,8 +3345,8 @@ static void LogInstruction(void) {
        m->ip, Get64(m->sp) & 0xffffffffffff, Get64(m->ax), Get64(m->cx),
        Get64(m->dx), Get64(m->bx), Get64(m->bp), Get64(m->si), Get64(m->di),
        Get64(m->r8), Get64(m->r9), Get64(m->r10), Get64(m->r11), Get64(m->r12),
-       Get64(m->r13), Get64(m->r14), Get64(m->r15),
-       m->fs.base & 0xffffffffffff, m->gs.base & 0xffffffffffff);
+       Get64(m->r13), Get64(m->r14), Get64(m->r15), m->fs.base & 0xffffffffffff,
+       m->gs.base & 0xffffffffffff);
 }
 
 static void EnterWatchpoint(long bp) {
@@ -3363,10 +3363,10 @@ static void EnterWatchpoint(long bp) {
 }
 
 static void ProfileOp(struct Machine *m, u64 pc) {
-  if (ophits &&                           //
-      pc >= m->system->codestart_prof &&  //
-      pc < m->system->codestart_prof + m->system->codesize_prof) {
-    ++ophits[pc - m->system->codestart_prof];
+  if (ophits &&                      //
+      pc >= m->system->codestart &&  //
+      pc < m->system->codestart + m->system->codesize) {
+    ++ophits[pc - m->system->codestart];
   }
 }
 
@@ -3720,10 +3720,10 @@ int VirtualMachine(int argc, char *argv[]) {
   do {
     action = 0;
     LoadProgram(m, codepath, argv + optind_ - 1, environ);
-    if (m->system->codesize_prof) {
+    if (m->system->codesize) {
       ophits = (unsigned long *)AllocateBig(
-          m->system->codesize_prof * sizeof(unsigned long),
-          PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+          m->system->codesize * sizeof(unsigned long), PROT_READ | PROT_WRITE,
+          MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     }
     ScrollMemoryViews();
     AddStdFd(&m->system->fds, 0);
@@ -3835,7 +3835,7 @@ int main(int argc, char *argv[]) {
                           1ull << (SIGWINCH_LINUX - 1);  //
   if (optind_ == argc) PrintUsage(48, stderr);
   rc = VirtualMachine(argc, argv);
-  FreeBig(ophits, m->system->codesize_prof * sizeof(unsigned long));
+  FreeBig(ophits, m->system->codesize * sizeof(unsigned long));
   FreeMachine(m);
   ClearHistory();
   FreePanels();

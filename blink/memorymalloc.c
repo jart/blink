@@ -205,7 +205,6 @@ void FreeSystem(struct System *s) {
   unassert(!pthread_mutex_destroy(&s->sig_lock));
   DestroyFds(&s->fds);
   DestroyJit(&s->jit);
-  FreeBig(s->fun, s->codesize * sizeof(atomic_int));
   FreeBig(s, sizeof(struct System));
 }
 
@@ -235,10 +234,7 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
   m->mode = system->mode;
   m->thread = pthread_self();
   m->nolinear = system->nolinear;
-  m->codesize = system->codesize;
-  m->codestart = system->codestart;
   Write32(m->sigaltstack.flags, SS_DISABLE_LINUX);
-  m->fun = system->fun ? system->fun - system->codestart : 0;
   if (parent) {
     m->tid = (system->next_tid++ & (kMaxThreadIds - 1)) + kMinThreadId;
   } else {
