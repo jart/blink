@@ -1390,6 +1390,10 @@ static void OpSfence(P) {
   OpMfence(A);
 }
 
+static void OpWbinvd(P) {
+  OpMfence(A);
+}
+
 static void OpClflush(P) {
   OpMfence(A);
 }
@@ -1894,7 +1898,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*106*/ OpUd,                    //
     /*107*/ OpUd,                    //
     /*108*/ OpUd,                    //
-    /*109*/ OpUd,                    //
+    /*109*/ OpWbinvd,                //
     /*10A*/ OpUd,                    //
     /*10B*/ OpUd,                    //
     /*10C*/ OpUd,                    //
