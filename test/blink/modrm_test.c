@@ -28,7 +28,7 @@ struct Machine *m;
 struct XedDecodedInst xedd;
 
 void SetUp(void) {
-  unassert((s = NewSystem()));
+  unassert((s = NewSystem(XED_MODE_LONG)));
   unassert((m = NewMachine(s, 0)));
   m->xedd = &xedd;
   memset(&xedd, 0, sizeof(xedd));

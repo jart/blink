@@ -102,9 +102,8 @@ static int Exec(char *prog, char **argv, char **envp) {
   int i;
   struct Machine *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
-  unassert((g_machine = NewMachine(NewSystem(), 0)));
+  unassert((g_machine = NewMachine(NewSystem(XED_MODE_LONG), 0)));
   if (FLAG_nojit) DisableJit(&g_machine->system->jit);
-  SetMachineMode(g_machine, XED_MODE_LONG);
   g_machine->system->exec = Exec;
   g_machine->nolinear = FLAG_nolinear;
   g_machine->system->nolinear = FLAG_nolinear;

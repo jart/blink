@@ -108,27 +108,39 @@ static void FreeHostPages(struct System *s) {
   // TODO(jart): Iterate the PML4T to find host pages.
 }
 
-struct System *NewSystem(void) {
+struct System *NewSystem(int mode) {
   struct System *s;
-  if ((s = (struct System *)AllocateBig(sizeof(struct System),
-                                        PROT_READ | PROT_WRITE,
-                                        MAP_ANONYMOUS | MAP_PRIVATE, -1, 0))) {
-    InitJit(&s->jit);
-    InitFds(&s->fds);
-    pthread_mutex_init(&s->sig_lock, 0);
-    pthread_mutex_init(&s->mmap_lock, 0);
-    pthread_mutex_init(&s->exec_lock, 0);
-    pthread_mutex_init(&s->futex_lock, 0);
-    pthread_cond_init(&s->machines_cond, 0);
-    pthread_mutex_init(&s->machines_lock, 0);
-    s->blinksigs = 1ull << (SIGSYS_LINUX - 1) |   //
-                   1ull << (SIGILL_LINUX - 1) |   //
-                   1ull << (SIGFPE_LINUX - 1) |   //
-                   1ull << (SIGSEGV_LINUX - 1) |  //
-                   1ull << (SIGTRAP_LINUX - 1);
-    s->automap = kAutomapStart;
-    s->pid = getpid();
+  unassert(mode == XED_MODE_REAL ||    //
+           mode == XED_MODE_LEGACY ||  //
+           mode == XED_MODE_LONG);
+  if (posix_memalign((void **)&s, _Alignof(struct System), sizeof(*s))) {
+    enomem();
+    return 0;
   }
+  memset(s, 0, sizeof(*s));
+  s->mode = mode;
+  if (mode == XED_MODE_REAL) {
+    if (posix_memalign((void **)&s->real, 4096, kRealSize)) {
+      free(s);
+      enomem();
+      return 0;
+    }
+  }
+  InitJit(&s->jit);
+  InitFds(&s->fds);
+  pthread_mutex_init(&s->sig_lock, 0);
+  pthread_mutex_init(&s->mmap_lock, 0);
+  pthread_mutex_init(&s->exec_lock, 0);
+  pthread_mutex_init(&s->futex_lock, 0);
+  pthread_cond_init(&s->machines_cond, 0);
+  pthread_mutex_init(&s->machines_lock, 0);
+  s->blinksigs = 1ull << (SIGSYS_LINUX - 1) |   //
+                 1ull << (SIGILL_LINUX - 1) |   //
+                 1ull << (SIGFPE_LINUX - 1) |   //
+                 1ull << (SIGSEGV_LINUX - 1) |  //
+                 1ull << (SIGTRAP_LINUX - 1);
+  s->automap = kAutomapStart;
+  s->pid = getpid();
   return s;
 }
 
@@ -205,7 +217,7 @@ void FreeSystem(struct System *s) {
   unassert(!pthread_mutex_destroy(&s->sig_lock));
   DestroyFds(&s->fds);
   DestroyJit(&s->jit);
-  FreeBig(s, sizeof(struct System));
+  free(s);
 }
 
 struct Machine *NewMachine(struct System *system, struct Machine *parent) {

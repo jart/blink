@@ -52,6 +52,7 @@ u8 *GetPageAddress(struct System *s, u64 entry) {
   if (entry & PAGE_HOST) {
     return (u8 *)(intptr_t)(entry & PAGE_TA);
   } else if ((entry & PAGE_TA) + 4096 <= kRealSize) {
+    unassert(s->real);
     return s->real + (entry & PAGE_TA);
   } else {
     return 0;
@@ -113,7 +114,7 @@ u8 *LookupAddress(struct Machine *m, i64 virt) {
   u8 *host;
   u64 entry, page;
   if (m->mode == XED_MODE_LONG ||
-      (m->mode != XED_MODE_REAL && (m->system->cr0 & CR0_PG) != 0)) {
+      (m->mode != XED_MODE_REAL && (m->system->cr0 & CR0_PG))) {
     if (atomic_load_explicit(&m->invalidated, memory_order_relaxed)) {
       ResetTlb(m);
       atomic_store_explicit(&m->invalidated, false, memory_order_relaxed);
@@ -132,6 +133,7 @@ u8 *LookupAddress(struct Machine *m, i64 virt) {
     }
   } else if (virt >= 0 && virt <= 0xffffffff &&
              (virt & 0xffffffff) + 4095 < kRealSize) {
+    unassert(m->system->real);
     return m->system->real + virt;
   } else {
     efault();

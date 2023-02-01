@@ -3805,7 +3805,7 @@ int main(int argc, char *argv[]) {
   WriteErrorInit();
   AddPath_StartOp_Hook = AddPath_StartOp_Tui;
   unassert((pty = NewPty()));
-  unassert((s = NewSystem()));
+  unassert((s = NewSystem(XED_MODE_REAL)));
   unassert((m = NewMachine(s, 0)));
   SetMachineMode(m, XED_MODE_LONG);
   m->system->redraw = Redraw;

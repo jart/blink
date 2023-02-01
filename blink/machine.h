@@ -239,6 +239,7 @@ struct System {
   u16 gdt_limit;
   u16 idt_limit;
   int pid;
+  u8 *real;
   u64 gdt_base;
   u64 idt_base;
   u64 cr0;
@@ -269,7 +270,6 @@ struct System {
   void (*onlongbranch)(struct Machine *);
   int (*exec)(char *, char **, char **);
   void (*redraw)(bool);
-  _Alignas(4096) u8 real[kRealSize];
 };
 
 struct JitPath {
@@ -393,7 +393,7 @@ extern const nexgen32e_f kSax[3];
 extern bool FLAG_noconnect;
 extern bool g_wasteland;
 
-struct System *NewSystem(void);
+struct System *NewSystem(int);
 void FreeSystem(struct System *);
 _Noreturn void Actor(struct Machine *);
 void SetMachineMode(struct Machine *, int);
