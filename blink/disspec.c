@@ -463,6 +463,7 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0x1B, "nop Ev");
     RCASE(0x1C, "nop Ev");
     RCASE(0x1D, "nop Ev");
+    RCASE(0x1E, "nop Ev");
     RCASE(0x20, "mov %Hd %Cd");
     RCASE(0x22, "mov %Cd %Hd");
     RCASE(0x28, "movapSD %Vps Wps");
