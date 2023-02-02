@@ -29,7 +29,6 @@
 #include "blink/debug.h"
 #include "blink/dll.h"
 #include "blink/endian.h"
-#include "blink/flag.h"
 #include "blink/jit.h"
 #include "blink/loader.h"
 #include "blink/lock.h"
@@ -45,16 +44,14 @@
 #include "blink/x86.h"
 #include "blink/xlat.h"
 
-#define OPTS "hjms0L:"
+#define OPTS "hjms0"
 #define USAGE \
   " [-" OPTS "] PROG [ARGS...]\n\
-  -h                   help\n\
-  -j                   disable jit\n\
-  -0                   to specify argv[0]\n\
-  -m                   enable memory safety\n\
-  -s                   print statistics on exit\n\
-  -L PATH              log filename (default ${TMPDIR:-/tmp}/blink.log)\n\
-  $BLINK_LOG_FILENAME  log filename (same as -L flag)\n"
+  -h        help\n\
+  -j        disable jit\n\
+  -0        to specify argv[0]\n\
+  -m        enable memory safety\n\
+  -s        print statistics on exit\n"
 
 extern char **environ;
 static bool FLAG_zero;
@@ -70,7 +67,7 @@ void TerminateSignal(struct Machine *m, int sig) {
   int syssig;
   struct sigaction sa;
   unassert(!IsSignalIgnoredByDefault(sig));
-  ERRF("terminating due to signal %s", DescribeSignal(sig));
+  LOGF("terminating due to signal %s", DescribeSignal(sig));
   if ((syssig = XlatSignal(sig)) == -1) syssig = SIGTERM;
   KillOtherThreads(m->system);
   FreeMachine(m);
@@ -91,7 +88,7 @@ static void OnSigSegv(int sig, siginfo_t *si, void *ptr) {
   // TODO: Fix memory leak with FormatPml4t()
   // TODO(jart): Fix address translation in non-linear mode.
   g_machine->faultaddr = ToGuest(si->si_addr);
-  ERRF("SEGMENTATION FAULT (%s) AT ADDRESS %" PRIx64 "\n\t%s\n%s",
+  LOGF("SEGMENTATION FAULT (%s) AT ADDRESS %" PRIx64 "\n\t%s\n%s",
        strsignal(sig), g_machine->faultaddr, GetBacktrace(g_machine),
        FormatPml4t(g_machine));
 #ifdef DEBUG
@@ -161,7 +158,6 @@ _Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   FLAG_nolinear = !CanHaveLinearMemory();
-  FLAG_logpath = getenv("BLINK_LOG_FILENAME");
 #ifdef __CYGWIN__
   FLAG_nojit = true;
   FLAG_nolinear = true;
@@ -186,18 +182,12 @@ static void GetOpts(int argc, char *argv[]) {
       case 's':
         FLAG_statistics = true;
         break;
-      case 'L':
-        FLAG_logpath = optarg_;
-        break;
       case 'h':
         PrintUsage(argc, argv, 0, 1);
       default:
         PrintUsage(argc, argv, 48, 2);
     }
   }
-#if LOG_ENABLED
-  LogInit(FLAG_logpath);
-#endif
 }
 
 static void HandleSigs(void) {
@@ -239,6 +229,9 @@ int main(int argc, char *argv[]) {
   WriteErrorInit();
   HandleSigs();
   InitBus();
+#if LOG_TMP
+  LogInit(0);
+#endif
   if (!Commandv(argv[optind_], g_pathbuf, sizeof(g_pathbuf))) {
     WriteErrorString(argv[0]);
     WriteErrorString(": command not found: ");

@@ -39,7 +39,7 @@ void InitBus(void) {
   unsigned i;
   pthread_condattr_t cattr;
   pthread_mutexattr_t mattr;
-#if !CAN_PSHARE
+#ifdef __CYGWIN__
   if (g_bus) FreeBig(g_bus, sizeof(*g_bus));
 #endif
   unassert(g_bus =
@@ -47,7 +47,7 @@ void InitBus(void) {
                                          MAP_SHARED | MAP_ANONYMOUS, -1, 0));
   unassert(!pthread_condattr_init(&cattr));
   unassert(!pthread_mutexattr_init(&mattr));
-#if CAN_PSHARE
+#ifndef __CYGWIN__
   unassert(!pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED));
   unassert(!pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
 #endif

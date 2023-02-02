@@ -19,7 +19,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <pthread.h>
 #include <stdatomic.h>
 #include <unistd.h>
 
@@ -32,7 +31,7 @@
 #include "blink/machine.h"
 #include "blink/syscall.h"
 
-static int CloseFd(struct Fd *fd) {
+static int CloseFd(struct System *s, struct Fd *fd) {
   int rc;
   unassert(fd->cb);
   if (fd->dirstream) {
@@ -40,75 +39,54 @@ static int CloseFd(struct Fd *fd) {
   } else {
     rc = fd->cb->close(fd->fildes);
   }
-  FreeFd(fd);
+  // EINTR shouldn't be possible since we don't support SO_LINGER
+  unassert(!(rc == -1 && errno == EINTR));
+  FreeFd(&s->fds, fd);
   return rc;
 }
 
-static int CloseFds(struct Dll *fds) {
-  int rc = 0;
-  struct Dll *e, *e2;
-  for (e = dll_first(fds); e; e = e2) {
-    e2 = dll_next(fds, e);
-    dll_remove(&fds, e);
-    rc |= CloseFd(FD_CONTAINER(e));
-  }
-  return rc;
-}
-
-static int FinishClose(struct Machine *m, int rc) {
-  if (rc == -1 && errno == EINTR && !CheckInterrupt(m)) rc = 0;
-  return rc;
-}
-
-int SysClose(struct Machine *m, i32 fildes) {
-  struct Fd *fd;
-  LockFds(&m->system->fds);
-  if ((fd = GetFd(&m->system->fds, fildes))) {
-    dll_remove(&m->system->fds.list, &fd->elem);
-  }
-  UnlockFds(&m->system->fds);
-  if (!fd) return -1;
-  return FinishClose(m, CloseFd(fd));
-}
-
-int SysCloseRange(struct Machine *m, u32 first, u32 last, u32 flags) {
+int SysClose(struct System *s, i32 fildes) {
   int rc;
   struct Fd *fd;
-  sigset_t block, oldmask;
-  struct Dll *e, *e2, *fds;
+  LockFds(&s->fds);
+  if ((fd = GetFd(&s->fds, fildes))) {
+    rc = CloseFd(s, fd);
+  } else {
+    rc = -1;
+  }
+  UnlockFds(&s->fds);
+  return rc;
+}
+
+int SysCloseRange(struct System *s, u32 first, u32 last, u32 flags) {
+  int rc;
+  struct Fd *fd;
+  struct Dll *e, *e2;
   if (flags || first > last) {
     return einval();
   }
-  LockFds(&m->system->fds);
-  for (fds = 0, e = dll_first(m->system->fds.list); e; e = e2) {
+  LockFds(&s->fds);
+  for (rc = 0, e = dll_first(s->fds.list); e; e = e2) {
     fd = FD_CONTAINER(e);
-    e2 = dll_next(m->system->fds.list, e);
+    e2 = dll_next(s->fds.list, e);
     if (first <= fd->fildes && fd->fildes <= last) {
-      dll_remove(&m->system->fds.list, e);
-      dll_make_last(&fds, e);
+      rc |= CloseFd(s, fd);
     }
   }
-  UnlockFds(&m->system->fds);
-  unassert(!sigfillset(&block));
-  unassert(!pthread_sigmask(SIG_BLOCK, &block, &oldmask));
-  rc = CloseFds(fds);
-  unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
-  unassert(!(rc == -1 && errno == EINTR));
+  UnlockFds(&s->fds);
   return rc;
 }
 
 void SysCloseExec(struct System *s) {
   struct Fd *fd;
-  struct Dll *e, *e2, *fds;
+  struct Dll *e, *e2;
   LockFds(&s->fds);
-  for (fds = 0, e = dll_first(s->fds.list); e; e = e2) {
+  for (e = dll_first(s->fds.list); e; e = e2) {
     fd = FD_CONTAINER(e);
     e2 = dll_next(s->fds.list, e);
     if (fd->oflags & O_CLOEXEC) {
-      dll_remove(&s->fds.list, e);
-      dll_make_last(&fds, e);
+      CloseFd(s, fd);
     }
   }
   UnlockFds(&s->fds);
-  CloseFds(fds);
 }

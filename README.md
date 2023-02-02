@@ -9,16 +9,13 @@ This project contains two programs:
 
 `blink` is a virtual machine that runs x86-64-linux programs on
 different operating systems and hardware architectures. It's designed to
-do the same thing as the `qemu-x86_64` command, except that
-
-1. blink is 180kb in size, whereas the qemu-x86_64 executable is 4mb
-
-2. blink will run your Linux binaries on any POSIX platform, whereas
-   qemu-x86_64 only supports Linux
-
-3. blink goes 2x faster than qemu-x86_64 on some benchmarks, such as SSE
-   integer / floating point math. Blink is also faster at running
-   ephemeral programs such as compilers
+do the same thing as the `qemu-x86_64` command, except (a) rather than
+being a 4mb binary, Blink only has a ~179kb footprint; and (b) Blink
+goes 2x faster than Qemu on some benchmarks such as emulating GCC. The
+tradeoff is Blink doesn't have as many features as Qemu. Blink is a
+great fit when you want a virtual machine that's extremely small and
+runs ephemeral programs much faster. For further details on the
+motivations for this tool, please read <https://justine.lol/ape.html>.
 
 [`blinkenlights`](https://justine.lol/blinkenlights) is a TUI interface
 that may be used for debugging x86_64-linux programs across platforms.
@@ -56,6 +53,11 @@ The instructions for compiling Blink are as follows:
 $ make -j4
 $ o//blink/blink -h
 Usage: o//blink/blink [-hjms] PROG [ARGS...]
+  -h        help
+  -j        disable jit
+  -0        to specify argv[0]
+  -m        enable memory safety
+  -s        print statistics on exit
 ```
 
 Here's how you can run a simple hello world program with Blink:
@@ -122,210 +124,15 @@ You can hunt down bugs in Blink using the following build modes:
 - `MODE=ubsan` to find violations of the C standard
 - `MODE=msan` helps find uninitialized memory errors
 
-## Reference
-
-### `blink` Flags
-
-Your Blink VM may be started with the following command line flags:
-
-- `-h` shows this help
-
-- `-j` disables Just-In-Time (JIT) compilation, which will make Blink go
-  ~10x slower.
-
-- `-m` disables the linear memory optimization. This makes Blink memory
-  safe, but comes at the cost of going ~4x slower. On some platforms
-  this can help avoid the possibility of an mmap() crisis. This option
-  is required, if Blink is running inside Blink, in which case only one
-  level of simulation may use the linear memory optimization.
-
-- `-L PATH` specifies the log path. The default log path is
-  `$TMPDIR/blink.log` or `/tmp/blink.log` if `$TMPDIR` isn't defined. If
-  a log file isn't desired, this flag may be set to `-` or `/dev/stderr`
-  for logging to standard error.
-
-- `-s` will cause internal statistics to be printed to standard error on
-  exit. Stats aren't available in `MODE=rel` and `MODE=tiny` builds, and
-  this flag is ignored.
-
-### `blinkenlights` Flags
-
-Blinkenlights' TUI may be started with the following command line flags:
-
-- `-h` shows this help
-
-- `-r` puts your virtual machine real mode. This may be used to run
-  16-bit i8086 programs, such as SectorLISP. It's also used for booting
-  programs from Blinkenlights's simulated BIOS.
-
-- `-b ADDR` pushes a breakpoint, which may be specified as a raw
-  hexadecimal address, or a symbolic name that's defined by your ELF
-  binary (or its associated `.dbg` file). When pressing `c` (continue)
-  or `C` (continue harder) in the TUI, Blink will immediately stop upon
-  reaching an instruction that's listed as a breakpoint, after which a
-  modal dialog is displayed. The modal dialog may be cleared by `ENTER`
-  after which the TUI resumes its normal state.
-
-- `-w ADDR` pushes a watchpoint, which may be specified as a raw
-  hexadecimal address, or a symbolic name that's defined by your ELF
-  binary (or its associated `.dbg` file). When pressing `c` (continue)
-  or `C` (continue harder) in the TUI, Blink will immediately stop upon
-  reaching an instruction that either (a) has a ModR/M encoding that
-  references an address that's listed as a watchpoint, or (b) manages to
-  mutate the memory stored at a watchpoint address by some other means.
-  When Blinkenlights is stopped at a watchpoint, a modal dialog will be
-  displayed which may be cleared by pressing `ENTER`, after which the
-  TUI resumes its normal state.
-
-- `-j` enables Just-In-Time (JIT) compilation. This will make
-  Blinkenlights go significantly faster, at the cost of taking away the
-  ability to step through each instruction. The TUI will visualize JIT
-  path formation in the assembly display; see the JIT Path Glyphs
-  section below to learn more. Please note this flag has the opposite
-  meaning as it does in the `blink` command.
-
-- `-m` enables the linear memory optimization. This makes blinkenlights
-  capable of faster emulation, at the cost of losing some statistics. It
-  no longer becomes possible to display which percentage of a memory map
-  has been activated. Blinkenlights will also remove the commit /
-  reserve / free page statistics from the status panel on the bottom
-  right of the display. Please note this flag has the opposite meaning
-  as it does in the `blink` command.
-
-- `-t` may be used to disable Blinkenlights TUI mode. This makes the
-  program behave similarly to the `blink` command, however not as good.
-  We're currently using this flag for unit testing real mode programs,
-  which are encouraged to use the `SYSCALL` instruction to report their
-  exit status.
-
-- `-L PATH` specifies the log path. The default log path is
-  `$TMPDIR/blink.log` or `/tmp/blink.log` if `$TMPDIR` isn't defined.
-
-- `-s` will cause internal statistics to be printed to standard error on
-  exit. Stats aren't available in `MODE=rel` and `MODE=tiny` builds, and
-  this flag is ignored.
-
-- `-H` disables syntax highlighting
-
-- `-R` disables reactive error mode
-
-- `-v` increases verbosity
-
-#### JIT Path Glyphs
-
-When the Blinkenlights TUI is run with JITing enabled (using the `-j`
-flag) the assembly dump display will display a glyph next to the address
-of each instruction, to indicate the status of JIT path formation. Those
-glyphs are defined as follows:
-
-- ` ` or space indicates no JIT path is associated with an address
-
-- `S` means that a JIT path is currently being constructed which
-  starts at this address. By continuing to press `s` (step) in the TUI
-  interface, the JIT path will grow longer until it is eventually
-  completed, and the `S` glyph is replaced by `*`.
-
-- `*` (asterisk) means that a JIT path has been installed to the
-  adjacent address. When `s` (step) is pressed at such addresses
-  within the TUI display, stepping takes on a different meaning.
-  Rather than stepping a single instruction, it will step the entire
-  length of the JIT path. The next assembly line that'll be
-  highlighted will be the instruction after where the path ends.
-
-- `G` means that a hook has been explicitly set to `GeneralDispatch`.
-  This setting currently isn't used.
-
-### Environment Variables
-
-- `BLINK_LOG_FILENAME` may be specified to supply a log path to be used
-  in cases where the `-L PATH` flag isn't specified. This value should
-  be an absolute path. It may be `/dev/stderr` to avoid needing a file.
-
 ## Compiling and Running Programs under Blink
 
-Blink can be picky about which Linux binaries it'll execute. It may also
-be the case that your Linux binary will only run under Blink on Linux,
-but report errors if run under Blink on another platform, e.g. MacOS. In
-our experience, how successfully a program can run under Blink depends
-almost entirely on (1) how it was compiled, and (2) which C library it
-uses. This section will provide guidance on which tools will work best.
-
-First, some background. Blink's coverage of the x86_64 instruction set
-is comprehensive. However the Linux system call ABI is much larger and
-therefore not possible to fully support, unless Blink emulated a Linux
-kernel image too. Blink has sought to support the subset of Linux ABIs
-that are either (1) standardized by POSIX.1-2007 or (2) too popular to
-*not* support. As an example, `AF_INET`, `AF_UNIX`, and `AF_INET6` are
-supported, but Blink will return `EINVAL` if a program requests any of
-the dozens of other ones, e.g. `AF_BLUETOOTH`. Such errors are usually
-logged to `/tmp/blink.log`, to make it easy to file a feature request.
-In other cases ABIs aren't supported simply because they're Linux-only
-and difficult to polyfill on other POSIX platforms. For example, Blink
-will polyfill `open(O_TMPFILE)` on non-Linux platforms so it works the
-same way, but other Linux-specific ABIs like `membarrier()` we haven't
-had the time to figure out yet. Since app developers usually don't use
-non-portable APIs, it's usually the platform C library that's at fault
-for calling them. Many Linux system calls, could be rightfully thought
-of as an implementation detail of Glibc.
-
-Blink's prime directive is to support binaries built with Cosmopolitan
-Libc. Actually Portable Executables make up the bulk of Blink's unit
-test suite. Anything created by Cosmopolitan is almost certainly going
-to work very well. Since Cosmopolitan is closely related to Musl Libc,
-programs compiled using Musl also tend to work very well. For example,
-Alpine Linux is a Musl Libc based distro, so their prebuilt dynamic
-binaries tend to all work well, and it's also a great platform to use
-for compiling other software from source that's intended for Blink.
-
-So the recommended approach is either:
-
-1. Build your app using Cosmopolitan Libc, otherwise
-2. Build your app using GNU Autotools on Alpine Linux
-
-For Cosmopolitan, please read [Getting Started with Cosmopolitan
-Libc](https://jeskin.net/blog/getting-started-with-cosmopolitan-libc/)
-for information on how to get started. Cosmopolitan comes with a lot of
-third party software included that you can try with Blink right away,
-e.g. SQLite, Python, QuickJS, and Antirez's Kilo editor.
+Blink can be picky about which Linux executables it'll execute. For
+example the host system page size may cause problems on non-Linux
+platforms like Apple M1 (16kb) and Cygwin (64kb). On such platforms, you
+may encounter an error like this:
 
 ```
-git clone https://github.com/jart/cosmopolitan/
-cd cosmopolitan
-
-make -j8 o//third_party/python/python.com
-blinkenlights -jm o//third_party/python/python.com
-
-make -j8 o//third_party/quickjs/qjs.com
-blinkenlights -jm o//third_party/quickjs/qjs.com
-
-make -j8 o//third_party/sqlite3/sqlite3.com
-blinkenlights -jm o//third_party/sqlite3/sqlite3.com
-
-make -j8 o//examples/kilo.com
-blinkenlights -jm o//examples/kilo.com
-```
-
-But let's say you want to build an Autotools project like Emacs. The
-best way to do that is to spin up an Alpine Linux container and use
-[jart/blink-isystem](https://github.com/jart/blink-isystem) as your
-system header subset. blink-isystem is basically just the Musl Linux
-headers with all the problematic APIs commented out. That way autoconf
-won't think the APIs Blink doesn't have are available, and will instead
-configure Emacs to use portable alternatives. Setting this up is simple:
-
-```
-./configure CFLAGS="-isystem $HOME/blink-isystem" \
-            CXXFLAGS="-isystem $HOME/blink-isystem" \
-            LDFLAGS="-static -Wl,-z,common-page-size=65536,-z,max-page-size=65536"
-make -j
-```
-
-Another big issue is the host system page size may cause problems on
-non-Linux platforms like Apple M1 (16kb) and Cygwin (64kb). On such
-platforms, you may encounter an error like this:
-
-```
-p_vaddr p_offset skew unequal w.r.t. host page size
+I2023-01-06T18:12:51.007788:blink/loader.c:91:47550 p_vaddr p_offset skew unequal w.r.t. host page size
 ```
 
 The simplest way to solve that is by disabling the linear memory
@@ -411,6 +218,23 @@ program, that would otherwise move too slowly under the Blinkenlights
 vizualization. You may also want to press the `CTRL-T` (TURBO) key a few
 times, to make Python emulate in the TUI even faster.
 
+Some other programs you can try, are SQLite and Antirez's Kilo editor.
+
+```
+git clone https://github.com/jart/cosmopolitan/
+cd cosmopolitan
+make -j8 o//third_party/sqlite3/sqlite3.com
+blinkenlights -jm o//third_party/sqlite3/sqlite3.com
+make -j8 o//examples/kilo.com
+blinkenlights -jm o//examples/kilo.com
+```
+
+For further details, please read [Getting Started with Cosmopolitan
+Libc](https://jeskin.net/blog/getting-started-with-cosmopolitan-libc/)
+which is a blog post explaining how you can write your own programs in
+the cosmopolitan mono-repo, which naturally will be guaranteed to work
+really well under Blink and Blinkenlights.
+
 ## Technical Details
 
 blink is an x86-64 interpreter for POSIX platforms that's written in
@@ -420,10 +244,10 @@ done using our trimmed-down version of Intel's disassembler Xed.
 The prime directive of this project is to act as a virtual machine for
 userspace binaries compiled by Cosmopolitan Libc. However we've also had
 success virtualizing programs compiled with Glibc and Musl Libc, such as
-GCC and Qemu. Blink supports 500+ instructions and 150+ Linux syscalls,
-including fork() and clone(). Linux system calls may only be used by
-long mode programs via the `SYSCALL` instruction, as it is written in
-the System V ABI.
+GCC and Qemu. Blink supports 130+ Linux system call ABIs, including
+fork() and clone(). Linux system calls may only be used by long mode
+programs via the `SYSCALL` instruction, as it is written in the System V
+ABI.
 
 ### Instruction Sets
 

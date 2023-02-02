@@ -51,6 +51,7 @@
 #include "blink/util.h"
 #include "blink/x86.h"
 
+bool FLAG_noconnect;
 _Thread_local struct Machine *g_machine;
 
 static void OpHintNopEv(P) {

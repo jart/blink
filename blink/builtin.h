@@ -229,14 +229,6 @@
 #define CAN_64BIT 0
 #endif
 
-// Whether or not POSIX threads synchronization primitives can be shared
-// across multiple processes.
-#if defined(__CYGWIN__) || defined(__OpenBSD__)
-#define CAN_PSHARE 0
-#else
-#define CAN_PSHARE 1
-#endif
-
 #if CAN_64BIT
 #if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 406 || defined(__llvm__)
 #define HAVE_INT128

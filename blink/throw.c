@@ -90,14 +90,14 @@ void ThrowSegmentationFault(struct Machine *m, i64 va) {
   RestoreIp(m);
   m->faultaddr = va;
   // TODO: Fix memory leak with FormatPml4t()
-  ERRF("SEGMENTATION FAULT AT ADDRESS %" PRIx64 "\n\t%s\n%s", va,
+  LOGF("SEGMENTATION FAULT AT ADDRESS %" PRIx64 "\n\t%s\n%s", va,
        GetBacktrace(m), FormatPml4t(m));
   HaltMachine(m, kMachineSegmentationFault);
 }
 
 void OpUdImpl(struct Machine *m) {
   RestoreIp(m);
-  ERRF("UNDEFINED INSTRUCTION\n\t%s", GetBacktrace(m));
+  LOGF("UNDEFINED INSTRUCTION\n\t%s", GetBacktrace(m));
   HaltMachine(m, kMachineUndefinedInstruction);
 }
 

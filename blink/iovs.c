@@ -23,7 +23,6 @@
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/iovs.h"
-#include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/types.h"

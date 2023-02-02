@@ -124,11 +124,9 @@
 #define O_NOCTTY_LINUX    0x000100
 #define O_ASYNC_LINUX     0x002000
 #define O_NOATIME_LINUX   0x040000
+#define O_DSYNC_LINUX     0x001000
 #define O_PATH_LINUX      0x200000
 #define O_LARGEFILE_LINUX 0x008000
-#define O_DSYNC_LINUX     0x001000
-#define __O_SYNC_LINUX    0x100000
-#define O_SYNC_LINUX      (__O_SYNC_LINUX | O_DSYNC_LINUX)
 
 #define F_DUPFD_LINUX         0
 #define F_DUPFD_CLOEXEC_LINUX 0x0406
@@ -312,14 +310,6 @@
 #define SIOCGIFNETMASK_LINUX 0x891b
 #define SIOCGIFBRDADDR_LINUX 0x8919
 #define SIOCGIFDSTADDR_LINUX 0x8917
-
-#define FIOSETOWN_LINUX    0x8901  // int *
-#define SIOCSPGRP_LINUX    0x8902  // int *
-#define FIOGETOWN_LINUX    0x8903  // int *
-#define SIOCGPGRP_LINUX    0x8904  // int *
-#define SIOCATMARK_LINUX   0x8905  // int *
-#define SIOCGSTAMP_LINUX   0x8906  // struct timeval_linux *
-#define SIOCGSTAMPNS_LINUX 0x8907  // struct timespec_linux *
 
 #define AF_UNSPEC_LINUX 0
 #define AF_UNIX_LINUX   1
@@ -617,46 +607,6 @@
 #define TIOCSTI_LINUX            0x5412
 #define TIOCSWINSZ_LINUX         0x5414
 #define TIOCVHANGUP_LINUX        0x5437
-
-#define TCIFLUSH_LINUX  0
-#define TCOFLUSH_LINUX  1
-#define TCIOFLUSH_LINUX 2
-
-#define SO_DEBUG_LINUX             1
-#define SO_REUSEADDR_LINUX         2
-#define SO_TYPE_LINUX              3
-#define SO_ERROR_LINUX             4
-#define SO_DONTROUTE_LINUX         5
-#define SO_SNDBUF_LINUX            7
-#define SO_RCVBUF_LINUX            8
-#define SO_KEEPALIVE_LINUX         9
-#define SO_LINGER_LINUX            13
-#define SO_REUSEPORT_LINUX         15
-#define SO_RCVTIMEO_LINUX          20
-#define SO_SNDTIMEO_LINUX          21
-#define SO_RCVLOWAT_LINUX          18
-#define SO_SNDLOWAT_LINUX          19
-#define TCP_NODELAY_LINUX          1
-#define TCP_MAXSEG_LINUX           2
-#define TCP_CORK_LINUX             3
-#define TCP_NOPUSH_LINUX           3
-#define TCP_KEEPIDLE_LINUX         4
-#define TCP_KEEPINTVL_LINUX        5
-#define TCP_KEEPCNT_LINUX          6
-#define TCP_SYNCNT_LINUX           7
-#define TCP_DEFER_ACCEPT_LINUX     9
-#define TCP_WINDOW_CLAMP_LINUX     10
-#define TCP_FASTOPEN_LINUX         23
-#define TCP_NOTSENT_LOWAT_LINUX    25
-#define TCP_FASTOPEN_CONNECT_LINUX 30
-#define TCP_QUICKACK_LINUX         12
-#define TCP_SAVE_SYN_LINUX         27
-
-#define CLOSE_RANGE_UNSHARE_LINUX 2
-#define CLOSE_RANGE_CLOEXEC_LINUX 4
-
-#define SOCK_STREAM_LINUX 1
-#define SOCK_DGRAM_LINUX  2
 
 struct iovec_linux {
   u8 base[8];
@@ -956,11 +906,6 @@ struct statfs_linux {
   u8 frsize[8];   // fragment size
   u8 flags[8];    // mount flags of filesystem 2.6.36
   u8 spare[4][8];
-};
-
-struct linger_linux {
-  u8 onoff[4];   // on/off
-  u8 linger[4];  // seconds
 };
 
 int sysinfo_linux(struct sysinfo_linux *);

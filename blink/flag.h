@@ -3,6 +3,5 @@
 #include <stdbool.h>
 
 extern bool FLAG_noconnect;
-extern const char *FLAG_logpath;
 
 #endif /* BLINK_FLAG_H_ */
