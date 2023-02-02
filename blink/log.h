@@ -11,7 +11,6 @@
 #define LOG_ENABLED 0
 #endif
 
-#define LOG_TMP 0  // puts logs into /tmp/blink.log
 #define LOG_SYS 0  // log system calls run by guest
 #define LOG_SIG 0  // log signal handling behaviors
 #define LOG_ASM 0  // log executed assembly opcodes
@@ -25,61 +24,63 @@
 #define LOG_COD 0  // produce asm file of jit codes
 
 #if LOG_ENABLED
-#define LOGF(...) Log(__FILE__, __LINE__, __VA_ARGS__)
+#define ERRF(...) LogErr(__FILE__, __LINE__, __VA_ARGS__)
+#define LOGF(...) LogInfo(__FILE__, __LINE__, __VA_ARGS__)
 #else
+#define ERRF(...) (void)0
 #define LOGF(...) (void)0
 #endif
 
 #if LOG_SYS
-#define SYS_LOGF(...) Log(__FILE__, __LINE__, "(sys) " __VA_ARGS__)
+#define SYS_LOGF(...) LogInfo(__FILE__, __LINE__, "(sys) " __VA_ARGS__)
 #else
 #define SYS_LOGF(...) (void)0
 #endif
 
 #if LOG_SIG
-#define SIG_LOGF(...) Log(__FILE__, __LINE__, "(sig) " __VA_ARGS__)
+#define SIG_LOGF(...) LogInfo(__FILE__, __LINE__, "(sig) " __VA_ARGS__)
 #else
 #define SIG_LOGF(...) (void)0
 #endif
 
 #if LOG_ASM
-#define ASM_LOGF(...) Log(__FILE__, __LINE__, "(asm) " __VA_ARGS__)
+#define ASM_LOGF(...) LogInfo(__FILE__, __LINE__, "(asm) " __VA_ARGS__)
 #else
 #define ASM_LOGF(...) (void)0
 #endif
 
 #if LOG_JIT
-#define JIT_LOGF(...) Log(__FILE__, __LINE__, "(jit) " __VA_ARGS__)
+#define JIT_LOGF(...) LogInfo(__FILE__, __LINE__, "(jit) " __VA_ARGS__)
 #else
 #define JIT_LOGF(...) (void)0
 #endif
 
 #if LOG_JIX
-#define JIX_LOGF(...) Log(__FILE__, __LINE__, "(jix) " __VA_ARGS__)
+#define JIX_LOGF(...) LogInfo(__FILE__, __LINE__, "(jix) " __VA_ARGS__)
 #else
 #define JIX_LOGF(...) (void)0
 #endif
 
 #if LOG_MEM
-#define MEM_LOGF(...) Log(__FILE__, __LINE__, "(mem) " __VA_ARGS__)
+#define MEM_LOGF(...) LogInfo(__FILE__, __LINE__, "(mem) " __VA_ARGS__)
 #else
 #define MEM_LOGF(...) (void)0
 #endif
 
 #if LOG_THR
-#define THR_LOGF(...) Log(__FILE__, __LINE__, "(thr) " __VA_ARGS__)
+#define THR_LOGF(...) LogInfo(__FILE__, __LINE__, "(thr) " __VA_ARGS__)
 #else
 #define THR_LOGF(...) (void)0
 #endif
 
 #if LOG_ELF
-#define ELF_LOGF(...) Log(__FILE__, __LINE__, "(elf) " __VA_ARGS__)
+#define ELF_LOGF(...) LogInfo(__FILE__, __LINE__, "(elf) " __VA_ARGS__)
 #else
 #define ELF_LOGF(...) (void)0
 #endif
 
 #if LOG_SPX
-#define SPX_LOGF(...) Log(__FILE__, __LINE__, "(spx) " __VA_ARGS__)
+#define SPX_LOGF(...) LogInfo(__FILE__, __LINE__, "(spx) " __VA_ARGS__)
 #else
 #define SPX_LOGF(...) (void)0
 #endif
@@ -99,7 +100,8 @@
 extern char *g_progname;
 
 void LogInit(const char *);
-void Log(const char *, int, const char *, ...) printfesque(3);
+void LogErr(const char *, int, const char *, ...) printfesque(3);
+void LogInfo(const char *, int, const char *, ...) printfesque(3);
 int WriteError(int, const char *, int);
 void WriteErrorInit(void);
 int WriteErrorString(const char *);

@@ -88,10 +88,9 @@ int CountFds(struct Fds *fds) {
   return n;
 }
 
-void FreeFd(struct Fds *fds, struct Fd *fd) {
+void FreeFd(struct Fd *fd) {
   if (fd) {
     unassert(!pthread_mutex_destroy(&fd->lock));
-    dll_remove(&fds->list, &fd->elem);
     free(fd);
   }
 }
@@ -104,7 +103,8 @@ void DestroyFds(struct Fds *fds) {
   struct Dll *e, *e2;
   for (e = dll_first(fds->list); e; e = e2) {
     e2 = dll_next(fds->list, e);
-    FreeFd(fds, FD_CONTAINER(e));
+    dll_remove(&fds->list, e);
+    FreeFd(FD_CONTAINER(e));
   }
   unassert(!fds->list);
   unassert(!pthread_mutex_destroy(&fds->lock));
