@@ -48,7 +48,7 @@ struct Fd *GetFd(struct Fds *, int);
 void LockFd(struct Fd *);
 void UnlockFd(struct Fd *);
 int CountFds(struct Fds *);
-void FreeFd(struct Fds *, struct Fd *);
+void FreeFd(struct Fd *);
 void UnlockFds(struct Fds *);
 void DestroyFds(struct Fds *);
 

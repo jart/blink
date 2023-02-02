@@ -22,6 +22,7 @@
 #include <signal.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -32,9 +33,22 @@
 #include "blink/tsan.h"
 #include "blink/types.h"
 
+#define LOG_ERR  0
+#define LOG_INFO 1
+
+#define LOG_TMPDIR_SUFFIX "/blink.log"
+
 #define APPEND(F, ...) n += F(b + n, PIPE_BUF - n, __VA_ARGS__)
 
-static int g_log;
+static struct Log {
+  pthread_once_t once;
+  int level;
+  int fd;
+  char path[PATH_MAX];
+} g_log = {
+    PTHREAD_ONCE_INIT,
+    LOG_ERR,
+};
 
 static char *GetTimestamp(void) {
   int x;
@@ -86,17 +100,34 @@ static char *GetTimestamp(void) {
   return s;
 }
 
-void Log(const char *file, int line, const char *fmt, ...) {
-  va_list va;
+static void OpenLog(void) {
+  int fd;
+  if (!strcmp(g_log.path, "-") ||  //
+      !strcmp(g_log.path, "/dev/stderr")) {
+    fd = 2;
+  } else if (!strcmp(g_log.path, "/dev/stdout")) {
+    fd = 1;
+  } else {
+    fd = open(g_log.path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+    if (fd == -1) {
+      perror(g_log.path);
+      exit(1);
+    }
+  }
+  unassert((g_log.fd = fcntl(fd, F_DUPFD_CLOEXEC, kMinBlinkFd)) != -1);
+  unassert(!close(fd));
+}
+
+static void Log(const char *file, int line, const char *fmt, va_list va,
+                int level) {
   int err, n = 0;
   char b[PIPE_BUF];
   err = errno;
-  va_start(va, fmt);
-  APPEND(snprintf, "I%s:%s:%d:%d ", GetTimestamp(), file, line,
+  unassert(!pthread_once(&g_log.once, OpenLog));
+  APPEND(snprintf, "%c%s:%s:%d:%d ", "EI"[level], GetTimestamp(), file, line,
          g_machine ? g_machine->tid : 0);
   APPEND(vsnprintf, fmt, va);
   APPEND(snprintf, "\n");
-  va_end(va);
   if (n > PIPE_BUF - 1) {
     n = PIPE_BUF - 1;
     b[--n] = '\n';
@@ -104,21 +135,43 @@ void Log(const char *file, int line, const char *fmt, ...) {
     b[--n] = '.';
     b[--n] = '.';
   }
-  WriteError(g_log, b, n);
+  WriteError(g_log.fd, b, n);
+  if (level <= g_log.level) {
+    WriteError(2, b, n);
+  }
   errno = err;
 }
 
+void LogErr(const char *file, int line, const char *fmt, ...) {
+  va_list va;
+  va_start(va, fmt);
+  Log(file, line, fmt, va, LOG_ERR);
+  va_end(va);
+}
+
+void LogInfo(const char *file, int line, const char *fmt, ...) {
+  va_list va;
+  va_start(va, fmt);
+  Log(file, line, fmt, va, LOG_INFO);
+  va_end(va);
+}
+
+static void SetLogPath(const char *path) {
+  size_t n;
+  const char *tmpdir;
+  if (path && (n = strlen(path)) < PATH_MAX) {
+    memcpy(g_log.path, path, n + 1);
+  } else if ((tmpdir = getenv("TMPDIR")) &&
+             (n = strlen(tmpdir)) < PATH_MAX - sizeof(LOG_TMPDIR_SUFFIX) - 1) {
+    memcpy(g_log.path, tmpdir, n);
+    memcpy(g_log.path + n, LOG_TMPDIR_SUFFIX, sizeof(LOG_TMPDIR_SUFFIX));
+  } else {
+    memcpy(g_log.path, "/tmp", 4);
+    memcpy(g_log.path + 4, LOG_TMPDIR_SUFFIX, sizeof(LOG_TMPDIR_SUFFIX));
+  }
+}
+
 void LogInit(const char *path) {
-  int fd;
   WriteErrorInit();
-  if (!path) {
-    path = "/tmp/blink.log";
-  }
-  fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
-  if (fd == -1) {
-    perror(path);
-    exit(1);
-  }
-  unassert((g_log = fcntl(fd, F_DUPFD_CLOEXEC, kMinBlinkFd)) != -1);
-  unassert(!close(fd));
+  SetLogPath(path);
 }

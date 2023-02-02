@@ -346,8 +346,8 @@ int UnXlatSocketFamily(int x) {
 
 int XlatSocketType(int x) {
   switch (x) {
-    XLAT(1, SOCK_STREAM);
-    XLAT(2, SOCK_DGRAM);
+    XLAT(SOCK_STREAM_LINUX, SOCK_STREAM);
+    XLAT(SOCK_DGRAM_LINUX, SOCK_DGRAM);
     default:
       LOGF("%s %d not supported yet", "socket type", x);
       return einval();
@@ -384,68 +384,71 @@ int XlatSocketOptname(int level, int optname) {
   switch (level) {
     case SOL_SOCKET_LINUX:
       switch (optname) {
-        XLAT(2, SO_REUSEADDR);
-        XLAT(5, SO_DONTROUTE);
-        XLAT(7, SO_SNDBUF);
-        XLAT(8, SO_RCVBUF);
-        XLAT(9, SO_KEEPALIVE);
+        XLAT(SO_TYPE_LINUX, SO_TYPE);
+        XLAT(SO_ERROR_LINUX, SO_ERROR);
+        XLAT(SO_DEBUG_LINUX, SO_DEBUG);
+        XLAT(SO_REUSEADDR_LINUX, SO_REUSEADDR);
+        XLAT(SO_DONTROUTE_LINUX, SO_DONTROUTE);
+        XLAT(SO_SNDBUF_LINUX, SO_SNDBUF);
+        XLAT(SO_RCVBUF_LINUX, SO_RCVBUF);
+        XLAT(SO_KEEPALIVE_LINUX, SO_KEEPALIVE);
 #ifdef SO_REUSEPORT
-        XLAT(15, SO_REUSEPORT);
+        XLAT(SO_REUSEPORT_LINUX, SO_REUSEPORT);
 #endif
-        XLAT(20, SO_RCVTIMEO);
-        XLAT(21, SO_SNDTIMEO);
+        XLAT(SO_RCVTIMEO_LINUX, SO_RCVTIMEO);
+        XLAT(SO_SNDTIMEO_LINUX, SO_SNDTIMEO);
 #ifdef SO_RCVLOWAT
-        XLAT(18, SO_RCVLOWAT);
+        XLAT(SO_RCVLOWAT_LINUX, SO_RCVLOWAT);
 #endif
 #ifdef SO_SNDLOWAT
-        XLAT(19, SO_SNDLOWAT);
+        XLAT(SO_SNDLOWAT_LINUX, SO_SNDLOWAT);
 #endif
         default:
           break;
       }
     case SOL_TCP_LINUX:
       switch (optname) {
-        XLAT(1, TCP_NODELAY);
+        XLAT(TCP_NODELAY_LINUX, TCP_NODELAY);
 #ifdef TCP_MAXSEG
-        XLAT(2, TCP_MAXSEG);
+        XLAT(TCP_MAXSEG_LINUX, TCP_MAXSEG);
 #endif
 #if defined(TCP_CORK)
-        XLAT(3, TCP_CORK);
+        XLAT(TCP_CORK_LINUX, TCP_CORK);
 #elif defined(TCP_NOPUSH)
-        XLAT(3, TCP_NOPUSH);
+        XLAT(TCP_NOPUSH_LINUX, TCP_NOPUSH);
 #endif
 #ifdef TCP_KEEPIDLE
-        XLAT(4, TCP_KEEPIDLE);
+        XLAT(TCP_KEEPIDLE_LINUX, TCP_KEEPIDLE);
 #endif
 #ifdef TCP_KEEPINTVL
-        XLAT(5, TCP_KEEPINTVL);
+        XLAT(TCP_KEEPINTVL_LINUX, TCP_KEEPINTVL);
 #endif
 #ifdef TCP_KEEPCNT
-        XLAT(6, TCP_KEEPCNT);
+        XLAT(TCP_KEEPCNT_LINUX, TCP_KEEPCNT);
 #endif
 #ifdef TCP_SYNCNT
-        XLAT(7, TCP_SYNCNT);
+        XLAT(TCP_SYNCNT_LINUX, TCP_SYNCNT);
 #endif
 #ifdef TCP_DEFER_ACCEPT
-        XLAT(9, TCP_DEFER_ACCEPT);
+        XLAT(TCP_DEFER_ACCEPT_LINUX, TCP_DEFER_ACCEPT);
 #endif
 #ifdef TCP_WINDOW_CLAMP
-        XLAT(10, TCP_WINDOW_CLAMP);
+        XLAT(TCP_WINDOW_CLAMP_LINUX, TCP_WINDOW_CLAMP);
 #endif
 #ifdef TCP_FASTOPEN
-        XLAT(23, TCP_FASTOPEN);
+        XLAT(TCP_FASTOPEN_LINUX, TCP_FASTOPEN);
 #endif
 #ifdef TCP_NOTSENT_LOWAT
-        XLAT(25, TCP_NOTSENT_LOWAT);
+        XLAT(TCP_NOTSENT_LOWAT_LINUX, TCP_NOTSENT_LOWAT);
 #endif
 #ifdef TCP_FASTOPEN_CONNECT
-        XLAT(30, TCP_FASTOPEN_CONNECT);
+        XLAT(TCP_FASTOPEN_CONNECT_LINUX, TCP_FASTOPEN_CONNECT);
 #endif
 #ifdef TCP_QUICKACK
-        XLAT(12, TCP_QUICKACK);
+        XLAT(TCP_QUICKACK_LINUX, TCP_QUICKACK);
 #endif
 #ifdef TCP_SAVE_SYN
-        XLAT(27, TCP_SAVE_SYN);
+        XLAT(TCP_SAVE_SYN_LINUX, TCP_SAVE_SYN);
 #endif
         default:
           break;
@@ -581,6 +584,19 @@ int XlatOpenFlags(int x) {
 #ifdef O_DIRECT
   if (x & O_DIRECT_LINUX) res |= O_DIRECT, x &= ~O_DIRECT_LINUX;
 #endif
+#ifdef O_SYNC
+  if ((x & O_SYNC_LINUX) == O_SYNC_LINUX) {
+    res |= O_SYNC;
+    x &= ~O_SYNC_LINUX;
+  }
+  // order matters: O_DSYNC ⊂ O_SYNC
+#endif
+#ifdef O_DSYNC
+  if (x & O_DSYNC_LINUX) {
+    res |= O_DSYNC;
+    x &= ~O_DSYNC_LINUX;
+  }
+#endif
 #ifdef O_TMPFILE
   if ((x & O_TMPFILE_LINUX) == O_TMPFILE_LINUX) {
     res |= O_TMPFILE;
@@ -616,44 +632,98 @@ int XlatOpenFlags(int x) {
 int UnXlatOpenFlags(int x) {
   int res;
   res = UnXlatAccMode(x);
-  if (x & O_APPEND) res |= O_APPEND_LINUX;
-  if (x & O_CREAT) res |= O_CREAT_LINUX;
-  if (x & O_EXCL) res |= O_EXCL_LINUX;
-  if (x & O_TRUNC) res |= O_TRUNC_LINUX;
+  if ((x & O_APPEND) == O_APPEND) {
+    res |= O_APPEND_LINUX;
+    x &= ~O_APPEND;
+  }
+  if ((x & O_CREAT) == O_CREAT) {
+    res |= O_CREAT_LINUX;
+    x &= ~O_CREAT;
+  }
+  if ((x & O_EXCL) == O_EXCL) {
+    res |= O_EXCL_LINUX;
+    x &= ~O_EXCL;
+  }
+  if ((x & O_TRUNC) == O_TRUNC) {
+    res |= O_TRUNC_LINUX;
+    x &= ~O_TRUNC;
+  }
 #ifdef O_PATH
-  if (x & O_PATH) res |= O_PATH_LINUX;
+  if ((x & O_PATH) == O_PATH) {
+    res |= O_PATH_LINUX;
+    x &= ~O_PATH;
+  }
 #elif defined(O_EXEC)
-  if (x & O_EXEC) res |= O_PATH_LINUX;
+  if ((x & O_EXEC) == O_EXEC) {
+    res |= O_PATH_LINUX;
+    x &= ~O_EXEC;
+  }
 #endif
 #ifdef O_LARGEFILE
-  if (x & O_LARGEFILE) res |= O_LARGEFILE_LINUX;
+  if ((x & O_LARGEFILE) == O_LARGEFILE) {
+    res |= O_LARGEFILE_LINUX;
+    x &= ~O_LARGEFILE;
+  }
 #endif
 #ifdef O_NDELAY
-  if (x & O_NDELAY) res |= O_NDELAY_LINUX;
+  if ((x & O_NDELAY) == O_NDELAY) {
+    res |= O_NDELAY_LINUX;
+    x &= ~O_NDELAY;
+  }
 #endif
 #ifdef O_DIRECT
-  if (x & O_DIRECT) res |= O_DIRECT_LINUX;
+  if ((x & O_DIRECT) == O_DIRECT) {
+    res |= O_DIRECT_LINUX;
+    x &= ~O_DIRECT;
+  }
 #endif
 #ifdef O_TMPFILE
   if ((x & O_TMPFILE) == O_TMPFILE) {
     res |= O_TMPFILE_LINUX;
+    x &= ~O_TMPFILE;
   }
-  // order matters: O_DIRECTORY ⊂ O_TMPFILE
 #endif
-  if (x & O_DIRECTORY) res |= O_DIRECTORY_LINUX;
+  if ((x & O_DIRECTORY) == O_DIRECTORY) {
+    res |= O_DIRECTORY_LINUX;
+    x &= ~O_DIRECTORY;
+  }
+#ifdef O_SYNC
+  if ((x & O_SYNC) == O_SYNC) {
+    res |= O_SYNC_LINUX;
+    x &= ~O_SYNC;
+  }
+#endif
 #ifdef O_NOFOLLOW
-  if (x & O_NOFOLLOW) res |= O_NOFOLLOW_LINUX;
+  if ((x & O_NOFOLLOW) == O_NOFOLLOW) {
+    res |= O_NOFOLLOW_LINUX;
+    x &= ~O_NOFOLLOW;
+  }
 #endif
-  if (x & O_CLOEXEC) res |= O_CLOEXEC_LINUX;
-  if (x & O_NOCTTY) res |= O_NOCTTY_LINUX;
+  if ((x & O_CLOEXEC) == O_CLOEXEC) {
+    res |= O_CLOEXEC_LINUX;
+    x &= ~O_CLOEXEC;
+  }
+  if ((x & O_NOCTTY) == O_NOCTTY) {
+    res |= O_NOCTTY_LINUX;
+    x &= ~O_NOCTTY;
+  }
 #ifdef O_ASYNC
-  if (x & O_ASYNC) res |= O_ASYNC_LINUX;
+  if ((x & O_ASYNC) == O_ASYNC) {
+    res |= O_ASYNC_LINUX;
+    x &= ~O_ASYNC;
+  }
 #endif
 #ifdef O_NOATIME
-  if (x & O_NOATIME) res |= O_NOATIME_LINUX;
+  if ((x & O_NOATIME) == O_NOATIME) {
+    res |= O_NOATIME_LINUX;
+    x &= ~O_NOATIME;
+  }
 #endif
 #ifdef O_DSYNC
-  if (x & O_DSYNC) res |= O_DSYNC_LINUX;
+  if ((x & O_DSYNC) == O_DSYNC) {
+    res |= O_DSYNC_LINUX;
+    x &= ~O_DSYNC;
+  }
 #endif
   return res;
 }

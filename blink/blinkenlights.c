@@ -3633,7 +3633,6 @@ static void GetOpts(int argc, char *argv[]) {
   int opt;
   bool wantjit = false;
   bool wantunsafe = false;
-  const char *logpath = 0;
   while ((opt = GetOpt(argc, argv, "hjmCvtrzRNsb:Hw:L:")) != -1) {
     switch (opt) {
       case 'j':
@@ -3682,7 +3681,7 @@ static void GetOpts(int argc, char *argv[]) {
         ++verbose;
         break;
       case 'L':
-        logpath = optarg_;
+        FLAG_logpath = optarg_;
         break;
       case 'z':
         ++codeview.zoom;
@@ -3696,7 +3695,7 @@ static void GetOpts(int argc, char *argv[]) {
         PrintUsage(48, stderr);
     }
   }
-  LogInit(logpath);
+  LogInit(FLAG_logpath);
   if (!wantjit) {
     DisableJit(&m->system->jit);
   }

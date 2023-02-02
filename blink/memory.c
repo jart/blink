@@ -162,6 +162,7 @@ u8 *ResolveAddress(struct Machine *m, i64 v) {
 bool IsValidMemory(struct Machine *m, i64 virt, i64 size, int prot) {
   i64 p, pe;
   u64 pte, mask, need;
+  unassert(m->mode == XED_MODE_LONG);
   unassert(prot && !(prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)));
   if ((-0x800000000000 <= virt && virt < 0x800000000000) &&
       size <= 0x800000000000 && virt + size <= 0x800000000000) {
