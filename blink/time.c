@@ -19,6 +19,7 @@
 #include <sched.h>
 #include <time.h>
 
+#include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/modrm.h"
