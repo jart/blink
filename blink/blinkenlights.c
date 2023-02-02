@@ -2236,7 +2236,9 @@ static ssize_t ReadPtyFdDirect(int fd) {
   char buf[32];
   LOGF("ReadPtyFdDirect");
   pty->conf |= kPtyBlinkcursor;
-  rc = ReadAnsi(fd, buf, sizeof(buf));
+  do {
+    rc = ReadAnsi(fd, buf, sizeof(buf));
+  } while (rc == -1 && errno == EINTR);
   pty->conf &= ~kPtyBlinkcursor;
   if (rc > 0) {
     PtyWriteInput(pty, buf, rc);
