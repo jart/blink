@@ -40,12 +40,15 @@
 #include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <sys/statvfs.h>
 #include <sys/time.h>
 #include <sys/times.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
+
+#include "blink/endian.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -1867,6 +1870,22 @@ static int IoctlTcsbrk(struct Machine *m, int fildes, int drain) {
   return rc;
 }
 
+static int IoctlTcxonc(struct Machine *m, int fildes, int arg) {
+  return tcflow(fildes, arg);
+}
+
+static int IoctlGetInt32(struct Machine *m, int fildes, unsigned long cmd,
+                         i64 addr) {
+  u8 buf[4];
+  int rc, hostint;
+  if (!IsValidMemory(m, addr, 4, PROT_WRITE)) return efault();
+  if ((rc = ioctl(fildes, cmd, &hostint)) != -1) {
+    Write32(buf, hostint);
+    CopyToUserWrite(m, addr, buf, 4);
+  }
+  return rc;
+}
+
 static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
   struct Fd *fd;
   int (*tcgetattr_impl)(int, struct termios *);
@@ -1923,6 +1942,16 @@ static int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlFionclex(m, fildes);
     case TCSBRK_LINUX:
       return IoctlTcsbrk(m, fildes, addr);
+    case TCXONC_LINUX:
+      return IoctlTcxonc(m, fildes, addr);
+#ifdef FIONREAD
+    case FIONREAD_LINUX:
+      return IoctlGetInt32(m, fildes, FIONREAD, addr);
+#endif
+#ifdef TIOCOUTQ
+    case TIOCOUTQ_LINUX:
+      return IoctlGetInt32(m, fildes, TIOCOUTQ, addr);
+#endif
     default:
       LOGF("missing ioctl %#" PRIx64, request);
       return einval();
@@ -2046,6 +2075,53 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
     if (CopyToUserWrite(m, staddr, &gst, sizeof(gst)) == -1) rc = -1;
   }
   return rc;
+}
+
+static void XlatStatvfsToLinux(struct statfs_linux *sf,
+                               const struct statvfs *vfs) {
+  memset(sf, 0, sizeof(*sf));
+  Write64(sf->bsize, vfs->f_bsize);
+  Write64(sf->frsize, vfs->f_frsize);
+  Write64(sf->blocks, vfs->f_blocks);
+  Write64(sf->bfree, vfs->f_bfree);
+  Write64(sf->bavail, vfs->f_bavail);
+  Write64(sf->files, vfs->f_files);
+  Write64(sf->ffree, vfs->f_ffree);
+  Write64(sf->ffree, vfs->f_favail);
+  Write32(sf->fsid[0], vfs->f_fsid);
+  Write32(sf->fsid[1], (u64)vfs->f_fsid >> 32);
+  Write64(sf->flags, vfs->f_flag);
+  Write64(sf->namelen, vfs->f_namemax);
+}
+
+static int Statvfs(intptr_t arg, struct statvfs *buf) {
+  return statvfs((const char *)arg, buf);
+}
+
+static int Fstatvfs(intptr_t arg, struct statvfs *buf) {
+  return fstatvfs((int)arg, buf);
+}
+
+static int SysStatfsImpl(struct Machine *m, intptr_t arg, i64 addr,
+                         int thunk(intptr_t, struct statvfs *)) {
+  int rc;
+  struct statvfs vfs;
+  struct statfs_linux sf;
+  if (!IsValidMemory(m, addr, sizeof(sf), PROT_WRITE)) return efault();
+  INTERRUPTIBLE(rc = thunk(arg, &vfs));
+  if (rc != -1) {
+    XlatStatvfsToLinux(&sf, &vfs);
+    CopyToUserWrite(m, addr, &sf, sizeof(sf));
+  }
+  return rc;
+}
+
+static int SysStatfs(struct Machine *m, i64 path, i64 addr) {
+  return SysStatfsImpl(m, (intptr_t)LoadStr(m, path), addr, Statvfs);
+}
+
+static int SysFstatfs(struct Machine *m, i32 fildes, i64 addr) {
+  return SysStatfsImpl(m, (intptr_t)(u32)fildes, addr, Fstatvfs);
 }
 
 static int XlatFchownatFlags(int x) {
@@ -2241,6 +2317,96 @@ static int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
   return rc;
 }
 
+#ifdef F_GETOWN_EX
+static int UnxlatFownerType(int type) {
+  if (type == F_OWNER_TID) return F_OWNER_TID_LINUX;
+  if (type == F_OWNER_PID) return F_OWNER_PID_LINUX;
+  if (type == F_OWNER_PGRP) return F_OWNER_PGRP_LINUX;
+  LOGF("unknown f_owner_ex::type %d", type);
+  return einval();
+}
+#endif
+
+static int SysFcntlSetownEx(struct Machine *m, i32 fildes, i64 addr) {
+  const struct f_owner_ex_linux *gowner;
+  if (!(gowner = (const struct f_owner_ex_linux *)Schlep(m, addr,
+                                                         sizeof(*gowner)))) {
+    return -1;
+  }
+#ifdef F_SETOWN_EX
+  struct f_owner_ex howner;
+  switch (Read32(gowner->type)) {
+    case F_OWNER_TID_LINUX:
+      howner.type = F_OWNER_TID;
+      howner.pid = Read32(gowner->pid);
+      break;
+    case F_OWNER_PID_LINUX:
+      howner.type = F_OWNER_PID;
+      howner.pid = Read32(gowner->pid);
+      break;
+    case F_OWNER_PGRP_LINUX:
+      howner.type = F_OWNER_PGRP;
+      howner.pid = Read32(gowner->pid);
+      break;
+    default:
+      LOGF("unknown f_owner_ex::type %" PRId32, Read32(gowner->type));
+      return einval();
+  }
+  return fcntl(fildes, F_SETOWN_EX, &howner);
+#else
+  pid_t pid;
+  switch (Read32(gowner->type)) {
+    case F_OWNER_PID_LINUX:
+      pid = Read32(gowner->pid);
+      break;
+    case F_OWNER_PGRP_LINUX:
+      pid = -Read32(gowner->pid);
+      break;
+    case F_OWNER_TID_LINUX:
+      // POSIX doesn't specify fcntl() as applying per-thread
+      if (!(pid = Read32(gowner->pid)) || pid == m->system->pid) {
+        break;
+      }
+      // fallthrough
+    default:
+      LOGF("unknown f_owner_ex::type %" PRId32, Read32(gowner->type));
+      return einval();
+  }
+  return fcntl(fildes, F_SETOWN, pid);
+#endif
+}
+
+static int SysFcntlGetownEx(struct Machine *m, i32 fildes, i64 addr) {
+  int rc;
+  struct f_owner_ex_linux gowner;
+  if (!IsValidMemory(m, addr, sizeof(gowner), PROT_WRITE)) return efault();
+#ifdef F_GETOWN_EX
+  int type;
+  struct f_owner_ex howner;
+  if ((rc = fcntl(fildes, F_GETOWN_EX, &howner)) != -1) {
+    if ((type = UnxlatFownerType(howner.type)) != -1) {
+      Write32(gowner.type, type);
+      Write32(gowner.pid, howner.pid);
+      CopyToUserWrite(m, addr, &gowner, sizeof(gowner));
+    } else {
+      rc = -1;
+    }
+  }
+#else
+  if ((rc = fcntl(fildes, F_GETOWN)) != -1) {
+    if (rc >= 0) {
+      Write32(gowner.type, F_OWNER_PID_LINUX);
+      Write32(gowner.pid, rc);
+    } else {
+      Write32(gowner.type, F_OWNER_PGRP_LINUX);
+      Write32(gowner.pid, -rc);
+    }
+    CopyToUserWrite(m, addr, &gowner, sizeof(gowner));
+  }
+#endif
+  return rc;
+}
+
 static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
   int rc, fl;
   struct Fd *fd;
@@ -2280,6 +2446,14 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
              cmd == F_SETLKW_LINUX ||  //
              cmd == F_GETLK_LINUX) {
     rc = SysFcntlLock(m, fd->fildes, cmd, arg);
+  } else if (cmd == F_SETOWN_LINUX) {
+    rc = fcntl(fd->fildes, F_SETOWN, arg);
+  } else if (cmd == F_GETOWN_LINUX) {
+    rc = fcntl(fd->fildes, F_GETOWN);
+  } else if (cmd == F_SETOWN_EX_LINUX) {
+    rc = SysFcntlSetownEx(m, fd->fildes, arg);
+  } else if (cmd == F_GETOWN_EX_LINUX) {
+    rc = SysFcntlGetownEx(m, fd->fildes, arg);
   } else {
     LOGF("missing fcntl() command %" PRId32, cmd);
     rc = einval();
@@ -3713,6 +3887,8 @@ void OpSyscall(P) {
     SYSCALL(0x070, SysSetsid, (m));
     SYSCALL(0x07C, SysGetsid, (m, di));
     SYSCALL(0x079, SysGetpgid, (m, di));
+    SYSCALL(0x089, SysStatfs, (m, di, si));
+    SYSCALL(0x08A, SysFstatfs, (m, di, si));
     SYSCALL(0x06D, SysSetpgid, (m, di, si));
     SYSCALL(0x066, SysGetuid, (m));
     SYSCALL(0x068, SysGetgid, (m));

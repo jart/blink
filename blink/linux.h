@@ -130,11 +130,32 @@
 
 #define F_DUPFD_LINUX         0
 #define F_DUPFD_CLOEXEC_LINUX 0x0406
-#define F_GETFD_LINUX         1
-#define F_SETFD_LINUX         2
-#define FD_CLOEXEC_LINUX      1
-#define F_GETFL_LINUX         3
-#define F_SETFL_LINUX         4
+
+#define F_GETFD_LINUX    1
+#define F_SETFD_LINUX    2
+#define FD_CLOEXEC_LINUX 1
+
+#define F_GETFL_LINUX 3
+#define F_SETFL_LINUX 4
+
+#define F_GETLK_LINUX  5
+#define F_SETLK_LINUX  6
+#define F_SETLKW_LINUX 7
+#define F_RDLCK_LINUX  0
+#define F_WRLCK_LINUX  1
+#define F_UNLCK_LINUX  2
+
+#define F_SETSIG_LINUX 10
+#define F_GETSIG_LINUX 11
+
+#define F_SETOWN_LINUX        8
+#define F_GETOWN_LINUX        9
+#define F_SETOWN_EX_LINUX     15
+#define F_GETOWN_EX_LINUX     16
+#define F_GETOWNER_UIDS_LINUX 17
+#define F_OWNER_TID_LINUX     0
+#define F_OWNER_PID_LINUX     1
+#define F_OWNER_PGRP_LINUX    2
 
 #define SOCK_CLOEXEC_LINUX  O_CLOEXEC_LINUX
 #define SOCK_NONBLOCK_LINUX O_NDELAY_LINUX
@@ -298,14 +319,6 @@
 #define SOL_SOCKET_LINUX 1
 #define SOL_TCP_LINUX    6
 #define SOL_UDP_LINUX    17
-
-#define F_SETLK_LINUX  6
-#define F_SETLKW_LINUX 7
-#define F_GETLK_LINUX  5
-
-#define F_RDLCK_LINUX 0
-#define F_WRLCK_LINUX 1
-#define F_UNLCK_LINUX 2
 
 #define SA_NOCLDSTOP_LINUX 1
 #define SA_NOCLDWAIT_LINUX 2
@@ -512,10 +525,88 @@
 #define ITIMER_VIRTUAL_LINUX 1
 #define ITIMER_PROF_LINUX    2
 
-#define FIONBIO_LINUX  0x5421
-#define FIOCLEX_LINUX  0x5451
-#define FIONCLEX_LINUX 0x5450
-#define TCSBRK_LINUX   0x5409
+#define FIOASYNC_LINUX           0x5452
+#define FIOCLEX_LINUX            0x5451
+#define FIONBIO_LINUX            0x5421
+#define FIONCLEX_LINUX           0x5450
+#define FIONREAD_LINUX           0x541b
+#define FIOQSIZE_LINUX           0x5460
+#define TCFLSH_LINUX             0x540b
+#define TCGETA_LINUX             0x5405
+#define TCGETS_LINUX             0x5401
+#define TCGETX_LINUX             0x5432
+#define TCSBRK_LINUX             0x5409
+#define TCSBRKP_LINUX            0x5425
+#define TCSETA_LINUX             0x5406
+#define TCSETAF_LINUX            0x5408
+#define TCSETAW_LINUX            0x5407
+#define TCSETS_LINUX             0x5402
+#define TCSETSF_LINUX            0x5404
+#define TCSETSW_LINUX            0x5403
+#define TCSETX_LINUX             0x5433
+#define TCSETXF_LINUX            0x5434
+#define TCSETXW_LINUX            0x5435
+#define TCXONC_LINUX             0x540a
+#define TIOCCBRK_LINUX           0x5428
+#define TIOCCONS_LINUX           0x541d
+#define TIOCEXCL_LINUX           0x540c
+#define TIOCGDEV_LINUX           0x80045432
+#define TIOCGETD_LINUX           0x5424
+#define TIOCGEXCL_LINUX          0x80045440
+#define TIOCGICOUNT_LINUX        0x545d
+#define TIOCGISO7816_LINUX       0x80285442
+#define TIOCGLCKTRMIOS_LINUX     0x5456
+#define TIOCGPGRP_LINUX          0x540f
+#define TIOCGPKT_LINUX           0x80045438
+#define TIOCGPTLCK_LINUX         0x80045439
+#define TIOCGPTN_LINUX           0x80045430
+#define TIOCGPTPEER_LINUX        0x5441
+#define TIOCGRS485_LINUX         0x542e
+#define TIOCGSERIAL_LINUX        0x541e
+#define TIOCGSID_LINUX           0x5429
+#define TIOCGSOFTCAR_LINUX       0x5419
+#define TIOCGWINSZ_LINUX         0x5413
+#define TIOCINQ_LINUX            0x541b
+#define TIOCLINUX_LINUX          0x541c
+#define TIOCMBIC_LINUX           0x5417
+#define TIOCMBIS_LINUX           0x5416
+#define TIOCMGET_LINUX           0x5415
+#define TIOCMIWAIT_LINUX         0x545c
+#define TIOCMSET_LINUX           0x5418
+#define TIOCNOTTY_LINUX          0x5422
+#define TIOCNXCL_LINUX           0x540d
+#define TIOCOUTQ_LINUX           0x5411
+#define TIOCPKT_LINUX            0x5420
+#define TIOCPKT_DATA_LINUX       0
+#define TIOCPKT_DOSTOP_LINUX     0x20
+#define TIOCPKT_FLUSHREAD_LINUX  0x1
+#define TIOCPKT_FLUSHWRITE_LINUX 0x2
+#define TIOCPKT_IOCTL_LINUX      0x40
+#define TIOCPKT_NOSTOP_LINUX     0x10
+#define TIOCPKT_START_LINUX      0x8
+#define TIOCPKT_STOP_LINUX       0x4
+#define TIOCSBRK_LINUX           0x5427
+#define TIOCSCTTY_LINUX          0x540e
+#define TIOCSERCONFIG_LINUX      0x5453
+#define TIOCSERGETLSR_LINUX      0x5459
+#define TIOCSERGETMULTI_LINUX    0x545a
+#define TIOCSERGSTRUCT_LINUX     0x5458
+#define TIOCSERGWILD_LINUX       0x5454
+#define TIOCSERSETMULTI_LINUX    0x545b
+#define TIOCSERSWILD_LINUX       0x5455
+#define TIOCSER_TEMT_LINUX       0x1
+#define TIOCSETD_LINUX           0x5423
+#define TIOCSIG_LINUX            0x40045436
+#define TIOCSISO7816_LINUX       0xc0285443
+#define TIOCSLCKTRMIOS_LINUX     0x5457
+#define TIOCSPGRP_LINUX          0x5410
+#define TIOCSPTLCK_LINUX         0x40045431
+#define TIOCSRS485_LINUX         0x542f
+#define TIOCSSERIAL_LINUX        0x541f
+#define TIOCSSOFTCAR_LINUX       0x541a
+#define TIOCSTI_LINUX            0x5412
+#define TIOCSWINSZ_LINUX         0x5414
+#define TIOCVHANGUP_LINUX        0x5437
 
 struct iovec_linux {
   u8 base[8];
@@ -795,6 +886,26 @@ struct robust_list_linux {
 struct utimbuf_linux {
   u8 actime[8];
   u8 modtime[8];
+};
+
+struct f_owner_ex_linux {
+  u8 type[4];
+  u8 pid[4];
+};
+
+struct statfs_linux {
+  u8 type[8];     // type of filesystem
+  u8 bsize[8];    // optimal transfer block size
+  u8 blocks[8];   // total data blocks in filesystem
+  u8 bfree[8];    // free blocks in filesystem
+  u8 bavail[8];   // free blocks available to
+  u8 files[8];    // total file nodes in filesystem
+  u8 ffree[8];    // free file nodes in filesystem
+  u8 fsid[2][4];  // filesystem id
+  u8 namelen[8];  // maximum length of filenames
+  u8 frsize[8];   // fragment size
+  u8 flags[8];    // mount flags of filesystem 2.6.36
+  u8 spare[4][8];
 };
 
 int sysinfo_linux(struct sysinfo_linux *);
