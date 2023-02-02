@@ -19,13 +19,13 @@
 #include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/builtin.h"
+#include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
-#include "blink/mop.h"
 
 void OpCmpxchgEbAlGb(P) {
   u8 *p = GetModrmRegisterBytePointerWrite1(A);

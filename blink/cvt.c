@@ -20,12 +20,12 @@
 #include <string.h>
 
 #include "blink/builtin.h"
+#include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/fpu.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
-#include "blink/mop.h"
 #include "blink/pun.h"
 #include "blink/stats.h"
 

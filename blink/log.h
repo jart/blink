@@ -11,6 +11,7 @@
 #define LOG_ENABLED 0
 #endif
 
+#define LOG_TMP 0  // puts logs into /tmp/blink.log
 #define LOG_SYS 0  // log system calls run by guest
 #define LOG_SIG 0  // log signal handling behaviors
 #define LOG_ASM 0  // log executed assembly opcodes

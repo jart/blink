@@ -41,7 +41,8 @@
 #include <stdbool.h>
 #include <w32api/_mingw.h>
 #define RtlGenRandom SystemFunction036
-bool __stdcall SystemFunction036(void* RandomBuffer, __LONG32 RandomBufferLength);
+bool __stdcall SystemFunction036(void *RandomBuffer,
+                                 __LONG32 RandomBufferLength);
 #endif
 
 static ssize_t GetDevRandom(char *p, size_t n) {
@@ -86,7 +87,8 @@ ssize_t GetRandom(void *p, size_t n) {
 #elif defined(__CYGWIN__)
   rc = RtlGenRandom(p, n) ? n : -1;
 #else
-  rc = -1; errno = ENOSYS;
+  rc = -1;
+  errno = ENOSYS;
 #endif
   if (rc == -1 && errno == ENOSYS) {
     rc = GetDevRandom((char *)p, n);

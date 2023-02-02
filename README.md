@@ -457,14 +457,9 @@ That's because Blink's JIT tries to avoid updating `Machine::ip` on ops
 it considers "pure" such as those that only access registers, which for
 reasons of performance is defined to include pushing and popping.
 
-### Futexes
+### Threads
 
-If futexes are shared between multiple processes then they'll have
-poorer latency, because Blink currently only supports true condition
-variables between threads. However such code won't deadlock, since the
-POSIX threads API requires that Blink periodically poll the futex. Blink
-also currently doesn't unlock robust mutexes on process death. We're
-working on both these problems.
+Blink currently doesn't unlock robust mutexes on process death.
 
 ### Signal Handling
 

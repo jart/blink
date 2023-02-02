@@ -64,6 +64,7 @@
 #endif
 
 #include "blink/assert.h"
+#include "blink/bus.h"
 #include "blink/case.h"
 #include "blink/debug.h"
 #include "blink/endian.h"
@@ -76,7 +77,6 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
-#include "blink/mop.h"
 #include "blink/pml4t.h"
 #include "blink/random.h"
 #include "blink/signal.h"
@@ -214,8 +214,8 @@ bool CheckInterrupt(struct Machine *m) {
 
 static struct Futex *FindFutex(struct Machine *m, i64 addr) {
   struct Dll *e;
-  for (e = dll_first(m->system->futexes); e;
-       e = dll_next(m->system->futexes, e)) {
+  for (e = dll_first(g_bus->futexes.active); e;
+       e = dll_next(g_bus->futexes.active, e)) {
     if (FUTEX_CONTAINER(e)->addr == addr) {
       return FUTEX_CONTAINER(e);
     }
@@ -227,11 +227,11 @@ static int SysFutexWake(struct Machine *m, i64 uaddr, u32 count) {
   int rc;
   struct Futex *f;
   if (!count) return 0;
-  LOCK(&m->system->futex_lock);
+  LOCK(&g_bus->futexes.lock);
   if ((f = FindFutex(m, uaddr))) {
     LOCK(&f->lock);
   }
-  UNLOCK(&m->system->futex_lock);
+  UNLOCK(&g_bus->futexes.lock);
   if (f && f->waiters) {
     THR_LOGF("pid=%d tid=%d is waking %d waiters at address %#" PRIx64,
              m->system->pid, m->tid, f->waiters, uaddr);
@@ -306,18 +306,15 @@ static int SysFork(struct Machine *m) {
   LockFds(&m->system->fds);
   LOCK(&m->system->sig_lock);
   LOCK(&m->system->mmap_lock);
-  LOCK(&m->system->futex_lock);
   LOCK(&m->system->machines_lock);
   pid = fork();
   UNLOCK(&m->system->machines_lock);
-  UNLOCK(&m->system->futex_lock);
   UNLOCK(&m->system->mmap_lock);
   UNLOCK(&m->system->sig_lock);
   UnlockFds(&m->system->fds);
   UNLOCK(&m->system->exec_lock);
   if (!pid) {
     newpid = getpid();
-    InitBus();  // TODO(jart): use shared memory for g_bus
     THR_LOGF("pid=%d tid=%d SysFork -> pid=%d tid=%d",  //
              m->system->pid, m->tid, newpid, newpid);
     m->tid = m->system->pid = newpid;
@@ -439,21 +436,22 @@ static int SysClone(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
 }
 
 static struct Futex *NewFutex(i64 addr) {
+  struct Dll *e;
   struct Futex *f;
-  if ((f = (struct Futex *)calloc(1, sizeof(struct Futex)))) {
-    pthread_cond_init(&f->cond, 0);
-    pthread_mutex_init(&f->lock, 0);
-    dll_init(&f->elem);
-    f->waiters = 1;
-    f->addr = addr;
+  if (!(e = dll_first(g_bus->futexes.free))) {
+    LOG_ONCE(LOGF("ran out of futexes"));
+    enomem();
+    return 0;
   }
+  dll_remove(&g_bus->futexes.free, e);
+  f = FUTEX_CONTAINER(e);
+  f->waiters = 1;
+  f->addr = addr;
   return f;
 }
 
 static void FreeFutex(struct Futex *f) {
-  unassert(!pthread_mutex_destroy(&f->lock));
-  unassert(!pthread_cond_destroy(&f->cond));
-  free(f);
+  dll_make_first(&g_bus->futexes.free, &f->elem);
 }
 
 static int SysFutexWait(struct Machine *m,  //
@@ -482,9 +480,9 @@ static int SysFutexWait(struct Machine *m,  //
     deadline = GetMaxTime();
   }
   if (!(mem = GetAddress(m, uaddr))) return efault();
-  LOCK(&m->system->futex_lock);
+  LOCK(&g_bus->futexes.lock);
   if (Load32(mem) != expect) {
-    UNLOCK(&m->system->futex_lock);
+    UNLOCK(&g_bus->futexes.lock);
     return eagain();
   }
   if ((f = FindFutex(m, uaddr))) {
@@ -494,13 +492,13 @@ static int SysFutexWait(struct Machine *m,  //
   }
   if (!f) {
     if ((f = NewFutex(uaddr))) {
-      dll_make_first(&m->system->futexes, &f->elem);
+      dll_make_first(&g_bus->futexes.active, &f->elem);
     } else {
-      UNLOCK(&m->system->futex_lock);
+      UNLOCK(&g_bus->futexes.lock);
       return -1;
     }
   }
-  UNLOCK(&m->system->futex_lock);
+  UNLOCK(&g_bus->futexes.lock);
   THR_LOGF("pid=%d tid=%d is waiting at address %#" PRIx64, m->system->pid,
            m->tid, uaddr);
   do {
@@ -523,19 +521,24 @@ static int SysFutexWait(struct Machine *m,  //
       tick = AddTime(tick, FromMilliseconds(kPollingMs));
       if (CompareTime(tick, deadline) > 0) tick = deadline;
       rc = pthread_cond_timedwait(&f->cond, &f->lock, &tick);
+      if (rc == ETIMEDOUT) {
+        THR_LOGF("futex wait timed out");
+      } else {
+        THR_LOGF("futex wait returned %s", rc ? strerror(rc) : "0");
+      }
     }
     UNLOCK(&f->lock);
   } while (rc == ETIMEDOUT && CompareTime(tick, deadline) < 0);
-  LOCK(&m->system->futex_lock);
+  LOCK(&g_bus->futexes.lock);
   LOCK(&f->lock);
   if (!--f->waiters) {
-    dll_remove(&m->system->futexes, &f->elem);
+    dll_remove(&g_bus->futexes.active, &f->elem);
     UNLOCK(&f->lock);
-    UNLOCK(&m->system->futex_lock);
     FreeFutex(f);
+    UNLOCK(&g_bus->futexes.lock);
   } else {
     UNLOCK(&f->lock);
-    UNLOCK(&m->system->futex_lock);
+    UNLOCK(&g_bus->futexes.lock);
   }
   if (rc) {
     errno = rc;
@@ -2621,6 +2624,7 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
     return efault();
   }
 #ifndef __EMSCRIPTEN__
+  wstatus = 0;
   INTERRUPTIBLE(rc = wait4(pid, &wstatus, options, &hrusage));
 #else
   memset(&hrusage, 0, sizeof(hrusage));
@@ -2630,7 +2634,14 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
     if (opt_out_wstatus_addr) {
       if (WIFEXITED(wstatus)) {
         gwstatus = (WEXITSTATUS(wstatus) & 255) << 8;
+      } else if (WIFSTOPPED(wstatus)) {
+        gwstatus = UnXlatSignal(WSTOPSIG(wstatus)) << 8 | 127;
+#ifdef WIFCONTINUED
+      } else if (WIFCONTINUED(wstatus)) {
+        gwstatus = 0xffff;
+#endif
       } else {
+        if (!WIFSIGNALED(wstatus)) LOGF("unsupported wstatus %#x", wstatus);
         unassert(WIFSIGNALED(wstatus));
         gwstatus = UnXlatSignal(WTERMSIG(wstatus)) & 127;
 #ifdef WCOREDUMP

@@ -24,6 +24,7 @@
 
 #include "blink/assert.h"
 #include "blink/builtin.h"
+#include "blink/bus.h"
 #include "blink/case.h"
 #include "blink/debug.h"
 #include "blink/dll.h"
@@ -227,6 +228,10 @@ int main(int argc, char *argv[]) {
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
   WriteErrorInit();
   HandleSigs();
+  InitBus();
+#if LOG_TMP
+  LogInit(0);
+#endif
   if (!Commandv(argv[optind_], g_pathbuf, sizeof(g_pathbuf))) {
     WriteErrorString(argv[0]);
     WriteErrorString(": command not found: ");

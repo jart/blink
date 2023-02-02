@@ -202,9 +202,14 @@ o/$(MODE)/third_party/cosmo:									\
 		o/$(MODE)/third_party/cosmo/7/utimensat_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/readlinkat_test.com.ok				\
 		o/$(MODE)/third_party/cosmo/2/signal_test.com.ok				\
-		o/$(MODE)/third_party/cosmo/2/tkill_test.com.ok
+		o/$(MODE)/third_party/cosmo/2/tkill_test.com.ok					\
+		o/$(MODE)/third_party/cosmo/2/lockipc_test.com.ok				\
+		o/$(MODE)/third_party/cosmo/2/sem_timedwait_test.com.ok
 	@mkdir -p $(@D)
 	@touch $@
+
+PROBLEMATIC_TESTS =										\
+		o/$(MODE)/third_party/cosmo/2/sem_open_test.com.ok				\
 
 DARWIN_PROBLEMATIC_TESTS =									\
 		o/$(MODE)/third_party/cosmo/2/sched_getaffinity_test.com.ok			\

@@ -18,9 +18,9 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <stdlib.h>
 
+#include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
-#include "blink/mop.h"
 #include "blink/pml4t.h"
 #include "blink/x86.h"
 

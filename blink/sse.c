@@ -24,7 +24,6 @@
 #include "blink/likely.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-
 #include "blink/sse.h"
 
 static void MmxPaddusb(u8 x[8], const u8 y[8]) {

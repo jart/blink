@@ -29,5 +29,6 @@
 #define kSemSize    128       // number of bytes used for each semaphore
 #define kBusCount   256       // # load balanced semaphores in virtual bus
 #define kBusRegion  kSemSize  // 16 is sufficient for 8-byte loads/stores
+#define kFutexMax   100
 
 #endif /* BLINK_TUNABLES_H_ */

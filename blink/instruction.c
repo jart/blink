@@ -23,7 +23,6 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-
 #include "blink/stats.h"
 #include "blink/x86.h"
 

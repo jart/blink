@@ -17,12 +17,12 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/assert.h"
+#include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/lock.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
-#include "blink/mop.h"
 #include "blink/random.h"
 
 #define RESEED_INTERVAL 16

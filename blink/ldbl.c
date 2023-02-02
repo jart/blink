@@ -40,8 +40,7 @@ u8 *SerializeLdbl(u8 b[10], double f) {
 
 double DeserializeLdbl(const u8 b[10]) {
   union DoublePun u;
-  u.i = (u64)(MAX(-1023, MIN(1024, ((Read16(b + 8) & 0x7fff) - 0x3fff))) +
-                   1023)
+  u.i = (u64)(MAX(-1023, MIN(1024, ((Read16(b + 8) & 0x7fff) - 0x3fff))) + 1023)
             << 52 |
         ((Read64(b) & 0x7fffffffffffffff) + (1 << (11 - 1))) >> 11 |
         (u64)(b[9] >> 7) << 63;

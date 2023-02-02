@@ -21,11 +21,11 @@
 #include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/builtin.h"
+#include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
-#include "blink/mop.h"
 
 struct Dubble {
   u64 lo;

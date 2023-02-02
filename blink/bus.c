@@ -20,10 +20,12 @@
 #include <stdatomic.h>
 
 #include "blink/builtin.h"
+#include "blink/bus.h"
+#include "blink/dll.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/mop.h"
+#include "blink/map.h"
 #include "blink/rde.h"
 #include "blink/swap.h"
 #include "blink/tsan.h"
@@ -31,22 +33,28 @@
 #define ACQUIRE memory_order_acquire
 #define RELEASE memory_order_release
 
-/* When software uses locks or semaphores to synchronize processes,
-   threads, or other code sections; Intel recommends that only one lock
-   or semaphore be present within a cache line (or 128 byte sector, if
-   128-byte sector is supported). In processors based on Intel NetBurst
-   microarchitecture (which support 128-byte sector consisting of two
-   cache lines), following this recommendation means that each lock or
-   semaphore should be contained in a 128-byte block of memory that
-   begins on a 128-byte boundary. The practice minimizes the bus traffic
-   required to service locks. ──Intel V.3 §8.10.6.7 */
-_Alignas(kSemSize) static atomic_int g_bus[kBusCount][kSemSize / sizeof(int)];
+struct Bus *g_bus;
 
 void InitBus(void) {
-  int i;
-  for (i = 0; i < kBusCount; ++i) {
-    atomic_store_explicit(g_bus[i], 0, memory_order_relaxed);
+  unsigned i;
+  pthread_condattr_t cattr;
+  pthread_mutexattr_t mattr;
+  unassert(g_bus =
+               (struct Bus *)AllocateBig(sizeof(*g_bus), PROT_READ | PROT_WRITE,
+                                         MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+  unassert(!pthread_condattr_init(&cattr));
+  unassert(!pthread_mutexattr_init(&mattr));
+  unassert(!pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED));
+  unassert(!pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
+  unassert(!pthread_mutex_init(&g_bus->futexes.lock, &mattr));
+  for (i = 0; i < kFutexMax; ++i) {
+    unassert(!pthread_cond_init(&g_bus->futexes.mem[i].cond, &cattr));
+    unassert(!pthread_mutex_init(&g_bus->futexes.mem[i].lock, &mattr));
+    dll_init(&g_bus->futexes.mem[i].elem);
+    dll_make_last(&g_bus->futexes.free, &g_bus->futexes.mem[i].elem);
   }
+  unassert(!pthread_mutexattr_destroy(&mattr));
+  unassert(!pthread_condattr_destroy(&cattr));
 }
 
 void LockBus(const u8 *locality) {
@@ -57,11 +65,11 @@ void LockBus(const u8 *locality) {
   _Static_assert(IS2POW(kBusCount), "virtual bus count must be two-power");
   _Static_assert(IS2POW(kBusRegion), "virtual bus region must be two-power");
   _Static_assert(kBusRegion >= 16, "virtual bus region must be at least 16");
-  SpinLock(g_bus[(uintptr_t)locality / kBusRegion % kBusCount]);
+  SpinLock(g_bus->lock[(uintptr_t)locality / kBusRegion % kBusCount]);
 }
 
 void UnlockBus(const u8 *locality) {
-  SpinUnlock(g_bus[(uintptr_t)locality / kBusRegion % kBusCount]);
+  SpinUnlock(g_bus->lock[(uintptr_t)locality / kBusRegion % kBusCount]);
 }
 
 i64 Load8(const u8 p[1]) {

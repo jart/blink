@@ -40,6 +40,7 @@
 #include "blink/bitscan.h"
 #include "blink/breakpoint.h"
 #include "blink/builtin.h"
+#include "blink/bus.h"
 #include "blink/case.h"
 #include "blink/cga.h"
 #include "blink/debug.h"
@@ -58,7 +59,6 @@
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/mda.h"
-#include "blink/mop.h"
 #include "blink/panel.h"
 #include "blink/pml4t.h"
 #include "blink/pty.h"
@@ -3806,6 +3806,7 @@ int main(int argc, char *argv[]) {
   react = true;
   tuimode = true;
   WriteErrorInit();
+  InitBus();
   AddPath_StartOp_Hook = AddPath_StartOp_Tui;
   unassert((pty = NewPty()));
   unassert((s = NewSystem(XED_MODE_REAL)));

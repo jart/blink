@@ -22,12 +22,12 @@
 #include "blink/alu.h"
 #include "blink/assert.h"
 #include "blink/builtin.h"
+#include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
-#include "blink/mop.h"
 #include "blink/swap.h"
 
 void OpXaddEbGb(P) {

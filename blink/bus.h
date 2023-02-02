@@ -1,18 +1,54 @@
 #ifndef BLINK_MOP_H_
 #define BLINK_MOP_H_
 #include <limits.h>
+#include <pthread.h>
 #include <stdatomic.h>
 
 #include "blink/builtin.h"
+#include "blink/dll.h"
 #include "blink/endian.h"
 #include "blink/spin.h"
 #include "blink/tsan.h"
+#include "blink/tunables.h"
+
+#define FUTEX_CONTAINER(e) DLL_CONTAINER(struct Futex, elem, e)
 
 #if !defined(__x86_64__) && !defined(__i386__)
 #define FENCE atomic_thread_fence(memory_order_seq_cst)
 #else
 #define FENCE (void)0
 #endif
+
+struct Futex {
+  i64 addr;
+  int waiters;
+  struct Dll elem;
+  pthread_cond_t cond;
+  pthread_mutex_t lock;
+};
+
+struct Futexes {
+  struct Dll *active;
+  struct Dll *free;
+  pthread_mutex_t lock;
+  struct Futex mem[kFutexMax];
+};
+
+struct Bus {
+  /* When software uses locks or semaphores to synchronize processes,
+     threads, or other code sections; Intel recommends that only one lock
+     or semaphore be present within a cache line (or 128 byte sector, if
+     128-byte sector is supported). In processors based on Intel NetBurst
+     microarchitecture (which support 128-byte sector consisting of two
+     cache lines), following this recommendation means that each lock or
+     semaphore should be contained in a 128-byte block of memory that
+     begins on a 128-byte boundary. The practice minimizes the bus traffic
+     required to service locks. ──Intel V.3 §8.10.6.7 */
+  _Alignas(kSemSize) atomic_int lock[kBusCount][kSemSize / sizeof(int)];
+  struct Futexes futexes;
+};
+
+extern struct Bus *g_bus;
 
 void InitBus(void);
 void LockBus(const u8 *);

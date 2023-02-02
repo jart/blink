@@ -24,6 +24,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/bus.h"
 #include "blink/errno.h"
 #include "blink/linux.h"
 #include "blink/lock.h"
@@ -31,7 +32,6 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
-#include "blink/mop.h"
 #include "blink/types.h"
 #include "blink/util.h"
 #include "blink/x86.h"
@@ -132,7 +132,6 @@ struct System *NewSystem(int mode) {
   pthread_mutex_init(&s->sig_lock, 0);
   pthread_mutex_init(&s->mmap_lock, 0);
   pthread_mutex_init(&s->exec_lock, 0);
-  pthread_mutex_init(&s->futex_lock, 0);
   pthread_cond_init(&s->machines_cond, 0);
   pthread_mutex_init(&s->machines_lock, 0);
   s->blinksigs = 1ull << (SIGSYS_LINUX - 1) |   //
@@ -212,7 +211,6 @@ void FreeSystem(struct System *s) {
   FreeHostPages(s);
   unassert(!pthread_mutex_destroy(&s->machines_lock));
   unassert(!pthread_cond_destroy(&s->machines_cond));
-  unassert(!pthread_mutex_destroy(&s->futex_lock));
   unassert(!pthread_mutex_destroy(&s->exec_lock));
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));

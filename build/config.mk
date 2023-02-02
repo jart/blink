@@ -33,7 +33,7 @@ CPPFLAGS +=				\
 	-D__BSD_VISIBLE
 
 LDLIBS +=				\
-	-lm				\
+	-lm
 
 ifneq ($(HOST_SYSTEM), Darwin)
 ifneq ($(HOST_SYSTEM), OpenBSD)
@@ -103,7 +103,7 @@ CFLAGS += -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
 CPPFLAGS += -DDEBUG
 ifeq ($(HOST_SYSTEM), Linux)
 CFLAGS += -fno-pie
-LDFLAGS += -static -no-pie
+LDFLAGS += -static -no-pie $(LDFLAGS_STATIC)
 endif
 ifneq ($(HOST_SYSTEM), Darwin)
 ifneq ($(HOST_SYSTEM), FreeBSD)
