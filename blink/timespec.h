@@ -1,16 +1,10 @@
 #ifndef BLINK_TIMESPEC_H_
 #define BLINK_TIMESPEC_H_
 #include <errno.h>
-#include <limits.h>
-#include <stdint.h>
 #include <time.h>
 
 #include "blink/assert.h"
-
-#define MAX_INTEGRAL_TIME    \
-  (((time_t) ~(time_t)0) > 1 \
-       ? (time_t) ~(time_t)0 \
-       : (time_t)((((uintmax_t)1) << (sizeof(time_t) * CHAR_BIT - 1)) - 1))
+#include "blink/limits.h"
 
 static inline struct timespec GetTime(void) {
   struct timespec ts;
@@ -26,7 +20,7 @@ static inline struct timespec GetMonotonic(void) {
 
 static inline struct timespec GetMaxTime(void) {
   struct timespec ts;
-  ts.tv_sec = MAX_INTEGRAL_TIME;
+  ts.tv_sec = NUMERIC_MAX(time_t);
   ts.tv_nsec = 999999999;
   return ts;
 }
@@ -108,19 +102,19 @@ static inline struct timespec SleepTime(struct timespec dur) {
 
 static inline time_t ToSeconds(struct timespec ts) {
   unassert(ts.tv_nsec < 1000000000);
-  if (ts.tv_sec < MAX_INTEGRAL_TIME) {
+  if (ts.tv_sec < NUMERIC_MAX(time_t)) {
     if (ts.tv_nsec) {
       ts.tv_sec += 1;
     }
     return ts.tv_sec;
   } else {
-    return MAX_INTEGRAL_TIME;
+    return NUMERIC_MAX(time_t);
   }
 }
 
 static inline time_t ToMilliseconds(struct timespec ts) {
   unassert(ts.tv_nsec < 1000000000);
-  if (ts.tv_sec < MAX_INTEGRAL_TIME / 1000 - 999) {
+  if (ts.tv_sec < NUMERIC_MAX(time_t) / 1000 - 999) {
     if (ts.tv_nsec <= 999000000) {
       ts.tv_nsec = (ts.tv_nsec + 999999) / 1000000;
     } else {
@@ -129,13 +123,13 @@ static inline time_t ToMilliseconds(struct timespec ts) {
     }
     return ts.tv_sec * 1000 + ts.tv_nsec;
   } else {
-    return MAX_INTEGRAL_TIME;
+    return NUMERIC_MAX(time_t);
   }
 }
 
 static inline time_t ToMicroseconds(struct timespec ts) {
   unassert(ts.tv_nsec < 1000000000);
-  if (ts.tv_sec < MAX_INTEGRAL_TIME / 1000000 - 999999) {
+  if (ts.tv_sec < NUMERIC_MAX(time_t) / 1000000 - 999999) {
     if (ts.tv_nsec <= 999999000) {
       ts.tv_nsec = (ts.tv_nsec + 999) / 1000;
     } else {
@@ -144,16 +138,16 @@ static inline time_t ToMicroseconds(struct timespec ts) {
     }
     return ts.tv_sec * 1000000 + ts.tv_nsec;
   } else {
-    return MAX_INTEGRAL_TIME;
+    return NUMERIC_MAX(time_t);
   }
 }
 
 static inline time_t ToNanoseconds(struct timespec ts) {
   unassert(ts.tv_nsec < 1000000000);
-  if (ts.tv_sec < MAX_INTEGRAL_TIME / 1000000000 - 999999999) {
+  if (ts.tv_sec < NUMERIC_MAX(time_t) / 1000000000 - 999999999) {
     return ts.tv_sec * 1000000000 + ts.tv_nsec;
   } else {
-    return MAX_INTEGRAL_TIME;
+    return NUMERIC_MAX(time_t);
   }
 }
 

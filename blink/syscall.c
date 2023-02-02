@@ -48,9 +48,6 @@
 #include <time.h>
 #include <unistd.h>
 
-#include "blink/endian.h"
-#include "blink/macros.h"
-
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
@@ -67,6 +64,7 @@
 #include "blink/assert.h"
 #include "blink/bus.h"
 #include "blink/case.h"
+#include "blink/cygwin.h"
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
@@ -1596,29 +1594,37 @@ static long CheckFdAccess(struct Machine *m, i32 fildes, bool writable,
 
 static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
                     u64 offset) {
-  void *buf;
   ssize_t rc;
+  struct Iovs iv;
   if (CheckFdAccess(m, fildes, false, EBADF) == -1) return -1;
-  if (!IsValidMemory(m, addr, size, PROT_WRITE)) return efault();
   if (size) {
-    if ((buf = malloc(size))) {
-      INTERRUPTIBLE(rc = pread(fildes, buf, size, offset));
-      if (rc != -1) CopyToUserWrite(m, addr, buf, rc);
-      free(buf);
-    } else {
-      rc = -1;
+    InitIovs(&iv);
+    if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
+      INTERRUPTIBLE(rc = preadv(fildes, iv.p, iv.i, offset));
+      if (rc != -1) SetWriteAddr(m, addr, rc);
     }
+    FreeIovs(&iv);
   } else {
-    rc = pread(fildes, 0, 0, offset);
+    rc = 0;
   }
   return rc;
 }
 
 static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
                      u64 offset) {
-  i64 rc;
+  ssize_t rc;
+  struct Iovs iv;
   if (CheckFdAccess(m, fildes, true, EBADF) == -1) return -1;
-  INTERRUPTIBLE(rc = pwrite(fildes, Schlep(m, addr, size), size, offset));
+  if (size) {
+    InitIovs(&iv);
+    if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
+      INTERRUPTIBLE(rc = pwritev(fildes, iv.p, iv.i, offset));
+      if (rc != -1) SetReadAddr(m, addr, rc);
+    }
+    FreeIovs(&iv);
+  } else {
+    rc = 0;
+  }
   return rc;
 }
 
@@ -1633,7 +1639,7 @@ static i64 SysPreadv2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
     LOGF("%s flags not supported yet: %#" PRIx32, "preadv2", flags);
     return einval();
   }
-  if (iovlen > IOV_MAX) return einval();
+  if (iovlen > IOV_MAX_LINUX) return einval();
   LockFds(&m->system->fds);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
@@ -1677,7 +1683,7 @@ static i64 SysPwritev2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
     LOGF("%s flags not supported yet: %#" PRIx32, "pwritev2", flags);
     return einval();
   }
-  if (iovlen > IOV_MAX) return einval();
+  if (iovlen > IOV_MAX_LINUX) return einval();
   LockFds(&m->system->fds);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);

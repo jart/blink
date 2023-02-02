@@ -658,6 +658,8 @@
 #define SOCK_STREAM_LINUX 1
 #define SOCK_DGRAM_LINUX  2
 
+#define IOV_MAX_LINUX 1024
+
 struct iovec_linux {
   u8 base[8];
   u8 len[8];

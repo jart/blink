@@ -21,6 +21,9 @@
 
 #include "test/test.h"
 
+char bb1[5000];
+char bb2[5000];
+
 void SetUp(void) {
 }
 
@@ -53,5 +56,24 @@ TEST(preadv, test) {
   ASSERT_EQ(0, memcmp(b3, b2, 8));
   ASSERT_EQ(8, preadv(3, (struct iovec[]){{b3, 4}, {b3 + 4, 4}}, 2, 0));
   ASSERT_EQ(0, memcmp(b3, b1, 8));
+  ASSERT_EQ(0, close(3));
+}
+
+TEST(pwritev, test) {
+  ASSERT_EQ(3, open("/tmp", O_RDWR | O_TMPFILE, 0644));
+  memset(bb1, 1, 5000);
+  ASSERT_EQ(5000, pwritev(3,
+                          (struct iovec[]){
+                              {bb1, 4097},
+                              {bb1 + 4097, 903},
+                          },
+                          2, 0));
+  ASSERT_EQ(5000, preadv(3,
+                         (struct iovec[]){
+                             {bb2, 4097},
+                             {bb2 + 4097, 903},
+                         },
+                         2, 0));
+  ASSERT_EQ(0, memcmp(bb1, bb2, 4000));
   ASSERT_EQ(0, close(3));
 }
