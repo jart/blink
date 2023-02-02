@@ -39,13 +39,18 @@ void InitBus(void) {
   unsigned i;
   pthread_condattr_t cattr;
   pthread_mutexattr_t mattr;
+#ifdef __CYGWIN__
+  if (g_bus) FreeBig(g_bus, sizeof(*g_bus));
+#endif
   unassert(g_bus =
                (struct Bus *)AllocateBig(sizeof(*g_bus), PROT_READ | PROT_WRITE,
                                          MAP_SHARED | MAP_ANONYMOUS, -1, 0));
   unassert(!pthread_condattr_init(&cattr));
   unassert(!pthread_mutexattr_init(&mattr));
+#ifndef __CYGWIN__
   unassert(!pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED));
   unassert(!pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
+#endif
   unassert(!pthread_mutex_init(&g_bus->futexes.lock, &mattr));
   for (i = 0; i < kFutexMax; ++i) {
     unassert(!pthread_cond_init(&g_bus->futexes.mem[i].cond, &cattr));

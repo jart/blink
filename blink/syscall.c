@@ -307,7 +307,13 @@ static int SysFork(struct Machine *m) {
   LOCK(&m->system->sig_lock);
   LOCK(&m->system->mmap_lock);
   LOCK(&m->system->machines_lock);
+#ifdef __CYGWIN__
+  LOCK(&g_bus->futexes.lock);
+#endif
   pid = fork();
+#ifdef __CYGWIN__
+  UNLOCK(&g_bus->futexes.lock);
+#endif
   UNLOCK(&m->system->machines_lock);
   UNLOCK(&m->system->mmap_lock);
   UNLOCK(&m->system->sig_lock);
@@ -315,6 +321,9 @@ static int SysFork(struct Machine *m) {
   UNLOCK(&m->system->exec_lock);
   if (!pid) {
     newpid = getpid();
+#ifdef __CYGWIN__
+    InitBus();
+#endif
     THR_LOGF("pid=%d tid=%d SysFork -> pid=%d tid=%d",  //
              m->system->pid, m->tid, newpid, newpid);
     m->tid = m->system->pid = newpid;
