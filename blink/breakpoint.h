@@ -2,8 +2,9 @@
 #define BLINK_BREAKPOINT_H_
 #include <stdbool.h>
 #include <stddef.h>
-#include "blink/types.h"
 #include <sys/types.h>
+
+#include "blink/types.h"
 
 struct Breakpoint {
   i64 addr;

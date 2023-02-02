@@ -23,7 +23,7 @@
 #include "blink/assert.h"
 #include "blink/dis.h"
 #include "blink/high.h"
-#include "blink/modrm.h"
+#include "blink/rde.h"
 #include "blink/util.h"
 
 static const char kJcxz[3][6] = {"jcxz", "jecxz", "jrcxz"};

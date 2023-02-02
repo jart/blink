@@ -21,8 +21,9 @@
 #include "blink/flags.h"
 #include "blink/log.h"
 #include "blink/machine.h"
-#include "blink/modrm.h"
+#include "blink/rde.h"
 #include "blink/stats.h"
+#include "blink/x86.h"
 
 bool GetParity(u8 b) {
   b ^= b >> 4;

@@ -23,7 +23,9 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/rde.h"
 #include "blink/watch.h"
+#include "blink/x86.h"
 
 void PopWatchpoint(struct Watchpoints *wps) {
   if (wps->i) {

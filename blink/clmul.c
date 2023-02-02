@@ -18,7 +18,9 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/bitscan.h"
 #include "blink/endian.h"
+#include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/rde.h"
 
 struct clmul {
   u64 x, y;

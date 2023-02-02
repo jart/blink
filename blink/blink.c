@@ -40,6 +40,7 @@
 #include "blink/syscall.h"
 #include "blink/util.h"
 #include "blink/web.h"
+#include "blink/x86.h"
 #include "blink/xlat.h"
 
 #define OPTS "hjms0"

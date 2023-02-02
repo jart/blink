@@ -22,6 +22,7 @@
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
+#include "blink/rde.h"
 
 // BMI2
 // BZHI clearing starting at bit

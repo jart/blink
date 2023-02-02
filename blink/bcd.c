@@ -20,6 +20,7 @@
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/machine.h"
+#include "blink/x86.h"
 
 static relegated dontinline void BcdFlags(struct Machine *m, bool af, bool cf) {
   m->flags = SetFlag(m->flags, FLAGS_CF, cf);

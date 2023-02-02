@@ -32,6 +32,7 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/pun.h"
+#include "blink/rde.h"
 #include "blink/stats.h"
 #include "blink/swap.h"
 #include "blink/types.h"

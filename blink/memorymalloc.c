@@ -34,6 +34,7 @@
 #include "blink/mop.h"
 #include "blink/types.h"
 #include "blink/util.h"
+#include "blink/x86.h"
 
 struct Allocator {
   pthread_mutex_t lock;

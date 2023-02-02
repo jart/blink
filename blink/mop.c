@@ -23,8 +23,8 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/modrm.h"
 #include "blink/mop.h"
+#include "blink/rde.h"
 #include "blink/swap.h"
 #include "blink/tsan.h"
 

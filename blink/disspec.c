@@ -16,11 +16,12 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <stdbool.h>
 #include <string.h>
 
 #include "blink/builtin.h"
 #include "blink/case.h"
-#include "blink/modrm.h"
+#include "blink/rde.h"
 #include "blink/x86.h"
 
 #define UNKNOWN     "wut"

@@ -22,6 +22,7 @@
 #include "blink/dis.h"
 #include "blink/elf.h"
 #include "blink/endian.h"
+#include "blink/log.h"
 #include "blink/util.h"
 
 bool g_disisprog_disable;

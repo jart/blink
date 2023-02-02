@@ -22,6 +22,7 @@
 #include "blink/machine.h"
 #include "blink/mop.h"
 #include "blink/pml4t.h"
+#include "blink/x86.h"
 
 static void AppendContiguousMemoryRange(struct ContiguousMemoryRanges *ranges,
                                         i64 a, i64 b) {

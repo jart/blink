@@ -18,7 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <stdlib.h>
 
-#include "blink/machine.h"
+#include "blink/util.h"
 
 bool g_exitdontabort;
 

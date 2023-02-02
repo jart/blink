@@ -21,7 +21,7 @@
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/machine.h"
-#include "blink/modrm.h"
+#include "blink/rde.h"
 #include "blink/stats.h"
 
 /**

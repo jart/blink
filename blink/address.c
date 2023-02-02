@@ -20,7 +20,7 @@
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
-#include "blink/modrm.h"
+#include "blink/rde.h"
 #include "blink/x86.h"
 
 i64 GetPc(struct Machine *m) {

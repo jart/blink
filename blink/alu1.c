@@ -27,6 +27,7 @@
 #include "blink/lock.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
+#include "blink/rde.h"
 #include "blink/stats.h"
 #include "blink/swap.h"
 

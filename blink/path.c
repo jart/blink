@@ -31,7 +31,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/modrm.h"
+#include "blink/rde.h"
 #include "blink/stats.h"
 
 #define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)

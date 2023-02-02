@@ -24,7 +24,7 @@
 #include <unistd.h>
 
 #include "blink/log.h"
-#include "blink/machine.h"
+#include "blink/tunables.h"
 
 static int g_errfd;
 

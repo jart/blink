@@ -26,6 +26,7 @@
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/util.h"
 

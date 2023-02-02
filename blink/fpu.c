@@ -31,6 +31,7 @@
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/pun.h"
+#include "blink/rde.h"
 
 #define FPUREG 0
 #define MEMORY 1

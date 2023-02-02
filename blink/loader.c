@@ -37,6 +37,7 @@
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/util.h"
+#include "blink/x86.h"
 
 #define READ64(p) Read64((const u8 *)(p))
 #define READ32(p) Read32((const u8 *)(p))

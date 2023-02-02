@@ -16,15 +16,16 @@
 │ See the License for the specific language governing permissions and          │
 │ limitations under the License.                                               │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <stdbool.h>
 #include <string.h>
 
 #include "blink/assert.h"
 #include "blink/bitscan.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
-#include "blink/log.h"
 #include "blink/macros.h"
-#include "blink/modrm.h"
+#include "blink/rde.h"
+#include "blink/types.h"
 #include "blink/x86.h"
 
 const char kXedCopyright[] = "\

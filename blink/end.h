@@ -1,6 +1,6 @@
 #ifndef BLINK_END_H_
 #define BLINK_END_H_
-#include "blink/machine.h"
+#include "blink/flag.h"
 
 // many platforms complain about `end` / `_end` so we'll just pick some
 // arbitarry variable in the .bss section, which should be close enough

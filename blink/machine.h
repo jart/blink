@@ -7,17 +7,14 @@
 #include <stdatomic.h>
 #include <stdbool.h>
 
-#include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/elf.h"
-#include "blink/end.h"
 #include "blink/fds.h"
 #include "blink/jit.h"
 #include "blink/linux.h"
-#include "blink/log.h"
 #include "blink/tsan.h"
-#include "blink/x86.h"
+#include "blink/tunables.h"
 
 #define kArgRde   1
 #define kArgDisp  2
@@ -43,34 +40,6 @@
 #define kMachineFpuException         -7
 #define kMachineProtectionFault      -8
 #define kMachineSimdException        -9
-
-#if CAN_64BIT
-#ifdef __APPLE__
-#define kSkew 0x088800000000
-#else
-#define kSkew 0x000000000000
-#endif
-#define kAutomapStart  0x200000000000
-#define kPreciousStart 0x444000000000  // 1 tb
-#define kPreciousEnd   0x454000000000
-#define kStackTop      0x500000000000
-#else
-#define kAutomapStart  0x20000000
-#define kSkew          0x00000000
-#define kStackTop      0xf8000000
-#define kPreciousStart 0x44000000  // 192 mb
-#define kPreciousEnd   0x50000000
-#endif
-
-#define kRealSize  (16 * 1024 * 1024)  // size of ram for real mode
-#define kStackSize (8 * 1024 * 1024)   // size of stack for user mode
-#define kMinBrk    (2 * 1024 * 1024)   // minimum user mode image address
-
-#define kMinBlinkFd 100       // fds owned by the vm start here
-#define kPollingMs  50        // busy loop for futex(), poll(), etc.
-#define kSemSize    128       // number of bytes used for each semaphore
-#define kBusCount   256       // # load balanced semaphores in virtual bus
-#define kBusRegion  kSemSize  // 16 is sufficient for 8-byte loads/stores
 
 #define CR0_PE 0x01        // protected mode enabled
 #define CR0_MP 0x02        // monitor coprocessor
@@ -390,7 +359,6 @@ struct Machine {                           //
 extern _Thread_local struct Machine *g_machine;
 extern const nexgen32e_f kConvert[3];
 extern const nexgen32e_f kSax[3];
-extern bool FLAG_noconnect;
 extern bool g_wasteland;
 
 struct System *NewSystem(int);
@@ -667,6 +635,11 @@ void OpPsdMaxd1(u8 *, struct Machine *, long);
 void Int64ToDouble(i64, struct Machine *, long);
 void Int32ToDouble(i32, struct Machine *, long);
 void MovsdWpsVpsOp(u8 *, struct Machine *, long);
+
+void LogCpu(struct Machine *);
+const char *GetBacktrace(struct Machine *);
+const char *DescribeOp(struct Machine *, i64);
+int GetInstruction(struct Machine *, i64, struct XedDecodedInst *);
 
 void SetupCod(struct Machine *);
 void FlushCod(struct JitBlock *);

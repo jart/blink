@@ -28,7 +28,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/modrm.h"
+
 #include "blink/types.h"
 #include "blink/util.h"
 

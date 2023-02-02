@@ -23,6 +23,7 @@
 #include "blink/modrm.h"
 #include "blink/mop.h"
 #include "blink/time.h"
+#include "blink/x86.h"
 
 static void StoreDescriptorTable(P, u16 limit, u64 base) {
   u64 l;

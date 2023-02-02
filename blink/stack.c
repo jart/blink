@@ -21,9 +21,11 @@
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/mop.h"
+#include "blink/rde.h"
 #include "blink/tsan.h"
 #include "blink/x86.h"
 

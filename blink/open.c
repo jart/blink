@@ -26,6 +26,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
 #include "blink/debug.h"
 #include "blink/errno.h"
 #include "blink/fds.h"

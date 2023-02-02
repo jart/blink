@@ -31,6 +31,7 @@
 #include "blink/mop.h"
 #include "blink/pml4t.h"
 #include "blink/stats.h"
+#include "blink/x86.h"
 
 void SetReadAddr(struct Machine *m, i64 addr, u32 size) {
   if (size) {

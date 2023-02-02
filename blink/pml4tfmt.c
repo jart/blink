@@ -27,6 +27,7 @@
 #include "blink/macros.h"
 #include "blink/pml4t.h"
 #include "blink/util.h"
+#include "blink/x86.h"
 
 #define INTERESTING_FLAGS (PAGE_U | PAGE_RW | PAGE_XD)
 
