@@ -686,7 +686,7 @@ u64 SetProtection(int prot) {
   return key;
 }
 
-int CheckVirtual(struct System *s, i64 virt, i64 size) {
+bool IsFullyMapped(struct System *s, i64 virt, i64 size) {
   u8 *mi;
   u64 pt;
   i64 ti, end, level;
@@ -697,22 +697,41 @@ int CheckVirtual(struct System *s, i64 virt, i64 size) {
       pt = Get64(mi);
       if (level > 12) {
         if (!(pt & PAGE_V)) {
-          return enomem();
+          return false;
         }
         continue;
       }
       for (;;) {
         if (!(pt & PAGE_V)) {
-          return enomem();
+          return false;
         }
         if ((virt += 4096) >= end) {
-          return 0;
+          return true;
         }
         if (++ti == 512) break;
         pt = Get64((mi += 8));
       }
     }
   }
+}
+
+bool IsFullyUnmapped(struct System *s, i64 virt, i64 size) {
+  u8 *mi;
+  i64 end;
+  u64 i, pt;
+  if (OverlapsPrecious(virt, size)) return false;
+  for (end = virt + size; virt < end; virt += 1ull << i) {
+    for (pt = s->cr3, i = 39;; i -= 9) {
+      mi = GetPageAddress(s, pt) + ((virt >> i) & 511) * 8;
+      pt = Load64(mi);
+      if (!(pt & PAGE_V)) {
+        break;
+      } else if (i == 12) {
+        return false;
+      }
+    }
+  }
+  return true;
 }
 
 int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
@@ -725,10 +744,10 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
   if (!IsValidAddrSize(virt, size)) {
     return einval();
   }
-  if (CheckVirtual(s, virt, size) == -1) {
+  if (!IsFullyMapped(s, virt, size)) {
     LOGF("mprotect(%#" PRIx64 ", %#" PRIx64 ") interval has unmapped pages",
          virt, size);
-    return -1;
+    return enomem();
   }
   key = SetProtection(prot);
   // some operating systems e.g. openbsd and apple M1, have a

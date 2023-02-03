@@ -870,6 +870,7 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   LOCK(&m->system->mmap_lock);
   rc = ProtectVirtual(m->system, addr, size, prot);
   if (rc != -1 && (prot & PROT_EXEC)) {
+    LOGF("resetting jit hooks");
     ClearJitHooks(&m->system->jit);
   }
   UNLOCK(&m->system->mmap_lock);
@@ -955,20 +956,14 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
     }
   }
   LOCK(&m->system->mmap_lock);
-  if (!(flags & MAP_FIXED_LINUX)) {
-    if (!virt) {
-      if ((virt = FindVirtual(m->system, m->system->automap, size)) == -1) {
-        UNLOCK(&m->system->mmap_lock);
-        goto Finished;
-      }
-      pagesize = GetSystemPageSize();
-      m->system->automap = ROUNDUP(virt + size, pagesize);
-    } else {
-      if ((virt = FindVirtual(m->system, virt, size)) == -1) {
-        UNLOCK(&m->system->mmap_lock);
-        goto Finished;
-      }
+  if (!(flags & MAP_FIXED_LINUX) &&
+      (!virt || !IsFullyUnmapped(m->system, virt, size))) {
+    if ((virt = FindVirtual(m->system, m->system->automap, size)) == -1) {
+      UNLOCK(&m->system->mmap_lock);
+      goto Finished;
     }
+    pagesize = GetSystemPageSize();
+    m->system->automap = ROUNDUP(virt + size, pagesize);
   }
   rc = ReserveVirtual(m->system, virt, size, key, fildes, offset,
                       !!(flags & MAP_SHARED_LINUX));

@@ -97,3 +97,17 @@ TEST(mmap, multiprocess_private_vs_shared) {
   EXPECT_NE(-1, munmap(sharedvar, pagesize));
   EXPECT_NE(-1, munmap(privatevar, pagesize));
 }
+
+TEST(mmap, suggestedAddressWithoutMapFixed_isUsedIfAvailable) {
+  void *want, *got1, *got2;
+  want = (void *)(intptr_t)0x300000000000;
+  got1 = mmap(want, pagesize, PROT_READ | PROT_WRITE,
+              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  ASSERT_EQ((intptr_t)want, (intptr_t)got1);
+  got2 = mmap(want, pagesize, PROT_READ | PROT_WRITE,
+              MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  ASSERT_NE((intptr_t)MAP_FAILED, (intptr_t)got2);
+  ASSERT_NE((intptr_t)want, (intptr_t)got2);
+  ASSERT_EQ(0, munmap(got1, pagesize));
+  ASSERT_EQ(0, munmap(got2, pagesize));
+}
