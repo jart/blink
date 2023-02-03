@@ -2621,6 +2621,33 @@ static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
                   GetDirFildes(dstdirfd), LoadStr(m, dstpath));
 }
 
+static int XlatLinkatFlags(int x) {
+  int res = 0;
+  if (x & AT_SYMLINK_NOFOLLOW_LINUX) {
+    x &= ~AT_SYMLINK_NOFOLLOW_LINUX;  // default behavior
+  }
+  if (x & AT_SYMLINK_FOLLOW_LINUX) {
+    res |= AT_SYMLINK_FOLLOW;
+    x &= ~AT_SYMLINK_FOLLOW_LINUX;
+  }
+  if (x) {
+    LOGF("%s() flags %d not supported", "linkat", x);
+    return -1;
+  }
+  return res;
+}
+
+static i32 SysLinkat(struct Machine *m,  //
+                     i32 olddirfd,       //
+                     i64 oldpath,        //
+                     i32 newdirfd,       //
+                     i64 newpath,        //
+                     i32 flags) {
+  return linkat(GetDirFildes(olddirfd), LoadStr(m, oldpath),
+                GetDirFildes(newdirfd), LoadStr(m, newpath),
+                XlatLinkatFlags(flags));
+}
+
 static bool IsFileExecutable(const char *path) {
   return !access(path, X_OK);
 }
@@ -4089,6 +4116,7 @@ void OpSyscall(P) {
     SYSCALL4(0x106, SysFstatat);
     SYSCALL3(0x107, SysUnlinkat);
     SYSCALL4(0x108, SysRenameat);
+    SYSCALL5(0x109, SysLinkat);
     SYSCALL3(0x10A, SysSymlinkat);
     SYSCALL4(0x10B, SysReadlinkat);
     SYSCALL3(0x10C, SysFchmodat);
