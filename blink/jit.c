@@ -405,7 +405,8 @@ bool SetJitHook(struct Jit *jit, u64 virt, intptr_t func) {
   i = atomic_load_explicit(&jit->hooks.i, memory_order_relaxed);
   do {
     if (i == jit->hooks.n / 2) {
-      LOGF("ran out of jit hooks");
+      LOG_ONCE(LOGF("ran out of jit hooks"));
+      DisableJit(jit);
       return false;
     }
   } while (!atomic_compare_exchange_weak_explicit(

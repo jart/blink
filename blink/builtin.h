@@ -212,13 +212,9 @@
 #endif
 
 #ifdef __GNUC__
-#define printfesque(n)   __attribute__((__format__(__printf__, n, n + 1)))
-#define scanfesque(n)    __attribute__((__format__(__scanf__, n, n + 1)))
-#define strftimeesque(n) __attribute__((__format__(__strftime__, n, 0)))
+#define printf_attr(n) __attribute__((__format__(__printf__, n, n + 1)))
 #else
-#define printfesque(n)
-#define scanfesque(n)
-#define strftimeesque(n)
+#define printf_attr(n)
 #endif
 
 #ifdef __x86_64__

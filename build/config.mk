@@ -96,6 +96,8 @@ endif
 
 ifeq ($(MODE), cosmo)
 CC = cosmocc
+CFLAGS += -fno-pie
+LDFLAGS += -no-pie
 endif
 
 ifeq ($(MODE), dbg)

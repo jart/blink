@@ -3762,6 +3762,38 @@ static i32 SysSetgroups(struct Machine *m, i32 size, i64 addr) {
   return rc;
 }
 
+static i32 SysGetresuid(struct Machine *m,  //
+                        i64 realaddr,       //
+                        i64 effectiveaddr,  //
+                        i64 savedaddr) {
+  u8 *real = 0;
+  u8 *effective = 0;
+  if (savedaddr) return enosys();
+  if ((realaddr && !(real = (u8 *)Schlep(m, realaddr, 4))) ||
+      (effectiveaddr && !(effective = (u8 *)Schlep(m, effectiveaddr, 4)))) {
+    return -1;
+  }
+  Write32(real, getuid());
+  Write32(effective, geteuid());
+  return 0;
+}
+
+static i32 SysGetresgid(struct Machine *m,  //
+                        i64 realaddr,       //
+                        i64 effectiveaddr,  //
+                        i64 savedaddr) {
+  u8 *real = 0;
+  u8 *effective = 0;
+  if (savedaddr) return enosys();
+  if ((realaddr && !(real = (u8 *)Schlep(m, realaddr, 4))) ||
+      (effectiveaddr && !(effective = (u8 *)Schlep(m, effectiveaddr, 4)))) {
+    return -1;
+  }
+  Write32(real, getgid());
+  Write32(effective, getegid());
+  return 0;
+}
+
 static int SysSchedYield(struct Machine *m) {
   return sched_yield();
 }
@@ -3960,6 +3992,8 @@ void OpSyscall(P) {
     SYSCALL(0x070, SysSetsid, (m));
     SYSCALL(0x073, SysGetgroups, (m, di, si));
     SYSCALL(0x074, SysSetgroups, (m, di, si));
+    SYSCALL(0x076, SysGetresuid, (m, di, si, dx));
+    SYSCALL(0x078, SysGetresgid, (m, di, si, dx));
     SYSCALL(0x079, SysGetpgid, (m, di));
     SYSCALL(0x07C, SysGetsid, (m, di));
     SYSCALL(0x07F, SysSigpending, (m, di));

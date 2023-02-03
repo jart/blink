@@ -61,6 +61,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
             (flags & PF_X_ ? 0 : PAGE_XD);
 
   ELF_LOGF("PROGRAM HEADER");
+  ELF_LOGF("  aslr = %" PRIx64, aslr);
   ELF_LOGF("  vaddr = %" PRIx64, vaddr);
   ELF_LOGF("  memsz = %" PRIx64, memsz);
   ELF_LOGF("  offset = %" PRIx64, offset);
@@ -256,7 +257,6 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
     Elf64_Ehdr_ *ehdr;
     end = INT64_MIN;
     ELF_LOGF("loading elf interpreter %s", interpreter);
-    aslr = Read16(elf->ehdr->type) == ET_DYN_ ? 0x200000 : 0;
     errno = 0;
     if ((fd = open(interpreter, O_RDONLY)) == -1 ||
         (fstat(fd, &st) == -1 || !st.st_size) ||
@@ -271,6 +271,7 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
       WriteErrorString(")\n");
       exit(127);
     }
+    aslr = Read16(ehdr->type) == ET_DYN_ ? kDynInterpAddr : 0;
     elf->at_base = m->ip = Read64(ehdr->entry) + aslr;
     for (i = 0; i < Read16(ehdr->phnum); ++i) {
       phdr = GetElfSegmentHeaderAddress(ehdr, st.st_size, i);
@@ -405,7 +406,7 @@ error: unsupported executable; we need:\n\
       elf->ehdr = (Elf64_Ehdr_ *)elf->map;
       elf->size = elf->mapsize;
       execstack = LoadElf(
-          m, elf, Read16(elf->ehdr->type) == ET_DYN_ ? 0x400000 : 0, fd);
+          m, elf, Read16(elf->ehdr->type) == ET_DYN_ ? kDynExecAddr : 0, fd);
     } else if (READ64(elf->map) == READ64("MZqFpD='") ||
                READ64(elf->map) == READ64("jartsr='")) {
       if (GetElfHeader(ehdr, prog, elf->map) == -1) exit(127);

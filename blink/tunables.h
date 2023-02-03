@@ -11,6 +11,8 @@
 #define kAutomapStart  0x200000000000
 #define kPreciousStart 0x444000000000  // 1 tb
 #define kPreciousEnd   0x454000000000
+#define kDynInterpAddr 0x454000000000
+#define kDynExecAddr   0x455000000000
 #define kStackTop      0x500000000000
 #else
 #define kAutomapStart  0x20000000
@@ -18,6 +20,8 @@
 #define kStackTop      0xf8000000
 #define kPreciousStart 0x44000000  // 192 mb
 #define kPreciousEnd   0x50000000
+#define kDynInterpAddr 0x40000000
+#define kDynExecAddr   0x41000000
 #endif
 
 #define kRealSize  (16 * 1024 * 1024)  // size of ram for real mode

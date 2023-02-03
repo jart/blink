@@ -100,8 +100,8 @@
 extern char *g_progname;
 
 void LogInit(const char *);
-void LogErr(const char *, int, const char *, ...) printfesque(3);
-void LogInfo(const char *, int, const char *, ...) printfesque(3);
+void LogErr(const char *, int, const char *, ...) printf_attr(3);
+void LogInfo(const char *, int, const char *, ...) printf_attr(3);
 int WriteError(int, const char *, int);
 void WriteErrorInit(void);
 int WriteErrorString(const char *);

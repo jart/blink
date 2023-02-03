@@ -14,6 +14,6 @@ void AppendChar(struct Buffer *, char);
 void AppendData(struct Buffer *, const char *, int);
 int AppendStr(struct Buffer *, const char *);
 void AppendWide(struct Buffer *, wint_t);
-int AppendFmt(struct Buffer *, const char *, ...) printfesque(2);
+int AppendFmt(struct Buffer *, const char *, ...) printf_attr(2);
 
 #endif /* BLINK_BUFFER_H_ */

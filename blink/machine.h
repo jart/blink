@@ -633,7 +633,7 @@ int GetInstruction(struct Machine *, i64, struct XedDecodedInst *);
 void SetupCod(struct Machine *);
 void FlushCod(struct JitBlock *);
 #if LOG_COD
-void WriteCod(const char *, ...) printfesque(1);
+void WriteCod(const char *, ...) printf_attr(1);
 void LogCodOp(struct Machine *, const char *);
 #else
 #define LogCodOp(m, s) (void)0
