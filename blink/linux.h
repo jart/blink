@@ -965,6 +965,18 @@ struct linger_linux {
   u8 linger[4];  // seconds
 };
 
+struct msghdr_linux {
+  u8 name[8];        // optional pointer to address
+  u8 namelen[4];     // socklen_t size of name
+  u8 pad1_[4];       //
+  u8 iov[8];         // points to scatter/gather array
+  u8 iovlen[8];      // u64 # elements in iov
+  u8 control[8];     // points to ancillary data c. cmsghdr
+  u8 controllen[8];  // u64 ancillary data buffer len
+  u8 flags[4];       // u32 MSG_XXX (only applies to recvmsg)
+  u8 pad2_[4];       //
+};
+
 int sysinfo_linux(struct sysinfo_linux *);
 
 #endif /* BLINK_LINUX_H_ */

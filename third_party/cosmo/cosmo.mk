@@ -207,7 +207,8 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/sem_timedwait_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/getdelim_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/getgroups_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/sigpending_test.com.ok
+	o/$(MODE)/third_party/cosmo/2/sigpending_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/sendrecvmsg_test.com.ok
 
 ifneq ($(HOST_OS), Cygwin)
 # lseek_test works in cygwin locally but fails on github actions for mysterious reasons

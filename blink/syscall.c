@@ -19,6 +19,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <grp.h>
 #include <inttypes.h>
 #include <limits.h>
 #include <net/if.h>
@@ -1299,6 +1300,50 @@ static int XlatRecvFlags(int flags) {
   return hostflags;
 }
 
+static int UnXlatMsgFlags(int flags) {
+  int guestflags = 0;
+  if (flags & MSG_OOB) {
+    guestflags |= MSG_OOB_LINUX;
+    flags &= ~MSG_OOB;
+  }
+  if (flags & MSG_PEEK) {
+    guestflags |= MSG_PEEK_LINUX;
+    flags &= ~MSG_PEEK;
+  }
+  if (flags & MSG_TRUNC) {
+    guestflags |= MSG_TRUNC_LINUX;
+    flags &= ~MSG_TRUNC;
+  }
+  if (flags & MSG_CTRUNC) {
+    guestflags |= MSG_CTRUNC_LINUX;
+    flags &= ~MSG_CTRUNC;
+  }
+  if (flags & MSG_WAITALL) {
+    guestflags |= MSG_WAITALL_LINUX;
+    flags &= ~MSG_WAITALL;
+  }
+  if (flags & MSG_DONTROUTE) {
+    guestflags |= MSG_DONTROUTE_LINUX;
+    flags &= ~MSG_DONTROUTE;
+  }
+#ifdef MSG_EOR
+  if (flags & MSG_EOR) {
+    guestflags |= MSG_EOR_LINUX;
+    flags &= ~MSG_EOR;
+  }
+#endif
+#ifdef MSG_NOSIGNAL
+  if (flags & MSG_NOSIGNAL) {
+    guestflags |= MSG_NOSIGNAL_LINUX;
+    flags &= ~MSG_NOSIGNAL;
+  }
+#endif
+  if (flags) {
+    LOGF("unsupported %s flags %#x", "msg", flags);
+  }
+  return guestflags;
+}
+
 static i64 SysSendto(struct Machine *m,  //
                      i32 fildes,         //
                      i64 bufaddr,        //
@@ -1353,6 +1398,90 @@ static i64 SysRecvfrom(struct Machine *m,  //
                   (struct sockaddr *)&addr, addrlen);
   }
   free(buf);
+  return rc;
+}
+
+static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
+  i32 len;
+  u64 iovlen;
+  ssize_t rc;
+  i64 iovaddr;
+  struct Iovs iv;
+  struct msghdr msg;
+  struct sockaddr_storage ss;
+  const struct msghdr_linux *gm;
+  if ((flags = XlatSendFlags(flags)) == -1) {
+    return -1;
+  }
+  if (!(gm = (const struct msghdr_linux *)Schlep(m, msgaddr, sizeof(*gm)))) {
+    return -1;
+  }
+  if (Read64(gm->controllen)) {
+    LOGF("ancillary data not supported yet");
+    return enotsup();
+  }
+  memset(&msg, 0, sizeof(msg));
+  if ((len = Read32(gm->namelen)) > 0) {
+    if ((len = LoadSockaddr(m, Read64(gm->name), len, &ss)) == -1) {
+      return -1;
+    }
+    msg.msg_name = &ss;
+    msg.msg_namelen = len;
+  }
+  iovaddr = Read64(gm->iov);
+  iovlen = Read64(gm->iovlen);
+  if (!iovlen || iovlen > IOV_MAX_LINUX) {
+    errno = EMSGSIZE;
+    return -1;
+  }
+  InitIovs(&iv);
+  if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+    msg.msg_iov = iv.p;
+    msg.msg_iovlen = iv.i;
+    INTERRUPTIBLE(rc = sendmsg(fildes, &msg, flags));
+  }
+  FreeIovs(&iv);
+  return rc;
+}
+
+static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
+  ssize_t rc;
+  u64 iovlen;
+  i64 iovaddr;
+  struct Iovs iv;
+  struct msghdr msg;
+  struct msghdr_linux gm;
+  struct sockaddr_storage addr;
+  if ((flags = XlatRecvFlags(flags)) == -1) return -1;
+  if (CopyFromUserRead(m, &gm, msgaddr, sizeof(gm)) == -1) return -1;
+  memset(&msg, 0, sizeof(msg));
+  iovaddr = Read64(gm.iov);
+  iovlen = Read64(gm.iovlen);
+  if (!iovlen || iovlen > IOV_MAX_LINUX) {
+    errno = EMSGSIZE;
+    return -1;
+  }
+  InitIovs(&iv);
+  if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+    msg.msg_iov = iv.p;
+    msg.msg_iovlen = iv.i;
+    if (Read64(gm.name)) {
+      memset(&addr, 0, sizeof(addr));
+      msg.msg_name = &addr;
+      msg.msg_namelen = sizeof(addr);
+    }
+    INTERRUPTIBLE(rc = recvmsg(fildes, &msg, flags));
+    if (rc != -1) {
+      Write32(gm.flags, UnXlatMsgFlags(msg.msg_flags));
+      CopyToUserWrite(m, msgaddr, &gm, sizeof(gm));
+      if (Read64(gm.name)) {
+        StoreSockaddr(m, Read64(gm.name),
+                      msgaddr + offsetof(struct msghdr_linux, namelen),
+                      (struct sockaddr *)&addr, msg.msg_namelen);
+      }
+    }
+  }
+  FreeIovs(&iv);
   return rc;
 }
 
@@ -3781,6 +3910,8 @@ void OpSyscall(P) {
     SYSCALL(0x02B, SysAccept, (m, di, si, dx));
     SYSCALL(0x02C, SysSendto, (m, di, si, dx, r0, r8, r9));
     SYSCALL(0x02D, SysRecvfrom, (m, di, si, dx, r0, r8, r9));
+    SYSCALL(0x02E, SysSendmsg, (m, di, si, dx));
+    SYSCALL(0x02F, SysRecvmsg, (m, di, si, dx));
     SYSCALL(0x030, SysShutdown, (m, di, si));
     SYSCALL(0x031, SysBind, (m, di, si, dx));
     SYSCALL(0x032, SysListen, (m, di, si));
