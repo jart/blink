@@ -28,7 +28,7 @@
 #include "blink/fds.h"
 #include "blink/syscall.h"
 
-int SysPipe(struct Machine *m, i64 pipefds_addr, i32 flags) {
+int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
   int rc;
   int fds[2];
   u8 fds_linux[2][4];

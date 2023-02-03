@@ -61,7 +61,7 @@ void *Mmap(void *addr,     //
     MEM_LOGF("%s failed to create %s map [%p,%p) as %s flags %#x: %s "
              "(system page size is %ld)",
              owner, szbuf, (u8 *)addr, (u8 *)addr + length, DescribeProt(prot),
-             flags, strerror(errno), GetSystemPageSize());
+             flags, DescribeHostErrno(errno), GetSystemPageSize());
   }
 #endif
   return res;
@@ -77,7 +77,7 @@ int Munmap(void *addr, size_t length) {
     MEM_LOGF("unmapped %s bytes at [%p,%p)", szbuf, addr, (u8 *)addr + length);
   } else {
     MEM_LOGF("failed to unmap %s bytes at [%p,%p): %s", szbuf, addr,
-             (u8 *)addr + length, strerror(errno));
+             (u8 *)addr + length, DescribeHostErrno(errno));
   }
 #endif
   return rc;
@@ -97,7 +97,7 @@ int Mprotect(void *addr,     //
   } else {
     MEM_LOGF("%s failed to protect %s byte map [%p,%p) as %s: %s", owner, szbuf,
              (u8 *)addr, (u8 *)addr + length, DescribeProt(prot),
-             strerror(errno));
+             DescribeHostErrno(errno));
   }
 #endif
   return res;

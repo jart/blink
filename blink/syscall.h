@@ -47,7 +47,7 @@ int SysClose(struct Machine *, i32);
 int SysCloseRange(struct Machine *, u32, u32, u32);
 int SysDup(struct Machine *, i32, i32, i32, i32);
 int SysOpenat(struct Machine *, i32, i64, i32, i32);
-int SysPipe(struct Machine *, i64, i32);
+int SysPipe2(struct Machine *, i64, i32);
 int SysIoctl(struct Machine *, int, u64, i64);
 _Noreturn void SysExitGroup(struct Machine *, int);
 _Noreturn void SysExit(struct Machine *, int);

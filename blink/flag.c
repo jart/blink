@@ -18,5 +18,6 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/flag.h"
 
+bool FLAG_strace;
 bool FLAG_noconnect;
 const char *FLAG_logpath;

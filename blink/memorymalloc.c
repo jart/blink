@@ -25,6 +25,7 @@
 
 #include "blink/assert.h"
 #include "blink/bus.h"
+#include "blink/debug.h"
 #include "blink/errno.h"
 #include "blink/linux.h"
 #include "blink/lock.h"
@@ -539,7 +540,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                  "try using `blink -m` to disable memory optimizations, or "
                  "try compiling blink using -Wl,--image-base=0x23000000 or "
                  "possibly -Wl,-Ttext-segment=0x23000000 in LDFLAGS"
-               : strerror(errno));
+               : DescribeHostErrno(errno));
       PanicDueToMmap();
     }
     s->memstat.allocated += size / 4096;
@@ -596,7 +597,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                    ", brk=%p size=%ld, flags=%#x, fd=%d, offset=%#" PRIx64
                    ") crisis: %s",
                    virt, g_allocator.brk, lilsize, lilflags, fd, (u64)liloff,
-                   strerror(errno));
+                   DescribeHostErrno(errno));
               PanicDueToMmap();
             }
             real = (intptr_t)lil + lilskew;
@@ -760,7 +761,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
           last = mpstart;
           if (Mprotect(ToHost(mpstart), pagesize, sysprot, "linear")) {
             LOGF("mprotect(%#" PRIx64 " [%p], %#lx, %d) failed: %s", mpstart,
-                 ToHost(mpstart), pagesize, prot, strerror(errno));
+                 ToHost(mpstart), pagesize, prot, DescribeHostErrno(errno));
             Abort();
           }
         } else if ((pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
@@ -769,7 +770,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
           if (Mprotect(real, pagesize, sysprot, "mug")) {
             LOGF("mprotect(pt=%#" PRIx64
                  ", real=%p, size=%#lx, prot=%d) failed: %s",
-                 pt, real, pagesize, prot, strerror(errno));
+                 pt, real, pagesize, prot, DescribeHostErrno(errno));
             Abort();
           }
         }

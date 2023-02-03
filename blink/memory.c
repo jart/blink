@@ -27,6 +27,7 @@
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/likely.h"
+#include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/pml4t.h"
@@ -361,10 +362,7 @@ void *Schlep(struct Machine *m, i64 addr, size_t size) {
   return res;
 }
 
-// Returns pointer to string in guest memory. If the string overlaps a
-// page boundary, then it's copied, and the temporary memory is pushed
-// to the free list. Returns NULL w/ EFAULT or ENOMEM on error.
-char *LoadStr(struct Machine *m, i64 addr) {
+static char *LoadStrImpl(struct Machine *m, i64 addr) {
   size_t have;
   char *copy, *page, *p;
   have = 4096 - (addr & 4095);
@@ -388,6 +386,17 @@ char *LoadStr(struct Machine *m, i64 addr) {
   }
   free(copy);
   return 0;
+}
+
+// Returns pointer to string in guest memory. If the string overlaps a
+// page boundary, then it's copied, and the temporary memory is pushed
+// to the free list. Returns NULL w/ EFAULT or ENOMEM on error.
+char *LoadStr(struct Machine *m, i64 addr) {
+  char *res;
+  if ((res = LoadStrImpl(m, addr))) {
+    SYS_LOGF("LoadStr(%#" PRIx64 ") -> \"%s\"", addr, res);
+  }
+  return res;
 }
 
 // Copies string from guest memory. The returned memory is pushed to the

@@ -27,6 +27,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/debug.h"
 #include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -114,7 +115,7 @@ static void SpawnCxxFilt(void) {
   if (pipe(pipefds[1]) == -1 ||  //
       pipe(pipefds[0]) == -1 ||  //
       (g_cxxfilt.pid = fork()) == -1) {
-    LOGF("can't launch c++ demangler: %s", strerror(errno));
+    LOGF("can't launch c++ demangler: %s", DescribeHostErrno(errno));
     close(pipefds[0][0]);
     close(pipefds[0][1]);
     close(pipefds[1][0]);
@@ -198,11 +199,11 @@ static char *DemangleCxxFilt(char *p, size_t pn, const char *s, size_t sn) {
         res = 0;
       }
     } else {
-      LOGF("failed to read from c++filt pipe: %s", strerror(errno));
+      LOGF("failed to read from c++filt pipe: %s", DescribeHostErrno(errno));
       res = 0;
     }
   } else {
-    LOGF("failed to write to c++filt pipe: %s", strerror(errno));
+    LOGF("failed to write to c++filt pipe: %s", DescribeHostErrno(errno));
     res = 0;
   }
   return res;

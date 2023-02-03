@@ -124,9 +124,25 @@ You can hunt down bugs in Blink using the following build modes:
 
 ## Reference
 
+The Blinkenlights project provides two programs which may be launched on
+the command line.
+
 ### `blink` Flags
 
-Your Blink VM may be started with the following command line flags:
+The headless Blinkenlights virtual machine command (named `blink` by
+convention) accepts command line arguments per the specification:
+
+```
+blink [FLAG...] PROGRAM [ARG...]
+```
+
+Where `PROGRAM` is an x86_64-linux binary that may be specified as:
+
+1. An absolute path to an executable file, which will be run as-is
+2. A relative path containing slashes, which will be run as-is
+3. A path name without slashes, which will be `$PATH` searched
+
+The following `FLAG` arguments are provided:
 
 - `-h` shows this help
 
@@ -139,10 +155,25 @@ Your Blink VM may be started with the following command line flags:
   is required, if Blink is running inside Blink, in which case only one
   level of simulation may use the linear memory optimization.
 
+- `-0` allows `argv[0]` to be specified on the command line. Under
+  normal circumstances, `blink cmd arg1` is equivalent to `execve("cmd",
+  {"cmd", "arg1})` since that's how most programs are launched. However
+  if you need the full power of execve() process spawning, you can say
+  `blink -0 cmd arg0 arg1` which is equivalent to `execve("cmd",
+  {"arg0", "arg1})`.
+
 - `-L PATH` specifies the log path. The default log path is
   `$TMPDIR/blink.log` or `/tmp/blink.log` if `$TMPDIR` isn't defined. If
   a log file isn't desired, this flag may be set to `-` or `/dev/stderr`
   for logging to standard error.
+
+- `-S` enables system call logging. This will emit to the log file the
+  names of system calls each time a `SYSCALL` operation in invoked,
+  along with their arguments and results in hexadecimal. Blink currently
+  only displays symbol names for error codes. The x86_64-linux headers
+  and System V ABI may be consulted to determine the meaning of other
+  hex codes. System call logging isn't available in `MODE=rel` and
+  `MODE=tiny` builds, in which case this flag is ignored.
 
 - `-s` will cause internal statistics to be printed to standard error on
   exit. Stats aren't available in `MODE=rel` and `MODE=tiny` builds, and
@@ -150,7 +181,39 @@ Your Blink VM may be started with the following command line flags:
 
 ### `blinkenlights` Flags
 
-Blinkenlights' TUI may be started with the following command line flags:
+The Blinkenlights TUI interface command (named `blinkenlights` by
+convention) requires a UTF-8 VT100 / XTERM style terminal to use. We
+recommend the following terminals, ordered by preference:
+
+- [KiTTY](https://sw.kovidgoyal.net/kitty/) (Linux)
+- [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html) (Windows)
+- Gnome Terminal (Linux)
+- Terminal.app (MacOS)
+- CMD.EXE (Windows 10+)
+- PowerShell (Windows 10+)
+- Xterm (Linux)
+
+The following fonts are recommended, ordered by preference:
+
+- [PragmataPro Regular Mono](https://fsd.it/shop/fonts/pragmatapro/) (€59)
+- Bitstream Vera Sans Mono (a.k.a. DejaVu Sans Mono)
+- Consolas
+- Menlo
+
+The `blinkenlights` command accepts its command line arguments in
+accordance with the following specification:
+
+```
+blinkenlights [FLAG...] PROGRAM [ARG...]
+```
+
+Where `PROGRAM` is an x86_64-linux binary that may be specified as:
+
+1. An absolute path to an executable file, which will be run as-is
+2. A relative path containing slashes, which will be run as-is
+3. A path name without slashes, which will be `$PATH` searched
+
+The following `FLAG` arguments are provided:
 
 - `-h` shows this help
 
@@ -192,6 +255,13 @@ Blinkenlights' TUI may be started with the following command line flags:
   right of the display. Please note this flag has the opposite meaning
   as it does in the `blink` command.
 
+- `-0` allows `argv[0]` to be specified on the command line. Under
+  normal circumstances, `blinkenlights cmd arg1` is equivalent to
+  `execve("cmd", {"cmd", "arg1})` since that's how most programs are
+  launched. However if you need the full power of execve() process
+  spawning, you can say `blinkenlights -0 cmd arg0 arg1` which is
+  equivalent to `execve("cmd", {"arg0", "arg1})`.
+
 - `-t` may be used to disable Blinkenlights TUI mode. This makes the
   program behave similarly to the `blink` command, however not as good.
   We're currently using this flag for unit testing real mode programs,
@@ -201,15 +271,35 @@ Blinkenlights' TUI may be started with the following command line flags:
 - `-L PATH` specifies the log path. The default log path is
   `$TMPDIR/blink.log` or `/tmp/blink.log` if `$TMPDIR` isn't defined.
 
+- `-S` enables system call logging. This will emit to the log file the
+  names of system calls each time a `SYSCALL` operation in invoked,
+  along with their arguments and results in hexadecimal. Blink currently
+  only displays symbol names for error codes. The x86_64-linux headers
+  and System V ABI may be consulted to determine the meaning of other
+  hex codes. System call logging isn't available in `MODE=rel` and
+  `MODE=tiny` builds, in which case this flag is ignored.
+
 - `-s` will cause internal statistics to be printed to standard error on
   exit. Stats aren't available in `MODE=rel` and `MODE=tiny` builds, and
   this flag is ignored.
 
-- `-H` disables syntax highlighting
+- `-z` [repeatable] may be specified to zoom the memory panels, so they
+  display a larger amount of memory in a smaller space. By default, one
+  terminal cell corresponds to a single byte of memory. When memory has
+  been zoomed the magic kernel is used (similar to Lanczos) to decimate
+  the number of bytes by half, for each `-z` that's specified. Normally
+  this would be accomplished by using `CTRL+MOUSEWHEEL` where the mouse
+  cursor is hovered over the panel that should be zoomed. However, many
+  terminal emulators (especially on Windows), do not support this xterm
+  feature and as such, this flag is provided as an alternative.
+
+- `-v` [repeatable] increases verbosity
 
 - `-R` disables reactive error mode
 
-- `-v` increases verbosity
+- `-H` disables syntax highlighting
+
+- `-N` enables natural scrolling
 
 #### JIT Path Glyphs
 
@@ -237,6 +327,9 @@ glyphs are defined as follows:
 
 ### Environment Variables
 
+The following environment variables are recognized by both the `blink`
+and `blinkenlights` commands:
+
 - `BLINK_LOG_FILENAME` may be specified to supply a log path to be used
   in cases where the `-L PATH` flag isn't specified. This value should
   be an absolute path. It may be `/dev/stderr` to avoid needing a file.
@@ -254,7 +347,7 @@ First, some background. Blink's coverage of the x86_64 instruction set
 is comprehensive. However the Linux system call ABI is much larger and
 therefore not possible to fully support, unless Blink emulated a Linux
 kernel image too. Blink has sought to support the subset of Linux ABIs
-that are either (1) standardized by POSIX.1-2007 or (2) too popular to
+that are either (1) standardized by POSIX.1-2017 or (2) too popular to
 *not* support. As an example, `AF_INET`, `AF_UNIX`, and `AF_INET6` are
 supported, but Blink will return `EINVAL` if a program requests any of
 the dozens of other ones, e.g. `AF_BLUETOOTH`. Such errors are usually

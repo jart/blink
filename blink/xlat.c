@@ -37,6 +37,7 @@
 
 #include "blink/builtin.h"
 #include "blink/case.h"
+#include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/linux.h"
@@ -1647,7 +1648,7 @@ void XlatTermiosToLinux(struct termios_linux *dst, const struct termios *src) {
       speed = B38400;
     }
   } else {
-    LOGF("failed to get baud rate: %s", strerror(errno));
+    LOGF("failed to get baud rate: %s", DescribeHostErrno(errno));
     speed = B38400;
   }
   Write32(dst->cflag, (Read32(dst->cflag) & ~CBAUD_LINUX) | speed);

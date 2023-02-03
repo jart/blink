@@ -156,6 +156,13 @@ void LogInfo(const char *file, int line, const char *fmt, ...) {
   va_end(va);
 }
 
+void LogSys(const char *file, int line, const char *fmt, ...) {
+  va_list va;
+  va_start(va, fmt);
+  Log(file, line, fmt, va, LOG_INFO);
+  va_end(va);
+}
+
 static void SetLogPath(const char *path) {
   size_t n;
   const char *tmpdir;

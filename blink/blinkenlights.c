@@ -79,7 +79,7 @@
 #include "blink/xmmtype.h"
 
 #define USAGE \
-  " [-?HhrRstv] [ROM] [ARGS...]\n\
+  " [-?HhrRsStv] [ROM] [ARGS...]\n\
 \n\
 DESCRIPTION\n\
 \n\
@@ -129,8 +129,8 @@ x       hex                       -v       increase verbosity\n\
 ?       help                      -j       enables jit\n\
 t       sse type                  -m       disables memory safety\n\
 w       sse width                 -N       natural scroll wheel\n\
-B       pop breakpoint            -?       help\n\
-p       profiling mode\n\
+B       pop breakpoint            -S       system call logging\n\
+p       profiling mode            -?       help\n\
 ctrl-t  turbo\n\
 alt-t   slowmo"
 
@@ -3292,7 +3292,7 @@ static void ReadKeyboard(void) {
       LOGF("ReadKeyboard interrupted");
       return;
     }
-    fprintf(stderr, "ReadKeyboard failed: %s\n", strerror(errno));
+    fprintf(stderr, "ReadKeyboard failed: %s\n", DescribeHostErrno(errno));
     exit(1);
   }
   HandleKeyboard(buf);
@@ -3633,13 +3633,16 @@ static void GetOpts(int argc, char *argv[]) {
   int opt;
   bool wantjit = false;
   bool wantunsafe = false;
-  while ((opt = GetOpt(argc, argv, "hjmCvtrzRNsb:Hw:L:")) != -1) {
+  while ((opt = GetOpt(argc, argv, "hjmCvtrzRNsSb:Hw:L:")) != -1) {
     switch (opt) {
       case 'j':
         wantjit = true;
         break;
       case 't':
         tuimode = false;
+        break;
+      case 'S':
+        FLAG_strace = true;
         break;
       case 'C':
         FLAG_noconnect = true;

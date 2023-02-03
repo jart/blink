@@ -45,7 +45,7 @@
 #include "blink/x86.h"
 #include "blink/xlat.h"
 
-#define OPTS "hjms0L:"
+#define OPTS "hjmsS0L:"
 #define USAGE \
   " [-" OPTS "] PROG [ARGS...]\n\
   -h                   help\n\
@@ -53,6 +53,7 @@
   -0                   to specify argv[0]\n\
   -m                   enable memory safety\n\
   -s                   print statistics on exit\n\
+  -S                   enable system call logging\n\
   -L PATH              log filename (default ${TMPDIR:-/tmp}/blink.log)\n\
   $BLINK_LOG_FILENAME  log filename (same as -L flag)\n"
 
@@ -161,7 +162,9 @@ _Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   FLAG_nolinear = !CanHaveLinearMemory();
+#if LOG_ENABLED
   FLAG_logpath = getenv("BLINK_LOG_FILENAME");
+#endif
 #ifdef __CYGWIN__
   FLAG_nojit = true;
   FLAG_nolinear = true;
@@ -179,6 +182,9 @@ static void GetOpts(int argc, char *argv[]) {
         break;
       case 'j':
         FLAG_nojit = true;
+        break;
+      case 'S':
+        FLAG_strace = true;
         break;
       case 'm':
         FLAG_nolinear = true;

@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "blink/builtin.h"
+#include "blink/flag.h"
 
 #ifndef NDEBUG
 #define LOG_ENABLED 1
@@ -11,7 +12,6 @@
 #define LOG_ENABLED 0
 #endif
 
-#define LOG_SYS 0  // log system calls run by guest
 #define LOG_SIG 0  // log signal handling behaviors
 #define LOG_ASM 0  // log executed assembly opcodes
 #define LOG_JIT 0  // jit path construction logging
@@ -31,8 +31,13 @@
 #define LOGF(...) (void)0
 #endif
 
-#if LOG_SYS
-#define SYS_LOGF(...) LogInfo(__FILE__, __LINE__, "(sys) " __VA_ARGS__)
+#if LOG_ENABLED
+#define SYS_LOGF(...)                                   \
+  do {                                                  \
+    if (__builtin_expect(FLAG_strace, 0)) {             \
+      LogSys(__FILE__, __LINE__, "(sys) " __VA_ARGS__); \
+    }                                                   \
+  } while (0)
 #else
 #define SYS_LOGF(...) (void)0
 #endif
@@ -100,6 +105,7 @@
 extern char *g_progname;
 
 void LogInit(const char *);
+void LogSys(const char *, int, const char *, ...) printf_attr(3);
 void LogErr(const char *, int, const char *, ...) printf_attr(3);
 void LogInfo(const char *, int, const char *, ...) printf_attr(3);
 int WriteError(int, const char *, int);

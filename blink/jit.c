@@ -27,6 +27,7 @@
 #include "blink/assert.h"
 #include "blink/bitscan.h"
 #include "blink/builtin.h"
+#include "blink/debug.h"
 #include "blink/dll.h"
 #include "blink/end.h"
 #include "blink/endian.h"
@@ -462,12 +463,12 @@ int ClearJitHooks(struct Jit *jit) {
 
 static bool CheckMmapResult(void *want, void *got) {
   if (got == MAP_FAILED) {
-    LOGF("failed to mmap() jit block: %s", strerror(errno));
+    LOGF("failed to mmap() jit block: %s", DescribeHostErrno(errno));
     return false;
   }
   if (got != want) {
     LOGF("jit block mmap(%p) returned unexpected address %p: %s", want, got,
-         strerror(errno));
+         DescribeHostErrno(errno));
     return false;
   }
   return true;
@@ -478,7 +479,7 @@ static bool PrepareJitMemory(void *addr, size_t size) {
   // Apple M1 only permits RWX memory if we use MAP_JIT, which Apple has
   // chosen to make incompatible with MAP_FIXED.
   if (Munmap(addr, size)) {
-    LOGF("failed to munmap() jit block: %s", strerror(errno));
+    LOGF("failed to munmap() jit block: %s", DescribeHostErrno(errno));
     return false;
   }
   return CheckMmapResult(
@@ -491,7 +492,7 @@ static bool PrepareJitMemory(void *addr, size_t size) {
     return true;
   }
   if (~prot & PROT_EXEC) {
-    LOGF("failed to mprotect() jit block: %s", strerror(errno));
+    LOGF("failed to mprotect() jit block: %s", DescribeHostErrno(errno));
     return false;
   }
   // OpenBSD imposes a R^X invariant and raises ENOTSUP if RWX

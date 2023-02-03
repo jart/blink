@@ -96,12 +96,55 @@
 #define SO_LINGER_ SO_LINGER
 #endif
 
-#define ASSIGN(D, S) memcpy(&D, &S, MIN(sizeof(S), sizeof(D)))
-#define SYSCALL(x, name, args)                                              \
-  CASE(x, SYS_LOGF("%s(%#" PRIx64 ", %#" PRIx64 ", %#" PRIx64 ", %#" PRIx64 \
-                   ", %#" PRIx64 ", %#" PRIx64 ")",                         \
-                   #name, di, si, dx, r0, r8, r9);                          \
-       ax = name args)
+#define SYSCALL0(magnum, func)                                \
+  case magnum:                                                \
+    ax = func(m);                                             \
+    SYS_LOGF("%s() -> %s", #func, DescribeSyscallResult(ax)); \
+    break
+
+#define SYSCALL1(magnum, func)                                                \
+  case magnum:                                                                \
+    ax = func(m, di);                                                         \
+    SYS_LOGF("%s(%#" PRIx64 ") -> %s", #func, di, DescribeSyscallResult(ax)); \
+    break
+
+#define SYSCALL2(magnum, func)                                      \
+  case magnum:                                                      \
+    ax = func(m, di, si);                                           \
+    SYS_LOGF("%s(%#" PRIx64 ", %#" PRIx64 ") -> %s", #func, di, si, \
+             DescribeSyscallResult(ax));                            \
+    break
+
+#define SYSCALL3(magnum, func)                                                \
+  case magnum:                                                                \
+    ax = func(m, di, si, dx);                                                 \
+    SYS_LOGF("%s(%#" PRIx64 ", %#" PRIx64 ", %#" PRIx64 ") -> %s", #func, di, \
+             si, dx, DescribeSyscallResult(ax));                              \
+    break
+
+#define SYSCALL4(magnum, func)                                        \
+  case magnum:                                                        \
+    ax = func(m, di, si, dx, r0);                                     \
+    SYS_LOGF("%s(%#" PRIx64 ", %#" PRIx64 ", %#" PRIx64 ", %#" PRIx64 \
+             ") -> %s",                                               \
+             #func, di, si, dx, r0, DescribeSyscallResult(ax));       \
+    break
+
+#define SYSCALL5(magnum, func)                                        \
+  case magnum:                                                        \
+    ax = func(m, di, si, dx, r0, r8);                                 \
+    SYS_LOGF("%s(%#" PRIx64 ", %#" PRIx64 ", %#" PRIx64 ", %#" PRIx64 \
+             ", %#" PRIx64 ") -> %s",                                 \
+             #func, di, si, dx, r0, r8, DescribeSyscallResult(ax));   \
+    break
+
+#define SYSCALL6(magnum, func)                                          \
+  case magnum:                                                          \
+    ax = func(m, di, si, dx, r0, r8, r9);                               \
+    SYS_LOGF("%s(%#" PRIx64 ", %#" PRIx64 ", %#" PRIx64 ", %#" PRIx64   \
+             ", %#" PRIx64 ", %#" PRIx64 ") -> %s",                     \
+             #func, di, si, dx, r0, r8, r9, DescribeSyscallResult(ax)); \
+    break
 
 char *g_blink_path;
 bool FLAG_statistics;
@@ -522,7 +565,7 @@ static int SysFutexWait(struct Machine *m,  //
       if (rc == ETIMEDOUT) {
         THR_LOGF("futex wait timed out");
       } else {
-        THR_LOGF("futex wait returned %s", rc ? strerror(rc) : "0");
+        THR_LOGF("futex wait returned %s", DescribeHostErrno(rc));
       }
     }
     UNLOCK(&f->lock);
@@ -967,7 +1010,7 @@ static int SysDup1(struct Machine *m, i32 fildes) {
     unassert(AddFd(&m->system->fds, newfildes, oflags));
     UnlockFds(&m->system->fds);
   } else {
-    LOGF("dup() failed %s", strerror(errno));
+    LOGF("dup() failed %s", DescribeHostErrno(errno));
   }
   return newfildes;
 }
@@ -1012,7 +1055,7 @@ static int SysDup2(struct Machine *m, i32 fildes, i32 newfildes) {
     unassert(AddFd(&m->system->fds, newfildes, oflags));
     UnlockFds(&m->system->fds);
   } else {
-    LOGF("dup2() failed %s", strerror(errno));
+    LOGF("dup2() failed %s", DescribeHostErrno(errno));
   }
   return rc;
 }
@@ -1054,7 +1097,7 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
     unassert(AddFd(&m->system->fds, newfildes, oflags));
     UnlockFds(&m->system->fds);
   } else {
-    LOGF("dup2() failed %s", strerror(errno));
+    LOGF("dup2() failed %s", DescribeHostErrno(errno));
   }
   if (flags) UNLOCK(&m->system->exec_lock);
   return rc;
@@ -1077,7 +1120,7 @@ static int SysDupf(struct Machine *m, i32 fildes, i32 minfildes, int cmd) {
     unassert(AddFd(&m->system->fds, newfildes, oflags));
     UnlockFds(&m->system->fds);
   } else {
-    LOGF("dupf() failed %s", strerror(errno));
+    LOGF("dupf() failed %s", DescribeHostErrno(errno));
   }
   return newfildes;
 }
@@ -1923,7 +1966,7 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
     struct stat st;
     if (fstatat(fd->fildes, ent->d_name, &st, AT_SYMLINK_NOFOLLOW) == -1) {
       LOGF("fstatat(%d, %s) failed: %s", fd->fildes, ent->d_name,
-           strerror(errno));
+           DescribeHostErrno(errno));
       type = DT_UNKNOWN_LINUX;
     } else {
       if (S_ISDIR(st.st_mode)) {
@@ -2649,7 +2692,6 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
         gwstatus = 0xffff;
 #endif
       } else {
-        if (!WIFSIGNALED(wstatus)) LOGF("unsupported wstatus %#x", wstatus);
         unassert(WIFSIGNALED(wstatus));
         gwstatus = UnXlatSignal(WTERMSIG(wstatus)) & 127;
 #ifdef WCOREDUMP
@@ -3662,7 +3704,7 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
   if (!err) {
     return 0;
   } else {
-    LOGF("tkill(%d, %d) failed: %s", tid, sig, strerror(err));
+    LOGF("tkill(%d, %d) failed: %s", tid, sig, DescribeHostErrno(err));
     errno = err;
     return -1;
   }
@@ -3883,6 +3925,10 @@ static int SysSchedGetPriorityMin(struct Machine *m, int policy) {
   return 0;
 }
 
+static int SysPipe(struct Machine *m, i64 pipefds_addr) {
+  return SysPipe2(m, pipefds_addr, 0);
+}
+
 void OpSyscall(P) {
   u64 ax, di, si, dx, r0, r8, r9;
   STATISTIC(++syscalls);
@@ -3898,166 +3944,166 @@ void OpSyscall(P) {
   r9 = Get64(m->r9);
   m->interrupted = false;
   switch (ax & 0xfff) {
-    SYSCALL(0x000, SysRead, (m, di, si, dx));
-    SYSCALL(0x001, SysWrite, (m, di, si, dx));
-    SYSCALL(0x002, SysOpen, (m, di, si, dx));
-    SYSCALL(0x003, SysClose, (m, di));
-    SYSCALL(0x004, SysStat, (m, di, si));
-    SYSCALL(0x005, SysFstat, (m, di, si));
-    SYSCALL(0x006, SysLstat, (m, di, si));
-    SYSCALL(0x007, SysPoll, (m, di, si, dx));
-    SYSCALL(0x008, SysLseek, (m, di, si, dx));
-    SYSCALL(0x009, SysMmap, (m, di, si, dx, r0, r8, r9));
-    SYSCALL(0x011, SysPread, (m, di, si, dx, r0));
-    SYSCALL(0x012, SysPwrite, (m, di, si, dx, r0));
-    SYSCALL(0x017, SysSelect, (m, di, si, dx, r0, r8));
-    SYSCALL(0x019, SysMremap, (m, di, si, dx, r0, r8));
-    SYSCALL(0x10E, SysPselect, (m, di, si, dx, r0, r8, r9));
-    SYSCALL(0x01A, SysMsync, (m, di, si, dx));
-    SYSCALL(0x00A, SysMprotect, (m, di, si, dx));
-    SYSCALL(0x00B, SysMunmap, (m, di, si));
-    SYSCALL(0x00C, SysBrk, (m, di));
-    SYSCALL(0x00D, SysSigaction, (m, di, si, dx, r0));
-    SYSCALL(0x00E, SysSigprocmask, (m, di, si, dx, r0));
-    SYSCALL(0x010, SysIoctl, (m, di, si, dx));
-    SYSCALL(0x013, SysReadv, (m, di, si, dx));
-    SYSCALL(0x014, SysWritev, (m, di, si, dx));
-    SYSCALL(0x015, SysAccess, (m, di, si));
-    SYSCALL(0x016, SysPipe, (m, di, 0));
-    SYSCALL(0x125, SysPipe, (m, di, si));
-    SYSCALL(0x018, SysSchedYield, (m));
-    SYSCALL(0x01C, SysMadvise, (m, di, si, dx));
-    SYSCALL(0x020, SysDup1, (m, di));
-    SYSCALL(0x021, SysDup2, (m, di, si));
-    SYSCALL(0x124, SysDup3, (m, di, si, dx));
-    SYSCALL(0x022, SysPause, (m));
-    SYSCALL(0x023, SysNanosleep, (m, di, si));
-    SYSCALL(0x024, SysGetitimer, (m, di, si));
-    SYSCALL(0x025, SysAlarm, (m, di));
-    SYSCALL(0x026, SysSetitimer, (m, di, si, dx));
-    SYSCALL(0x027, SysGetpid, (m));
-    SYSCALL(0x0BA, SysGettid, (m));
-    SYSCALL(0x029, SysSocket, (m, di, si, dx));
-    SYSCALL(0x02A, SysConnect, (m, di, si, dx));
-    SYSCALL(0x02B, SysAccept, (m, di, si, dx));
-    SYSCALL(0x02C, SysSendto, (m, di, si, dx, r0, r8, r9));
-    SYSCALL(0x02D, SysRecvfrom, (m, di, si, dx, r0, r8, r9));
-    SYSCALL(0x02E, SysSendmsg, (m, di, si, dx));
-    SYSCALL(0x02F, SysRecvmsg, (m, di, si, dx));
-    SYSCALL(0x030, SysShutdown, (m, di, si));
-    SYSCALL(0x031, SysBind, (m, di, si, dx));
-    SYSCALL(0x032, SysListen, (m, di, si));
-    SYSCALL(0x033, SysGetsockname, (m, di, si, dx));
-    SYSCALL(0x034, SysGetpeername, (m, di, si, dx));
-    SYSCALL(0x035, SysSocketpair, (m, di, si, dx, r0));
-    SYSCALL(0x036, SysSetsockopt, (m, di, si, dx, r0, r8));
-    SYSCALL(0x037, SysGetsockopt, (m, di, si, dx, r0, r8));
-    SYSCALL(0x038, SysClone, (m, di, si, dx, r0, r8, r9));
-    SYSCALL(0x039, SysFork, (m));
-    SYSCALL(0x03A, SysVfork, (m));
-    SYSCALL(0x03B, SysExecve, (m, di, si, dx));
-    SYSCALL(0x03D, SysWait4, (m, di, si, dx, r0));
-    SYSCALL(0x03E, SysKill, (m, di, si));
-    SYSCALL(0x03F, SysUname, (m, di));
-    SYSCALL(0x048, SysFcntl, (m, di, si, dx));
-    SYSCALL(0x049, SysFlock, (m, di, si));
-    SYSCALL(0x04A, SysFsync, (m, di));
-    SYSCALL(0x04B, SysFdatasync, (m, di));
-    SYSCALL(0x04C, SysTruncate, (m, di, si));
-    SYSCALL(0x04D, SysFtruncate, (m, di, si));
-    SYSCALL(0x04F, SysGetcwd, (m, di, si));
-    SYSCALL(0x050, SysChdir, (m, di));
-    SYSCALL(0x051, SysFchdir, (m, di));
-    SYSCALL(0x052, SysRename, (m, di, si));
-    SYSCALL(0x053, SysMkdir, (m, di, si));
-    SYSCALL(0x054, SysRmdir, (m, di));
-    SYSCALL(0x055, SysCreat, (m, di, si));
-    SYSCALL(0x056, SysLink, (m, di, si));
-    SYSCALL(0x057, SysUnlink, (m, di));
-    SYSCALL(0x058, SysSymlink, (m, di, si));
-    SYSCALL(0x059, SysReadlink, (m, di, si, dx));
-    SYSCALL(0x05A, SysChmod, (m, di, si));
-    SYSCALL(0x05B, SysFchmod, (m, di, si));
-    SYSCALL(0x05C, SysChown, (m, di, si, dx));
-    SYSCALL(0x05D, SysFchown, (m, di, si, dx));
-    SYSCALL(0x05E, SysLchown, (m, di, si, dx));
-    SYSCALL(0x104, SysFchownat, (m, di, si, dx, r0, r8));
-    SYSCALL(0x05F, SysUmask, (m, di));
-    SYSCALL(0x060, SysGettimeofday, (m, di, si));
-    SYSCALL(0x061, SysGetrlimit, (m, di, si));
-    SYSCALL(0x062, SysGetrusage, (m, di, si));
-    SYSCALL(0x063, SysSysinfo, (m, di));
-    SYSCALL(0x064, SysTimes, (m, di));
-    SYSCALL(0x06F, SysGetpgrp, (m));
-    SYSCALL(0x070, SysSetsid, (m));
-    SYSCALL(0x073, SysGetgroups, (m, di, si));
-    SYSCALL(0x074, SysSetgroups, (m, di, si));
-    SYSCALL(0x076, SysGetresuid, (m, di, si, dx));
-    SYSCALL(0x078, SysGetresgid, (m, di, si, dx));
-    SYSCALL(0x079, SysGetpgid, (m, di));
-    SYSCALL(0x07C, SysGetsid, (m, di));
-    SYSCALL(0x07F, SysSigpending, (m, di));
-    SYSCALL(0x089, SysStatfs, (m, di, si));
-    SYSCALL(0x08A, SysFstatfs, (m, di, si));
-    SYSCALL(0x06D, SysSetpgid, (m, di, si));
-    SYSCALL(0x066, SysGetuid, (m));
-    SYSCALL(0x068, SysGetgid, (m));
-    SYSCALL(0x069, SysSetuid, (m, di));
-    SYSCALL(0x06A, SysSetgid, (m, di));
-    SYSCALL(0x06B, SysGeteuid, (m));
-    SYSCALL(0x06C, SysGetegid, (m));
-    SYSCALL(0x06E, SysGetppid, (m));
-    SYSCALL(0x082, SysSigsuspend, (m, di, si));
-    SYSCALL(0x083, SysSigaltstack, (m, di, si));
-    SYSCALL(0x085, SysMknod, (m, di, si, dx));
-    SYSCALL(0x08C, SysGetpriority, (m, di, si));
-    SYSCALL(0x08D, SysSetpriority, (m, di, si, dx));
-    SYSCALL(0x08E, SysSchedSetparam, (m, di, si));
-    SYSCALL(0x08F, SysSchedGetparam, (m, di, si));
-    SYSCALL(0x090, SysSchedSetscheduler, (m, di, si, dx));
-    SYSCALL(0x091, SysSchedGetscheduler, (m, di));
-    SYSCALL(0x092, SysSchedGetPriorityMax, (m, di));
-    SYSCALL(0x093, SysSchedGetPriorityMin, (m, di));
-    SYSCALL(0x09D, SysPrctl, (m, di, si, dx, r0, r8));
-    SYSCALL(0x09E, SysArchPrctl, (m, di, si));
-    SYSCALL(0x0A0, SysSetrlimit, (m, di, si));
-    SYSCALL(0x0A2, SysSync, (m));
-    SYSCALL(0x0C8, SysTkill, (m, di, si));
-    SYSCALL(0x0C9, SysTime, (m, di));
-    SYSCALL(0x0CA, SysFutex, (m, di, si, dx, r0, r8, r9));
-    SYSCALL(0x0CB, SysSchedSetaffinity, (m, di, si, dx));
-    SYSCALL(0x0CC, SysSchedGetaffinity, (m, di, si, dx));
-    SYSCALL(0x0D9, SysGetdents, (m, di, si, dx));
-    SYSCALL(0x0DA, SysSetTidAddress, (m, di));
-    SYSCALL(0x0DD, SysFadvise, (m, di, si, dx, r0));
-    SYSCALL(0x0E4, SysClockGettime, (m, di, si));
-    SYSCALL(0x0E5, SysClockGetres, (m, di, si));
-    SYSCALL(0x0E6, SysClockNanosleep, (m, di, si, dx, r0));
-    SYSCALL(0x0EA, SysTgkill, (m, di, si, dx));
-    SYSCALL(0x084, SysUtime, (m, di, si));
-    SYSCALL(0x0EB, SysUtimes, (m, di, si));
-    SYSCALL(0x105, SysFutimesat, (m, di, si, dx));
-    SYSCALL(0x118, SysUtimensat, (m, di, si, dx, r0));
-    SYSCALL(0x101, SysOpenat, (m, di, si, dx, r0));
-    SYSCALL(0x102, SysMkdirat, (m, di, si, dx));
-    SYSCALL(0x106, SysFstatat, (m, di, si, dx, r0));
-    SYSCALL(0x107, SysUnlinkat, (m, di, si, dx));
-    SYSCALL(0x108, SysRenameat, (m, di, si, dx, r0));
-    SYSCALL(0x10A, SysSymlinkat, (m, di, si, dx));
-    SYSCALL(0x10B, SysReadlinkat, (m, di, si, dx, r0));
-    SYSCALL(0x10C, SysFchmodat, (m, di, si, dx));
-    SYSCALL(0x10D, SysFaccessat, (m, di, si, dx));
-    SYSCALL(0x1b7, SysFaccessat2, (m, di, si, dx, r0));
-    SYSCALL(0x120, SysAccept4, (m, di, si, dx, r0));
-    SYSCALL(0x111, SysSetRobustList, (m, di, si));
-    SYSCALL(0x112, SysGetRobustList, (m, di, si, dx));
-    SYSCALL(0x127, SysPreadv, (m, di, si, dx, r0));
-    SYSCALL(0x128, SysPwritev, (m, di, si, dx, r0));
-    SYSCALL(0x12E, SysPrlimit, (m, di, si, dx, r0));
-    SYSCALL(0x13E, SysGetrandom, (m, di, si, dx));
-    SYSCALL(0x147, SysPreadv2, (m, di, si, dx, r0, r8));
-    SYSCALL(0x148, SysPwritev2, (m, di, si, dx, r0, r8));
-    SYSCALL(0x1B4, SysCloseRange, (m, di, si, dx));
+    SYSCALL3(0x000, SysRead);
+    SYSCALL3(0x001, SysWrite);
+    SYSCALL3(0x002, SysOpen);
+    SYSCALL1(0x003, SysClose);
+    SYSCALL2(0x004, SysStat);
+    SYSCALL2(0x005, SysFstat);
+    SYSCALL2(0x006, SysLstat);
+    SYSCALL3(0x007, SysPoll);
+    SYSCALL3(0x008, SysLseek);
+    SYSCALL6(0x009, SysMmap);
+    SYSCALL4(0x011, SysPread);
+    SYSCALL4(0x012, SysPwrite);
+    SYSCALL5(0x017, SysSelect);
+    SYSCALL5(0x019, SysMremap);
+    SYSCALL6(0x10E, SysPselect);
+    SYSCALL3(0x01A, SysMsync);
+    SYSCALL3(0x00A, SysMprotect);
+    SYSCALL2(0x00B, SysMunmap);
+    SYSCALL1(0x00C, SysBrk);
+    SYSCALL4(0x00D, SysSigaction);
+    SYSCALL4(0x00E, SysSigprocmask);
+    SYSCALL3(0x010, SysIoctl);
+    SYSCALL3(0x013, SysReadv);
+    SYSCALL3(0x014, SysWritev);
+    SYSCALL2(0x015, SysAccess);
+    SYSCALL1(0x016, SysPipe);
+    SYSCALL2(0x125, SysPipe2);
+    SYSCALL0(0x018, SysSchedYield);
+    SYSCALL3(0x01C, SysMadvise);
+    SYSCALL1(0x020, SysDup1);
+    SYSCALL2(0x021, SysDup2);
+    SYSCALL3(0x124, SysDup3);
+    SYSCALL0(0x022, SysPause);
+    SYSCALL2(0x023, SysNanosleep);
+    SYSCALL2(0x024, SysGetitimer);
+    SYSCALL1(0x025, SysAlarm);
+    SYSCALL3(0x026, SysSetitimer);
+    SYSCALL0(0x027, SysGetpid);
+    SYSCALL0(0x0BA, SysGettid);
+    SYSCALL3(0x029, SysSocket);
+    SYSCALL3(0x02A, SysConnect);
+    SYSCALL3(0x02B, SysAccept);
+    SYSCALL6(0x02C, SysSendto);
+    SYSCALL6(0x02D, SysRecvfrom);
+    SYSCALL3(0x02E, SysSendmsg);
+    SYSCALL3(0x02F, SysRecvmsg);
+    SYSCALL2(0x030, SysShutdown);
+    SYSCALL3(0x031, SysBind);
+    SYSCALL2(0x032, SysListen);
+    SYSCALL3(0x033, SysGetsockname);
+    SYSCALL3(0x034, SysGetpeername);
+    SYSCALL4(0x035, SysSocketpair);
+    SYSCALL5(0x036, SysSetsockopt);
+    SYSCALL5(0x037, SysGetsockopt);
+    SYSCALL6(0x038, SysClone);
+    SYSCALL0(0x039, SysFork);
+    SYSCALL0(0x03A, SysVfork);
+    SYSCALL3(0x03B, SysExecve);
+    SYSCALL4(0x03D, SysWait4);
+    SYSCALL2(0x03E, SysKill);
+    SYSCALL1(0x03F, SysUname);
+    SYSCALL3(0x048, SysFcntl);
+    SYSCALL2(0x049, SysFlock);
+    SYSCALL1(0x04A, SysFsync);
+    SYSCALL1(0x04B, SysFdatasync);
+    SYSCALL2(0x04C, SysTruncate);
+    SYSCALL2(0x04D, SysFtruncate);
+    SYSCALL2(0x04F, SysGetcwd);
+    SYSCALL1(0x050, SysChdir);
+    SYSCALL1(0x051, SysFchdir);
+    SYSCALL2(0x052, SysRename);
+    SYSCALL2(0x053, SysMkdir);
+    SYSCALL1(0x054, SysRmdir);
+    SYSCALL2(0x055, SysCreat);
+    SYSCALL2(0x056, SysLink);
+    SYSCALL1(0x057, SysUnlink);
+    SYSCALL2(0x058, SysSymlink);
+    SYSCALL3(0x059, SysReadlink);
+    SYSCALL2(0x05A, SysChmod);
+    SYSCALL2(0x05B, SysFchmod);
+    SYSCALL3(0x05C, SysChown);
+    SYSCALL3(0x05D, SysFchown);
+    SYSCALL3(0x05E, SysLchown);
+    SYSCALL5(0x104, SysFchownat);
+    SYSCALL1(0x05F, SysUmask);
+    SYSCALL2(0x060, SysGettimeofday);
+    SYSCALL2(0x061, SysGetrlimit);
+    SYSCALL2(0x062, SysGetrusage);
+    SYSCALL1(0x063, SysSysinfo);
+    SYSCALL1(0x064, SysTimes);
+    SYSCALL0(0x06F, SysGetpgrp);
+    SYSCALL0(0x070, SysSetsid);
+    SYSCALL2(0x073, SysGetgroups);
+    SYSCALL2(0x074, SysSetgroups);
+    SYSCALL3(0x076, SysGetresuid);
+    SYSCALL3(0x078, SysGetresgid);
+    SYSCALL1(0x079, SysGetpgid);
+    SYSCALL1(0x07C, SysGetsid);
+    SYSCALL1(0x07F, SysSigpending);
+    SYSCALL2(0x089, SysStatfs);
+    SYSCALL2(0x08A, SysFstatfs);
+    SYSCALL2(0x06D, SysSetpgid);
+    SYSCALL0(0x066, SysGetuid);
+    SYSCALL0(0x068, SysGetgid);
+    SYSCALL1(0x069, SysSetuid);
+    SYSCALL1(0x06A, SysSetgid);
+    SYSCALL0(0x06B, SysGeteuid);
+    SYSCALL0(0x06C, SysGetegid);
+    SYSCALL0(0x06E, SysGetppid);
+    SYSCALL2(0x082, SysSigsuspend);
+    SYSCALL2(0x083, SysSigaltstack);
+    SYSCALL3(0x085, SysMknod);
+    SYSCALL2(0x08C, SysGetpriority);
+    SYSCALL3(0x08D, SysSetpriority);
+    SYSCALL2(0x08E, SysSchedSetparam);
+    SYSCALL2(0x08F, SysSchedGetparam);
+    SYSCALL3(0x090, SysSchedSetscheduler);
+    SYSCALL1(0x091, SysSchedGetscheduler);
+    SYSCALL1(0x092, SysSchedGetPriorityMax);
+    SYSCALL1(0x093, SysSchedGetPriorityMin);
+    SYSCALL5(0x09D, SysPrctl);
+    SYSCALL2(0x09E, SysArchPrctl);
+    SYSCALL2(0x0A0, SysSetrlimit);
+    SYSCALL0(0x0A2, SysSync);
+    SYSCALL2(0x0C8, SysTkill);
+    SYSCALL1(0x0C9, SysTime);
+    SYSCALL6(0x0CA, SysFutex);
+    SYSCALL3(0x0CB, SysSchedSetaffinity);
+    SYSCALL3(0x0CC, SysSchedGetaffinity);
+    SYSCALL3(0x0D9, SysGetdents);
+    SYSCALL1(0x0DA, SysSetTidAddress);
+    SYSCALL4(0x0DD, SysFadvise);
+    SYSCALL2(0x0E4, SysClockGettime);
+    SYSCALL2(0x0E5, SysClockGetres);
+    SYSCALL4(0x0E6, SysClockNanosleep);
+    SYSCALL3(0x0EA, SysTgkill);
+    SYSCALL2(0x084, SysUtime);
+    SYSCALL2(0x0EB, SysUtimes);
+    SYSCALL3(0x105, SysFutimesat);
+    SYSCALL4(0x118, SysUtimensat);
+    SYSCALL4(0x101, SysOpenat);
+    SYSCALL3(0x102, SysMkdirat);
+    SYSCALL4(0x106, SysFstatat);
+    SYSCALL3(0x107, SysUnlinkat);
+    SYSCALL4(0x108, SysRenameat);
+    SYSCALL3(0x10A, SysSymlinkat);
+    SYSCALL4(0x10B, SysReadlinkat);
+    SYSCALL3(0x10C, SysFchmodat);
+    SYSCALL3(0x10D, SysFaccessat);
+    SYSCALL4(0x1b7, SysFaccessat2);
+    SYSCALL4(0x120, SysAccept4);
+    SYSCALL2(0x111, SysSetRobustList);
+    SYSCALL3(0x112, SysGetRobustList);
+    SYSCALL4(0x127, SysPreadv);
+    SYSCALL4(0x128, SysPwritev);
+    SYSCALL4(0x12E, SysPrlimit);
+    SYSCALL3(0x13E, SysGetrandom);
+    SYSCALL5(0x147, SysPreadv2);
+    SYSCALL5(0x148, SysPwritev2);
+    SYSCALL3(0x1B4, SysCloseRange);
     case 0x3C:
       SysExit(m, di);
     case 0xE7:
@@ -4074,11 +4120,7 @@ void OpSyscall(P) {
       break;
   }
   if (!m->interrupted) {
-    SYS_LOGF("system call returned %" PRId64 " %s", ax,
-             ax == -1 ? strerror(errno) : "");
     Put64(m->ax, ax != -1 ? ax : -(XlatErrno(errno) & 0xfff));
-  } else {
-    SYS_LOGF("system call interrupted");
   }
   CollectGarbage(m);
 }

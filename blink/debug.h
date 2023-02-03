@@ -12,5 +12,7 @@ const char *DescribeProt(int);
 const char *DescribeFlags(int);
 const char *DescribeSignal(int);
 const char *DescribeMopcode(int);
+const char *DescribeHostErrno(int);
+const char *DescribeSyscallResult(i64);
 
 #endif /* BLINK_DEBUG_H_ */
