@@ -48,6 +48,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "blink/log.h"
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
@@ -3579,6 +3581,52 @@ static int SysGetegid(struct Machine *m) {
   return getegid();
 }
 
+static i32 SysGetgroups(struct Machine *m, i32 size, i64 addr) {
+  gid_t *group;
+  u8 i32buf[4];
+  int i, ngroups;
+  long ngroups_max;
+  if (!size) {
+    return getgroups(0, 0);
+  } else {
+    // POSIX.1 recommends adding 1 to ngroups_max but the Linux manual
+    // says this can result in EINVAL. Apple M1 says NGROUPS_MAX is 16
+    // even though it usually returns 18 groups or more...
+#ifdef __APPLE__
+    ngroups_max = size;
+#else
+    ngroups_max = sysconf(_SC_NGROUPS_MAX);
+#endif
+    size = MIN(size, ngroups_max);
+    if (!IsValidMemory(m, addr, (size_t)size * 4, PROT_WRITE)) return efault();
+    if (!(group = (gid_t *)malloc(size * sizeof(gid_t)))) return -1;
+    if ((ngroups = getgroups(size, group)) != -1) {
+      for (i = 0; i < ngroups; ++i) {
+        Write32(i32buf, group[i]);
+        CopyToUserWrite(m, addr + (size_t)i * 4, i32buf, 4);
+      }
+    }
+    free(group);
+    return ngroups;
+  }
+}
+
+static i32 SysSetgroups(struct Machine *m, i32 size, i64 addr) {
+  int i, rc;
+  gid_t *group;
+  const u8 *group_linux;
+  if (!(group_linux = (const u8 *)Schlep(m, addr, (size_t)size * 4)) ||
+      !(group = (gid_t *)malloc(size * sizeof(gid_t)))) {
+    return -1;
+  }
+  for (i = 0; i < size; ++i) {
+    group[i] = Read32(group_linux + (size_t)i * 4);
+  }
+  rc = setgroups(size, group);
+  free(group);
+  return rc;
+}
+
 static int SysSchedYield(struct Machine *m) {
   return sched_yield();
 }
@@ -3773,6 +3821,8 @@ void OpSyscall(P) {
     SYSCALL(0x064, SysTimes, (m, di));
     SYSCALL(0x06F, SysGetpgrp, (m));
     SYSCALL(0x070, SysSetsid, (m));
+    SYSCALL(0x073, SysGetgroups, (m, di, si));
+    SYSCALL(0x074, SysSetgroups, (m, di, si));
     SYSCALL(0x07C, SysGetsid, (m, di));
     SYSCALL(0x079, SysGetpgid, (m, di));
     SYSCALL(0x089, SysStatfs, (m, di, si));
