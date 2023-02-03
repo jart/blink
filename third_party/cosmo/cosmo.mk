@@ -206,7 +206,8 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/lockipc_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/sem_timedwait_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/getdelim_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/getgroups_test.com.ok
+	o/$(MODE)/third_party/cosmo/2/getgroups_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/sigpending_test.com.ok
 
 ifneq ($(HOST_OS), Cygwin)
 # lseek_test works in cygwin locally but fails on github actions for mysterious reasons
@@ -219,11 +220,12 @@ o/$(MODE)/third_party/cosmo: $(COSMO_TESTS)
 	@touch $@
 
 PROBLEMATIC_TESTS =										\
-		o/$(MODE)/third_party/cosmo/2/sem_open_test.com.ok
+	o/$(MODE)/third_party/cosmo/2/sem_open_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/sigprocmask_test.com.ok
 
 DARWIN_PROBLEMATIC_TESTS =									\
-		o/$(MODE)/third_party/cosmo/2/sched_getaffinity_test.com.ok			\
-		o/$(MODE)/third_party/cosmo/2/backtrace_test.com.ok
+	o/$(MODE)/third_party/cosmo/2/sched_getaffinity_test.com.ok				\
+	o/$(MODE)/third_party/cosmo/2/backtrace_test.com.ok
 
 o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/2/intrin_test.com.emulates			\

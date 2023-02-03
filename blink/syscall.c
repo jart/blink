@@ -3484,6 +3484,12 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
   return 0;
 }
 
+static int SysSigpending(struct Machine *m, i64 setaddr) {
+  u8 word[8];
+  Write64(word, m->signals);
+  return CopyToUserWrite(m, setaddr, word, 8);
+}
+
 static int SysKill(struct Machine *m, int pid, int sig) {
   return kill(pid, sig ? XlatSignal(sig) : 0);
 }
@@ -3823,8 +3829,9 @@ void OpSyscall(P) {
     SYSCALL(0x070, SysSetsid, (m));
     SYSCALL(0x073, SysGetgroups, (m, di, si));
     SYSCALL(0x074, SysSetgroups, (m, di, si));
-    SYSCALL(0x07C, SysGetsid, (m, di));
     SYSCALL(0x079, SysGetpgid, (m, di));
+    SYSCALL(0x07C, SysGetsid, (m, di));
+    SYSCALL(0x07F, SysSigpending, (m, di));
     SYSCALL(0x089, SysStatfs, (m, di, si));
     SYSCALL(0x08A, SysFstatfs, (m, di, si));
     SYSCALL(0x06D, SysSetpgid, (m, di, si));
