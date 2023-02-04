@@ -26,6 +26,11 @@
 #include <termios.h>
 #include <unistd.h>
 
+#ifdef __HAIKU__
+#include <OS.h>
+#include <sys/sockio.h>
+#endif
+
 #include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/errno.h"

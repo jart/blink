@@ -67,7 +67,6 @@
 #include "blink/assert.h"
 #include "blink/bus.h"
 #include "blink/case.h"
-#include "blink/cygwin.h"
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
@@ -80,6 +79,7 @@
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/pml4t.h"
+#include "blink/preadv.h"
 #include "blink/random.h"
 #include "blink/signal.h"
 #include "blink/stats.h"
@@ -157,7 +157,7 @@ static int SystemIoctl(int fd, unsigned long request, ...) {
   va_start(va, request);
   arg = va_arg(va, intptr_t);
   va_end(va);
-  return ioctl(fd, request, arg);
+  return ioctl(fd, request, (void *)arg);
 }
 
 #ifdef __EMSCRIPTEN__
@@ -187,11 +187,11 @@ ssize_t em_readv(int fd, const struct iovec *iov, int iovcnt) {
 #endif
 
 static int my_tcgetwinsize(int fd, struct winsize *ws) {
-  return ioctl(fd, TIOCGWINSZ, ws);
+  return ioctl(fd, TIOCGWINSZ, (void *)ws);
 }
 
 static int my_tcsetwinsize(int fd, const struct winsize *ws) {
-  return ioctl(fd, TIOCSWINSZ, ws);
+  return ioctl(fd, TIOCSWINSZ, (void *)ws);
 }
 
 const struct FdCb kFdCbHost = {
@@ -2376,6 +2376,7 @@ static int UnxlatFownerType(int type) {
 }
 #endif
 
+#ifdef F_SETOWN
 static int SysFcntlSetownEx(struct Machine *m, i32 fildes, i64 addr) {
   const struct f_owner_ex_linux *gowner;
   if (!(gowner = (const struct f_owner_ex_linux *)Schlep(m, addr,
@@ -2424,7 +2425,9 @@ static int SysFcntlSetownEx(struct Machine *m, i32 fildes, i64 addr) {
   return fcntl(fildes, F_SETOWN, pid);
 #endif
 }
+#endif
 
+#ifdef F_GETOWN
 static int SysFcntlGetownEx(struct Machine *m, i32 fildes, i64 addr) {
   int rc;
   struct f_owner_ex_linux gowner;
@@ -2455,6 +2458,7 @@ static int SysFcntlGetownEx(struct Machine *m, i32 fildes, i64 addr) {
 #endif
   return rc;
 }
+#endif
 
 static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
   int rc, fl;
@@ -2495,14 +2499,18 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
              cmd == F_SETLKW_LINUX ||  //
              cmd == F_GETLK_LINUX) {
     rc = SysFcntlLock(m, fd->fildes, cmd, arg);
+#ifdef F_SETOWN
   } else if (cmd == F_SETOWN_LINUX) {
     rc = fcntl(fd->fildes, F_SETOWN, arg);
-  } else if (cmd == F_GETOWN_LINUX) {
-    rc = fcntl(fd->fildes, F_GETOWN);
   } else if (cmd == F_SETOWN_EX_LINUX) {
     rc = SysFcntlSetownEx(m, fd->fildes, arg);
+#endif
+#ifdef F_GETOWN
+  } else if (cmd == F_GETOWN_LINUX) {
+    rc = fcntl(fd->fildes, F_GETOWN);
   } else if (cmd == F_GETOWN_EX_LINUX) {
     rc = SysFcntlGetownEx(m, fd->fildes, arg);
+#endif
   } else {
     LOGF("missing fcntl() command %" PRId32, cmd);
     rc = einval();

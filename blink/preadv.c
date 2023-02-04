@@ -16,15 +16,15 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#ifdef __CYGWIN__
+#if defined(__CYGWIN__) || defined(__HAIKU__)
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#include "blink/cygwin.h"
 #include "blink/errno.h"
 #include "blink/limits.h"
 #include "blink/macros.h"
+#include "blink/preadv.h"
 
 ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
   int i;
