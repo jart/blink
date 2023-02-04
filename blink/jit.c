@@ -386,6 +386,22 @@ int DisableJit(struct Jit *jit) {
   return 0;
 }
 
+/**
+ * Fixes the memory protection for existing Just-In-Time code blocks.
+ */
+int FixJitProtection(struct Jit *jit) {
+  struct Dll *e;
+  LOCK(&jit->lock);
+  int prot;
+  prot = atomic_load_explicit(&g_jit.prot, memory_order_relaxed);
+  for (e = dll_first(jit->blocks); e; e = dll_next(jit->blocks, e)) {
+    unassert(!Mprotect(JITBLOCK_CONTAINER(e)->addr, jit->blocksize, prot,
+                       "jit"));
+  }
+  UNLOCK(&jit->lock);
+  return 0;
+}
+
 bool SetJitHook(struct Jit *jit, u64 virt, intptr_t func) {
   int offset;
   unsigned i;
@@ -1113,6 +1129,7 @@ STUB(int, InitJit, (struct Jit *jit), 0)
 STUB(int, DestroyJit, (struct Jit *jit), 0)
 STUB(int, ShutdownJit, (void), 0)
 STUB(int, DisableJit, (struct Jit *jit), 0)
+STUB(int, FixJitProtection, (struct Jit *jit), 0)
 STUB(bool, AppendJit, (struct JitBlock *jb, const void *data, long size), 0)
 STUB(bool, AppendJitMovReg, (struct JitBlock *jb, int dst, int src), 0)
 STUB(int, AbandonJit, (struct Jit *jit, struct JitBlock *jb), 0)

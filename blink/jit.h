@@ -155,6 +155,7 @@ int ShutdownJit(void);
 int InitJit(struct Jit *);
 int DestroyJit(struct Jit *);
 int DisableJit(struct Jit *);
+int FixJitProtection(struct Jit *);
 bool CanJitForImmediateEffect(void) nosideeffect;
 bool AppendJit(struct JitBlock *, const void *, long);
 int AbandonJit(struct Jit *, struct JitBlock *);
