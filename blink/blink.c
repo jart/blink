@@ -171,7 +171,6 @@ static void GetOpts(int argc, char *argv[]) {
   FLAG_logpath = getenv("BLINK_LOG_FILENAME");
 #endif
 #ifdef __CYGWIN__
-  FLAG_nojit = true;
   FLAG_nolinear = true;
 #endif
 #ifdef __COSMOPOLITAN__

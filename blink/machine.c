@@ -2314,9 +2314,17 @@ static void CheckForSignals(struct Machine *m) {
   }
 }
 
-void Actor(struct Machine *m) {
-  for (g_machine = m;;) {
+void Actor(struct Machine *mm) {
+#ifdef __CYGWIN__
+  // TODO: Why does JIT clobber %rbx on Cygwin?
+  struct Machine *volatile m;
+#else
+  struct Machine *m;
+#endif
+  for (g_machine = mm, m = mm;;) {
+#ifndef __CYGWIN__
     STATISTIC(++interps);
+#endif
     ExecuteInstruction(m);
     CheckForSignals(m);
   }

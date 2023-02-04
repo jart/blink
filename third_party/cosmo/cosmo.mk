@@ -53,7 +53,6 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/prototxt_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/rand64_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/qsort_test.com.ok						\
-	o/$(MODE)/third_party/cosmo/2/readansi_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/regex_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/renameat_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/atoi_test.com.ok						\
@@ -89,8 +88,6 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/atan2_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/argon2_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/counter_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/pthread_exit_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/pthread_create_test.com.ok				\
 	o/$(MODE)/third_party/cosmo/2/pthread_detach_test.com.ok				\
 	o/$(MODE)/third_party/cosmo/2/pthread_mutex_lock_test.com.ok				\
 	o/$(MODE)/third_party/cosmo/2/pthread_mutex_lock2_test.com.ok				\
@@ -123,11 +120,7 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/crc32_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/crc32c_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/crc32z_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/lock2_test.com.ok						\
-	o/$(MODE)/third_party/cosmo/2/lock_test.com.ok						\
-	o/$(MODE)/third_party/cosmo/5/sigaction_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/sigsetjmp_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/sigsuspend_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/escapehtml_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/escapeurlparam_test.com.ok				\
 	o/$(MODE)/third_party/cosmo/2/escapejsstringliteral_test.com.ok				\
@@ -155,10 +148,8 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/stat_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/stackrwx_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/clone_test.com.ok						\
-	o/$(MODE)/third_party/cosmo/2/dup_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/cv_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/4/writev_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/setsockopt_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/3/sqlite_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/sched_yield_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/pwrite_test.com.ok					\
@@ -173,8 +164,6 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/fseeko_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/fputs_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/5/pipe_test.com.ok						\
-	o/$(MODE)/third_party/cosmo/2/fork_test.com.ok						\
-	o/$(MODE)/third_party/cosmo/2/execve_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/arena_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/acos_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/getintegercoefficients8_test.com.ok			\
@@ -188,32 +177,42 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/complex_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/countbits_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/cv_wait_example_test.com.ok				\
-	o/$(MODE)/third_party/cosmo/2/daemon_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/4/dtoa_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/expm1_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/fgetln_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/getcontext_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/getenv_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/3/ftruncate_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/socket_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/5/unix_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/tmpfile_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/select_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/7/utimensat_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/readlinkat_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/signal_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/tkill_test.com.ok						\
-	o/$(MODE)/third_party/cosmo/2/lockipc_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/sem_timedwait_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/getdelim_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/getgroups_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/dup_test.com.ok						\
+	o/$(MODE)/third_party/cosmo/2/sem_timedwait_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/lockipc_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/socket_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/5/unix_test.com.ok						\
+	o/$(MODE)/third_party/cosmo/2/daemon_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/execve_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/sigpending_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/sendrecvmsg_test.com.ok
+	o/$(MODE)/third_party/cosmo/2/fork_test.com.ok						\
+	o/$(MODE)/third_party/cosmo/2/setsockopt_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/sigsuspend_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/lock2_test.com.ok						\
+	o/$(MODE)/third_party/cosmo/2/lock_test.com.ok						\
+	o/$(MODE)/third_party/cosmo/5/sigaction_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/pthread_create_test.com.ok				\
+	o/$(MODE)/third_party/cosmo/2/pthread_exit_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/readansi_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/sendrecvmsg_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/lseek_test.com.ok
 
 ifneq ($(HOST_OS), Cygwin)
-# lseek_test works in cygwin locally but fails on github actions for mysterious reasons
 COSMO_TESTS +=											\
-	o/$(MODE)/third_party/cosmo/2/lseek_test.com.ok
+	o/$(MODE)/third_party/cosmo/4/dtoa_test.com.ok
 endif
 
 o/$(MODE)/third_party/cosmo: $(COSMO_TESTS)

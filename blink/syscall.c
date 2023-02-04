@@ -367,6 +367,12 @@ static int SysFork(struct Machine *m) {
     m->tid = m->system->pid = newpid;
     m->system->isfork = true;
     RemoveOtherThreads(m->system);
+#ifdef __CYGWIN__
+    LOGF("disabling jit due to fork");
+    DestroyJit(&m->system->jit);
+    InitJit(&m->system->jit);
+    DisableJit(&m->system->jit);
+#endif
   }
   return pid;
 }
