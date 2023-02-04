@@ -349,15 +349,16 @@ static int SysFork(struct Machine *m) {
   // https://dev.haiku-os.org/ticket/17896
   if (!pid) g_machine = m;
 #endif
-#if !CAN_PSHARE
-  UNLOCK(&g_bus->futexes.lock);
-#endif
-  UNLOCK(&m->system->machines_lock);
-  UNLOCK(&m->system->mmap_lock);
-  UNLOCK(&m->system->sig_lock);
-  UnlockFds(&m->system->fds);
-  UNLOCK(&m->system->exec_lock);
   if (!pid) {
+    // child process
+#if !CAN_PSHARE
+    pthread_mutex_init(&g_bus->futexes.lock, 0);
+#endif
+    pthread_mutex_init(&m->system->machines_lock, 0);
+    pthread_mutex_init(&m->system->mmap_lock, 0);
+    pthread_mutex_init(&m->system->sig_lock, 0);
+    pthread_mutex_init(&m->system->fds.lock, 0);
+    pthread_mutex_init(&m->system->exec_lock, 0);
     newpid = getpid();
 #if !CAN_PSHARE
     InitBus();
@@ -372,6 +373,16 @@ static int SysFork(struct Machine *m) {
     // protection for JIT blocks after forking.
     FixJitProtection(&m->system->jit);
 #endif
+  } else {
+    // parent process
+#if !CAN_PSHARE
+    UNLOCK(&g_bus->futexes.lock);
+#endif
+    UNLOCK(&m->system->machines_lock);
+    UNLOCK(&m->system->mmap_lock);
+    UNLOCK(&m->system->sig_lock);
+    UnlockFds(&m->system->fds);
+    UNLOCK(&m->system->exec_lock);
   }
   return pid;
 }
