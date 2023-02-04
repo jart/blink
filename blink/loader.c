@@ -190,8 +190,9 @@ bool IsSupportedExecutable(const char *path, void *image) {
   Elf64_Ehdr_ *ehdr;
   if (READ32(image) == READ32("\177ELF")) {
     ehdr = (Elf64_Ehdr_ *)image;
-    return (Read16(ehdr->type) == ET_EXEC_ ||  //
-            Read16(ehdr->type) == ET_DYN_) &&
+    return (Read16(ehdr->type) == ET_EXEC_ ||
+            (Read16(ehdr->type) == ET_DYN_ &&
+             ehdr->ident[EI_OSABI_] != ELFOSABI_FREEBSD_)) &&
            ehdr->ident[EI_CLASS_] == ELFCLASS64_ &&
            Read16(ehdr->machine) == EM_NEXGEN32E_;
   }

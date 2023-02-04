@@ -219,6 +219,7 @@ struct System {
   struct Jit jit;
   struct Fds fds;
   struct Elf elf;
+  sigset_t exec_sigmask;
   pthread_mutex_t exec_lock;
   pthread_mutex_t sig_lock;
   struct sigaction_linux hands[64] GUARDED_BY(sig_lock);

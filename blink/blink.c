@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -106,6 +107,7 @@ static void OnSigSegv(int sig, siginfo_t *si, void *ptr) {
 
 static int Exec(char *prog, char **argv, char **envp) {
   int i;
+  sigset_t oldmask;
   struct Machine *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
   unassert((g_machine = NewMachine(NewSystem(XED_MODE_LONG), 0)));
@@ -132,9 +134,12 @@ static int Exec(char *prog, char **argv, char **envp) {
     old->system->fds.list = 0;
     UNLOCK(&old->system->fds.lock);
     // releasing the execve() lock must come after unlocking fds
+    memcpy(&oldmask, &old->system->exec_sigmask, sizeof(oldmask));
     UNLOCK(&old->system->exec_lock);
     // freeing the last machine in a system will free its system too
     FreeMachine(old);
+    // restore the signal mask we had before execve() was called
+    pthread_sigmask(SIG_SETMASK, &oldmask, 0);
   }
   // meta interpreter loop
   for (;;) {

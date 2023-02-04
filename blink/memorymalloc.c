@@ -461,6 +461,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   int prot;
   long pagesize;
   int greenfield;
+  void *got, *want;
   i64 ti, pt, end, level, entry;
 
   // we determine these
@@ -528,13 +529,15 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     // please note we need to take off the seatbelt after an execve().
     if (g_wasteland) greenfield = false;
     errno = 0;
-    if (Mmap(ToHost(virt), size, prot,                 //
-             ((greenfield ? MAP_DEMAND : MAP_FIXED) |  //
-              (fd == -1 ? MAP_ANONYMOUS : 0) |         //
-              (shared ? MAP_SHARED : MAP_PRIVATE)),    //
-             fd, offset, "linear") != ToHost(virt)) {
-      LOGF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ") crisis: %s", virt,
-           ToHost(virt), size,
+    want = ToHost(virt);
+    if ((got = Mmap(want, size, prot,                         //
+                    ((greenfield ? MAP_DEMAND : MAP_FIXED) |  //
+                     (fd == -1 ? MAP_ANONYMOUS : 0) |         //
+                     (shared ? MAP_SHARED : MAP_PRIVATE)),    //
+                    fd, offset, "linear")) != want) {
+      LOGF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ")"
+           "-> %#" PRIx64 "[%p] crisis: %s",
+           virt, want, size, ToGuest(got), got,
            (greenfield && errno == MAP_DENIED)
                ? "requested memory overlapped blink image or system memory. "
                  "try using `blink -m` to disable memory optimizations, or "

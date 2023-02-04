@@ -50,6 +50,7 @@
 #include <unistd.h>
 
 #include "blink/log.h"
+#include "blink/util.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -343,6 +344,11 @@ static int SysFork(struct Machine *m) {
   LOCK(&g_bus->futexes.lock);
 #endif
   pid = fork();
+#ifdef __HAIKU__
+  // haiku wipes tls after fork() in child
+  // https://dev.haiku-os.org/ticket/17896
+  if (!pid) g_machine = m;
+#endif
 #if !CAN_PSHARE
   UNLOCK(&g_bus->futexes.lock);
 #endif
@@ -2660,8 +2666,18 @@ static bool CanEmulateExecutableImpl(const char *prog) {
   bool res;
   ssize_t rc;
   char hdr[64];
-  if (!IsFileExecutable(prog)) return false;
-  if ((fd = open(prog, O_RDONLY | O_CLOEXEC)) == -1) return false;
+  if (!IsFileExecutable(prog)) {
+    return false;
+  }
+  if ((fd = open(prog, O_RDONLY | O_CLOEXEC)) == -1) {
+    return false;
+  }
+#ifdef __HAIKU__
+  if (IsHaikuExecutable(fd)) {
+    close(fd);
+    return false;
+  }
+#endif
   if ((rc = pread(fd, hdr, 64, 0)) == 64) {
     res = IsSupportedExecutable(prog, hdr);
   } else {
@@ -2680,13 +2696,49 @@ static bool CanEmulateExecutable(const char *prog) {
   return res;
 }
 
+static bool IsBlinkSig(struct System *s, int sig) {
+  unassert(1 <= sig && sig <= 64);
+  return !!(s->blinksigs & (1ull << (sig - 1)));
+}
+
+static void ResetTimerDispositions(struct System *s) {
+  struct itimerval it;
+  memset(&it, 0, sizeof(it));
+  setitimer(ITIMER_REAL, &it, 0);
+}
+
+static void ResetSignalDispositions(struct System *s) {
+  int sig;
+  int syssig;
+  LOCK(&s->sig_lock);
+  for (sig = 1; sig <= 64; ++sig) {
+    if (!IsBlinkSig(s, sig) &&
+        Read64(s->hands[sig - 1].handler) != SIG_DFL_LINUX &&
+        (syssig = XlatSignal(sig)) != -1) {
+      Write64(s->hands[sig - 1].handler, SIG_DFL_LINUX);
+      signal(syssig, SIG_DFL);
+    }
+  }
+  UNLOCK(&s->sig_lock);
+}
+
 static void ExecveBlink(struct Machine *m, char *prog, char **argv,
                         char **envp) {
-  if (m->system->exec && CanEmulateExecutable(prog)) {
-    // TODO(jart): Prevent possibility of stack overflow.
-    SYS_LOGF("m->system->exec(%s)", prog);
-    SysCloseExec(m->system);
-    _Exit(m->system->exec(prog, argv, envp));
+  sigset_t block;
+  if (m->system->exec) {
+    // it's worth blocking signals on the outside of the if statement
+    // since open() during the executable check, might possibly EINTR
+    // and the same could apply to calling close() on our cloexec fds
+    pthread_sigmask(SIG_BLOCK, &block, &m->system->exec_sigmask);
+    if (CanEmulateExecutable(prog)) {
+      // TODO(jart): Prevent possibility of stack overflow.
+      SYS_LOGF("m->system->exec(%s)", prog);
+      SysCloseExec(m->system);
+      ResetTimerDispositions(m->system);
+      ResetSignalDispositions(m->system);
+      _Exit(m->system->exec(prog, argv, envp));
+    }
+    pthread_sigmask(SIG_SETMASK, &m->system->exec_sigmask, 0);
   }
 }
 
@@ -2696,21 +2748,9 @@ static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   if (!(argv = CopyStrList(m, aa))) return -1;
   if (!(envp = CopyStrList(m, ea))) return -1;
   LOCK(&m->system->exec_lock);
-#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
-  // These platforms use ELF and Blink currently mistakes their system
-  // binaries as Linux executables, due to the laxness of Linux checks
-  // therefore we'll favor calling execve() first.
-  SYS_LOGF("execve(%s)", prog);
-  execve(prog, argv, envp);
-  ExecveBlink(m, prog, argv, envp);
-#else
-  // The default course is to try to emulate first especially on Linux
-  // since things like binfmt_misc registrations would otherwise allow
-  // other virtual machines the user didn't ask for to take control.
   ExecveBlink(m, prog, argv, envp);
   SYS_LOGF("execve(%s)", prog);
   execve(prog, argv, envp);
-#endif
   UNLOCK(&m->system->exec_lock);
   return -1;
 }
@@ -2936,8 +2976,7 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
     if (isignored) {
       m->signals &= ~(1ull << (sig - 1));
     }
-    if ((syssig = XlatSignal(sig)) != -1 &&
-        (~m->system->blinksigs & (1ull << (sig - 1)))) {
+    if ((syssig = XlatSignal(sig)) != -1 && !IsBlinkSig(m->system, sig)) {
       unassert(syssig != SIGSEGV);
       sigfillset(&syshand.sa_mask);
       syshand.sa_flags = SA_SIGINFO;
