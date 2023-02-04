@@ -731,11 +731,6 @@ reasons of performance is defined to include pushing and popping.
 
 Blink currently doesn't unlock robust mutexes on process death.
 
-### Fork
-
-Blink resets and disables JIT in child processes created by fork(), if
-running on Cygwin. Other platforms are not impacted.
-
 ### Signal Handling
 
 Blink uses `SIGSYS` to deliver signals internally. This signal is
