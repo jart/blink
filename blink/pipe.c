@@ -25,17 +25,39 @@
 
 #include "blink/assert.h"
 #include "blink/endian.h"
+#include "blink/errno.h"
 #include "blink/fds.h"
+#include "blink/lock.h"
+#include "blink/log.h"
 #include "blink/syscall.h"
 
 int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
   int rc;
   int fds[2];
+  int oflags;
+  int supported;
   u8 fds_linux[2][4];
+  supported = O_CLOEXEC_LINUX | O_NDELAY_LINUX;
+  if (flags & ~supported) {
+    LOGF("%s() unsupported flags: %d", "pipe2", flags & ~supported);
+    return einval();
+  }
+  if (flags) LOCK(&m->system->exec_lock);
   if (pipe(fds) != -1) {
+    oflags = 0;
+    if (flags & O_CLOEXEC_LINUX) {
+      oflags |= O_CLOEXEC;
+      unassert(!fcntl(fds[0], F_SETFD, FD_CLOEXEC));
+      unassert(!fcntl(fds[1], F_SETFD, FD_CLOEXEC));
+    }
+    if (flags & O_NDELAY_LINUX) {
+      oflags |= O_NDELAY;
+      unassert(!fcntl(fds[0], F_SETFL, O_NDELAY));
+      unassert(!fcntl(fds[1], F_SETFL, O_NDELAY));
+    }
     LockFds(&m->system->fds);
-    unassert(AddFd(&m->system->fds, fds[0], O_RDONLY));
-    unassert(AddFd(&m->system->fds, fds[1], O_WRONLY));
+    unassert(AddFd(&m->system->fds, fds[0], O_RDONLY | oflags));
+    unassert(AddFd(&m->system->fds, fds[1], O_WRONLY | oflags));
     UnlockFds(&m->system->fds);
     Write32(fds_linux[0], fds[0]);
     Write32(fds_linux[1], fds[1]);
@@ -44,5 +66,6 @@ int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
   } else {
     rc = -1;
   }
+  if (flags) UNLOCK(&m->system->exec_lock);
   return rc;
 }
