@@ -570,9 +570,10 @@ ring-0 system instructions, since Blink is primarily a user-mode VM, and
 therefore only has limited support for bare metal operating system
 software (which we'll discuss more in-depth in a later section).
 
-Blink advertises itself as `blink 4.0` in the `uname()` system call.
-Programs may detect they're running in Blink by issuing a `CPUID`
-instruction where `EAX` is set to the leaf number:
+Blink advertises itself as `Linux 4.5` in the `uname()` system call and
+`uname -v` will report `blink-1.0`. Programs may detect they're running
+in Blink by issuing a `CPUID` instruction where `EAX` is set to the leaf
+number:
 
 - Leaf `0x0` (or `0x80000000`) reports `GenuineIntel` in
   `EBX ‖ EDX ‖ ECX`

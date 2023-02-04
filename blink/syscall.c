@@ -1133,9 +1133,9 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
   // glibc binaries won't run unless we report blink as a
   // modern linux kernel on top of genuine intel hardware
   struct utsname_linux uts = {
-      .sysname = "blink",
-      .release = "4.0",
-      .version = "blink 4.0",
+      .sysname = "Linux",
+      .release = "4.5",
+      .version = "blink-1.0",
       .machine = "x86_64",
   };
   union {
