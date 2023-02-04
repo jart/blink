@@ -2697,7 +2697,6 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
     return efault();
   }
 #ifndef __EMSCRIPTEN__
-  wstatus = 0;
   INTERRUPTIBLE(rc = wait4(pid, &wstatus, options, &hrusage));
 #else
   memset(&hrusage, 0, sizeof(hrusage));
@@ -2706,16 +2705,26 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
   if (rc != -1) {
     if (opt_out_wstatus_addr) {
       if (WIFEXITED(wstatus)) {
-        gwstatus = (WEXITSTATUS(wstatus) & 255) << 8;
+        int exitcode;
+        exitcode = WEXITSTATUS(wstatus) & 255;
+        gwstatus = exitcode << 8;
+        SYS_LOGF("pid %d exited %d", rc, exitcode);
       } else if (WIFSTOPPED(wstatus)) {
-        gwstatus = UnXlatSignal(WSTOPSIG(wstatus)) << 8 | 127;
+        int stopsig;
+        stopsig = UnXlatSignal(WSTOPSIG(wstatus));
+        gwstatus = stopsig << 8 | 127;
+        SYS_LOGF("pid %d stopped %s", rc, DescribeSignal(stopsig));
 #ifdef WIFCONTINUED
       } else if (WIFCONTINUED(wstatus)) {
         gwstatus = 0xffff;
+        SYS_LOGF("pid %d continued", rc);
 #endif
       } else {
+        int termsig;
         unassert(WIFSIGNALED(wstatus));
-        gwstatus = UnXlatSignal(WTERMSIG(wstatus)) & 127;
+        termsig = UnXlatSignal(WTERMSIG(wstatus));
+        SYS_LOGF("pid %d terminated %s", rc, DescribeSignal(termsig));
+        gwstatus = termsig & 127;
 #ifdef WCOREDUMP
         if (WCOREDUMP(wstatus)) {
           gwstatus |= 128;
@@ -4091,14 +4100,12 @@ void OpSyscall(P) {
     SYSCALL2(0x0A0, SysSetrlimit);
     SYSCALL0(0x0A2, SysSync);
     SYSCALL2(0x0C8, SysTkill);
-    SYSCALL1(0x0C9, SysTime);
     SYSCALL6(0x0CA, SysFutex);
     SYSCALL3(0x0CB, SysSchedSetaffinity);
     SYSCALL3(0x0CC, SysSchedGetaffinity);
     SYSCALL3(0x0D9, SysGetdents);
     SYSCALL1(0x0DA, SysSetTidAddress);
     SYSCALL4(0x0DD, SysFadvise);
-    SYSCALL2(0x0E4, SysClockGettime);
     SYSCALL2(0x0E5, SysClockGetres);
     SYSCALL4(0x0E6, SysClockNanosleep);
     SYSCALL3(0x0EA, SysTgkill);
@@ -4128,14 +4135,30 @@ void OpSyscall(P) {
     SYSCALL5(0x148, SysPwritev2);
     SYSCALL3(0x1B4, SysCloseRange);
     case 0x3C:
+      SYS_LOGF("%s(%#" PRIx64 ")", "SysExit", di);
       SysExit(m, di);
     case 0xE7:
+      SYS_LOGF("%s(%#" PRIx64 ")", "SysExitGroup", di);
       SysExitGroup(m, di);
     case 0x00F:
+      SYS_LOGF("%s()", "SigRestore");
       SigRestore(m);
       return;
     case 0x500:
+      // Cosmopolitan uses this number to trigger ENOSYS for testing.
       ax = enosys();
+      break;
+    case 0x0E4:
+      // clock_gettime() is
+      //   1) called frequently,
+      //   2) latency sensitive, and
+      //   3) usually implemented as a VDSO.
+      // Therefore we exempt it from system call tracing.
+      ax = SysClockGettime(m, di, si);
+      break;
+    case 0x0C9:
+      // time() is also noisy in some environments.
+      ax = SysTime(m, di);
       break;
     default:
       LOGF("missing syscall 0x%03" PRIx64, ax);

@@ -76,7 +76,7 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   static struct siginfo_linux si;
   static struct fpstate_linux fp;
   static struct ucontext_linux uc;
-  SIG_LOGF("delivering signal %s", DescribeSignal(sig));
+  SYS_LOGF("delivering %s", DescribeSignal(sig));
   if (IsMakingPath(g_machine)) {
     AbandonPath(g_machine);
   }
