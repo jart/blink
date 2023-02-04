@@ -2647,7 +2647,7 @@ static bool IsFileExecutable(const char *path) {
   return !access(path, X_OK);
 }
 
-static bool CanEmulateExecutable(const char *prog) {
+static bool CanEmulateExecutableImpl(const char *prog) {
   int fd;
   bool res;
   ssize_t rc;
@@ -2663,20 +2663,46 @@ static bool CanEmulateExecutable(const char *prog) {
   return res;
 }
 
-static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
-  char *prog, **argv, **envp;
-  if (!(prog = CopyStr(m, pa))) return -1;
-  if (!(argv = CopyStrList(m, aa))) return -1;
-  if (!(envp = CopyStrList(m, ea))) return -1;
-  LOCK(&m->system->exec_lock);
+static bool CanEmulateExecutable(const char *prog) {
+  int err;
+  bool res;
+  err = errno;
+  res = CanEmulateExecutableImpl(prog);
+  errno = err;
+  return res;
+}
+
+static void ExecveBlink(struct Machine *m, char *prog, char **argv,
+                        char **envp) {
   if (m->system->exec && CanEmulateExecutable(prog)) {
     // TODO(jart): Prevent possibility of stack overflow.
     SYS_LOGF("m->system->exec(%s)", prog);
     SysCloseExec(m->system);
     _Exit(m->system->exec(prog, argv, envp));
   }
+}
+
+static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
+  char *prog, **argv, **envp;
+  if (!(prog = CopyStr(m, pa))) return -1;
+  if (!(argv = CopyStrList(m, aa))) return -1;
+  if (!(envp = CopyStrList(m, ea))) return -1;
+  LOCK(&m->system->exec_lock);
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+  // These platforms use ELF and Blink currently mistakes their system
+  // binaries as Linux executables, due to the laxness of Linux checks
+  // therefore we'll favor calling execve() first.
   SYS_LOGF("execve(%s)", prog);
   execve(prog, argv, envp);
+  ExecveBlink(m, prog, argv, envp);
+#else
+  // The default course is to try to emulate first especially on Linux
+  // since things like binfmt_misc registrations would otherwise allow
+  // other virtual machines the user didn't ask for to take control.
+  ExecveBlink(m, prog, argv, envp);
+  SYS_LOGF("execve(%s)", prog);
+  execve(prog, argv, envp);
+#endif
   UNLOCK(&m->system->exec_lock);
   return -1;
 }
@@ -2702,9 +2728,15 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
   memset(&hrusage, 0, sizeof(hrusage));
   INTERRUPTIBLE(rc = waitpid(pid, &wstatus, options));
 #endif
-  if (rc != -1) {
+  if (rc != -1 && rc != 0) {
     if (opt_out_wstatus_addr) {
-      if (WIFEXITED(wstatus)) {
+#ifdef WIFCONTINUED
+      if (WIFCONTINUED(wstatus)) {
+        gwstatus = 0xffff;
+        SYS_LOGF("pid %d continued", rc);
+      } else
+#endif
+          if (WIFEXITED(wstatus)) {
         int exitcode;
         exitcode = WEXITSTATUS(wstatus) & 255;
         gwstatus = exitcode << 8;
@@ -2714,11 +2746,6 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
         stopsig = UnXlatSignal(WSTOPSIG(wstatus));
         gwstatus = stopsig << 8 | 127;
         SYS_LOGF("pid %d stopped %s", rc, DescribeSignal(stopsig));
-#ifdef WIFCONTINUED
-      } else if (WIFCONTINUED(wstatus)) {
-        gwstatus = 0xffff;
-        SYS_LOGF("pid %d continued", rc);
-#endif
       } else {
         int termsig;
         unassert(WIFSIGNALED(wstatus));

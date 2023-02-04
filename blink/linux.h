@@ -660,6 +660,10 @@
 
 #define IOV_MAX_LINUX 1024
 
+#define WNOHANG_LINUX    1
+#define WUNTRACED_LINUX  2
+#define WCONTINUED_LINUX 8
+
 struct iovec_linux {
   u8 base[8];
   u8 len[8];

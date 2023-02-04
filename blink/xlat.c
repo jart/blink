@@ -489,9 +489,20 @@ int XlatLock(int x) {
 
 int XlatWait(int x) {
   int r = 0;
-  if (x & 1) r |= WNOHANG, x &= ~1;
-  if (x & 2) r |= WUNTRACED, x &= ~2;
-  if (x & 8) r |= WCONTINUED, x &= ~8;
+  if (x & WNOHANG_LINUX) {
+    r |= WNOHANG;
+    x &= ~WNOHANG_LINUX;
+  }
+  if (x & WUNTRACED_LINUX) {
+    r |= WUNTRACED;
+    x &= ~WUNTRACED_LINUX;
+  }
+#ifdef WCONTINUED
+  if (x & WCONTINUED_LINUX) {
+    r |= WCONTINUED;
+    x &= ~WCONTINUED_LINUX;
+  }
+#endif
   if (x) LOGF("%s %d not supported yet", "wait", x);
   return r;
 }
