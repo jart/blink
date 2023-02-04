@@ -208,12 +208,8 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/pthread_exit_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/readansi_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/sendrecvmsg_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/lseek_test.com.ok
-
-ifneq ($(HOST_OS), Cygwin)
-COSMO_TESTS +=											\
+	o/$(MODE)/third_party/cosmo/2/lseek_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/4/dtoa_test.com.ok
-endif
 
 o/$(MODE)/third_party/cosmo: $(COSMO_TESTS)
 	@mkdir -p $(@D)

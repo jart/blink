@@ -51,9 +51,6 @@ emulates:				\
 
 tags: TAGS HTAGS
 
-clean:
-	rm -rf o
-
 include build/config.mk
 include build/rules.mk
 include third_party/zlib/zlib.mk
@@ -156,6 +153,9 @@ TAGS:	o/$(MODE)/srcs.txt $(SRCS)
 HTAGS:	o/$(MODE)/hdrs.txt $(HDRS)
 	$(RM) $@
 	build/htags -L $< -o $@
+
+clean:
+	rm -f $(OBJS)
 
 $(SRCS):
 $(HDRS):
