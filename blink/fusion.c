@@ -125,14 +125,14 @@ bool FuseBranchTest(P) {
 #error "architecture not implemented"
 #endif
   AppendJit(m->path.jb, code, sizeof(code));
-  Connect(A, m->ip + jlen);
+  Connect(A, m->ip + jlen, false);
   Jitter(A,
          "a1i"  // arg1 = disp
          "m"    // call micro-op
          "q",   // arg0 = machine
          bdisp, AdvanceIp);
   AlignJit(m->path.jb, 8, 0);
-  Connect(A, m->ip + jlen + bdisp);
+  Connect(A, m->ip + jlen + bdisp, false);
   FinishPath(m);
   m->path.skip = 1;
   STATISTIC(++fused_branches);
@@ -323,14 +323,14 @@ bool FuseBranchCmp(P, bool imm) {
 #error "architecture not implemented"
 #endif
   AppendJit(m->path.jb, code, sizeof(code));
-  Connect(A, m->ip + jlen);
+  Connect(A, m->ip + jlen, false);
   Jitter(A,
          "a1i"  // arg1 = disp
          "m"    // call micro-op
          "q",   // arg0 = machine
          bdisp, AdvanceIp);
   AlignJit(m->path.jb, 8, 0);
-  Connect(A, m->ip + jlen + bdisp);
+  Connect(A, m->ip + jlen + bdisp, false);
   FinishPath(m);
   m->path.skip = 1;
   STATISTIC(++fused_branches);

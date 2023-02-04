@@ -582,16 +582,20 @@ static void OpMovslGdqpEd(P) {
   }
 }
 
-void Connect(P, u64 pc) {
+void Connect(P, u64 pc, bool avoid_obvious_cycles) {
   void *jump;
   nexgen32e_f f;
-  f = (nexgen32e_f)GetJitHook(&m->system->jit, pc, (intptr_t)GeneralDispatch);
-  if (f != JitlessDispatch && f != GeneralDispatch) {
-    jump = (u8 *)f + GetPrologueSize();
-  } else {
-    if (!FLAG_noconnect) {
-      RecordJitJump(m->path.jb, pc, GetPrologueSize());
+  if (!(avoid_obvious_cycles && pc == m->path.start)) {
+    f = (nexgen32e_f)GetJitHook(&m->system->jit, pc, (intptr_t)GeneralDispatch);
+    if (f != JitlessDispatch && f != GeneralDispatch) {
+      jump = (u8 *)f + GetPrologueSize();
+    } else {
+      if (!FLAG_noconnect) {
+        RecordJitJump(m->path.jb, pc, GetPrologueSize());
+      }
+      jump = (void *)m->system->ender;
     }
+  } else {
     jump = (void *)m->system->ender;
   }
   AppendJitJump(m->path.jb, jump);
@@ -951,7 +955,7 @@ void Terminate(P, void uop(struct Machine *, u64)) {
            "q",   // arg0 = sav0 (machine)
            disp, uop);
     AlignJit(m->path.jb, 8, 0);
-    Connect(A, m->ip);
+    Connect(A, m->ip, true);
     FinishPath(m);
   }
 }
@@ -992,14 +996,14 @@ static void OpJcc(P) {
     };
 #endif
     AppendJit(m->path.jb, code, sizeof(code));
-    Connect(A, m->ip);
+    Connect(A, m->ip, false);
     Jitter(A,
            "a1i"  // arg1 = disp
            "m"    // call micro-op
            "q",   // arg0 = machine
            disp, FastJmp);
     AlignJit(m->path.jb, 8, 0);
-    Connect(A, m->ip + disp);
+    Connect(A, m->ip + disp, false);
     FinishPath(m);
   }
   if (cc(m)) {
