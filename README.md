@@ -94,6 +94,14 @@ make check2
 make emulates
 ```
 
+### Production Worthiness
+
+For an independent objective analysis of how well Blink is going so far,
+we built the Musl Libc test suite programs and ran them under Blink. So
+far we're passing 76% of them. You can read the report here
+<https://justine.lol/blink-musl-tests.sh.txt> where lines commented out
+indicate tests that failed.
+
 ### Alternative Builds
 
 For maximum performance, use `MODE=rel` or `MODE=opt`. Please note the
