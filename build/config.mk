@@ -34,7 +34,8 @@ CPPFLAGS +=				\
 	-D__BSD_VISIBLE
 
 LDLIBS +=				\
-	-lm
+	-lm					\
+	rust/target/debug/librblink.a
 
 ifneq ($(HOST_SYSTEM), Darwin)
 ifneq ($(HOST_SYSTEM), OpenBSD)

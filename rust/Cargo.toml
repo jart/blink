@@ -1,0 +1,13 @@
+[package]
+name = "rust"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "rblink"
+crate-type = ["staticlib"]
+
+[dependencies]
+lazy_static = "1.4.0"
+libc = "0.2.139"
+num_cpus = "1.15.0"
