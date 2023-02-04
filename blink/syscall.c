@@ -368,10 +368,9 @@ static int SysFork(struct Machine *m) {
     m->system->isfork = true;
     RemoveOtherThreads(m->system);
 #ifdef __CYGWIN__
-    LOGF("disabling jit due to fork");
-    DestroyJit(&m->system->jit);
-    InitJit(&m->system->jit);
-    DisableJit(&m->system->jit);
+    // Cygwin doesn't seem to properly set the PROT_EXEC
+    // protection for JIT blocks after forking.
+    FixJitProtection(&m->system->jit);
 #endif
   }
   return pid;
