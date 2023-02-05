@@ -3,7 +3,7 @@
 *.xz
 *.elf
 *.so
-*.so.*
+*.so.1
 /o
 /core*
 /HTAGS
