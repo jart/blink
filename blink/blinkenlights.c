@@ -1896,9 +1896,9 @@ static void DrawStatus(struct Panel *p) {
   rw += AppendStat(s, 12, "ips", ips, false);
   toto = kRealSize + (long)m->system->memstat.allocated * 4096;
   rw += AppendStat(s, 10, "kb", toto / 1024, false);
-  if (m->nolinear) rw += AppendStat(s, 8, "reserve", MEMSTAT(reserved));
-  if (m->nolinear) rw += AppendStat(s, 8, "commit", MEMSTAT(committed));
-  if (m->nolinear) rw += AppendStat(s, 5, "freed", MEMSTAT(freed));
+  if (FLAG_nolinear) rw += AppendStat(s, 8, "reserve", MEMSTAT(reserved));
+  if (FLAG_nolinear) rw += AppendStat(s, 8, "commit", MEMSTAT(committed));
+  if (FLAG_nolinear) rw += AppendStat(s, 5, "freed", MEMSTAT(freed));
   rw += AppendStat(s, 5, "tables", MEMSTAT(pagetables));
   rw += AppendStat(s, 3, "fds", fds, fds != lastfds);
   status = GetStatus(xn - rw);
@@ -3702,8 +3702,7 @@ static void GetOpts(int argc, char *argv[]) {
   if (!wantjit) {
     DisableJit(&m->system->jit);
   }
-  m->nolinear = !wantunsafe;
-  m->system->nolinear = !wantunsafe;
+  FLAG_nolinear = !wantunsafe;
 }
 
 static int OpenDevTty(void) {

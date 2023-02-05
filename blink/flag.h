@@ -3,6 +3,7 @@
 #include <stdbool.h>
 
 extern bool FLAG_strace;
+extern bool FLAG_nolinear;
 extern bool FLAG_noconnect;
 extern const char *FLAG_logpath;
 

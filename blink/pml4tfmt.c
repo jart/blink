@@ -24,6 +24,7 @@
 #include "blink/assert.h"
 #include "blink/buffer.h"
 #include "blink/endian.h"
+#include "blink/flag.h"
 #include "blink/macros.h"
 #include "blink/pml4t.h"
 #include "blink/util.h"
@@ -70,7 +71,7 @@ static void FormatEndPage(struct Machine *m, struct Pml4tFormater *pp,
   pp->t = false;
   FormatSize(size, end - pp->start, 1024);
   AppendFmt(&pp->b, "%012" PRIx64 " %5s ", end - 1, size);
-  if (m->nolinear) {
+  if (FLAG_nolinear) {
     AppendFmt(&pp->b, "%3d%% ",
               (int)ceil((double)pp->committed / pp->count * 100));
   }

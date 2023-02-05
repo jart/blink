@@ -245,7 +245,6 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
   m->system = system;
   m->mode = system->mode;
   m->thread = pthread_self();
-  m->nolinear = system->nolinear;
   Write32(m->sigaltstack.flags, SS_DISABLE_LINUX);
   if (parent) {
     m->tid = (system->next_tid++ & (kMaxThreadIds - 1)) + kMinThreadId;

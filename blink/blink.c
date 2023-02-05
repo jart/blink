@@ -61,7 +61,6 @@
 extern char **environ;
 static bool FLAG_zero;
 static bool FLAG_nojit;
-static bool FLAG_nolinear;
 static char g_pathbuf[PATH_MAX];
 
 static void OnSigSys(int sig) {
@@ -113,8 +112,6 @@ static int Exec(char *prog, char **argv, char **envp) {
   unassert((g_machine = NewMachine(NewSystem(XED_MODE_LONG), 0)));
   if (FLAG_nojit) DisableJit(&g_machine->system->jit);
   g_machine->system->exec = Exec;
-  g_machine->nolinear = FLAG_nolinear;
-  g_machine->system->nolinear = FLAG_nolinear;
   if (!old) {
     // this is the first time a program is being loaded
     LoadProgram(g_machine, prog, argv, envp);
@@ -169,9 +166,6 @@ static void GetOpts(int argc, char *argv[]) {
   FLAG_nolinear = !CanHaveLinearMemory();
 #if LOG_ENABLED
   FLAG_logpath = getenv("BLINK_LOG_FILENAME");
-#endif
-#ifdef __CYGWIN__
-  FLAG_nolinear = true;
 #endif
 #ifdef __COSMOPOLITAN__
   if (IsWindows()) {

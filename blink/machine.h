@@ -74,7 +74,7 @@
 #define MACHINE_CONTAINER(e)  DLL_CONTAINER(struct Machine, elem, e)
 #define HOSTPAGE_CONTAINER(e) DLL_CONTAINER(struct HostPage, elem, e)
 
-#if defined(NOLINEAR) || defined(__SANITIZE_THREAD__)
+#if defined(NOLINEAR) || defined(__SANITIZE_THREAD__) || defined(__CYGWIN__)
 #define CanHaveLinearMemory() false
 #else
 #define CanHaveLinearMemory() CAN_64BIT
@@ -86,7 +86,7 @@
 #define IsMakingPath(m) 0
 #endif
 
-#define HasLinearMapping(x) (CanHaveLinearMemory() && !(x)->nolinear)
+#define HasLinearMapping(x) (CanHaveLinearMemory() && !FLAG_nolinear)
 
 #if CAN_64BIT
 #define _Atomicish(t) _Atomic(t)
@@ -195,7 +195,6 @@ struct System {
   u8 mode;
   bool dlab;
   bool isfork;
-  bool nolinear;
   u16 gdt_limit;
   u16 idt_limit;
   int pid;
@@ -248,12 +247,11 @@ struct Machine {                           //
   u64 ip;                                  // instruction pointer
   u8 oplen;                                // length of operation
   u8 mode;                                 // [dup] XED_MODE_{REAL,LEGACY,LONG}
-  bool nolinear;                           // [dup] no linear address resolution
   bool reserving;                          // did it call ReserveAddress?
   u32 flags;                               // x86 eflags register
   i64 stashaddr;                           // page overlap buffer
-  _Atomic(bool) invalidated;               // the tlb must be flushed
   _Atomic(bool) killed;                    // used to send a soft SIGKILL
+  _Atomic(bool) invalidated;               // the tlb must be flushed
   _Atomicish(u64) signals;                 // signals waiting for delivery
   union {                                  // GENERAL REGISTER FILE
     u64 align8_;                           //
