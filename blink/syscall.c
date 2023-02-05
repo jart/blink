@@ -385,6 +385,7 @@ static void *OnSpawn(void *arg) {
   int rc;
   struct Machine *m = (struct Machine *)arg;
   THR_LOGF("pid=%d tid=%d OnSpawn", m->system->pid, m->tid);
+  m->thread = pthread_self();
   g_machine = m;
   if (!(rc = sigsetjmp(m->onhalt, 1))) {
     unassert(!pthread_sigmask(SIG_SETMASK, &m->spawn_sigmask, 0));
@@ -402,6 +403,7 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   int ignored;
   int supported;
   int mandatory;
+  pthread_t thread;
   sigset_t ss, oldss;
   pthread_attr_t attr;
   atomic_int *ptid_ptr;
@@ -460,7 +462,7 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   m2->spawn_sigmask = oldss;
   unassert(!pthread_attr_init(&attr));
   unassert(!pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED));
-  err = pthread_create(&m2->thread, &attr, OnSpawn, m2);
+  err = pthread_create(&thread, &attr, OnSpawn, m2);
   unassert(!pthread_attr_destroy(&attr));
   if (err) {
     FreeMachine(m2);
@@ -2734,6 +2736,7 @@ static void ExecveBlink(struct Machine *m, char *prog, char **argv,
     // it's worth blocking signals on the outside of the if statement
     // since open() during the executable check, might possibly EINTR
     // and the same could apply to calling close() on our cloexec fds
+    sigfillset(&block);
     pthread_sigmask(SIG_BLOCK, &block, &m->system->exec_sigmask);
     if (CanEmulateExecutable(prog)) {
       // TODO(jart): Prevent possibility of stack overflow.
