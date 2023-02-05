@@ -14,3 +14,4 @@ third_party/musl/%: third_party/musl/%.gz
 o/lib/ld-musl-x86_64.so.1: third_party/musl/lib/1/ld-musl-x86_64.so.1
 	@mkdir -p $(@D)
 	cp -f $< $@
+	chmod +x $@

@@ -59,12 +59,19 @@ struct Fd *AddFd(struct Fds *fds, int fildes, int oflags) {
 }
 
 struct Fd *GetFd(struct Fds *fds, int fildes) {
+  bool lru;
   struct Dll *e;
   if (fildes >= 0) {
+    lru = false;
     for (e = dll_first(fds->list); e; e = dll_next(fds->list, e)) {
       if (FD_CONTAINER(e)->fildes == fildes) {
+        if (lru) {
+          dll_remove(&fds->list, e);
+          dll_make_first(&fds->list, e);
+        }
         return FD_CONTAINER(e);
       }
+      lru = true;
     }
   }
   ebadf();

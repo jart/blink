@@ -13,6 +13,7 @@
 #include "blink/fds.h"
 #include "blink/jit.h"
 #include "blink/linux.h"
+#include "blink/log.h"
 #include "blink/tsan.h"
 #include "blink/tunables.h"
 
