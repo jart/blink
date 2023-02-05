@@ -31,6 +31,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/overlays.h"
 #include "blink/rde.h"
 #include "blink/stats.h"
 
@@ -148,7 +149,8 @@ void SetupCod(struct Machine *m) {
 #if LOG_COD
   LoadDebugSymbols(&m->system->elf);
   DisLoadElf(&g_dis, &m->system->elf);
-  g_cod = open("/tmp/blink.s", O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+  g_cod = OverlaysOpen(AT_FDCWD_LINUX, "/tmp/blink.s",
+                       O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
   g_cod = fcntl(g_cod, F_DUPFD_CLOEXEC, kMinBlinkFd);
 #endif
 }

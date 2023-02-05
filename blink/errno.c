@@ -73,3 +73,7 @@ long eperm(void) {
 long enotsup(void) {
   return ReturnErrno(ENOTSUP);
 }
+
+long enoent(void) {
+  return ReturnErrno(ENOENT);
+}

@@ -36,6 +36,7 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
+#include "blink/overlays.h"
 #include "blink/util.h"
 #include "blink/x86.h"
 
@@ -259,7 +260,7 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
     end = INT64_MIN;
     ELF_LOGF("loading elf interpreter %s", interpreter);
     errno = 0;
-    if ((fd = open(interpreter, O_RDONLY)) == -1 ||
+    if ((fd = OverlaysOpen(AT_FDCWD, interpreter, O_RDONLY, 0)) == -1 ||
         (fstat(fd, &st) == -1 || !st.st_size) ||
         (ehdr = (Elf64_Ehdr_ *)Mmap(0, st.st_size, PROT_READ | PROT_WRITE,
                                     MAP_PRIVATE, fd, 0, "loader")) ==
@@ -374,7 +375,7 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
   elf->at_phent = 56;
   free(g_progname);
   g_progname = strdup(prog);
-  if ((fd = open(prog, O_RDONLY)) == -1 ||
+  if ((fd = OverlaysOpen(AT_FDCWD, prog, O_RDONLY, 0)) == -1 ||
       (fstat(fd, &st) == -1 || !st.st_size) ||
       (elf->map =
            (char *)Mmap(0, (elf->mapsize = st.st_size), PROT_READ | PROT_WRITE,

@@ -1,5 +1,9 @@
 # -*- conf -*-
+*.gz
 *.xz
+*.elf
+*.so
+*.so.*
 /o
 /core*
 /HTAGS
@@ -8,6 +12,5 @@
 /gmon.out
 /perf.data
 /perf.data.old
-/third_party/cosmo/**/*.gz
 /third_party/cosmo/**/*.com
 /third_party/cosmo/**/*.dbg

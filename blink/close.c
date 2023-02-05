@@ -71,13 +71,34 @@ int SysClose(struct Machine *m, i32 fildes) {
   return FinishClose(m, CloseFd(fd));
 }
 
+static int SysCloseRangeCloexec(struct Machine *m, u32 first, u32 last) {
+  struct Fd *fd;
+  struct Dll *e;
+  LockFds(&m->system->fds);
+  for (e = dll_first(m->system->fds.list); e;
+       e = dll_next(m->system->fds.list, e)) {
+    fd = FD_CONTAINER(e);
+    if (first <= fd->fildes && fd->fildes <= last) {
+      if (~fd->oflags & O_CLOEXEC) {
+        fd->oflags |= O_CLOEXEC;
+        fcntl(fd->fildes, F_SETFD, FD_CLOEXEC);
+      }
+    }
+  }
+  UnlockFds(&m->system->fds);
+  return 0;
+}
+
 int SysCloseRange(struct Machine *m, u32 first, u32 last, u32 flags) {
   int rc;
   struct Fd *fd;
   sigset_t block, oldmask;
   struct Dll *e, *e2, *fds;
-  if (flags || first > last) {
+  if ((flags & ~CLOSE_RANGE_CLOEXEC_LINUX) || first > last) {
     return einval();
+  }
+  if (flags & CLOSE_RANGE_CLOEXEC_LINUX) {
+    return SysCloseRangeCloexec(m, first, last);
   }
   LockFds(&m->system->fds);
   for (fds = 0, e = dll_first(m->system->fds.list); e; e = e2) {

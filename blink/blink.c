@@ -37,6 +37,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/overlays.h"
 #include "blink/signal.h"
 #include "blink/sigwinch.h"
 #include "blink/stats.h"
@@ -56,6 +57,7 @@
   -s                   print statistics on exit\n\
   -S                   enable system call logging\n\
   -L PATH              log filename (default ${TMPDIR:-/tmp}/blink.log)\n\
+  $BLINK_OVERLAYS      file system roots [default \":o\"\n\
   $BLINK_LOG_FILENAME  log filename (same as -L flag)\n"
 
 extern char **environ;
@@ -240,6 +242,7 @@ int main(int argc, char *argv[]) {
   g_blink_path = argc > 0 ? argv[0] : 0;
   GetOpts(argc, argv);
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
+  SetOverlays(getenv("BLINK_OVERLAYS"));
   WriteErrorInit();
   HandleSigs();
   InitBus();

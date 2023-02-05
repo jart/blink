@@ -1,0 +1,31 @@
+#!/bin/sh
+set -ex
+# e.g. deploy-ltp chmod01
+
+T=/mnt/videos/website/justine.lol/ltp/bin
+L=/opt/ltp/testcases/bin/
+V=1
+mkdir -p $T/$V
+
+for f; do
+  if [ ! -f $L/$f ]; then
+    echo "not found: $L/$f" >&2
+    exit 1
+  fi
+
+  cp $L/$f $T/$V/${f##*/}.elf
+  rm -f $T/$V/${f##*/}.elf.gz
+  gzip $T/$V/${f##*/}.elf
+  sha256sum -b $T/$V/${f##*/}.elf.gz >$T/$V/${f##*/}.elf.gz.sha256
+  mkdir -p ~/blink/third_party/ltp/bin/$V
+  cp $T/$V/${f##*/}.elf.gz.sha256 ~/blink/third_party/ltp/bin/$V/${f##*/}.elf.gz.sha256
+
+  sed -i -e 's!/mnt/videos/website/justine.lol/ltp/bin!third_party/ltp/bin!' \
+      ~/blink/third_party/ltp/bin/$V/${f##*/}.elf.gz.sha256
+done
+
+syncweb
+
+ssh debian gsutil -m -h Cache-Control:public,max-age=31536000 cp -r -a public-read \
+    /mnt/videos/website/justine.lol/ltp/bin/$V/${f##*/}.elf.gz \
+    gs://justine/ltp/bin/$V/

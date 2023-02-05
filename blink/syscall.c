@@ -50,6 +50,7 @@
 #include <unistd.h>
 
 #include "blink/log.h"
+#include "blink/overlays.h"
 #include "blink/util.h"
 
 #ifdef __EMSCRIPTEN__
@@ -2689,19 +2690,19 @@ static i32 SysLinkat(struct Machine *m,  //
                 XlatLinkatFlags(flags));
 }
 
-static bool IsFileExecutable(const char *path) {
-  return !access(path, X_OK);
-}
-
 static bool CanEmulateExecutableImpl(const char *prog) {
   int fd;
   bool res;
   ssize_t rc;
   char hdr[64];
-  if (!IsFileExecutable(prog)) {
+  struct stat st;
+  if ((fd = OverlaysOpen(AT_FDCWD, prog, O_RDONLY | O_CLOEXEC, 0)) == -1) {
     return false;
   }
-  if ((fd = open(prog, O_RDONLY | O_CLOEXEC)) == -1) {
+  unassert(!fstat(fd, &st));
+  if (!(st.st_mode & 0111)) {
+    LOGF("execve %s needs chmod +x", prog);
+    close(fd);
     return false;
   }
 #ifdef __HAIKU__

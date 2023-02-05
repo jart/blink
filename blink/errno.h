@@ -7,6 +7,7 @@ long efault(void);
 long eintr(void);
 long einval(void);
 long enfile(void);
+long enoent(void);
 long enomem(void);
 long enosys(void);
 long enotsup(void);

@@ -26,6 +26,7 @@
 
 #include "blink/debug.h"
 #include "blink/lock.h"
+#include "blink/overlays.h"
 
 #ifdef UNWIND
 #define UNW_LOCAL_ONLY
@@ -419,7 +420,7 @@ void LoadDebugSymbols(struct Elf *elf) {
   if (elf->ehdr && GetElfSymbolTable(elf->ehdr, elf->size, &n) && n) return;
   unassert(elf->prog);
   snprintf(buf, sizeof(buf), "%s.dbg", elf->prog);
-  if ((fd = open(buf, O_RDONLY)) != -1) {
+  if ((fd = OverlaysOpen(AT_FDCWD, buf, O_RDONLY, 0)) != -1) {
     if (fstat(fd, &st) != -1 &&
         (elfmap = Mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0,
                        "debug")) != MAP_FAILED) {

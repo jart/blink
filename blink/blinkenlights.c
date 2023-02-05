@@ -59,6 +59,7 @@
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/mda.h"
+#include "blink/overlays.h"
 #include "blink/panel.h"
 #include "blink/pml4t.h"
 #include "blink/pty.h"
@@ -3820,6 +3821,7 @@ int main(int argc, char *argv[]) {
   SetXmmSize(2);
   SetXmmDisp(kXmmHex);
   GetOpts(argc, argv);
+  SetOverlays(getenv("BLINK_OVERLAYS"));
   sigfillset(&sa.sa_mask);
   sa.sa_flags = 0;
   sa.sa_handler = OnSigSys;

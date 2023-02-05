@@ -33,7 +33,8 @@ test:	o				\
 	o/$(MODE)/test
 
 check:	test				\
-	o/$(MODE)/third_party/cosmo
+	o/$(MODE)/third_party/cosmo	\
+	o/$(MODE)/third_party/ltp
 
 check2:	o/$(MODE)/test/sse		\
 	o/$(MODE)/test/lib		\
@@ -62,6 +63,8 @@ include test/flat/flat.mk
 include test/metal/metal.mk
 include test/blink/test.mk
 include third_party/gcc/gcc.mk
+include third_party/ltp/ltp.mk
+include third_party/musl/musl.mk
 include third_party/qemu/qemu.mk
 include third_party/cosmo/cosmo.mk
 
