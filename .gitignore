@@ -5,6 +5,7 @@
 *.so
 *.so.1
 /o
+/gf*
 /core*
 /HTAGS
 /TAGS
