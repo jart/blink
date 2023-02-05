@@ -377,10 +377,7 @@ static bool FreePage(struct System *s, u64 entry) {
   long pagesize;
   struct HostPage *h;
   unassert(entry & PAGE_V);
-  if (entry & PAGE_RSRV) {
-    --s->memstat.reserved;
-    return false;
-  } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) == PAGE_HOST) {
+  if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) == PAGE_HOST) {
     ++s->memstat.freed;
     --s->memstat.committed;
     ClearPage((page = (u8 *)(intptr_t)(entry & PAGE_TA)));
@@ -393,17 +390,26 @@ static bool FreePage(struct System *s, u64 entry) {
     return false;
   } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
              (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
-    --s->memstat.allocated;
-    --s->memstat.committed;
+    if (entry & PAGE_RSRV) {
+      --s->memstat.reserved;
+    } else {
+      --s->memstat.committed;
+    }
     pagesize = GetSystemPageSize();
     unassert(!Munmap((void *)ROUNDDOWN((intptr_t)(entry & PAGE_TA), pagesize),
                      pagesize));
     return false;
   } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
              (PAGE_HOST | PAGE_MAP)) {
-    --s->memstat.allocated;
-    --s->memstat.committed;
+    if (entry & PAGE_RSRV) {
+      --s->memstat.reserved;
+    } else {
+      --s->memstat.committed;
+    }
     return true;
+  } else if (entry & PAGE_RSRV) {
+    --s->memstat.reserved;
+    return false;
   } else {
     unassert((entry & PAGE_TA) < kRealSize);
     return false;
@@ -549,9 +555,8 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     s->memstat.committed += size / 4096;
     flags |= PAGE_HOST | PAGE_MAP;
   } else if (fd != -1 || shared) {
-    s->memstat.allocated += size / 4096;
-    s->memstat.committed += size / 4096;
     flags |= PAGE_HOST | PAGE_MAP | PAGE_MUG;
+    s->memstat.reserved += size / 4096;
   } else {
     s->memstat.reserved += size / 4096;
   }
@@ -608,7 +613,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
             real = (intptr_t)ToHost(virt);
           }
           unassert(!(real & ~PAGE_TA));
-          entry = real | flags | PAGE_V;
+          entry = real | flags | PAGE_RSRV | PAGE_V;
         } else {
           entry = flags | PAGE_RSRV | PAGE_V;
         }

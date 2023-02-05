@@ -65,15 +65,26 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
   u64 x;
   u64 page;
   unassert(entry & PAGE_RSRV);
-  unassert(!(entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)));
-  if ((page = AllocatePage(m->system)) != -1) {
+  // page faults should only happen in non-linear mode
+  if (!(entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG))) {
+    // an anonymous page is being accessed for the first time
+    if ((page = AllocatePage(m->system)) != -1) {
+      --m->system->memstat.reserved;
+      ++m->system->memstat.committed;
+      x = (page & (PAGE_TA | PAGE_HOST)) | (entry & ~(PAGE_TA | PAGE_RSRV));
+      Store64(GetPageAddress(m->system, table) + index * 8, x);
+      return x;
+    } else {
+      return 0;
+    }
+  } else {
+    // a file-mapped page is being accessed for the first time
+    unassert((entry & (PAGE_HOST | PAGE_MAP)) == (PAGE_HOST | PAGE_MAP));
     --m->system->memstat.reserved;
     ++m->system->memstat.committed;
-    x = (page & (PAGE_TA | PAGE_HOST)) | (entry & ~(PAGE_TA | PAGE_RSRV));
+    x = entry & ~PAGE_RSRV;
     Store64(GetPageAddress(m->system, table) + index * 8, x);
     return x;
-  } else {
-    return 0;
   }
 }
 
