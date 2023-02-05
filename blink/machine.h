@@ -419,6 +419,7 @@ void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 void ResetRam(struct Machine *);
 void SetReadAddr(struct Machine *, i64, u32);
 void SetWriteAddr(struct Machine *, i64, u32);
+int SyncVirtual(struct System *, i64, i64, int);
 int ProtectVirtual(struct System *, i64, i64, int);
 bool IsFullyMapped(struct System *, i64, i64);
 bool IsFullyUnmapped(struct System *, i64, i64);

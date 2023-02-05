@@ -995,9 +995,34 @@ static i64 SysMremap(struct Machine *m, i64 old_address, u64 old_size,
   return enomem();
 }
 
+static int XlatMsyncFlags(int flags) {
+  int sysflags;
+  if (flags & ~(MS_ASYNC_LINUX | MS_SYNC_LINUX | MS_INVALIDATE_LINUX)) {
+    LOGF("unsupported msync() flags %#x", flags);
+    return einval();
+  }
+  // According to POSIX, either MS_SYNC or MS_ASYNC must be specified
+  // in flags, and indeed failure to include one of these flags will
+  // cause msync() to fail on some systems. However, Linux permits a
+  // call to msync() that specifies neither of these flags, with
+  // semantics that are (currently) equivalent to specifying MS_ASYNC.
+  // ──Quoth msync(2) of Linux Programmer's Manual
+  if (flags & MS_ASYNC_LINUX) {
+    sysflags = MS_ASYNC;
+  } else if (flags & MS_SYNC_LINUX) {
+    sysflags = MS_SYNC;
+  } else {
+    sysflags = MS_ASYNC;
+  }
+  if (flags & MS_INVALIDATE_LINUX) {
+    sysflags |= MS_INVALIDATE;
+  }
+  return sysflags;
+}
+
 static int SysMsync(struct Machine *m, i64 virt, size_t size, int flags) {
-  // TODO(jart): Is this safe on all platforms?
-  return 0;
+  if ((flags = XlatMsyncFlags(flags)) == -1) return -1;
+  return SyncVirtual(m->system, virt, size, flags);
 }
 
 static int SysDup1(struct Machine *m, i32 fildes) {

@@ -739,6 +739,18 @@ reasons of performance is defined to include pushing and popping.
 
 Blink currently doesn't unlock robust mutexes on process death.
 
+### Coherency
+
+POSIX.1 provides almost no guarantees of coherency, synchronization, and
+durability when it comes to `MAP_SHARED` mappings and recommends that
+msync() be explicitly used to synchronize memory with file contents. The
+Linux Kernel implements shared memory so well, that this is rarely
+necessary. However some platforms like OpenBSD lack write coherency.
+This means if you change a shared writable memory map and then call
+pread() on the associated file region, you might get stale data. Blink
+isn't able to polyfill incoherent platforms to be as coherent as Linux,
+therefore apps that run in Blink should assume the POSIX rules apply.
+
 ### Signal Handling
 
 Blink uses `SIGSYS` to deliver signals internally. This signal is

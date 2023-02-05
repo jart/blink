@@ -41,6 +41,37 @@ long GetSystemPageSize(void) {
   return MAX(4096, z);
 }
 
+static const char *DescribeSync(int prot) {
+  char *p;
+  bool gotsome;
+  _Thread_local static char buf[64];
+  p = buf;
+  gotsome = false;
+  if (prot & MS_SYNC) {
+    if (gotsome) *p++ = '|';
+    p = stpcpy(p, "MS_SYNC");
+    prot &= ~MS_SYNC;
+    gotsome = true;
+  }
+  if (prot & MS_ASYNC) {
+    if (gotsome) *p++ = '|';
+    p = stpcpy(p, "MS_ASYNC");
+    prot &= ~MS_ASYNC;
+    gotsome = true;
+  }
+  if (prot & MS_INVALIDATE) {
+    if (gotsome) *p++ = '|';
+    p = stpcpy(p, "MS_INVALIDATE");
+    prot &= ~MS_INVALIDATE;
+    gotsome = true;
+  }
+  if (prot) {
+    if (gotsome) *p++ = '|';
+    p = FormatInt64(p, prot);
+  }
+  return buf;
+}
+
 void *Mmap(void *addr,     //
            size_t length,  //
            int prot,       //
@@ -97,6 +128,26 @@ int Mprotect(void *addr,     //
   } else {
     MEM_LOGF("%s failed to protect %s byte map [%p,%p) as %s: %s", owner, szbuf,
              (u8 *)addr, (u8 *)addr + length, DescribeProt(prot),
+             DescribeHostErrno(errno));
+  }
+#endif
+  return res;
+}
+
+int Msync(void *addr,     //
+          size_t length,  //
+          int flags,      //
+          const char *owner) {
+  int res = msync(addr, length, flags);
+#if LOG_MEM
+  char szbuf[16];
+  FormatSize(szbuf, length, 1024);
+  if (res != -1) {
+    MEM_LOGF("%s synced %s byte map [%p,%p) as %s", owner, szbuf, addr,
+             (u8 *)addr + length, DescribeSync(prot));
+  } else {
+    MEM_LOGF("%s failed to sync %s byte map [%p,%p) as %s: %s", owner, szbuf,
+             (u8 *)addr, (u8 *)addr + length, DescribeSync(prot),
              DescribeHostErrno(errno));
   }
 #endif

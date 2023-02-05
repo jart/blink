@@ -786,7 +786,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
             (mpstart = ROUNDDOWN(virt, pagesize)) != last) {
           last = mpstart;
           if (Mprotect(ToHost(mpstart), pagesize, sysprot, "linear")) {
-            LOGF("mprotect(%#" PRIx64 " [%p], %#lx, %d) failed: %s", mpstart,
+            ERRF("mprotect(%#" PRIx64 " [%p], %#lx, %d) failed: %s", mpstart,
                  ToHost(mpstart), pagesize, prot, DescribeHostErrno(errno));
             Abort();
           }
@@ -794,7 +794,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
                    (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
           real = (u8 *)ROUNDDOWN((intptr_t)(pt & PAGE_TA), pagesize);
           if (Mprotect(real, pagesize, sysprot, "mug")) {
-            LOGF("mprotect(pt=%#" PRIx64
+            ERRF("mprotect(pt=%#" PRIx64
                  ", real=%p, size=%#lx, prot=%d) failed: %s",
                  pt, real, pagesize, prot, DescribeHostErrno(errno));
             Abort();
@@ -810,4 +810,65 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
     }
   }
   InvalidateSystem(s, true, false);
+}
+
+static void SyncPage(struct System *s, u64 entry) {
+  if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) == PAGE_HOST) {
+    return;  // don't need to do anything for anonymous private memory
+  }
+}
+
+int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
+  u8 *mi;
+  u64 pt;
+  long skew, pagesize;
+  i64 ti, end, level, mpstart, last = -1;
+  if (!IsValidAddrSize(virt, size)) {
+    return einval();
+  }
+  pagesize = GetSystemPageSize();
+  if (HasLinearMapping(s) && (skew = virt & (pagesize - 1))) {
+    size += skew;
+    virt -= skew;
+  }
+  for (end = virt + size;;) {
+    for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
+      ti = (virt >> level) & 511;
+      mi = GetPageAddress(s, pt) + ti * 8;
+      pt = Get64(mi);
+      if (level > 12) {
+        unassert(pt & PAGE_V);
+        continue;
+      }
+      for (;;) {
+        unassert(pt & PAGE_V);
+        if (HasLinearMapping(s) &&
+            (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
+                (PAGE_HOST | PAGE_MAP) &&
+            (mpstart = ROUNDDOWN(virt, pagesize)) != last) {
+          last = mpstart;
+          if (Msync(ToHost(mpstart), pagesize, sysflags, "linear")) {
+            ERRF("msync(%#" PRIx64 " [%p], %#lx, %d) failed: %s", mpstart,
+                 ToHost(mpstart), pagesize, sysflags, DescribeHostErrno(errno));
+            Abort();
+          }
+        } else if ((pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
+                   (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
+          intptr_t real = pt & PAGE_TA;
+          intptr_t page = ROUNDDOWN(real, pagesize);
+          long lilsize = (real - page) + MIN(4096, end - virt);
+          if (Msync((void *)page, lilsize, sysflags, "mug")) {
+            ERRF("msync(%p [pt=%#" PRIx64
+                 "], size=%#lx, flags=%d) failed: %s\n%s",
+                 (void *)page, pt, pagesize, sysflags, DescribeHostErrno(errno),
+                 FormatPml4t(g_machine));
+            Abort();
+          }
+        }
+        if ((virt += 4096) >= end) return 0;
+        if (++ti == 512) break;
+        pt = Get64((mi += 8));
+      }
+    }
+  }
 }
