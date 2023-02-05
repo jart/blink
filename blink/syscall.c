@@ -215,18 +215,27 @@ const struct FdCb kFdCbHost = {
     .tcsetwinsize = my_tcsetwinsize,
 };
 
+static int GetFdSocketType(int fildes) {
+  int type = 0;
+  socklen_t len = sizeof(type);
+  getsockopt(fildes, SOL_SOCKET, SO_TYPE, &type, &len);
+  return type;
+}
+
 void AddStdFd(struct Fds *fds, int fildes) {
   int flags;
+  struct Fd *fd;
   if ((flags = fcntl(fildes, F_GETFL, 0)) >= 0) {
-    unassert(AddFd(fds, fildes, flags));
+    unassert(fd = AddFd(fds, fildes, flags));
+    fd->type = GetFdSocketType(fildes);
   }
 }
 
 struct Fd *GetAndLockFd(struct Machine *m, int fildes) {
   struct Fd *fd;
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) LockFd(fd);
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   return fd;
 }
 
@@ -337,7 +346,7 @@ static int SysFork(struct Machine *m) {
   // exec_lock must come before fds.lock (see dup3)
   // exec_lock must come before fds.lock (see execve)
   LOCK(&m->system->exec_lock);
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   LOCK(&m->system->sig_lock);
   LOCK(&m->system->mmap_lock);
   LOCK(&m->system->machines_lock);
@@ -356,7 +365,7 @@ static int SysFork(struct Machine *m) {
   UNLOCK(&m->system->machines_lock);
   UNLOCK(&m->system->mmap_lock);
   UNLOCK(&m->system->sig_lock);
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   UNLOCK(&m->system->exec_lock);
   if (!pid) {
     newpid = getpid();
@@ -931,13 +940,13 @@ static int SysMunmap(struct Machine *m, i64 virt, u64 size) {
 int GetOflags(struct Machine *m, int fildes) {
   int oflags;
   struct Fd *fd;
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     oflags = fd->oflags;
   } else {
     oflags = -1;
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   return oflags;
 }
 
@@ -1035,14 +1044,11 @@ static int SysDup1(struct Machine *m, i32 fildes) {
     return ebadf();
   }
   if ((newfildes = dup(fildes)) != -1) {
-    LockFds(&m->system->fds);
-    if ((fd = GetFd(&m->system->fds, fildes))) {
-      oflags = fd->oflags & ~O_CLOEXEC;
-    } else {
-      oflags = 0;
-    }
-    unassert(AddFd(&m->system->fds, newfildes, oflags));
-    UnlockFds(&m->system->fds);
+    LOCK(&m->system->fds.lock);
+    unassert(fd = GetFd(&m->system->fds, fildes));
+    oflags = fd->oflags & ~O_CLOEXEC;
+    unassert(ForkFd(&m->system->fds, fd, newfildes, oflags));
+    UNLOCK(&m->system->fds.lock);
   } else {
     LOGF("dup() failed %s", DescribeHostErrno(errno));
   }
@@ -1068,26 +1074,23 @@ static int SysDup2(struct Machine *m, i32 fildes, i32 newfildes) {
   }
   if (fildes == newfildes) {
     // no-op system call, but still must validate
-    LockFds(&m->system->fds);
+    LOCK(&m->system->fds.lock);
     if (GetFd(&m->system->fds, fildes)) {
       rc = fildes;
     } else {
       rc = -1;
     }
-    UnlockFds(&m->system->fds);
+    UNLOCK(&m->system->fds.lock);
   } else if ((rc = Dup2(m, fildes, newfildes)) != -1) {
-    LockFds(&m->system->fds);
+    LOCK(&m->system->fds.lock);
     if ((fd = GetFd(&m->system->fds, newfildes))) {
       dll_remove(&m->system->fds.list, &fd->elem);
       FreeFd(fd);
     }
-    if ((fd = GetFd(&m->system->fds, fildes))) {
-      oflags = fd->oflags & ~O_CLOEXEC;
-    } else {
-      oflags = 0;
-    }
-    unassert(AddFd(&m->system->fds, newfildes, oflags));
-    UnlockFds(&m->system->fds);
+    unassert(fd = GetFd(&m->system->fds, fildes));
+    oflags = fd->oflags & ~O_CLOEXEC;
+    unassert(ForkFd(&m->system->fds, fd, newfildes, oflags));
+    UNLOCK(&m->system->fds.lock);
   } else {
     LOGF("dup2() failed %s", DescribeHostErrno(errno));
   }
@@ -1115,21 +1118,18 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
     if (flags & O_CLOEXEC_LINUX) {
       unassert(!fcntl(newfildes, F_SETFD, FD_CLOEXEC));
     }
-    LockFds(&m->system->fds);
+    LOCK(&m->system->fds.lock);
     if ((fd = GetFd(&m->system->fds, newfildes))) {
       dll_remove(&m->system->fds.list, &fd->elem);
       FreeFd(fd);
     }
-    if ((fd = GetFd(&m->system->fds, fildes))) {
-      oflags = fd->oflags & ~O_CLOEXEC;
-    } else {
-      oflags = 0;
-    }
+    unassert(fd = GetFd(&m->system->fds, fildes));
+    oflags = fd->oflags & ~O_CLOEXEC;
     if (flags & O_CLOEXEC_LINUX) {
       oflags |= O_CLOEXEC;
     }
-    unassert(AddFd(&m->system->fds, newfildes, oflags));
-    UnlockFds(&m->system->fds);
+    unassert(ForkFd(&m->system->fds, fd, newfildes, oflags));
+    UNLOCK(&m->system->fds.lock);
   } else {
     LOGF("dup2() failed %s", DescribeHostErrno(errno));
   }
@@ -1142,17 +1142,14 @@ static int SysDupf(struct Machine *m, i32 fildes, i32 minfildes, int cmd) {
   int newfildes;
   struct Fd *fd;
   if ((newfildes = fcntl(fildes, cmd, minfildes)) != -1) {
-    LockFds(&m->system->fds);
-    if ((fd = GetFd(&m->system->fds, fildes))) {
-      oflags = fd->oflags & ~O_CLOEXEC;
-    } else {
-      oflags = 0;
-    }
+    LOCK(&m->system->fds.lock);
+    unassert(fd = GetFd(&m->system->fds, fildes));
+    oflags = fd->oflags & ~O_CLOEXEC;
     if (cmd == F_DUPFD_CLOEXEC) {
       oflags |= O_CLOEXEC;
     }
-    unassert(AddFd(&m->system->fds, newfildes, oflags));
-    UnlockFds(&m->system->fds);
+    unassert(ForkFd(&m->system->fds, fd, newfildes, oflags));
+    UNLOCK(&m->system->fds.lock);
   } else {
     LOGF("dupf() failed %s", DescribeHostErrno(errno));
   }
@@ -1193,6 +1190,7 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
 }
 
 static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
+  struct Fd *fd;
   int flags, fildes;
   flags = type & (SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
   type &= ~(SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
@@ -1202,11 +1200,14 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
   if (flags) LOCK(&m->system->exec_lock);
   if ((fildes = socket(family, type, protocol)) != -1) {
     FixupSock(fildes, flags);
-    LockFds(&m->system->fds);
-    unassert(AddFd(&m->system->fds, fildes,
-                   O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
-                       (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0)));
-    UnlockFds(&m->system->fds);
+    LOCK(&m->system->fds.lock);
+    fd = AddFd(&m->system->fds, fildes,
+               O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
+                   (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0));
+    fd->type = type;
+    fd->family = family;
+    fd->protocol = protocol;
+    UNLOCK(&m->system->fds.lock);
   }
   if (flags) UNLOCK(&m->system->exec_lock);
   return fildes;
@@ -1214,6 +1215,7 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
 
 static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
                          i64 pipefds_addr) {
+  struct Fd *fd;
   u8 fds_linux[2][4];
   int rc, flags, sysflags, fds[2];
   flags = type & (SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
@@ -1225,13 +1227,19 @@ static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
   if ((rc = socketpair(family, type, protocol, fds)) != -1) {
     FixupSock(fds[0], flags);
     FixupSock(fds[1], flags);
-    LockFds(&m->system->fds);
+    LOCK(&m->system->fds.lock);
     sysflags = O_RDWR;
     if (flags & SOCK_CLOEXEC_LINUX) sysflags |= O_CLOEXEC;
     if (flags & SOCK_NONBLOCK_LINUX) sysflags |= O_NDELAY;
-    unassert(AddFd(&m->system->fds, fds[0], sysflags));
-    unassert(AddFd(&m->system->fds, fds[1], sysflags));
-    UnlockFds(&m->system->fds);
+    unassert(fd = AddFd(&m->system->fds, fds[0], sysflags));
+    fd->type = type;
+    fd->family = family;
+    fd->protocol = protocol;
+    unassert(fd = AddFd(&m->system->fds, fds[1], sysflags));
+    fd->type = type;
+    fd->family = family;
+    fd->protocol = protocol;
+    UNLOCK(&m->system->fds.lock);
     Write32(fds_linux[0], fds[0]);
     Write32(fds_linux[1], fds[1]);
     CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux));
@@ -1306,24 +1314,48 @@ static int SysGetpeername(struct Machine *m, int fd, i64 aa, i64 asa) {
   return SysSocketName(m, fd, aa, asa, getpeername);
 }
 
-static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
-                      i64 sockaddr_size_addr, i32 flags) {
+static int Accept(struct Machine *m, i32 fildes, i64 sockaddr_addr,
+                  i64 sockaddr_size_addr, i32 flags, struct Fd *fd) {
   int newfd;
   socklen_t addrlen;
   struct sockaddr_storage addr;
-  if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
   addrlen = sizeof(addr);
-  if (flags) LOCK(&m->system->exec_lock);
   INTERRUPTIBLE(newfd = accept(fildes, (struct sockaddr *)&addr, &addrlen));
   if (newfd != -1) {
     FixupSock(newfd, flags);
-    LockFds(&m->system->fds);
-    unassert(AddFd(&m->system->fds, newfd,
-                   O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
-                       (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0)));
-    UnlockFds(&m->system->fds);
+    unassert(ForkFd(&m->system->fds, fd, newfd,
+                    O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
+                        (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0)));
     StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
                   (struct sockaddr *)&addr, addrlen);
+  }
+  return newfd;
+}
+
+static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
+                      i64 sockaddr_size_addr, i32 flags) {
+  int newfd;
+  struct Fd *fd;
+  if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
+  if (flags) LOCK(&m->system->exec_lock);
+  if ((fd = GetAndLockFd(m, fildes))) {
+    if (fd->type) {
+      if (fd->type == SOCK_STREAM) {
+        newfd = Accept(m, fildes, sockaddr_addr, sockaddr_size_addr, flags, fd);
+      } else {
+        // POSIX.1 and Linux require EOPNOTSUPP when called on a file
+        // descriptor that doesn't support accepting, i.e. SOCK_STREAM,
+        // but FreeBSD incorrectly returns EINVAL.
+        errno = EOPNOTSUPP;
+        newfd = -1;
+      }
+    } else {
+      errno = ENOTSOCK;
+      newfd = -1;
+    }
+    UnlockFd(fd);
+  } else {
+    newfd = -1;
   }
   if (flags) UNLOCK(&m->system->exec_lock);
   return newfd;
@@ -1722,7 +1754,7 @@ static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   struct Fd *fd;
   struct Iovs iv;
   ssize_t (*readv_impl)(int, const struct iovec *, int);
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
     unassert(readv_impl = fd->cb->readv);
@@ -1731,7 +1763,7 @@ static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
     readv_impl = 0;
     oflags = 0;
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   if (!fd) return -1;
   if ((oflags & O_ACCMODE) == O_WRONLY) return ebadf();
   if (size) {
@@ -1753,7 +1785,7 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   struct Fd *fd;
   struct Iovs iv;
   ssize_t (*writev_impl)(int, const struct iovec *, int);
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
     unassert(writev_impl = fd->cb->writev);
@@ -1762,7 +1794,7 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
     writev_impl = 0;
     oflags = 0;
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   if (!fd) return -1;
   if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();
   if (size) {
@@ -1784,13 +1816,13 @@ static long CheckFdAccess(struct Machine *m, i32 fildes, bool writable,
                           int errno_if_check_fails) {
   int oflags;
   struct Fd *fd;
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     oflags = fd->oflags;
   } else {
     oflags = 0;
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   if (!fd) return -1;
   if ((writable && ((oflags & O_ACCMODE) == O_RDONLY)) ||
       (!writable && ((oflags & O_ACCMODE) == O_WRONLY))) {
@@ -1848,7 +1880,7 @@ static i64 SysPreadv2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
     return einval();
   }
   if (iovlen > IOV_MAX_LINUX) return einval();
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
     unassert(readv_impl = fd->cb->readv);
@@ -1857,7 +1889,7 @@ static i64 SysPreadv2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
     readv_impl = 0;
     oflags = 0;
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   if (!fd) return -1;
   if ((oflags & O_ACCMODE) == O_WRONLY) return ebadf();
   if (iovlen) {
@@ -1892,7 +1924,7 @@ static i64 SysPwritev2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
     return einval();
   }
   if (iovlen > IOV_MAX_LINUX) return einval();
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
     unassert(writev_impl = fd->cb->writev);
@@ -1901,7 +1933,7 @@ static i64 SysPwritev2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
     writev_impl = 0;
     oflags = 0;
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   if (!fd) return -1;
   if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();
   if (iovlen) {
@@ -3696,14 +3728,14 @@ static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
             break;
           }
           fildes = Read32(gfds[i].fd);
-          LockFds(&m->system->fds);
+          LOCK(&m->system->fds.lock);
           if ((fd = GetFd(&m->system->fds, fildes))) {
             unassert(fd->cb);
             unassert(poll_impl = fd->cb->poll);
           } else {
             poll_impl = 0;
           }
-          UnlockFds(&m->system->fds);
+          UNLOCK(&m->system->fds.lock);
           if (fd) {
             hfds[0].fd = fildes;
             ev = Read16(gfds[i].events);

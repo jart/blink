@@ -36,10 +36,6 @@ void InitFds(struct Fds *fds) {
   pthread_mutex_init(&fds->lock, 0);
 }
 
-void LockFds(struct Fds *fds) {
-  LOCK(&fds->lock);
-}
-
 struct Fd *AddFd(struct Fds *fds, int fildes, int oflags) {
   struct Fd *fd;
   if (fildes >= 0) {
@@ -56,6 +52,18 @@ struct Fd *AddFd(struct Fds *fds, int fildes, int oflags) {
     einval();
     return 0;
   }
+}
+
+struct Fd *ForkFd(struct Fds *fds, struct Fd *fd, int fildes, int oflags) {
+  struct Fd *fd2;
+  if ((fd2 = AddFd(fds, fildes, oflags))) {
+    if (fd) {
+      fd2->type = fd->type;
+      fd2->family = fd->family;
+      fd2->protocol = fd->protocol;
+    }
+  }
+  return fd2;
 }
 
 struct Fd *GetFd(struct Fds *fds, int fildes) {
@@ -100,10 +108,6 @@ void FreeFd(struct Fd *fd) {
     unassert(!pthread_mutex_destroy(&fd->lock));
     free(fd);
   }
-}
-
-void UnlockFds(struct Fds *fds) {
-  UNLOCK(&fds->lock);
 }
 
 void DestroyFds(struct Fds *fds) {

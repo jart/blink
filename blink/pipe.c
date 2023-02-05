@@ -55,10 +55,10 @@ int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
       unassert(!fcntl(fds[0], F_SETFL, O_NDELAY));
       unassert(!fcntl(fds[1], F_SETFL, O_NDELAY));
     }
-    LockFds(&m->system->fds);
+    LOCK(&m->system->fds.lock);
     unassert(AddFd(&m->system->fds, fds[0], O_RDONLY | oflags));
     unassert(AddFd(&m->system->fds, fds[1], O_WRONLY | oflags));
-    UnlockFds(&m->system->fds);
+    UNLOCK(&m->system->fds.lock);
     Write32(fds_linux[0], fds[0]);
     Write32(fds_linux[1], fds[1]);
     CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux));

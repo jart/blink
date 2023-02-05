@@ -20,6 +20,7 @@
 #include <sys/uio.h>
 
 #include "blink/debug.h"
+#include "blink/lock.h"
 #include "blink/machine.h"
 #include "blink/syscall.h"
 #include "blink/uart.h"
@@ -30,13 +31,13 @@ static int OpE9Read(struct Machine *m) {
   int fildes = 0;
   struct iovec t = {&b, 1};
   ssize_t (*readv_impl)(int, const struct iovec *, int);
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     readv_impl = fd->cb->readv;
   } else {
     readv_impl = 0;
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   if (readv_impl && readv_impl(fildes, &t, 1) == 1) {
     return b;
   } else {
@@ -49,13 +50,13 @@ static int OpE9Write(struct Machine *m, u8 b) {
   int fildes = 1;
   struct iovec t = {&b, 1};
   ssize_t (*writev_impl)(int, const struct iovec *, int);
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     writev_impl = fd->cb->writev;
   } else {
     writev_impl = 0;
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   if (!writev_impl) return -1;
   return writev_impl(fildes, &t, 1);
 }
@@ -66,13 +67,13 @@ static int OpE9Poll(struct Machine *m) {
   int fildes = 0;
   struct pollfd pf;
   int (*poll_impl)(struct pollfd *, nfds_t, int);
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     poll_impl = fd->cb->poll;
   } else {
     poll_impl = 0;
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   if (!poll_impl) return -1;
   pf.fd = fildes;
   pf.events = POLLIN | POLLOUT;

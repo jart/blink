@@ -26,6 +26,8 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "blink/lock.h"
+
 #ifdef __HAIKU__
 #include <OS.h>
 #include <sys/sockio.h>
@@ -297,7 +299,7 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
   int (*tcsetattr_impl)(int, int, const struct termios *);
   int (*tcgetwinsize_impl)(int, struct winsize *);
   int (*tcsetwinsize_impl)(int, const struct winsize *);
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
     unassert(tcgetattr_impl = fd->cb->tcgetattr);
@@ -310,7 +312,7 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
     tcgetwinsize_impl = 0;
     tcsetwinsize_impl = 0;
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   if (!fd) return -1;
   switch (request) {
     case TIOCGWINSZ_LINUX:

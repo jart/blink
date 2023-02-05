@@ -28,6 +28,7 @@
 #include "blink/dll.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/syscall.h"
@@ -62,11 +63,11 @@ static int FinishClose(struct Machine *m, int rc) {
 
 int SysClose(struct Machine *m, i32 fildes) {
   struct Fd *fd;
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     dll_remove(&m->system->fds.list, &fd->elem);
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   if (!fd) return -1;
   return FinishClose(m, CloseFd(fd));
 }
@@ -74,7 +75,7 @@ int SysClose(struct Machine *m, i32 fildes) {
 static int SysCloseRangeCloexec(struct Machine *m, u32 first, u32 last) {
   struct Fd *fd;
   struct Dll *e;
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   for (e = dll_first(m->system->fds.list); e;
        e = dll_next(m->system->fds.list, e)) {
     fd = FD_CONTAINER(e);
@@ -85,7 +86,7 @@ static int SysCloseRangeCloexec(struct Machine *m, u32 first, u32 last) {
       }
     }
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   return 0;
 }
 
@@ -100,7 +101,7 @@ int SysCloseRange(struct Machine *m, u32 first, u32 last, u32 flags) {
   if (flags & CLOSE_RANGE_CLOEXEC_LINUX) {
     return SysCloseRangeCloexec(m, first, last);
   }
-  LockFds(&m->system->fds);
+  LOCK(&m->system->fds.lock);
   for (fds = 0, e = dll_first(m->system->fds.list); e; e = e2) {
     fd = FD_CONTAINER(e);
     e2 = dll_next(m->system->fds.list, e);
@@ -109,7 +110,7 @@ int SysCloseRange(struct Machine *m, u32 first, u32 last, u32 flags) {
       dll_make_last(&fds, e);
     }
   }
-  UnlockFds(&m->system->fds);
+  UNLOCK(&m->system->fds.lock);
   unassert(!sigfillset(&block));
   unassert(!pthread_sigmask(SIG_BLOCK, &block, &oldmask));
   rc = CloseFds(fds);
@@ -121,7 +122,7 @@ int SysCloseRange(struct Machine *m, u32 first, u32 last, u32 flags) {
 void SysCloseExec(struct System *s) {
   struct Fd *fd;
   struct Dll *e, *e2, *fds;
-  LockFds(&s->fds);
+  LOCK(&s->fds.lock);
   for (fds = 0, e = dll_first(s->fds.list); e; e = e2) {
     fd = FD_CONTAINER(e);
     e2 = dll_next(s->fds.list, e);
@@ -130,6 +131,6 @@ void SysCloseExec(struct System *s) {
       dll_make_last(&fds, e);
     }
   }
-  UnlockFds(&s->fds);
+  UNLOCK(&s->fds.lock);
   CloseFds(fds);
 }

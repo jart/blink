@@ -26,9 +26,12 @@ struct FdCb {
 };
 
 struct Fd {
-  int fildes;
-  int oflags;
-  DIR *dirstream;
+  int fildes;      // file descriptor
+  int oflags;      // host O_XXX constants
+  int family;      // host AF_XXX constants
+  int type;        // host SOCK_XXX constants
+  int protocol;    // host IPPROTO_XXX constants
+  DIR *dirstream;  // for getdents() lazilly
   struct Dll elem;
   pthread_mutex_t lock;
   const struct FdCb *cb;
@@ -42,14 +45,13 @@ struct Fds {
 extern const struct FdCb kFdCbHost;
 
 void InitFds(struct Fds *);
-void LockFds(struct Fds *);
 struct Fd *AddFd(struct Fds *, int, int);
+struct Fd *ForkFd(struct Fds *, struct Fd *, int, int);
 struct Fd *GetFd(struct Fds *, int);
 void LockFd(struct Fd *);
 void UnlockFd(struct Fd *);
 int CountFds(struct Fds *);
 void FreeFd(struct Fd *);
-void UnlockFds(struct Fds *);
 void DestroyFds(struct Fds *);
 
 #endif /* BLINK_FDS_H_ */

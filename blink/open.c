@@ -30,6 +30,7 @@
 #include "blink/debug.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/overlays.h"
 #include "blink/random.h"
@@ -85,9 +86,9 @@ static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
       if (oflags & O_CLOEXEC_LINUX) {
         unassert(!fcntl(fildes, F_SETFD, FD_CLOEXEC));
       }
-      LockFds(&m->system->fds);
+      LOCK(&m->system->fds.lock);
       unassert(AddFd(&m->system->fds, fildes, oflags));
-      UnlockFds(&m->system->fds);
+      UNLOCK(&m->system->fds.lock);
     } else {
       unassert(!close(tmpdir));
     }
@@ -113,9 +114,9 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
   INTERRUPTIBLE(
       fildes = OverlaysOpen(GetDirFildes(dirfildes), path, sysflags, mode));
   if (fildes != -1) {
-    LockFds(&m->system->fds);
+    LOCK(&m->system->fds.lock);
     unassert(AddFd(&m->system->fds, fildes, sysflags));
-    UnlockFds(&m->system->fds);
+    UNLOCK(&m->system->fds.lock);
   } else {
 #ifdef __FreeBSD__
     // Address FreeBSD divergence from IEEE Std 1003.1-2008 (POSIX.1)
