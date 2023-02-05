@@ -19,6 +19,7 @@
 #include <limits.h>
 #include <stdatomic.h>
 
+#include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/bus.h"
 #include "blink/dll.h"
