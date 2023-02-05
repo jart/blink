@@ -540,7 +540,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                      (fd == -1 ? MAP_ANONYMOUS : 0) |         //
                      (shared ? MAP_SHARED : MAP_PRIVATE)),    //
                     fd, offset, "linear")) != want) {
-      LOGF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ")"
+      ERRF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ")"
            "-> %#" PRIx64 "[%p] crisis: %s",
            virt, want, size, ToGuest(got), got,
            (greenfield && errno == MAP_DENIED)
