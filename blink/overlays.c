@@ -148,5 +148,6 @@ int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
       }
     }
   }
-  return err;
+  errno = err;
+  return -1;
 }
