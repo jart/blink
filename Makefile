@@ -33,14 +33,14 @@ test:	o				\
 	o/$(MODE)/test
 
 check:	test				\
-	o/$(MODE)/third_party/cosmo	\
-	o/$(MODE)/third_party/ltp
+	o/$(MODE)/third_party/cosmo
 
 check2:	o/$(MODE)/test/sse		\
 	o/$(MODE)/test/lib		\
 	o/$(MODE)/test/sys		\
 	o/$(MODE)/test/func		\
 	o/$(MODE)/test/asm		\
+	o/$(MODE)/third_party/ltp	\
 	o/$(MODE)/test/asm/emulates	\
 	o/$(MODE)/test/func/emulates	\
 	o/$(MODE)/third_party/ltp/medium

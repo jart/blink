@@ -2608,10 +2608,6 @@ static int SysRmdir(struct Machine *m, i64 path) {
   return rmdir(LoadStr(m, path));
 }
 
-static int SysUnlink(struct Machine *m, i64 path) {
-  return unlink(LoadStr(m, path));
-}
-
 static int SysRename(struct Machine *m, i64 srcpath, i64 dstpath) {
   return rename(LoadStr(m, srcpath), LoadStr(m, dstpath));
 }
@@ -2684,9 +2680,30 @@ static int XlatUnlinkatFlags(int x) {
   return res;
 }
 
-static int SysUnlinkat(struct Machine *m, i32 dirfd, i64 path, i32 flags) {
-  return unlinkat(GetDirFildes(dirfd), LoadStr(m, path),
-                  XlatUnlinkatFlags(flags));
+static int SysUnlinkat(struct Machine *m, i32 dirfd, i64 pathaddr, i32 flags) {
+  int rc;
+  const char *path;
+  dirfd = GetDirFildes(dirfd);
+  if ((flags = XlatUnlinkatFlags(flags)) == -1) return -1;
+  if (!(path = LoadStr(m, pathaddr))) return -1;
+  rc = unlinkat(dirfd, path, flags);
+#ifndef __linux
+  // POSIX.1 says unlink(directory) raises EPERM but on Linux
+  // it always raises EISDIR, which is so much less ambiguous
+  if (rc == -1 && !flags && errno == EPERM) {
+    struct stat st;
+    if (!fstatat(dirfd, path, &st, 0) && S_ISDIR(st.st_mode)) {
+      errno = EISDIR;
+    } else {
+      errno = EPERM;
+    }
+  }
+#endif
+  return rc;
+}
+
+static int SysUnlink(struct Machine *m, i64 pathaddr) {
+  return SysUnlinkat(m, AT_FDCWD_LINUX, pathaddr, 0);
 }
 
 static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
