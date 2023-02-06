@@ -2260,7 +2260,7 @@ static int XlatFchownatFlags(int x) {
   }
 #endif
   if (x) {
-    LOGF("%s() flags %d not supported", "fchownat", x);
+    LOGF("%s() flags %#x not supported", "fchownat", x);
     return -1;
   }
   return res;
@@ -3733,23 +3733,21 @@ static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
   return rc;
 }
 
-static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
+static int Poll(struct Machine *m, i64 fdsaddr, u64 nfds,
+                struct timespec deadline) {
   long i;
   u64 gfdssize;
   struct Fd *fd;
   int fildes, rc, ev;
   struct pollfd hfds[1];
-  struct timeval ts1, ts2;
   struct pollfd_linux *gfds;
-  long wait, elapsed, timeout;
+  struct timespec now, wait, remain;
   int (*poll_impl)(struct pollfd *, nfds_t, int);
-  timeout = timeout_ms * 1000L;
   if (!mulo(nfds, sizeof(struct pollfd_linux), &gfdssize) &&
       gfdssize <= 0x7ffff000) {
     if ((gfds = (struct pollfd_linux *)malloc(gfdssize))) {
       rc = 0;
       CopyFromUserRead(m, gfds, fdsaddr, gfdssize);
-      unassert(!gettimeofday(&ts1, 0));
       for (;;) {
         for (i = 0; i < nfds; ++i) {
         TryAgain:
@@ -3802,21 +3800,15 @@ static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
             Write16(gfds[i].revents, POLLNVAL_LINUX);
           }
         }
-        if (rc || !timeout) break;
-        wait = kPollingMs * 1000;
-        if (timeout < 0) {
-          usleep(wait);
-        } else {
-          unassert(!gettimeofday(&ts2, 0));
-          elapsed = TimevalTomicros(TimevalSub(ts2, ts1));
-          if (elapsed >= timeout) {
-            break;
-          }
-          if (timeout - elapsed < wait) {
-            wait = timeout - elapsed;
-          }
-          usleep(wait);
+        if (rc || CompareTime((now = GetTime()), deadline) >= 0) {
+          break;
         }
+        wait = FromMilliseconds(kPollingMs);
+        remain = SubtractTime(deadline, now);
+        if (CompareTime(remain, wait) < 0) {
+          wait = remain;
+        }
+        nanosleep(&wait, 0);
       }
       if (rc != -1) {
         CopyToUserWrite(m, fdsaddr, gfds, nfds * sizeof(*gfds));
@@ -3829,6 +3821,71 @@ static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
   } else {
     return einval();
   }
+}
+
+static int SysPoll(struct Machine *m, i64 fdsaddr, u64 nfds, i32 timeout_ms) {
+  struct timespec deadline;
+  if (timeout_ms < 0) {
+    deadline = GetMaxTime();
+  } else {
+    deadline = AddTime(GetTime(), FromMilliseconds(timeout_ms));
+  }
+  return Poll(m, fdsaddr, nfds, deadline);
+}
+
+static int SysPpoll(struct Machine *m, i64 fdsaddr, u64 nfds, i64 timeoutaddr,
+                    i64 sigmaskaddr, u64 sigsetsize) {
+  int rc;
+  u64 oldmask = 0;
+  const struct sigset_linux *sm;
+  const struct timespec_linux *gt;
+  struct timespec_linux timeout_linux;
+  struct timespec now, timeout, remain, deadline;
+  if (sigmaskaddr) {
+    if (sigsetsize != 8) return einval();
+    if ((sm = (const struct sigset_linux *)Schlep(m, sigmaskaddr,
+                                                  sizeof(*sm)))) {
+      oldmask = m->sigmask;
+      m->sigmask = Read64(sm->sigmask);
+    } else {
+      return -1;
+    }
+  }
+  if (!CheckInterrupt(m)) {
+    if (timeoutaddr) {
+      if ((gt = (const struct timespec_linux *)Schlep(m, timeoutaddr,
+                                                      sizeof(*gt)))) {
+        timeout.tv_sec = Read64(gt->sec);
+        timeout.tv_nsec = Read64(gt->nsec);
+        if (timeout.tv_nsec >= 1000000000) {
+          return einval();
+        }
+      } else {
+        return -1;
+      }
+      deadline = AddTime(GetTime(), timeout);
+      rc = Poll(m, fdsaddr, nfds, deadline);
+      if (rc != -1 || errno == EINTR) {
+        now = GetTime();
+        if (CompareTime(now, deadline) >= 0) {
+          remain = FromMilliseconds(0);
+        } else {
+          remain = SubtractTime(deadline, now);
+        }
+        Write64(timeout_linux.sec, remain.tv_sec);
+        Write64(timeout_linux.nsec, remain.tv_nsec);
+        CopyToUserWrite(m, timeoutaddr, &timeout_linux, sizeof(timeout_linux));
+      }
+    } else {
+      rc = Poll(m, fdsaddr, nfds, GetMaxTime());
+    }
+  } else {
+    rc = -1;
+  }
+  if (sigmaskaddr) {
+    m->sigmask = oldmask;
+  }
+  return rc;
 }
 
 static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
@@ -4293,6 +4350,7 @@ void OpSyscall(P) {
     SYSCALL4(0x10B, SysReadlinkat);
     SYSCALL3(0x10C, SysFchmodat);
     SYSCALL3(0x10D, SysFaccessat);
+    SYSCALL5(0x10F, SysPpoll);
     SYSCALL4(0x1b7, SysFaccessat2);
     SYSCALL4(0x120, SysAccept4);
     SYSCALL2(0x111, SysSetRobustList);
