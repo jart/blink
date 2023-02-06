@@ -50,7 +50,7 @@ static char **SplitString(const char *s, int c) {
     } else {
       e = strdup(s);
     }
-    if (!e || !(g = realloc(r, (n + 2) * sizeof(*r)))) {
+    if (!e || !(g = (char **)realloc(r, (n + 2) * sizeof(*r)))) {
       free(e);
       FreeStrings(r);
       return 0;
