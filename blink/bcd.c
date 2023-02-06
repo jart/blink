@@ -84,3 +84,17 @@ relegated void OpAad(P) {
   Put16(m->ax, (m->ah * imm + m->al) & 255);
   BcdFlags(m, 0, 0);
 }
+
+// http://www.righto.com/2023/01/understanding-x86s-decimal-adjust-after.html
+relegated void OpDaa(P) {
+  u8 old_al;
+  old_al = m->al;
+  if ((m->al & 0x0f) > 9 || GetFlag(m->flags, FLAGS_AF)) {
+    m->al += 6;
+    m->flags = SetFlag(m->flags, FLAGS_AF, true);
+  }
+  if ((old_al > 0x99) || GetFlag(m->flags, FLAGS_CF)) {
+    m->al += 0x60;
+    m->flags = SetFlag(m->flags, FLAGS_CF, true);
+  }
+}

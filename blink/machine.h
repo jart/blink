@@ -477,6 +477,7 @@ void OpCvt0f5a(P);
 void OpCvt0f5b(P);
 void OpCvt0fE6(P);
 void OpCvtt0f2c(P);
+void OpDaa(P);
 void OpDas(P);
 void OpDecEvqp(P);
 void OpDivAlAhAxEbSigned(P);
