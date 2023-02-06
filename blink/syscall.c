@@ -2135,14 +2135,14 @@ static int XlatFaccessatFlags(int x) {
   return res;
 }
 
-static int SysFaccessat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
-  return faccessat(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode), 0);
-}
-
 static int SysFaccessat2(struct Machine *m, i32 dirfd, i64 path, i32 mode,
                          i32 flags) {
-  return faccessat(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode),
-                   XlatFaccessatFlags(flags));
+  return OverlaysAccess(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode),
+                        XlatFaccessatFlags(flags));
+}
+
+static int SysFaccessat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
+  return SysFaccessat2(m, dirfd, path, mode, 0);
 }
 
 static int SysFstat(struct Machine *m, i32 fd, i64 staddr) {
@@ -2294,8 +2294,8 @@ static int SysFchownat(struct Machine *m, i32 dirfd, i64 pathaddr, u32 uid,
     }
   }
 #endif
-  return fchownat(GetDirFildes(dirfd), path, uid, gid,
-                  XlatFchownatFlags(flags));
+  return OverlaysChown(GetDirFildes(dirfd), path, uid, gid,
+                       XlatFchownatFlags(flags));
 }
 
 static int SysChown(struct Machine *m, i64 pathaddr, u32 uid, u32 gid) {
@@ -2414,7 +2414,7 @@ static int SysListen(struct Machine *m, i32 fd, i32 backlog) {
 }
 
 static int SysMkdirat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
-  return mkdirat(GetDirFildes(dirfd), LoadStr(m, path), mode);
+  return OverlaysMkdir(GetDirFildes(dirfd), LoadStr(m, path), mode);
 }
 
 static int SysMkdir(struct Machine *m, i64 path, i32 mode) {
@@ -2426,7 +2426,7 @@ static int SysFchmod(struct Machine *m, i32 fd, u32 mode) {
 }
 
 static int SysFchmodat(struct Machine *m, i32 dirfd, i64 path, u32 mode) {
-  return fchmodat(GetDirFildes(dirfd), LoadStr(m, path), mode, 0);
+  return OverlaysChmod(GetDirFildes(dirfd), LoadStr(m, path), mode, 0);
 }
 
 static int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
@@ -2650,14 +2650,6 @@ static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
   return rc;
 }
 
-static int SysRmdir(struct Machine *m, i64 path) {
-  return rmdir(LoadStr(m, path));
-}
-
-static int SysRename(struct Machine *m, i64 srcpath, i64 dstpath) {
-  return rename(LoadStr(m, srcpath), LoadStr(m, dstpath));
-}
-
 static int SysChmod(struct Machine *m, i64 path, u32 mode) {
   return SysFchmodat(m, AT_FDCWD_LINUX, path, mode);
 }
@@ -2732,7 +2724,7 @@ static int SysUnlinkat(struct Machine *m, i32 dirfd, i64 pathaddr, i32 flags) {
   dirfd = GetDirFildes(dirfd);
   if ((flags = XlatUnlinkatFlags(flags)) == -1) return -1;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  rc = unlinkat(dirfd, path, flags);
+  rc = OverlaysUnlink(dirfd, path, flags);
 #ifndef __linux
   // POSIX.1 says unlink(directory) raises EPERM but on Linux
   // it always raises EISDIR, which is so much less ambiguous
@@ -2752,10 +2744,18 @@ static int SysUnlink(struct Machine *m, i64 pathaddr) {
   return SysUnlinkat(m, AT_FDCWD_LINUX, pathaddr, 0);
 }
 
+static int SysRmdir(struct Machine *m, i64 path) {
+  return SysUnlinkat(m, AT_FDCWD_LINUX, path, AT_REMOVEDIR_LINUX);
+}
+
 static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
                        int dstdirfd, i64 dstpath) {
   return renameat(GetDirFildes(srcdirfd), LoadStr(m, srcpath),
                   GetDirFildes(dstdirfd), LoadStr(m, dstpath));
+}
+
+static int SysRename(struct Machine *m, i64 src, i64 dst) {
+  return SysRenameat(m, AT_FDCWD_LINUX, src, AT_FDCWD_LINUX, dst);
 }
 
 static int XlatLinkatFlags(int x) {

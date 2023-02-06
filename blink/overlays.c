@@ -105,6 +105,10 @@ void SetOverlays(const char *config) {
   }
 }
 
+static bool IsUnrecoverableErrno(void) {
+  return errno == EINTR || errno == EMFILE || errno == ENFILE;
+}
+
 int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
   int fd;
   int err;
@@ -127,7 +131,7 @@ int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
     } else {
       dirfd = open(g_overlays[i], O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
       if (dirfd == -1) {
-        if (errno == EINTR || errno == EMFILE || errno == ENFILE) {
+        if (IsUnrecoverableErrno()) {
           return -1;
         } else {
           LOGF("bad overlay %s: %s", g_overlays[i], DescribeHostErrno(errno));
@@ -153,18 +157,19 @@ int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
   return -1;
 }
 
-int OverlaysStat(int dirfd, const char *path, struct stat *st, int flags) {
+static int OverlaysGeneric(int dirfd, const char *path, void *args,
+                           int fgenericat(int, const char *, void *)) {
   int err;
   size_t i;
   unassert(g_overlays);
   if (!path) return efault();
   if (!*path) return enoent();
   if (*path != '/') {
-    return fstatat(dirfd, path, st, flags);
+    return fgenericat(dirfd, path, args);
   }
   for (err = ENOENT, i = 0; g_overlays[i]; ++i) {
     if (!*g_overlays[i]) {
-      if (!fstatat(AT_FDCWD, path, st, flags)) {
+      if (!fgenericat(AT_FDCWD, path, args)) {
         return 0;
       }
       err = errno;
@@ -174,14 +179,14 @@ int OverlaysStat(int dirfd, const char *path, struct stat *st, int flags) {
     } else {
       dirfd = open(g_overlays[i], O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
       if (dirfd == -1) {
-        if (errno == EINTR || errno == EMFILE || errno == ENFILE) {
+        if (IsUnrecoverableErrno()) {
           return -1;
         } else {
           LOGF("bad overlay %s: %s", g_overlays[i], DescribeHostErrno(errno));
           continue;
         }
       }
-      if (!fstatat(dirfd, path + 1, st, flags)) {
+      if (!fgenericat(dirfd, path + 1, args)) {
         unassert(!close(dirfd));
         return 0;
       }
@@ -194,4 +199,106 @@ int OverlaysStat(int dirfd, const char *path, struct stat *st, int flags) {
   }
   errno = err;
   return -1;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct Stat {
+  struct stat *st;
+  int flags;
+};
+
+static int Stat(int dirfd, const char *path, void *vargs) {
+  struct Stat *args = (struct Stat *)vargs;
+  return fstatat(dirfd, path, args->st, args->flags);
+}
+
+int OverlaysStat(int dirfd, const char *path, struct stat *st, int flags) {
+  struct Stat args = {st, flags};
+  return OverlaysGeneric(dirfd, path, &args, Stat);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct Access {
+  int mode;
+  int flags;
+};
+
+static int Access(int dirfd, const char *path, void *vargs) {
+  struct Access *args = (struct Access *)vargs;
+  return faccessat(dirfd, path, args->mode, args->flags);
+}
+
+int OverlaysAccess(int dirfd, const char *path, int mode, int flags) {
+  struct Access args = {mode, flags};
+  return OverlaysGeneric(dirfd, path, &args, Access);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct Unlink {
+  int flags;
+};
+
+static int Unlink(int dirfd, const char *path, void *vargs) {
+  struct Unlink *args = (struct Unlink *)vargs;
+  return unlinkat(dirfd, path, args->flags);
+}
+
+int OverlaysUnlink(int dirfd, const char *path, int flags) {
+  struct Unlink args = {flags};
+  return OverlaysGeneric(dirfd, path, &args, Unlink);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct Mkdir {
+  int mode;
+};
+
+static int Mkdir(int dirfd, const char *path, void *vargs) {
+  struct Mkdir *args = (struct Mkdir *)vargs;
+  return mkdirat(dirfd, path, args->mode);
+}
+
+int OverlaysMkdir(int dirfd, const char *path, int mode) {
+  struct Mkdir args = {mode};
+  return OverlaysGeneric(dirfd, path, &args, Mkdir);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct Chmod {
+  int mode;
+  int flags;
+};
+
+static int Chmod(int dirfd, const char *path, void *vargs) {
+  struct Chmod *args = (struct Chmod *)vargs;
+  return fchmodat(dirfd, path, args->mode, args->flags);
+}
+
+int OverlaysChmod(int dirfd, const char *path, int mode, int flags) {
+  struct Chmod args = {mode, flags};
+  return OverlaysGeneric(dirfd, path, &args, Chmod);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct Chown {
+  uid_t uid;
+  gid_t gid;
+  int flags;
+};
+
+static int Chown(int dirfd, const char *path, void *vargs) {
+  struct Chown *args = (struct Chown *)vargs;
+  return fchownat(dirfd, path, args->uid, args->gid, args->flags);
+}
+
+int OverlaysChown(int dirfd, const char *path, uid_t uid, gid_t gid,
+                  int flags) {
+  struct Chown args = {uid, gid, flags};
+  return OverlaysGeneric(dirfd, path, &args, Chown);
 }
