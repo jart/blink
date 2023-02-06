@@ -32,7 +32,6 @@ LTP_TESTS =							\
 	o//third_party/ltp/bin/1/brk02.elf.ok			\
 	o//third_party/ltp/bin/1/chown01.elf.ok			\
 	o//third_party/ltp/bin/1/clock_getres01.elf.ok		\
-	o//third_party/ltp/bin/1/clock_gettime04.elf.ok		\
 	o//third_party/ltp/bin/1/clock_nanosleep04.elf.ok	\
 	o//third_party/ltp/bin/1/close01.elf.ok			\
 	o//third_party/ltp/bin/1/close02.elf.ok			\
@@ -306,6 +305,11 @@ ifneq ($(HOST_SYSTEM), FreeBSD)
 # it_interval and it_value in setitimer() is 100000000", but this test
 # needs the platform to support values like INT_MAX.
 LTP_TESTS += o//third_party/ltp/bin/1/alarm02.elf.ok
+endif
+
+# These tests require procfs which currently isn't simulated.
+ifneq ($(HOST_SYSTEM), FreeBSD)
+LTP_TESTS += o//third_party/ltp/bin/1/clock_gettime04.elf.ok
 endif
 
 ifeq ($(shell id -u), 0)

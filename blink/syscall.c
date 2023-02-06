@@ -3151,20 +3151,20 @@ static int SysClockNanosleep(struct Machine *m, int clock, int flags,
 TryAgain:
 #if defined(TIMER_ABSTIME) && !defined(__OpenBSD__)
   flags = flags & TIMER_ABSTIME_LINUX ? TIMER_ABSTIME : 0;
-  if ((rc = clock_nanosleep(clock, flags, &req, &rem))) {
+  if ((rc = clock_nanosleep(sysclock, flags, &req, &rem))) {
     errno = rc;
     rc = -1;
   }
 #else
   if (!flags) {
-    if (clock == CLOCK_REALTIME) {
+    if (sysclock == CLOCK_REALTIME) {
       rc = nanosleep(&req, &rem);
     } else {
       rc = einval();
     }
   } else {
     struct timespec now;
-    if (!(rc = clock_gettime(clock, &now))) {
+    if (!(rc = clock_gettime(sysclock, &now))) {
       if (CompareTime(now, req) < 0) {
         req = SubtractTime(req, now);
         rc = nanosleep(&req, &rem);
