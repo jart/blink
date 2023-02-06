@@ -33,6 +33,7 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
+#include "blink/pml4t.h"
 #include "blink/types.h"
 #include "blink/util.h"
 #include "blink/x86.h"
@@ -44,8 +45,6 @@ struct Allocator {
 } g_allocator = {
     PTHREAD_MUTEX_INITIALIZER,
 };
-
-bool g_wasteland;
 
 static void FillPage(void *p, int c) {
   memset(p, c, 4096);
@@ -416,15 +415,24 @@ static bool FreePage(struct System *s, u64 entry) {
   }
 }
 
-#define IS_EMPTY_SPACE             1
-#define IS_COMPLETE_LINEAR_MAPPING 2
+static void AddPageToRanges(struct ContiguousMemoryRanges *ranges, i64 virt,
+                            i64 end) {
+  if (!(ranges->i && ranges->p[ranges->i - 1].b == virt)) {
+    unassert(ranges->p = realloc(ranges->p, ++ranges->i * sizeof(*ranges->p)));
+    ranges->p[ranges->i - 1].a = virt;
+  }
+  ranges->p[ranges->i - 1].b = virt + MIN(4096, end - virt);
+}
 
-static int RemoveVirtual(struct System *s, i64 virt, i64 size) {
+// removes page table entries. anonymous pages will be added to the
+// system's free list. mug pages will be freed one by one. linear pages
+// won't be freed, and will instead have their intervals pooled in the
+// ranges data structure; the caller is responsible for freeing those.
+static void RemoveVirtual(struct System *s, i64 virt, i64 size,
+                          struct ContiguousMemoryRanges *ranges) {
   u8 *mi;
   i64 end;
   u64 i, pt;
-  bool got_some = false;
-  bool is_mapped = true;
   for (end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
       mi = GetPageAddress(s, pt) + ((virt >> i) & 511) * 8;
@@ -432,20 +440,13 @@ static int RemoveVirtual(struct System *s, i64 virt, i64 size) {
       if (!(pt & PAGE_V)) {
         break;
       } else if (i == 12) {
-        got_some = true;
-        is_mapped &= FreePage(s, pt);
+        if (FreePage(s, pt) && HasLinearMapping(m)) {
+          AddPageToRanges(ranges, virt, end);
+        }
         Store64(mi, 0);
         break;
       }
     }
-  }
-  if (!got_some) {
-    return IS_EMPTY_SPACE;
-  } else if (got_some && is_mapped) {
-    unassert(HasLinearMapping(s));
-    return IS_COMPLETE_LINEAR_MAPPING;
-  } else {
-    return 0;
   }
 }
 
@@ -464,10 +465,11 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                    i64 offset, bool shared) {
   u8 *mi;
   int prot;
-  long pagesize;
-  int greenfield;
+  int method;
   void *got, *want;
+  long i, pagesize;
   i64 ti, pt, end, level, entry;
+  struct ContiguousMemoryRanges ranges;
 
   // we determine these
   unassert(!(flags & PAGE_TA));
@@ -520,7 +522,28 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
 
   // remove existing mapping
   // this is the point of no return
-  greenfield = RemoveVirtual(s, virt, size) == IS_EMPTY_SPACE;
+  memset(&ranges, 0, sizeof(ranges));
+  RemoveVirtual(s, virt, size, &ranges);
+  if (HasLinearMapping(m) && ranges.i) {
+    // linear mappings exist within the requested interval
+    if (ranges.i == 1 &&          //
+        ranges.p[0].a == virt &&  //
+        ranges.p[1].b == virt + size) {
+      // it should be 100% safe to let the kernel blow it away
+      method = MAP_FIXED;
+    } else {
+      // holes exist; try to create a greenfield
+      for (i = 0; i < ranges.i; ++i) {
+        Munmap(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a);
+      }
+      // errors in Munmap() should propagate to Mmap() below
+      method = MAP_DEMAND;
+    }
+    free(ranges.p);
+  } else {
+    // requested interval should be a greenfield
+    method = MAP_DEMAND;
+  }
 
   prot = ((flags & PAGE_U ? PROT_READ : 0) |
           ((flags & PAGE_RW) || fd == -1 ? PROT_WRITE : 0));
@@ -532,18 +555,17 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     // lets us report a friendly error to the user, when that happens.
     // the solution is most likely to rebuild with -Wl,-Ttext-segment=
     // please note we need to take off the seatbelt after an execve().
-    if (g_wasteland) greenfield = false;
     errno = 0;
     want = ToHost(virt);
-    if ((got = Mmap(want, size, prot,                         //
-                    ((greenfield ? MAP_DEMAND : MAP_FIXED) |  //
-                     (fd == -1 ? MAP_ANONYMOUS : 0) |         //
-                     (shared ? MAP_SHARED : MAP_PRIVATE)),    //
+    if ((got = Mmap(want, size, prot,                       //
+                    (method |                               //
+                     (fd == -1 ? MAP_ANONYMOUS : 0) |       //
+                     (shared ? MAP_SHARED : MAP_PRIVATE)),  //
                     fd, offset, "linear")) != want) {
       ERRF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ")"
            "-> %#" PRIx64 "[%p] crisis: %s",
            virt, want, size, ToGuest(got), got,
-           (greenfield && errno == MAP_DENIED)
+           (method == MAP_DEMAND && errno == MAP_DENIED)
                ? "requested memory overlapped blink image or system memory. "
                  "try using `blink -m` to disable memory optimizations, or "
                  "try compiling blink using -Wl,--image-base=0x23000000 or "
@@ -652,29 +674,32 @@ i64 FindVirtual(struct System *s, i64 virt, i64 size) {
 }
 
 int FreeVirtual(struct System *s, i64 virt, i64 size) {
-  long pagesize;
-  if (!IsValidAddrSize(virt, size)) {
-    return einval();
-  }
-  pagesize = GetSystemPageSize();
-  if (HasLinearMapping(s)) {
-    if (virt & (pagesize - 1)) {
-      LOGF("app chose munmap addr (%#" PRIx64 ") that's not aligned "
-           "to the platform page size (%#lx) while using linear mode",
-           virt, pagesize);
-      return einval();
-    }
-  }
+  int rc;
+  long i;
+  struct ContiguousMemoryRanges ranges;
   MEM_LOGF("freeing virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
            virt, virt + size, size / 1024);
+  if (!IsValidAddrSize(virt, size)) {
+    LOGF("invalid addr size");
+    return einval();
+  }
   // TODO(jart): We should probably validate a PAGE_EOF exists at the
   //             end when size isn't a multiple of platform page size
-  if (RemoveVirtual(s, virt, size) == IS_COMPLETE_LINEAR_MAPPING &&
-      (HasLinearMapping(s) && !(virt & (pagesize - 1)))) {
-    unassert(!Munmap(ToHost(virt & PAGE_TA), size));
+  memset(&ranges, 0, sizeof(ranges));
+  RemoveVirtual(s, virt, size, &ranges);
+  for (rc = i = 0; i < ranges.i; ++i) {
+    if (Munmap(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a)) {
+      LOGF("failed to %s subrange"
+           " [%" PRIx64 ",%" PRIx64 ") within requested range"
+           " [%" PRIx64 ",%" PRIx64 "): %s",
+           "munmap", ranges.p[i].a, ranges.p[i].b, virt, virt + size,
+           DescribeHostErrno(errno));
+      rc = einval();
+    }
   }
+  free(ranges.p);
   InvalidateSystem(s, true, false);
-  return 0;
+  return rc;
 }
 
 int GetProtection(u64 key) {
@@ -742,11 +767,14 @@ bool IsFullyUnmapped(struct System *s, i64 virt, i64 size) {
 }
 
 int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
+  int rc;
   int sysprot;
   u64 pt, key;
   u8 *mi, *real;
-  long pagesize;
-  i64 ti, end, level, mpstart, last = -1;
+  long i, pagesize;
+  i64 ti, end, level, orig_virt;
+  struct ContiguousMemoryRanges ranges;
+  orig_virt = virt;
   pagesize = GetSystemPageSize();
   if (!IsValidAddrSize(virt, size)) {
     return einval();
@@ -769,7 +797,8 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
       ((virt & (pagesize - 1)) && (size & (pagesize - 1)))) {
     sysprot = PROT_READ | PROT_WRITE;
   }
-  for (end = virt + size;;) {
+  memset(&ranges, 0, sizeof(ranges));
+  for (rc = 0, end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
       mi = GetPageAddress(s, pt) + ti * 8;
@@ -780,58 +809,79 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
       }
       for (;;) {
         unassert(pt & PAGE_V);
-        if (HasLinearMapping(s) &&
-            (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
-                (PAGE_HOST | PAGE_MAP) &&
-            (mpstart = ROUNDDOWN(virt, pagesize)) != last) {
-          last = mpstart;
-          if (Mprotect(ToHost(mpstart), pagesize, sysprot, "linear")) {
-            ERRF("mprotect(%#" PRIx64 " [%p], %#lx, %d) failed: %s", mpstart,
-                 ToHost(mpstart), pagesize, prot, DescribeHostErrno(errno));
-            Abort();
-          }
+        if (HasLinearMapping(s) && (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
+                                       (PAGE_HOST | PAGE_MAP)) {
+          AddPageToRanges(&ranges, virt, end);
         } else if ((pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                    (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
           real = (u8 *)ROUNDDOWN((intptr_t)(pt & PAGE_TA), pagesize);
           if (Mprotect(real, pagesize, sysprot, "mug")) {
-            ERRF("mprotect(pt=%#" PRIx64
+            LOGF("mprotect(pt=%#" PRIx64
                  ", real=%p, size=%#lx, prot=%d) failed: %s",
                  pt, real, pagesize, prot, DescribeHostErrno(errno));
-            Abort();
+            rc = -1;
           }
         }
         pt &= ~(PAGE_U | PAGE_RW | PAGE_XD);
         pt |= key;
         Put64(mi, pt);
-        if ((virt += 4096) >= end) return 0;
+        if ((virt += 4096) >= end) {
+          goto FinishedCrawling;
+        }
         if (++ti == 512) break;
         pt = Get64((mi += 8));
       }
     }
   }
-  InvalidateSystem(s, true, false);
-}
-
-static void SyncPage(struct System *s, u64 entry) {
-  if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) == PAGE_HOST) {
-    return;  // don't need to do anything for anonymous private memory
+FinishedCrawling:
+  if (HasLinearMapping(s)) {
+    for (i = 0; i < ranges.i; ++i) {
+      if (ranges.p[i].a & (pagesize - 1)) {
+        LOGF("failed to %s subrange"
+             " [%" PRIx64 ",%" PRIx64 ") within requested range"
+             " [%" PRIx64 ",%" PRIx64 "): %s",
+             "mprotect", ranges.p[i].a, ranges.p[i].b, orig_virt,
+             orig_virt + size, "HOST_PAGE_MISALIGN");
+      } else if (Mprotect(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a,
+                          sysprot, "linear")) {
+        LOGF("failed to %s subrange"
+             " [%" PRIx64 ",%" PRIx64 ") within requested range"
+             " [%" PRIx64 ",%" PRIx64 "): %s",
+             "mprotect", ranges.p[i].a, ranges.p[i].b, orig_virt,
+             orig_virt + size, DescribeHostErrno(errno));
+        rc = -1;
+      }
+    }
+    free(ranges.p);
   }
+  InvalidateSystem(s, true, false);
+  return rc;
 }
 
 int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
+  int rc;
   u8 *mi;
   u64 pt;
-  long skew, pagesize;
-  i64 ti, end, level, mpstart, last = -1;
+  i64 orig_virt;
+  i64 ti, end, level;
+  long i, skew, pagesize;
+  struct ContiguousMemoryRanges ranges;
   if (!IsValidAddrSize(virt, size)) {
     return einval();
   }
+  orig_virt = virt;
   pagesize = GetSystemPageSize();
   if (HasLinearMapping(s) && (skew = virt & (pagesize - 1))) {
     size += skew;
     virt -= skew;
   }
-  for (end = virt + size;;) {
+  if (!IsFullyMapped(s, virt, size)) {
+    LOGF("mprotect(%#" PRIx64 ", %#" PRIx64 ") interval has unmapped pages",
+         virt, size);
+    return enomem();
+  }
+  memset(&ranges, 0, sizeof(ranges));
+  for (rc = 0, end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
       mi = GetPageAddress(s, pt) + ti * 8;
@@ -842,33 +892,44 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
       }
       for (;;) {
         unassert(pt & PAGE_V);
-        if (HasLinearMapping(s) &&
-            (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
-                (PAGE_HOST | PAGE_MAP) &&
-            (mpstart = ROUNDDOWN(virt, pagesize)) != last) {
-          last = mpstart;
-          if (Msync(ToHost(mpstart), pagesize, sysflags, "linear")) {
-            ERRF("msync(%#" PRIx64 " [%p], %#lx, %d) failed: %s", mpstart,
-                 ToHost(mpstart), pagesize, sysflags, DescribeHostErrno(errno));
-            Abort();
-          }
+        if (HasLinearMapping(s) && (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
+                                       (PAGE_HOST | PAGE_MAP)) {
+          AddPageToRanges(&ranges, virt, end);
         } else if ((pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                    (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
           intptr_t real = pt & PAGE_TA;
           intptr_t page = ROUNDDOWN(real, pagesize);
           long lilsize = (real - page) + MIN(4096, end - virt);
           if (Msync((void *)page, lilsize, sysflags, "mug")) {
-            ERRF("msync(%p [pt=%#" PRIx64
+            LOGF("msync(%p [pt=%#" PRIx64
                  "], size=%#lx, flags=%d) failed: %s\n%s",
                  (void *)page, pt, pagesize, sysflags, DescribeHostErrno(errno),
                  FormatPml4t(g_machine));
-            Abort();
+            rc = -1;
           }
         }
-        if ((virt += 4096) >= end) return 0;
+        if ((virt += 4096) >= end) {
+          goto FinishedCrawling;
+        }
         if (++ti == 512) break;
         pt = Get64((mi += 8));
       }
     }
   }
+FinishedCrawling:
+  if (HasLinearMapping(s)) {
+    for (i = 0; i < ranges.i; ++i) {
+      if (Msync(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a, sysflags,
+                "linear")) {
+        LOGF("failed to %s subrange"
+             " [%" PRIx64 ",%" PRIx64 ") within requested range"
+             " [%" PRIx64 ",%" PRIx64 "): %s",
+             "msync", ranges.p[i].a, ranges.p[i].b, orig_virt, orig_virt + size,
+             DescribeHostErrno(errno));
+        rc = -1;
+      }
+    }
+    free(ranges.p);
+  }
+  return rc;
 }

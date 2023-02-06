@@ -53,8 +53,8 @@ static void FindContiguousMemoryRangesImpl(
   }
 }
 
-void FindContiguousMemoryRanges(struct Machine *m,
-                                struct ContiguousMemoryRanges *ranges) {
+int FindContiguousMemoryRanges(struct Machine *m,
+                               struct ContiguousMemoryRanges *ranges) {
   u64 cr3;
   ranges->i = 0;
   if (m->mode == XED_MODE_LONG) {
@@ -64,4 +64,5 @@ void FindContiguousMemoryRanges(struct Machine *m,
   } else {
     AppendContiguousMemoryRange(ranges, 0, kRealSize);
   }
+  return 0;
 }

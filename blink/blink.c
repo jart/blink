@@ -38,6 +38,7 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/overlays.h"
+#include "blink/pml4t.h"
 #include "blink/signal.h"
 #include "blink/sigwinch.h"
 #include "blink/stats.h"
@@ -123,16 +124,10 @@ static int Exec(char *prog, char **argv, char **envp) {
       AddStdFd(&g_machine->system->fds, i);
     }
   } else {
-    // execve() was called and emulation has been requested.
-    // we don't currently wipe out all the mappings that the last
-    // program made so we need to disable the fixed map safety check
-    g_wasteland = true;
+    unassert(!FreeVirtual(old->system, -0x800000000000, 0x1000000000000));
     LoadProgram(g_machine, prog, argv, envp);
-    // locks are only superficially required since we killed everything
-    LOCK(&old->system->fds.lock);
     g_machine->system->fds.list = old->system->fds.list;
     old->system->fds.list = 0;
-    UNLOCK(&old->system->fds.lock);
     // releasing the execve() lock must come after unlocking fds
     memcpy(&oldmask, &old->system->exec_sigmask, sizeof(oldmask));
     UNLOCK(&old->system->exec_lock);

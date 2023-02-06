@@ -12,7 +12,7 @@ struct ContiguousMemoryRanges {
   struct ContiguousMemoryRange *p;
 };
 
-void FindContiguousMemoryRanges(struct Machine *,
-                                struct ContiguousMemoryRanges *);
+int FindContiguousMemoryRanges(struct Machine *,
+                               struct ContiguousMemoryRanges *);
 
 #endif /* BLINK_PML4T_H_ */

@@ -348,7 +348,6 @@ struct Machine {                           //
 extern _Thread_local struct Machine *g_machine;
 extern const nexgen32e_f kConvert[3];
 extern const nexgen32e_f kSax[3];
-extern bool g_wasteland;
 
 struct System *NewSystem(int);
 void FreeSystem(struct System *);

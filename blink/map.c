@@ -144,10 +144,10 @@ int Msync(void *addr,     //
   FormatSize(szbuf, length, 1024);
   if (res != -1) {
     MEM_LOGF("%s synced %s byte map [%p,%p) as %s", owner, szbuf, addr,
-             (u8 *)addr + length, DescribeSync(prot));
+             (u8 *)addr + length, DescribeSync(flags));
   } else {
     MEM_LOGF("%s failed to sync %s byte map [%p,%p) as %s: %s", owner, szbuf,
-             (u8 *)addr, (u8 *)addr + length, DescribeSync(prot),
+             (u8 *)addr, (u8 *)addr + length, DescribeSync(flags),
              DescribeHostErrno(errno));
   }
 #endif
