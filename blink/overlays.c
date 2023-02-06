@@ -69,6 +69,12 @@ static void FreeOverlays(void) {
   g_overlays = 0;
 }
 
+// if the user only specified a single overlay, then we treat it as
+// chroot would unless of course the specified root is the real one
+static bool IsRestrictedRoot(void) {
+  return !g_overlays[1] && g_overlays[0][0];
+}
+
 void SetOverlays(const char *config) {
   static int once;
   char cwd[PATH_MAX];
@@ -121,6 +127,12 @@ void SetOverlays(const char *config) {
                      "one of them must be empty string");
     exit(1);
   }
+  if (IsRestrictedRoot()) {
+    if (chdir(g_overlays[0])) {
+      WriteErrorString("invalid BLINK_OVERLAY chroot");
+      exit(1);
+    }
+  }
 }
 
 // if we get these failures when opening a temporary dirfd of a user
@@ -130,15 +142,10 @@ static bool IsUnrecoverableErrno(void) {
   return errno == EINTR || errno == EMFILE || errno == ENFILE;
 }
 
-// if the user only specified a single overlay, then we treat it as
-// chroot would unless of course the specified root is the real one
-static bool IsRestrictedRoot(void) {
-  return !g_overlays[1] && g_overlays[0][0];
-}
-
 char *OverlaysGetcwd(char *output, size_t size) {
   size_t n, m;
-  char buf[PATH_MAX], *cwd;
+  const char *cwd;
+  char buf[PATH_MAX];
   if (!(cwd = (getcwd)(buf, sizeof(buf)))) return 0;
   n = strlen(cwd);
   if (IsRestrictedRoot()) {
@@ -232,10 +239,12 @@ int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
   return -1;
 }
 
-static int OverlaysGeneric(int dirfd, const char *path, void *args,
-                           int fgenericat(int, const char *, void *)) {
+static ssize_t OverlaysGeneric(int dirfd, const char *path, void *args,
+                               ssize_t fgenericat(int, const char *, void *)) {
+  _Static_assert(sizeof(ssize_t) >= sizeof(int), "");
   int err;
   size_t i;
+  ssize_t rc;
   if (!path) return efault();
   if (!*path) return enoent();
   if (path[0] != '/' && path[0]) {
@@ -243,8 +252,8 @@ static int OverlaysGeneric(int dirfd, const char *path, void *args,
   }
   for (err = ENOENT, i = 0; g_overlays[i]; ++i) {
     if (!*g_overlays[i]) {
-      if (!fgenericat(AT_FDCWD, path, args)) {
-        return 0;
+      if ((rc = fgenericat(AT_FDCWD, path, args)) != -1) {
+        return rc;
       }
       err = errno;
       if (err != ENOENT && err != ENOTDIR) {
@@ -260,9 +269,9 @@ static int OverlaysGeneric(int dirfd, const char *path, void *args,
           continue;
         }
       }
-      if (!fgenericat(dirfd, !path[1] ? "." : path + 1, args)) {
+      if ((rc = fgenericat(dirfd, !path[1] ? "." : path + 1, args)) != -1) {
         unassert(!close(dirfd));
-        return 0;
+        return rc;
       }
       err = errno;
       unassert(!close(dirfd));
@@ -282,7 +291,7 @@ struct Stat {
   int flags;
 };
 
-static int Stat(int dirfd, const char *path, void *vargs) {
+static ssize_t Stat(int dirfd, const char *path, void *vargs) {
   struct Stat *args = (struct Stat *)vargs;
   return fstatat(dirfd, path, args->st, args->flags);
 }
@@ -299,7 +308,7 @@ struct Access {
   int flags;
 };
 
-static int Access(int dirfd, const char *path, void *vargs) {
+static ssize_t Access(int dirfd, const char *path, void *vargs) {
   struct Access *args = (struct Access *)vargs;
   return faccessat(dirfd, path, args->mode, args->flags);
 }
@@ -315,7 +324,7 @@ struct Unlink {
   int flags;
 };
 
-static int Unlink(int dirfd, const char *path, void *vargs) {
+static ssize_t Unlink(int dirfd, const char *path, void *vargs) {
   struct Unlink *args = (struct Unlink *)vargs;
   return unlinkat(dirfd, path, args->flags);
 }
@@ -331,7 +340,7 @@ struct Mkdir {
   int mode;
 };
 
-static int Mkdir(int dirfd, const char *path, void *vargs) {
+static ssize_t Mkdir(int dirfd, const char *path, void *vargs) {
   struct Mkdir *args = (struct Mkdir *)vargs;
   return mkdirat(dirfd, path, args->mode);
 }
@@ -348,7 +357,7 @@ struct Chmod {
   int flags;
 };
 
-static int Chmod(int dirfd, const char *path, void *vargs) {
+static ssize_t Chmod(int dirfd, const char *path, void *vargs) {
   struct Chmod *args = (struct Chmod *)vargs;
   return fchmodat(dirfd, path, args->mode, args->flags);
 }
@@ -366,7 +375,7 @@ struct Chown {
   int flags;
 };
 
-static int Chown(int dirfd, const char *path, void *vargs) {
+static ssize_t Chown(int dirfd, const char *path, void *vargs) {
   struct Chown *args = (struct Chown *)vargs;
   return fchownat(dirfd, path, args->uid, args->gid, args->flags);
 }
@@ -375,4 +384,55 @@ int OverlaysChown(int dirfd, const char *path, uid_t uid, gid_t gid,
                   int flags) {
   struct Chown args = {uid, gid, flags};
   return OverlaysGeneric(dirfd, path, &args, Chown);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct Symlink {
+  const char *target;
+};
+
+static ssize_t Symlink(int dirfd, const char *path, void *vargs) {
+  struct Symlink *args = (struct Symlink *)vargs;
+  return symlinkat(args->target, dirfd, path);
+}
+
+int OverlaysSymlink(const char *target, int dirfd, const char *path) {
+  struct Symlink args = {target};
+  return OverlaysGeneric(dirfd, path, &args, Symlink);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct Readlink {
+  char *buf;
+  size_t size;
+};
+
+static ssize_t Readlink(int dirfd, const char *path, void *vargs) {
+  struct Readlink *args = (struct Readlink *)vargs;
+  return readlinkat(dirfd, path, args->buf, args->size);
+}
+
+ssize_t OverlaysReadlink(int dirfd, const char *path, char *buf, size_t size) {
+  struct Readlink args = {buf, size};
+  return OverlaysGeneric(dirfd, path, &args, Readlink);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct Utime {
+  const struct timespec *times;
+  int flags;
+};
+
+static ssize_t Utime(int dirfd, const char *path, void *vargs) {
+  struct Utime *args = (struct Utime *)vargs;
+  return utimensat(dirfd, path, args->times, args->flags);
+}
+
+int OverlaysUtime(int dirfd, const char *path, const struct timespec times[2],
+                  int flags) {
+  struct Utime args = {times, flags};
+  return OverlaysGeneric(dirfd, path, &args, Utime);
 }

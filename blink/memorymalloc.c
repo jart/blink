@@ -418,7 +418,8 @@ static bool FreePage(struct System *s, u64 entry) {
 static void AddPageToRanges(struct ContiguousMemoryRanges *ranges, i64 virt,
                             i64 end) {
   if (!(ranges->i && ranges->p[ranges->i - 1].b == virt)) {
-    unassert(ranges->p = realloc(ranges->p, ++ranges->i * sizeof(*ranges->p)));
+    unassert(ranges->p = (struct ContiguousMemoryRange *)realloc(
+                 ranges->p, ++ranges->i * sizeof(*ranges->p)));
     ranges->p[ranges->i - 1].a = virt;
   }
   ranges->p[ranges->i - 1].b = virt + MIN(4096, end - virt);
@@ -775,6 +776,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
   i64 ti, end, level, orig_virt;
   struct ContiguousMemoryRanges ranges;
   orig_virt = virt;
+  (void)orig_virt;
   pagesize = GetSystemPageSize();
   if (!IsValidAddrSize(virt, size)) {
     return einval();
@@ -870,6 +872,7 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
     return einval();
   }
   orig_virt = virt;
+  (void)orig_virt;
   pagesize = GetSystemPageSize();
   if (HasLinearMapping(s) && (skew = virt & (pagesize - 1))) {
     size += skew;

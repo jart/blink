@@ -159,7 +159,7 @@ HTAGS:	o/$(MODE)/hdrs.txt $(HDRS)
 	build/htags -L $< -o $@
 
 clean:
-	rm -f $(OBJS)
+	rm -f $(OBJS) o/$(MODE)/blink/blink o/$(MODE)/blink/blinkenlights o/$(MODE)/blink/blink.a
 
 $(SRCS):
 $(HDRS):

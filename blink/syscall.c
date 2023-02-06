@@ -2642,8 +2642,8 @@ static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
   ssize_t rc;
   if (size < 0) return einval();
   if (!(buf = (char *)malloc(size))) return -1;
-  if ((rc = readlinkat(GetDirFildes(dirfd), LoadStr(m, path), buf, size)) !=
-      -1) {
+  if ((rc = OverlaysReadlink(GetDirFildes(dirfd), LoadStr(m, path), buf,
+                             size)) != -1) {
     if (CopyToUserWrite(m, bufaddr, buf, rc) == -1) rc = -1;
   }
   free(buf);
@@ -2654,28 +2654,29 @@ static int SysChmod(struct Machine *m, i64 path, u32 mode) {
   return SysFchmodat(m, AT_FDCWD_LINUX, path, mode);
 }
 
-static int SysTruncate(struct Machine *m, i64 path, u64 length) {
-  int rc;
-  INTERRUPTIBLE(rc = truncate(LoadStr(m, path), length));
-  return rc;
-}
-
-static int SysSymlink(struct Machine *m, i64 targetpath, i64 linkpath) {
-  return symlink(LoadStr(m, targetpath), LoadStr(m, linkpath));
+static int SysTruncate(struct Machine *m, i64 pathaddr, u64 length) {
+  int fd;
+  const char *path;
+  if (!(path = LoadStr(m, pathaddr))) return -1;
+  INTERRUPTIBLE(
+      fd = OverlaysOpen(AT_FDCWD, path, O_TRUNC | O_RDWR | O_CLOEXEC, 0));
+  if (fd == -1) return -1;
+  close(fd);
+  return 0;
 }
 
 static int SysSymlinkat(struct Machine *m, i64 targetpath, i32 newdirfd,
                         i64 linkpath) {
-  return symlinkat(LoadStr(m, targetpath), GetDirFildes(newdirfd),
-                   LoadStr(m, linkpath));
+  return OverlaysSymlink(LoadStr(m, targetpath), GetDirFildes(newdirfd),
+                         LoadStr(m, linkpath));
+}
+
+static int SysSymlink(struct Machine *m, i64 targetpath, i64 linkpath) {
+  return SysSymlinkat(m, targetpath, AT_FDCWD_LINUX, linkpath);
 }
 
 static int SysReadlink(struct Machine *m, i64 path, i64 bufaddr, u64 size) {
   return SysReadlinkat(m, AT_FDCWD_LINUX, path, bufaddr, size);
-}
-
-static int SysLink(struct Machine *m, i64 existingpath, i64 newpath) {
-  return link(LoadStr(m, existingpath), LoadStr(m, newpath));
 }
 
 static int SysMknod(struct Machine *m, i64 path, i32 mode, u64 dev) {
@@ -2783,6 +2784,10 @@ static i32 SysLinkat(struct Machine *m,  //
   return linkat(GetDirFildes(olddirfd), LoadStr(m, oldpath),
                 GetDirFildes(newdirfd), LoadStr(m, newpath),
                 XlatLinkatFlags(flags));
+}
+
+static int SysLink(struct Machine *m, i64 existingpath, i64 newpath) {
+  return SysLinkat(m, AT_FDCWD_LINUX, existingpath, AT_FDCWD_LINUX, newpath, 0);
 }
 
 static bool CanEmulateExecutableImpl(const char *prog) {
@@ -3478,13 +3483,13 @@ static int SysUtime(struct Machine *m, i64 pathaddr, i64 timesaddr) {
   struct timespec ts[2];
   const struct utimbuf_linux *t;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  if (!timesaddr) return utimensat(AT_FDCWD, path, 0, 0);
+  if (!timesaddr) return OverlaysUtime(AT_FDCWD, path, 0, 0);
   if ((t = (const struct utimbuf_linux *)Schlep(m, timesaddr, sizeof(*t)))) {
     ts[0].tv_sec = Read64(t->actime);
     ts[0].tv_nsec = 0;
     ts[1].tv_sec = Read64(t->modtime);
     ts[1].tv_nsec = 0;
-    return utimensat(AT_FDCWD, path, ts, 0);
+    return OverlaysUtime(AT_FDCWD, path, ts, 0);
   } else {
     return -1;
   }
@@ -3495,11 +3500,11 @@ static int SysUtimes(struct Machine *m, i64 pathaddr, i64 tvsaddr) {
   struct timespec ts[2];
   const struct timeval_linux *tv;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  if (!tvsaddr) return utimensat(AT_FDCWD, path, 0, 0);
+  if (!tvsaddr) return OverlaysUtime(AT_FDCWD, path, 0, 0);
   if ((tv = (const struct timeval_linux *)Schlep(
            m, tvsaddr, sizeof(struct timeval_linux) * 2))) {
     ConvertUtimeTimevals(ts, tv);
-    return utimensat(AT_FDCWD, path, ts, 0);
+    return OverlaysUtime(AT_FDCWD, path, ts, 0);
   } else {
     return -1;
   }
@@ -3511,11 +3516,11 @@ static int SysFutimesat(struct Machine *m, i32 dirfd, i64 pathaddr,
   struct timespec ts[2];
   const struct timeval_linux *tv;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  if (!tvsaddr) return utimensat(GetDirFildes(dirfd), path, 0, 0);
+  if (!tvsaddr) return OverlaysUtime(GetDirFildes(dirfd), path, 0, 0);
   if ((tv = (const struct timeval_linux *)Schlep(
            m, tvsaddr, sizeof(struct timeval_linux) * 2))) {
     ConvertUtimeTimevals(ts, tv);
-    return utimensat(GetDirFildes(dirfd), path, ts, 0);
+    return OverlaysUtime(GetDirFildes(dirfd), path, ts, 0);
   } else {
     return -1;
   }
@@ -3544,7 +3549,7 @@ static int SysUtimensat(struct Machine *m, i32 fd, i64 pathaddr, i64 tvsaddr,
   }
   if ((flags = XlatUtimensatFlags(flags)) == -1) return -1;
   if (path) {
-    return utimensat(GetDirFildes(fd), path, tsp, flags);
+    return OverlaysUtime(GetDirFildes(fd), path, tsp, flags);
   } else {
     if (flags) {
       LOGF("%s() flags %d not supported", "utimensat(path=null)", flags);
@@ -4173,7 +4178,7 @@ static int SysStat(struct Machine *m, i64 path, i64 st) {
 }
 
 static int SysLstat(struct Machine *m, i64 path, i64 st) {
-  return SysFstatat(m, AT_FDCWD_LINUX, path, st, 0x0400);
+  return SysFstatat(m, AT_FDCWD_LINUX, path, st, AT_SYMLINK_NOFOLLOW_LINUX);
 }
 
 static int SysOpen(struct Machine *m, i64 path, int flags, int mode) {
