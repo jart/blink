@@ -47,11 +47,12 @@
 #include "blink/x86.h"
 #include "blink/xlat.h"
 
-#define OPTS "hjmsS0L:"
+#define OPTS "hjemsS0L:"
 #define USAGE \
   " [-" OPTS "] PROG [ARGS...]\n\
   -h                   help\n\
   -j                   disable jit\n\
+  -e                   also log to stderr\n\
   -0                   to specify argv[0]\n\
   -m                   enable memory safety\n\
   -s                   print statistics on exit\n\
@@ -191,6 +192,9 @@ static void GetOpts(int argc, char *argv[]) {
         break;
       case 's':
         FLAG_statistics = true;
+        break;
+      case 'e':
+        FLAG_alsologtostderr = true;
         break;
       case 'L':
         FLAG_logpath = optarg_;

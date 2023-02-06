@@ -136,7 +136,7 @@ static void Log(const char *file, int line, const char *fmt, va_list va,
     b[--n] = '.';
   }
   WriteError(g_log.fd, b, n);
-  if (level <= g_log.level) {
+  if (FLAG_alsologtostderr || level <= g_log.level) {
     WriteError(2, b, n);
   }
   errno = err;
