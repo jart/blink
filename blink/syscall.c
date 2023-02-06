@@ -2368,8 +2368,27 @@ static int SysFchdir(struct Machine *m, i32 fildes) {
   return fchdir(fildes);
 }
 
+static int XlatLock(int x) {
+  switch (x) {
+    case LOCK_UN_LINUX:
+      return LOCK_UN;
+    case LOCK_SH_LINUX:
+      return LOCK_SH;
+    case LOCK_SH_LINUX | LOCK_NB_LINUX:
+      return LOCK_SH | LOCK_NB;
+    case LOCK_EX_LINUX:
+      return LOCK_EX;
+    case LOCK_EX_LINUX | LOCK_NB_LINUX:
+      return LOCK_EX | LOCK_NB;
+    default:
+      LOGF("bad flock() type: %#x", x);
+      return einval();
+  }
+}
+
 static int SysFlock(struct Machine *m, i32 fd, i32 lock) {
-  return flock(fd, XlatLock(lock));
+  if ((lock = XlatLock(lock)) == -1) return -1;
+  return flock(fd, lock);
 }
 
 static int SysShutdown(struct Machine *m, i32 fd, i32 how) {

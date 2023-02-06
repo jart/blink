@@ -478,15 +478,6 @@ int XlatShutdown(int x) {
   return einval();
 }
 
-int XlatLock(int x) {
-  int r = 0;
-  if (x & 1) r |= LOCK_SH;
-  if (x & 2) r |= LOCK_EX;
-  if (x & 4) r |= LOCK_NB;
-  if (x & 8) r |= LOCK_UN;
-  return r;
-}
-
 int XlatWait(int x) {
   int r = 0;
   if (x & WNOHANG_LINUX) {

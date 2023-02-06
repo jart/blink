@@ -668,6 +668,11 @@
 #define MS_ASYNC_LINUX      1
 #define MS_INVALIDATE_LINUX 2
 
+#define LOCK_SH_LINUX 1
+#define LOCK_EX_LINUX 2
+#define LOCK_NB_LINUX 4
+#define LOCK_UN_LINUX 8
+
 struct iovec_linux {
   u8 base[8];
   u8 len[8];
