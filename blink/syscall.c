@@ -3102,7 +3102,7 @@ static int SysSetitimer(struct Machine *m, int which, i64 neuaddr,
   int rc;
   struct itimerval neu, old;
   struct itimerval_linux git;
-  CopyFromUserRead(m, &git, neuaddr, sizeof(git));
+  if (CopyFromUserRead(m, &git, neuaddr, sizeof(git)) == -1) return -1;
   XlatLinuxToItimerval(&neu, &git);
   if ((rc = setitimer(UnXlatItimer(which), &neu, &old)) != -1) {
     if (oldaddr) {

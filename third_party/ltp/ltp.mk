@@ -22,7 +22,6 @@ o/$(MODE)/third_party/ltp/bin/%.elf.ok:				\
 LTP_TESTS =							\
 	o//third_party/ltp/bin/1/accept01.elf.ok		\
 	o//third_party/ltp/bin/1/accept4_01.elf.ok		\
-	o//third_party/ltp/bin/1/alarm02.elf.ok			\
 	o//third_party/ltp/bin/1/alarm03.elf.ok			\
 	o//third_party/ltp/bin/1/alarm05.elf.ok			\
 	o//third_party/ltp/bin/1/alarm06.elf.ok			\
@@ -301,6 +300,13 @@ LTP_TESTS =							\
 	o//third_party/ltp/bin/1/writev02.elf.ok		\
 	o//third_party/ltp/bin/1/writev05.elf.ok		\
 	o//third_party/ltp/bin/1/writev06.elf.ok
+
+ifneq ($(HOST_SYSTEM), FreeBSD)
+# The FreeBSD manual states "The maximum number of seconds allowed for
+# it_interval and it_value in setitimer() is 100000000", but this test
+# needs the platform to support values like INT_MAX.
+LTP_TESTS += o//third_party/ltp/bin/1/alarm02.elf.ok
+endif
 
 ifeq ($(shell id -u), 0)
 LTP_TESTS +=							\
