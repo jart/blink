@@ -14,10 +14,17 @@ third_party/ltp/bin/%.elf: third_party/ltp/bin/%.elf.gz
 o/$(MODE)/third_party/ltp/bin/%.elf.ok:				\
 		third_party/ltp/bin/%.elf			\
 		o/lib/ld-musl-x86_64.so.1			\
-		o/$(MODE)/blink/blink
+		o/$(MODE)/blink/blink				\
+		o/proc/cpuinfo					\
+		o/proc/meminfo
 	@mkdir -p $(@D)
 	o/$(MODE)/blink/blink $<
 	@touch $@
+
+o/proc/%: third_party/ltp/%
+	@mkdir -p $(@D)
+	cp -f $< $@
+	chmod +x $@
 
 LTP_TESTS =							\
 	o//third_party/ltp/bin/1/accept01.elf.ok		\
@@ -39,7 +46,6 @@ LTP_TESTS =							\
 	o//third_party/ltp/bin/1/confstr01.elf.ok		\
 	o//third_party/ltp/bin/1/creat01.elf.ok			\
 	o//third_party/ltp/bin/1/creat03.elf.ok			\
-	o//third_party/ltp/bin/1/creat05.elf.ok			\
 	o//third_party/ltp/bin/1/dup01.elf.ok			\
 	o//third_party/ltp/bin/1/dup02.elf.ok			\
 	o//third_party/ltp/bin/1/dup04.elf.ok			\
@@ -113,18 +119,14 @@ LTP_TESTS =							\
 	o//third_party/ltp/bin/1/fork06.elf.ok			\
 	o//third_party/ltp/bin/1/fork07.elf.ok			\
 	o//third_party/ltp/bin/1/fork08.elf.ok			\
-	o//third_party/ltp/bin/1/fork09.elf.ok			\
 	o//third_party/ltp/bin/1/fork10.elf.ok			\
 	o//third_party/ltp/bin/1/fork11.elf.ok			\
-	o//third_party/ltp/bin/1/fsync02.elf.ok			\
 	o//third_party/ltp/bin/1/fsync03.elf.ok			\
 	o//third_party/ltp/bin/1/ftruncate01.elf.ok		\
 	o//third_party/ltp/bin/1/ftruncate01_64.elf.ok		\
 	o//third_party/ltp/bin/1/ftruncate03.elf.ok		\
 	o//third_party/ltp/bin/1/ftruncate03_64.elf.ok		\
 	o//third_party/ltp/bin/1/futex_wait01.elf.ok		\
-	o//third_party/ltp/bin/1/futex_wait02.elf.ok		\
-	o//third_party/ltp/bin/1/futex_wait03.elf.ok		\
 	o//third_party/ltp/bin/1/futex_wait04.elf.ok		\
 	o//third_party/ltp/bin/1/futex_wake01.elf.ok		\
 	o//third_party/ltp/bin/1/getcwd02.elf.ok		\
@@ -140,38 +142,28 @@ LTP_TESTS =							\
 	o//third_party/ltp/bin/1/getitimer01.elf.ok		\
 	o//third_party/ltp/bin/1/getpagesize01.elf.ok		\
 	o//third_party/ltp/bin/1/getpgid01.elf.ok		\
-	o//third_party/ltp/bin/1/getpgid02.elf.ok		\
 	o//third_party/ltp/bin/1/getpgrp01.elf.ok		\
-	o//third_party/ltp/bin/1/getpid01.elf.ok		\
 	o//third_party/ltp/bin/1/getpid02.elf.ok		\
-	o//third_party/ltp/bin/1/getppid01.elf.ok		\
 	o//third_party/ltp/bin/1/getppid02.elf.ok		\
 	o//third_party/ltp/bin/1/getpriority02.elf.ok		\
 	o//third_party/ltp/bin/1/getrandom02.elf.ok		\
 	o//third_party/ltp/bin/1/getrandom03.elf.ok		\
-	o//third_party/ltp/bin/1/getrlimit01.elf.ok		\
 	o//third_party/ltp/bin/1/getrlimit02.elf.ok		\
-	o//third_party/ltp/bin/1/getrlimit03.elf.ok		\
 	o//third_party/ltp/bin/1/getrusage01.elf.ok		\
 	o//third_party/ltp/bin/1/getsid01.elf.ok		\
-	o//third_party/ltp/bin/1/getsid02.elf.ok		\
 	o//third_party/ltp/bin/1/gettid01.elf.ok		\
 	o//third_party/ltp/bin/1/gettimeofday01.elf.ok		\
 	o//third_party/ltp/bin/1/getuid01.elf.ok		\
-	o//third_party/ltp/bin/1/getuid03.elf.ok		\
 	o//third_party/ltp/bin/1/growfiles.elf.ok		\
 	o//third_party/ltp/bin/1/hackbench.elf.ok		\
 	o//third_party/ltp/bin/1/in6_01.elf.ok			\
 	o//third_party/ltp/bin/1/inode01.elf.ok			\
-	o//third_party/ltp/bin/1/inode02.elf.ok			\
-	o//third_party/ltp/bin/1/kill03.elf.ok			\
 	o//third_party/ltp/bin/1/kill06.elf.ok			\
 	o//third_party/ltp/bin/1/kill08.elf.ok			\
 	o//third_party/ltp/bin/1/kill09.elf.ok			\
 	o//third_party/ltp/bin/1/link02.elf.ok			\
 	o//third_party/ltp/bin/1/link03.elf.ok			\
 	o//third_party/ltp/bin/1/link05.elf.ok			\
-	o//third_party/ltp/bin/1/linkat01.elf.ok		\
 	o//third_party/ltp/bin/1/listen01.elf.ok		\
 	o//third_party/ltp/bin/1/llseek01.elf.ok		\
 	o//third_party/ltp/bin/1/llseek02.elf.ok		\
@@ -189,7 +181,6 @@ LTP_TESTS =							\
 	o//third_party/ltp/bin/1/mmap07.elf.ok			\
 	o//third_party/ltp/bin/1/mmap08.elf.ok			\
 	o//third_party/ltp/bin/1/mmap09.elf.ok			\
-	o//third_party/ltp/bin/1/mmap12.elf.ok			\
 	o//third_party/ltp/bin/1/mmap19.elf.ok			\
 	o//third_party/ltp/bin/1/mmapstress04.elf.ok		\
 	o//third_party/ltp/bin/1/mprotect02.elf.ok		\
@@ -200,15 +191,11 @@ LTP_TESTS =							\
 	o//third_party/ltp/bin/1/munmap02.elf.ok		\
 	o//third_party/ltp/bin/1/munmap03.elf.ok		\
 	o//third_party/ltp/bin/1/nanosleep02.elf.ok		\
-	o//third_party/ltp/bin/1/nanosleep04.elf.ok		\
 	o//third_party/ltp/bin/1/open01.elf.ok			\
 	o//third_party/ltp/bin/1/open03.elf.ok			\
-	o//third_party/ltp/bin/1/open04.elf.ok			\
 	o//third_party/ltp/bin/1/open06.elf.ok			\
 	o//third_party/ltp/bin/1/open09.elf.ok			\
 	o//third_party/ltp/bin/1/pause01.elf.ok			\
-	o//third_party/ltp/bin/1/pause02.elf.ok			\
-	o//third_party/ltp/bin/1/pause03.elf.ok			\
 	o//third_party/ltp/bin/1/pipe01.elf.ok			\
 	o//third_party/ltp/bin/1/pipe02.elf.ok			\
 	o//third_party/ltp/bin/1/pipe03.elf.ok			\
@@ -301,15 +288,52 @@ LTP_TESTS =							\
 	o//third_party/ltp/bin/1/writev06.elf.ok
 
 ifneq ($(HOST_SYSTEM), FreeBSD)
+# These tests make the system get wrekt.
+LTP_TESTS +=							\
+	o//third_party/ltp/bin/1/pause02.elf.ok			\
+	o//third_party/ltp/bin/1/creat05.elf.ok			\
+	o//third_party/ltp/bin/1/fork09.elf.ok			\
+	o//third_party/ltp/bin/1/inode02.elf.ok			\
+	o//third_party/ltp/bin/1/open04.elf.ok
+endif
+
+ifneq ($(HOST_SYSTEM), FreeBSD)
 # The FreeBSD manual states "The maximum number of seconds allowed for
 # it_interval and it_value in setitimer() is 100000000", but this test
 # needs the platform to support values like INT_MAX.
 LTP_TESTS += o//third_party/ltp/bin/1/alarm02.elf.ok
 endif
 
+ifneq ($(HOST_SYSTEM), FreeBSD)
+# This passes but complains about an EXDEV errno mismatch (possibly with
+# procfs) and therefore would be expensive and/or tricky to polyfill.
+LTP_TESTS += o//third_party/ltp/bin/1/linkat01.elf.ok
+endif
+
+# These tests won't pass unless Linux-specific rlimits are present,
+# RLIMIT_LOCKS, RLIMIT_MSGQUEUE, RLIMIT_RTTIME, etc.
+ifneq ($(HOST_SYSTEM), FreeBSD)
+LTP_TESTS +=							\
+	o//third_party/ltp/bin/1/getrlimit01.elf.ok		\
+	o//third_party/ltp/bin/1/getrlimit03.elf.ok
+endif
+
 # These tests require procfs which currently isn't simulated.
 ifneq ($(HOST_SYSTEM), FreeBSD)
-LTP_TESTS += o//third_party/ltp/bin/1/clock_gettime04.elf.ok
+LTP_TESTS +=							\
+	o//third_party/ltp/bin/1/clock_gettime04.elf.ok		\
+	o//third_party/ltp/bin/1/futex_wait02.elf.ok		\
+	o//third_party/ltp/bin/1/futex_wait03.elf.ok		\
+	o//third_party/ltp/bin/1/nanosleep04.elf.ok		\
+	o//third_party/ltp/bin/1/getpgid02.elf.ok		\
+	o//third_party/ltp/bin/1/getppid01.elf.ok		\
+	o//third_party/ltp/bin/1/getuid03.elf.ok		\
+	o//third_party/ltp/bin/1/getsid02.elf.ok		\
+	o//third_party/ltp/bin/1/getpid01.elf.ok		\
+	o//third_party/ltp/bin/1/pause03.elf.ok			\
+	o//third_party/ltp/bin/1/fsync02.elf.ok			\
+	o//third_party/ltp/bin/1/mmap12.elf.ok			\
+	o//third_party/ltp/bin/1/kill03.elf.ok
 endif
 
 ifeq ($(shell id -u), 0)

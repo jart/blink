@@ -1027,6 +1027,14 @@ static int XlatMsyncFlags(int flags) {
   if (flags & MS_INVALIDATE_LINUX) {
     sysflags |= MS_INVALIDATE;
   }
+#ifdef __FreeBSD__
+  // FreeBSD's manual says "The flags argument was both MS_ASYNC and
+  // MS_INVALIDATE. Only one of these flags is allowed." which makes
+  // following the POSIX recommendation somewhat difficult.
+  if (sysflags == (MS_ASYNC | MS_INVALIDATE)) {
+    sysflags = MS_INVALIDATE;
+  }
+#endif
   return sysflags;
 }
 
@@ -2304,7 +2312,25 @@ static int SysSync(struct Machine *m) {
   return 0;
 }
 
+static int CheckSyncable(int fildes) {
+#ifdef __FreeBSD__
+  // FreeBSD doesn't return EINVAL like Linux does when trying to
+  // synchronize character devices, e.g. /dev/null. An unresolved
+  // question though is if FreeBSD actually does something here.
+  struct stat st;
+  if (!fstat(fildes, &st) &&    //
+      (S_ISCHR(st.st_mode) ||   //
+       S_ISFIFO(st.st_mode) ||  //
+       S_ISLNK(st.st_mode) ||   //
+       S_ISSOCK(st.st_mode))) {
+    return einval();
+  }
+#endif
+  return 0;
+}
+
 static int SysFsync(struct Machine *m, i32 fildes) {
+  if (CheckSyncable(fildes) == -1) return -1;
 #ifdef F_FULLSYNC
   int rc;
   // MacOS fsync() provides weaker guarantees than Linux fsync()
@@ -2328,19 +2354,7 @@ static int SysFsync(struct Machine *m, i32 fildes) {
 }
 
 static int SysFdatasync(struct Machine *m, i32 fildes) {
-#ifdef __FreeBSD__
-  // FreeBSD doesn't return EINVAL like Linux does when trying to
-  // synchronize character devices, e.g. /dev/null. An unresolved
-  // question though is if FreeBSD actually does something here.
-  struct stat st;
-  if (!fstat(fildes, &st) &&    //
-      (S_ISCHR(st.st_mode) ||   //
-       S_ISFIFO(st.st_mode) ||  //
-       S_ISLNK(st.st_mode) ||   //
-       S_ISSOCK(st.st_mode))) {
-    return einval();
-  }
-#endif
+  if (CheckSyncable(fildes) == -1) return -1;
 #ifdef F_FULLSYNC
   int rc;
   if ((rc = fcntl(fildes, F_FULLFSYNC, 0))) {
