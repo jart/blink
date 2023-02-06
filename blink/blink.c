@@ -243,6 +243,12 @@ void exit(int status) {
 
 int main(int argc, char *argv[]) {
   SetupWeb();
+  // Ensure utf-8 is printed correctly on windows, this method
+  // has issues(http://stackoverflow.com/a/10884364/4279) but
+  // should work for at least windows 7 and newer.
+#if defined(_WIN32) && !defined(__CYGWIN__)
+  SetConsoleOutputCP(CP_UTF8);
+#endif
   g_blink_path = argc > 0 ? argv[0] : 0;
   GetOpts(argc, argv);
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
