@@ -2189,8 +2189,8 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
     }
   }
 #endif
-  if ((rc = fstatat(GetDirFildes(dirfd), path, &st, XlatFstatatFlags(flags))) !=
-      -1) {
+  if ((rc = OverlaysStat(GetDirFildes(dirfd), path, &st,
+                         XlatFstatatFlags(flags))) != -1) {
     XlatStatToLinux(&gst, &st);
     if (CopyToUserWrite(m, staddr, &gst, sizeof(gst)) == -1) rc = -1;
   }

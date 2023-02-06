@@ -90,6 +90,7 @@ void SetOverlays(const char *config) {
   // just in case the app calls chdir() or something
   for (i = 0; g_overlays[i]; ++i) {
     if (!g_overlays[i][0]) continue;
+    if (g_overlays[i][0] == '/') continue;
     if (!cwdlen) {
       if (!getcwd(cwd, sizeof(cwd))) break;
       cwdlen = strlen(cwd);
@@ -140,6 +141,49 @@ int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
         }
         unassert(!close(fd));
         return dirfd;
+      }
+      err = errno;
+      unassert(!close(dirfd));
+      if (err != ENOENT && err != ENOTDIR) {
+        return -1;
+      }
+    }
+  }
+  errno = err;
+  return -1;
+}
+
+int OverlaysStat(int dirfd, const char *path, struct stat *st, int flags) {
+  int err;
+  size_t i;
+  unassert(g_overlays);
+  if (!path) return efault();
+  if (!*path) return enoent();
+  if (*path != '/') {
+    return fstatat(dirfd, path, st, flags);
+  }
+  for (err = ENOENT, i = 0; g_overlays[i]; ++i) {
+    if (!*g_overlays[i]) {
+      if (!fstatat(AT_FDCWD, path, st, flags)) {
+        return 0;
+      }
+      err = errno;
+      if (err != ENOENT && err != ENOTDIR) {
+        return -1;
+      }
+    } else {
+      dirfd = open(g_overlays[i], O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
+      if (dirfd == -1) {
+        if (errno == EINTR || errno == EMFILE || errno == ENFILE) {
+          return -1;
+        } else {
+          LOGF("bad overlay %s: %s", g_overlays[i], DescribeHostErrno(errno));
+          continue;
+        }
+      }
+      if (!fstatat(dirfd, path + 1, st, flags)) {
+        unassert(!close(dirfd));
+        return 0;
       }
       err = errno;
       unassert(!close(dirfd));

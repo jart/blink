@@ -157,6 +157,8 @@ The following `FLAG` arguments are provided:
 
 - `-h` shows this help
 
+- `-e` means log to standard error (fd 2) in addition to the log file.
+
 - `-j` disables Just-In-Time (JIT) compilation, which will make Blink go
   ~10x slower.
 
@@ -343,7 +345,24 @@ and `blinkenlights` commands:
 
 - `BLINK_LOG_FILENAME` may be specified to supply a log path to be used
   in cases where the `-L PATH` flag isn't specified. This value should
-  be an absolute path. It may be `/dev/stderr` to avoid needing a file.
+  be an absolute path. If logging to standard error is desired, use the
+  `blink -e` flag.
+
+- `BLINK_OVERLAYS` specifies root one or more directories to use as the
+  root filesystem. Similar to `$PATH` this is a colon delimited list of
+  pathnames. If relative paths are specified, they'll be resolved to an
+  absolute path at startup time. Overlays only apply to IO system calls
+  that specify an absolute path. The empty string overlay means use the
+  normal `/` root filesystem. The default value is `:o`, which means if
+  the absolute path `/$f` is opened, then first check if `/$f` exists,
+  and if it doesn't, then check if `o/$f` exists, in which case open
+  that instead. Blink uses this convention to open shared object tests.
+  It favors the system version if it exists, but also downloads
+  `ld-musl-x86_64.so.1` to `o/lib/ld-musl-x86_64.so.1` so the dynamic
+  linker can transparently find it on platforms like Apple, that don't
+  let users put files in the root folder. On the other hand, it's
+  possible to say `BLINK_OVERLAYS=o:` so that `o/...` takes precedence
+  over `/...` (noting again that empty string means root).
 
 ## Compiling and Running Programs under Blink
 
