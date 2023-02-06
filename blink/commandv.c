@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <ctype.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
@@ -24,6 +25,7 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "blink/overlays.h"
 #include "blink/util.h"
 
 struct PathSearcher {
@@ -62,7 +64,7 @@ static char AccessCommand(struct PathSearcher *ps, const char *suffix,
   if (pathlen && ps->path[pathlen - 1] != '/') ps->path[pathlen++] = '/';
   memcpy(ps->path + pathlen, ps->name, ps->namelen);
   memcpy(ps->path + pathlen + ps->namelen, suffix, suffixlen + 1);
-  return !access(ps->path, X_OK);
+  return !OverlaysAccess(AT_FDCWD, ps->path, X_OK, 0);
 }
 
 static char SearchPath(struct PathSearcher *ps, const char *suffix) {
