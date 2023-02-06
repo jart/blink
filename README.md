@@ -362,7 +362,9 @@ and `blinkenlights` commands:
   linker can transparently find it on platforms like Apple, that don't
   let users put files in the root folder. On the other hand, it's
   possible to say `BLINK_OVERLAYS=o:` so that `o/...` takes precedence
-  over `/...` (noting again that empty string means root).
+  over `/...` (noting again that empty string means root). If a single
+  overlay is specified that isn't empty string, then it'll effectively
+  act as a restricted chroot environment.
 
 ## Compiling and Running Programs under Blink
 

@@ -4,6 +4,8 @@
 #include <unistd.h>
 
 void SetOverlays(const char *);
+int OverlaysChdir(const char *);
+char *OverlaysGetcwd(char *, size_t);
 int OverlaysOpen(int, const char *, int, int);
 int OverlaysStat(int, const char *, struct stat *, int);
 int OverlaysAccess(int, const char *, int, int);

@@ -2375,7 +2375,7 @@ static int SysFdatasync(struct Machine *m, i32 fildes) {
 }
 
 static int SysChdir(struct Machine *m, i64 path) {
-  return chdir(LoadStr(m, path));
+  return OverlaysChdir(LoadStr(m, path));
 }
 
 static int SysFchdir(struct Machine *m, i32 fildes) {
@@ -3014,7 +3014,7 @@ static i64 SysGetcwd(struct Machine *m, i64 bufaddr, size_t size) {
   char *buf;
   i64 res;
   if (!(buf = (char *)malloc(size))) return -1;
-  if ((getcwd)(buf, size)) {
+  if (OverlaysGetcwd(buf, size)) {
     n = strlen(buf) + 1;
     CopyToUserWrite(m, bufaddr, buf, n);
     res = bufaddr;

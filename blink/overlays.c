@@ -28,6 +28,7 @@
 #include "blink/errno.h"
 #include "blink/log.h"
 #include "blink/overlays.h"
+#include "blink/util.h"
 
 static char **g_overlays;
 
@@ -71,6 +72,7 @@ static void FreeOverlays(void) {
 void SetOverlays(const char *config) {
   static int once;
   char cwd[PATH_MAX];
+  bool has_real_root;
   size_t i, n, cwdlen = 0;
   if (!once) {
     atexit(FreeOverlays);
@@ -88,9 +90,19 @@ void SetOverlays(const char *config) {
   unassert(g_overlays = SplitString(config, ':'));
   // make relative overlays absolute at startup time
   // just in case the app calls chdir() or something
+  has_real_root = false;
   for (i = 0; g_overlays[i]; ++i) {
-    if (!g_overlays[i][0]) continue;
-    if (g_overlays[i][0] == '/') continue;
+    if (!g_overlays[i][0]) {
+      has_real_root = true;
+      continue;
+    }
+    if (g_overlays[i][0] == '/') {
+      if (!g_overlays[i][1]) {
+        g_overlays[i][0] = 0;
+        has_real_root = true;
+      }
+      continue;
+    }
     if (!cwdlen) {
       if (!getcwd(cwd, sizeof(cwd))) break;
       cwdlen = strlen(cwd);
@@ -103,20 +115,83 @@ void SetOverlays(const char *config) {
     free(g_overlays[i]);
     g_overlays[i] = strdup(cwd);
   }
+  unassert(g_overlays[0]);
+  if (!has_real_root && g_overlays[1]) {
+    WriteErrorString("if multiple overlays are specified, "
+                     "one of them must be empty string");
+    exit(1);
+  }
 }
 
+// if we get these failures when opening a temporary dirfd of a user
+// supplied overlay path, then it's definitely not a user error, and
+// therefore not safe to continue.
 static bool IsUnrecoverableErrno(void) {
   return errno == EINTR || errno == EMFILE || errno == ENFILE;
+}
+
+// if the user only specified a single overlay, then we treat it as
+// chroot would unless of course the specified root is the real one
+static bool IsRestrictedRoot(void) {
+  return !g_overlays[1] && g_overlays[0][0];
+}
+
+char *OverlaysGetcwd(char *output, size_t size) {
+  size_t n, m;
+  char buf[PATH_MAX], *cwd;
+  if (!(cwd = (getcwd)(buf, sizeof(buf)))) return 0;
+  n = strlen(cwd);
+  if (IsRestrictedRoot()) {
+    m = strlen(g_overlays[0]);
+    if (n == m && !memcmp(cwd, g_overlays[0], n)) {
+      cwd = "/";
+    } else if (n > m && !memcmp(cwd, g_overlays[0], m) && cwd[m] == '/') {
+      cwd += m;
+    } else {
+      cwd = "(unreachable)/";
+    }
+    n = strlen(cwd);
+  }
+  if (n + 1 > size) return 0;
+  memcpy(output, cwd, n + 1);
+  return output;
+}
+
+static int Chdir(const char *path) {
+  return chdir(path);
+}
+
+int OverlaysChdir(const char *path) {
+  size_t n, m;
+  char buf[PATH_MAX];
+  if (!path) return efault();
+  if (!path[0]) return enoent();
+  if (IsRestrictedRoot() && path[0] == '/') {
+    if (!path[1]) {
+      return Chdir(g_overlays[0]);
+    } else {
+      n = strlen(g_overlays[0]);
+      m = strlen(path);
+      if (n + m + 1 > sizeof(buf)) {
+        errno = ENAMETOOLONG;
+        return -1;
+      }
+      memcpy(buf, g_overlays[0], n);
+      memcpy(buf + n, path, m);
+      buf[n + m] = 0;
+      return Chdir(buf);
+    }
+  }
+  return Chdir(path);
 }
 
 int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
   int fd;
   int err;
   size_t i;
-  unassert(g_overlays);
   if (!path) return efault();
   if (!*path) return enoent();
-  if (*path != '/') {
+  if (path[0] != '/' && path[0]) {
     return openat(dirfd, path, flags, mode);
   }
   for (err = ENOENT, i = 0; g_overlays[i]; ++i) {
@@ -138,7 +213,7 @@ int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
           continue;
         }
       }
-      if ((fd = openat(dirfd, path + 1, flags, mode)) != -1) {
+      if ((fd = openat(dirfd, !path[1] ? "." : path + 1, flags, mode)) != -1) {
         unassert(dup2(fd, dirfd) == dirfd);
         if (flags & O_CLOEXEC) {
           unassert(!fcntl(dirfd, F_SETFD, FD_CLOEXEC));
@@ -161,10 +236,9 @@ static int OverlaysGeneric(int dirfd, const char *path, void *args,
                            int fgenericat(int, const char *, void *)) {
   int err;
   size_t i;
-  unassert(g_overlays);
   if (!path) return efault();
   if (!*path) return enoent();
-  if (*path != '/') {
+  if (path[0] != '/' && path[0]) {
     return fgenericat(dirfd, path, args);
   }
   for (err = ENOENT, i = 0; g_overlays[i]; ++i) {
@@ -186,7 +260,7 @@ static int OverlaysGeneric(int dirfd, const char *path, void *args,
           continue;
         }
       }
-      if (!fgenericat(dirfd, path + 1, args)) {
+      if (!fgenericat(dirfd, !path[1] ? "." : path + 1, args)) {
         unassert(!close(dirfd));
         return 0;
       }
