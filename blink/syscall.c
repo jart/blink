@@ -2655,14 +2655,14 @@ static int SysChmod(struct Machine *m, i64 path, u32 mode) {
 }
 
 static int SysTruncate(struct Machine *m, i64 pathaddr, u64 length) {
-  int fd;
+  int rc, fd;
   const char *path;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  INTERRUPTIBLE(
-      fd = OverlaysOpen(AT_FDCWD, path, O_TRUNC | O_RDWR | O_CLOEXEC, 0));
+  INTERRUPTIBLE(fd = OverlaysOpen(AT_FDCWD, path, O_RDWR | O_CLOEXEC, 0));
   if (fd == -1) return -1;
+  rc = ftruncate(fd, length);
   close(fd);
-  return 0;
+  return rc;
 }
 
 static int SysSymlinkat(struct Machine *m, i64 targetpath, i32 newdirfd,
