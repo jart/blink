@@ -170,10 +170,10 @@ The following `FLAG` arguments are provided:
 
 - `-0` allows `argv[0]` to be specified on the command line. Under
   normal circumstances, `blink cmd arg1` is equivalent to `execve("cmd",
-  {"cmd", "arg1})` since that's how most programs are launched. However
+  {"cmd", "arg1"})` since that's how most programs are launched. However
   if you need the full power of execve() process spawning, you can say
   `blink -0 cmd arg0 arg1` which is equivalent to `execve("cmd",
-  {"arg0", "arg1})`.
+  {"arg0", "arg1"})`.
 
 - `-L PATH` specifies the log path. The default log path is
   `$TMPDIR/blink.log` or `/tmp/blink.log` if `$TMPDIR` isn't defined. If
@@ -270,10 +270,10 @@ The following `FLAG` arguments are provided:
 
 - `-0` allows `argv[0]` to be specified on the command line. Under
   normal circumstances, `blinkenlights cmd arg1` is equivalent to
-  `execve("cmd", {"cmd", "arg1})` since that's how most programs are
+  `execve("cmd", {"cmd", "arg1"})` since that's how most programs are
   launched. However if you need the full power of execve() process
   spawning, you can say `blinkenlights -0 cmd arg0 arg1` which is
-  equivalent to `execve("cmd", {"arg0", "arg1})`.
+  equivalent to `execve("cmd", {"arg0", "arg1"})`.
 
 - `-t` may be used to disable Blinkenlights TUI mode. This makes the
   program behave similarly to the `blink` command, however not as good.
