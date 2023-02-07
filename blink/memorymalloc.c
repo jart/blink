@@ -62,6 +62,24 @@ static void FreeHostPage(struct HostPage *hp) {
   free(hp);
 }
 
+static void FreeAnonymousPage(struct System *s, u8 *page) {
+  struct HostPage *h;
+  unassert((h = NewHostPage()));
+  LOCK(&g_allocator.lock);
+  h->page = page;
+  h->next = g_allocator.pages;
+  g_allocator.pages = h;
+  UNLOCK(&g_allocator.lock);
+}
+
+static void CleanupAllocator(void) {
+  struct HostPage *h;
+  while ((h = g_allocator.pages)) {
+    g_allocator.pages = h->next;
+    FreeHostPage(h);
+  }
+}
+
 static size_t GetBigSize(size_t n) {
   unassert(n);
   long z = GetSystemPageSize();
@@ -75,6 +93,11 @@ void FreeBig(void *p, size_t n) {
 
 void *AllocateBig(size_t n, int prot, int flags, int fd, off_t off) {
   void *p;
+  static bool once;
+  if (!once) {
+    atexit(CleanupAllocator);
+    once = true;
+  }
 #if defined(__CYGWIN__) || defined(__EMSCRIPTEN__)
   p = Mmap(0, n, prot, flags, fd, off, "big");
   return p != MAP_FAILED ? p : 0;
@@ -105,8 +128,34 @@ void *AllocateBig(size_t n, int prot, int flags, int fd, off_t off) {
 #endif
 }
 
+static void FreePageTable(struct System *s, u64 pt, long level) {
+  u8 *mi;
+  long i;
+  mi = GetPageAddress(s, pt);
+  for (i = 0; i < 512; ++i) {
+    if (level == 4) {
+      unassert(!Read64(mi + i * 8));
+    } else {
+      pt = Read64(mi + i * 8);
+      if (pt & PAGE_V) {
+        FreePageTable(s, pt, level + 1);
+        Write64(mi + i * 8, 0);
+      } else {
+        unassert(!pt);
+      }
+    }
+  }
+  FreeAnonymousPage(s, mi);
+}
+
 static void FreeHostPages(struct System *s) {
-  // TODO(jart): Iterate the PML4T to find host pages.
+  if (!s->real && s->cr3) {
+    unassert(!FreeVirtual(s, -0x800000000000, 0x1000000000000));
+    FreePageTable(s, s->cr3, 1);
+    s->cr3 = 0;
+  }
+  free(s->real);
+  s->real = 0;
 }
 
 struct System *NewSystem(int mode) {
@@ -120,7 +169,7 @@ struct System *NewSystem(int mode) {
   }
   memset(s, 0, sizeof(*s));
   s->mode = mode;
-  if (mode == XED_MODE_REAL) {
+  if (s->mode == XED_MODE_REAL) {
     if (posix_memalign((void **)&s->real, 4096, kRealSize)) {
       free(s);
       enomem();
@@ -371,43 +420,39 @@ void InvalidateSystem(struct System *s, bool tlb, bool icache) {
   UNLOCK(&s->machines_lock);
 }
 
-static bool FreePage(struct System *s, u64 entry) {
+static void TallyFreePage(struct System *s, u64 entry) {
+  if (entry & PAGE_RSRV) {
+    --s->memstat.reserved;
+  } else {
+    --s->memstat.committed;
+  }
+}
+
+static bool FreePage(struct System *s, u64 entry, u64 size) {
   u8 *page;
   long pagesize;
-  struct HostPage *h;
+  intptr_t real, mug;
   unassert(entry & PAGE_V);
   if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) == PAGE_HOST) {
     ++s->memstat.freed;
     --s->memstat.committed;
     ClearPage((page = (u8 *)(intptr_t)(entry & PAGE_TA)));
-    unassert((h = NewHostPage()));
-    LOCK(&g_allocator.lock);
-    h->page = page;
-    h->next = g_allocator.pages;
-    g_allocator.pages = h;
-    UNLOCK(&g_allocator.lock);
+    FreeAnonymousPage(s, page);
     return false;
   } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
              (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
-    if (entry & PAGE_RSRV) {
-      --s->memstat.reserved;
-    } else {
-      --s->memstat.committed;
-    }
+    TallyFreePage(s, entry);
     pagesize = GetSystemPageSize();
-    unassert(!Munmap((void *)ROUNDDOWN((intptr_t)(entry & PAGE_TA), pagesize),
-                     pagesize));
+    real = entry & PAGE_TA;
+    mug = ROUNDDOWN(real, pagesize);
+    unassert(!Munmap((void *)mug, real - mug + size));
     return false;
   } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
              (PAGE_HOST | PAGE_MAP)) {
-    if (entry & PAGE_RSRV) {
-      --s->memstat.reserved;
-    } else {
-      --s->memstat.committed;
-    }
+    TallyFreePage(s, entry);
     return true;
   } else if (entry & PAGE_RSRV) {
-    --s->memstat.reserved;
+    TallyFreePage(s, entry);
     return false;
   } else {
     unassert((entry & PAGE_TA) < kRealSize);
@@ -441,7 +486,7 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
       if (!(pt & PAGE_V)) {
         break;
       } else if (i == 12) {
-        if (FreePage(s, pt) && HasLinearMapping(m)) {
+        if (FreePage(s, pt, MIN(4096, end - virt)) && HasLinearMapping(m)) {
           AddPageToRanges(ranges, virt, end);
         }
         Store64(mi, 0);
@@ -564,7 +609,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                      (shared ? MAP_SHARED : MAP_PRIVATE)),  //
                     fd, offset, "linear")) != want) {
       ERRF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ")"
-           "-> %#" PRIx64 "[%p] crisis: %s",
+           " -> %#" PRIx64 "[%p] crisis: %s",
            virt, want, size, ToGuest(got), got,
            (method == MAP_DEMAND && errno == MAP_DENIED)
                ? "requested memory overlapped blink image or system memory. "
@@ -605,32 +650,32 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
         intptr_t real;
         if (flags & PAGE_MAP) {
           if (flags & PAGE_MUG) {
-            void *lil;
-            off_t liloff;
-            int lilflags;
-            long lilsize;
-            long lilskew;
-            lilsize = MIN(4096, end - virt);
+            void *mug;
+            off_t mugoff;
+            int mugflags;
+            long mugsize;
+            long mugskew;
+            mugsize = MIN(4096, end - virt);
             if (fd != -1) {
-              lilskew = offset - ROUNDDOWN(offset, pagesize);
-              liloff = ROUNDDOWN(offset, pagesize);
-              lilsize += lilskew;
+              mugskew = offset - ROUNDDOWN(offset, pagesize);
+              mugoff = ROUNDDOWN(offset, pagesize);
+              mugsize += mugskew;
             } else {
-              liloff = 0;
-              lilskew = 0;
+              mugoff = 0;
+              mugskew = 0;
             }
-            lilflags = (shared ? MAP_SHARED : MAP_PRIVATE) |
+            mugflags = (shared ? MAP_SHARED : MAP_PRIVATE) |
                        (fd == -1 ? MAP_ANONYMOUS : 0);
-            lil = AllocateBig(lilsize, prot, lilflags, fd, liloff);
-            if (!lil) {
-              LOGF("mmap(virt=%" PRIx64
+            mug = AllocateBig(mugsize, prot, mugflags, fd, mugoff);
+            if (!mug) {
+              ERRF("mmap(virt=%" PRIx64
                    ", brk=%p size=%ld, flags=%#x, fd=%d, offset=%#" PRIx64
                    ") crisis: %s",
-                   virt, g_allocator.brk, lilsize, lilflags, fd, (u64)liloff,
+                   virt, g_allocator.brk, mugsize, mugflags, fd, (u64)mugoff,
                    DescribeHostErrno(errno));
               PanicDueToMmap();
             }
-            real = (intptr_t)lil + lilskew;
+            real = (intptr_t)mug + mugskew;
             offset += 4096;
           } else {
             real = (intptr_t)ToHost(virt);

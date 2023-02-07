@@ -19,6 +19,7 @@ endif
 HOST_SYSTEM := $(shell uname -s)
 HOST_ARCH := $(shell uname -m)
 HOST_OS := $(shell uname -o 2>/dev/null)
+TMPDIR := $(shell mkdir -p o/tmp; echo $(shell pwd)/o/tmp)
 
 ifneq ($(HOST_SYSTEM), Linux)
 VM = o/$(MODE)/blink/blink

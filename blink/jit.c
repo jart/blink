@@ -452,7 +452,7 @@ intptr_t GetJitHook(struct Jit *jit, u64 virt, intptr_t dflt) {
   unassert(virt);
   unassert(IS2POW(jit->hooks.n));
   hash = HASH(virt);
-  STATISTIC(++hook_get);
+  // STATISTIC(++hook_get);
   for (spot = step = 0;; ++step) {
     spot = (hash + step * ((step + 1) >> 1)) & (jit->hooks.n - 1);
     offset = atomic_load_explicit(jit->hooks.func + spot, memory_order_acquire);

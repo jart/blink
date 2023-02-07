@@ -1067,18 +1067,13 @@ static int SysDup1(struct Machine *m, i32 fildes) {
   int oflags;
   int newfildes;
   struct Fd *fd;
-  if (fildes < 0) {
-    LOGF("dup() ebadf");
-    return ebadf();
-  }
+  if (fildes < 0) return ebadf();
   if ((newfildes = dup(fildes)) != -1) {
     LOCK(&m->system->fds.lock);
     unassert(fd = GetFd(&m->system->fds, fildes));
     oflags = fd->oflags & ~O_CLOEXEC;
     unassert(ForkFd(&m->system->fds, fd, newfildes, oflags));
     UNLOCK(&m->system->fds.lock);
-  } else {
-    LOGF("dup() failed %s", DescribeHostErrno(errno));
   }
   return newfildes;
 }
@@ -1119,8 +1114,6 @@ static int SysDup2(struct Machine *m, i32 fildes, i32 newfildes) {
     oflags = fd->oflags & ~O_CLOEXEC;
     unassert(ForkFd(&m->system->fds, fd, newfildes, oflags));
     UNLOCK(&m->system->fds.lock);
-  } else {
-    LOGF("dup2() failed %s", DescribeHostErrno(errno));
   }
   return rc;
 }
@@ -1129,18 +1122,9 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
   int rc;
   int oflags;
   struct Fd *fd;
-  if (newfildes < 0) {
-    LOGF("dup3() ebadf");
-    return ebadf();
-  }
-  if (fildes == newfildes) {
-    LOGF("dup3() args equal");
-    return einval();
-  }
-  if (flags & ~O_CLOEXEC_LINUX) {
-    LOGF("dup3() unsupported flags");
-    return einval();
-  }
+  if (newfildes < 0) return ebadf();
+  if (fildes == newfildes) return einval();
+  if (flags & ~O_CLOEXEC_LINUX) return einval();
   if (flags) LOCK(&m->system->exec_lock);
   if ((rc = Dup2(m, fildes, newfildes)) != -1) {
     if (flags & O_CLOEXEC_LINUX) {
@@ -1158,8 +1142,6 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
     }
     unassert(ForkFd(&m->system->fds, fd, newfildes, oflags));
     UNLOCK(&m->system->fds.lock);
-  } else {
-    LOGF("dup2() failed %s", DescribeHostErrno(errno));
   }
   if (flags) UNLOCK(&m->system->exec_lock);
   return rc;
@@ -1178,8 +1160,6 @@ static int SysDupf(struct Machine *m, i32 fildes, i32 minfildes, int cmd) {
     }
     unassert(ForkFd(&m->system->fds, fd, newfildes, oflags));
     UNLOCK(&m->system->fds.lock);
-  } else {
-    LOGF("dupf() failed %s", DescribeHostErrno(errno));
   }
   return newfildes;
 }
@@ -2059,7 +2039,7 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
 #else
     struct stat st;
     if (fstatat(fd->fildes, ent->d_name, &st, AT_SYMLINK_NOFOLLOW) == -1) {
-      LOGF("fstatat(%d, %s) failed: %s", fd->fildes, ent->d_name,
+      LOGF("getdents() fstatat(%d, %s) failed: %s", fd->fildes, ent->d_name,
            DescribeHostErrno(errno));
       type = DT_UNKNOWN_LINUX;
     } else {
@@ -4023,7 +4003,6 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
   if (!err) {
     return 0;
   } else {
-    LOGF("tkill(%d, %d) failed: %s", tid, sig, DescribeHostErrno(err));
     errno = err;
     return -1;
   }
