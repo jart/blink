@@ -620,7 +620,7 @@ currently does nothing to address) but they tend to be comparatively
 minor, e.g. an op returning `NAN` instead of `-NAN`.
 
 Blink has reasonably comprehensive coverage of the baseline ISAs,
-including even support for BCD operations (even in long mode!) But there
+including even support for BCD operations (even in long mode!). But there
 are some truly fringe instructions Blink hasn't implemented, such as
 `BOUND` and `ENTER`. Most of the unsupported instructions, are usually
 ring-0 system instructions, since Blink is primarily a user-mode VM, and
