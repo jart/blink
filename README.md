@@ -35,7 +35,7 @@ We regularly test that Blink is able run x86-64-linux binaries on the
 following platforms:
 
 - Linux (x86, ARM, RISC-V, MIPS, PowerPC, s390x)
-- MacOS (x86, ARM)
+- macOS (x86, ARM)
 - FreeBSD
 - OpenBSD
 - NetBSD
@@ -201,7 +201,7 @@ recommend the following terminals, ordered by preference:
 - [KiTTY](https://sw.kovidgoyal.net/kitty/) (Linux)
 - [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html) (Windows)
 - Gnome Terminal (Linux)
-- Terminal.app (MacOS)
+- Terminal.app (macOS)
 - CMD.EXE (Windows 10+)
 - PowerShell (Windows 10+)
 - Xterm (Linux)
@@ -370,7 +370,7 @@ and `blinkenlights` commands:
 
 Blink can be picky about which Linux binaries it'll execute. It may also
 be the case that your Linux binary will only run under Blink on Linux,
-but report errors if run under Blink on another platform, e.g. MacOS. In
+but report errors if run under Blink on another platform, e.g. macOS. In
 our experience, how successfully a program can run under Blink depends
 almost entirely on (1) how it was compiled, and (2) which C library it
 uses. This section will provide guidance on which tools will work best.
@@ -644,7 +644,7 @@ number:
   `EBX ‖ ECX ‖ EDX` with zero filling for strings shorter than 12:
 
   - `Linux` for Linux
-  - `XNU` for MacOS
+  - `XNU` for macOS
   - `FreeBSD` for FreeBSD
   - `NetBSD` for NetBSD
   - `OpenBSD` for OpenBSD
