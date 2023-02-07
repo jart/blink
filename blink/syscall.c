@@ -2412,7 +2412,7 @@ static int SysFsync(struct Machine *m, i32 fildes) {
   if (CheckSyncable(fildes) == -1) return -1;
 #ifdef F_FULLSYNC
   int rc;
-  // MacOS fsync() provides weaker guarantees than Linux fsync()
+  // macOS fsync() provides weaker guarantees than Linux fsync()
   // https://mjtsai.com/blog/2022/02/17/apple-ssd-benchmarks-and-f_fullsync/
   if ((rc = fcntl(fildes, F_FULLFSYNC, 0))) {
     // If the FULLFSYNC failed, fall back to attempting an fsync(). It
@@ -2423,7 +2423,7 @@ static int SysFsync(struct Machine *m, i32 fildes) {
     // better to detect fullfsync support once and avoid the fcntl call
     // every time sync is called. ──Quoth SQLite (os_unix.c) It's also
     // possible for F_FULLFSYNC to fail on Cosmopolitan Libc when our
-    // binary isn't running on MacOS.
+    // binary isn't running on macOS.
     rc = fsync(fildes);
   }
   return rc;

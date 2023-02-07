@@ -35,7 +35,7 @@ We regularly test that Blink is able run x86-64-linux binaries on the
 following platforms:
 
 - Linux (x86, ARM, RISC-V, MIPS, PowerPC, s390x)
-- MacOS (x86, ARM)
+- macOS (x86, ARM)
 - FreeBSD
 - OpenBSD
 - NetBSD
@@ -170,10 +170,10 @@ The following `FLAG` arguments are provided:
 
 - `-0` allows `argv[0]` to be specified on the command line. Under
   normal circumstances, `blink cmd arg1` is equivalent to `execve("cmd",
-  {"cmd", "arg1})` since that's how most programs are launched. However
+  {"cmd", "arg1"})` since that's how most programs are launched. However
   if you need the full power of execve() process spawning, you can say
   `blink -0 cmd arg0 arg1` which is equivalent to `execve("cmd",
-  {"arg0", "arg1})`.
+  {"arg0", "arg1"})`.
 
 - `-L PATH` specifies the log path. The default log path is
   `$TMPDIR/blink.log` or `/tmp/blink.log` if `$TMPDIR` isn't defined. If
@@ -201,7 +201,7 @@ recommend the following terminals, ordered by preference:
 - [KiTTY](https://sw.kovidgoyal.net/kitty/) (Linux)
 - [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html) (Windows)
 - Gnome Terminal (Linux)
-- Terminal.app (MacOS)
+- Terminal.app (macOS)
 - CMD.EXE (Windows 10+)
 - PowerShell (Windows 10+)
 - Xterm (Linux)
@@ -270,10 +270,10 @@ The following `FLAG` arguments are provided:
 
 - `-0` allows `argv[0]` to be specified on the command line. Under
   normal circumstances, `blinkenlights cmd arg1` is equivalent to
-  `execve("cmd", {"cmd", "arg1})` since that's how most programs are
+  `execve("cmd", {"cmd", "arg1"})` since that's how most programs are
   launched. However if you need the full power of execve() process
   spawning, you can say `blinkenlights -0 cmd arg0 arg1` which is
-  equivalent to `execve("cmd", {"arg0", "arg1})`.
+  equivalent to `execve("cmd", {"arg0", "arg1"})`.
 
 - `-t` may be used to disable Blinkenlights TUI mode. This makes the
   program behave similarly to the `blink` command, however not as good.
@@ -370,7 +370,7 @@ and `blinkenlights` commands:
 
 Blink can be picky about which Linux binaries it'll execute. It may also
 be the case that your Linux binary will only run under Blink on Linux,
-but report errors if run under Blink on another platform, e.g. MacOS. In
+but report errors if run under Blink on another platform, e.g. macOS. In
 our experience, how successfully a program can run under Blink depends
 almost entirely on (1) how it was compiled, and (2) which C library it
 uses. This section will provide guidance on which tools will work best.
@@ -620,7 +620,7 @@ currently does nothing to address) but they tend to be comparatively
 minor, e.g. an op returning `NAN` instead of `-NAN`.
 
 Blink has reasonably comprehensive coverage of the baseline ISAs,
-including even support for BCD operations (even in long mode!) But there
+including even support for BCD operations (even in long mode!). But there
 are some truly fringe instructions Blink hasn't implemented, such as
 `BOUND` and `ENTER`. Most of the unsupported instructions, are usually
 ring-0 system instructions, since Blink is primarily a user-mode VM, and
@@ -644,7 +644,7 @@ number:
   `EBX ‖ ECX ‖ EDX` with zero filling for strings shorter than 12:
 
   - `Linux` for Linux
-  - `XNU` for MacOS
+  - `XNU` for macOS
   - `FreeBSD` for FreeBSD
   - `NetBSD` for NetBSD
   - `OpenBSD` for OpenBSD
