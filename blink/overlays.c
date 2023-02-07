@@ -132,7 +132,6 @@ bool IsAcceptablePath(const char *data, size_t size) {
 }
 
 int SetOverlays(const char *config) {
-  struct stat st;
   static int once;
   bool has_real_root;
   size_t i, n, cwdlen = 0;
@@ -171,17 +170,6 @@ int SetOverlays(const char *config) {
   // make sure the paths are all normal looking
   for (i = 0; paths[i]; ++i) {
     if (!paths[i][0]) continue;
-    if (stat(paths[i], &st)) {
-      LOGF("blink overlay path %s not found: %s", paths[i],
-           DescribeHostErrno(errno));
-      FreeStrings(paths);
-      return -1;
-    }
-    if (!S_ISDIR(st.st_mode)) {
-      LOGF("blink overlay path %s not a directory", paths[i]);
-      FreeStrings(paths);
-      return -1;
-    }
     if (!IsAcceptablePath(paths[i], -1)) {
       LOGF("blink overlay path %s can't have '.', '..' or '//'", paths[i]);
       FreeStrings(paths);
