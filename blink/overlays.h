@@ -3,7 +3,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-void SetOverlays(const char *);
+int SetOverlays(const char *);
 int OverlaysChdir(const char *);
 char *OverlaysGetcwd(char *, size_t);
 int OverlaysOpen(int, const char *, int, int);

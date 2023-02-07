@@ -26,8 +26,10 @@
 #include "blink/assert.h"
 #include "blink/debug.h"
 #include "blink/errno.h"
+#include "blink/likely.h"
 #include "blink/log.h"
 #include "blink/overlays.h"
+#include "blink/thompike.h"
 #include "blink/util.h"
 
 static char **g_overlays;
@@ -71,40 +73,85 @@ static void FreeOverlays(void) {
 
 // if the user only specified a single overlay, then we treat it as
 // chroot would unless of course the specified root is the real one
-static bool IsRestrictedRoot(void) {
-  return !g_overlays[1] && g_overlays[0][0];
+static bool IsRestrictedRoot(char **paths) {
+  return !paths[1] && paths[0][0];
 }
 
-void SetOverlays(const char *config) {
+/**
+ * Returns true if path seems legit.
+ *
+ * 1. The substring "//" is disallowed.
+ * 2. We won't serve hidden files (segment starts with '.').
+ * 3. We won't serve paths with segments equal to "." or "..".
+ *
+ * It is assumed that the URI parser already took care of percent
+ * escape decoding as well as ISO-8859-1 decoding. The input needs
+ * to be a UTF-8 string. This function takes overlong encodings into
+ * consideration, so you don't need to call Underlong() beforehand.
+ *
+ * @param size if -1 implies strlen
+ * @see IsReasonablePath()
+ */
+bool IsAcceptablePath(const char *data, size_t size) {
+  const char *p, *e;
+  int x, y, a, b, t, i, n;
+  if (size == -1) size = data ? strlen(data) : 0;
+  t = 0;
+  y = '/';
+  p = data;
+  e = p + size;
+  while (p < e) {
+    x = *p++ & 0xff;
+    if (UNLIKELY(x >= 0300)) {
+      a = ThomPikeByte(x);
+      n = ThomPikeLen(x) - 1;
+      if (p + n <= e) {
+        for (i = 0;;) {
+          b = p[i] & 0xff;
+          if (!ThomPikeCont(b)) break;
+          a = ThomPikeMerge(a, b);
+          if (++i == n) {
+            x = a;
+            p += i;
+            break;
+          }
+        }
+      }
+    }
+    if (x == '\\') {
+      x = '/';
+    }
+    if (y == '/') {
+      if (x == '.') return false;
+      if (x == '/' && t) return false;
+    }
+    y = x;
+    t = 1;
+  }
+  return true;
+}
+
+int SetOverlays(const char *config) {
+  struct stat st;
   static int once;
-  char cwd[PATH_MAX];
   bool has_real_root;
   size_t i, n, cwdlen = 0;
-  if (!once) {
-    atexit(FreeOverlays);
-    once = 1;
+  char cwd[PATH_MAX], **paths;
+  if (!config) return efault();
+  if (!(paths = SplitString(config, ':'))) {
+    return -1;
   }
-  FreeOverlays();
-  // should we use the default config?
-  if (!config) {
-    // when an absolute path $x is encountered
-    config = ""    // use $x if it exists
-             ":"   // otherwise
-             "o";  // use o/$x if it exists
-  }
-  // load the overlay paths into an array
-  unassert(g_overlays = SplitString(config, ':'));
   // make relative overlays absolute at startup time
   // just in case the app calls chdir() or something
   has_real_root = false;
-  for (i = 0; g_overlays[i]; ++i) {
-    if (!g_overlays[i][0]) {
+  for (i = 0; paths[i]; ++i) {
+    if (!paths[i][0]) {
       has_real_root = true;
       continue;
     }
-    if (g_overlays[i][0] == '/') {
-      if (!g_overlays[i][1]) {
-        g_overlays[i][0] = 0;
+    if (paths[i][0] == '/') {
+      if (!paths[i][1]) {
+        paths[i][0] = 0;
         has_real_root = true;
       }
       continue;
@@ -114,25 +161,62 @@ void SetOverlays(const char *config) {
       cwdlen = strlen(cwd);
       cwd[cwdlen++] = '/';
     }
-    if (cwdlen + (n = strlen(g_overlays[i])) >= sizeof(cwd)) {
+    if (cwdlen + (n = strlen(paths[i])) >= sizeof(cwd)) {
       continue;
     }
-    memcpy(cwd + cwdlen, g_overlays[i], n + 1);
-    free(g_overlays[i]);
-    g_overlays[i] = strdup(cwd);
+    memcpy(cwd + cwdlen, paths[i], n + 1);
+    free(paths[i]);
+    paths[i] = strdup(cwd);
   }
-  unassert(g_overlays[0]);
-  if (!has_real_root && g_overlays[1]) {
-    WriteErrorString("if multiple overlays are specified, "
-                     "one of them must be empty string");
-    exit(1);
-  }
-  if (IsRestrictedRoot()) {
-    if (chdir(g_overlays[0])) {
-      WriteErrorString("invalid BLINK_OVERLAY chroot");
-      exit(1);
+  // make sure the paths are all normal looking
+  for (i = 0; paths[i]; ++i) {
+    if (!paths[i][0]) continue;
+    if (stat(paths[i], &st)) {
+      LOGF("blink overlay path %s not found: %s", paths[i],
+           DescribeHostErrno(errno));
+      FreeStrings(paths);
+      return -1;
+    }
+    if (!S_ISDIR(st.st_mode)) {
+      LOGF("blink overlay path %s not a directory", paths[i]);
+      FreeStrings(paths);
+      return -1;
+    }
+    if (!IsAcceptablePath(paths[i], -1)) {
+      LOGF("blink overlay path %s can't have '.', '..' or '//'", paths[i]);
+      FreeStrings(paths);
+      return einval();
     }
   }
+  // should we use the default config?
+  if (!config) {
+    // when an absolute path $x is encountered
+    config = ""    // use $x if it exists
+             ":"   // otherwise
+             "o";  // use o/$x if it exists
+  }
+  // load the overlay paths into an array
+  unassert(paths[0]);
+  if (!has_real_root && paths[1]) {
+    LOGF("if multiple overlays are specified, "
+         "one of them must be empty string");
+    FreeStrings(paths);
+    return einval();
+  }
+  if (IsRestrictedRoot(paths)) {
+    if (chdir(paths[0])) {
+      LOGF("failed to cd into blink overlay: %s", DescribeHostErrno(errno));
+      FreeStrings(paths);
+      return -1;
+    }
+  }
+  if (!once) {
+    atexit(FreeOverlays);
+    once = 1;
+  }
+  FreeOverlays();
+  g_overlays = paths;
+  return 0;
 }
 
 // if we get these failures when opening a temporary dirfd of a user
@@ -148,7 +232,7 @@ char *OverlaysGetcwd(char *output, size_t size) {
   char buf[PATH_MAX];
   if (!(cwd = (getcwd)(buf, sizeof(buf)))) return 0;
   n = strlen(cwd);
-  if (IsRestrictedRoot()) {
+  if (IsRestrictedRoot(g_overlays)) {
     m = strlen(g_overlays[0]);
     if (n == m && !memcmp(cwd, g_overlays[0], n)) {
       cwd = "/";
@@ -173,7 +257,7 @@ int OverlaysChdir(const char *path) {
   char buf[PATH_MAX];
   if (!path) return efault();
   if (!path[0]) return enoent();
-  if (IsRestrictedRoot() && path[0] == '/') {
+  if (IsRestrictedRoot(g_overlays) && path[0] == '/') {
     if (!path[1]) {
       return Chdir(g_overlays[0]);
     } else {

@@ -48,7 +48,7 @@
 #include "blink/x86.h"
 #include "blink/xlat.h"
 
-#define OPTS "hjemsS0L:"
+#define OPTS "hjemsS0L:C:"
 #define USAGE \
   " [-" OPTS "] PROG [ARGS...]\n\
   -h                   help\n\
@@ -59,6 +59,7 @@
   -s                   print statistics on exit\n\
   -S                   enable system call logging\n\
   -L PATH              log filename (default ${TMPDIR:-/tmp}/blink.log)\n\
+  -C PATH              sets chroot dir or overlay spec [default \":o\"]\n\
   $BLINK_OVERLAYS      file system roots [default \":o\"\n\
   $BLINK_LOG_FILENAME  log filename (same as -L flag)\n"
 
@@ -167,6 +168,7 @@ _Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   FLAG_nolinear = !CanHaveLinearMemory();
+  FLAG_overlays = getenv("BLINK_OVERLAYS");
 #if LOG_ENABLED
   FLAG_logpath = getenv("BLINK_LOG_FILENAME");
 #endif
@@ -198,6 +200,9 @@ static void GetOpts(int argc, char *argv[]) {
         break;
       case 'L':
         FLAG_logpath = optarg_;
+        break;
+      case 'C':
+        FLAG_overlays = optarg_;
         break;
       case 'h':
         PrintUsage(argc, argv, 0, 1);
@@ -252,8 +257,11 @@ int main(int argc, char *argv[]) {
   g_blink_path = argc > 0 ? argv[0] : 0;
   GetOpts(argc, argv);
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
-  SetOverlays(getenv("BLINK_OVERLAYS"));
   WriteErrorInit();
+  if (SetOverlays(FLAG_overlays)) {
+    WriteErrorString("bad blink overlays spec; see log for details");
+    exit(1);
+  }
   HandleSigs();
   InitBus();
   if (!Commandv(argv[optind_], g_pathbuf, sizeof(g_pathbuf))) {

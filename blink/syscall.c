@@ -2307,6 +2307,10 @@ static int SysLchown(struct Machine *m, i64 pathaddr, u32 uid, u32 gid) {
                      AT_SYMLINK_NOFOLLOW_LINUX);
 }
 
+static int SysChroot(struct Machine *m, i64 path) {
+  return SetOverlays(LoadStr(m, path));
+}
+
 static int SysSync(struct Machine *m) {
   sync();
   return 0;
@@ -4365,6 +4369,7 @@ void OpSyscall(P) {
     SYSCALL5(0x09D, SysPrctl);
     SYSCALL2(0x09E, SysArchPrctl);
     SYSCALL2(0x0A0, SysSetrlimit);
+    SYSCALL1(0x0A1, SysChroot);
     SYSCALL0(0x0A2, SysSync);
     SYSCALL2(0x0C8, SysTkill);
     SYSCALL6(0x0CA, SysFutex);

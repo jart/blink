@@ -23,3 +23,4 @@ bool FLAG_nolinear;
 bool FLAG_noconnect;
 bool FLAG_alsologtostderr;
 const char *FLAG_logpath;
+const char *FLAG_overlays;

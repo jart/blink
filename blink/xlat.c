@@ -368,6 +368,7 @@ int XlatSocketType(int x) {
   switch (x) {
     XLAT(SOCK_STREAM_LINUX, SOCK_STREAM);
     XLAT(SOCK_DGRAM_LINUX, SOCK_DGRAM);
+    XLAT(SOCK_RAW_LINUX, SOCK_RAW);
     default:
       LOGF("%s %d not supported yet", "socket type", x);
       return einval();
