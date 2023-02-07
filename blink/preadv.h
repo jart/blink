@@ -1,6 +1,6 @@
 #ifndef BLINK_PREADV_H_
 #define BLINK_PREADV_H_
-#if defined(__CYGWIN__) || defined(__HAIKU__)
+#if defined(__CYGWIN__) || defined(__HAIKU__) || defined(__APPLE__)
 #include <sys/uio.h>
 
 ssize_t preadv(int, const struct iovec *, int, off_t);

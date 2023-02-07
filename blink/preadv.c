@@ -16,7 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#if defined(__CYGWIN__) || defined(__HAIKU__)
+#if defined(__CYGWIN__) || defined(__HAIKU__) || defined(__APPLE__)
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
