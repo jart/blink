@@ -440,6 +440,7 @@ folder, which will ask Blink to create a chroot'd environment.
 
 ```
 cd ~/buildroot
+export CC="gcc -Wl,-z,common-page-size=65536,-z,max-page-size=65536"
 make menuconfig
 make
 cp -R output/target ~/blinkroot
