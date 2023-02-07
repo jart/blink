@@ -191,11 +191,10 @@ LTP_TESTS =							\
 	o//third_party/ltp/bin/1/munmap02.elf.ok		\
 	o//third_party/ltp/bin/1/munmap03.elf.ok		\
 	o//third_party/ltp/bin/1/nanosleep02.elf.ok		\
-	o//third_party/ltp/bin/1/open01.elf.ok			\
+	o//third_party/ltp/bin/1/fstat02.elf.ok			\
 	o//third_party/ltp/bin/1/open03.elf.ok			\
 	o//third_party/ltp/bin/1/open06.elf.ok			\
 	o//third_party/ltp/bin/1/open09.elf.ok			\
-	o//third_party/ltp/bin/1/pause01.elf.ok			\
 	o//third_party/ltp/bin/1/pipe01.elf.ok			\
 	o//third_party/ltp/bin/1/pipe02.elf.ok			\
 	o//third_party/ltp/bin/1/pipe03.elf.ok			\
@@ -298,6 +297,11 @@ LTP_TESTS +=							\
 endif
 
 ifneq ($(HOST_SYSTEM), FreeBSD)
+# Something weird about the sticky bit.
+LTP_TESTS += o//third_party/ltp/bin/1/open01.elf.ok
+endif
+
+ifneq ($(HOST_SYSTEM), FreeBSD)
 # The FreeBSD manual states "The maximum number of seconds allowed for
 # it_interval and it_value in setitimer() is 100000000", but this test
 # needs the platform to support values like INT_MAX.
@@ -331,6 +335,7 @@ LTP_TESTS +=							\
 	o//third_party/ltp/bin/1/getsid02.elf.ok		\
 	o//third_party/ltp/bin/1/getpid01.elf.ok		\
 	o//third_party/ltp/bin/1/pause03.elf.ok			\
+	o//third_party/ltp/bin/1/pause01.elf.ok			\
 	o//third_party/ltp/bin/1/fsync02.elf.ok			\
 	o//third_party/ltp/bin/1/mmap12.elf.ok			\
 	o//third_party/ltp/bin/1/kill03.elf.ok

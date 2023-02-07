@@ -574,7 +574,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     // linear mappings exist within the requested interval
     if (ranges.i == 1 &&          //
         ranges.p[0].a == virt &&  //
-        ranges.p[1].b == virt + size) {
+        ranges.p[0].b == virt + size) {
       // it should be 100% safe to let the kernel blow it away
       method = MAP_FIXED;
     } else {
