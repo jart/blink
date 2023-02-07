@@ -2866,6 +2866,7 @@ static void ResetSignalDispositions(struct System *s) {
   LOCK(&s->sig_lock);
   for (sig = 1; sig <= 64; ++sig) {
     if (!IsBlinkSig(s, sig) &&
+        Read64(s->hands[sig - 1].handler) != SIG_IGN_LINUX &&
         Read64(s->hands[sig - 1].handler) != SIG_DFL_LINUX &&
         (syssig = XlatSignal(sig)) != -1) {
       Write64(s->hands[sig - 1].handler, SIG_DFL_LINUX);
@@ -3131,7 +3132,6 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
       m->signals &= ~(1ull << (sig - 1));
     }
     if ((syssig = XlatSignal(sig)) != -1 && !IsBlinkSig(m->system, sig)) {
-      unassert(syssig != SIGSEGV);
       sigfillset(&syshand.sa_mask);
       syshand.sa_flags = SA_SIGINFO;
       if (flags & SA_RESTART_LINUX) syshand.sa_flags |= SA_RESTART;
@@ -3150,7 +3150,10 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
           syshand.sa_sigaction = OnSignal;
           break;
       }
-      unassert(!sigaction(syssig, &syshand, 0));
+      if (sigaction(syssig, &syshand, 0)) {
+        LOGF("system sigaction(%s) returned %s", DescribeSignal(sig),
+             DescribeHostErrno(errno));
+      }
     }
   }
   UNLOCK(&m->system->sig_lock);

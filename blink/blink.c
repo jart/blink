@@ -125,6 +125,11 @@ static int Exec(char *prog, char **argv, char **envp) {
     }
   } else {
     unassert(!FreeVirtual(old->system, -0x800000000000, 0x1000000000000));
+    for (i = 1; i <= 64; ++i) {
+      if (Read64(old->system->hands[i - 1].handler) == SIG_IGN_LINUX) {
+        Write64(g_machine->system->hands[i - 1].handler, SIG_IGN_LINUX);
+      }
+    }
     LoadProgram(g_machine, prog, argv, envp);
     g_machine->system->fds.list = old->system->fds.list;
     old->system->fds.list = 0;

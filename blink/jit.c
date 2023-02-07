@@ -395,8 +395,8 @@ int FixJitProtection(struct Jit *jit) {
   int prot;
   prot = atomic_load_explicit(&g_jit.prot, memory_order_relaxed);
   for (e = dll_first(jit->blocks); e; e = dll_next(jit->blocks, e)) {
-    unassert(!Mprotect(JITBLOCK_CONTAINER(e)->addr, jit->blocksize, prot,
-                       "jit"));
+    unassert(
+        !Mprotect(JITBLOCK_CONTAINER(e)->addr, jit->blocksize, prot, "jit"));
   }
   UNLOCK(&jit->lock);
   return 0;
@@ -408,6 +408,7 @@ bool SetJitHook(struct Jit *jit, u64 virt, intptr_t func) {
   intptr_t base, key;
   unsigned hash, spot, step;
   unassert(virt);
+  STATISTIC(++hook_set);
   // reduce function pointer to four bytes
   if (func) {
     base = (intptr_t)IMAGE_END;
@@ -451,6 +452,7 @@ intptr_t GetJitHook(struct Jit *jit, u64 virt, intptr_t dflt) {
   unassert(virt);
   unassert(IS2POW(jit->hooks.n));
   hash = HASH(virt);
+  STATISTIC(++hook_get);
   for (spot = step = 0;; ++step) {
     spot = (hash + step * ((step + 1) >> 1)) & (jit->hooks.n - 1);
     offset = atomic_load_explicit(jit->hooks.func + spot, memory_order_acquire);
@@ -465,6 +467,7 @@ intptr_t GetJitHook(struct Jit *jit, u64 virt, intptr_t dflt) {
     if (!key) {
       return dflt;
     }
+    STATISTIC(++hook_collision);
   }
 }
 

@@ -157,7 +157,8 @@ const char *DescribeProt(int prot) {
 }
 
 const char *DescribeSignal(int sig) {
-  _Thread_local static char buf[21];
+  char *p;
+  _Thread_local static char buf[30];
   switch (sig) {
     case SIGHUP_LINUX:
       return "SIGHUP";
@@ -224,9 +225,14 @@ const char *DescribeSignal(int sig) {
     case SIGPWR_LINUX:
       return "SIGPWR";
     default:
-      FormatInt64(buf, sig);
-      return buf;
+      break;
   }
+  p = buf;
+  if (SIGRTMIN_LINUX <= sig && sig <= SIGRTMAX_LINUX) {
+    p = stpcpy(p, "SIGRTMIN+");
+  }
+  p = FormatInt64(p, sig);
+  return buf;
 }
 
 const char *DescribeSyscallResult(i64 ax) {

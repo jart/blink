@@ -225,10 +225,20 @@ int XlatSignal(int x) {
 #ifdef SIGIO
     XLAT(SIGIO_LINUX, SIGIO);
 #endif
+#ifdef SIGPWR
+    XLAT(SIGPWR_LINUX, SIGPWR);
+#endif
     XLAT(SIGSYS_LINUX, SIGSYS);
     default:
-      return einval();
+      break;
   }
+#ifdef SIGRTMIN
+  if ((SIGRTMIN_LINUX <= x && x <= SIGRTMAX_LINUX) &&
+      SIGRTMIN + (x - SIGRTMIN_LINUX) <= SIGRTMAX) {
+    return SIGRTMIN + (x - SIGRTMIN_LINUX);
+  }
+#endif
+  return einval();
 }
 
 int XlatResource(int x) {
@@ -303,6 +313,9 @@ int UnXlatSignal(int x) {
 #ifdef SIGIO
   if (x == SIGIO) return SIGIO_LINUX;
 #endif
+#ifdef SIGPWR
+  if (x == SIGPWR) return SIGPWR_LINUX;
+#endif
 #ifdef SIGSTKFLT
   if (x == SIGSTKFLT) return SIGSTKFLT_LINUX;
 #endif
@@ -310,6 +323,12 @@ int UnXlatSignal(int x) {
   if (x == SIGSYS) return SIGSYS_LINUX;
   if (x == SIGTSTP) return SIGTSTP_LINUX;
   if (x == SIGURG) return SIGURG_LINUX;
+#ifdef SIGRTMIN
+  if ((SIGRTMIN <= x && x <= SIGRTMAX) &&
+      SIGRTMIN_LINUX + (x - SIGRTMIN) <= SIGRTMAX_LINUX) {
+    return SIGRTMIN_LINUX + (x - SIGRTMIN);
+  }
+#endif
   return einval();
 }
 
