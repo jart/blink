@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <poll.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <sys/uio.h>
 #include <termios.h>
 
@@ -28,9 +29,8 @@ struct FdCb {
 struct Fd {
   int fildes;      // file descriptor
   int oflags;      // host O_XXX constants
-  int family;      // host AF_XXX constants
-  int type;        // host SOCK_XXX constants
-  int protocol;    // host IPPROTO_XXX constants
+  int socktype;    // host SOCK_XXX constants
+  bool norestart;  // is SO_RCVTIMEO in play?
   DIR *dirstream;  // for getdents() lazilly
   struct Dll elem;
   pthread_mutex_t lock;

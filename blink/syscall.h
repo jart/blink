@@ -25,18 +25,21 @@
 #define SETFL_FLAGS \
   (O_APPEND | O_NDELAY | O_ASYNC_SETFL | O_DIRECT_SETFL | O_NOATIME_SETFL)
 
-#define INTERRUPTIBLE(x)               \
-  do {                                 \
-    int rc_;                           \
-    rc_ = (x);                         \
-    if (rc_ == -1 && errno == EINTR) { \
-      if (CheckInterrupt(m)) {         \
-        break;                         \
-      }                                \
-    } else {                           \
-      break;                           \
-    }                                  \
+#define INTERRUPTIBLE(restartable, x)       \
+  do {                                      \
+    int rc_;                                \
+    rc_ = (x);                              \
+    if (rc_ == -1 && errno == EINTR) {      \
+      if (CheckInterrupt(m, restartable)) { \
+        break;                              \
+      }                                     \
+    } else {                                \
+      break;                                \
+    }                                       \
   } while (1)
+
+#define NORESTART(x)   INTERRUPTIBLE(false, x)
+#define RESTARTABLE(x) INTERRUPTIBLE(true, x)
 
 extern char *g_blink_path;
 
@@ -57,6 +60,6 @@ void AddStdFd(struct Fds *, int);
 int GetOflags(struct Machine *, int);
 int GetFildes(struct Machine *, int);
 struct Fd *GetAndLockFd(struct Machine *, int);
-bool CheckInterrupt(struct Machine *);
+bool CheckInterrupt(struct Machine *, bool);
 
 #endif /* BLINK_SYSCALL_H_ */

@@ -441,7 +441,9 @@ int XlatSocketOptname(int level, int optname) {
         XLAT(IP_HDRINCL_LINUX, IP_HDRINCL);
         XLAT(IP_OPTIONS_LINUX, IP_OPTIONS);
         XLAT(IP_RECVTTL_LINUX, IP_RECVTTL);
+#ifdef IP_RETOPTS
         XLAT(IP_RETOPTS_LINUX, IP_RETOPTS);
+#endif
         default:
           break;
       }

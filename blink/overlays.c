@@ -188,13 +188,6 @@ int SetOverlays(const char *config) {
       return einval();
     }
   }
-  // should we use the default config?
-  if (!config) {
-    // when an absolute path $x is encountered
-    config = ""    // use $x if it exists
-             ":"   // otherwise
-             "o";  // use o/$x if it exists
-  }
   // load the overlay paths into an array
   unassert(paths[0]);
   if (!has_real_root && paths[1]) {

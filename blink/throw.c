@@ -37,13 +37,13 @@ void RestoreIp(struct Machine *m) {
 
 void DeliverSignalToUser(struct Machine *m, int sig) {
   EnqueueSignal(m, sig);
-  if (ConsumeSignal(m)) {
+  if ((sig = ConsumeSignal(m, 0, 0))) {
     TerminateSignal(m, sig);
   }
 }
 
 void HaltMachine(struct Machine *m, int code) {
-  SIG_LOGF("HaltMachine(%d)", code);
+  SIG_LOGF("HaltMachine(%d) at %#" PRIx64, code, m->ip);
   switch (code) {
     case kMachineDivideError:
     case kMachineFpuException:

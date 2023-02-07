@@ -215,11 +215,16 @@ const struct FdCb kFdCbHost = {
     .tcsetwinsize = my_tcsetwinsize,
 };
 
-static int GetFdSocketType(int fildes) {
-  int type = 0;
-  socklen_t len = sizeof(type);
-  getsockopt(fildes, SOL_SOCKET, SO_TYPE, &type, &len);
-  return type;
+static int GetFdSocketType(int fildes, int *type) {
+  socklen_t len = sizeof(*type);
+  return getsockopt(fildes, SOL_SOCKET, SO_TYPE, type, &len);
+}
+
+static bool IsNoRestartSocket(int fildes) {
+  struct timeval tv = {0};
+  socklen_t len = sizeof(tv);
+  getsockopt(fildes, SOL_SOCKET, SO_RCVTIMEO, &tv, &len);
+  return tv.tv_sec || tv.tv_usec;
 }
 
 void AddStdFd(struct Fds *fds, int fildes) {
@@ -227,7 +232,9 @@ void AddStdFd(struct Fds *fds, int fildes) {
   struct Fd *fd;
   if ((flags = fcntl(fildes, F_GETFL, 0)) >= 0) {
     unassert(fd = AddFd(fds, fildes, flags));
-    fd->type = GetFdSocketType(fildes);
+    if (!GetFdSocketType(fildes, &fd->socktype)) {
+      fd->norestart = IsNoRestartSocket(fildes);
+    }
   }
 }
 
@@ -244,15 +251,51 @@ int GetDirFildes(int fildes) {
   return fildes;
 }
 
-bool CheckInterrupt(struct Machine *m) {
-  int sig;
-  u64 signals;
+void SignalActor(struct Machine *mm) {
+#ifdef __CYGWIN__
+  // TODO: Why does JIT clobber %rbx on Cygwin?
+  struct Machine *volatile m = mm;
+#else
+  struct Machine *m = mm;
+#endif
+  for (;;) {
+#ifndef __CYGWIN__
+    STATISTIC(++interps);
+#endif
+    ExecuteInstruction(m);
+    if (m->restored) break;
+    CheckForSignals(m);
+  }
+}
+
+bool CheckInterrupt(struct Machine *m, bool restartable) {
+  bool res, restart;
+  int sig, delivered;
+  // an actual i/o call just received EINTR from the kernel
+GetSome:
+  // determine if there's any signals pending for our guest
   Put64(m->ax, -EINTR_LINUX);
-  signals = m->signals;
-  if ((sig = ConsumeSignal(m))) {
+  if ((sig = ConsumeSignal(m, &delivered, &restart))) {
     TerminateSignal(m, sig);
   }
-  return (m->interrupted = signals != m->signals);
+  if (delivered) {
+    // we're officially calling a signal handler
+    if (restart && restartable) {
+      // run the signal handler code inside the i/o routine
+      m->restored = false;
+      SignalActor(m);
+      m->restored = false;
+      goto GetSome;
+    } else {
+      // let the i/o routine return eintr
+      res = true;
+    }
+  } else {
+    // no signal is being delivered
+    res = false;
+  }
+  m->interrupted = res;
+  return res;
 }
 
 static struct Futex *FindFutex(struct Machine *m, i64 addr) {
@@ -590,7 +633,7 @@ static int SysFutexWait(struct Machine *m,  //
       rc = EAGAIN;
       break;
     }
-    if (CheckInterrupt(m)) {
+    if (CheckInterrupt(m, true)) {
       rc = EINTR;
       break;
     }
@@ -1083,7 +1126,7 @@ static int Dup2(struct Machine *m, int fildes, int newfildes) {
   // POSIX.1-2007 lists dup2() as raising EINTR which seems impossible
   // so it'd be wonderful to learn what kernel(s) actually return this
   // noting Linux reproduces that in both its dup(2) and dup(3) manual
-  INTERRUPTIBLE(rc = dup2(fildes, newfildes));
+  RESTARTABLE(rc = dup2(fildes, newfildes));
   return rc;
 }
 
@@ -1212,9 +1255,7 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
     fd = AddFd(&m->system->fds, fildes,
                O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
                    (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0));
-    fd->type = type;
-    fd->family = family;
-    fd->protocol = protocol;
+    fd->socktype = type;
     UNLOCK(&m->system->fds.lock);
   }
   if (flags) UNLOCK(&m->system->exec_lock);
@@ -1240,13 +1281,9 @@ static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
     if (flags & SOCK_CLOEXEC_LINUX) sysflags |= O_CLOEXEC;
     if (flags & SOCK_NONBLOCK_LINUX) sysflags |= O_NDELAY;
     unassert(fd = AddFd(&m->system->fds, fds[0], sysflags));
-    fd->type = type;
-    fd->family = family;
-    fd->protocol = protocol;
+    fd->socktype = type;
     unassert(fd = AddFd(&m->system->fds, fds[1], sysflags));
-    fd->type = type;
-    fd->family = family;
-    fd->protocol = protocol;
+    fd->socktype = type;
     UNLOCK(&m->system->fds.lock);
     Write32(fds_linux[0], fds[0]);
     Write32(fds_linux[1], fds[1]);
@@ -1322,13 +1359,25 @@ static int SysGetpeername(struct Machine *m, int fd, i64 aa, i64 asa) {
   return SysSocketName(m, fd, aa, asa, getpeername);
 }
 
+static int GetNoRestart(struct Machine *m, int fildes, bool *norestart) {
+  struct Fd *fd;
+  LOCK(&m->system->fds.lock);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    *norestart = fd->norestart;
+  }
+  UNLOCK(&m->system->fds.lock);
+  if (!fd) return ebadf();
+  return 0;
+}
+
 static int Accept(struct Machine *m, i32 fildes, i64 sockaddr_addr,
                   i64 sockaddr_size_addr, i32 flags, struct Fd *fd) {
   int newfd;
   socklen_t addrlen;
   struct sockaddr_storage addr;
   addrlen = sizeof(addr);
-  INTERRUPTIBLE(newfd = accept(fildes, (struct sockaddr *)&addr, &addrlen));
+  INTERRUPTIBLE(!fd->norestart,
+                newfd = accept(fildes, (struct sockaddr *)&addr, &addrlen));
   if (newfd != -1) {
     FixupSock(newfd, flags);
     unassert(ForkFd(&m->system->fds, fd, newfd,
@@ -1347,8 +1396,8 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
   if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
   if (flags) LOCK(&m->system->exec_lock);
   if ((fd = GetAndLockFd(m, fildes))) {
-    if (fd->type) {
-      if (fd->type == SOCK_STREAM) {
+    if (fd->socktype) {
+      if (fd->socktype == SOCK_STREAM) {
         newfd = Accept(m, fildes, sockaddr_addr, sockaddr_size_addr, flags, fd);
       } else {
         // POSIX.1 and Linux require EOPNOTSUPP when called on a file
@@ -1471,11 +1520,13 @@ static i64 SysSendto(struct Machine *m,  //
   i64 rc;
   int len;
   int hostflags;
+  bool norestart;
   const void *mem;
   socklen_t addrlen;
   struct sockaddr *addrp;
   struct sockaddr_storage ss;
   if ((hostflags = XlatSendFlags(flags)) == -1) return -1;
+  if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if (sockaddr_size) {
     if ((len = LoadSockaddr(m, sockaddr_addr, sockaddr_size, &ss)) != -1) {
       addrlen = len;
@@ -1488,7 +1539,8 @@ static i64 SysSendto(struct Machine *m,  //
     addrp = 0;
   }
   mem = Schlep(m, bufaddr, buflen);
-  INTERRUPTIBLE(rc = sendto(fildes, mem, buflen, hostflags, addrp, addrlen));
+  INTERRUPTIBLE(!norestart,
+                rc = sendto(fildes, mem, buflen, hostflags, addrp, addrlen));
   return rc;
 }
 
@@ -1502,13 +1554,15 @@ static i64 SysRecvfrom(struct Machine *m,  //
   i64 rc;
   void *buf;
   int hostflags;
+  bool norestart;
   socklen_t addrlen;
   struct sockaddr_storage addr;
   if ((hostflags = XlatRecvFlags(flags)) == -1) return -1;
+  if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if (!(buf = malloc(buflen))) return -1;
   addrlen = sizeof(addr);
-  rc = recvfrom(fildes, buf, buflen, hostflags, (struct sockaddr *)&addr,
-                &addrlen);
+  INTERRUPTIBLE(!norestart, rc = recvfrom(fildes, buf, buflen, hostflags,
+                                          (struct sockaddr *)&addr, &addrlen));
   if (rc != -1) {
     CopyToUserWrite(m, bufaddr, buf, rc);
     StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
@@ -1523,13 +1577,13 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   u64 iovlen;
   ssize_t rc;
   i64 iovaddr;
+  bool norestart;
   struct Iovs iv;
   struct msghdr msg;
   struct sockaddr_storage ss;
   const struct msghdr_linux *gm;
-  if ((flags = XlatSendFlags(flags)) == -1) {
-    return -1;
-  }
+  if ((flags = XlatSendFlags(flags)) == -1) return -1;
+  if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if (!(gm = (const struct msghdr_linux *)Schlep(m, msgaddr, sizeof(*gm)))) {
     return -1;
   }
@@ -1555,7 +1609,7 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
     msg.msg_iov = iv.p;
     msg.msg_iovlen = iv.i;
-    INTERRUPTIBLE(rc = sendmsg(fildes, &msg, flags));
+    INTERRUPTIBLE(!norestart, rc = sendmsg(fildes, &msg, flags));
   }
   FreeIovs(&iv);
   return rc;
@@ -1565,11 +1619,13 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   ssize_t rc;
   u64 iovlen;
   i64 iovaddr;
+  bool norestart;
   struct Iovs iv;
   struct msghdr msg;
   struct msghdr_linux gm;
   struct sockaddr_storage addr;
   if ((flags = XlatRecvFlags(flags)) == -1) return -1;
+  if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if (CopyFromUserRead(m, &gm, msgaddr, sizeof(gm)) == -1) return -1;
   memset(&msg, 0, sizeof(msg));
   iovaddr = Read64(gm.iov);
@@ -1587,7 +1643,7 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
       msg.msg_name = &addr;
       msg.msg_namelen = sizeof(addr);
     }
-    INTERRUPTIBLE(rc = recvmsg(fildes, &msg, flags));
+    INTERRUPTIBLE(!norestart, rc = recvmsg(fildes, &msg, flags));
     if (rc != -1) {
       Write32(gm.flags, UnXlatMsgFlags(msg.msg_flags));
       CopyToUserWrite(m, msgaddr, &gm, sizeof(gm));
@@ -1606,14 +1662,17 @@ static int SysConnectBind(struct Machine *m, i32 fildes, i64 sockaddr_addr,
                           u32 sockaddr_size,
                           int impl(int, const struct sockaddr *, socklen_t)) {
   int rc, len;
+  bool norestart;
   socklen_t addrlen;
   struct sockaddr_storage addr;
+  if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if ((len = LoadSockaddr(m, sockaddr_addr, sockaddr_size, &addr)) != -1) {
     addrlen = len;
   } else {
     return -1;
   }
-  rc = impl(fildes, (const struct sockaddr *)&addr, addrlen);
+  INTERRUPTIBLE(!norestart,
+                (rc = impl(fildes, (const struct sockaddr *)&addr, addrlen)));
   return rc;
 }
 
@@ -1692,7 +1751,9 @@ static int GetsockoptLinger(struct Machine *m, i32 fd, i64 optvaladdr,
 
 static int SysSetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
                          i64 optvaladdr, u32 optvalsize) {
+  int rc;
   void *optval;
+  struct Fd *fd;
   int syslevel, sysoptname;
   switch (level) {
     case SOL_SOCKET_LINUX:
@@ -1710,7 +1771,18 @@ static int SysSetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   if (XlatSocketLevel(level, &syslevel) == -1) return -1;
   if ((sysoptname = XlatSocketOptname(level, optname)) == -1) return -1;
   if (!(optval = Schlep(m, optvaladdr, optvalsize))) return -1;
-  return setsockopt(fildes, syslevel, sysoptname, optval, optvalsize);
+  rc = setsockopt(fildes, syslevel, sysoptname, optval, optvalsize);
+  if (rc != -1 &&                      //
+      level == SOL_SOCKET_LINUX &&     //
+      optname == SO_RCVTIMEO_LINUX &&  //
+      optvalsize >= 4) {
+    LOCK(&m->system->fds.lock);
+    if ((fd = GetFd(&m->system->fds, fildes))) {
+      fd->norestart = !!Read32((u8 *)optval);
+    }
+    UNLOCK(&m->system->fds.lock);
+  }
+  return rc;
 }
 
 static int SysGetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
@@ -1777,7 +1849,7 @@ static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   if (size) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
-      INTERRUPTIBLE(rc = readv_impl(fildes, iv.p, iv.i));
+      RESTARTABLE(rc = readv_impl(fildes, iv.p, iv.i));
       if (rc != -1) SetWriteAddr(m, addr, rc);
     }
     FreeIovs(&iv);
@@ -1808,7 +1880,7 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   if (size) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
-      INTERRUPTIBLE(rc = writev_impl(fildes, iv.p, iv.i));
+      RESTARTABLE(rc = writev_impl(fildes, iv.p, iv.i));
       if (rc != -1) SetReadAddr(m, addr, rc);
     }
     FreeIovs(&iv);
@@ -1848,7 +1920,7 @@ static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
   if (size) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
-      INTERRUPTIBLE(rc = preadv(fildes, iv.p, iv.i, offset));
+      RESTARTABLE(rc = preadv(fildes, iv.p, iv.i, offset));
       if (rc != -1) SetWriteAddr(m, addr, rc);
     }
     FreeIovs(&iv);
@@ -1866,7 +1938,7 @@ static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
   if (size) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
-      INTERRUPTIBLE(rc = pwritev(fildes, iv.p, iv.i, offset));
+      RESTARTABLE(rc = pwritev(fildes, iv.p, iv.i, offset));
       if (rc != -1) SetReadAddr(m, addr, rc);
     }
     FreeIovs(&iv);
@@ -1905,9 +1977,9 @@ static i64 SysPreadv2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
     if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
       if (iv.i) {
         if (offset == -1) {
-          INTERRUPTIBLE(rc = readv_impl(fildes, iv.p, iv.i));
+          RESTARTABLE(rc = readv_impl(fildes, iv.p, iv.i));
         } else {
-          INTERRUPTIBLE(rc = preadv(fildes, iv.p, iv.i, offset));
+          RESTARTABLE(rc = preadv(fildes, iv.p, iv.i, offset));
         }
       } else {
         rc = 0;
@@ -1949,9 +2021,9 @@ static i64 SysPwritev2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
     if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
       if (iv.i) {
         if (offset == -1) {
-          INTERRUPTIBLE(rc = writev_impl(fildes, iv.p, iv.i));
+          RESTARTABLE(rc = writev_impl(fildes, iv.p, iv.i));
         } else {
-          INTERRUPTIBLE(rc = pwritev(fildes, iv.p, iv.i, offset));
+          RESTARTABLE(rc = pwritev(fildes, iv.p, iv.i, offset));
         }
       } else {
         rc = 0;
@@ -2109,7 +2181,7 @@ static i64 SysLseek(struct Machine *m, i32 fildes, i64 offset, int whence) {
 static i64 SysFtruncate(struct Machine *m, i32 fildes, i64 size) {
   i64 rc;
   if (CheckFdAccess(m, fildes, true, EINVAL) == -1) return -1;
-  INTERRUPTIBLE(rc = ftruncate(fildes, size));
+  RESTARTABLE(rc = ftruncate(fildes, size));
   return rc;
 }
 
@@ -2236,7 +2308,7 @@ static int SysStatfsImpl(struct Machine *m, intptr_t arg, i64 addr,
   struct statvfs vfs;
   struct statfs_linux sf;
   if (!IsValidMemory(m, addr, sizeof(sf), PROT_WRITE)) return efault();
-  INTERRUPTIBLE(rc = thunk(arg, &vfs));
+  RESTARTABLE(rc = thunk(arg, &vfs));
   if (rc != -1) {
     XlatStatvfsToLinux(&sf, &vfs);
     CopyToUserWrite(m, addr, &sf, sizeof(sf));
@@ -2463,7 +2535,7 @@ static int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
   flock.l_whence = whence;
   flock.l_start = Read64(flock_linux.start);
   flock.l_len = Read64(flock_linux.len);
-  INTERRUPTIBLE(rc = fcntl(systemfd, syscmd, &flock));
+  RESTARTABLE(rc = fcntl(systemfd, syscmd, &flock));
   if (rc != -1 && syscmd == F_GETLK) {
     if (flock.l_type == F_RDLCK) {
       Write16(flock_linux.type, F_RDLCK_LINUX);
@@ -2662,7 +2734,7 @@ static int SysTruncate(struct Machine *m, i64 pathaddr, u64 length) {
   int rc, fd;
   const char *path;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  INTERRUPTIBLE(fd = OverlaysOpen(AT_FDCWD, path, O_RDWR | O_CLOEXEC, 0));
+  RESTARTABLE(fd = OverlaysOpen(AT_FDCWD, path, O_RDWR | O_CLOEXEC, 0));
   if (fd == -1) return -1;
   rc = ftruncate(fd, length);
   close(fd);
@@ -2910,10 +2982,10 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
     return efault();
   }
 #ifndef __EMSCRIPTEN__
-  INTERRUPTIBLE(rc = wait4(pid, &wstatus, options, &hrusage));
+  RESTARTABLE(rc = wait4(pid, &wstatus, options, &hrusage));
 #else
   memset(&hrusage, 0, sizeof(hrusage));
-  INTERRUPTIBLE(rc = waitpid(pid, &wstatus, options));
+  RESTARTABLE(rc = waitpid(pid, &wstatus, options));
 #endif
   if (rc != -1 && rc != 0) {
     if (opt_out_wstatus_addr) {
@@ -3046,7 +3118,7 @@ static ssize_t SysGetrandom(struct Machine *m, i64 a, size_t n, int f) {
   }
   if (n) {
     if (!(p = (char *)malloc(n))) return -1;
-    INTERRUPTIBLE(rc = GetRandom(p, n));
+    RESTARTABLE(rc = GetRandom(p, n));
     if (rc != -1) CopyToUserWrite(m, a, p, rc);
     free(p);
   } else {
@@ -3118,7 +3190,6 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
     if ((syssig = XlatSignal(sig)) != -1 && !IsBlinkSig(m->system, sig)) {
       sigfillset(&syshand.sa_mask);
       syshand.sa_flags = SA_SIGINFO;
-      if (flags & SA_RESTART_LINUX) syshand.sa_flags |= SA_RESTART;
       if (flags & SA_NOCLDSTOP_LINUX) syshand.sa_flags |= SA_NOCLDSTOP;
 #ifdef SA_NOCLDWAIT
       if (flags & SA_NOCLDWAIT_LINUX) syshand.sa_flags |= SA_NOCLDWAIT;
@@ -3181,7 +3252,7 @@ static int SysNanosleep(struct Machine *m, i64 req, i64 rem) {
 TryAgain:
   rc = nanosleep(&hreq, &hrem);
   if (rc == -1 && errno == EINTR) {
-    if (CheckInterrupt(m)) {
+    if (CheckInterrupt(m, false)) {
       if (rem) {
         Write64(gtimespec.sec, hrem.tv_sec);
         Write64(gtimespec.nsec, hrem.tv_nsec);
@@ -3233,7 +3304,7 @@ TryAgain:
   }
 #endif
   if (rc == -1 && errno == EINTR) {
-    if (CheckInterrupt(m)) {
+    if (CheckInterrupt(m, false)) {
       if (!flags && remaddr) {
         Write64(gtimespec.sec, rem.tv_sec);
         Write64(gtimespec.nsec, rem.tv_nsec);
@@ -3260,7 +3331,7 @@ static int SysSigsuspend(struct Machine *m, i64 maskaddr, i64 sigsetsize) {
   oldmask = m->sigmask;
   m->sigmask = Read64(word);
   nanos = 1;
-  while (!CheckInterrupt(m)) {
+  while (!CheckInterrupt(m, false)) {
     // TODO(jart): do better than expo backoff
     if (nanos > 256) {
       if (nanos < 10 * 1000) {
@@ -3658,9 +3729,9 @@ static i32 Select(struct Machine *m,          //
     oldmask_guest = m->sigmask;
     m->sigmask = *sigmaskp_guest;
   }
-  if (!CheckInterrupt(m)) {
-    INTERRUPTIBLE(rc = pselect(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp,
-                               &oldmask));
+  if (!CheckInterrupt(m, false)) {
+    NORESTART(rc = pselect(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp,
+                           &oldmask));
   } else {
     rc = -1;
   }
@@ -3796,7 +3867,7 @@ static int Poll(struct Machine *m, i64 fdsaddr, u64 nfds,
       for (;;) {
         for (i = 0; i < nfds; ++i) {
         TryAgain:
-          if (CheckInterrupt(m)) {
+          if (CheckInterrupt(m, false)) {
             rc = eintr();
             break;
           }
@@ -3896,7 +3967,7 @@ static int SysPpoll(struct Machine *m, i64 fdsaddr, u64 nfds, i64 timeoutaddr,
       return -1;
     }
   }
-  if (!CheckInterrupt(m)) {
+  if (!CheckInterrupt(m, false)) {
     if (timeoutaddr) {
       if ((gt = (const struct timespec_linux *)Schlep(m, timeoutaddr,
                                                       sizeof(*gt)))) {
@@ -4020,7 +4091,7 @@ static int SysTgkill(struct Machine *m, int pid, int tid, int sig) {
 
 static int SysPause(struct Machine *m) {
   int rc;
-  INTERRUPTIBLE(rc = pause());
+  NORESTART(rc = pause());
   return rc;
 }
 

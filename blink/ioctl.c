@@ -214,7 +214,7 @@ static int IoctlFionclex(struct Machine *m, int fildes) {
 static int IoctlTcsbrk(struct Machine *m, int fildes, int drain) {
   int rc;
   if (drain) {
-    INTERRUPTIBLE(rc = tcdrain(fildes));
+    RESTARTABLE(rc = tcdrain(fildes));
   } else {
     rc = tcsendbreak(fildes, 0);
   }

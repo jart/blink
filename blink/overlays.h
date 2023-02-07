@@ -3,6 +3,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define DEFAULT_OVERLAYS ":o"
+
 int SetOverlays(const char *);
 int OverlaysChdir(const char *);
 char *OverlaysGetcwd(char *, size_t);

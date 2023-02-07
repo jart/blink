@@ -3409,7 +3409,7 @@ static void Exec(void) {
       if (verbose) LogInstruction();
       Execute();
       if (m->signals) {
-        if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
+        if ((sig = ConsumeSignal(m, 0, 0))) {
           exit(128 + sig);
         }
       }
@@ -3437,7 +3437,7 @@ static void Exec(void) {
         if (verbose) LogInstruction();
         Execute();
         if (m->signals) {
-          if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
+          if ((sig = ConsumeSignal(m, 0, 0))) {
             exit(128 + sig);
           }
         }
@@ -3589,7 +3589,7 @@ static void Tui(void) {
           if (verbose) LogInstruction();
           Execute();
           if (m->signals) {
-            if ((sig = ConsumeSignal(m)) && sig != SIGALRM_LINUX) {
+            if ((sig = ConsumeSignal(m, 0, 0))) {
               exit(128 + sig);
             }
           }
@@ -3635,6 +3635,7 @@ static void GetOpts(int argc, char *argv[]) {
   bool wantjit = false;
   bool wantunsafe = false;
   FLAG_overlays = getenv("BLINK_OVERLAYS");
+  if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
   while ((opt = GetOpt(argc, argv, "hjmvtrzRNsSb:Hw:L:C:")) != -1) {
     switch (opt) {
       case 'j':
@@ -3829,7 +3830,7 @@ int main(int argc, char *argv[]) {
   SetXmmDisp(kXmmHex);
   GetOpts(argc, argv);
   if (SetOverlays(FLAG_overlays)) {
-    WriteErrorString("bad blink overlays spec; see log for details");
+    WriteErrorString("bad blink overlays spec; see log for details\n");
     exit(1);
   }
   sigfillset(&sa.sa_mask);

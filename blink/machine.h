@@ -328,12 +328,10 @@ struct Machine {                           //
   i64 faultaddr;                           // used for tui error reporting
   _Atomicish(u64) sigmask;                 // signals that've been blocked
   u32 tlbindex;                            //
-  int sig;                                 // signal under active delivery
-  u64 siguc;                               // hosted address of ucontext_t
-  u64 sigfp;                               // virtual address of fpstate_t
   struct System *system;                   //
   bool canhalt;                            //
   bool metal;                              //
+  bool restored;                           //
   bool interrupted;                        //
   sigjmp_buf onhalt;                       //
   struct sigaltstack_linux sigaltstack;    //
@@ -386,6 +384,7 @@ _Noreturn void OpUd(P);
 _Noreturn void OpHlt(P);
 void JitlessDispatch(P);
 void RestoreIp(struct Machine *);
+void CheckForSignals(struct Machine *);
 void UnlockRobustFutexes(struct Machine *);
 
 bool IsValidAddrSize(i64, i64) pureconst;

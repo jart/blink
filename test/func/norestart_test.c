@@ -1,7 +1,7 @@
 /*-*- mode:c;indent-tabs-mode:nil;c-basic-offset:2;tab-width:8;coding:utf-8 -*-│
 │vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2022 Justine Alexandra Roberts Tunney                              │
+│ Copyright 2023 Justine Alexandra Roberts Tunney                              │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -16,23 +16,42 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <sys/socket.h>
-#include <time.h>
+#include <errno.h>
+#include <signal.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
-#include "blink/assert.h"
-#include "blink/bitscan.h"
-#include "blink/linux.h"
-#include "blink/log.h"
-#include "blink/machine.h"
-#include "blink/macros.h"
-#include "blink/timespec.h"
-#include "blink/types.h"
-#include "blink/util.h"
+// SA_RESTART doesn't apply to @norestart functions like sigsuspend()
+// see also restart_test.c
+// see also eintr_test.c
+
+volatile int gotsig;
+
+void OnSig(int sig, siginfo_t *si, void *ptr) {
+  gotsig = 1;
+}
 
 int main(int argc, char *argv[]) {
-  return 0;
+  sigset_t mask;
+  int rc, ws, pid;
+  sigfillset(&mask);
+  sigprocmask(SIG_BLOCK, &mask, 0);
+  sigaction(SIGUSR1,
+            &(struct sigaction){
+                .sa_sigaction = OnSig,
+                .sa_flags = SA_RESTART,
+            },
+            0);
+  if (!(pid = fork())) {
+    sigemptyset(&mask);
+    rc = sigsuspend(&mask);
+    if (rc == -1 && errno == EINTR && gotsig) {
+      _exit(0);
+    } else {
+      _exit(1);
+    }
+  }
+  kill(pid, SIGUSR1);
+  wait(&ws);
+  return WEXITSTATUS(ws);
 }

@@ -57,7 +57,7 @@ static int CloseFds(struct Dll *fds) {
 }
 
 static int FinishClose(struct Machine *m, int rc) {
-  if (rc == -1 && errno == EINTR && !CheckInterrupt(m)) rc = 0;
+  if (rc == -1 && errno == EINTR && !CheckInterrupt(m, true)) rc = 0;
   return rc;
 }
 

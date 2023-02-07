@@ -58,9 +58,8 @@ struct Fd *ForkFd(struct Fds *fds, struct Fd *fd, int fildes, int oflags) {
   struct Fd *fd2;
   if ((fd2 = AddFd(fds, fildes, oflags))) {
     if (fd) {
-      fd2->type = fd->type;
-      fd2->family = fd->family;
-      fd2->protocol = fd->protocol;
+      fd2->socktype = fd->socktype;
+      fd2->norestart = fd->norestart;
     }
   }
   return fd2;

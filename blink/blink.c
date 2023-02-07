@@ -169,6 +169,7 @@ static void GetOpts(int argc, char *argv[]) {
   int opt;
   FLAG_nolinear = !CanHaveLinearMemory();
   FLAG_overlays = getenv("BLINK_OVERLAYS");
+  if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
 #if LOG_ENABLED
   FLAG_logpath = getenv("BLINK_LOG_FILENAME");
 #endif
@@ -259,7 +260,7 @@ int main(int argc, char *argv[]) {
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
   WriteErrorInit();
   if (SetOverlays(FLAG_overlays)) {
-    WriteErrorString("bad blink overlays spec; see log for details");
+    WriteErrorString("bad blink overlays spec; see log for details\n");
     exit(1);
   }
   HandleSigs();

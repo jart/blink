@@ -2306,14 +2306,14 @@ void ExecuteInstruction(struct Machine *m) {
 #endif
 }
 
-static void CheckForSignals(struct Machine *m) {
+void CheckForSignals(struct Machine *m) {
   int sig;
   if (atomic_load_explicit(&m->killed, memory_order_relaxed)) {
     SysExit(m, 0);
   }
   if (m->signals &&                  //
       (m->signals & ~m->sigmask) &&  //
-      (sig = ConsumeSignal(m))) {
+      (sig = ConsumeSignal(m, 0, 0))) {
     TerminateSignal(m, sig);
   }
 }
