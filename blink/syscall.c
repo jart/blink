@@ -2830,8 +2830,8 @@ static int SysRmdir(struct Machine *m, i64 path) {
 
 static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
                        int dstdirfd, i64 dstpath) {
-  return renameat(GetDirFildes(srcdirfd), LoadStr(m, srcpath),
-                  GetDirFildes(dstdirfd), LoadStr(m, dstpath));
+  return OverlaysRename(GetDirFildes(srcdirfd), LoadStr(m, srcpath),
+                        GetDirFildes(dstdirfd), LoadStr(m, dstpath));
 }
 
 static int SysRename(struct Machine *m, i64 src, i64 dst) {
@@ -2860,9 +2860,9 @@ static i32 SysLinkat(struct Machine *m,  //
                      i32 newdirfd,       //
                      i64 newpath,        //
                      i32 flags) {
-  return linkat(GetDirFildes(olddirfd), LoadStr(m, oldpath),
-                GetDirFildes(newdirfd), LoadStr(m, newpath),
-                XlatLinkatFlags(flags));
+  return OverlaysLink(GetDirFildes(olddirfd), LoadStr(m, oldpath),
+                      GetDirFildes(newdirfd), LoadStr(m, newpath),
+                      XlatLinkatFlags(flags));
 }
 
 static int SysLink(struct Machine *m, i64 existingpath, i64 newpath) {

@@ -18,5 +18,7 @@ int OverlaysChown(int, const char *, uid_t, gid_t, int);
 int OverlaysSymlink(const char *, int, const char *);
 ssize_t OverlaysReadlink(int, const char *, char *, size_t);
 int OverlaysUtime(int, const char *, const struct timespec[2], int);
+int OverlaysLink(int, const char *, int, const char *, int);
+int OverlaysRename(int, const char *, int, const char *);
 
 #endif /* BLINK_OVERLAYS_H_ */

@@ -501,3 +501,109 @@ int OverlaysUtime(int dirfd, const char *path, const struct timespec times[2],
   struct Utime args = {times, flags};
   return OverlaysGeneric(dirfd, path, &args, Utime);
 }
+
+////////////////////////////////////////////////////////////////////////////////
+
+static ssize_t OverlaysGeneric2(int srcdirfd, const char *srcpath, int dstdirfd,
+                                const char *dstpath, void *args,
+                                ssize_t fgenericat(int, const char *, int,
+                                                   const char *, void *)) {
+  int err;
+  ssize_t rc;
+  ssize_t i, j;
+  const char *sp, *dp;
+  int srccloseme, dstcloseme;
+  if (!srcpath || !dstpath) return efault();
+  if (!*srcpath || !*dstpath) return enoent();
+  for (err = ENOENT, j = 0; j >= 0 && g_overlays[j]; ++j) {
+    if (srcpath[0] != '/' && srcpath[0]) {
+      j = -2;
+      sp = srcpath;
+      srccloseme = -1;
+    } else if (!*g_overlays[j]) {
+      srcdirfd = AT_FDCWD;
+      srccloseme = -1;
+      sp = srcpath;
+    } else {
+      sp = !srcpath[1] ? "." : srcpath + 1;
+      srccloseme = srcdirfd =
+          open(g_overlays[j], O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
+      if (srcdirfd == -1) {
+        if (IsUnrecoverableErrno()) {
+          return -1;
+        } else {
+          LOGF("bad overlay %s: %s", g_overlays[j], DescribeHostErrno(errno));
+          continue;
+        }
+      }
+    }
+    for (i = 0; i >= 0 && g_overlays[i]; ++i) {
+      if (dstpath[0] != '/' && dstpath[0]) {
+        i = -2;
+        dp = dstpath;
+        dstcloseme = -1;
+      } else if (!*g_overlays[i]) {
+        dstdirfd = AT_FDCWD;
+        dstcloseme = -1;
+        dp = dstpath;
+      } else {
+        dp = !dstpath[1] ? "." : dstpath + 1;
+        dstcloseme = dstdirfd =
+            open(g_overlays[i], O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
+        if (dstdirfd == -1) {
+          if (IsUnrecoverableErrno()) {
+            if (srccloseme != -1) close(srccloseme);
+            return -1;
+          } else {
+            LOGF("bad overlay %s: %s", g_overlays[i], DescribeHostErrno(errno));
+            continue;
+          }
+        }
+      }
+      if ((rc = fgenericat(srcdirfd, sp, dstdirfd, dp, args)) != -1) {
+        if (dstcloseme != -1) close(dstcloseme);
+        if (srccloseme != -1) close(srccloseme);
+        return rc;
+      }
+      err = errno;
+      if (dstcloseme != -1) close(dstcloseme);
+      if (err != ENOENT && err != ENOTDIR) {
+        if (srccloseme != -1) close(srccloseme);
+        return -1;
+      }
+    }
+    if (srccloseme != -1) close(srccloseme);
+  }
+  errno = err;
+  return -1;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+static ssize_t Rename(int srcdirfd, const char *srcpath, int dstdirfd,
+                      const char *dstpath, void *vargs) {
+  return renameat(srcdirfd, srcpath, dstdirfd, dstpath);
+}
+
+int OverlaysRename(int srcdirfd, const char *srcpath, int dstdirfd,
+                   const char *dstpath) {
+  return OverlaysGeneric2(srcdirfd, srcpath, dstdirfd, dstpath, 0, Rename);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+struct Link {
+  int flags;
+};
+
+static ssize_t Link(int srcdirfd, const char *srcpath, int dstdirfd,
+                    const char *dstpath, void *vargs) {
+  struct Link *args = (struct Link *)vargs;
+  return linkat(srcdirfd, srcpath, dstdirfd, dstpath, args->flags);
+}
+
+int OverlaysLink(int srcdirfd, const char *srcpath, int dstdirfd,
+                 const char *dstpath, int flags) {
+  struct Link args = {flags};
+  return OverlaysGeneric2(srcdirfd, srcpath, dstdirfd, dstpath, &args, Link);
+}
