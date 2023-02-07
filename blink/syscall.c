@@ -425,6 +425,9 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
     if (flags & CLONE_CHILD_CLEARTID_LINUX) {
       m->ctid = ctid;
     }
+    if (stack) {
+      Put64(m->sp, stack);
+    }
 #if !CAN_PSHARE
     InitBus();
 #endif

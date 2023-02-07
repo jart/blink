@@ -60,7 +60,7 @@
   -S                   enable system call logging\n\
   -L PATH              log filename (default ${TMPDIR:-/tmp}/blink.log)\n\
   -C PATH              sets chroot dir or overlay spec [default \":o\"]\n\
-  $BLINK_OVERLAYS      file system roots [default \":o\"\n\
+  $BLINK_OVERLAYS      file system roots [default \":o\"]\n\
   $BLINK_LOG_FILENAME  log filename (same as -L flag)\n"
 
 extern char **environ;
