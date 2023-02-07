@@ -326,9 +326,16 @@
 #define AF_INET_LINUX   2
 #define AF_INET6_LINUX  10
 
+#define SOL_IP_LINUX     0
 #define SOL_SOCKET_LINUX 1
 #define SOL_TCP_LINUX    6
 #define SOL_UDP_LINUX    17
+
+#define IPPROTO_IP_LINUX     0
+#define IPPROTO_ICMP_LINUX   1
+#define IPPROTO_TCP_LINUX    6
+#define IPPROTO_UDP_LINUX    17
+#define IPPROTO_ICMPV6_LINUX 58
 
 #define SA_NOCLDSTOP_LINUX 1
 #define SA_NOCLDWAIT_LINUX 2
@@ -636,6 +643,14 @@
 #define SO_SNDTIMEO_LINUX          21
 #define SO_RCVLOWAT_LINUX          18
 #define SO_SNDLOWAT_LINUX          19
+#define SO_BROADCAST_LINUX         6
+#define IP_TOS_LINUX               1
+#define IP_TTL_LINUX               2
+#define IP_HDRINCL_LINUX           3
+#define IP_OPTIONS_LINUX           4
+#define IP_RETOPTS_LINUX           7
+#define IP_RECVTTL_LINUX           12
+#define IP_MTU_LINUX               14
 #define TCP_NODELAY_LINUX          1
 #define TCP_MAXSEG_LINUX           2
 #define TCP_CORK_LINUX             3
@@ -657,6 +672,7 @@
 
 #define SOCK_STREAM_LINUX 1
 #define SOCK_DGRAM_LINUX  2
+#define SOCK_RAW_LINUX    3
 
 #define IOV_MAX_LINUX 1024
 

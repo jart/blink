@@ -378,8 +378,12 @@ int XlatSocketType(int x) {
 int XlatSocketProtocol(int x) {
   switch (x) {
     XLAT(0, 0);
-    XLAT(6, IPPROTO_TCP);
-    XLAT(17, IPPROTO_UDP);
+    XLAT(IPPROTO_TCP_LINUX, IPPROTO_TCP);
+    XLAT(IPPROTO_UDP_LINUX, IPPROTO_UDP);
+    XLAT(IPPROTO_ICMP_LINUX, IPPROTO_ICMP);
+#ifdef IPPROTO_ICMPV6
+    XLAT(IPPROTO_ICMPV6_LINUX, IPPROTO_ICMPV6);
+#endif
     default:
       LOGF("%s %d not supported yet", "socket protocol", x);
       return einval();
@@ -390,9 +394,10 @@ int XlatSocketLevel(int x, int *level) {
   // Haiku defines SOL_SOCKET as -1
   int res;
   switch (x) {
-    CASE(1, res = SOL_SOCKET);
-    CASE(6, res = IPPROTO_TCP);
-    CASE(17, res = IPPROTO_UDP);
+    CASE(SOL_SOCKET_LINUX, res = SOL_SOCKET);
+    CASE(SOL_IP_LINUX, res = IPPROTO_IP);
+    CASE(SOL_TCP_LINUX, res = IPPROTO_TCP);
+    CASE(SOL_UDP_LINUX, res = IPPROTO_UDP);
     default:
       LOGF("%s %d not supported yet", "socket level", x);
       return einval();
@@ -412,6 +417,7 @@ int XlatSocketOptname(int level, int optname) {
         XLAT(SO_DONTROUTE_LINUX, SO_DONTROUTE);
         XLAT(SO_SNDBUF_LINUX, SO_SNDBUF);
         XLAT(SO_RCVBUF_LINUX, SO_RCVBUF);
+        XLAT(SO_BROADCAST_LINUX, SO_BROADCAST);
         XLAT(SO_KEEPALIVE_LINUX, SO_KEEPALIVE);
 #ifdef SO_REUSEPORT
         XLAT(SO_REUSEPORT_LINUX, SO_REUSEPORT);
@@ -427,6 +433,19 @@ int XlatSocketOptname(int level, int optname) {
         default:
           break;
       }
+      break;
+    case SOL_IP_LINUX:
+      switch (optname) {
+        XLAT(IP_TOS_LINUX, IP_TOS);
+        XLAT(IP_TTL_LINUX, IP_TTL);
+        XLAT(IP_HDRINCL_LINUX, IP_HDRINCL);
+        XLAT(IP_OPTIONS_LINUX, IP_OPTIONS);
+        XLAT(IP_RECVTTL_LINUX, IP_RECVTTL);
+        XLAT(IP_RETOPTS_LINUX, IP_RETOPTS);
+        default:
+          break;
+      }
+      break;
     case SOL_TCP_LINUX:
       switch (optname) {
         XLAT(TCP_NODELAY_LINUX, TCP_NODELAY);
@@ -474,6 +493,7 @@ int XlatSocketOptname(int level, int optname) {
         default:
           break;
       }
+      break;
     default:
       break;
   }
