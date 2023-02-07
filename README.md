@@ -406,6 +406,7 @@ So the recommended approach is either:
 
 1. Build your app using Cosmopolitan Libc, otherwise
 2. Build your app using GNU Autotools on Alpine Linux
+3. Build your app using Buildroot
 
 For Cosmopolitan, please read [Getting Started with Cosmopolitan
 Libc](https://jeskin.net/blog/getting-started-with-cosmopolitan-libc/)
@@ -430,8 +431,31 @@ make -j8 o//examples/kilo.com
 blinkenlights -jm o//examples/kilo.com
 ```
 
-But let's say you want to build an Autotools project like Emacs. The
-best way to do that is to spin up an Alpine Linux container and use
+Blink is great for making single-file autonomous binaries like the above
+easily copyable across platforms. If you're more interested in building
+systems instead, then [Buildroot](https://buildroot.org/) is one way to
+create a Linux userspace that'll run under Blink. All you have to do is
+set the `$BLINK_OVERLAYS` environment variable to the buildroot target
+folder, which will ask Blink to create a chroot'd environment.
+
+```
+cd ~/buildroot
+make menuconfig
+make
+cp -R output/target ~/blinkroot
+sudo mount -t devtmpfs none ~/blinkroot/dev
+sudo mount -t sysfs none ~/blinkroot/sys
+sudo mount -t proc none ~/blinkroot/proc
+cd ~/blink
+make -j8
+export BLINK_OVERLAYS=$HOME/blinkroot
+o//blink/blink sh
+uname -a
+Linux hostname 4.5 blink-1.0 x86_64 GNU/Linux
+```
+
+If you want to build an Autotools project like Emacs, the best way to do
+that is to spin up an Alpine Linux container and use
 [jart/blink-isystem](https://github.com/jart/blink-isystem) as your
 system header subset. blink-isystem is basically just the Musl Linux
 headers with all the problematic APIs commented out. That way autoconf
