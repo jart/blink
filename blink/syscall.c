@@ -338,9 +338,16 @@ _Noreturn void SysExit(struct Machine *m, int rc) {
   }
 }
 
-static int SysFork(struct Machine *m) {
+static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
   int pid, newpid = 0;
+  atomic_int *ctid_ptr;
   unassert(!m->path.jb);
+  if ((flags & CLONE_CHILD_SETTID_LINUX) &&
+      ((ctid & (sizeof(int) - 1)) ||
+       !(ctid_ptr = (atomic_int *)LookupAddress(m, ctid)))) {
+    LOGF("bad clone() ptid / ctid pointers: %#" PRIx64, flags);
+    return efault();
+  }
   // NOTES ON LOCKING HIERARCHY
   // exec_lock must come before sig_lock (see dup3)
   // exec_lock must come before fds.lock (see dup3)
@@ -369,6 +376,12 @@ static int SysFork(struct Machine *m) {
   UNLOCK(&m->system->exec_lock);
   if (!pid) {
     newpid = getpid();
+    if (flags & CLONE_CHILD_SETTID_LINUX) {
+      atomic_store_explicit(ctid_ptr, Little32(newpid), memory_order_release);
+    }
+    if (flags & CLONE_CHILD_CLEARTID_LINUX) {
+      m->ctid = ctid;
+    }
 #if !CAN_PSHARE
     InitBus();
 #endif
@@ -386,8 +399,12 @@ static int SysFork(struct Machine *m) {
   return pid;
 }
 
+static int SysFork(struct Machine *m) {
+  return Fork(m, 0, 0, 0);
+}
+
 static int SysVfork(struct Machine *m) {
-  // TODO(jart): Parent should be stopped while child is running.
+  // TODO: Parent should be stopped while child is running.
   return SysFork(m);
 }
 
@@ -486,14 +503,17 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   return tid;
 }
 
+static bool IsForkOrVfork(u64 flags) {
+  u64 supported = CLONE_CHILD_SETTID_LINUX | CLONE_CHILD_CLEARTID_LINUX;
+  return (flags & ~supported) == SIGCHLD_LINUX ||
+         (flags & ~supported) ==
+             (CLONE_VM_LINUX | CLONE_VFORK_LINUX | SIGCHLD_LINUX);
+}
+
 static int SysClone(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
                     u64 tls, u64 func) {
-  if (flags == SIGCHLD_LINUX) {
-    if (stack) return einval();
-    return SysFork(m);
-  } else if (flags == (CLONE_VM_LINUX | CLONE_VFORK_LINUX | SIGCHLD_LINUX)) {
-    if (stack) return einval();
-    return SysVfork(m);
+  if (IsForkOrVfork(flags)) {
+    return Fork(m, flags, stack, ctid);
   } else {
     return SysSpawn(m, flags, stack, ptid, ctid, tls, func);
   }
