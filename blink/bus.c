@@ -31,6 +31,12 @@
 #include "blink/swap.h"
 #include "blink/tsan.h"
 
+#if CAN_PSHARE
+#define BUS_MEMORY MAP_SHARED
+#else
+#define BUS_MEMORY MAP_PRIVATE
+#endif
+
 #define ACQUIRE memory_order_acquire
 #define RELEASE memory_order_release
 
@@ -45,7 +51,7 @@ void InitBus(void) {
 #endif
   unassert(g_bus =
                (struct Bus *)AllocateBig(sizeof(*g_bus), PROT_READ | PROT_WRITE,
-                                         MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+                                         BUS_MEMORY | MAP_ANONYMOUS, -1, 0));
   unassert(!pthread_condattr_init(&cattr));
   unassert(!pthread_mutexattr_init(&mattr));
 #if CAN_PSHARE
