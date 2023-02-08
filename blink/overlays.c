@@ -259,21 +259,23 @@ int OverlaysChdir(const char *path) {
 
 int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
   int fd;
-  int err;
   size_t i;
+  int err = -1;
   if (!path) return efault();
   if (!*path) return enoent();
   if (path[0] != '/' && path[0]) {
     return openat(dirfd, path, flags, mode);
   }
-  for (err = ENOENT, i = 0; g_overlays[i]; ++i) {
+  for (i = 0; g_overlays[i]; ++i) {
     if (!*g_overlays[i]) {
       if ((fd = open(path, flags, mode)) != -1) {
         return fd;
       }
-      err = errno;
-      if (err != ENOENT && err != ENOTDIR) {
+      if (errno != ENOENT && errno != ENOTDIR) {
         return -1;
+      }
+      if (err == -1) {
+        err = errno;
       }
     } else {
       dirfd = open(g_overlays[i], O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
@@ -293,13 +295,16 @@ int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
         unassert(!close(fd));
         return dirfd;
       }
-      err = errno;
+      if (err == -1) {
+        err = errno;
+      }
       unassert(!close(dirfd));
-      if (err != ENOENT && err != ENOTDIR) {
+      if (errno != ENOENT && errno != ENOTDIR) {
         return -1;
       }
     }
   }
+  unassert(err != -1);
   errno = err;
   return -1;
 }
@@ -307,20 +312,22 @@ int OverlaysOpen(int dirfd, const char *path, int flags, int mode) {
 static ssize_t OverlaysGeneric(int dirfd, const char *path, void *args,
                                ssize_t fgenericat(int, const char *, void *)) {
   _Static_assert(sizeof(ssize_t) >= sizeof(int), "");
-  int err;
   size_t i;
   ssize_t rc;
+  int err = -1;
   if (!path) return efault();
   if (!*path) return enoent();
   if (path[0] != '/' && path[0]) {
     return fgenericat(dirfd, path, args);
   }
-  for (err = ENOENT, i = 0; g_overlays[i]; ++i) {
+  for (i = 0; g_overlays[i]; ++i) {
     if (!*g_overlays[i]) {
       if ((rc = fgenericat(AT_FDCWD, path, args)) != -1) {
         return rc;
       }
-      err = errno;
+      if (err == -1) {
+        err = errno;
+      }
       if (err != ENOENT && err != ENOTDIR) {
         return -1;
       }
@@ -338,13 +345,16 @@ static ssize_t OverlaysGeneric(int dirfd, const char *path, void *args,
         unassert(!close(dirfd));
         return rc;
       }
-      err = errno;
+      if (err == -1) {
+        err = errno;
+      }
       unassert(!close(dirfd));
-      if (err != ENOENT && err != ENOTDIR) {
+      if (errno != ENOENT && errno != ENOTDIR) {
         return -1;
       }
     }
   }
+  unassert(err != -1);
   errno = err;
   return -1;
 }
@@ -508,14 +518,14 @@ static ssize_t OverlaysGeneric2(int srcdirfd, const char *srcpath, int dstdirfd,
                                 const char *dstpath, void *args,
                                 ssize_t fgenericat(int, const char *, int,
                                                    const char *, void *)) {
-  int err;
   ssize_t rc;
+  int err = -1;
   ssize_t i, j;
   const char *sp, *dp;
   int srccloseme, dstcloseme;
   if (!srcpath || !dstpath) return efault();
   if (!*srcpath || !*dstpath) return enoent();
-  for (err = ENOENT, j = 0; j >= 0 && g_overlays[j]; ++j) {
+  for (j = 0; j >= 0 && g_overlays[j]; ++j) {
     if (srcpath[0] != '/' && srcpath[0]) {
       j = -2;
       sp = srcpath;
@@ -565,15 +575,18 @@ static ssize_t OverlaysGeneric2(int srcdirfd, const char *srcpath, int dstdirfd,
         if (srccloseme != -1) close(srccloseme);
         return rc;
       }
-      err = errno;
+      if (err == -1) {
+        err = errno;
+      }
       if (dstcloseme != -1) close(dstcloseme);
-      if (err != ENOENT && err != ENOTDIR) {
+      if (errno != ENOENT && errno != ENOTDIR) {
         if (srccloseme != -1) close(srccloseme);
         return -1;
       }
     }
     if (srccloseme != -1) close(srccloseme);
   }
+  unassert(err != -1);
   errno = err;
   return -1;
 }
