@@ -23,6 +23,7 @@
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/iovs.h"
+#include "blink/limits.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -53,6 +54,7 @@ static int AppendIovs(struct Iovs *ib, void *base, size_t len) {
     n = ib->n;
     if (i &&
         (uintptr_t)base == (uintptr_t)p[i - 1].iov_base + p[i - 1].iov_len) {
+      if (p[i - 1].iov_len + len > NUMERIC_MAX(ssize_t)) return einval();
       p[i - 1].iov_len += len;
     } else {
       if (i == n) {
@@ -75,9 +77,10 @@ static int AppendIovs(struct Iovs *ib, void *base, size_t len) {
 }
 
 int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr, u64 size) {
+  u64 have;
   void *real;
   unsigned got;
-  u64 have;
+  if (size > NUMERIC_MAX(ssize_t)) return einval();
   while (size && ib->i < IOV_MAX) {
     if (!(real = LookupAddress(m, addr))) return efault();
     have = 4096 - (addr & 4095);
@@ -90,26 +93,22 @@ int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr, u64 size) {
 }
 
 int AppendIovsGuest(struct Machine *m, struct Iovs *iv, i64 iovaddr,
-                    i64 iovlen) {
+                    int iovlen) {
   int rc;
-  size_t i;
-  u64 iovsize;
+  size_t i, iovsize;
   const struct iovec_linux *guestiovs;
-  if (!mulo(iovlen, sizeof(struct iovec_linux), &iovsize) &&
-      (0 <= iovsize && iovsize <= 0x7ffff000)) {
-    if ((guestiovs = (const struct iovec_linux *)Schlep(m, iovaddr, iovsize))) {
-      for (rc = i = 0; i < iovlen && iv->i < IOV_MAX; ++i) {
-        if (AppendIovsReal(m, iv, Read64(guestiovs[i].base),
-                           Read64(guestiovs[i].len)) == -1) {
-          rc = -1;
-          break;
-        }
+  if (iovlen > IOV_MAX_LINUX) return einval();
+  iovsize = iovlen * sizeof(struct iovec_linux);
+  if ((guestiovs = (const struct iovec_linux *)Schlep(m, iovaddr, iovsize))) {
+    for (rc = i = 0; i < iovlen && iv->i < IOV_MAX; ++i) {
+      if (AppendIovsReal(m, iv, Read64(guestiovs[i].base),
+                         Read64(guestiovs[i].len)) == -1) {
+        rc = -1;
+        break;
       }
-      return rc;
-    } else {
-      return -1;
     }
+    return rc;
   } else {
-    return eoverflow();
+    return -1;
   }
 }

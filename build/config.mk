@@ -24,6 +24,7 @@ endif
 
 CPPFLAGS +=				\
 	-iquote.			\
+	-D_FILE_OFFSET_BITS=64		\
 	-D_POSIX_C_SOURCE=200809L	\
 	-D_XOPEN_SOURCE=700		\
 	-D_DARWIN_C_SOURCE		\

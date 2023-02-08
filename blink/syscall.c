@@ -50,6 +50,8 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "blink/errno.h"
+#include "blink/limits.h"
 #include "blink/log.h"
 #include "blink/overlays.h"
 #include "blink/util.h"
@@ -951,6 +953,7 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   _Static_assert(PROT_EXEC == 4, "");
   int rc;
   int unsupported;
+  if (size > NUMERIC_MAX(size_t)) return eoverflow();
   if (!IsValidAddrSize(addr, size)) return einval();
   if ((unsupported = prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))) {
     LOGF("unsupported mprotect() protection: %#x", unsupported);
@@ -967,7 +970,7 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   return rc;
 }
 
-static int SysMadvise(struct Machine *m, i64 addr, size_t len, int advice) {
+static int SysMadvise(struct Machine *m, i64 addr, u64 len, int advice) {
   return 0;
 }
 
@@ -1016,8 +1019,8 @@ int GetOflags(struct Machine *m, int fildes) {
   return oflags;
 }
 
-static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
-                   int flags, int fildes, i64 offset) {
+static i64 SysMmap(struct Machine *m, i64 virt, u64 size, int prot, int flags,
+                   int fildes, i64 offset) {
   u64 key;
   int oflags;
   ssize_t rc;
@@ -1025,12 +1028,17 @@ static i64 SysMmap(struct Machine *m, i64 virt, size_t size, int prot,
   if (!IsValidAddrSize(virt, size)) return einval();
   if (flags & MAP_GROWSDOWN_LINUX) return enotsup();
   if ((key = Prot2Page(prot)) == -1) return einval();
+  if (size > NUMERIC_MAX(size_t)) return eoverflow();
   if (flags & MAP_FIXED_NOREPLACE_LINUX) return enotsup();
   if (flags & MAP_ANONYMOUS_LINUX) {
     fildes = -1;
     if ((flags & MAP_TYPE_LINUX) == MAP_FILE_LINUX) {
       return einval();
     }
+  } else if (offset < 0) {
+    return einval();
+  } else if (offset > NUMERIC_MAX(off_t)) {
+    return eoverflow();
   }
   if (fildes != -1) {
     if ((oflags = GetOflags(m, fildes)) == -1) return -1;
@@ -1104,7 +1112,8 @@ static int XlatMsyncFlags(int flags) {
   return sysflags;
 }
 
-static int SysMsync(struct Machine *m, i64 virt, size_t size, int flags) {
+static int SysMsync(struct Machine *m, i64 virt, u64 size, int flags) {
+  if (size > NUMERIC_MAX(size_t)) return eoverflow();
   if ((flags = XlatMsyncFlags(flags)) == -1) return -1;
   return SyncVirtual(m->system, virt, size, flags);
 }
@@ -1837,6 +1846,7 @@ static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   struct Fd *fd;
   struct Iovs iv;
   ssize_t (*readv_impl)(int, const struct iovec *, int);
+  if (size > NUMERIC_MAX(size_t)) return eoverflow();
   LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
@@ -1868,6 +1878,7 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   struct Fd *fd;
   struct Iovs iv;
   ssize_t (*writev_impl)(int, const struct iovec *, int);
+  if (size > NUMERIC_MAX(size_t)) return eoverflow();
   LOCK(&m->system->fds.lock);
   if ((fd = GetFd(&m->system->fds, fildes))) {
     unassert(fd->cb);
@@ -1919,6 +1930,7 @@ static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
                     u64 offset) {
   ssize_t rc;
   struct Iovs iv;
+  if (size > NUMERIC_MAX(size_t)) return eoverflow();
   if (CheckFdAccess(m, fildes, false, EBADF) == -1) return -1;
   if (size) {
     InitIovs(&iv);
@@ -1937,6 +1949,7 @@ static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
                      u64 offset) {
   ssize_t rc;
   struct Iovs iv;
+  if (size > NUMERIC_MAX(size_t)) return eoverflow();
   if (CheckFdAccess(m, fildes, true, EBADF) == -1) return -1;
   if (size) {
     InitIovs(&iv);
@@ -1981,6 +1994,10 @@ static i64 SysPreadv2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
       if (iv.i) {
         if (offset == -1) {
           RESTARTABLE(rc = readv_impl(fildes, iv.p, iv.i));
+        } else if (offset < 0) {
+          return einval();
+        } else if (offset > NUMERIC_MAX(off_t)) {
+          return eoverflow();
         } else {
           RESTARTABLE(rc = preadv(fildes, iv.p, iv.i, offset));
         }
@@ -2025,6 +2042,10 @@ static i64 SysPwritev2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
       if (iv.i) {
         if (offset == -1) {
           RESTARTABLE(rc = writev_impl(fildes, iv.p, iv.i));
+        } else if (offset < 0) {
+          return einval();
+        } else if (offset > NUMERIC_MAX(off_t)) {
+          return eoverflow();
         } else {
           RESTARTABLE(rc = pwritev(fildes, iv.p, iv.i, offset));
         }
@@ -2164,6 +2185,8 @@ static int SysFadvise(struct Machine *m, u32 fd, u64 offset, u64 len,
 static i64 SysLseek(struct Machine *m, i32 fildes, i64 offset, int whence) {
   i64 rc;
   struct Fd *fd;
+  if (offset > NUMERIC_MAX(off_t)) return eoverflow();
+  if (offset < -NUMERIC_MAX(off_t) - 1) return eoverflow();
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
   if (!fd->dirstream) {
     rc = lseek(fd->fildes, offset, XlatWhence(whence));
@@ -2181,10 +2204,12 @@ static i64 SysLseek(struct Machine *m, i32 fildes, i64 offset, int whence) {
   return rc;
 }
 
-static i64 SysFtruncate(struct Machine *m, i32 fildes, i64 size) {
+static i64 SysFtruncate(struct Machine *m, i32 fildes, i64 length) {
   i64 rc;
+  if (length < 0) return einval();
+  if (length > NUMERIC_MAX(off_t)) return eoverflow();
   if (CheckFdAccess(m, fildes, true, EINVAL) == -1) return -1;
-  RESTARTABLE(rc = ftruncate(fildes, size));
+  RESTARTABLE(rc = ftruncate(fildes, length));
   return rc;
 }
 
@@ -2733,9 +2758,11 @@ static int SysChmod(struct Machine *m, i64 path, u32 mode) {
   return SysFchmodat(m, AT_FDCWD_LINUX, path, mode);
 }
 
-static int SysTruncate(struct Machine *m, i64 pathaddr, u64 length) {
+static int SysTruncate(struct Machine *m, i64 pathaddr, i64 length) {
   int rc, fd;
   const char *path;
+  if (length < 0) return einval();
+  if (length > NUMERIC_MAX(off_t)) return eoverflow();
   if (!(path = LoadStr(m, pathaddr))) return -1;
   RESTARTABLE(fd = OverlaysOpen(AT_FDCWD, path, O_RDWR | O_CLOEXEC, 0));
   if (fd == -1) return -1;
