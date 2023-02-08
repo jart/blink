@@ -50,11 +50,32 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
+#include "blink/bus.h"
+#include "blink/case.h"
+#include "blink/debug.h"
+#include "blink/endian.h"
 #include "blink/errno.h"
+#include "blink/iovs.h"
 #include "blink/limits.h"
+#include "blink/linux.h"
+#include "blink/loader.h"
+#include "blink/lock.h"
 #include "blink/log.h"
+#include "blink/machine.h"
+#include "blink/macros.h"
+#include "blink/map.h"
 #include "blink/overlays.h"
+#include "blink/pml4t.h"
+#include "blink/preadv.h"
+#include "blink/random.h"
+#include "blink/signal.h"
+#include "blink/stats.h"
+#include "blink/swap.h"
+#include "blink/syscall.h"
+#include "blink/timespec.h"
 #include "blink/util.h"
+#include "blink/xlat.h"
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -68,31 +89,6 @@
 #ifdef __linux
 #include <sched.h>
 #endif
-
-#include "blink/assert.h"
-#include "blink/bus.h"
-#include "blink/case.h"
-#include "blink/debug.h"
-#include "blink/endian.h"
-#include "blink/errno.h"
-#include "blink/iovs.h"
-#include "blink/linux.h"
-#include "blink/loader.h"
-#include "blink/lock.h"
-#include "blink/log.h"
-#include "blink/machine.h"
-#include "blink/macros.h"
-#include "blink/map.h"
-#include "blink/pml4t.h"
-#include "blink/preadv.h"
-#include "blink/random.h"
-#include "blink/signal.h"
-#include "blink/stats.h"
-#include "blink/swap.h"
-#include "blink/syscall.h"
-#include "blink/timespec.h"
-#include "blink/util.h"
-#include "blink/xlat.h"
 
 #ifdef SO_LINGER_SEC
 #define SO_LINGER_ SO_LINGER_SEC
@@ -3352,22 +3348,57 @@ TryAgain:
   return rc;
 }
 
-static int SysSigsuspend(struct Machine *m, i64 maskaddr, i64 sigsetsize) {
+static int SigsuspendActual(struct Machine *m, u64 mask) {
   int rc;
+  u64 oldmask;
+  sigset_t block_host, oldmask_host;
+  unassert(!sigfillset(&block_host));
+  unassert(!pthread_sigmask(SIG_BLOCK, &block_host, &oldmask_host));
+  assert(sigismember(&oldmask_host, SIGSYS) == 0);
+  oldmask = m->sigmask;
+  m->sigmask = mask;
+  NORESTART(rc, sigsuspend(&oldmask_host));
+  m->sigmask = oldmask;
+  unassert(!pthread_sigmask(SIG_SETMASK, &oldmask_host, 0));
+  return rc;
+}
+
+static int SigsuspendPolyfill(struct Machine *m, u64 mask) {
+  long nanos;
+  u64 oldmask;
+  struct timespec ts;
+  oldmask = m->sigmask;
+  m->sigmask = mask;
+  nanos = 1;
+  while (!CheckInterrupt(m, false)) {
+    if (nanos > 256) {
+      if (nanos < 10 * 1000) {
+        sched_yield();
+      } else {
+        ts = FromNanoseconds(nanos);
+        if (nanosleep(&ts, 0)) {
+          unassert(errno == EINTR);
+          continue;
+        }
+      }
+    }
+    if (nanos < 100 * 1000 * 1000) {
+      nanos <<= 1;
+    }
+  }
+  m->sigmask = oldmask;
+  return -1;
+}
+
+static int SysSigsuspend(struct Machine *m, i64 maskaddr, i64 sigsetsize) {
   u8 word[8];
-  u64 oldmask_guest = 0;
-  sigset_t block, oldmask;
   if (sigsetsize != 8) return einval();
   if (CopyFromUserRead(m, word, maskaddr, 8) == -1) return -1;
-  unassert(!sigfillset(&block));
-  unassert(!pthread_sigmask(SIG_BLOCK, &block, &oldmask));
-  assert(sigismember(&oldmask, SIGSYS) == 0);
-  oldmask_guest = m->sigmask;
-  m->sigmask = Read64(word);
-  NORESTART(rc, sigsuspend(&oldmask));
-  m->sigmask = oldmask_guest;
-  unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
-  return rc;
+#ifdef __EMSCRIPTEN__
+  return SigsuspendPolyfill(m, Read64(word));
+#else
+  return SigsuspendActual(m, Read64(word));
+#endif
 }
 
 static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
