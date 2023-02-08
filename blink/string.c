@@ -154,19 +154,19 @@ static void StringOp(P, int op) {
                (Rep(rde) == 3 && !GetFlag(m->flags, FLAGS_ZF));
         break;
       case STRING_MOVS:
-        memcpy(BeginStore(m, (v = AddressDi(A)), n, p, s[0]),
-               Load(m, AddressSi(A), n, s[1]), n);
+        memmove(BeginStore(m, (v = AddressDi(A)), n, p, s[0]),
+                Load(m, AddressSi(A), n, s[1]), n);
         AddDi(A, sgn * n);
         AddSi(A, sgn * n);
         EndStore(m, v, n, p, s[0]);
         break;
       case STRING_STOS:
-        memcpy(BeginStore(m, (v = AddressDi(A)), n, p, s[0]), m->ax, n);
+        memmove(BeginStore(m, (v = AddressDi(A)), n, p, s[0]), m->ax, n);
         AddDi(A, sgn * n);
         EndStore(m, v, n, p, s[0]);
         break;
       case STRING_LODS:
-        memcpy(m->ax, Load(m, AddressSi(A), n, s[1]), n);
+        memmove(m->ax, Load(m, AddressSi(A), n, s[1]), n);
         AddSi(A, sgn * n);
         break;
       case STRING_SCAS:
