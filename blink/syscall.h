@@ -38,8 +38,16 @@
     }                                       \
   } while (1)
 
-#define NORESTART(x)   INTERRUPTIBLE(false, x)
 #define RESTARTABLE(x) INTERRUPTIBLE(true, x)
+
+#define NORESTART(rc, x)             \
+  do {                               \
+    if (!CheckInterrupt(m, false)) { \
+      INTERRUPTIBLE(false, rc = x);  \
+    } else {                         \
+      rc = -1;                       \
+    }                                \
+  } while (0)
 
 extern char *g_blink_path;
 

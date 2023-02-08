@@ -60,35 +60,6 @@ static inline struct timespec FromNanoseconds(time_t x) {
   return ts;
 }
 
-static inline int CompareTime(struct timespec a, struct timespec b) {
-  int cmp;
-  if (!(cmp = (a.tv_sec > b.tv_sec) - (a.tv_sec < b.tv_sec))) {
-    cmp = (a.tv_nsec > b.tv_nsec) - (a.tv_nsec < b.tv_nsec);
-  }
-  return cmp;
-}
-
-static inline struct timespec AddTime(struct timespec x, struct timespec y) {
-  x.tv_sec += y.tv_sec;
-  x.tv_nsec += y.tv_nsec;
-  if (x.tv_nsec >= 1000000000) {
-    x.tv_nsec -= 1000000000;
-    x.tv_sec += 1;
-  }
-  return x;
-}
-
-static inline struct timespec SubtractTime(struct timespec a,
-                                           struct timespec b) {
-  a.tv_sec -= b.tv_sec;
-  if (a.tv_nsec < b.tv_nsec) {
-    a.tv_nsec += 1000000000;
-    a.tv_sec--;
-  }
-  a.tv_nsec -= b.tv_nsec;
-  return a;
-}
-
 static inline struct timespec SleepTime(struct timespec dur) {
   struct timespec unslept;
   if (!nanosleep(&dur, &unslept)) {
@@ -150,5 +121,9 @@ static inline time_t ToNanoseconds(struct timespec ts) {
     return NUMERIC_MAX(time_t);
   }
 }
+
+int CompareTime(struct timespec, struct timespec);
+struct timespec AddTime(struct timespec, struct timespec);
+struct timespec SubtractTime(struct timespec, struct timespec);
 
 #endif /* BLINK_TIMESPEC_H_ */

@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -88,7 +89,6 @@
 #include "blink/swap.h"
 #include "blink/syscall.h"
 #include "blink/timespec.h"
-#include "blink/timeval.h"
 #include "blink/util.h"
 #include "blink/xlat.h"
 
@@ -3249,7 +3249,7 @@ static int SysNanosleep(struct Machine *m, i64 req, i64 rem) {
   int rc;
   struct timespec hreq, hrem;
   struct timespec_linux gtimespec;
-  CopyFromUserRead(m, &gtimespec, req, sizeof(gtimespec));
+  if (CopyFromUserRead(m, &gtimespec, req, sizeof(gtimespec)) == -1) return -1;
   hreq.tv_sec = Read64(gtimespec.sec);
   hreq.tv_nsec = Read64(gtimespec.nsec);
 TryAgain:
@@ -3277,7 +3277,9 @@ static int SysClockNanosleep(struct Machine *m, int clock, int flags,
   struct timespec_linux gtimespec;
   if (XlatClock(clock, &sysclock) == -1) return -1;
   if (flags & ~TIMER_ABSTIME_LINUX) return einval();
-  CopyFromUserRead(m, &gtimespec, reqaddr, sizeof(gtimespec));
+  if (CopyFromUserRead(m, &gtimespec, reqaddr, sizeof(gtimespec)) == -1) {
+    return -1;
+  }
   req.tv_sec = Read64(gtimespec.sec);
   req.tv_nsec = Read64(gtimespec.nsec);
 TryAgain:
@@ -3324,35 +3326,21 @@ TryAgain:
 }
 
 static int SysSigsuspend(struct Machine *m, i64 maskaddr, i64 sigsetsize) {
+  int rc;
   u8 word[8];
-  long nanos;
-  u64 oldmask;
-  struct timespec ts;
-  SIG_LOGF("SysSigsuspend");
+  u64 oldmask_guest = 0;
+  sigset_t block, oldmask;
   if (sigsetsize != 8) return einval();
-  CopyFromUserRead(m, word, maskaddr, 8);
-  oldmask = m->sigmask;
+  if (CopyFromUserRead(m, word, maskaddr, 8) == -1) return -1;
+  unassert(!sigfillset(&block));
+  unassert(!pthread_sigmask(SIG_BLOCK, &block, &oldmask));
+  assert(sigismember(&oldmask, SIGSYS) == 0);
+  oldmask_guest = m->sigmask;
   m->sigmask = Read64(word);
-  nanos = 1;
-  while (!CheckInterrupt(m, false)) {
-    // TODO(jart): do better than expo backoff
-    if (nanos > 256) {
-      if (nanos < 10 * 1000) {
-        sched_yield();
-      } else {
-        ts = FromNanoseconds(nanos);
-        if (nanosleep(&ts, 0)) {
-          unassert(errno == EINTR);
-          continue;
-        }
-      }
-    }
-    if (nanos < 100 * 1000 * 1000) {
-      nanos <<= 1;
-    }
-  }
-  m->sigmask = oldmask;
-  return -1;
+  NORESTART(rc, sigsuspend(&oldmask));
+  m->sigmask = oldmask_guest;
+  unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
+  return rc;
 }
 
 static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
@@ -3732,12 +3720,8 @@ static i32 Select(struct Machine *m,          //
     oldmask_guest = m->sigmask;
     m->sigmask = *sigmaskp_guest;
   }
-  if (!CheckInterrupt(m, false)) {
-    NORESTART(rc = pselect(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp,
-                           &oldmask));
-  } else {
-    rc = -1;
-  }
+  NORESTART(rc,
+            pselect(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp, &oldmask));
   if (sigmaskp_guest) {
     m->sigmask = oldmask_guest;
   }
@@ -4094,7 +4078,7 @@ static int SysTgkill(struct Machine *m, int pid, int tid, int sig) {
 
 static int SysPause(struct Machine *m) {
   int rc;
-  NORESTART(rc = pause());
+  NORESTART(rc, pause());
   return rc;
 }
 

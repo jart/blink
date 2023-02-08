@@ -1418,6 +1418,27 @@ void OpSsePalignr(P) {
   }
 }
 
+void OpSse(P, void MmxKernel(u8[8], const u8[8]),
+           void SseKernel(u8[16], const u8[16])) {
+  IGNORE_RACES_START();
+  if (Osz(rde)) {
+    SseKernel(XmmRexrReg(m, rde), GetXmmAddress(A));
+  } else {
+    MmxKernel(XmmRexrReg(m, rde), GetMmxAddress(A));
+  }
+  IGNORE_RACES_END();
+  if (IsMakingPath(m)) {
+    Jitter(A,
+           "z4P"    // res0 = GetXmmOrMemPointer(RexbRm)
+           "r0s1="  // sav1 = res0
+           "z4Q"    // res0 = GetXmmPointer(RexrReg)
+           "s1a1="  // arg1 = sav1
+           "t"      // arg0 = res0
+           "c",     // call function
+           Osz(rde) ? SseKernel : MmxKernel);
+  }
+}
+
 // clang-format off
 void OpSsePunpcklbw(P) { OpSse(A, MmxPunpcklbw, SsePunpcklbw); }
 void OpSsePunpcklwd(P) { OpSse(A, MmxPunpcklwd, SsePunpcklwd); }

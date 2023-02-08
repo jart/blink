@@ -128,7 +128,7 @@ static void SpawnCxxFilt(void) {
     unassert(!sigaddset(&ss, SIGINT));
     unassert(!sigaddset(&ss, SIGQUIT));
     unassert(!sigaddset(&ss, SIGWINCH));
-    unassert(!sigprocmask(SIG_BLOCK, &ss, 0));
+    unassert(!pthread_sigmask(SIG_BLOCK, &ss, 0));
     unassert(dup2(pipefds[1][0], 0) == 0);
     unassert(dup2(pipefds[0][1], 1) == 1);
     if (pipefds[0][0] > 1) unassert(!close(pipefds[0][0]));
