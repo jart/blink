@@ -1528,9 +1528,9 @@ static i64 SysSendto(struct Machine *m,  //
   i64 rc;
   int len;
   int hostflags;
-  bool norestart;
   const void *mem;
   socklen_t addrlen;
+  bool norestart = false;
   struct sockaddr *addrp;
   struct sockaddr_storage ss;
   if ((hostflags = XlatSendFlags(flags)) == -1) return -1;
@@ -1562,8 +1562,8 @@ static i64 SysRecvfrom(struct Machine *m,  //
   i64 rc;
   void *buf;
   int hostflags;
-  bool norestart;
   socklen_t addrlen;
+  bool norestart = false;
   struct sockaddr_storage addr;
   if ((hostflags = XlatRecvFlags(flags)) == -1) return -1;
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
@@ -1585,9 +1585,9 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   u64 iovlen;
   ssize_t rc;
   i64 iovaddr;
-  bool norestart;
   struct Iovs iv;
   struct msghdr msg;
+  bool norestart = false;
   struct sockaddr_storage ss;
   const struct msghdr_linux *gm;
   if ((flags = XlatSendFlags(flags)) == -1) return -1;
@@ -1627,9 +1627,9 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   ssize_t rc;
   u64 iovlen;
   i64 iovaddr;
-  bool norestart;
   struct Iovs iv;
   struct msghdr msg;
+  bool norestart = false;
   struct msghdr_linux gm;
   struct sockaddr_storage addr;
   if ((flags = XlatRecvFlags(flags)) == -1) return -1;
@@ -1670,8 +1670,8 @@ static int SysConnectBind(struct Machine *m, i32 fildes, i64 sockaddr_addr,
                           u32 sockaddr_size,
                           int impl(int, const struct sockaddr *, socklen_t)) {
   int rc, len;
-  bool norestart;
   socklen_t addrlen;
+  bool norestart = false;
   struct sockaddr_storage addr;
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if ((len = LoadSockaddr(m, sockaddr_addr, sockaddr_size, &addr)) != -1) {
