@@ -3100,7 +3100,7 @@ static int SysPrlimit(struct Machine *m, i32 pid, i32 resource,
   }
   if ((rc = getrlimit(XlatResource(resource), &old)) != -1) {
     if (new_rlimit_addr) {
-      rc = SysSetrlimit(m, XlatResource(resource), new_rlimit_addr);
+      rc = SysSetrlimit(m, resource, new_rlimit_addr);
     }
     if (rc != -1 && old_rlimit_addr) {
       XlatRlimitToLinux(&lux, &old);
