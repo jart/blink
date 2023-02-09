@@ -283,6 +283,7 @@ void RemoveOtherThreads(struct System *s) {
     g = dll_next(s->machines, e);
     m = MACHINE_CONTAINER(e);
     if (m != g_machine) {
+      dll_remove(&s->machines, e);
       FreeMachineUnlocked(m);
     }
   }

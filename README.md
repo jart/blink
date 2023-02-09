@@ -139,9 +139,6 @@ we haven't included are usually due to (1) floating ULP rounding errors
 point emulation), and (2) APIs that can't or won't be supported, e.g.
 System V message queues. Blink runs the precompiled Linux test binaries
 above on other operating systems too (e.g. Apple M1, FreeBSD, Cygwin).
-The biggest issue with Blink right now are (1) `blink git clone` over
-networks isn't working, (2) DNS with Glibc libraries isn't working, and
-(3) dtoa_test.com flakes occasionally on Cygwini inside *NSYNC locks.
 
 ## Reference
 
