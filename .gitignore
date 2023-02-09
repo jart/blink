@@ -4,6 +4,7 @@
 *.elf
 *.so
 *.so.1
+blink.log
 /o
 /gf*
 /core*

@@ -77,107 +77,45 @@ static bool IsRestrictedRoot(char **paths) {
   return !paths[1] && paths[0][0];
 }
 
-/**
- * Returns true if path seems legit.
- *
- * 1. The substring "//" is disallowed.
- * 2. We won't serve hidden files (segment starts with '.').
- * 3. We won't serve paths with segments equal to "." or "..".
- *
- * It is assumed that the URI parser already took care of percent
- * escape decoding as well as ISO-8859-1 decoding. The input needs
- * to be a UTF-8 string. This function takes overlong encodings into
- * consideration, so you don't need to call Underlong() beforehand.
- *
- * @param size if -1 implies strlen
- * @see IsReasonablePath()
- */
-bool IsAcceptablePath(const char *data, size_t size) {
-  const char *p, *e;
-  int x, y, a, b, t, i, n;
-  if (size == -1) size = data ? strlen(data) : 0;
-  t = 0;
-  y = '/';
-  p = data;
-  e = p + size;
-  while (p < e) {
-    x = *p++ & 0xff;
-    if (UNLIKELY(x >= 0300)) {
-      a = ThomPikeByte(x);
-      n = ThomPikeLen(x) - 1;
-      if (p + n <= e) {
-        for (i = 0;;) {
-          b = p[i] & 0xff;
-          if (!ThomPikeCont(b)) break;
-          a = ThomPikeMerge(a, b);
-          if (++i == n) {
-            x = a;
-            p += i;
-            break;
-          }
-        }
-      }
-    }
-    if (x == '\\') {
-      x = '/';
-    }
-    if (y == '/') {
-      if (x == '.') return false;
-      if (x == '/' && t) return false;
-    }
-    y = x;
-    t = 1;
-  }
-  return true;
-}
-
 int SetOverlays(const char *config) {
+  size_t i, j;
   static int once;
   bool has_real_root;
-  size_t i, n, cwdlen = 0;
-  char cwd[PATH_MAX], **paths;
+  char *path, *path2, **paths;
   if (!config) return efault();
   if (!(paths = SplitString(config, ':'))) {
     return -1;
   }
-  // make relative overlays absolute at startup time
-  // just in case the app calls chdir() or something
+  // normalize absolute paths at startup and
+  // remove non-existent paths
   has_real_root = false;
-  for (i = 0; paths[i]; ++i) {
-    if (!paths[i][0]) {
-      has_real_root = true;
-      continue;
-    }
-    if (paths[i][0] == '/') {
-      if (!paths[i][1]) {
-        paths[i][0] = 0;
+  i = j = 0;
+  do {
+    path = paths[i++];
+    if (path) {
+      if (!path[0] || (path[0] == '/' && !path[1])) {
+        path[0] = 0;
         has_real_root = true;
+      } else {
+        path2 = ExpandUser(path);
+        free(path);
+        path = path2;
+        path2 = malloc(PATH_MAX + 1);
+        if (!realpath(path, path2)) {
+          free(path);
+          continue;
+        }
+        free(path);
+        path = path2;
       }
-      continue;
     }
-    if (!cwdlen) {
-      if (!getcwd(cwd, sizeof(cwd))) break;
-      cwdlen = strlen(cwd);
-      cwd[cwdlen++] = '/';
-    }
-    if (cwdlen + (n = strlen(paths[i])) >= sizeof(cwd)) {
-      continue;
-    }
-    memcpy(cwd + cwdlen, paths[i], n + 1);
-    free(paths[i]);
-    paths[i] = strdup(cwd);
+    paths[j++] = path;
+  } while (path);
+  if (!paths[0]) {
+    LOGF("blink overlays '%s' didn't have a path that exists", config);
+    FreeStrings(paths);
+    return einval();
   }
-  // make sure the paths are all normal looking
-  for (i = 0; paths[i]; ++i) {
-    if (!paths[i][0]) continue;
-    if (!IsAcceptablePath(paths[i], -1)) {
-      LOGF("blink overlay path %s can't have '.', '..' or '//'", paths[i]);
-      FreeStrings(paths);
-      return einval();
-    }
-  }
-  // load the overlay paths into an array
-  unassert(paths[0]);
   if (!has_real_root && paths[1]) {
     LOGF("if multiple overlays are specified, "
          "one of them must be empty string");

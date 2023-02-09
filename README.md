@@ -158,6 +158,8 @@ The following `FLAG` arguments are provided:
 - `-h` shows this help
 
 - `-e` means log to standard error (fd 2) in addition to the log file.
+  If logging to *only* standard error is desired, then `-eL/dev/null`
+  may be used.
 
 - `-j` disables Just-In-Time (JIT) compilation, which will make Blink go
   ~10x slower.
@@ -175,10 +177,11 @@ The following `FLAG` arguments are provided:
   `blink -0 cmd arg0 arg1` which is equivalent to `execve("cmd",
   {"arg0", "arg1"})`.
 
-- `-L PATH` specifies the log path. The default log path is
-  `$TMPDIR/blink.log` or `/tmp/blink.log` if `$TMPDIR` isn't defined. If
-  a log file isn't desired, this flag may be set to `-` or `/dev/stderr`
-  for logging to standard error.
+- `-L PATH` specifies the log path. The default log path is `blink.log`
+  in the current directory at startup. This log file won't be created
+  until something is actually logged. If logging to a file isn't
+  desired, then `-L /dev/null` may be used. See also the `-e` flag for
+  logging to standard error.
 
 - `-S` enables system call logging. This will emit to the log file the
   names of system calls each time a `SYSCALL` operation in invoked,
