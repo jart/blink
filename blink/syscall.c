@@ -1586,7 +1586,7 @@ static i64 SysSendto(struct Machine *m,  //
     addrlen = 0;
     addrp = 0;
   }
-  mem = Schlep(m, bufaddr, buflen);
+  if (!(mem = Schlep(m, bufaddr, buflen))) return -1;
   INTERRUPTIBLE(!norestart,
                 rc = sendto(fildes, mem, buflen, hostflags, addrp, addrlen));
   return rc;
@@ -1612,9 +1612,9 @@ static i64 SysRecvfrom(struct Machine *m,  //
   INTERRUPTIBLE(!norestart, rc = recvfrom(fildes, buf, buflen, hostflags,
                                           (struct sockaddr *)&addr, &addrlen));
   if (rc != -1) {
-    CopyToUserWrite(m, bufaddr, buf, rc);
-    StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
-                  (struct sockaddr *)&addr, addrlen);
+    unassert(!CopyToUserWrite(m, bufaddr, buf, rc));
+    unassert(!StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
+                            (struct sockaddr *)&addr, addrlen));
   }
   free(buf);
   return rc;
