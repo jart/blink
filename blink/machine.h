@@ -392,6 +392,7 @@ void JitlessDispatch(P);
 void RestoreIp(struct Machine *);
 void CheckForSignals(struct Machine *);
 void UnlockRobustFutexes(struct Machine *);
+void *AddToFreeList(struct Machine *, void *);
 
 bool IsValidAddrSize(i64, i64) pureconst;
 bool OverlapsPrecious(i64, i64) pureconst;

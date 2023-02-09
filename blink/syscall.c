@@ -1570,6 +1570,12 @@ static int UnXlatMsgFlags(int flags) {
     flags &= ~MSG_NOSIGNAL;
   }
 #endif
+#ifdef MSG_CMSG_CLOEXEC
+  if (flags & MSG_CMSG_CLOEXEC) {
+    guestflags |= MSG_CMSG_CLOEXEC_LINUX;
+    flags &= ~MSG_CMSG_CLOEXEC;
+  }
+#endif
   if (flags) {
     LOGF("unsupported %s flags %#x", "msg", flags);
   }
@@ -1646,6 +1652,52 @@ static i64 SysRecvfrom(struct Machine *m,  //
   return rc;
 }
 
+static int XlatAncillaryData(struct Machine *m, struct msghdr *msg,
+                             const struct msghdr_linux *gm) {
+  struct ucred *ucred;
+  struct cmsghdr *cmsg;
+  const struct ucred_linux *ucred_linux;
+  const struct cmsghdr_linux *cmsg_linux;
+  if (Read64(gm->controllen) < sizeof(*cmsg_linux)) return 0;
+  if (!Read64(gm->control)) return 0;
+  if (!(cmsg_linux = (const struct cmsghdr_linux *)SchlepR(
+            m, Read64(gm->control), sizeof(*cmsg_linux)))) {
+    return -1;
+  }
+  if (Read32(cmsg_linux->level) != SOL_SOCKET_LINUX) {
+    LOGF("unsupported ancillary %s %d", "level", Read32(cmsg_linux->level));
+    return einval();
+  }
+  if (Read32(cmsg_linux->type) != SCM_CREDENTIALS_LINUX) {
+    LOGF("unsupported ancillary %s %d", "type", Read32(cmsg_linux->level));
+    return einval();
+  }
+  if (Read32(cmsg_linux->len) < sizeof(*cmsg_linux) + sizeof(*ucred_linux) ||
+      Read32(cmsg_linux->len) > Read64(gm->controllen)) {
+    LOGF("bad ancillary size");
+    return einval();
+  }
+  if (!(ucred_linux = (const struct ucred_linux *)SchlepR(
+            m, Read64(gm->control) + sizeof(*cmsg_linux),
+            sizeof(*ucred_linux)))) {
+    return -1;
+  }
+  if (!(cmsg = (struct cmsghdr *)AddToFreeList(
+            m, calloc(1, CMSG_SPACE(sizeof(*ucred)))))) {
+    return -1;
+  }
+  cmsg->cmsg_len = CMSG_LEN(sizeof(*ucred));
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = SCM_CREDENTIALS;
+  ucred = (struct ucred *)CMSG_DATA(cmsg);
+  ucred->pid = Read32(ucred_linux->pid);
+  ucred->uid = Read32(ucred_linux->uid);
+  ucred->gid = Read32(ucred_linux->gid);
+  msg->msg_control = cmsg;
+  msg->msg_controllen = CMSG_SPACE(sizeof(*ucred));
+  return 0;
+}
+
 static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   i32 len;
   u64 iovlen;
@@ -1661,10 +1713,6 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   if (!(gm = (const struct msghdr_linux *)SchlepR(m, msgaddr, sizeof(*gm)))) {
     return -1;
   }
-  if (Read64(gm->controllen)) {
-    LOGF("ancillary data not supported yet");
-    return enotsup();
-  }
   memset(&msg, 0, sizeof(msg));
   if ((len = Read32(gm->namelen)) > 0) {
     if ((len = LoadSockaddr(m, Read64(gm->name), len, &ss)) == -1) {
@@ -1672,6 +1720,9 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
     }
     msg.msg_name = &ss;
     msg.msg_namelen = len;
+  }
+  if (XlatAncillaryData(m, &msg, gm) == -1) {
+    return -1;
   }
   iovaddr = Read64(gm->iov);
   iovlen = Read64(gm->iovlen);
@@ -1701,6 +1752,10 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   if ((flags = XlatRecvFlags(flags)) == -1) return -1;
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if (CopyFromUserRead(m, &gm, msgaddr, sizeof(gm)) == -1) return -1;
+  /* if (Read64(gm.controllen)) { */
+  /*   LOGF("recvmsg ancillary data not supported yet"); */
+  /*   return enotsup(); */
+  /* } */
   memset(&msg, 0, sizeof(msg));
   iovaddr = Read64(gm.iov);
   iovlen = Read64(gm.iovlen);

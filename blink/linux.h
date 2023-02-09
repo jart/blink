@@ -706,6 +706,8 @@
 #define LOCK_NB_LINUX 4
 #define LOCK_UN_LINUX 8
 
+#define SCM_CREDENTIALS_LINUX 2
+
 struct iovec_linux {
   u8 base[8];
   u8 len[8];
@@ -1021,6 +1023,18 @@ struct msghdr_linux {
   u8 controllen[8];  // u64 ancillary data buffer len
   u8 flags[4];       // u32 MSG_XXX (only applies to recvmsg)
   u8 pad2_[4];       //
+};
+
+struct cmsghdr_linux {
+  u8 len[8];    // u64 bytes in message (including this)
+  u8 level[4];  // i32 e.g. SOL_SOCKET
+  u8 type[4];   // i32 e.g. SCM_RIGHTS
+};
+
+struct ucred_linux {  // 8-byte aligned
+  u8 pid[4];          // process id of sending process
+  u8 uid[4];          // user id of sending process
+  u8 gid[4];          // group id of sending process
 };
 
 int sysinfo_linux(struct sysinfo_linux *);
