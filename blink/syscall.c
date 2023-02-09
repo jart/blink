@@ -393,10 +393,11 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
   // exec_lock must come before sig_lock (see dup3)
   // exec_lock must come before fds.lock (see dup3)
   // exec_lock must come before fds.lock (see execve)
+  // mmap_lock must come before fds.lock (see GetOflags)
   LOCK(&m->system->exec_lock);
-  LOCK(&m->system->fds.lock);
   LOCK(&m->system->sig_lock);
   LOCK(&m->system->mmap_lock);
+  LOCK(&m->system->fds.lock);
   LOCK(&m->system->machines_lock);
 #if !CAN_PSHARE
   LOCK(&g_bus->futexes.lock);
@@ -411,9 +412,9 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
   UNLOCK(&g_bus->futexes.lock);
 #endif
   UNLOCK(&m->system->machines_lock);
+  UNLOCK(&m->system->fds.lock);
   UNLOCK(&m->system->mmap_lock);
   UNLOCK(&m->system->sig_lock);
-  UNLOCK(&m->system->fds.lock);
   UNLOCK(&m->system->exec_lock);
   if (!pid) {
     newpid = getpid();
