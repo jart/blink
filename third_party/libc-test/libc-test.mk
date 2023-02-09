@@ -144,11 +144,6 @@ ifneq ($(HOST_SYSTEM), Darwin)
 LIBC_TEST_TESTS += o//third_party/libc-test/bin/2/functional/stat.elf.ok
 endif
 
-# Not sure yet why these aren't working.
-ifneq ($(HOST_SYSTEM), OpenBSD)
-LIBC_TEST_TESTS += o//third_party/libc-test/bin/2/functional/vfork.elf.ok
-endif
-
 # No RLIMIT_NPROC on Cygwin
 ifneq ($(HOST_OS), Cygwin)
 LIBC_TEST_TESTS += o//third_party/libc-test/bin/2/regression/pthread_atfork-errno-clobber.elf.ok
@@ -167,6 +162,11 @@ endif
 # libc.so.6: cannot stat shared object: No such file or directory".
 #
 # o//third_party/libc-test/bin/2/regression/execle-env.elf.ok
+
+# This test also executes /bin/sh so it's failing on GitHub Actions. It
+# also fails for unexplained reasons on OpenBSD.
+#
+# o//third_party/libc-test/bin/2/functional/vfork.elf.ok
 
 ################################################################################
 
