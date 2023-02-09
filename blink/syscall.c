@@ -267,8 +267,9 @@ void SignalActor(struct Machine *mm) {
 }
 
 bool CheckInterrupt(struct Machine *m, bool restartable) {
-  bool res, restart;
   int sig, delivered;
+  sigset_t unblock, oldmask;
+  bool res, restart, issigsuspend;
   // an actual i/o call just received EINTR from the kernel
 GetSome:
   // determine if there's any signals pending for our guest
@@ -278,11 +279,22 @@ GetSome:
   }
   if (delivered) {
     // we're officially calling a signal handler
+    // it's very important that no locks are being held
+    // run the signal handler code inside the i/o routine
+    if ((issigsuspend = m->issigsuspend)) {
+      m->issigsuspend = false;
+      unassert(!sigemptyset(&unblock));
+      unassert(!pthread_sigmask(SIG_BLOCK, &unblock, &oldmask));
+    }
+    m->restored = false;
+    SignalActor(m);
+    m->restored = false;
+    if (issigsuspend) {
+      unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
+      m->issigsuspend = true;
+    }
     if (restart && restartable) {
-      // run the signal handler code inside the i/o routine
-      m->restored = false;
-      SignalActor(m);
-      m->restored = false;
+      // try to consume some more signals while we're here
       goto GetSome;
     } else {
       // let the i/o routine return eintr
@@ -987,8 +999,8 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
         if (size / 4096 + m->system->vss < GetMaxVss(m->system)) {
           if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
                              PAGE_RW | PAGE_U, -1, 0, false) != -1) {
-            LOGF("increased break %" PRIx64 " -> %" PRIx64, m->system->brk,
-                 addr);
+            MEM_LOGF("increased break %" PRIx64 " -> %" PRIx64, m->system->brk,
+                     addr);
             m->system->brk = addr;
           }
         } else {
@@ -1219,7 +1231,6 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
   if (newfildes < 0) return ebadf();
   if (fildes == newfildes) return einval();
   if (flags & ~O_CLOEXEC_LINUX) return einval();
-  if (flags) LOCK(&m->system->exec_lock);
   if ((rc = Dup2(m, fildes, newfildes)) != -1) {
     if (flags & O_CLOEXEC_LINUX) {
       unassert(!fcntl(newfildes, F_SETFD, FD_CLOEXEC));
@@ -1237,7 +1248,6 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
     unassert(ForkFd(&m->system->fds, fd, newfildes, oflags));
     UNLOCK(&m->system->fds.lock);
   }
-  if (flags) UNLOCK(&m->system->exec_lock);
   return rc;
 }
 
@@ -1323,6 +1333,9 @@ static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
   if ((type = XlatSocketType(type)) == -1) return -1;
   if ((family = XlatSocketFamily(family)) == -1) return -1;
   if ((protocol = XlatSocketProtocol(protocol)) == -1) return -1;
+  if (!IsValidMemory(m, pipefds_addr, sizeof(fds_linux), PROT_WRITE)) {
+    return efault();
+  }
   if (flags) LOCK(&m->system->exec_lock);
   if ((rc = socketpair(family, type, protocol, fds)) != -1) {
     FixupSock(fds[0], flags);
@@ -1338,7 +1351,7 @@ static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
     UNLOCK(&m->system->fds.lock);
     Write32(fds_linux[0], fds[0]);
     Write32(fds_linux[1], fds[1]);
-    CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux));
+    unassert(!CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux)));
   }
   if (flags) UNLOCK(&m->system->exec_lock);
   return rc;
@@ -1421,51 +1434,53 @@ static int GetNoRestart(struct Machine *m, int fildes, bool *norestart) {
   return 0;
 }
 
-static int Accept(struct Machine *m, i32 fildes, i64 sockaddr_addr,
-                  i64 sockaddr_size_addr, i32 flags, struct Fd *fd) {
-  int newfd;
+static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
+                      i64 sockaddr_size_addr, i32 flags) {
+  struct Fd *fd;
   socklen_t addrlen;
+  int newfd, socktype;
+  bool restartable = false;
   struct sockaddr_storage addr;
+  if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
+  LOCK(&m->system->fds.lock);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    socktype = fd->socktype;
+    restartable = !fd->norestart;
+  }
+  UNLOCK(&m->system->fds.lock);
+  if (!fd) {
+    return -1;
+  }
+  if (!socktype) {
+    errno = ENOTSOCK;
+    return -1;
+  }
+  if (socktype != SOCK_STREAM) {
+    // POSIX.1 and Linux require EOPNOTSUPP when called on a file
+    // descriptor that doesn't support accepting, i.e. SOCK_STREAM,
+    // but FreeBSD incorrectly returns EINVAL.
+    errno = EOPNOTSUPP;
+    return -1;
+  }
   addrlen = sizeof(addr);
-  INTERRUPTIBLE(!fd->norestart,
+  INTERRUPTIBLE(restartable,
                 newfd = accept(fildes, (struct sockaddr *)&addr, &addrlen));
   if (newfd != -1) {
     FixupSock(newfd, flags);
-    unassert(ForkFd(&m->system->fds, fd, newfd,
-                    O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
-                        (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0)));
-    StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
-                  (struct sockaddr *)&addr, addrlen);
-  }
-  return newfd;
-}
-
-static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
-                      i64 sockaddr_size_addr, i32 flags) {
-  int newfd;
-  struct Fd *fd;
-  if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
-  if (flags) LOCK(&m->system->exec_lock);
-  if ((fd = GetAndLockFd(m, fildes))) {
-    if (fd->socktype) {
-      if (fd->socktype == SOCK_STREAM) {
-        newfd = Accept(m, fildes, sockaddr_addr, sockaddr_size_addr, flags, fd);
-      } else {
-        // POSIX.1 and Linux require EOPNOTSUPP when called on a file
-        // descriptor that doesn't support accepting, i.e. SOCK_STREAM,
-        // but FreeBSD incorrectly returns EINVAL.
-        errno = EOPNOTSUPP;
-        newfd = -1;
-      }
-    } else {
-      errno = ENOTSOCK;
+    LOCK(&m->system->fds.lock);
+    if (!(fd = GetFd(&m->system->fds, fildes)) ||
+        !ForkFd(&m->system->fds, fd, newfd,
+                O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
+                    (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0))) {
+      close(newfd);
       newfd = -1;
     }
-    UnlockFd(fd);
-  } else {
-    newfd = -1;
+    UNLOCK(&m->system->fds.lock);
+    if (newfd != -1) {
+      StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
+                    (struct sockaddr *)&addr, addrlen);
+    }
   }
-  if (flags) UNLOCK(&m->system->exec_lock);
   return newfd;
 }
 
@@ -1587,7 +1602,7 @@ static i64 SysSendto(struct Machine *m,  //
     msg.msg_name = &ss;
   }
   InitIovs(&iv);
-  if ((rc = AppendIovsReal(m, &iv, bufaddr, buflen)) != -1) {
+  if ((rc = AppendIovsReal(m, &iv, bufaddr, buflen, PROT_READ)) != -1) {
     msg.msg_iov = iv.p;
     msg.msg_iovlen = iv.i;
     INTERRUPTIBLE(!norestart, rc = sendmsg(fildes, &msg, hostflags));
@@ -1617,7 +1632,7 @@ static i64 SysRecvfrom(struct Machine *m,  //
     msg.msg_namelen = sizeof(addr);
   }
   InitIovs(&iv);
-  if ((rc = AppendIovsReal(m, &iv, bufaddr, buflen)) != -1) {
+  if ((rc = AppendIovsReal(m, &iv, bufaddr, buflen, PROT_WRITE)) != -1) {
     msg.msg_iov = iv.p;
     msg.msg_iovlen = iv.i;
     INTERRUPTIBLE(!norestart, rc = recvmsg(fildes, &msg, hostflags));
@@ -1665,7 +1680,7 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
     return -1;
   }
   InitIovs(&iv);
-  if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+  if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen, PROT_READ)) != -1) {
     msg.msg_iov = iv.p;
     msg.msg_iovlen = iv.i;
     INTERRUPTIBLE(!norestart, rc = sendmsg(fildes, &msg, flags));
@@ -1694,7 +1709,7 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
     return -1;
   }
   InitIovs(&iv);
-  if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+  if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen, PROT_WRITE)) != -1) {
     msg.msg_iov = iv.p;
     msg.msg_iovlen = iv.i;
     if (Read64(gm.name)) {
@@ -1909,7 +1924,7 @@ static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   if ((oflags & O_ACCMODE) == O_WRONLY) return ebadf();
   if (size) {
     InitIovs(&iv);
-    if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
+    if ((rc = AppendIovsReal(m, &iv, addr, size, PROT_WRITE)) != -1) {
       RESTARTABLE(rc = readv_impl(fildes, iv.p, iv.i));
       if (rc != -1) SetWriteAddr(m, addr, rc);
     }
@@ -1941,7 +1956,7 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();
   if (size) {
     InitIovs(&iv);
-    if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
+    if ((rc = AppendIovsReal(m, &iv, addr, size, PROT_READ)) != -1) {
       RESTARTABLE(rc = writev_impl(fildes, iv.p, iv.i));
       if (rc != -1) SetReadAddr(m, addr, rc);
     }
@@ -1982,7 +1997,7 @@ static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
   if (CheckFdAccess(m, fildes, false, EBADF) == -1) return -1;
   if (size) {
     InitIovs(&iv);
-    if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
+    if ((rc = AppendIovsReal(m, &iv, addr, size, PROT_WRITE)) != -1) {
       RESTARTABLE(rc = preadv(fildes, iv.p, iv.i, offset));
       if (rc != -1) SetWriteAddr(m, addr, rc);
     }
@@ -2001,7 +2016,7 @@ static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
   if (CheckFdAccess(m, fildes, true, EBADF) == -1) return -1;
   if (size) {
     InitIovs(&iv);
-    if ((rc = AppendIovsReal(m, &iv, addr, size)) != -1) {
+    if ((rc = AppendIovsReal(m, &iv, addr, size, PROT_READ)) != -1) {
       RESTARTABLE(rc = pwritev(fildes, iv.p, iv.i, offset));
       if (rc != -1) SetReadAddr(m, addr, rc);
     }
@@ -2038,7 +2053,7 @@ static i64 SysPreadv2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
   if ((oflags & O_ACCMODE) == O_WRONLY) return ebadf();
   if (iovlen) {
     InitIovs(&iv);
-    if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+    if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen, PROT_WRITE)) != -1) {
       if (iv.i) {
         if (offset == -1) {
           RESTARTABLE(rc = readv_impl(fildes, iv.p, iv.i));
@@ -2086,7 +2101,7 @@ static i64 SysPwritev2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
   if ((oflags & O_ACCMODE) == O_RDONLY) return ebadf();
   if (iovlen) {
     InitIovs(&iv);
-    if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen)) != -1) {
+    if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen, PROT_READ)) != -1) {
       if (iv.i) {
         if (offset == -1) {
           RESTARTABLE(rc = writev_impl(fildes, iv.p, iv.i));
@@ -2148,24 +2163,38 @@ static int UnXlatDt(int x) {
 }
 
 static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
+  i64 i;
   int type;
   off_t off;
   long tell;
   int reclen;
-  i64 i, dlz;
   size_t len;
   struct Fd *fd;
+  struct stat st;
   struct dirent *ent;
   struct dirent_linux rec;
-  dlz = sizeof(struct dirent_linux);
-  if (size < dlz) return einval();
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
-  if (!IsValidMemory(m, addr, size, PROT_WRITE)) return efault();
+  if (size < sizeof(rec) - sizeof(rec.name)) {
+    UnlockFd(fd);
+    return einval();
+  }
+  if ((fd->oflags & O_DIRECTORY) != O_DIRECTORY) {
+    UnlockFd(fd);
+    return enotdir();
+  }
+  if (!IsValidMemory(m, addr, size, PROT_WRITE)) {
+    UnlockFd(fd);
+    return efault();
+  }
+  if (fstat(fildes, &st) || !st.st_nlink) {
+    UnlockFd(fd);
+    return enoent();
+  }
   if (!fd->dirstream && !(fd->dirstream = fdopendir(fd->fildes))) {
     UnlockFd(fd);
     return -1;
   }
-  for (i = 0; i + dlz <= size; i += reclen) {
+  for (i = 0; i + sizeof(rec) <= size; i += reclen) {
     // telldir() can actually return negative on ARM/MIPS/i386
     errno = 0;
     tell = telldir(fd->dirstream);
@@ -2767,7 +2796,8 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
   } else if (cmd == F_SETLK_LINUX ||   //
              cmd == F_SETLKW_LINUX ||  //
              cmd == F_GETLK_LINUX) {
-    rc = SysFcntlLock(m, fd->fildes, cmd, arg);
+    UnlockFd(fd);
+    return SysFcntlLock(m, fildes, cmd, arg);
 #ifdef F_SETOWN
   } else if (cmd == F_SETOWN_LINUX) {
     rc = fcntl(fd->fildes, F_SETOWN, arg);
@@ -2885,8 +2915,8 @@ static int XlatUnlinkatFlags(int x) {
     x &= ~AT_REMOVEDIR_LINUX;
   }
   if (x) {
-    LOGF("%s() flags %d not supported", "unlinkat", x);
-    return -1;
+    LOGF("%s() flags %#x not supported", "unlinkat", x);
+    return einval();
   }
   return res;
 }
@@ -3219,19 +3249,23 @@ static int SysSysinfo(struct Machine *m, i64 siaddr) {
   return 0;
 }
 
-static i64 SysGetcwd(struct Machine *m, i64 bufaddr, size_t size) {
-  size_t n;
-  char *buf;
+static i64 SysGetcwd(struct Machine *m, i64 bufaddr, i64 size) {
   i64 res;
-  if (!(buf = (char *)malloc(size))) return -1;
-  if (OverlaysGetcwd(buf, size)) {
+  size_t n;
+  char buf[PATH_MAX + 1];
+  if (size < 0) return enomem();
+  if (OverlaysGetcwd(buf, sizeof(buf))) {
     n = strlen(buf) + 1;
-    CopyToUserWrite(m, bufaddr, buf, n);
-    res = bufaddr;
+    if (size < n) {
+      res = erange();
+    } else if (CopyToUserWrite(m, bufaddr, buf, n) != -1) {
+      res = n;
+    } else {
+      res = -1;
+    }
   } else {
     res = -1;
   }
-  free(buf);
   return res;
 }
 
@@ -3247,7 +3281,11 @@ static ssize_t SysGetrandom(struct Machine *m, i64 a, size_t n, int f) {
   if (n) {
     if (!(p = (char *)malloc(n))) return -1;
     RESTARTABLE(rc = GetRandom(p, n));
-    if (rc != -1) CopyToUserWrite(m, a, p, rc);
+    if (rc != -1) {
+      if (CopyToUserWrite(m, a, p, rc) == -1) {
+        rc = -1;
+      }
+    }
     free(p);
   } else {
     rc = 0;
@@ -3280,8 +3318,10 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
   if (sigsetsize != 8) return einval();
   if (!(1 <= sig && sig <= 64)) return einval();
   if (sig == SIGKILL_LINUX || sig == SIGSTOP_LINUX) return einval();
+  memset(&hand, 0, sizeof(hand));
+  if (old && !IsValidMemory(m, old, sizeof(hand), PROT_WRITE)) return efault();
   if (act) {
-    CopyFromUserRead(m, &hand, act, sizeof(hand));
+    if (CopyFromUserRead(m, &hand, act, sizeof(hand)) == -1) return -1;
     flags = Read64(hand.flags);
     handler = Read64(hand.handler);
     if (handler == SIG_IGN_LINUX) {
@@ -3302,6 +3342,11 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
         if (!(flags & SA_RESTORER_LINUX)) {
           LOGF("sigaction() flags missing SA_RESTORER");
           return einval();
+        }
+        if (!IsValidMemory(m, Read64(hand.restorer), 1, PROT_EXEC)) {
+          LOGF("sigaction() SA_RESTORER at %" PRIx64 " isn't executable",
+               Read64(hand.restorer));
+          return efault();
         }
         break;
     }
@@ -3464,14 +3509,18 @@ static int SigsuspendActual(struct Machine *m, u64 mask) {
   int rc;
   u64 oldmask;
   sigset_t block_host, oldmask_host;
+  oldmask = m->sigmask;
   unassert(!sigfillset(&block_host));
   unassert(!pthread_sigmask(SIG_BLOCK, &block_host, &oldmask_host));
   assert(sigismember(&oldmask_host, SIGSYS) == 0);
-  oldmask = m->sigmask;
   m->sigmask = mask;
+  SIG_LOGF("sigmask push %" PRIx64, m->sigmask);
+  m->issigsuspend = true;
   NORESTART(rc, sigsuspend(&oldmask_host));
-  m->sigmask = oldmask;
+  m->issigsuspend = false;
   unassert(!pthread_sigmask(SIG_SETMASK, &oldmask_host, 0));
+  m->sigmask = oldmask;
+  SIG_LOGF("sigmask pop %" PRIx64, m->sigmask);
   return rc;
 }
 
@@ -3580,6 +3629,18 @@ static int SysClockGettime(struct Machine *m, int clock, i64 ts) {
     }
   }
   return rc;
+}
+
+static int SysClockSettime(struct Machine *m, int clock, i64 ts) {
+  clock_t sysclock;
+  struct timespec ht;
+  const struct timespec_linux *gt;
+  if (XlatClock(clock, &sysclock) == -1) return -1;
+  if ((gt = (const struct timespec_linux *)SchlepR(m, ts, sizeof(*gt)))) {
+    ht.tv_sec = Read64(gt->sec);
+    ht.tv_nsec = Read64(gt->nsec);
+  }
+  return clock_settime(sysclock, &ht);
 }
 
 static int SysClockGetres(struct Machine *m, int clock, i64 ts) {
@@ -3888,11 +3949,13 @@ static i32 Select(struct Machine *m,          //
   if (sigmaskp_guest) {
     oldmask_guest = m->sigmask;
     m->sigmask = *sigmaskp_guest;
+    SIG_LOGF("sigmask push %" PRIx64, m->sigmask);
   }
   NORESTART(rc,
             pselect(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp, &oldmask));
   if (sigmaskp_guest) {
     m->sigmask = oldmask_guest;
+    SIG_LOGF("sigmask pop %" PRIx64, m->sigmask);
   }
   unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
   if (rc != -1) {
@@ -4119,6 +4182,7 @@ static int SysPpoll(struct Machine *m, i64 fdsaddr, u64 nfds, i64 timeoutaddr,
                                                    sizeof(*sm)))) {
       oldmask = m->sigmask;
       m->sigmask = Read64(sm->sigmask);
+      SIG_LOGF("sigmask push %" PRIx64, m->sigmask);
     } else {
       return -1;
     }
@@ -4156,6 +4220,7 @@ static int SysPpoll(struct Machine *m, i64 fdsaddr, u64 nfds, i64 timeoutaddr,
   }
   if (sigmaskaddr) {
     m->sigmask = oldmask;
+    SIG_LOGF("sigmask pop %" PRIx64, m->sigmask);
   }
   return rc;
 }
@@ -4164,14 +4229,31 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
                           i64 oldsetaddr, u64 sigsetsize) {
   u64 set;
   u8 word[8];
-  if (sigsetsize != 8) return einval();
-  if (oldsetaddr) {
-    Write64(word, m->sigmask);
-    CopyToUserWrite(m, oldsetaddr, word, 8);
+  const u8 *neu;
+  if (sigsetsize != 8) {
+    return einval();
+  }
+  if (how != SIG_BLOCK_LINUX &&    //
+      how != SIG_UNBLOCK_LINUX &&  //
+      how != SIG_SETMASK_LINUX) {
+    return einval();
   }
   if (setaddr) {
-    CopyFromUserRead(m, word, setaddr, 8);
-    set = Read64(word);
+    if (!(neu = (const u8 *)SchlepR(m, setaddr, 8))) {
+      return -1;
+    }
+  } else {
+    neu = 0;
+  }
+  if (oldsetaddr) {
+    SIG_LOGF("sigmask read %" PRIx64, m->sigmask);
+    Write64(word, m->sigmask);
+    if (CopyToUserWrite(m, oldsetaddr, word, 8) == -1) {
+      return -1;
+    }
+  }
+  if (setaddr) {
+    set = Read64(neu);
     if (how == SIG_BLOCK_LINUX) {
       m->sigmask |= set;
     } else if (how == SIG_UNBLOCK_LINUX) {
@@ -4179,8 +4261,9 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
     } else if (how == SIG_SETMASK_LINUX) {
       m->sigmask = set;
     } else {
-      return einval();
+      __builtin_unreachable();
     }
+    SIG_LOGF("sigmask becomes %" PRIx64, m->sigmask);
   }
   return 0;
 }
@@ -4655,6 +4738,7 @@ void OpSyscall(P) {
     SYSCALL3(0x0D9, SysGetdents);
     SYSCALL1(0x0DA, SysSetTidAddress);
     SYSCALL4(0x0DD, SysFadvise);
+    SYSCALL2(0x0E3, SysClockSettime);
     SYSCALL2(0x0E5, SysClockGetres);
     SYSCALL4(0x0E6, SysClockNanosleep);
     SYSCALL3(0x0EA, SysTgkill);

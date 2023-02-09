@@ -59,8 +59,8 @@ static int LoadInstructionSlow(struct Machine *m, u64 ip) {
   u8 copy[15], *toil;
   i = 4096 - (ip & 4095);
   STATISTIC(++page_overlaps);
-  if ((addr = LookupAddress(m, ip))) {
-    if ((toil = LookupAddress(m, ip + i))) {
+  if ((addr = LookupAddress2(m, ip, PAGE_XD, 0))) {
+    if ((toil = LookupAddress2(m, ip + i, PAGE_XD, 0))) {
       memcpy(copy, addr, i);
       memcpy(copy + i, toil, 15 - i);
       return ReadInstruction(m, copy, 15);
@@ -85,7 +85,7 @@ int LoadInstruction2(struct Machine *m, u64 pc) {
   if ((pc & 4095) < 4096 - 15) {
     if (pc - (pc & 4095) == m->opcache->codevirt && m->opcache->codehost) {
       addr = m->opcache->codehost + (pc & 4095);
-    } else if ((page = LookupAddress(m, pc - (pc & 4095)))) {
+    } else if ((page = LookupAddress2(m, pc - (pc & 4095), PAGE_XD, 0))) {
       m->opcache->codevirt = pc - (pc & 4095);
       m->opcache->codehost = page;
       addr = page + (pc & 4095);
@@ -105,7 +105,18 @@ int LoadInstruction2(struct Machine *m, u64 pc) {
 
 void LoadInstruction(struct Machine *m, u64 pc) {
   int rc;
-  if ((rc = LoadInstruction2(m, pc))) {
-    HaltMachine(m, rc);
+  switch ((rc = LoadInstruction2(m, pc))) {
+    case 0:
+      break;
+    case kMachineSegmentationFault:
+      m->faultaddr = pc;
+      // TODO: Fix memory leak with FormatPml4t()
+      ERRF("CODE PROTECTION CRISIS\n\t%s\n%s", GetBacktrace(m), FormatPml4t(m));
+      HaltMachine(m, rc);
+    case kMachineDecodeError:
+      ERRF("INSTRUCTION DECODING CRISIS\n\t%s", GetBacktrace(m));
+      HaltMachine(m, rc);
+    default:
+      HaltMachine(m, rc);
   }
 }

@@ -111,6 +111,7 @@ static void OpenLog(void) {
   } else {
     fd = open(g_log.path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
     if (fd == -1) {
+      perror(g_log.path);
       g_log.fd = -1;
       return;
     }
@@ -139,7 +140,7 @@ static void Log(const char *file, int line, const char *fmt, va_list va,
   if (g_log.fd != -1) {
     WriteError(g_log.fd, b, n);
   }
-  if (FLAG_alsologtostderr || level <= g_log.level) {
+  if (FLAG_alsologtostderr || (!FLAG_nologstderr && level <= g_log.level)) {
     WriteError(2, b, n);
   }
   errno = err;

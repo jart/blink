@@ -92,10 +92,11 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   // set the thread signal mask to the one specified by the signal
   // handler. by default, the signal being delivered will be added
   // within the mask unless the guest program specifies SA_NODEFER
-  m->sigmask = Read64(m->system->hands[sig - 1].mask);
+  m->sigmask |= Read64(m->system->hands[sig - 1].mask);
   if (~Read64(m->system->hands[sig - 1].flags) & SA_NODEFER_LINUX) {
-    m->sigmask = 1ull << (sig - 1);
+    m->sigmask |= 1ull << (sig - 1);
   }
+  SIG_LOGF("sigmask deliver %" PRIx64, m->sigmask);
   // if the guest setup a sigaltstack() and the signal handler used
   // SA_ONSTACK then use that alternative stack for signal handling
   // otherwise use the current stack, and do not touch the red zone
@@ -120,6 +121,7 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   sp = ROUNDDOWN(sp, 16);
   sp -= sizeof(sf);
   unassert((sp & 15) == 8);
+  SIG_LOGF("restorer is %" PRIx64, Read64(m->system->hands[sig - 1].restorer));
   memcpy(sf.ret, m->system->hands[sig - 1].restorer, 8);
   Write64(sf.uc.fpstate, sp + offsetof(struct SignalFrame, fp));
   SIG_LOGF("delivering signal @ %" PRIx64, sp);
@@ -132,6 +134,7 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   Put64(m->di, sig);
   Put64(m->si, sp + offsetof(struct SignalFrame, si));
   Put64(m->dx, sp + offsetof(struct SignalFrame, uc));
+  SIG_LOGF("handler is %" PRIx64, Read64(m->system->hands[sig - 1].handler));
   m->ip = Read64(m->system->hands[sig - 1].handler);
 }
 
@@ -151,6 +154,7 @@ void SigRestore(struct Machine *m) {
   m->ip = Read64(sf.uc.rip);
   m->flags = Read64(sf.uc.eflags);
   m->sigmask = Read64(sf.uc.sigmask);
+  SIG_LOGF("sigmask restore %" PRIx64, m->sigmask);
   memcpy(m->r8, sf.uc.r8, 8);
   memcpy(m->r9, sf.uc.r9, 8);
   memcpy(m->r10, sf.uc.r10, 8);

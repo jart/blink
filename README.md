@@ -72,28 +72,6 @@ step, `c` for continue, and scroll wheel for reverse debugging.
 o//blink/blinkenlights third_party/cosmo/tinyhello.elf
 ```
 
-### Testing
-
-Blink is tested primarily using precompiled x86 binaries, which are
-downloaded automatically. You can check how well Blink works on your
-local platform by running:
-
-```sh
-make check
-```
-
-To check that Blink works on 11 different hardware `$(ARCHITECTURES)`
-(see [Makefile](Makefile)), you can run the following command, which
-will download statically-compiled builds of GCC and Qemu. Since our
-toolchain binaries are intended for x86-64 Linux, Blink will bootstrap
-itself locally first, so that it's possible to run these tests on other
-operating systems and architectures.
-
-```sh
-make check2
-make emulates
-```
-
 ### Alternative Builds
 
 For maximum tinyness, use `MODE=tiny`, since it makes Blink's binary
@@ -126,21 +104,44 @@ You can hunt down bugs in Blink using the following build modes:
 - `MODE=ubsan` to find violations of the C standard
 - `MODE=msan` helps find uninitialized memory errors
 
+### Testing
+
+Blink is tested primarily using precompiled binaries downloaded
+automatically. Blink has more than 700 test programs total. You can
+check how well Blink works on your local platform by running:
+
+```sh
+make check
+```
+
+To check that Blink works on 11 different hardware `$(ARCHITECTURES)`
+(see [Makefile](Makefile)), you can run the following command, which
+will download statically-compiled builds of GCC and Qemu. Since our
+toolchain binaries are intended for x86-64 Linux, Blink will bootstrap
+itself locally first, so that it's possible to run these tests on other
+operating systems and architectures.
+
+```sh
+make check2
+make emulates
+```
+
 ### Production Worthiness
 
-The only major issue with Blink right now is that the git command isn't
-working. Blink passes all of the Cosmopolitan Libc tests. Blink passes
-329 test suites from the [Linux Test
-Project](https://github.com/linux-test-project/ltp), see
-<https://justine.lol/blink-ltp.txt>. Blink earns a "B" at [Musl Libc's
-unit test suite](https://github.com/jart/libc-test) with 83% of its test
-binaries passing successfully (see
-<https://justine.lol/blink-musl-tests.sh.txt> for the report). Most of
-these failures are due to (1) floating ULP rounding errors (since Blink
-aims to be tiny, and full-blown FPU emulation isn't tiny), and (2) APIs
-we won't support since aren't portable and aren't commonly used enough
-to be worth polyfilling, e.g. System V message queues. Threaded tests
-flake rarely on Cygwin.
+Blink passes 194 test suites from the Cosmopolitan Libc project (see
+[third_party/cosmo](third_party/cosmo). Blink passes 350 test suites
+from the [Linux Test Project](https://github.com/linux-test-project/ltp)
+(see [third_party/ltp](third_party/ltp). Blink passes 108 of [Musl
+Libc's unit test suite](https://github.com/jart/libc-test) unit test
+suites (see [third_party/libc-test](third_party/libc-test)). The tests
+we haven't included are usually due to (1) floating ULP rounding errors
+(Blink aims to be fast and tiny, so we're on the fence about floating
+point emulation), and (2) APIs that can't or won't be supported, e.g.
+System V message queues. Blink runs the precompiled Linux test binaries
+above on other operating systems too (e.g. Apple M1, FreeBSD, Cygwin).
+The biggest issue with Blink right now are (1) `blink git clone` over
+networks isn't working, (2) DNS with Glibc libraries isn't working, and
+(3) dtoa_test.com flakes occasionally on Cygwini inside *NSYNC locks.
 
 ## Reference
 

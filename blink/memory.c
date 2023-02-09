@@ -126,7 +126,7 @@ static u64 FindPageTableEntry(struct Machine *m, u64 page) {
   return entry;
 }
 
-u8 *LookupAddress(struct Machine *m, i64 virt) {
+u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
   u8 *host;
   u64 entry, page;
   if (m->mode == XED_MODE_LONG ||
@@ -139,7 +139,9 @@ u8 *LookupAddress(struct Machine *m, i64 virt) {
         ((entry = m->tlb[0].entry) & PAGE_V)) {
       STATISTIC(++tlb_hits_1);
     } else if (-0x800000000000 <= virt && virt < 0x800000000000) {
-      if (!(entry = FindPageTableEntry(m, page))) return (u8 *)efault0();
+      if (!(entry = FindPageTableEntry(m, page))) {
+        return (u8 *)efault0();
+      }
     } else {
       return (u8 *)efault0();
     }
@@ -150,11 +152,18 @@ u8 *LookupAddress(struct Machine *m, i64 virt) {
   } else {
     return (u8 *)efault0();
   }
+  if ((entry & mask) != need) {
+    return (u8 *)efault0();
+  }
   if ((host = GetPageAddress(m->system, entry))) {
     return host + (virt & 4095);
   } else {
     return (u8 *)efault0();
   }
+}
+
+u8 *LookupAddress(struct Machine *m, i64 virt) {
+  return LookupAddress2(m, virt, PAGE_U, PAGE_U);
 }
 
 u8 *GetAddress(struct Machine *m, i64 v) {
@@ -345,12 +354,13 @@ void *AddToFreeList(struct Machine *m, void *mem) {
 // Returns pointer to memory in guest memory. If the memory overlaps a
 // page boundary, then it's copied, and the temporary memory is pushed
 // to the free list. Returns NULL w/ EFAULT or ENOMEM on error.
-static void *Schlep(struct Machine *m, i64 addr, size_t size) {
+static void *Schlep(struct Machine *m, i64 addr, size_t size, u64 mask,
+                    u64 need) {
   char *copy;
   size_t have;
   void *res, *page;
   if (!size) return 0;
-  if (!(page = LookupAddress(m, addr))) return 0;
+  if (!(page = LookupAddress2(m, addr, mask, need))) return 0;
   have = 4096 - (addr & 4095);
   if (size <= have) {
     res = page;
@@ -358,7 +368,7 @@ static void *Schlep(struct Machine *m, i64 addr, size_t size) {
     if (!(copy = (char *)malloc(size))) return 0;
     memcpy(copy, page, have);
     for (; have < size; have += 4096) {
-      if (!(page = LookupAddress(m, addr + have))) {
+      if (!(page = LookupAddress2(m, addr + have, mask, need))) {
         free(copy);
         return 0;
       }
@@ -370,22 +380,19 @@ static void *Schlep(struct Machine *m, i64 addr, size_t size) {
 }
 
 void *SchlepR(struct Machine *m, i64 addr, size_t size) {
-  if (!IsValidMemory(m, addr, size, PROT_READ)) return efault0();
   SetReadAddr(m, addr, size);
-  return Schlep(m, addr, size);
+  return Schlep(m, addr, size, PAGE_U, PAGE_U);
 }
 
 void *SchlepW(struct Machine *m, i64 addr, size_t size) {
-  if (!IsValidMemory(m, addr, size, PROT_WRITE)) return efault0();
   SetWriteAddr(m, addr, size);
-  return Schlep(m, addr, size);
+  return Schlep(m, addr, size, PAGE_RW, PAGE_RW);
 }
 
 void *SchlepRW(struct Machine *m, i64 addr, size_t size) {
-  if (!IsValidMemory(m, addr, size, PROT_READ | PROT_WRITE)) return efault0();
   SetReadAddr(m, addr, size);
   SetWriteAddr(m, addr, size);
-  return Schlep(m, addr, size);
+  return Schlep(m, addr, size, PAGE_U | PAGE_RW, PAGE_U | PAGE_RW);
 }
 
 static char *LoadStrImpl(struct Machine *m, i64 addr) {
@@ -393,7 +400,7 @@ static char *LoadStrImpl(struct Machine *m, i64 addr) {
   char *copy, *page, *p;
   have = 4096 - (addr & 4095);
   if (!addr) return 0;
-  if (!(page = (char *)LookupAddress(m, addr))) return 0;
+  if (!(page = (char *)LookupAddress2(m, addr, PAGE_U, PAGE_U))) return 0;
   if ((p = (char *)memchr(page, '\0', have))) {
     SetReadAddr(m, addr, p - page + 1);
     return page;
@@ -401,7 +408,7 @@ static char *LoadStrImpl(struct Machine *m, i64 addr) {
   if (!(copy = (char *)malloc(have + 4096))) return 0;
   memcpy(copy, page, have);
   for (;;) {
-    if (!(page = (char *)LookupAddress(m, addr + have))) break;
+    if (!(page = (char *)LookupAddress2(m, addr + have, PAGE_U, PAGE_U))) break;
     if ((p = (char *)memccpy(copy + have, page, '\0', 4096))) {
       SetReadAddr(m, addr, have + (p - (copy + have)) + 1);
       return (char *)AddToFreeList(m, copy);

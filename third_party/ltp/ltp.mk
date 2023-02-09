@@ -28,6 +28,7 @@ o/proc/%: third_party/ltp/%
 	chmod +x $@
 
 LTP_TESTS =								\
+	o/$(MODE)/third_party/ltp/bin/2/hackbench.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/accept01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/accept4_01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/alarm03.elf.ok			\
@@ -133,6 +134,7 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/getcwd02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/getcwd03.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/getdents01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/getdents02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/getdomainname01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/getegid01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/getegid02.elf.ok		\
@@ -147,6 +149,7 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/getpid02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/getppid02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/getpriority02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/getrandom01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/getrandom02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/getrandom03.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/getrlimit02.elf.ok		\
@@ -246,6 +249,8 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/setpgrp02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/setsid01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/sigaction02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/rt_sigaction02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/rt_sigaction03.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/sigaltstack01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/sigaltstack02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/signal01.elf.ok			\
@@ -253,7 +258,11 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/signal04.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/signal06.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/sigprocmask01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/rt_sigprocmask02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sigsuspend01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/socket01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/socket02.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/socketpair01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/socketpair02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/stat02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/stat02_64.elf.ok		\
@@ -285,21 +294,23 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/waitpid13.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/write01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/write02.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/write03.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/write04.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/write05.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/write06.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/1/writetest.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/writetest.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/writev01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/writev02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/writev05.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/writev06.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/writev07.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/sendto01.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/1/setitimer02.elf.ok
-
-ifeq ($(USER), root)
-LTP_TESTS += 								\
-	o/$(MODE)/third_party/ltp/bin/1/setegid02.elf.ok		\
-	o/$(MODE)/third_party/ltp/bin/1/rename09.elf.ok
-
-endif
+	o/$(MODE)/third_party/ltp/bin/1/setitimer02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/unlinkat01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/futimesat01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/unlink07.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/futex_wake03.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/send01.elf.ok
 
 ifneq ($(HOST_SYSTEM), FreeBSD)
 # These tests make the system get wrekt.
@@ -358,6 +369,9 @@ endif
 
 ifeq ($(shell id -u), 0)
 LTP_TESTS +=								\
+	o/$(MODE)/third_party/ltp/bin/1/setegid02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/stat03.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/1/rename09.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/access01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/access03.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/autogroup01.elf.ok		\
@@ -416,7 +430,8 @@ LTP_TESTS_MEDIUM =							\
 	o/$(MODE)/third_party/ltp/bin/1/mmap001.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/mmapstress01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/nanosleep01.elf.ok		\
-	o/$(MODE)/third_party/ltp/bin/1/rename14.elf.ok
+	o/$(MODE)/third_party/ltp/bin/1/rename14.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/mmap2.elf.ok
 
 ifeq ($(shell id -u), 0)
 LTP_TESTS_MEDIUM +=							\

@@ -82,3 +82,11 @@ long enotsup(void) {
 long enoent(void) {
   return ReturnErrno(ENOENT);
 }
+
+long enotdir(void) {
+  return ReturnErrno(ENOTDIR);
+}
+
+long erange(void) {
+  return ReturnErrno(ERANGE);
+}

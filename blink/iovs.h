@@ -14,7 +14,7 @@ struct Iovs {
 
 void FreeIovs(struct Iovs *);
 void InitIovs(struct Iovs *);
-int AppendIovsReal(struct Machine *, struct Iovs *, i64, u64);
-int AppendIovsGuest(struct Machine *, struct Iovs *, i64, int);
+int AppendIovsReal(struct Machine *, struct Iovs *, i64, u64, int);
+int AppendIovsGuest(struct Machine *, struct Iovs *, i64, int, int);
 
 #endif /* BLINK_IOVS_H_ */

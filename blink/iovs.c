@@ -19,6 +19,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 
 #include "blink/endian.h"
 #include "blink/errno.h"
@@ -85,13 +86,24 @@ static int AppendIovs(struct Iovs *ib, void *base, size_t len) {
   return 0;
 }
 
-int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr, u64 size) {
-  u64 have;
+int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr, u64 size,
+                   int prot) {
   void *real;
   unsigned got;
+  u64 have, mask, need;
   if (size > NUMERIC_MAX(ssize_t)) return einval();
+  need = 0;
+  mask = 0;
+  if (prot & PROT_READ) {
+    mask |= PAGE_U;
+    need |= PAGE_U;
+  }
+  if (prot & PROT_WRITE) {
+    mask |= PAGE_RW;
+    need |= PAGE_RW;
+  }
   while (size && ib->i < IOV_MAX) {
-    if (!(real = LookupAddress(m, addr))) return efault();
+    if (!(real = LookupAddress2(m, addr, mask, need))) return efault();
     have = 4096 - (addr & 4095);
     got = MIN(size, have);
     if (AppendIovs(ib, real, got) == -1) return -1;
@@ -101,8 +113,8 @@ int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr, u64 size) {
   return 0;
 }
 
-int AppendIovsGuest(struct Machine *m, struct Iovs *iv, i64 iovaddr,
-                    int iovlen) {
+int AppendIovsGuest(struct Machine *m, struct Iovs *iv, i64 iovaddr, int iovlen,
+                    int prot) {
   int rc;
   size_t i, iovsize;
   const struct iovec_linux *guestiovs;
@@ -111,7 +123,7 @@ int AppendIovsGuest(struct Machine *m, struct Iovs *iv, i64 iovaddr,
   if ((guestiovs = (const struct iovec_linux *)SchlepR(m, iovaddr, iovsize))) {
     for (rc = i = 0; i < iovlen && iv->i < IOV_MAX; ++i) {
       if (AppendIovsReal(m, iv, Read64(guestiovs[i].base),
-                         Read64(guestiovs[i].len)) == -1) {
+                         Read64(guestiovs[i].len), prot) == -1) {
         rc = -1;
         break;
       }

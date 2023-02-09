@@ -337,6 +337,7 @@ struct Machine {                           //
   bool metal;                              //
   bool restored;                           //
   bool interrupted;                        //
+  bool issigsuspend;                       //
   sigjmp_buf onhalt;                       //
   struct sigaltstack_linux sigaltstack;    //
   i64 robust_list;                         //
@@ -409,6 +410,7 @@ u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *LookupAddress(struct Machine *, i64);
+u8 *LookupAddress2(struct Machine *, i64, u64, u64);
 u8 *Load(struct Machine *, i64, size_t, u8 *);
 u8 *MallocPage(void);
 u8 *RealAddress(struct Machine *, i64);

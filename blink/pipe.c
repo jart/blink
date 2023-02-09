@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdatomic.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -42,6 +43,9 @@ int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
     LOGF("%s() unsupported flags: %d", "pipe2", flags & ~supported);
     return einval();
   }
+  if (!IsValidMemory(m, pipefds_addr, sizeof(fds_linux), PROT_WRITE)) {
+    return efault();
+  }
   if (flags) LOCK(&m->system->exec_lock);
   if (pipe(fds) != -1) {
     oflags = 0;
@@ -61,7 +65,7 @@ int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
     UNLOCK(&m->system->fds.lock);
     Write32(fds_linux[0], fds[0]);
     Write32(fds_linux[1], fds[1]);
-    CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux));
+    unassert(!CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux)));
     rc = 0;
   } else {
     rc = -1;

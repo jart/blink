@@ -758,7 +758,6 @@ static void OnSigInt(int sig, siginfo_t *si, void *uc) {
 }
 
 static void OnSigAlrm(int sig, siginfo_t *si, void *uc) {
-  EnqueueSignal(m, SIGALRM_LINUX);
   action |= ALARM;
 }
 
@@ -3634,6 +3633,7 @@ static void GetOpts(int argc, char *argv[]) {
   int opt;
   bool wantjit = false;
   bool wantunsafe = false;
+  FLAG_nologstderr = true;
   FLAG_overlays = getenv("BLINK_OVERLAYS");
   if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
   while ((opt = GetOpt(argc, argv, "hjmvtrzRNsSb:Hw:L:C:")) != -1) {
