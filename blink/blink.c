@@ -131,6 +131,8 @@ static int Exec(char *prog, char **argv, char **envp) {
         Write64(g_machine->system->hands[i - 1].handler, SIG_IGN_LINUX);
       }
     }
+    memcpy(g_machine->system->rlim, old->system->rlim,
+           sizeof(old->system->rlim));
     LoadProgram(g_machine, prog, argv, envp);
     g_machine->system->fds.list = old->system->fds.list;
     old->system->fds.list = 0;

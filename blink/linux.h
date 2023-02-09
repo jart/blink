@@ -404,7 +404,24 @@
 #define VLNEXT_LINUX   15
 #define VEOL2_LINUX    16
 
-#define RLIM_INFINITY_LINUX 0xffffffffffffffffull
+#define RLIMIT_CPU_LINUX        0
+#define RLIMIT_FSIZE_LINUX      1
+#define RLIMIT_DATA_LINUX       2
+#define RLIMIT_STACK_LINUX      3
+#define RLIMIT_CORE_LINUX       4
+#define RLIMIT_RSS_LINUX        5
+#define RLIMIT_NPROC_LINUX      6
+#define RLIMIT_NOFILE_LINUX     7
+#define RLIMIT_MEMLOCK_LINUX    8
+#define RLIMIT_AS_LINUX         9
+#define RLIMIT_LOCKS_LINUX      10
+#define RLIMIT_SIGPENDING_LINUX 11
+#define RLIMIT_MSGQUEUE_LINUX   12
+#define RLIMIT_NICE_LINUX       13
+#define RLIMIT_RTPRIO_LINUX     14
+#define RLIMIT_RTTIME_LINUX     15
+#define RLIM_INFINITY_LINUX     0xffffffffffffffffull
+#define RLIM_NLIMITS_LINUX      16
 
 #define MINSIGSTKSZ_LINUX   2048
 #define SS_ONSTACK_LINUX    1

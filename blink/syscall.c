@@ -971,7 +971,7 @@ static int SysMadvise(struct Machine *m, i64 addr, u64 len, int advice) {
 }
 
 static i64 SysBrk(struct Machine *m, i64 addr) {
-  i64 rc;
+  i64 rc, size;
   long pagesize;
   LOCK(&m->system->mmap_lock);
   MEM_LOGF("brk(%#" PRIx64 ") currently %#" PRIx64, addr, m->system->brk);
@@ -979,9 +979,22 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
   addr = ROUNDUP(addr, pagesize);
   if (addr >= kMinBrk) {
     if (addr > m->system->brk) {
-      if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
-                         PAGE_RW | PAGE_U, -1, 0, false) != -1) {
-        m->system->brk = addr;
+      size = addr - m->system->brk;
+      CleanseMemory(m->system, size);
+      if (m->system->rss < GetMaxRss(m->system)) {
+        if (size / 4096 + m->system->vss < GetMaxVss(m->system)) {
+          if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
+                             PAGE_RW | PAGE_U, -1, 0, false) != -1) {
+            m->system->brk = addr;
+          }
+        } else {
+          LOGF("not enough virtual memory (%#" PRIx64 " / %#" PRIx64
+               " pages) to map size %#" PRIx64,
+               m->system->vss, GetMaxVss(m->system), size);
+        }
+      } else {
+        LOGF("ran out of resident memory (%#" PRIx64 " / %#" PRIx64 " pages)",
+             m->system->rss, GetMaxRss(m->system));
       }
     } else if (addr < m->system->brk) {
       if (FreeVirtual(m->system, addr, m->system->brk - addr) != -1) {
@@ -1015,17 +1028,29 @@ int GetOflags(struct Machine *m, int fildes) {
   return oflags;
 }
 
-static i64 SysMmap(struct Machine *m, i64 virt, u64 size, int prot, int flags,
-                   int fildes, i64 offset) {
+static i64 SysMmapImpl(struct Machine *m, i64 virt, u64 size, int prot,
+                       int flags, int fildes, i64 offset) {
   u64 key;
   int oflags;
   ssize_t rc;
   long pagesize;
+  i64 newautomap;
   if (!IsValidAddrSize(virt, size)) return einval();
   if (flags & MAP_GROWSDOWN_LINUX) return enotsup();
   if ((key = Prot2Page(prot)) == -1) return einval();
-  if (size > NUMERIC_MAX(size_t)) return eoverflow();
   if (flags & MAP_FIXED_NOREPLACE_LINUX) return enotsup();
+  CleanseMemory(m->system, size);
+  if (m->system->rss > GetMaxRss(m->system)) {
+    LOGF("ran out of resident memory (%" PRIx64 " / %" PRIx64 " pages)",
+         m->system->rss, GetMaxRss(m->system));
+    return enomem();
+  }
+  if (size / 4096 + m->system->vss > GetMaxVss(m->system)) {
+    LOGF("not enough virtual memory (%" PRIx64 " / %" PRIx64
+         " pages) to map size %" PRIx64,
+         m->system->vss, GetMaxVss(m->system), size);
+    return enomem();
+  }
   if (flags & MAP_ANONYMOUS_LINUX) {
     fildes = -1;
     if ((flags & MAP_TYPE_LINUX) == MAP_FILE_LINUX) {
@@ -1048,22 +1073,36 @@ static i64 SysMmap(struct Machine *m, i64 virt, u64 size, int prot, int flags,
       return -1;
     }
   }
-  LOCK(&m->system->mmap_lock);
   if (!(flags & MAP_FIXED_LINUX) &&
       (!virt || !IsFullyUnmapped(m->system, virt, size))) {
     if ((virt = FindVirtual(m->system, m->system->automap, size)) == -1) {
-      UNLOCK(&m->system->mmap_lock);
       goto Finished;
     }
     pagesize = GetSystemPageSize();
-    m->system->automap = ROUNDUP(virt + size, pagesize);
+    newautomap = ROUNDUP(virt + size, pagesize);
+    if (newautomap >= kAutomapEnd) {
+      newautomap = kAutomapStart;
+    }
+  } else {
+    newautomap = -1;
   }
   rc = ReserveVirtual(m->system, virt, size, key, fildes, offset,
                       !!(flags & MAP_SHARED_LINUX));
-  UNLOCK(&m->system->mmap_lock);
+  if (rc != -1 && newautomap != -1) {
+    m->system->automap = newautomap;
+  }
   if (rc == -1) virt = -1;
 Finished:
   return virt;
+}
+
+static i64 SysMmap(struct Machine *m, i64 virt, u64 size, int prot, int flags,
+                   int fildes, i64 offset) {
+  i64 res;
+  LOCK(&m->system->mmap_lock);
+  res = SysMmapImpl(m, virt, size, prot, flags, fildes, offset);
+  UNLOCK(&m->system->mmap_lock);
+  return res;
 }
 
 static i64 SysMremap(struct Machine *m, i64 old_address, u64 old_size,
@@ -3067,10 +3106,36 @@ static int SysGetrusage(struct Machine *m, i32 resource, i64 rusageaddr) {
   return rc;
 }
 
+static void GetMemLimit(struct Machine *m, int resource,
+                        struct rlimit_linux *lux) {
+  LOCK(&m->system->mmap_lock);
+  memcpy(lux, m->system->rlim + resource, sizeof(*lux));
+  UNLOCK(&m->system->mmap_lock);
+}
+
+static int SetMemLimit(struct Machine *m, int resource,
+                       const struct rlimit_linux *lux) {
+  int rc;
+  LOCK(&m->system->mmap_lock);
+  if (Read64(lux->cur) <= Read64(m->system->rlim[resource].max) &&
+      Read64(lux->max) <= Read64(m->system->rlim[resource].max)) {
+    memcpy(m->system->rlim + resource, lux, sizeof(*lux));
+    rc = 0;
+  } else {
+    rc = eperm();
+  }
+  UNLOCK(&m->system->mmap_lock);
+  return rc;
+}
+
 static int SysGetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
   int rc;
   struct rlimit rlim;
   struct rlimit_linux lux;
+  if (resource == RLIMIT_AS_LINUX || resource == RLIMIT_DATA_LINUX) {
+    GetMemLimit(m, resource, &lux);
+    return CopyToUserWrite(m, rlimitaddr, &lux, sizeof(lux));
+  }
   if ((rc = getrlimit(XlatResource(resource), &rlim)) != -1) {
     XlatRlimitToLinux(&lux, &rlim);
     if (CopyToUserWrite(m, rlimitaddr, &lux, sizeof(lux)) == -1) rc = -1;
@@ -3081,33 +3146,38 @@ static int SysGetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
 static int SysSetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
   int sysresource;
   struct rlimit rlim;
-  struct rlimit_linux lux;
+  struct rlimit_linux *lux;
+  if (!(lux = (struct rlimit_linux *)Schlep(m, rlimitaddr, sizeof(*lux)))) {
+    return -1;
+  }
+  if (resource == RLIMIT_DATA_LINUX || resource == RLIMIT_AS_LINUX) {
+    return SetMemLimit(m, resource, lux);
+  }
   if ((sysresource = XlatResource(resource)) == -1) return -1;
-  if (CopyFromUserRead(m, &lux, rlimitaddr, sizeof(lux)) == -1) return -1;
-  XlatLinuxToRlimit(sysresource, &rlim, &lux);
+  XlatLinuxToRlimit(sysresource, &rlim, lux);
   return setrlimit(sysresource, &rlim);
 }
 
 static int SysPrlimit(struct Machine *m, i32 pid, i32 resource,
                       i64 new_rlimit_addr, i64 old_rlimit_addr) {
-  int rc;
-  struct rlimit old;
-  struct rlimit_linux lux;
-  if (pid && pid != m->system->pid) return eperm();
+  if (pid && pid != m->system->pid) {
+    return eperm();
+  }
+#ifndef TINY
   if ((old_rlimit_addr &&
-       !IsValidMemory(m, old_rlimit_addr, sizeof(lux), PROT_WRITE))) {
+       !IsValidMemory(m, old_rlimit_addr, sizeof(struct rlimit_linux),
+                      PROT_WRITE)) &&
+      (new_rlimit_addr &&
+       !IsValidMemory(m, new_rlimit_addr, sizeof(struct rlimit_linux),
+                      PROT_READ))) {
     return efault();
   }
-  if ((rc = getrlimit(XlatResource(resource), &old)) != -1) {
-    if (new_rlimit_addr) {
-      rc = SysSetrlimit(m, resource, new_rlimit_addr);
-    }
-    if (rc != -1 && old_rlimit_addr) {
-      XlatRlimitToLinux(&lux, &old);
-      CopyToUserWrite(m, old_rlimit_addr, &lux, sizeof(lux));
-    }
+#endif
+  if ((old_rlimit_addr && SysGetrlimit(m, resource, old_rlimit_addr) == -1) ||
+      (new_rlimit_addr && SysSetrlimit(m, resource, new_rlimit_addr) == -1)) {
+    return -1;
   }
-  return rc;
+  return 0;
 }
 
 static int SysSysinfo(struct Machine *m, i64 siaddr) {

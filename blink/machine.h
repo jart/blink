@@ -207,7 +207,10 @@ struct System {
   u64 cr3;
   u64 cr4;
   i64 brk;
+  i64 rss;
+  i64 vss;
   i64 automap;
+  i64 memchurn;
   i64 codestart;
   unsigned long codesize;
   struct MachineMemstat memstat;
@@ -225,6 +228,7 @@ struct System {
   struct sigaction_linux hands[64] GUARDED_BY(sig_lock);
   u64 blinksigs;  // signals blink itself handles
   pthread_mutex_t mmap_lock;
+  struct rlimit_linux rlim[RLIM_NLIMITS_LINUX];
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
   int (*exec)(char *, char **, char **);
@@ -374,6 +378,7 @@ int ReserveVirtual(struct System *, i64, i64, u64, int, i64, bool);
 char *FormatPml4t(struct Machine *);
 i64 FindVirtual(struct System *, i64, i64);
 int FreeVirtual(struct System *, i64, i64);
+void CleanseMemory(struct System *, size_t);
 void LoadArgv(struct Machine *, char *, char **, char **);
 _Noreturn void HaltMachine(struct Machine *, int);
 _Noreturn void RaiseDivideError(struct Machine *);
@@ -426,6 +431,8 @@ int GetProtection(u64);
 u64 SetProtection(int);
 int ClassifyOp(u64) pureconst;
 void Terminate(P, void (*)(struct Machine *, u64));
+i64 GetMaxRss(struct System *);
+i64 GetMaxVss(struct System *);
 
 void CountOp(long *);
 void FastPush(struct Machine *, long);

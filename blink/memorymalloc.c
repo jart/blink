@@ -128,37 +128,68 @@ void *AllocateBig(size_t n, int prot, int flags, int fd, off_t off) {
 #endif
 }
 
-static void FreePageTable(struct System *s, u64 pt, long level) {
+static bool FreePageTables(struct System *s, u64 pt, long level) {
   u8 *mi;
   long i;
+  bool canfree = true;
   mi = GetPageAddress(s, pt);
   for (i = 0; i < 512; ++i) {
     if (level == 4) {
-      unassert(!Read64(mi + i * 8));
+      if (Read64(mi + i * 8)) {
+        canfree = false;
+      }
     } else {
       pt = Read64(mi + i * 8);
       if (pt & PAGE_V) {
-        FreePageTable(s, pt, level + 1);
-        Write64(mi + i * 8, 0);
+        if (FreePageTables(s, pt, level + 1)) {
+          Write64(mi + i * 8, 0);
+        } else {
+          canfree = false;
+        }
       } else {
         unassert(!pt);
       }
     }
   }
-  FreeAnonymousPage(s, mi);
+  if (canfree) {
+    FreeAnonymousPage(s, mi);
+    --s->memstat.pagetables;
+    --s->rss;
+  }
+  return canfree;
 }
 
 static void FreeHostPages(struct System *s) {
   if (!s->real && s->cr3) {
     unassert(!FreeVirtual(s, -0x800000000000, 0x1000000000000));
-    FreePageTable(s, s->cr3, 1);
+    unassert(FreePageTables(s, s->cr3, 1));
     s->cr3 = 0;
   }
   free(s->real);
   s->real = 0;
 }
 
+void CleanseMemory(struct System *s, size_t size) {
+  i64 oldrss;
+  if (s->memchurn >= s->rss / 2) {
+    oldrss = s->rss;
+    (void)oldrss;
+    FreePageTables(s, s->cr3, 1);
+    MEM_LOGF("freed %" PRId64 " page tables", oldrss - s->rss);
+    s->memchurn = 0;
+  }
+}
+
+i64 GetMaxVss(struct System *s) {
+  return MIN(kMaxVirtual, Read64(s->rlim[RLIMIT_AS_LINUX].cur)) / 4096;
+}
+
+i64 GetMaxRss(struct System *s) {
+  return MIN(kMaxResident, Read64(s->rlim[RLIMIT_AS_LINUX].cur)) / 4096;
+}
+
 struct System *NewSystem(int mode) {
+  long i;
   struct System *s;
   unassert(mode == XED_MODE_REAL ||    //
            mode == XED_MODE_LEGACY ||  //
@@ -188,6 +219,10 @@ struct System *NewSystem(int mode) {
                  1ull << (SIGFPE_LINUX - 1) |   //
                  1ull << (SIGSEGV_LINUX - 1) |  //
                  1ull << (SIGTRAP_LINUX - 1);
+  for (i = 0; i < RLIM_NLIMITS_LINUX; ++i) {
+    Write64(s->rlim[i].cur, RLIM_INFINITY_LINUX);
+    Write64(s->rlim[i].max, RLIM_INFINITY_LINUX);
+  }
   s->automap = kAutomapStart;
   s->pid = getpid();
   return s;
@@ -370,6 +405,7 @@ u64 AllocatePage(struct System *s) {
   }
   UNLOCK(&g_allocator.lock);
 Finished:
+  ++s->rss;
   real = (intptr_t)page;
   unassert(!(real & ~PAGE_TA));
   return real | PAGE_HOST | PAGE_U | PAGE_RW | PAGE_V;
@@ -395,11 +431,11 @@ bool OverlapsPrecious(i64 virt, i64 size) {
 }
 
 bool IsValidAddrSize(i64 virt, i64 size) {
-  return size &&                        //
-         !(virt & 4095) &&              //
-         virt >= -0x800000000000 &&     //
-         virt < 0x800000000000 &&       //
-         size <= 0x1000000000000ull &&  //
+  return size > 0 &&                 //
+         !(virt & 4095) &&           //
+         virt >= -0x800000000000 &&  //
+         virt < 0x800000000000 &&    //
+         size <= 0x1000000000000 &&  //
          virt + size <= 0x800000000000;
 }
 
@@ -428,16 +464,20 @@ static void TallyFreePage(struct System *s, u64 entry) {
   }
 }
 
-static bool FreePage(struct System *s, u64 entry, u64 size) {
+static bool FreePage(struct System *s, u64 entry, u64 size,
+                     bool *address_space_was_mutated, long *rss_delta) {
   u8 *page;
   long pagesize;
   intptr_t real, mug;
   unassert(entry & PAGE_V);
   if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) == PAGE_HOST) {
+    unassert(~entry & PAGE_RSRV);
     ++s->memstat.freed;
     --s->memstat.committed;
     ClearPage((page = (u8 *)(intptr_t)(entry & PAGE_TA)));
     FreeAnonymousPage(s, page);
+    *address_space_was_mutated = true;
+    --*rss_delta;
     return false;
   } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
              (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
@@ -446,10 +486,13 @@ static bool FreePage(struct System *s, u64 entry, u64 size) {
     real = entry & PAGE_TA;
     mug = ROUNDDOWN(real, pagesize);
     unassert(!Munmap((void *)mug, real - mug + size));
+    *address_space_was_mutated = true;
+    if (~entry & PAGE_RSRV) --*rss_delta;
     return false;
   } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
              (PAGE_HOST | PAGE_MAP)) {
     TallyFreePage(s, entry);
+    if (~entry & PAGE_RSRV) --*rss_delta;
     return true;
   } else if (entry & PAGE_RSRV) {
     TallyFreePage(s, entry);
@@ -475,7 +518,9 @@ static void AddPageToRanges(struct ContiguousMemoryRanges *ranges, i64 virt,
 // won't be freed, and will instead have their intervals pooled in the
 // ranges data structure; the caller is responsible for freeing those.
 static void RemoveVirtual(struct System *s, i64 virt, i64 size,
-                          struct ContiguousMemoryRanges *ranges) {
+                          struct ContiguousMemoryRanges *ranges,
+                          bool *address_space_was_mutated,  //
+                          long *vss_delta, long *rss_delta) {
   u8 *mi;
   i64 end;
   u64 i, pt;
@@ -486,10 +531,13 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
       if (!(pt & PAGE_V)) {
         break;
       } else if (i == 12) {
-        if (FreePage(s, pt, MIN(4096, end - virt)) && HasLinearMapping(m)) {
+        if (FreePage(s, pt, MIN(4096, end - virt), address_space_was_mutated,
+                     rss_delta) &&
+            HasLinearMapping(m)) {
           AddPageToRanges(ranges, virt, end);
         }
         Store64(mi, 0);
+        --*vss_delta;
         break;
       }
     }
@@ -514,6 +562,8 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   int method;
   void *got, *want;
   long i, pagesize;
+  long vss_delta, rss_delta;
+  bool no_retreat_no_surrender;
   i64 ti, pt, end, level, entry;
   struct ContiguousMemoryRanges ranges;
 
@@ -567,9 +617,13 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
            virt, virt + size, size / 1024);
 
   // remove existing mapping
-  // this is the point of no return
+  // this may be the point of no return
+  vss_delta = 0;
+  rss_delta = 0;
+  no_retreat_no_surrender = false;
   memset(&ranges, 0, sizeof(ranges));
-  RemoveVirtual(s, virt, size, &ranges);
+  RemoveVirtual(s, virt, size, &ranges, &no_retreat_no_surrender, &vss_delta,
+                &rss_delta);
   if (HasLinearMapping(m) && ranges.i) {
     // linear mappings exist within the requested interval
     if (ranges.i == 1 &&          //
@@ -581,6 +635,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
       // holes exist; try to create a greenfield
       for (i = 0; i < ranges.i; ++i) {
         Munmap(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a);
+        no_retreat_no_surrender = true;
       }
       // errors in Munmap() should propagate to Mmap() below
       method = MAP_DEMAND;
@@ -608,6 +663,10 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                      (fd == -1 ? MAP_ANONYMOUS : 0) |       //
                      (shared ? MAP_SHARED : MAP_PRIVATE)),  //
                     fd, offset, "linear")) != want) {
+      if (got == MAP_FAILED && errno == ENOMEM && !no_retreat_no_surrender) {
+        LOGF("host system returned ENOMEM");
+        return -1;
+      }
       ERRF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ")"
            " -> %#" PRIx64 "[%p] crisis: %s",
            virt, want, size, ToGuest(got), got,
@@ -628,6 +687,14 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   } else {
     s->memstat.reserved += size / 4096;
   }
+
+  // account for pre-existing memory that was just removed
+  s->vss += vss_delta;
+  s->rss += rss_delta;
+  s->memchurn += -vss_delta;
+  // TODO(jart): Figure out what's wrong with rss accounting.
+  if (s->vss < 0) s->vss = 0;
+  if (s->rss < 0) s->rss = 0;
 
   // add pml4t entries ensuring intermediary tables exist
   for (end = virt + size;;) {
@@ -681,9 +748,15 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
             real = (intptr_t)ToHost(virt);
           }
           unassert(!(real & ~PAGE_TA));
-          entry = real | flags | PAGE_RSRV | PAGE_V;
+          entry = real | flags | PAGE_V;
         } else {
-          entry = flags | PAGE_RSRV | PAGE_V;
+          entry = flags | PAGE_V;
+        }
+        ++s->vss;
+        if (HasLinearMapping(s)) {
+          ++s->rss;
+        } else {
+          entry |= PAGE_RSRV;
         }
         if (fd != -1 && virt + 4096 >= end) {
           entry |= PAGE_EOF;
@@ -700,20 +773,28 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
 }
 
 i64 FindVirtual(struct System *s, i64 virt, i64 size) {
-  u64 i, pt, got = 0;
-  if (!IsValidAddrSize(virt, size)) return einval();
-  if (OverlapsPrecious(virt, size)) virt = kPreciousEnd + kSkew;
+  u64 i, pt, got, orig_virt = virt;
+  (void)orig_virt;
+StartOver:
+  if (!IsValidAddrSize(virt, size)) {
+    LOGF("FindVirtual [%#" PRIx64 ",%#" PRIx64 ") -> "
+         "[%#" PRIx64 ",%#" PRIx64 ") not possible",
+         orig_virt, orig_virt + size, virt, virt + size);
+    return enomem();
+  }
+  if (HasLinearMapping(s) && OverlapsPrecious(virt, size)) {
+    virt = kPreciousEnd + kSkew;
+  }
+  got = 0;
   do {
-    if (virt >= 0x800000000000) return enomem();
-    for (pt = s->cr3, i = 39; i >= 12; i -= 9) {
-      pt = Load64(GetPageAddress(s, pt) + ((virt >> i) & 511) * 8);
-      if (!(pt & PAGE_V)) break;
+    for (i = 39, pt = s->cr3;; i -= 9) {
+      pt = Load64(GetPageAddress(s, pt) + (((virt + got) >> i) & 511) * 8);
+      if (i == 12 || !(pt & PAGE_V)) break;
     }
-    if (i >= 12) {
-      got += 1ull << i;
-    } else {
-      virt += 4096;
-      got = 0;
+    got += 1ull << i;
+    if ((pt & PAGE_V)) {
+      virt += got;
+      goto StartOver;
     }
   } while (got < size);
   return virt;
@@ -722,6 +803,8 @@ i64 FindVirtual(struct System *s, i64 virt, i64 size) {
 int FreeVirtual(struct System *s, i64 virt, i64 size) {
   int rc;
   long i;
+  bool mutated;
+  long vss_delta, rss_delta;
   struct ContiguousMemoryRanges ranges;
   MEM_LOGF("freeing virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
            virt, virt + size, size / 1024);
@@ -731,8 +814,10 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
   }
   // TODO(jart): We should probably validate a PAGE_EOF exists at the
   //             end when size isn't a multiple of platform page size
+  vss_delta = 0;
+  rss_delta = 0;
   memset(&ranges, 0, sizeof(ranges));
-  RemoveVirtual(s, virt, size, &ranges);
+  RemoveVirtual(s, virt, size, &ranges, &mutated, &vss_delta, &rss_delta);
   for (rc = i = 0; i < ranges.i; ++i) {
     if (Munmap(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a)) {
       LOGF("failed to %s subrange"
@@ -744,6 +829,12 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
     }
   }
   free(ranges.p);
+  s->vss += vss_delta;
+  s->rss += rss_delta;
+  s->memchurn += -vss_delta;
+  // TODO(jart): Figure out what's wrong with rss accounting.
+  if (s->vss < 0) s->vss = 0;
+  if (s->rss < 0) s->rss = 0;
   InvalidateSystem(s, true, false);
   return rc;
 }
@@ -797,7 +888,7 @@ bool IsFullyUnmapped(struct System *s, i64 virt, i64 size) {
   u8 *mi;
   i64 end;
   u64 i, pt;
-  if (OverlapsPrecious(virt, size)) return false;
+  if (HasLinearMapping(s) && OverlapsPrecious(virt, size)) return false;
   for (end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
       mi = GetPageAddress(s, pt) + ((virt >> i) & 511) * 8;
