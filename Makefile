@@ -34,7 +34,8 @@ test:	o				\
 	o/$(MODE)/test
 
 check:	test				\
-	o/$(MODE)/third_party/cosmo
+	o/$(MODE)/third_party/cosmo	\
+	o/$(MODE)/third_party/libc-test
 
 check2:	o/$(MODE)/test/sse		\
 	o/$(MODE)/test/lib		\
@@ -69,6 +70,7 @@ include third_party/ltp/ltp.mk
 include third_party/musl/musl.mk
 include third_party/qemu/qemu.mk
 include third_party/cosmo/cosmo.mk
+include third_party/libc-test/libc-test.mk
 
 OBJS	 = $(foreach x,$(PKGS),$($(x)_OBJS))
 SRCS	:= $(foreach x,$(PKGS),$($(x)_SRCS))

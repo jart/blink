@@ -100,7 +100,7 @@ int SetOverlays(const char *config) {
         path2 = ExpandUser(path);
         free(path);
         path = path2;
-        path2 = malloc(PATH_MAX + 1);
+        path2 = (char *)malloc(PATH_MAX + 1);
         if (!realpath(path, path2)) {
           free(path);
           continue;

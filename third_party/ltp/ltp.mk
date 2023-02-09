@@ -21,6 +21,7 @@ o/$(MODE)/third_party/ltp/bin/%.elf.ok:				\
 	o/$(MODE)/blink/blink $<
 	@touch $@
 
+.PRECIOUS: o/proc/%
 o/proc/%: third_party/ltp/%
 	@mkdir -p $(@D)
 	cp -f $< $@
