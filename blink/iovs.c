@@ -27,6 +27,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/stats.h"
 #include "blink/types.h"
 #include "blink/util.h"
 
@@ -54,10 +55,18 @@ static int AppendIovs(struct Iovs *ib, void *base, size_t len) {
     n = ib->n;
     if (i &&
         (uintptr_t)base == (uintptr_t)p[i - 1].iov_base + p[i - 1].iov_len) {
+      STATISTIC(++iov_stretches);
       if (p[i - 1].iov_len + len > NUMERIC_MAX(ssize_t)) return einval();
       p[i - 1].iov_len += len;
     } else {
-      if (i == n) {
+      if (i < n) {
+        if (!i) {
+          STATISTIC(++iov_created);
+        } else {
+          STATISTIC(++iov_fragments);
+        }
+      } else {
+        STATISTIC(++iov_reallocs);
         n += n >> 1;
         if (p == ib->init) {
           if (!(p = (struct iovec *)malloc(sizeof(*p) * n))) return -1;

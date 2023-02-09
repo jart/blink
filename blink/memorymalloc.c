@@ -397,9 +397,9 @@ u64 AllocatePage(struct System *s) {
   s->memstat.committed += 1;
   s->memstat.freed += n - 1;
   LOCK(&g_allocator.lock);
-  for (i = 0; i + 1 < n; ++i, page += 4096) {
+  for (i = n; i-- > 1;) {
     unassert((h = NewHostPage()));
-    h->page = page;
+    h->page = page + i * 4096;
     h->next = g_allocator.pages;
     g_allocator.pages = h;
   }

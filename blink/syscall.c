@@ -1568,31 +1568,31 @@ static i64 SysSendto(struct Machine *m,  //
                      i32 flags,          //
                      i64 sockaddr_addr,  //
                      i32 sockaddr_size) {
-  i64 rc;
-  int len;
-  int hostflags;
-  const void *mem;
-  socklen_t addrlen;
+  ssize_t rc;
+  struct Iovs iv;
+  struct msghdr msg;
+  int len, hostflags;
   bool norestart = false;
-  struct sockaddr *addrp;
   struct sockaddr_storage ss;
   if (sockaddr_size < 0) return einval();
   if ((hostflags = XlatSendFlags(flags)) == -1) return -1;
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
+  memset(&msg, 0, sizeof(msg));
   if (sockaddr_size) {
     if ((len = LoadSockaddr(m, sockaddr_addr, sockaddr_size, &ss)) != -1) {
-      addrlen = len;
+      msg.msg_namelen = len;
     } else {
       return -1;
     }
-    addrp = (struct sockaddr *)&ss;
-  } else {
-    addrlen = 0;
-    addrp = 0;
+    msg.msg_name = &ss;
   }
-  if (!(mem = SchlepR(m, bufaddr, buflen))) return -1;
-  INTERRUPTIBLE(!norestart,
-                rc = sendto(fildes, mem, buflen, hostflags, addrp, addrlen));
+  InitIovs(&iv);
+  if ((rc = AppendIovsReal(m, &iv, bufaddr, buflen)) != -1) {
+    msg.msg_iov = iv.p;
+    msg.msg_iovlen = iv.i;
+    INTERRUPTIBLE(!norestart, rc = sendmsg(fildes, &msg, hostflags));
+  }
+  FreeIovs(&iv);
   return rc;
 }
 
@@ -1603,24 +1603,31 @@ static i64 SysRecvfrom(struct Machine *m,  //
                        i32 flags,          //
                        i64 sockaddr_addr,  //
                        i64 sockaddr_size_addr) {
-  i64 rc;
-  void *buf;
+  ssize_t rc;
   int hostflags;
-  socklen_t addrlen;
+  struct Iovs iv;
+  struct msghdr msg;
   bool norestart = false;
   struct sockaddr_storage addr;
   if ((hostflags = XlatRecvFlags(flags)) == -1) return -1;
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
-  if (!(buf = malloc(buflen))) return -1;
-  addrlen = sizeof(addr);
-  INTERRUPTIBLE(!norestart, rc = recvfrom(fildes, buf, buflen, hostflags,
-                                          (struct sockaddr *)&addr, &addrlen));
-  if (rc != -1) {
-    unassert(!CopyToUserWrite(m, bufaddr, buf, rc));
-    unassert(!StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
-                            (struct sockaddr *)&addr, addrlen));
+  memset(&msg, 0, sizeof(msg));
+  if (sockaddr_addr && sockaddr_size_addr) {
+    msg.msg_name = &addr;
+    msg.msg_namelen = sizeof(addr);
   }
-  free(buf);
+  InitIovs(&iv);
+  if ((rc = AppendIovsReal(m, &iv, bufaddr, buflen)) != -1) {
+    msg.msg_iov = iv.p;
+    msg.msg_iovlen = iv.i;
+    INTERRUPTIBLE(!norestart, rc = recvmsg(fildes, &msg, hostflags));
+    if (rc != -1) {
+      unassert(!StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
+                              (struct sockaddr *)msg.msg_name,
+                              msg.msg_namelen));
+    }
+  }
+  FreeIovs(&iv);
   return rc;
 }
 
