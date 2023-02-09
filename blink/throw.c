@@ -97,7 +97,7 @@ void ThrowSegmentationFault(struct Machine *m, i64 va) {
 
 void OpUdImpl(struct Machine *m) {
   RestoreIp(m);
-  ERRF("UNDEFINED INSTRUCTION\n\t%s", GetBacktrace(m));
+  ERRF("UNDEFINED INSTRUCTION\n\t%s\n%s", GetBacktrace(m), FormatPml4t(m));
   HaltMachine(m, kMachineUndefinedInstruction);
 }
 

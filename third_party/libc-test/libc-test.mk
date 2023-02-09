@@ -163,11 +163,6 @@ endif
 ################################################################################
 # FLAKY TESTS
 
-# pthread_mutex_unlock() fails on 5% of invocations because the the
-# thread set_child_tid mismatches the value stored within the mutex
-#
-# o/$(MODE)/third_party/libc-test/bin/2/functional/pthread_mutex.elf.ok
-
 # This test execve()'s the system /bin/sh. GitHub Actions Linux
 # environment reports "sh: error while loading shared libraries:
 # libc.so.6: cannot stat shared object: No such file or directory".
