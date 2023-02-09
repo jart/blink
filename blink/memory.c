@@ -27,6 +27,7 @@
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/likely.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -62,9 +63,9 @@ u8 *GetPageAddress(struct System *s, u64 entry) {
 }
 
 u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
-  u64 x;
-  u64 page;
+  u64 x, res, page;
   unassert(entry & PAGE_RSRV);
+  LOCK(&m->system->mmap_lock);
   // page faults should only happen in non-linear mode
   if (!(entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG))) {
     // an anonymous page is being accessed for the first time
@@ -73,9 +74,9 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
       ++m->system->memstat.committed;
       x = (page & (PAGE_TA | PAGE_HOST)) | (entry & ~(PAGE_TA | PAGE_RSRV));
       Store64(GetPageAddress(m->system, table) + index * 8, x);
-      return x;
+      res = x;
     } else {
-      return 0;
+      res = 0;
     }
   } else {
     // a file-mapped page is being accessed for the first time
@@ -84,8 +85,10 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
     ++m->system->memstat.committed;
     x = entry & ~PAGE_RSRV;
     Store64(GetPageAddress(m->system, table) + index * 8, x);
-    return x;
+    res = x;
   }
+  UNLOCK(&m->system->mmap_lock);
+  return res;
 }
 
 static u64 FindPageTableEntry(struct Machine *m, u64 page) {

@@ -94,36 +94,29 @@ make check2
 make emulates
 ```
 
-### Production Worthiness
-
-For independent objective analysis of how far Blink has come thus far,
-we've also been using test suites developed by other people. Blink
-passes 329 test suites from the [Linux Test
-Project](https://github.com/linux-test-project/ltp), see
-<https://justine.lol/blink-ltp.txt>. If you run [Musl Libc's unit test
-suite](https://github.com/jart/libc-test) on Blink, then 76% of the test
-binaries work successfully, see
-<https://justine.lol/blink-musl-tests.sh.txt>.
-
 ### Alternative Builds
 
-For maximum performance, use `MODE=rel` or `MODE=opt`. Please note the
-release mode builds will remove all the logging and assertion statements
-and Blink isn't mature enough for that yet. So extra caution is advised.
-
-```sh
-make MODE=rel
-o/rel/blink/blink -h
-```
-
-For maximum tinyness, use `MODE=tiny`. This build mode will not only
-remove logging and assertion statements, but also reduce performance in
-favor of smaller binary size whenever possible.
+For maximum tinyness, use `MODE=tiny`, since it makes Blink's binary
+footprint 50% smaller. Performance isn't impacted. Please note that all
+assertions will be removed, as well as all logging. Use this mode if
+you're confident that Blink is bug-free for your use case.
 
 ```sh
 make MODE=tiny
 strip o/tiny/blink/blink
 ls -hal o/tiny/blink/blink
+```
+
+The traditional `MODE=rel` or `MODE=opt` modes are available. Use this
+mode if you're on a non-JIT architecture (since this won't improve
+performance on AMD64 and ARM64) and you're confident that Blink is
+bug-free for your use case, and would rather have Blink not create a
+`blink.log` or print `SIGSEGV` delivery warnings to standard error,
+since many apps implement their own crash reporting.
+
+```sh
+make MODE=rel
+o/rel/blink/blink -h
 ```
 
 You can hunt down bugs in Blink using the following build modes:
@@ -132,6 +125,22 @@ You can hunt down bugs in Blink using the following build modes:
 - `MODE=tsan` helps find threading related bugs
 - `MODE=ubsan` to find violations of the C standard
 - `MODE=msan` helps find uninitialized memory errors
+
+### Production Worthiness
+
+The only major issue with Blink right now is that the git command isn't
+working. Blink passes all of the Cosmopolitan Libc tests. Blink passes
+329 test suites from the [Linux Test
+Project](https://github.com/linux-test-project/ltp), see
+<https://justine.lol/blink-ltp.txt>. Blink earns a "B" at [Musl Libc's
+unit test suite](https://github.com/jart/libc-test) with 83% of its test
+binaries passing successfully (see
+<https://justine.lol/blink-musl-tests.sh.txt> for the report). Most of
+these failures are due to (1) floating ULP rounding errors (since Blink
+aims to be tiny, and full-blown FPU emulation isn't tiny), and (2) APIs
+we won't support since aren't portable and aren't commonly used enough
+to be worth polyfilling, e.g. System V message queues. Threaded tests
+flake rarely on Cygwin.
 
 ## Reference
 

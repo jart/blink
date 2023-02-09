@@ -127,6 +127,9 @@ LIBC_TEST_TESTS =									\
 	o//third_party/libc-test/bin/2/regression/getpwnam_r-crash.elf.ok		\
 	o//third_party/libc-test/bin/2/regression/scanf-bytes-consumed.elf.ok		\
 	o//third_party/libc-test/bin/3/regression/malloc-oom.elf.ok			\
+	o//third_party/libc-test/bin/3/regression/setenv-oom.elf.ok			\
+	o//third_party/libc-test/bin/3/regression/pthread_create-oom.elf.ok		\
+	o//third_party/libc-test/bin/3/regression/daemon-failure.elf.ok			\
 	o//third_party/libc-test/bin/3/functional/inet_pton.elf.ok
 
 ifeq ($(shell [ -d /dev/shm ] && echo yes), yes)
@@ -166,6 +169,12 @@ endif
 # also fails for unexplained reasons on OpenBSD.
 #
 # o//third_party/libc-test/bin/2/functional/vfork.elf.ok
+
+# These tests work fine but they launch /bin/sh so avoiding adding them
+# to `make check` until we find some way to detect GA environment.
+#
+# o//third_party/libc-test/bin/3/functional/popen.elf.ok
+# o//third_party/libc-test/bin/3/functional/spawn.elf.ok
 
 # Fails on GitHub Actions Linux with "SEGMENTATION FAULT AT ADDRESS 10"
 # and this hasn't happened in any other environment.
