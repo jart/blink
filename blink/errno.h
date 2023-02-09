@@ -4,6 +4,7 @@
 long eagain(void);
 long ebadf(void);
 long efault(void);
+void *efault0(void);
 long eintr(void);
 long einval(void);
 long enfile(void);

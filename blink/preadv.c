@@ -26,6 +26,8 @@
 #include "blink/macros.h"
 #include "blink/preadv.h"
 
+// preadv() and pwritev() need MacOS 11+ c. 2020
+
 ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
   int i;
   char *p;

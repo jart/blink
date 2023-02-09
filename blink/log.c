@@ -111,8 +111,8 @@ static void OpenLog(void) {
   } else {
     fd = open(g_log.path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
     if (fd == -1) {
-      perror(g_log.path);
-      exit(1);
+      g_log.fd = -1;
+      return;
     }
   }
   unassert((g_log.fd = fcntl(fd, F_DUPFD_CLOEXEC, kMinBlinkFd)) != -1);
@@ -136,7 +136,9 @@ static void Log(const char *file, int line, const char *fmt, va_list va,
     b[--n] = '.';
     b[--n] = '.';
   }
-  WriteError(g_log.fd, b, n);
+  if (g_log.fd != -1) {
+    WriteError(g_log.fd, b, n);
+  }
   if (FLAG_alsologtostderr || level <= g_log.level) {
     WriteError(2, b, n);
   }

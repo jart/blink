@@ -95,7 +95,7 @@ static int IoctlTiocgpgrp(struct Machine *m, int fd, i64 addr) {
   errno = ENOTTY;
   return -1;
 #endif
-  if (!(pgrp = (u8 *)Schlep(m, addr, 4))) return -1;
+  if (!(pgrp = (u8 *)SchlepW(m, addr, 4))) return -1;
   if ((rc = tcgetpgrp(fd)) == -1) return -1;
   Write32(pgrp, rc);
   return 0;
@@ -103,7 +103,7 @@ static int IoctlTiocgpgrp(struct Machine *m, int fd, i64 addr) {
 
 static int IoctlTiocspgrp(struct Machine *m, int fd, i64 addr) {
   u8 *pgrp;
-  if (!(pgrp = (u8 *)Schlep(m, addr, 4))) return -1;
+  if (!(pgrp = (u8 *)SchlepR(m, addr, 4))) return -1;
   return tcsetpgrp(fd, Read32(pgrp));
 }
 
@@ -228,7 +228,7 @@ static int IoctlTcxonc(struct Machine *m, int fildes, int arg) {
 static int IoctlTiocgsid(struct Machine *m, int fildes, i64 addr) {
   int rc;
   u8 *sid;
-  if (!(sid = (u8 *)Schlep(m, addr, 4))) return -1;
+  if (!(sid = (u8 *)SchlepW(m, addr, 4))) return -1;
   if ((rc = tcgetsid(fildes)) != -1) {
     Write32(sid, rc);
     rc = 0;
@@ -257,7 +257,7 @@ static int IoctlTcflsh(struct Machine *m, int fildes, int queue) {
 static int IoctlSiocatmark(struct Machine *m, int fildes, i64 addr) {
   u8 *p;
   int rc;
-  if (!(p = (u8 *)Schlep(m, addr, 4))) return -1;
+  if (!(p = (u8 *)SchlepW(m, addr, 4))) return -1;
   if ((rc = sockatmark(fildes)) != -1) {
     Write32(p, rc);
     rc = 0;
@@ -269,7 +269,7 @@ static int IoctlGetInt32(struct Machine *m, int fildes, unsigned long cmd,
                          i64 addr) {
   u8 *p;
   int rc, val;
-  if (!(p = (u8 *)Schlep(m, addr, 4))) return -1;
+  if (!(p = (u8 *)SchlepW(m, addr, 4))) return -1;
   if ((rc = ioctl(fildes, cmd, &val)) != -1) {
     Write32(p, val);
   }
@@ -280,7 +280,7 @@ static int IoctlSetInt32(struct Machine *m, int fildes, unsigned long cmd,
                          i64 addr) {
   int val;
   const u8 *p;
-  if (!(p = (const u8 *)Schlep(m, addr, 4))) return -1;
+  if (!(p = (const u8 *)SchlepR(m, addr, 4))) return -1;
   val = Read32(p);
   return ioctl(fildes, cmd, &val);
 }

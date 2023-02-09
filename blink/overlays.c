@@ -365,6 +365,31 @@ int OverlaysMkdir(int dirfd, const char *path, int mode) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+struct Mkfifo {
+  int mode;
+};
+
+static ssize_t Mkfifo(int dirfd, const char *path, void *vargs) {
+  struct Mkfifo *args = (struct Mkfifo *)vargs;
+#ifdef __APPLE__  // Needs MacOS 13+ c. 2022
+  if (dirfd == AT_FDCWD) {
+    return mkfifo(path, args->mode);
+  } else {
+    LOGF("mkfifoat() needs MacOS 13+ (TODO: how do we detect it?)");
+    return enosys();
+  }
+#else
+  return mkfifoat(dirfd, path, args->mode);
+#endif
+}
+
+int OverlaysMkfifo(int dirfd, const char *path, int mode) {
+  struct Mkfifo args = {mode};
+  return OverlaysGeneric(dirfd, path, &args, Mkfifo);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 struct Chmod {
   int mode;
   int flags;

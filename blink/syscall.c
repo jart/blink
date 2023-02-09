@@ -595,7 +595,7 @@ static int SysFutexWait(struct Machine *m,  //
   struct timespec now, tick, timeout, deadline;
   now = tick = GetTime();
   if (timeout_addr) {
-    if (!(gtimeout = (const struct timespec_linux *)Schlep(
+    if (!(gtimeout = (const struct timespec_linux *)SchlepR(
               m, timeout_addr, sizeof(*gtimeout)))) {
       return -1;
     }
@@ -710,7 +710,7 @@ static void UnlockRobustFutex(struct Machine *m, u64 futex_addr,
     LOGF("robust futex isn't aligned");
     return;
   }
-  if (!(futex = (_Atomic(u32) *)Schlep(m, futex_addr, 4))) {
+  if (!(futex = (_Atomic(u32) *)SchlepR(m, futex_addr, 4))) {
     LOGF("encountered efault in robust futex list");
     return;
   }
@@ -753,7 +753,7 @@ void UnlockRobustFutexes(struct Machine *m) {
   m->robust_list = 0;
   pending = 0;
   do {
-    if (!(data = (struct robust_list_linux *)Schlep(m, item, sizeof(*data)))) {
+    if (!(data = (struct robust_list_linux *)SchlepR(m, item, sizeof(*data)))) {
       LOGF("encountered efault in robust futex list");
       break;
     }
@@ -775,7 +775,8 @@ void UnlockRobustFutexes(struct Machine *m) {
     item = Read64(data->next);
   } while (item != list);
   if (!pending) return;
-  if (!(data = (struct robust_list_linux *)Schlep(m, pending, sizeof(*data)))) {
+  if (!(data =
+            (struct robust_list_linux *)SchlepR(m, pending, sizeof(*data)))) {
     LOGF("encountered efault in robust futex list");
     return;
   }
@@ -986,6 +987,8 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
         if (size / 4096 + m->system->vss < GetMaxVss(m->system)) {
           if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
                              PAGE_RW | PAGE_U, -1, 0, false) != -1) {
+            LOGF("increased break %" PRIx64 " -> %" PRIx64, m->system->brk,
+                 addr);
             m->system->brk = addr;
           }
         } else {
@@ -1343,7 +1346,7 @@ static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
 
 static u32 LoadAddrSize(struct Machine *m, i64 asa) {
   const u8 *p;
-  if (asa && (p = (const u8 *)Schlep(m, asa, 4))) {
+  if (asa && (p = (const u8 *)SchlepR(m, asa, 4))) {
     return Read32(p);
   } else {
     return 0;
@@ -1360,8 +1363,8 @@ static int StoreAddrSize(struct Machine *m, i64 asa, socklen_t len) {
 static int LoadSockaddr(struct Machine *m, i64 sockaddr_addr, u32 sockaddr_size,
                         struct sockaddr_storage *out_sockaddr) {
   const struct sockaddr_linux *sockaddr_linux;
-  if ((sockaddr_linux = (const struct sockaddr_linux *)Schlep(m, sockaddr_addr,
-                                                              sockaddr_size))) {
+  if ((sockaddr_linux = (const struct sockaddr_linux *)SchlepR(
+           m, sockaddr_addr, sockaddr_size))) {
     return XlatSockaddrToHost(out_sockaddr, sockaddr_linux, sockaddr_size);
   } else {
     return -1;
@@ -1564,7 +1567,7 @@ static i64 SysSendto(struct Machine *m,  //
                      u64 buflen,         //
                      i32 flags,          //
                      i64 sockaddr_addr,  //
-                     u32 sockaddr_size) {
+                     i32 sockaddr_size) {
   i64 rc;
   int len;
   int hostflags;
@@ -1573,6 +1576,7 @@ static i64 SysSendto(struct Machine *m,  //
   bool norestart = false;
   struct sockaddr *addrp;
   struct sockaddr_storage ss;
+  if (sockaddr_size < 0) return einval();
   if ((hostflags = XlatSendFlags(flags)) == -1) return -1;
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if (sockaddr_size) {
@@ -1586,7 +1590,7 @@ static i64 SysSendto(struct Machine *m,  //
     addrlen = 0;
     addrp = 0;
   }
-  if (!(mem = Schlep(m, bufaddr, buflen))) return -1;
+  if (!(mem = SchlepR(m, bufaddr, buflen))) return -1;
   INTERRUPTIBLE(!norestart,
                 rc = sendto(fildes, mem, buflen, hostflags, addrp, addrlen));
   return rc;
@@ -1632,7 +1636,7 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   const struct msghdr_linux *gm;
   if ((flags = XlatSendFlags(flags)) == -1) return -1;
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
-  if (!(gm = (const struct msghdr_linux *)Schlep(m, msgaddr, sizeof(*gm)))) {
+  if (!(gm = (const struct msghdr_linux *)SchlepR(m, msgaddr, sizeof(*gm)))) {
     return -1;
   }
   if (Read64(gm->controllen)) {
@@ -1746,7 +1750,7 @@ static int GetsockoptInt32(struct Machine *m, i32 fd, int level, int optname,
   int rc, val;
   socklen_t optvalsize;
   u32 optvalsize_linux;
-  if (!(psize = (u8 *)Schlep(m, optvalsizeaddr, 4))) return -1;
+  if (!(psize = (u8 *)SchlepRW(m, optvalsizeaddr, 4))) return -1;
   optvalsize_linux = Read32(psize);
   if (!IsValidMemory(m, optvaladdr, optvalsize_linux, PROT_WRITE)) {
     return efault();
@@ -1766,7 +1770,8 @@ static int SetsockoptLinger(struct Machine *m, i32 fildes, i64 optvaladdr,
   struct linger hl;
   const struct linger_linux *gl;
   if (optvalsize < sizeof(*gl)) return einval();
-  if (!(gl = (const struct linger_linux *)Schlep(m, optvaladdr, sizeof(*gl)))) {
+  if (!(gl =
+            (const struct linger_linux *)SchlepR(m, optvaladdr, sizeof(*gl)))) {
     return -1;
   }
   hl.l_onoff = (i32)Read32(gl->onoff);
@@ -1782,7 +1787,7 @@ static int GetsockoptLinger(struct Machine *m, i32 fd, i64 optvaladdr,
   socklen_t optvalsize;
   u32 optvalsize_linux;
   struct linger_linux gl;
-  if (!(psize = (u8 *)Schlep(m, optvalsizeaddr, 4))) return -1;
+  if (!(psize = (u8 *)SchlepRW(m, optvalsizeaddr, 4))) return -1;
   optvalsize_linux = Read32(psize);
   if (!IsValidMemory(m, optvaladdr, optvalsize_linux, PROT_WRITE)) {
     return efault();
@@ -1818,7 +1823,7 @@ static int SysSetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   if (optvalsize > 256) return einval();
   if (XlatSocketLevel(level, &syslevel) == -1) return -1;
   if ((sysoptname = XlatSocketOptname(level, optname)) == -1) return -1;
-  if (!(optval = Schlep(m, optvaladdr, optvalsize))) return -1;
+  if (!(optval = SchlepR(m, optvaladdr, optvalsize))) return -1;
   rc = setsockopt(fildes, syslevel, sysoptname, optval, optvalsize);
   if (rc != -1 &&                      //
       level == SOL_SOCKET_LINUX &&     //
@@ -2636,8 +2641,8 @@ static int UnxlatFownerType(int type) {
 #ifdef F_SETOWN
 static int SysFcntlSetownEx(struct Machine *m, i32 fildes, i64 addr) {
   const struct f_owner_ex_linux *gowner;
-  if (!(gowner = (const struct f_owner_ex_linux *)Schlep(m, addr,
-                                                         sizeof(*gowner)))) {
+  if (!(gowner = (const struct f_owner_ex_linux *)SchlepR(m, addr,
+                                                          sizeof(*gowner)))) {
     return -1;
   }
 #ifdef F_SETOWN_EX
@@ -2821,9 +2826,27 @@ static int SysReadlink(struct Machine *m, i64 path, i64 bufaddr, u64 size) {
   return SysReadlinkat(m, AT_FDCWD_LINUX, path, bufaddr, size);
 }
 
+static int SysMknodat(struct Machine *m, i32 dirfd, i64 path, i32 mode,
+                      u64 dev) {
+  _Static_assert(S_IFIFO == 0010000, "");   // pipe
+  _Static_assert(S_IFCHR == 0020000, "");   // character device
+  _Static_assert(S_IFDIR == 0040000, "");   // directory
+  _Static_assert(S_IFBLK == 0060000, "");   // block device
+  _Static_assert(S_IFREG == 0100000, "");   // regular file
+  _Static_assert(S_IFLNK == 0120000, "");   // symbolic link
+  _Static_assert(S_IFSOCK == 0140000, "");  // socket
+  _Static_assert(S_IFMT == 0170000, "");    // mask of file types above
+  if ((mode & S_IFMT) == S_IFIFO) {
+    return OverlaysMkfifo(GetDirFildes(dirfd), LoadStr(m, path),
+                          mode & ~S_IFMT);
+  } else {
+    LOGF("mknod mode %#o not supported yet", mode);
+    return enosys();
+  }
+}
+
 static int SysMknod(struct Machine *m, i64 path, i32 mode, u64 dev) {
-  // TODO(jart): we can probably only emulate a subset of this call
-  return mknod(LoadStr(m, path), mode, dev);
+  return SysMknodat(m, AT_FDCWD_LINUX, path, mode, dev);
 }
 
 static int XlatPrio(int x) {
@@ -3147,8 +3170,9 @@ static int SysGetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
 static int SysSetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
   int sysresource;
   struct rlimit rlim;
-  struct rlimit_linux *lux;
-  if (!(lux = (struct rlimit_linux *)Schlep(m, rlimitaddr, sizeof(*lux)))) {
+  const struct rlimit_linux *lux;
+  if (!(lux = (const struct rlimit_linux *)SchlepR(m, rlimitaddr,
+                                                   sizeof(*lux)))) {
     return -1;
   }
   if (resource == RLIMIT_DATA_LINUX || resource == RLIMIT_AS_LINUX) {
@@ -3326,14 +3350,24 @@ static int SysGetitimer(struct Machine *m, int which, i64 curvaladdr) {
 static int SysSetitimer(struct Machine *m, int which, i64 neuaddr,
                         i64 oldaddr) {
   int rc;
-  struct itimerval neu, old;
-  struct itimerval_linux git;
-  if (CopyFromUserRead(m, &git, neuaddr, sizeof(git)) == -1) return -1;
-  XlatLinuxToItimerval(&neu, &git);
-  if ((rc = setitimer(UnXlatItimer(which), &neu, &old)) != -1) {
+  struct itimerval_linux gold;
+  struct itimerval neu, *neup, old;
+  const struct itimerval_linux *git = 0;
+  if ((neuaddr && !(git = (const struct itimerval_linux *)SchlepR(
+                        m, neuaddr, sizeof(*git)))) ||
+      (oldaddr && !IsValidMemory(m, oldaddr, sizeof(gold), PROT_WRITE))) {
+    return efault();
+  }
+  if (git) {
+    XlatLinuxToItimerval(&neu, git);
+    neup = &neu;
+  } else {
+    neup = 0;
+  }
+  if ((rc = setitimer(UnXlatItimer(which), neup, &old)) != -1) {
     if (oldaddr) {
-      XlatItimervalToLinux(&git, &old);
-      CopyToUserWrite(m, oldaddr, &git, sizeof(git));
+      XlatItimervalToLinux(&gold, &old);
+      CopyToUserWrite(m, oldaddr, &gold, sizeof(gold));
     }
   }
   return rc;
@@ -3486,8 +3520,8 @@ static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
       LOGF("can't change sigaltstack whilst on sigaltstack");
       return eperm();
     }
-    if (!(ss = (const struct sigaltstack_linux *)Schlep(m, newaddr,
-                                                        sizeof(*ss)))) {
+    if (!(ss = (const struct sigaltstack_linux *)SchlepR(m, newaddr,
+                                                         sizeof(*ss)))) {
       LOGF("couldn't schlep new sigaltstack: %#" PRIx64, newaddr);
       return -1;
     }
@@ -3682,7 +3716,7 @@ static int SysUtime(struct Machine *m, i64 pathaddr, i64 timesaddr) {
   const struct utimbuf_linux *t;
   if (!(path = LoadStr(m, pathaddr))) return -1;
   if (!timesaddr) return OverlaysUtime(AT_FDCWD, path, 0, 0);
-  if ((t = (const struct utimbuf_linux *)Schlep(m, timesaddr, sizeof(*t)))) {
+  if ((t = (const struct utimbuf_linux *)SchlepR(m, timesaddr, sizeof(*t)))) {
     ts[0].tv_sec = Read64(t->actime);
     ts[0].tv_nsec = 0;
     ts[1].tv_sec = Read64(t->modtime);
@@ -3699,7 +3733,7 @@ static int SysUtimes(struct Machine *m, i64 pathaddr, i64 tvsaddr) {
   const struct timeval_linux *tv;
   if (!(path = LoadStr(m, pathaddr))) return -1;
   if (!tvsaddr) return OverlaysUtime(AT_FDCWD, path, 0, 0);
-  if ((tv = (const struct timeval_linux *)Schlep(
+  if ((tv = (const struct timeval_linux *)SchlepR(
            m, tvsaddr, sizeof(struct timeval_linux) * 2))) {
     ConvertUtimeTimevals(ts, tv);
     return OverlaysUtime(AT_FDCWD, path, ts, 0);
@@ -3715,7 +3749,7 @@ static int SysFutimesat(struct Machine *m, i32 dirfd, i64 pathaddr,
   const struct timeval_linux *tv;
   if (!(path = LoadStr(m, pathaddr))) return -1;
   if (!tvsaddr) return OverlaysUtime(GetDirFildes(dirfd), path, 0, 0);
-  if ((tv = (const struct timeval_linux *)Schlep(
+  if ((tv = (const struct timeval_linux *)SchlepR(
            m, tvsaddr, sizeof(struct timeval_linux) * 2))) {
     ConvertUtimeTimevals(ts, tv);
     return OverlaysUtime(GetDirFildes(dirfd), path, ts, 0);
@@ -3735,7 +3769,7 @@ static int SysUtimensat(struct Machine *m, i32 fd, i64 pathaddr, i64 tvsaddr,
     return -1;
   }
   if (tvsaddr) {
-    if ((tv = (const struct timespec_linux *)Schlep(
+    if ((tv = (const struct timespec_linux *)SchlepR(
              m, tvsaddr, sizeof(struct timespec_linux) * 2))) {
       ConvertUtimeTimespecs(ts, tv);
       tsp = ts;
@@ -3760,7 +3794,7 @@ static int SysUtimensat(struct Machine *m, i32 fd, i64 pathaddr, i64 tvsaddr,
 static int LoadFdSet(struct Machine *m, int nfds, fd_set *fds, i64 addr) {
   int fd;
   const u8 *p;
-  if ((p = (const u8 *)Schlep(m, addr, ROUNDUP(nfds, 8) / 8))) {
+  if ((p = (const u8 *)SchlepRW(m, addr, FD_SETSIZE_LINUX / 8))) {
     FD_ZERO(fds);
     for (fd = 0; fd < nfds; ++fd) {
       if (p[fd >> 3] & (1 << (fd & 7))) {
@@ -3775,15 +3809,14 @@ static int LoadFdSet(struct Machine *m, int nfds, fd_set *fds, i64 addr) {
 
 static int SaveFdSet(struct Machine *m, int nfds, const fd_set *fds, i64 addr) {
   u8 *p;
-  int n, fd;
-  n = ROUNDUP(nfds, 8) / 8;
-  if (!(p = (u8 *)calloc(1, n))) return -1;
+  int fd;
+  if (!(p = (u8 *)calloc(1, FD_SETSIZE_LINUX / 8))) return -1;
   for (fd = 0; fd < nfds; ++fd) {
     if (FD_ISSET(fd, fds)) {
       p[fd >> 3] |= 1 << (fd & 7);
     }
   }
-  CopyToUserWrite(m, addr, p, n);
+  CopyToUserWrite(m, addr, p, FD_SETSIZE_LINUX / 8);
   free(p);
   return 0;
 }
@@ -3881,7 +3914,7 @@ static i32 SysSelect(struct Machine *m, i32 nfds, i64 readfds_addr,
   struct timeval_linux timeout_linux;
   const struct timeval_linux *timeoutp_linux;
   if (timeout_addr) {
-    if ((timeoutp_linux = (const struct timeval_linux *)Schlep(
+    if ((timeoutp_linux = (const struct timeval_linux *)SchlepRW(
              m, timeout_addr, sizeof(*timeoutp_linux)))) {
       timeout.tv_sec = Read64(timeoutp_linux->sec);
       timeout.tv_nsec = Read64(timeoutp_linux->usec);
@@ -3919,7 +3952,7 @@ static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
   struct timespec_linux timeout_linux;
   const struct timespec_linux *timeoutp_linux;
   if (timeout_addr) {
-    if ((timeoutp_linux = (const struct timespec_linux *)Schlep(
+    if ((timeoutp_linux = (const struct timespec_linux *)SchlepRW(
              m, timeout_addr, sizeof(*timeoutp_linux)))) {
       timeout.tv_sec = Read64(timeoutp_linux->sec);
       timeout.tv_nsec = Read64(timeoutp_linux->nsec);
@@ -3932,11 +3965,11 @@ static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
     memset(&timeout, 0, sizeof(timeout));
   }
   if (pselect6_addr) {
-    if ((ps = (const struct pselect6_linux *)Schlep(m, pselect6_addr,
-                                                    sizeof(*ps)))) {
+    if ((ps = (const struct pselect6_linux *)SchlepR(m, pselect6_addr,
+                                                     sizeof(*ps)))) {
       if (Read64(ps->sigmaskaddr)) {
         if (Read64(ps->sigmasksize) == 8) {
-          if ((sm = (const struct sigset_linux *)Schlep(
+          if ((sm = (const struct sigset_linux *)SchlepR(
                    m, Read64(ps->sigmaskaddr), sizeof(*sm)))) {
             sigmask = Read64(sm->sigmask);
             sigmaskp = &sigmask;
@@ -4075,8 +4108,8 @@ static int SysPpoll(struct Machine *m, i64 fdsaddr, u64 nfds, i64 timeoutaddr,
   struct timespec now, timeout, remain, deadline;
   if (sigmaskaddr) {
     if (sigsetsize != 8) return einval();
-    if ((sm = (const struct sigset_linux *)Schlep(m, sigmaskaddr,
-                                                  sizeof(*sm)))) {
+    if ((sm = (const struct sigset_linux *)SchlepR(m, sigmaskaddr,
+                                                   sizeof(*sm)))) {
       oldmask = m->sigmask;
       m->sigmask = Read64(sm->sigmask);
     } else {
@@ -4085,8 +4118,8 @@ static int SysPpoll(struct Machine *m, i64 fdsaddr, u64 nfds, i64 timeoutaddr,
   }
   if (!CheckInterrupt(m, false)) {
     if (timeoutaddr) {
-      if ((gt = (const struct timespec_linux *)Schlep(m, timeoutaddr,
-                                                      sizeof(*gt)))) {
+      if ((gt = (const struct timespec_linux *)SchlepRW(m, timeoutaddr,
+                                                        sizeof(*gt)))) {
         timeout.tv_sec = Read64(gt->sec);
         timeout.tv_nsec = Read64(gt->nsec);
         if (timeout.tv_nsec >= 1000000000) {
@@ -4165,6 +4198,7 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
   bool found;
   struct Dll *e;
   struct Machine *m2;
+  if (tid < 0) return einval();
   if (!(0 <= sig && sig <= 64)) {
     LOGF("tkill(%d, %d) failed due to bogus signal", tid, sig);
     return einval();
@@ -4281,7 +4315,7 @@ static i32 SysSetgroups(struct Machine *m, i32 size, i64 addr) {
   int i, rc;
   gid_t *group;
   const u8 *group_linux;
-  if (!(group_linux = (const u8 *)Schlep(m, addr, (size_t)size * 4)) ||
+  if (!(group_linux = (const u8 *)SchlepR(m, addr, (size_t)size * 4)) ||
       !(group = (gid_t *)malloc(size * sizeof(gid_t)))) {
     return -1;
   }
@@ -4293,19 +4327,55 @@ static i32 SysSetgroups(struct Machine *m, i32 size, i64 addr) {
   return rc;
 }
 
+static i32 SysSetresuid(struct Machine *m,  //
+                        u32 real,           //
+                        u32 effective,      //
+                        u32 saved) {
+#ifdef __linux
+  return setresuid(real, effective, saved);
+#else
+  if (saved != (u32)-1) return enosys();
+  return setreuid(real, effective);
+#endif
+}
+
+static i32 SysSetresgid(struct Machine *m,  //
+                        u32 real,           //
+                        u32 effective,      //
+                        u32 saved) {
+#ifdef __linux
+  return setresgid(real, effective, saved);
+#else
+  if (saved != (u32)-1) return enosys();
+  return setregid(real, effective);
+#endif
+}
+
 static i32 SysGetresuid(struct Machine *m,  //
                         i64 realaddr,       //
                         i64 effectiveaddr,  //
                         i64 savedaddr) {
+  uid_t uid;
+  gid_t euid;
   u8 *real = 0;
   u8 *effective = 0;
-  if (savedaddr) return enosys();
-  if ((realaddr && !(real = (u8 *)Schlep(m, realaddr, 4))) ||
-      (effectiveaddr && !(effective = (u8 *)Schlep(m, effectiveaddr, 4)))) {
+  if ((realaddr && !(real = (u8 *)SchlepW(m, realaddr, 4))) ||
+      (effectiveaddr && !(effective = (u8 *)SchlepW(m, effectiveaddr, 4)))) {
     return -1;
   }
-  Write32(real, getuid());
-  Write32(effective, geteuid());
+#ifdef __linux
+  gid_t suid;
+  u8 *saved = 0;
+  if ((savedaddr && !(saved = (u8 *)SchlepW(m, savedaddr, 4)))) return -1;
+  if (getresuid(&uid, &euid, &suid) == -1) return -1;
+  Write32(saved, uid);
+#else
+  if (savedaddr) return enosys();
+  uid = getuid();
+  euid = geteuid();
+#endif
+  Write32(real, uid);
+  Write32(effective, euid);
   return 0;
 }
 
@@ -4316,8 +4386,8 @@ static i32 SysGetresgid(struct Machine *m,  //
   u8 *real = 0;
   u8 *effective = 0;
   if (savedaddr) return enosys();
-  if ((realaddr && !(real = (u8 *)Schlep(m, realaddr, 4))) ||
-      (effectiveaddr && !(effective = (u8 *)Schlep(m, effectiveaddr, 4)))) {
+  if ((realaddr && !(real = (u8 *)SchlepW(m, realaddr, 4))) ||
+      (effectiveaddr && !(effective = (u8 *)SchlepW(m, effectiveaddr, 4)))) {
     return -1;
   }
   Write32(real, getgid());
@@ -4339,6 +4409,14 @@ static int SysSetuid(struct Machine *m, int uid) {
 
 static int SysSetgid(struct Machine *m, int gid) {
   return setgid(gid);
+}
+
+static int SysSetreuid(struct Machine *m, u32 uid, u32 euid) {
+  return setreuid(uid, euid);
+}
+
+static int SysSetregid(struct Machine *m, u32 gid, u32 egid) {
+  return setregid(gid, egid);
 }
 
 static int SysGetpgid(struct Machine *m, int pid) {
@@ -4527,7 +4605,9 @@ void OpSyscall(P) {
     SYSCALL0(0x070, SysSetsid);
     SYSCALL2(0x073, SysGetgroups);
     SYSCALL2(0x074, SysSetgroups);
+    SYSCALL3(0x075, SysSetresuid);
     SYSCALL3(0x076, SysGetresuid);
+    SYSCALL3(0x077, SysSetresgid);
     SYSCALL3(0x078, SysGetresgid);
     SYSCALL1(0x079, SysGetpgid);
     SYSCALL1(0x07C, SysGetsid);
@@ -4542,9 +4622,12 @@ void OpSyscall(P) {
     SYSCALL0(0x06B, SysGeteuid);
     SYSCALL0(0x06C, SysGetegid);
     SYSCALL0(0x06E, SysGetppid);
+    SYSCALL2(0x071, SysSetreuid);
+    SYSCALL2(0x072, SysSetregid);
     SYSCALL2(0x082, SysSigsuspend);
     SYSCALL2(0x083, SysSigaltstack);
     SYSCALL3(0x085, SysMknod);
+    SYSCALL4(0x103, SysMknodat);
     SYSCALL2(0x08C, SysGetpriority);
     SYSCALL3(0x08D, SysSetpriority);
     SYSCALL2(0x08E, SysSchedSetparam);

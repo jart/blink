@@ -10,6 +10,7 @@ int OverlaysChdir(const char *);
 char *OverlaysGetcwd(char *, size_t);
 int OverlaysMkdir(int, const char *, int);
 int OverlaysUnlink(int, const char *, int);
+int OverlaysMkfifo(int, const char *, int);
 int OverlaysOpen(int, const char *, int, int);
 int OverlaysChmod(int, const char *, int, int);
 int OverlaysAccess(int, const char *, int, int);

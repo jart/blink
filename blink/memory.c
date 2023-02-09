@@ -139,27 +139,21 @@ u8 *LookupAddress(struct Machine *m, i64 virt) {
         ((entry = m->tlb[0].entry) & PAGE_V)) {
       STATISTIC(++tlb_hits_1);
     } else if (-0x800000000000 <= virt && virt < 0x800000000000) {
-      if (!(entry = FindPageTableEntry(m, page))) {
-        efault();
-        return 0;
-      }
+      if (!(entry = FindPageTableEntry(m, page))) return (u8 *)efault0();
     } else {
-      efault();
-      return 0;
+      return (u8 *)efault0();
     }
   } else if (virt >= 0 && virt <= 0xffffffff &&
              (virt & 0xffffffff) + 4095 < kRealSize) {
     unassert(m->system->real);
     return m->system->real + virt;
   } else {
-    efault();
-    return 0;
+    return (u8 *)efault0();
   }
   if ((host = GetPageAddress(m->system, entry))) {
     return host + (virt & 4095);
   } else {
-    efault();
-    return 0;
+    return (u8 *)efault0();
   }
 }
 
@@ -351,7 +345,7 @@ void *AddToFreeList(struct Machine *m, void *mem) {
 // Returns pointer to memory in guest memory. If the memory overlaps a
 // page boundary, then it's copied, and the temporary memory is pushed
 // to the free list. Returns NULL w/ EFAULT or ENOMEM on error.
-void *Schlep(struct Machine *m, i64 addr, size_t size) {
+static void *Schlep(struct Machine *m, i64 addr, size_t size) {
   char *copy;
   size_t have;
   void *res, *page;
@@ -372,8 +366,26 @@ void *Schlep(struct Machine *m, i64 addr, size_t size) {
     }
     res = AddToFreeList(m, copy);
   }
-  SetReadAddr(m, addr, size);
   return res;
+}
+
+void *SchlepR(struct Machine *m, i64 addr, size_t size) {
+  if (!IsValidMemory(m, addr, size, PROT_READ)) return efault0();
+  SetReadAddr(m, addr, size);
+  return Schlep(m, addr, size);
+}
+
+void *SchlepW(struct Machine *m, i64 addr, size_t size) {
+  if (!IsValidMemory(m, addr, size, PROT_WRITE)) return efault0();
+  SetWriteAddr(m, addr, size);
+  return Schlep(m, addr, size);
+}
+
+void *SchlepRW(struct Machine *m, i64 addr, size_t size) {
+  if (!IsValidMemory(m, addr, size, PROT_READ | PROT_WRITE)) return efault0();
+  SetReadAddr(m, addr, size);
+  SetWriteAddr(m, addr, size);
+  return Schlep(m, addr, size);
 }
 
 static char *LoadStrImpl(struct Machine *m, i64 addr) {

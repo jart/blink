@@ -794,6 +794,10 @@ int XlatSockaddrToHost(struct sockaddr_storage *dst,
     return einval();
   }
   switch (Read16(src->family)) {
+    case AF_UNSPEC_LINUX:
+      memset(dst, 0, sizeof(*dst));
+      dst->ss_family = AF_UNSPEC;
+      return sizeof(*dst);
     case AF_UNIX_LINUX: {
       size_t n;
       struct sockaddr_un *dst_un;

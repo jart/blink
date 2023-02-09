@@ -218,7 +218,7 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/pselect02_64.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/pselect03.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/pselect03_64.elf.ok		\
-	o/$(MODE)/third_party/ltp/bin/1/pwrite01.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/pwrite01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/pwrite01_64.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/pwrite02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/pwrite02_64.elf.ok		\
@@ -236,8 +236,8 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/recvmsg02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/rmdir01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/sbrk02.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/1/select01.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/1/select04.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/select01.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/select04.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/set_robust_list01.elf.ok	\
 	o/$(MODE)/third_party/ltp/bin/1/set_tid_address01.elf.ok	\
 	o/$(MODE)/third_party/ltp/bin/1/setpgid01.elf.ok		\
@@ -257,8 +257,13 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/socketpair02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/stat02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/stat02_64.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/1/symlink01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/symlink02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/1/symlink04.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/symlink05.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/1/symlinkat01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/tkill01.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/1/tkill02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/truncate02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/truncate02_64.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/unlink05.elf.ok			\
@@ -285,7 +290,16 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/writetest.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/writev02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/writev05.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/1/writev06.elf.ok
+	o/$(MODE)/third_party/ltp/bin/1/writev06.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/1/sendto01.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/1/setitimer02.elf.ok
+
+ifeq ($(USER), root)
+LTP_TESTS += 								\
+	o/$(MODE)/third_party/ltp/bin/1/setegid02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/1/rename09.elf.ok
+
+endif
 
 ifneq ($(HOST_SYSTEM), FreeBSD)
 # These tests make the system get wrekt.
@@ -406,7 +420,7 @@ LTP_TESTS_MEDIUM =							\
 
 ifeq ($(shell id -u), 0)
 LTP_TESTS_MEDIUM +=							\
-	o/$(MODE)/third_party/ltp/bin/1/select02.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/select02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/pty06.elf.ok
 endif
 
