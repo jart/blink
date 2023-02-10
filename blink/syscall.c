@@ -50,6 +50,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "blink/ancillary.h"
 #include "blink/assert.h"
 #include "blink/bus.h"
 #include "blink/case.h"
@@ -213,12 +214,12 @@ const struct FdCb kFdCbHost = {
     .tcsetwinsize = my_tcsetwinsize,
 };
 
-static int GetFdSocketType(int fildes, int *type) {
+int GetFdSocketType(int fildes, int *type) {
   socklen_t len = sizeof(*type);
   return getsockopt(fildes, SOL_SOCKET, SO_TYPE, type, &len);
 }
 
-static bool IsNoRestartSocket(int fildes) {
+bool IsNoRestartSocket(int fildes) {
   struct timeval tv = {0};
   socklen_t len = sizeof(tv);
   getsockopt(fildes, SOL_SOCKET, SO_RCVTIMEO, &tv, &len);
@@ -1514,11 +1515,12 @@ static int XlatSendFlags(int flags) {
 
 static int XlatRecvFlags(int flags) {
   int supported, hostflags;
-  supported = MSG_OOB_LINUX |      //
-              MSG_PEEK_LINUX |     //
-              MSG_TRUNC_LINUX |    //
-              MSG_WAITALL_LINUX |  //
-              MSG_DONTWAIT_LINUX;
+  supported = MSG_OOB_LINUX |       //
+              MSG_PEEK_LINUX |      //
+              MSG_TRUNC_LINUX |     //
+              MSG_WAITALL_LINUX |   //
+              MSG_DONTWAIT_LINUX |  //
+              MSG_CMSG_CLOEXEC_LINUX;
   if (flags & ~supported) {
     LOGF("unsupported %s flags %#x", "recv", flags & ~supported);
     return einval();
@@ -1529,6 +1531,9 @@ static int XlatRecvFlags(int flags) {
   if (flags & MSG_TRUNC_LINUX) hostflags |= MSG_TRUNC;
   if (flags & MSG_WAITALL_LINUX) hostflags |= MSG_WAITALL;
   if (flags & MSG_DONTWAIT_LINUX) hostflags |= MSG_DONTWAIT;
+#ifdef MSG_CMSG_CLOEXEC
+  if (flags & MSG_CMSG_CLOEXEC_LINUX) hostflags |= MSG_CMSG_CLOEXEC;
+#endif
   return hostflags;
 }
 
@@ -1652,63 +1657,6 @@ static i64 SysRecvfrom(struct Machine *m,  //
   return rc;
 }
 
-#ifdef SCM_CREDENTIALS
-static int XlatScmCredentials(struct Machine *m, struct msghdr *msg,
-                              const struct msghdr_linux *gm,
-                              const struct cmsghdr_linux *gcmsg) {
-  struct ucred *ucred;
-  struct cmsghdr *cmsg;
-  const struct ucred_linux *ucred_linux;
-  if (Read32(gcmsg->len) < sizeof(*gcmsg) + sizeof(*ucred_linux) ||
-      Read32(gcmsg->len) > Read64(gm->controllen)) {
-    LOGF("scm_credentials corrupt");
-    return einval();
-  }
-  if (!(ucred_linux = (const struct ucred_linux *)SchlepR(
-            m, Read64(gm->control) + sizeof(*gcmsg), sizeof(*ucred_linux)))) {
-    return -1;
-  }
-  if (!(cmsg = (struct cmsghdr *)AddToFreeList(
-            m, calloc(1, CMSG_SPACE(sizeof(*ucred)))))) {
-    return -1;
-  }
-  cmsg->cmsg_len = CMSG_LEN(sizeof(*ucred));
-  cmsg->cmsg_level = SOL_SOCKET;
-  cmsg->cmsg_type = SCM_CREDENTIALS;
-  ucred = (struct ucred *)CMSG_DATA(cmsg);
-  ucred->pid = Read32(ucred_linux->pid);
-  ucred->uid = Read32(ucred_linux->uid);
-  ucred->gid = Read32(ucred_linux->gid);
-  msg->msg_control = cmsg;
-  msg->msg_controllen = CMSG_SPACE(sizeof(*ucred));
-  return 0;
-}
-#endif
-
-static int XlatAncillaryData(struct Machine *m, struct msghdr *msg,
-                             const struct msghdr_linux *gm) {
-  const struct cmsghdr_linux *gcmsg;
-  if (!Read64(gm->control)) return 0;
-  if (Read64(gm->controllen) < sizeof(*gcmsg)) return 0;
-  if (!(gcmsg = (const struct cmsghdr_linux *)SchlepR(m, Read64(gm->control),
-                                                      sizeof(*gcmsg)))) {
-    return -1;
-  }
-  if (Read32(gcmsg->level) != SOL_SOCKET_LINUX) {
-    LOGF("unsupported ancillary %s %d", "level", Read32(gcmsg->level));
-    return einval();
-  }
-  switch (Read32(gcmsg->type)) {
-#ifdef SCM_CREDENTIALS
-    case SCM_CREDENTIALS_LINUX:
-      return XlatScmCredentials(m, msg, gm, gcmsg);
-#endif
-    default:
-      LOGF("unsupported ancillary %s %d", "type", Read32(gcmsg->level));
-      return einval();
-  }
-}
-
 static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   i32 len;
   u64 iovlen;
@@ -1732,7 +1680,7 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
     msg.msg_name = &ss;
     msg.msg_namelen = len;
   }
-  if (XlatAncillaryData(m, &msg, gm) == -1) {
+  if (SendAncillary(m, &msg, gm) == -1) {
     return -1;
   }
   iovaddr = Read64(gm->iov);
@@ -1763,16 +1711,16 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   if ((flags = XlatRecvFlags(flags)) == -1) return -1;
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if (CopyFromUserRead(m, &gm, msgaddr, sizeof(gm)) == -1) return -1;
-  /* if (Read64(gm.controllen)) { */
-  /*   LOGF("recvmsg ancillary data not supported yet"); */
-  /*   return enotsup(); */
-  /* } */
   memset(&msg, 0, sizeof(msg));
   iovaddr = Read64(gm.iov);
   iovlen = Read64(gm.iovlen);
   if (!iovlen || iovlen > IOV_MAX_LINUX) {
     errno = EMSGSIZE;
     return -1;
+  }
+  if (Read64(gm.controllen)) {
+    msg.msg_control = AddToFreeList(m, calloc(1, kMaxAncillary));
+    msg.msg_controllen = kMaxAncillary;
   }
   InitIovs(&iv);
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen, PROT_WRITE)) != -1) {
@@ -1786,7 +1734,10 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
     INTERRUPTIBLE(!norestart, rc = recvmsg(fildes, &msg, flags));
     if (rc != -1) {
       Write32(gm.flags, UnXlatMsgFlags(msg.msg_flags));
-      CopyToUserWrite(m, msgaddr, &gm, sizeof(gm));
+      unassert(CopyToUserWrite(m, msgaddr, &gm, sizeof(gm)) != -1);
+      if (ReceiveAncillary(m, &gm, &msg, flags) == -1) {
+        return -1;
+      }
       if (Read64(gm.name)) {
         StoreSockaddr(m, Read64(gm.name),
                       msgaddr + offsetof(struct msghdr_linux, namelen),
@@ -2228,36 +2179,22 @@ static int UnXlatDt(int x) {
 #endif
 }
 
-static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
+static i64 Getdents(struct Machine *m, i32 fildes, i64 addr, i64 size,
+                    struct Fd *fd) {
   i64 i;
   int type;
   off_t off;
   long tell;
   int reclen;
   size_t len;
-  struct Fd *fd;
   struct stat st;
   struct dirent *ent;
   struct dirent_linux rec;
-  if (!(fd = GetAndLockFd(m, fildes))) return -1;
-  if (size < sizeof(rec) - sizeof(rec.name)) {
-    UnlockFd(fd);
-    return einval();
-  }
-  if ((fd->oflags & O_DIRECTORY) != O_DIRECTORY) {
-    UnlockFd(fd);
-    return enotdir();
-  }
-  if (!IsValidMemory(m, addr, size, PROT_WRITE)) {
-    UnlockFd(fd);
-    return efault();
-  }
-  if (fstat(fildes, &st) || !st.st_nlink) {
-    UnlockFd(fd);
-    return enoent();
-  }
+  if (size < sizeof(rec) - sizeof(rec.name)) return einval();
+  if ((fd->oflags & O_DIRECTORY) != O_DIRECTORY) return enotdir();
+  if (!IsValidMemory(m, addr, size, PROT_WRITE)) return efault();
+  if (fstat(fildes, &st) || !st.st_nlink) return enoent();
   if (!fd->dirstream && !(fd->dirstream = fdopendir(fd->fildes))) {
-    UnlockFd(fd);
     return -1;
   }
   for (i = 0; i + sizeof(rec) <= size; i += reclen) {
@@ -2311,8 +2248,16 @@ static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
     strcpy(rec.name, ent->d_name);
     CopyToUserWrite(m, addr + i, &rec, reclen);
   }
-  UnlockFd(fd);
   return i;
+}
+
+static i64 SysGetdents(struct Machine *m, i32 fildes, i64 addr, i64 size) {
+  i64 rc;
+  struct Fd *fd;
+  if (!(fd = GetAndLockFd(m, fildes))) return -1;
+  rc = Getdents(m, fildes, addr, size, fd);
+  UnlockFd(fd);
+  return rc;
 }
 
 static int SysSetTidAddress(struct Machine *m, i64 ctid) {

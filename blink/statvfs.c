@@ -17,6 +17,8 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <string.h>
+#include <sys/mount.h>
+#include <sys/param.h>
 
 #include "blink/endian.h"
 #include "blink/types.h"
@@ -27,17 +29,17 @@ static unsigned long XlatStatvfsFlags(unsigned long flags) {
 #ifdef ST_RDONLY
   if ((flags & ST_RDONLY) == ST_RDONLY) res |= ST_RDONLY_LINUX;
 #elif defined(MNT_RDONLY)
-  if ((flags & MNT_RDONLY) == MNT_RDONLY) res |= MNT_RDONLY_LINUX;
+  if ((flags & MNT_RDONLY) == MNT_RDONLY) res |= ST_RDONLY_LINUX;
 #endif
 #ifdef ST_NOSUID
   if ((flags & ST_NOSUID) == ST_NOSUID) res |= ST_NOSUID_LINUX;
 #elif defined(MNT_NOSUID)
-  if ((flags & MNT_NOSUID) == MNT_NOSUID) res |= MNT_NOSUID_LINUX;
+  if ((flags & MNT_NOSUID) == MNT_NOSUID) res |= ST_NOSUID_LINUX;
 #endif
 #ifdef ST_NODEV
   if ((flags & ST_NODEV) == ST_NODEV) res |= ST_NODEV_LINUX;
 #elif defined(MNT_NODEV)
-  if ((flags & MNT_NODEV) == MNT_NODEV) res |= MNT_NODEV_LINUX;
+  if ((flags & MNT_NODEV) == MNT_NODEV) res |= ST_NODEV_LINUX;
 #endif
 #ifdef ST_NOEXEC
   if ((flags & ST_NOEXEC) == ST_NOEXEC) res |= ST_NOEXEC_LINUX;
@@ -57,32 +59,32 @@ static unsigned long XlatStatvfsFlags(unsigned long flags) {
 #ifdef ST_RELATIME
   if ((flags & ST_RELATIME) == ST_RELATIME) res |= ST_RELATIME_LINUX;
 #elif defined(MNT_RELATIME)
-  if ((flags & MNT_RELATIME) == MNT_RELATIME) res |= MNT_RELATIME_LINUX;
+  if ((flags & MNT_RELATIME) == MNT_RELATIME) res |= ST_RELATIME_LINUX;
 #endif
 #ifdef ST_APPEND
   if ((flags & ST_APPEND) == ST_APPEND) res |= ST_APPEND_LINUX;
 #elif defined(MNT_APPEND)
-  if ((flags & MNT_APPEND) == MNT_APPEND) res |= MNT_APPEND_LINUX;
+  if ((flags & MNT_APPEND) == MNT_APPEND) res |= ST_APPEND_LINUX;
 #endif
 #ifdef ST_IMMUTABLE
   if ((flags & ST_IMMUTABLE) == ST_IMMUTABLE) res |= ST_IMMUTABLE_LINUX;
 #elif defined(MNT_IMMUTABLE)
-  if ((flags & MNT_IMMUTABLE) == MNT_IMMUTABLE) res |= MNT_IMMUTABLE_LINUX;
+  if ((flags & MNT_IMMUTABLE) == MNT_IMMUTABLE) res |= ST_IMMUTABLE_LINUX;
 #endif
 #ifdef ST_MANDLOCK
   if ((flags & ST_MANDLOCK) == ST_MANDLOCK) res |= ST_MANDLOCK_LINUX;
 #elif defined(MNT_MANDLOCK)
-  if ((flags & MNT_MANDLOCK) == MNT_MANDLOCK) res |= MNT_MANDLOCK_LINUX;
+  if ((flags & MNT_MANDLOCK) == MNT_MANDLOCK) res |= ST_MANDLOCK_LINUX;
 #endif
 #ifdef ST_NODIRATIME
   if ((flags & ST_NODIRATIME) == ST_NODIRATIME) res |= ST_NODIRATIME_LINUX;
 #elif defined(MNT_NODIRATIME)
-  if ((flags & MNT_NODIRATIME) == MNT_NODIRATIME) res |= MNT_NODIRATIME_LINUX;
+  if ((flags & MNT_NODIRATIME) == MNT_NODIRATIME) res |= ST_NODIRATIME_LINUX;
 #endif
 #ifdef ST_WRITE
   if ((flags & ST_WRITE) == ST_WRITE) res |= ST_WRITE_LINUX;
 #elif defined(MNT_WRITE)
-  if ((flags & MNT_WRITE) == MNT_WRITE) res |= MNT_WRITE_LINUX;
+  if ((flags & MNT_WRITE) == MNT_WRITE) res |= ST_WRITE_LINUX;
 #endif
   return res;
 }

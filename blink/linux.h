@@ -706,6 +706,7 @@
 #define LOCK_NB_LINUX 4
 #define LOCK_UN_LINUX 8
 
+#define SCM_RIGHTS_LINUX      1
 #define SCM_CREDENTIALS_LINUX 2
 
 #define ST_RDONLY_LINUX      1
@@ -721,6 +722,8 @@
 #define ST_NODIRATIME_LINUX  0x0800
 #define ST_WRITE_LINUX       0x0080
 #define ST_NOSYMFOLLOW_LINUX 0x2000
+
+#define SCM_MAX_FD_LINUX 253
 
 struct iovec_linux {
   u8 base[8];
