@@ -708,6 +708,20 @@
 
 #define SCM_CREDENTIALS_LINUX 2
 
+#define ST_RDONLY_LINUX      1
+#define ST_NOSUID_LINUX      2
+#define ST_NODEV_LINUX       4
+#define ST_NOEXEC_LINUX      8
+#define ST_SYNCHRONOUS_LINUX 16
+#define ST_NOATIME_LINUX     0x0040
+#define ST_RELATIME_LINUX    0x1000
+#define ST_APPEND_LINUX      0x0100
+#define ST_IMMUTABLE_LINUX   0x0200
+#define ST_MANDLOCK_LINUX    0x0040
+#define ST_NODIRATIME_LINUX  0x0800
+#define ST_WRITE_LINUX       0x0080
+#define ST_NOSYMFOLLOW_LINUX 0x2000
+
 struct iovec_linux {
   u8 base[8];
   u8 len[8];

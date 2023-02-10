@@ -2437,23 +2437,6 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
   return rc;
 }
 
-static void XlatStatvfsToLinux(struct statfs_linux *sf,
-                               const struct statvfs *vfs) {
-  memset(sf, 0, sizeof(*sf));
-  Write64(sf->bsize, vfs->f_bsize);
-  Write64(sf->frsize, vfs->f_frsize);
-  Write64(sf->blocks, vfs->f_blocks);
-  Write64(sf->bfree, vfs->f_bfree);
-  Write64(sf->bavail, vfs->f_bavail);
-  Write64(sf->files, vfs->f_files);
-  Write64(sf->ffree, vfs->f_ffree);
-  Write64(sf->ffree, vfs->f_favail);
-  Write32(sf->fsid[0], vfs->f_fsid);
-  Write32(sf->fsid[1], (u64)vfs->f_fsid >> 32);
-  Write64(sf->flags, vfs->f_flag);
-  Write64(sf->namelen, vfs->f_namemax);
-}
-
 static int Statvfs(intptr_t arg, struct statvfs *buf) {
   return statvfs((const char *)arg, buf);
 }
