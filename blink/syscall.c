@@ -1652,34 +1652,20 @@ static i64 SysRecvfrom(struct Machine *m,  //
   return rc;
 }
 
-static int XlatAncillaryData(struct Machine *m, struct msghdr *msg,
-                             const struct msghdr_linux *gm) {
+#ifdef SCM_CREDENTIALS
+static int XlatScmCredentials(struct Machine *m, struct msghdr *msg,
+                              const struct msghdr_linux *gm,
+                              const struct cmsghdr_linux *gcmsg) {
   struct ucred *ucred;
   struct cmsghdr *cmsg;
   const struct ucred_linux *ucred_linux;
-  const struct cmsghdr_linux *cmsg_linux;
-  if (Read64(gm->controllen) < sizeof(*cmsg_linux)) return 0;
-  if (!Read64(gm->control)) return 0;
-  if (!(cmsg_linux = (const struct cmsghdr_linux *)SchlepR(
-            m, Read64(gm->control), sizeof(*cmsg_linux)))) {
-    return -1;
-  }
-  if (Read32(cmsg_linux->level) != SOL_SOCKET_LINUX) {
-    LOGF("unsupported ancillary %s %d", "level", Read32(cmsg_linux->level));
-    return einval();
-  }
-  if (Read32(cmsg_linux->type) != SCM_CREDENTIALS_LINUX) {
-    LOGF("unsupported ancillary %s %d", "type", Read32(cmsg_linux->level));
-    return einval();
-  }
-  if (Read32(cmsg_linux->len) < sizeof(*cmsg_linux) + sizeof(*ucred_linux) ||
-      Read32(cmsg_linux->len) > Read64(gm->controllen)) {
-    LOGF("bad ancillary size");
+  if (Read32(gcmsg->len) < sizeof(*gcmsg) + sizeof(*ucred_linux) ||
+      Read32(gcmsg->len) > Read64(gm->controllen)) {
+    LOGF("scm_credentials corrupt");
     return einval();
   }
   if (!(ucred_linux = (const struct ucred_linux *)SchlepR(
-            m, Read64(gm->control) + sizeof(*cmsg_linux),
-            sizeof(*ucred_linux)))) {
+            m, Read64(gm->control) + sizeof(*gcmsg), sizeof(*ucred_linux)))) {
     return -1;
   }
   if (!(cmsg = (struct cmsghdr *)AddToFreeList(
@@ -1696,6 +1682,31 @@ static int XlatAncillaryData(struct Machine *m, struct msghdr *msg,
   msg->msg_control = cmsg;
   msg->msg_controllen = CMSG_SPACE(sizeof(*ucred));
   return 0;
+}
+#endif
+
+static int XlatAncillaryData(struct Machine *m, struct msghdr *msg,
+                             const struct msghdr_linux *gm) {
+  const struct cmsghdr_linux *gcmsg;
+  if (!Read64(gm->control)) return 0;
+  if (Read64(gm->controllen) < sizeof(*gcmsg)) return 0;
+  if (!(gcmsg = (const struct cmsghdr_linux *)SchlepR(m, Read64(gm->control),
+                                                      sizeof(*gcmsg)))) {
+    return -1;
+  }
+  if (Read32(gcmsg->level) != SOL_SOCKET_LINUX) {
+    LOGF("unsupported ancillary %s %d", "level", Read32(gcmsg->level));
+    return einval();
+  }
+  switch (Read32(gcmsg->type)) {
+#ifdef SCM_CREDENTIALS
+    case SCM_CREDENTIALS_LINUX:
+      return XlatScmCredentials(m, msg, gm, gcmsg);
+#endif
+    default:
+      LOGF("unsupported ancillary %s %d", "type", Read32(gcmsg->level));
+      return einval();
+  }
 }
 
 static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
