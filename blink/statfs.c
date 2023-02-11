@@ -23,6 +23,7 @@
 #include <sys/mman.h>
 #include <sys/mount.h>
 #include <sys/param.h>
+#include <sys/statvfs.h>
 
 #include "blink/endian.h"
 #include "blink/errno.h"
@@ -192,7 +193,6 @@ static void XlatStatvfsToLinux(struct statfs_linux *sf, const void *arg) {
   Write64(sf->bavail, vfs->f_bavail);
   Write64(sf->files, vfs->f_files);
   Write64(sf->ffree, vfs->f_ffree);
-  Write64(sf->favail, vfs->f_favail);
   Write32(sf->fsid[0], vfs->f_fsid);
   Write32(sf->fsid[1], (u64)vfs->f_fsid >> 32);
   Write64(sf->flags, XlatStatvfsFlags(vfs->f_flag));
