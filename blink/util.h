@@ -38,7 +38,5 @@ bool IsHaikuExecutable(int);
 long IsProcessTainted(void);
 long Magikarp(u8 *, long);
 int GetCpuCount(void);
-int GetFdSocketType(int, int *);
-bool IsNoRestartSocket(int);
 
 #endif /* BLINK_UTIL_H_ */

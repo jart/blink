@@ -90,3 +90,7 @@ long enotdir(void) {
 long erange(void) {
   return ReturnErrno(ERANGE);
 }
+
+long eopnotsupp(void) {
+  return ReturnErrno(EOPNOTSUPP);
+}

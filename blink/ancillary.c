@@ -137,11 +137,13 @@ int SendAncillary(struct Machine *m, struct msghdr *msg,
     } else {
       len = 0;
     }
+    need = ROUNDUP(sizeof(*gcmsg), 8) + len;
     space = ROUNDUP(sizeof(*gcmsg), 8) + ROUNDUP(len, 8);
-    if (space > avail) {
+    if (space > avail) space = avail;
+    if (need > avail) {
     ThisCorruption:
-      LOGF("ancillary corrupted len=%u level=%u type=%u avail=%zu space=%zu",
-           len, Read32(gcmsg->level), Read32(gcmsg->type), avail, space);
+      LOGF("ancillary corrupted len=%u level=%u type=%u avail=%zu need=%u", len,
+           Read32(gcmsg->level), Read32(gcmsg->type), avail, (unsigned)need);
       return einval();
     }
     if ((rc = GetAncillaryElementLength(gcmsg)) == -1) {
@@ -211,15 +213,11 @@ static i64 CopyCmsg(struct Machine *m, struct msghdr_linux *gm, int level,
 
 static void TrackScmRightsFd(struct Machine *m, int fildes, int flags) {
   int oflags;
-  struct Fd *fd;
   SYS_LOGF("ReceiveScmRights(fd=%d)", fildes);
   unassert((oflags = fcntl(fildes, F_GETFL, 0)) != -1);
-  fd =
-      AddFd(&m->system->fds, fildes,
-            oflags | O_RDWR | (flags & MSG_CMSG_CLOEXEC_LINUX ? O_CLOEXEC : 0));
-  if (!GetFdSocketType(fildes, &fd->socktype)) {
-    fd->norestart = IsNoRestartSocket(fildes);
-  }
+  InheritFd(AddFd(
+      &m->system->fds, fildes,
+      oflags | O_RDWR | (flags & MSG_CMSG_CLOEXEC_LINUX ? O_CLOEXEC : 0)));
 #ifndef MSG_CMSG_CLOEXEC
   if (flags & MSG_CMSG_CLOEXEC_LINUX) {
     unassert(!fcntl(fildes, F_SETFD, FD_CLOEXEC));

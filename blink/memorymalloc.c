@@ -237,7 +237,7 @@ static void FreeMachineUnlocked(struct Machine *m) {
   if (IsMakingPath(m)) {
     AbandonJit(&m->system->jit, m->path.jb);
   }
-  CollectGarbage(m);
+  CollectGarbage(m, 0);
   free(m->freelist.p);
   free(m);
 }
@@ -344,12 +344,12 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
   return m;
 }
 
-void CollectGarbage(struct Machine *m) {
+void CollectGarbage(struct Machine *m, size_t mark) {
   long i;
-  for (i = 0; i < m->freelist.n; ++i) {
+  for (i = mark; i < m->freelist.n; ++i) {
     free(m->freelist.p[i]);
   }
-  m->freelist.n = 0;
+  m->freelist.n = mark;
 }
 
 void FreeMachine(struct Machine *m) {

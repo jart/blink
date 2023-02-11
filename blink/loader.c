@@ -63,6 +63,10 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
 
   ELF_LOGF("PROGRAM HEADER");
   ELF_LOGF("  aslr = %" PRIx64, aslr);
+  ELF_LOGF("  flags = %s%s%s",          //
+           (flags & PF_R_ ? "R" : ""),  //
+           (flags & PF_W_ ? "W" : ""),  //
+           (flags & PF_X_ ? "X" : ""));
   ELF_LOGF("  vaddr = %" PRIx64, vaddr);
   ELF_LOGF("  memsz = %" PRIx64, memsz);
   ELF_LOGF("  offset = %" PRIx64, offset);

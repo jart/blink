@@ -790,7 +790,7 @@ int UnXlatItimer(int x) {
 int XlatSockaddrToHost(struct sockaddr_storage *dst,
                        const struct sockaddr_linux *src, u32 srclen) {
   if (srclen < 2) {
-    LOGF("sockaddr size too small for %s", "family");
+    LOGF("sockaddr size %d too small for %s", (int)srclen, "family");
     return einval();
   }
   switch (Read16(src->family)) {
@@ -863,7 +863,7 @@ int XlatSockaddrToHost(struct sockaddr_storage *dst,
 int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
                         const struct sockaddr *src, socklen_t srclen) {
   if (srclen < 2) {
-    LOGF("sockaddr size too small for %s", "family");
+    LOGF("sockaddr size %d too small for %s", (int)srclen, "family");
     return einval();
   }
   if (src->sa_family == AF_UNIX) {
@@ -871,7 +871,7 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
     struct sockaddr_un_linux *dst_un;
     const struct sockaddr_un *src_un;
     if (srclen < offsetof(struct sockaddr_un, sun_path)) {
-      LOGF("sockaddr size too small for %s", "sockaddr_un");
+      LOGF("sockaddr size %d too small for %s", (int)srclen, "sockaddr_un");
       return einval();
     }
     dst_un = (struct sockaddr_un_linux *)dst;
@@ -892,7 +892,7 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
     struct sockaddr_in_linux *dst_in;
     const struct sockaddr_in *src_in;
     if (srclen < sizeof(struct sockaddr_in)) {
-      LOGF("sockaddr size too small for %s", "sockaddr_in");
+      LOGF("sockaddr size %d too small for %s", (int)srclen, "sockaddr_in");
       return einval();
     }
     dst_in = (struct sockaddr_in_linux *)dst;
@@ -906,7 +906,7 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
     struct sockaddr_in6_linux *dst_in;
     const struct sockaddr_in6 *src_in;
     if (srclen < sizeof(struct sockaddr_in6)) {
-      LOGF("sockaddr size too small for %s", "sockaddr_in6");
+      LOGF("sockaddr size %d too small for %s", (int)srclen, "sockaddr_in6");
       return einval();
     }
     dst_in = (struct sockaddr_in6_linux *)dst;

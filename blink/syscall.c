@@ -217,29 +217,6 @@ const struct FdCb kFdCbHost = {
     .tcsetwinsize = my_tcsetwinsize,
 };
 
-int GetFdSocketType(int fildes, int *type) {
-  socklen_t len = sizeof(*type);
-  return getsockopt(fildes, SOL_SOCKET, SO_TYPE, type, &len);
-}
-
-bool IsNoRestartSocket(int fildes) {
-  struct timeval tv = {0};
-  socklen_t len = sizeof(tv);
-  getsockopt(fildes, SOL_SOCKET, SO_RCVTIMEO, &tv, &len);
-  return tv.tv_sec || tv.tv_usec;
-}
-
-void AddStdFd(struct Fds *fds, int fildes) {
-  int flags;
-  struct Fd *fd;
-  if ((flags = fcntl(fildes, F_GETFL, 0)) >= 0) {
-    unassert(fd = AddFd(fds, fildes, flags));
-    if (!GetFdSocketType(fildes, &fd->socktype)) {
-      fd->norestart = IsNoRestartSocket(fildes);
-    }
-  }
-}
-
 struct Fd *GetAndLockFd(struct Machine *m, int fildes) {
   struct Fd *fd;
   LOCK(&m->system->fds.lock);
@@ -282,26 +259,34 @@ GetSome:
     TerminateSignal(m, sig);
   }
   if (delivered) {
-    // we're officially calling a signal handler
-    // it's very important that no locks are being held
-    // run the signal handler code inside the i/o routine
-    if ((issigsuspend = m->issigsuspend)) {
-      m->issigsuspend = false;
-      unassert(!sigemptyset(&unblock));
-      unassert(!pthread_sigmask(SIG_BLOCK, &unblock, &oldmask));
-    }
-    m->restored = false;
-    SignalActor(m);
-    m->restored = false;
-    if (issigsuspend) {
-      unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
-      m->issigsuspend = true;
-    }
-    if (restart && restartable) {
-      // try to consume some more signals while we're here
-      goto GetSome;
+    if (m->sigdepth < kMaxSigDepth) {
+      // we're officially calling a signal handler
+      // run the signal handler code inside the i/o routine
+      // it's very important that no locks are currently held
+      // garbage may exist on the freelist for calls like sendmsg
+      ++m->sigdepth;
+      if ((issigsuspend = m->issigsuspend)) {
+        m->issigsuspend = false;
+        unassert(!sigemptyset(&unblock));
+        unassert(!pthread_sigmask(SIG_BLOCK, &unblock, &oldmask));
+      }
+      m->restored = false;
+      SignalActor(m);
+      m->restored = false;
+      if (issigsuspend) {
+        unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
+        m->issigsuspend = true;
+      }
+      --m->sigdepth;
+      if (restart && restartable) {
+        // try to consume some more signals while we're here
+        goto GetSome;
+      } else {
+        // let the i/o routine return eintr
+        res = true;
+      }
     } else {
-      // let the i/o routine return eintr
+      LOGF("exceeded max signal depth");
       res = true;
     }
   } else {
@@ -1463,8 +1448,7 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
     // POSIX.1 and Linux require EOPNOTSUPP when called on a file
     // descriptor that doesn't support accepting, i.e. SOCK_STREAM,
     // but FreeBSD incorrectly returns EINVAL.
-    errno = EOPNOTSUPP;
-    return -1;
+    return eopnotsupp();
   }
   addrlen = sizeof(addr);
   INTERRUPTIBLE(restartable,
@@ -1488,7 +1472,7 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
   return newfd;
 }
 
-static int XlatSendFlags(int flags) {
+static int XlatSendFlags(int flags, int socktype) {
   int supported, hostflags;
   supported = MSG_OOB_LINUX |        //
               MSG_DONTROUTE_LINUX |  //
@@ -1504,7 +1488,12 @@ static int XlatSendFlags(int flags) {
     return einval();
   }
   hostflags = 0;
-  if (flags & MSG_OOB_LINUX) hostflags |= MSG_OOB;
+  if (flags & MSG_OOB_LINUX) {
+    if (socktype != SOCK_STREAM) {
+      return eopnotsupp();
+    }
+    hostflags |= MSG_OOB;
+  }
   if (flags & MSG_DONTROUTE_LINUX) hostflags |= MSG_DONTROUTE;
   if (flags & MSG_DONTWAIT_LINUX) hostflags |= MSG_DONTWAIT;
 #ifdef MSG_NOSIGNAL
@@ -1590,6 +1579,69 @@ static int UnXlatMsgFlags(int flags) {
   return guestflags;
 }
 
+static i64 ConvertEnotconnToSigpipe(struct Machine *m, i64 rc) {
+#ifdef __linux
+  return rc;
+#else
+  if (!(rc == -1 && errno == ENOTCONN)) return rc;
+  LOCK(&m->system->sig_lock);
+  if ((m->sigmask & (1ull << (SIGPIPE_LINUX - 1))) ||
+      Read64(m->system->hands[SIGPIPE_LINUX - 1].handler) == SIG_IGN_LINUX) {
+    errno = EPIPE;
+  } else if (Read64(m->system->hands[SIGPIPE_LINUX - 1].handler) ==
+             SIG_DFL_LINUX) {
+    TerminateSignal(m, SIGPIPE_LINUX);
+  } else {
+    m->interrupted = true;
+    Put64(m->ax, -EINTR_LINUX);
+    DeliverSignal(m, SIGPIPE_LINUX, SI_KERNEL_LINUX);
+  }
+  UNLOCK(&m->system->sig_lock);
+  return rc;
+#endif
+}
+
+static bool IsSockAddrEmpty(const struct sockaddr *sa) {
+  return (sa->sa_family == AF_INET &&
+          !((const struct sockaddr_in *)sa)->sin_addr.s_addr) ||
+         (sa->sa_family == AF_INET6 &&
+          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr[0] &&
+          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr[1] &&
+          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr[2] &&
+          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr[3]);
+}
+
+// Operating systems like Linux let you sendmsg(buf, dest=0.0.0.0) where
+// the empty destination address implies the source address. Other OSes,
+// e.g. OpenBSD, do not implement this behavior. See also this Stack
+// Exchange question: https://unix.stackexchange.com/a/419881/451352
+static void EnsureSockAddrHasDestination(struct Machine *m, int fildes,
+                                         struct sockaddr_storage *ss) {
+#ifndef __linux
+  struct Fd *fd;
+  if (!IsSockAddrEmpty((const struct sockaddr *)ss)) return;
+  LOCK(&m->system->fds.lock);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    if (ss->ss_family == fd->saddr.sa.sa_family) {
+      if (ss->ss_family == AF_INET) {
+        memcpy(&((struct sockaddr_in *)ss)->sin_addr, &fd->saddr.sin.sin_addr,
+               sizeof(fd->saddr.sin.sin_addr));
+      } else if (ss->ss_family == AF_INET6) {
+        memcpy(&((struct sockaddr_in6 *)ss)->sin6_addr,
+               &fd->saddr.sin6.sin6_addr, sizeof(fd->saddr.sin6.sin6_addr));
+      } else {
+        unassert(!"inconsistent code");
+        __builtin_unreachable();
+      }
+    } else if (ss->ss_family == AF_INET) {
+      // if we do socket() followed by connect(0.0.0.0) assume 127.0.0.1
+      ((struct sockaddr_in *)ss)->sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    }
+  }
+  UNLOCK(&m->system->fds.lock);
+#endif
+}
+
 static i64 SysSendto(struct Machine *m,  //
                      i32 fildes,         //
                      i64 bufaddr,        //
@@ -1598,18 +1650,33 @@ static i64 SysSendto(struct Machine *m,  //
                      i64 sockaddr_addr,  //
                      i32 sockaddr_size) {
   ssize_t rc;
+  int socktype;
+  struct Fd *fd;
   struct Iovs iv;
+  bool norestart;
   struct msghdr msg;
   int len, hostflags;
-  bool norestart = false;
   struct sockaddr_storage ss;
+  LOCK(&m->system->fds.lock);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    socktype = fd->socktype;
+    norestart = fd->norestart;
+  } else {
+    socktype = 0;
+    norestart = false;
+  }
+  UNLOCK(&m->system->fds.lock);
+  if (!fd) return ebadf();
   if (sockaddr_size < 0) return einval();
-  if ((hostflags = XlatSendFlags(flags)) == -1) return -1;
-  if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
+  if ((hostflags = XlatSendFlags(flags, socktype)) == -1) return -1;
   memset(&msg, 0, sizeof(msg));
-  if (sockaddr_size) {
+  // "If sendto() is used on a connection-mode socket, the arguments
+  // dest_addr and addrlen are ignored." ──Quoth the Linux Programmer's
+  // Manual § send(2). However FreeBSD behaves differently.
+  if (socktype != SOCK_STREAM && sockaddr_size) {
     if ((len = LoadSockaddr(m, sockaddr_addr, sockaddr_size, &ss)) != -1) {
       msg.msg_namelen = len;
+      EnsureSockAddrHasDestination(m, fildes, &ss);
     } else {
       return -1;
     }
@@ -1622,7 +1689,7 @@ static i64 SysSendto(struct Machine *m,  //
     INTERRUPTIBLE(!norestart, rc = sendmsg(fildes, &msg, hostflags));
   }
   FreeIovs(&iv);
-  return rc;
+  return ConvertEnotconnToSigpipe(m, rc);
 }
 
 static i64 SysRecvfrom(struct Machine *m,  //
@@ -1665,21 +1732,33 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   u64 iovlen;
   ssize_t rc;
   i64 iovaddr;
+  int socktype;
+  struct Fd *fd;
   struct Iovs iv;
+  bool norestart;
   struct msghdr msg;
-  bool norestart = false;
   struct sockaddr_storage ss;
   const struct msghdr_linux *gm;
-  if ((flags = XlatSendFlags(flags)) == -1) return -1;
-  if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
+  LOCK(&m->system->fds.lock);
+  if ((fd = GetFd(&m->system->fds, fildes))) {
+    socktype = fd->socktype;
+    norestart = fd->norestart;
+  } else {
+    socktype = 0;
+    norestart = false;
+  }
+  UNLOCK(&m->system->fds.lock);
+  if (!fd) return ebadf();
+  if ((flags = XlatSendFlags(flags, socktype)) == -1) return -1;
   if (!(gm = (const struct msghdr_linux *)SchlepR(m, msgaddr, sizeof(*gm)))) {
     return -1;
   }
   memset(&msg, 0, sizeof(msg));
-  if ((len = Read32(gm->namelen)) > 0) {
+  if (socktype != SOCK_STREAM && (len = Read32(gm->namelen)) > 0) {
     if ((len = LoadSockaddr(m, Read64(gm->name), len, &ss)) == -1) {
       return -1;
     }
+    EnsureSockAddrHasDestination(m, fildes, &ss);
     msg.msg_name = &ss;
     msg.msg_namelen = len;
   }
@@ -1699,7 +1778,7 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
     INTERRUPTIBLE(!norestart, rc = sendmsg(fildes, &msg, flags));
   }
   FreeIovs(&iv);
-  return rc;
+  return ConvertEnotconnToSigpipe(m, rc);
 }
 
 static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
@@ -1756,17 +1835,28 @@ static int SysConnectBind(struct Machine *m, i32 fildes, i64 sockaddr_addr,
                           u32 sockaddr_size,
                           int impl(int, const struct sockaddr *, socklen_t)) {
   int rc, len;
+  struct Fd *fd;
   socklen_t addrlen;
   bool norestart = false;
   struct sockaddr_storage addr;
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if ((len = LoadSockaddr(m, sockaddr_addr, sockaddr_size, &addr)) != -1) {
     addrlen = len;
+    if (impl == connect) {
+      EnsureSockAddrHasDestination(m, fildes, &addr);
+    }
   } else {
     return -1;
   }
   INTERRUPTIBLE(!norestart,
                 (rc = impl(fildes, (const struct sockaddr *)&addr, addrlen)));
+  if (rc != -1 && impl == bind) {
+    LOCK(&m->system->fds.lock);
+    if ((fd = GetFd(&m->system->fds, fildes))) {
+      memcpy(&fd->saddr, &addr, sizeof(fd->saddr));
+    }
+    UNLOCK(&m->system->fds.lock);
+  }
   return rc;
 }
 
@@ -1984,7 +2074,7 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   } else {
     rc = 0;
   }
-  return rc;
+  return ConvertEnotconnToSigpipe(m, rc);
 }
 
 // FreeBSD doesn't do access mode check on read/write to pipes.
@@ -2125,6 +2215,7 @@ static i64 SysPwritev2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
       if (iv.i) {
         if (offset == -1) {
           RESTARTABLE(rc = writev_impl(fildes, iv.p, iv.i));
+          rc = ConvertEnotconnToSigpipe(m, rc);
         } else if (offset < 0) {
           return einval();
         } else if (offset > NUMERIC_MAX(off_t)) {
@@ -2786,13 +2877,16 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
 }
 
 static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
-                             i64 bufaddr, i64 size) {
+                             i64 bufaddr, i64 bufsiz) {
   char *buf;
   ssize_t rc;
-  if (size < 0) return einval();
-  if (!(buf = (char *)malloc(size))) return -1;
+  // This system call raises EINVAL when "bufsiz is not positive."
+  // ──Quoth the Linux Programmer's Manual § readlink(2). Some libc
+  // implementations (e.g. Musl) consider it to be posixly incorrect.
+  if (bufsiz <= 0) return einval();
+  if (!(buf = (char *)malloc(bufsiz))) return -1;
   if ((rc = OverlaysReadlink(GetDirFildes(dirfd), LoadStr(m, path), buf,
-                             size)) != -1) {
+                             bufsiz)) != -1) {
     if (CopyToUserWrite(m, bufaddr, buf, rc) == -1) rc = -1;
   }
   free(buf);
@@ -4260,6 +4354,24 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
     LOGF("tkill(%d, %d) failed due to bogus signal", tid, sig);
     return einval();
   }
+  // trigger signal immediately if possible
+  if (tid == m->tid && (~m->sigmask & (1ull << (sig - 1)))) {
+    switch (Read64(m->system->hands[sig - 1].handler)) {
+      case SIG_DFL_LINUX:
+        if (!IsSignalIgnoredByDefault(sig)) {
+          TerminateSignal(m, sig);
+          return 0;
+        }
+        // fallthrough
+      case SIG_IGN_LINUX:
+        return 0;
+      default:
+        Put64(m->ax, 0);
+        m->interrupted = true;
+        DeliverSignal(m, sig, SI_TKILL_LINUX);
+        return -1;
+    }
+  }
   if (!IsValidThreadId(m->system, tid)) {
     LOGF("tkill(%d, %d) failed due to bogus thread id", tid, sig);
     return esrch();
@@ -4554,6 +4666,7 @@ static int SysPipe(struct Machine *m, i64 pipefds_addr) {
 }
 
 void OpSyscall(P) {
+  size_t mark;
   u64 ax, di, si, dx, r0, r8, r9;
   STATISTIC(++syscalls);
   if (m->system->redraw) {
@@ -4566,6 +4679,7 @@ void OpSyscall(P) {
   r0 = Get64(m->r10);
   r8 = Get64(m->r8);
   r9 = Get64(m->r9);
+  mark = m->freelist.n;
   m->interrupted = false;
   switch (ax & 0xfff) {
     SYSCALL3(0x000, SysRead);
@@ -4769,5 +4883,5 @@ void OpSyscall(P) {
   if (!m->interrupted) {
     Put64(m->ax, ax != -1 ? ax : -(XlatErrno(errno) & 0xfff));
   }
-  CollectGarbage(m);
+  CollectGarbage(m, mark);
 }

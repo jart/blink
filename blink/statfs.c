@@ -116,23 +116,23 @@ static int ConvertBsdFsTypeNameToLinux(const char *fstypename) {
     char name[8];
     u32 lunix;
   } kFsTypeName[] = {
-      {"apfs", 0x4253584e},      //
-      {"zfs", 0x2fc12fc1},       //
-      {"ufs", 0x00011954},       //
-      {"iso9660", 0x9660},       //
-      {"ext", 0x4244},           //
-      {"ext2fs", 0x4244},        //
-      {"hfs", 0x4244},           //
-      {"msdos", 0x4d44},         //
-      {"ntfs", 0x5346544e},      //
-      {"efs", 0x00414a53},       //
-      {"jfs2", 0x3153464a},      //
-      {"udf", 0x15013346},       //
-      {"hpfs", 0xf995e849},      //
-      {"sysv", 0x012ff7b5},      //
-      {"devfs", 0x1373},         //
-      {"procfs", 0x002f},        //
-      {"linsysfs", 0x62656572},  //
+      {"apfs", 0x4253584e},                                    //
+      {"zfs", 0x2fc12fc1},                                     //
+      {"ufs", 0x00011954},                                     //
+      {"iso9660", 0x9660},                                     //
+      {"ext", 0x4244},                                         //
+      {"ext2fs", 0x4244},                                      //
+      {"hfs", 0x4244},                                         //
+      {"msdos", 0x4d44},                                       //
+      {"ntfs", 0x5346544e},                                    //
+      {"efs", 0x00414a53},                                     //
+      {"jfs2", 0x3153464a},                                    //
+      {"udf", 0x15013346},                                     //
+      {"hpfs", 0xf995e849},                                    //
+      {"sysv", 0x012ff7b5},                                    //
+      {"devfs", 0x1373},                                       //
+      {"procfs", 0x002f},                                      //
+      {{'l', 'i', 'n', 's', 'y', 's', 'f', 's'}, 0x62656572},  // linsysfs
   };
   for (i = 0; i < ARRAYLEN(kFsTypeName); ++i) {
     if (Read64((const u8 *)fstypename) ==

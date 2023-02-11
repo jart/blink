@@ -725,6 +725,55 @@
 
 #define SCM_MAX_FD_LINUX 253
 
+#define SI_USER_LINUX       0
+#define SI_QUEUE_LINUX      -1
+#define SI_TIMER_LINUX      -2
+#define SI_TKILL_LINUX      -6
+#define SI_MESGQ_LINUX      -3
+#define SI_ASYNCIO_LINUX    -4
+#define SI_ASYNCNL_LINUX    -60
+#define SI_KERNEL_LINUX     128
+#define SI_NOINFO_LINUX     32767
+#define CLD_EXITED_LINUX    1
+#define CLD_KILLED_LINUX    2
+#define CLD_DUMPED_LINUX    3
+#define CLD_TRAPPED_LINUX   4
+#define CLD_STOPPED_LINUX   5
+#define CLD_CONTINUED_LINUX 6
+#define TRAP_BRKPT_LINUX    1
+#define TRAP_TRACE_LINUX    2
+#define SEGV_MAPERR_LINUX   1
+#define SEGV_ACCERR_LINUX   2
+#define SEGV_PKUERR_LINUX   -1
+#define FPE_INTDIV_LINUX    1
+#define FPE_INTOVF_LINUX    2
+#define FPE_FLTDIV_LINUX    3
+#define FPE_FLTOVF_LINUX    4
+#define FPE_FLTUND_LINUX    5
+#define FPE_FLTRES_LINUX    6
+#define FPE_FLTINV_LINUX    7
+#define FPE_FLTSUB_LINUX    8
+#define ILL_ILLOPC_LINUX    1
+#define ILL_ILLOPN_LINUX    2
+#define ILL_ILLADR_LINUX    3
+#define ILL_ILLTRP_LINUX    4
+#define ILL_PRVOPC_LINUX    5
+#define ILL_PRVREG_LINUX    6
+#define ILL_COPROC_LINUX    7
+#define ILL_BADSTK_LINUX    8
+#define BUS_ADRALN_LINUX    1
+#define BUS_ADRERR_LINUX    2
+#define BUS_OBJERR_LINUX    3
+#define BUS_OOMERR_LINUX    -1
+#define BUS_MCEERR_AR_LINUX 4
+#define BUS_MCEERR_AO_LINUX 5
+#define POLL_IN_LINUX       1
+#define POLL_OUT_LINUX      2
+#define POLL_MSG_LINUX      3
+#define POLL_ERR_LINUX      4
+#define POLL_PRI_LINUX      5
+#define POLL_HUP_LINUX      6
+
 struct iovec_linux {
   u8 base[8];
   u8 len[8];

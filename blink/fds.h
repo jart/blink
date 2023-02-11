@@ -2,9 +2,11 @@
 #define BLINK_FDS_H_
 #include <dirent.h>
 #include <limits.h>
+#include <netinet/in.h>
 #include <poll.h>
 #include <pthread.h>
 #include <stdbool.h>
+#include <sys/socket.h>
 #include <sys/uio.h>
 #include <termios.h>
 
@@ -35,6 +37,11 @@ struct Fd {
   struct Dll elem;
   pthread_mutex_t lock;
   const struct FdCb *cb;
+  union {
+    struct sockaddr sa;
+    struct sockaddr_in sin;
+    struct sockaddr_in6 sin6;
+  } saddr;
 };
 
 struct Fds {
@@ -53,5 +60,6 @@ void UnlockFd(struct Fd *);
 int CountFds(struct Fds *);
 void FreeFd(struct Fd *);
 void DestroyFds(struct Fds *);
+void InheritFd(struct Fd *);
 
 #endif /* BLINK_FDS_H_ */

@@ -41,5 +41,6 @@
 #define kMaxResident  (8ULL * 1024 * 1024 * 1024)
 #define kMaxVirtual   (kMaxResident * 8)
 #define kMaxAncillary 1000
+#define kMaxSigDepth  8
 
 #endif /* BLINK_TUNABLES_H_ */

@@ -311,7 +311,8 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/2/futimesat01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/unlink07.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/2/futex_wake03.elf.ok		\
-	o/$(MODE)/third_party/ltp/bin/2/send01.elf.ok
+	o/$(MODE)/third_party/ltp/bin/2/send01.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/sendmsg01.elf.ok
 
 ifneq ($(HOST_SYSTEM), FreeBSD)
 # These tests make the system get wrekt.
@@ -408,6 +409,11 @@ LTP_TESTS +=								\
 	o/$(MODE)/third_party/ltp/bin/1/futex_wait05.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/poll02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/unlink08.elf.ok
+endif
+
+# TODO: Cygwin doesn't properly raise an EACCES errno.
+ifneq ($(HOST_OS), Cygwin)
+LTP_TESTS += o/$(MODE)/third_party/ltp/bin/2/readlink03.elf.ok
 endif
 
 ifneq ($(HOST_OS), Cygwin)

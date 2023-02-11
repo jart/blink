@@ -8,6 +8,9 @@ Project](https://github.com/linux-test-project/ltp).
 1. Comment out the capability code in lib/tst_capability.c
 2. Comment out the code that opens /proc/meminfo
 3. Remove `clone()` + `O_PATH` test from `close_range02`
+4. Remove `ifconfig lo up 127.0.0.1` code from sendmsg01
+5. Remove last test case (msg_control efault) from sendmsg01
+6. Fix readlink03 to work with Musl and not require root
 
 ## Build
 

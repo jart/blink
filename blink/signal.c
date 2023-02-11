@@ -220,7 +220,7 @@ static int ConsumeSignalImpl(struct Machine *m, int *delivered, bool *restart) {
         *restart =
             !!(Read64(m->system->hands[sig - 1].flags) & SA_RESTART_LINUX);
       }
-      DeliverSignal(m, sig, 0);
+      DeliverSignal(m, sig, SI_KERNEL_LINUX);
       return 0;
     } else if (IsSignalTooDangerousToIgnore(sig)) {
       // signal is too dangerous to be deferred

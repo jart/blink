@@ -333,6 +333,7 @@ struct Machine {                           //
   _Atomicish(u64) sigmask;                 // signals that've been blocked
   u32 tlbindex;                            //
   struct System *system;                   //
+  int sigdepth;                            //
   bool canhalt;                            //
   bool metal;                              //
   bool restored;                           //
@@ -366,7 +367,7 @@ void RemoveOtherThreads(struct System *);
 void KillOtherThreads(struct System *);
 void ResetCpu(struct Machine *);
 void ResetTlb(struct Machine *);
-void CollectGarbage(struct Machine *);
+void CollectGarbage(struct Machine *, size_t);
 void ResetInstructionCache(struct Machine *);
 void GeneralDispatch(P);
 nexgen32e_f GetOp(long);

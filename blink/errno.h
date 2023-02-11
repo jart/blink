@@ -14,6 +14,7 @@ long enosys(void);
 long enotdir(void);
 long enotsup(void);
 long eoverflow(void);
+long eopnotsupp(void);
 long erange(void);
 long eperm(void);
 long esrch(void);
