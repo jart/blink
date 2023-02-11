@@ -1606,10 +1606,10 @@ static bool IsSockAddrEmpty(const struct sockaddr *sa) {
   return (sa->sa_family == AF_INET &&
           !((const struct sockaddr_in *)sa)->sin_addr.s_addr) ||
          (sa->sa_family == AF_INET6 &&
-          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr[0] &&
-          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr[1] &&
-          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr[2] &&
-          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr[3]);
+          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr32[0] &&
+          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr32[1] &&
+          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr32[2] &&
+          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr32[3]);
 }
 
 // Operating systems like Linux let you sendmsg(buf, dest=0.0.0.0) where
