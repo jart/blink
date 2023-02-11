@@ -1015,7 +1015,7 @@ struct statfs_linux {
   u8 bsize[8];    // optimal transfer block size
   u8 blocks[8];   // total data blocks in filesystem
   u8 bfree[8];    // free blocks in filesystem
-  u8 bavail[8];   // free blocks available to
+  u8 bavail[8];   // free blocks available to unprivileged user
   u8 files[8];    // total file nodes in filesystem
   u8 ffree[8];    // free file nodes in filesystem
   u8 fsid[2][4];  // filesystem id

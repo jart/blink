@@ -232,6 +232,7 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/pwritev01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/pwritev01_64.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/read01.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/read02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/read03.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/read04.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/readdir01.elf.ok		\

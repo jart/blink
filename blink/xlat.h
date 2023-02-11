@@ -49,6 +49,5 @@ void XlatSigsetToLinux(u8[8], const sigset_t *);
 void XlatLinuxToSigset(sigset_t *, const u8[8]);
 void XlatRlimitToLinux(struct rlimit_linux *, const struct rlimit *);
 void XlatLinuxToRlimit(int, struct rlimit *, const struct rlimit_linux *);
-void XlatStatvfsToLinux(struct statfs_linux *, const struct statvfs *);
 
 #endif /* BLINK_XLAT_H_ */

@@ -39,6 +39,8 @@
 #include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <sys/mount.h>
+#include <sys/param.h>
 #include <sys/resource.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -89,6 +91,7 @@
 
 #ifdef __linux
 #include <sched.h>
+#include <sys/vfs.h>
 #endif
 
 #ifdef SO_LINGER_SEC
@@ -2391,36 +2394,6 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
     if (CopyToUserWrite(m, staddr, &gst, sizeof(gst)) == -1) rc = -1;
   }
   return rc;
-}
-
-static int Statvfs(intptr_t arg, struct statvfs *buf) {
-  return statvfs((const char *)arg, buf);
-}
-
-static int Fstatvfs(intptr_t arg, struct statvfs *buf) {
-  return fstatvfs((int)arg, buf);
-}
-
-static int SysStatfsImpl(struct Machine *m, intptr_t arg, i64 addr,
-                         int thunk(intptr_t, struct statvfs *)) {
-  int rc;
-  struct statvfs vfs;
-  struct statfs_linux sf;
-  if (!IsValidMemory(m, addr, sizeof(sf), PROT_WRITE)) return efault();
-  RESTARTABLE(rc = thunk(arg, &vfs));
-  if (rc != -1) {
-    XlatStatvfsToLinux(&sf, &vfs);
-    CopyToUserWrite(m, addr, &sf, sizeof(sf));
-  }
-  return rc;
-}
-
-static int SysStatfs(struct Machine *m, i64 path, i64 addr) {
-  return SysStatfsImpl(m, (intptr_t)LoadStr(m, path), addr, Statvfs);
-}
-
-static int SysFstatfs(struct Machine *m, i32 fildes, i64 addr) {
-  return SysStatfsImpl(m, (intptr_t)(u32)fildes, addr, Fstatvfs);
 }
 
 static int XlatFchownatFlags(int x) {

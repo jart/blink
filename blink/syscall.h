@@ -69,5 +69,7 @@ int GetOflags(struct Machine *, int);
 int GetFildes(struct Machine *, int);
 struct Fd *GetAndLockFd(struct Machine *, int);
 bool CheckInterrupt(struct Machine *, bool);
+int SysStatfs(struct Machine *, i64, i64);
+int SysFstatfs(struct Machine *, i32, i64);
 
 #endif /* BLINK_SYSCALL_H_ */

@@ -127,7 +127,8 @@ int SendAncillary(struct Machine *m, struct msghdr *msg,
       LOGF("ancillary corrupted");
       return einval();
     }
-    if (!(gcmsg = SchlepR(m, Read64(gm->control) + i, sizeof(*gcmsg)))) {
+    if (!(gcmsg = (const struct cmsghdr_linux *)SchlepR(
+              m, Read64(gm->control) + i, sizeof(*gcmsg)))) {
       return -1;
     }
     len = Read32(gcmsg->len);
@@ -169,12 +170,15 @@ int SendAncillary(struct Machine *m, struct msghdr *msg,
         switch (Read32(gcmsg->type)) {
 #ifdef SCM_RIGHTS
           case SCM_RIGHTS_LINUX:
-            if (SendScmRights(m, msg, payload, elements) == -1) return -1;
+            if (SendScmRights(m, msg, (const u8 *)payload, elements) == -1)
+              return -1;
             break;
 #endif
 #ifdef SCM_CREDENTIALS
           case SCM_CREDENTIALS_LINUX:
-            if (SendScmCredentials(m, msg, payload, elements) == -1) return -1;
+            if (SendScmCredentials(m, msg, (const struct ucred_linux *)payload,
+                                   elements) == -1)
+              return -1;
             break;
 #endif
           default:

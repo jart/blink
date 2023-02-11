@@ -1031,7 +1031,7 @@ void XlatWinsizeToHost(struct winsize *dst, const struct winsize_linux *src) {
 void XlatSigsetToLinux(u8 dst[8], const sigset_t *src) {
   u64 set = 0;
   int syssig, linuxsig;
-  for (syssig = 1; syssig <= 32; ++syssig) {
+  for (syssig = 1; syssig <= MIN(64, NSIG); ++syssig) {
     if (sigismember(src, syssig) == 1 &&
         (linuxsig = UnXlatSignal(syssig)) != -1) {
       set |= 1ull << (linuxsig - 1);
@@ -1045,7 +1045,7 @@ void XlatLinuxToSigset(sigset_t *dst, const u8 src[8]) {
   int syssig, linuxsig;
   set = Read64(src);
   sigemptyset(dst);
-  for (linuxsig = 1; linuxsig <= 32; ++linuxsig) {
+  for (linuxsig = 1; linuxsig <= MIN(64, NSIG); ++linuxsig) {
     if (((1ull << (linuxsig - 1)) & set) &&
         (syssig = XlatSignal(linuxsig)) != -1) {
       sigaddset(dst, syssig);
