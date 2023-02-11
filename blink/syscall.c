@@ -272,6 +272,7 @@ GetSome:
       }
       m->restored = false;
       SignalActor(m);
+      unassert(Read64(m->ax) == -EINTR_LINUX);
       m->restored = false;
       if (issigsuspend) {
         unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
@@ -1045,7 +1046,7 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, u64 size, int prot,
   if ((key = Prot2Page(prot)) == -1) return einval();
   if (flags & MAP_FIXED_NOREPLACE_LINUX) return enotsup();
   CleanseMemory(m->system, size);
-  if (m->system->rss > GetMaxRss(m->system)) {
+  if (m->system->rss >= GetMaxRss(m->system)) {
     LOGF("ran out of resident memory (%" PRIx64 " / %" PRIx64 " pages)",
          m->system->rss, GetMaxRss(m->system));
     return enomem();
@@ -3488,27 +3489,46 @@ static int SysSetitimer(struct Machine *m, int which, i64 neuaddr,
 }
 
 static int SysNanosleep(struct Machine *m, i64 req, i64 rem) {
-  int rc;
-  struct timespec hreq, hrem;
-  struct timespec_linux gtimespec;
-  if (CopyFromUserRead(m, &gtimespec, req, sizeof(gtimespec)) == -1) return -1;
-  hreq.tv_sec = Read64(gtimespec.sec);
-  hreq.tv_nsec = Read64(gtimespec.nsec);
-TryAgain:
-  rc = nanosleep(&hreq, &hrem);
-  if (rc == -1 && errno == EINTR) {
-    if (CheckInterrupt(m, false)) {
-      if (rem) {
-        Write64(gtimespec.sec, hrem.tv_sec);
-        Write64(gtimespec.nsec, hrem.tv_nsec);
-        CopyToUserWrite(m, rem, &gtimespec, sizeof(gtimespec));
-      }
-    } else {
-      hreq = hrem;
-      goto TryAgain;
-    }
+  struct timespec_linux gt;
+  const struct timespec_linux *gtp;
+  struct timespec ts, now, deadline;
+  now = GetTime();
+  if ((rem && !IsValidMemory(m, rem, sizeof(gtp), PROT_WRITE)) ||
+      !(gtp = (const struct timespec_linux *)SchlepR(m, req, sizeof(*gtp)))) {
+    return -1;
   }
-  return rc;
+  ts.tv_sec = Read64(gtp->sec);
+  ts.tv_nsec = Read64(gtp->nsec);
+  if (ts.tv_sec < 0) return einval();
+  if (!(0 <= ts.tv_nsec && ts.tv_nsec < 1000000000)) return einval();
+  deadline = AddTime(now, ts);
+  for (;;) {
+    if (CompareTime(now, deadline) >= 0) return 0;
+    ts = SubtractTime(deadline, now);
+    if (nanosleep(&ts, 0)) {
+      unassert(errno == EINTR);
+      // this may run a guest signal handler before returning
+      if (CheckInterrupt(m, false)) {
+        // a signal was delivered or is about to be delivered
+        if (rem) {
+          // rem is only updated when -1 w/ eintr is returned
+          now = GetTime();
+          if (CompareTime(now, deadline) < 0) {
+            ts = SubtractTime(deadline, now);
+          } else {
+            ts = GetZeroTime();
+          }
+          Write64(gt.sec, ts.tv_sec);
+          Write64(gt.nsec, ts.tv_nsec);
+          CopyToUserWrite(m, rem, &gt, sizeof(gt));
+        }
+        return -1;
+      }
+    }
+    // sleep apis aren't nearly as fast and reliable as time apis
+    // even if nanosleep() claims it slept the full time we check
+    now = GetTime();
+  }
 }
 
 static int SysClockNanosleep(struct Machine *m, int clock, int flags,
