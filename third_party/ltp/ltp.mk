@@ -57,6 +57,7 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/dup202.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/dup203.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/dup204.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/dup205.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/dup206.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/dup207.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/dup3_01.elf.ok			\
@@ -198,6 +199,7 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/fstat02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/open03.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/open06.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/open07.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/open09.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/pipe01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/pipe02.elf.ok			\
@@ -285,6 +287,7 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/waitpid01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/waitpid02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/waitpid03.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/waitpid04.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/waitpid06.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/waitpid07.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/waitpid08.elf.ok		\
@@ -310,9 +313,15 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/2/unlinkat01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/futimesat01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/unlink07.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/2/futex_wake03.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/futex_wait03.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/send01.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/2/sendmsg01.elf.ok
+	o/$(MODE)/third_party/ltp/bin/2/sendmsg01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sched_yield01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/readlinkat01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/readlinkat02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/readv02.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/realpath01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/openat01.elf.ok
 
 ifneq ($(HOST_SYSTEM), FreeBSD)
 # These tests make the system get wrekt.
@@ -372,9 +381,12 @@ endif
 ifeq ($(shell id -u), 0)
 LTP_TESTS +=								\
 	o/$(MODE)/third_party/ltp/bin/1/setegid02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/open08.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/open10.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/2/stat03.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/rename09.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/access01.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/1/access02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/access03.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/autogroup01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/chmod07.elf.ok			\
@@ -394,6 +406,7 @@ LTP_TESTS +=								\
 	o/$(MODE)/third_party/ltp/bin/1/mmap10.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/mmap11.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/nice04.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/open02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/open11.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/open14.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/openat03.elf.ok			\

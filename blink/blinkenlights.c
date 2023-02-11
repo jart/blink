@@ -3829,7 +3829,7 @@ int main(int argc, char *argv[]) {
   SetXmmSize(2);
   SetXmmDisp(kXmmHex);
   GetOpts(argc, argv);
-  if (SetOverlays(FLAG_overlays)) {
+  if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");
     exit(1);
   }

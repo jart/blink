@@ -1,12 +1,13 @@
 #ifndef BLINK_OVERLAYS_H_
 #define BLINK_OVERLAYS_H_
+#include <stdbool.h>
 #include <sys/stat.h>
 #include <unistd.h>
 
 #define DEFAULT_OVERLAYS ":o"
 
-int SetOverlays(const char *);
 int OverlaysChdir(const char *);
+int SetOverlays(const char *, bool);
 char *OverlaysGetcwd(char *, size_t);
 int OverlaysMkdir(int, const char *, int);
 int OverlaysUnlink(int, const char *, int);

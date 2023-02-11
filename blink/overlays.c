@@ -32,6 +32,8 @@
 #include "blink/thompike.h"
 #include "blink/util.h"
 
+#define UNREACHABLE "(unreachable)"
+
 static char **g_overlays;
 
 static void FreeStrings(char **ss) {
@@ -77,7 +79,7 @@ static bool IsRestrictedRoot(char **paths) {
   return !paths[1] && paths[0][0];
 }
 
-int SetOverlays(const char *config) {
+int SetOverlays(const char *config, bool cd_into_chroot) {
   size_t i, j;
   static int once;
   bool has_real_root;
@@ -122,7 +124,7 @@ int SetOverlays(const char *config) {
     FreeStrings(paths);
     return einval();
   }
-  if (IsRestrictedRoot(paths)) {
+  if (cd_into_chroot && IsRestrictedRoot(paths)) {
     if (chdir(paths[0])) {
       LOGF("failed to cd into blink overlay: %s", DescribeHostErrno(errno));
       FreeStrings(paths);
@@ -147,8 +149,7 @@ static bool IsUnrecoverableErrno(void) {
 
 char *OverlaysGetcwd(char *output, size_t size) {
   size_t n, m;
-  const char *cwd;
-  char buf[PATH_MAX];
+  char *cwd, buf[PATH_MAX];
   if (!(cwd = (getcwd)(buf, sizeof(buf)))) return 0;
   n = strlen(cwd);
   if (IsRestrictedRoot(g_overlays)) {
@@ -157,8 +158,11 @@ char *OverlaysGetcwd(char *output, size_t size) {
       cwd = "/";
     } else if (n > m && !memcmp(cwd, g_overlays[0], m) && cwd[m] == '/') {
       cwd += m;
+    } else if (strlen(UNREACHABLE) + n + 1 < sizeof(buf)) {
+      memmove(cwd + strlen(UNREACHABLE), cwd, n + 1);
+      memcpy(cwd, UNREACHABLE, strlen(UNREACHABLE));
     } else {
-      cwd = "(unreachable)/";
+      return 0;
     }
     n = strlen(cwd);
   }

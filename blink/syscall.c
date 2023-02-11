@@ -284,10 +284,12 @@ GetSome:
         goto GetSome;
       } else {
         // let the i/o routine return eintr
+        errno = EINTR;
         res = true;
       }
     } else {
       LOGF("exceeded max signal depth");
+      errno = EINTR;
       res = true;
     }
   } else {
@@ -1607,10 +1609,8 @@ static bool IsSockAddrEmpty(const struct sockaddr *sa) {
   return (sa->sa_family == AF_INET &&
           !((const struct sockaddr_in *)sa)->sin_addr.s_addr) ||
          (sa->sa_family == AF_INET6 &&
-          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr32[0] &&
-          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr32[1] &&
-          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr32[2] &&
-          !((const struct sockaddr_in6 *)sa)->sin6_addr.s6_addr32[3]);
+          !Read64(((u8 *)&((struct sockaddr_in6 *)sa)->sin6_addr) + 0) &&
+          !Read64(((u8 *)&((struct sockaddr_in6 *)sa)->sin6_addr) + 8));
 }
 
 // Operating systems like Linux let you sendmsg(buf, dest=0.0.0.0) where
@@ -2545,7 +2545,7 @@ static int SysLchown(struct Machine *m, i64 pathaddr, u32 uid, u32 gid) {
 }
 
 static int SysChroot(struct Machine *m, i64 path) {
-  return SetOverlays(LoadStr(m, path));
+  return SetOverlays(LoadStr(m, path), false);
 }
 
 static int SysSync(struct Machine *m) {
@@ -3958,17 +3958,14 @@ static int LoadFdSet(struct Machine *m, int nfds, fd_set *fds, i64 addr) {
 }
 
 static int SaveFdSet(struct Machine *m, int nfds, const fd_set *fds, i64 addr) {
-  u8 *p;
   int fd;
-  if (!(p = (u8 *)calloc(1, FD_SETSIZE_LINUX / 8))) return -1;
+  u8 p[FD_SETSIZE_LINUX / 8] = {0};
   for (fd = 0; fd < nfds; ++fd) {
     if (FD_ISSET(fd, fds)) {
       p[fd >> 3] |= 1 << (fd & 7);
     }
   }
-  CopyToUserWrite(m, addr, p, FD_SETSIZE_LINUX / 8);
-  free(p);
-  return 0;
+  return CopyToUserWrite(m, addr, p, FD_SETSIZE_LINUX / 8);
 }
 
 static i32 Select(struct Machine *m,          //
@@ -3984,12 +3981,9 @@ static i32 Select(struct Machine *m,          //
   sigset_t block, oldmask;
   fd_set readfds, writefds, exceptfds;
   fd_set *readfdsp, *writefdsp, *exceptfdsp;
-  struct timespec timeout, started, elapsed;
+  struct timespec *tp, now, waitfor, deadline = {0};
   if (timeoutp) {
-    started = GetTime();
-    timeout = *timeoutp;
-  } else {
-    memset(&timeout, 0, sizeof(timeout));
+    deadline = AddTime(GetTime(), *timeoutp);
   }
   setsize = MIN(FD_SETSIZE, FD_SETSIZE_LINUX);
   if (nfds < 0 || nfds > setsize) {
@@ -4033,8 +4027,31 @@ static i32 Select(struct Machine *m,          //
     m->sigmask = *sigmaskp_guest;
     SIG_LOGF("sigmask push %" PRIx64, m->sigmask);
   }
-  NORESTART(rc,
-            pselect(nfds, readfdsp, writefdsp, exceptfdsp, timeoutp, &oldmask));
+  if (!CheckInterrupt(m, false)) {
+    do {
+      if (timeoutp) {
+        now = GetTime();
+        if (CompareTime(now, deadline) < 0) {
+          waitfor = SubtractTime(deadline, now);
+        } else {
+          waitfor = GetZeroTime();
+        }
+        tp = &waitfor;
+      } else {
+        tp = 0;
+      }
+      rc = pselect(nfds, readfdsp, writefdsp, exceptfdsp, tp, &oldmask);
+      if (rc == -1 && errno == EINTR) {
+        if (CheckInterrupt(m, false)) {
+          break;
+        }
+      } else {
+        break;
+      }
+    } while (1);
+  } else {
+    rc = -1;
+  }
   if (sigmaskp_guest) {
     m->sigmask = oldmask_guest;
     SIG_LOGF("sigmask pop %" PRIx64, m->sigmask);
@@ -4049,11 +4066,11 @@ static i32 Select(struct Machine *m,          //
     }
   }
   if (timeoutp) {
-    elapsed = SubtractTime(GetTime(), started);
-    if (CompareTime(elapsed, timeout) < 0) {
-      *timeoutp = SubtractTime(timeout, elapsed);
+    now = GetTime();
+    if (CompareTime(now, deadline) < 0) {
+      *timeoutp = SubtractTime(deadline, now);
     } else {
-      memset(timeoutp, 0, sizeof(*timeoutp));
+      *timeoutp = GetZeroTime();
     }
   }
   return rc;
@@ -4070,7 +4087,8 @@ static i32 SysSelect(struct Machine *m, i32 nfds, i64 readfds_addr,
              m, timeout_addr, sizeof(*timeoutp_linux)))) {
       timeout.tv_sec = Read64(timeoutp_linux->sec);
       timeout.tv_nsec = Read64(timeoutp_linux->usec);
-      if (0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000) {
+      if (0 <= timeout.tv_sec &&
+          (0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000)) {
         timeout.tv_nsec *= 1000;
         timeoutp = &timeout;
       } else {
@@ -4108,7 +4126,12 @@ static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
              m, timeout_addr, sizeof(*timeoutp_linux)))) {
       timeout.tv_sec = Read64(timeoutp_linux->sec);
       timeout.tv_nsec = Read64(timeoutp_linux->nsec);
-      timeoutp = &timeout;
+      if (0 <= timeout.tv_sec &&
+          (0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000000)) {
+        timeoutp = &timeout;
+      } else {
+        return einval();
+      }
     } else {
       return -1;
     }
@@ -4275,7 +4298,8 @@ static int SysPpoll(struct Machine *m, i64 fdsaddr, u64 nfds, i64 timeoutaddr,
                                                         sizeof(*gt)))) {
         timeout.tv_sec = Read64(gt->sec);
         timeout.tv_nsec = Read64(gt->nsec);
-        if (timeout.tv_nsec >= 1000000000) {
+        if (!(0 <= timeout.tv_sec &&
+              (0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000000))) {
           return einval();
         }
       } else {

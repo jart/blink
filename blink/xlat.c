@@ -536,7 +536,10 @@ int XlatWait(int x) {
     x &= ~WCONTINUED_LINUX;
   }
 #endif
-  if (x) LOGF("%s %d not supported yet", "wait", x);
+  if (x) {
+    LOGF("%s %d not supported yet", "wait", x);
+    return einval();
+  }
   return r;
 }
 

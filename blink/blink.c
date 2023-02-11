@@ -261,7 +261,7 @@ int main(int argc, char *argv[]) {
   GetOpts(argc, argv);
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
   WriteErrorInit();
-  if (SetOverlays(FLAG_overlays)) {
+  if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");
     exit(1);
   }
