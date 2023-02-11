@@ -1591,9 +1591,10 @@ static i64 ConvertEnotconnToSigpipe(struct Machine *m, i64 rc) {
   } else if (Read64(m->system->hands[SIGPIPE_LINUX - 1].handler) ==
              SIG_DFL_LINUX) {
     TerminateSignal(m, SIGPIPE_LINUX);
+    errno = EPIPE;
   } else {
     m->interrupted = true;
-    Put64(m->ax, -EINTR_LINUX);
+    Put64(m->ax, -EPIPE_LINUX);
     DeliverSignal(m, SIGPIPE_LINUX, SI_KERNEL_LINUX);
   }
   UNLOCK(&m->system->sig_lock);
