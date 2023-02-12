@@ -40,7 +40,9 @@ jobs:
           ./emsdk/emsdk activate latest
 
       - name: Configure blink
-        run: emconfigure ./configure
+        run: |
+          . ./emsdk/emsdk_env.sh
+          emconfigure ./configure
 
       - name: Build blink
         run: |
