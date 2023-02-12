@@ -201,7 +201,7 @@ static inline intptr_t GetJitPc(const struct JitBlock *jb) {
  * Returns true if DisableJit() was called or AcquireJit() had failed.
  */
 static inline bool IsJitDisabled(const struct Jit *jit) {
-#ifdef HAVE_JIT
+#if HAVE_JIT
   return atomic_load_explicit(&jit->disabled, memory_order_relaxed);
 #else
   return true;

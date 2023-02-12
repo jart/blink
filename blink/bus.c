@@ -24,6 +24,7 @@
 #include "blink/bus.h"
 #include "blink/dll.h"
 #include "blink/endian.h"
+#include "blink/lock.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
@@ -37,8 +38,13 @@
 #define BUS_MEMORY MAP_PRIVATE
 #endif
 
+#ifndef DISABLE_THREADS
 #define ACQUIRE memory_order_acquire
 #define RELEASE memory_order_release
+#else
+#define ACQUIRE memory_order_relaxed
+#define RELEASE memory_order_relaxed
+#endif
 
 struct Bus *g_bus;
 
@@ -77,11 +83,15 @@ void LockBus(const u8 *locality) {
   _Static_assert(IS2POW(kBusCount), "virtual bus count must be two-power");
   _Static_assert(IS2POW(kBusRegion), "virtual bus region must be two-power");
   _Static_assert(kBusRegion >= 16, "virtual bus region must be at least 16");
+#ifndef DISABLE_THREADS
   SpinLock(g_bus->lock[(uintptr_t)locality / kBusRegion % kBusCount]);
+#endif
 }
 
 void UnlockBus(const u8 *locality) {
+#ifndef DISABLE_THREADS
   SpinUnlock(g_bus->lock[(uintptr_t)locality / kBusRegion % kBusCount]);
+#endif
 }
 
 i64 Load8(const u8 p[1]) {

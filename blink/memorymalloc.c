@@ -207,13 +207,15 @@ struct System *NewSystem(int mode) {
       return 0;
     }
   }
+#if HAVE_JIT
   InitJit(&s->jit);
+#endif
   InitFds(&s->fds);
-  pthread_mutex_init(&s->sig_lock, 0);
-  pthread_mutex_init(&s->mmap_lock, 0);
-  pthread_mutex_init(&s->exec_lock, 0);
-  pthread_cond_init(&s->machines_cond, 0);
-  pthread_mutex_init(&s->machines_lock, 0);
+  unassert(!pthread_mutex_init(&s->sig_lock, 0));
+  unassert(!pthread_mutex_init(&s->mmap_lock, 0));
+  unassert(!pthread_mutex_init(&s->exec_lock, 0));
+  unassert(!pthread_cond_init(&s->machines_cond, 0));
+  unassert(!pthread_mutex_init(&s->machines_lock, 0));
   s->blinksigs = 1ull << (SIGSYS_LINUX - 1) |   //
                  1ull << (SIGILL_LINUX - 1) |   //
                  1ull << (SIGFPE_LINUX - 1) |   //
@@ -300,7 +302,9 @@ void FreeSystem(struct System *s) {
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));
   DestroyFds(&s->fds);
+#if HAVE_JIT
   DestroyJit(&s->jit);
+#endif
   free(s);
 }
 

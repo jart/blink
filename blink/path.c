@@ -35,7 +35,13 @@
 #include "blink/rde.h"
 #include "blink/stats.h"
 
+#ifdef DISABLE_OVERLAYS
+#define OverlaysOpen openat
+#endif
+
 #define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
+
+#if HAVE_JIT
 
 void (*AddPath_StartOp_Hook)(P);
 
@@ -81,7 +87,7 @@ void FuseOp(struct Machine *m, i64 pc) {
   JIX_LOGF("%" PRIx64 ":%" PRIx64 "   </op>", GetPc(m), pc);
 }
 
-#ifdef HAVE_JIT
+#if HAVE_JIT
 #if defined(__x86_64__)
 static const u8 kEnter[] = {
     0x55,                    // push %rbp
@@ -138,14 +144,14 @@ static const u32 kLeave[] = {
 #endif /* HAVE_JIT */
 
 long GetPrologueSize(void) {
-#ifdef HAVE_JIT
+#if HAVE_JIT
   return sizeof(kEnter);
 #else
   return 0;
 #endif
 }
 
-void SetupCod(struct Machine *m) {
+void(SetupCod)(struct Machine *m) {
 #if LOG_COD
   LoadDebugSymbols(&m->system->elf);
   DisLoadElf(&g_dis, &m->system->elf);
@@ -520,7 +526,7 @@ static bool MustUpdateIp(P) {
 }
 
 static void InitPaths(struct System *s) {
-#ifdef HAVE_JIT
+#if HAVE_JIT
   struct JitBlock *jb;
   if (!s->ender) {
     unassert((jb = StartJit(&s->jit)));
@@ -539,7 +545,7 @@ static void InitPaths(struct System *s) {
 }
 
 bool CreatePath(P) {
-#ifdef HAVE_JIT
+#if HAVE_JIT
   bool res;
   i64 pc, jpc;
   unassert(!IsMakingPath(m));
@@ -743,3 +749,5 @@ bool AddPath(P) {
          uimm0, disp, rde, GetOp(Mopcode(rde)));
   return true;
 }
+
+#endif /* HAVE_JIT */

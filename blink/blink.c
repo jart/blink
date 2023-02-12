@@ -80,7 +80,9 @@ void TerminateSignal(struct Machine *m, int sig) {
   if ((syssig = XlatSignal(sig)) == -1) syssig = SIGTERM;
   KillOtherThreads(m->system);
   FreeMachine(m);
+#if HAVE_JIT
   ShutdownJit();
+#endif
   sa.sa_flags = 0;
   sa.sa_handler = SIG_DFL;
   sigemptyset(&sa.sa_mask);
@@ -115,7 +117,9 @@ static int Exec(char *prog, char **argv, char **envp) {
   struct Machine *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
   unassert((g_machine = NewMachine(NewSystem(XED_MODE_LONG), 0)));
+#if HAVE_JIT
   if (FLAG_nojit) DisableJit(&g_machine->system->jit);
+#endif
   g_machine->system->exec = Exec;
   if (!old) {
     // this is the first time a program is being loaded
@@ -170,8 +174,10 @@ _Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   FLAG_nolinear = !CanHaveLinearMemory();
+#ifndef DISABLE_OVERLAYS
   FLAG_overlays = getenv("BLINK_OVERLAYS");
   if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
+#endif
 #if LOG_ENABLED
   FLAG_logpath = getenv("BLINK_LOG_FILENAME");
 #endif
@@ -205,7 +211,11 @@ static void GetOpts(int argc, char *argv[]) {
         FLAG_logpath = optarg_;
         break;
       case 'C':
+#ifndef DISABLE_OVERLAYS
         FLAG_overlays = optarg_;
+#else
+        WriteErrorString("error: overlays support was disabled\n");
+#endif
         break;
       case 'h':
         PrintUsage(argc, argv, 0, 1);
@@ -258,13 +268,15 @@ int main(int argc, char *argv[]) {
   SetConsoleOutputCP(CP_UTF8);
 #endif
   g_blink_path = argc > 0 ? argv[0] : 0;
+  WriteErrorInit();
   GetOpts(argc, argv);
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
-  WriteErrorInit();
+#ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");
     exit(1);
   }
+#endif
   HandleSigs();
   InitBus();
   if (!Commandv(argv[optind_], g_pathbuf, sizeof(g_pathbuf))) {

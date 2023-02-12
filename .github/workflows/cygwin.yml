@@ -36,5 +36,6 @@ jobs:
       - name: make matrix
         run: |
           cd "$GITHUB_WORKSPACE"
+          ./configure
           make -j$(nproc) check o//test/blink
         shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'

@@ -34,30 +34,34 @@
 #include "blink/swap.h"
 
 void LoadAluArgs(P) {
-  if (IsModrmRegister(rde) && RexrReg(rde) == RexbRm(rde)) {
-    Jitter(A, "A"        // res0 = GetReg(RexrReg)
-              "r0a2="    // arg2 = res0
-              "r0a1=");  // arg1 = res0
-  } else {
-    Jitter(A, "B"        // res0 = GetRegOrMem(RexbRm)
-              "r0s1="    // sav1 = res0
-              "A"        // res0 = GetReg(RexrReg)
-              "r0a2="    // arg2 = res0
-              "s1a1=");  // arg1 = sav1
+  if (IsMakingPath(m)) {
+    if (IsModrmRegister(rde) && RexrReg(rde) == RexbRm(rde)) {
+      Jitter(A, "A"        // res0 = GetReg(RexrReg)
+                "r0a2="    // arg2 = res0
+                "r0a1=");  // arg1 = res0
+    } else {
+      Jitter(A, "B"        // res0 = GetRegOrMem(RexbRm)
+                "r0s1="    // sav1 = res0
+                "A"        // res0 = GetReg(RexrReg)
+                "r0a2="    // arg2 = res0
+                "s1a1=");  // arg1 = sav1
+    }
   }
 }
 
 void LoadAluFlipArgs(P) {
-  if (IsModrmRegister(rde) && RexrReg(rde) == RexbRm(rde)) {
-    Jitter(A, "A"        // res0 = GetReg(RexrReg)
-              "r0a2="    // arg2 = res0
-              "r0a1=");  // arg1 = res0
-  } else {
-    Jitter(A, "B"        // res0 = GetRegOrMem(RexbRm)
-              "r0s1="    // sav1 = res0
-              "A"        // res0 = GetReg(RexrReg)
-              "s1a2="    // arg2 = sav1
-              "r0a1=");  // arg1 = res0
+  if (IsMakingPath(m)) {
+    if (IsModrmRegister(rde) && RexrReg(rde) == RexbRm(rde)) {
+      Jitter(A, "A"        // res0 = GetReg(RexrReg)
+                "r0a2="    // arg2 = res0
+                "r0a1=");  // arg1 = res0
+    } else {
+      Jitter(A, "B"        // res0 = GetRegOrMem(RexbRm)
+                "r0s1="    // sav1 = res0
+                "A"        // res0 = GetReg(RexrReg)
+                "s1a2="    // arg2 = sav1
+                "r0a1=");  // arg1 = res0
+    }
   }
 }
 

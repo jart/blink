@@ -37,6 +37,10 @@
 #include "blink/syscall.h"
 #include "blink/xlat.h"
 
+#ifdef DISABLE_OVERLAYS
+#define OverlaysOpen openat
+#endif
+
 static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
                       i32 oflags, i32 mode) {
   long i;

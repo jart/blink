@@ -24,28 +24,32 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/debug.h"
+#include "blink/dis.h"
+#include "blink/endian.h"
+#include "blink/flags.h"
+#include "blink/loader.h"
 #include "blink/lock.h"
+#include "blink/log.h"
 #include "blink/macros.h"
+#include "blink/map.h"
 #include "blink/overlays.h"
+#include "blink/stats.h"
+#include "blink/tsan.h"
+#include "blink/util.h"
 
 #ifdef UNWIND
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 #endif
 
-#include "blink/assert.h"
-#include "blink/dis.h"
-#include "blink/endian.h"
-#include "blink/flags.h"
-#include "blink/loader.h"
-#include "blink/log.h"
-#include "blink/map.h"
-#include "blink/stats.h"
-#include "blink/tsan.h"
-#include "blink/util.h"
-
 #define MAX_BACKTRACE_LINES 64
+
+#ifdef DISABLE_OVERLAYS
+#define OverlaysOpen openat
+#endif
 
 #define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
 

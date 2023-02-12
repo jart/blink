@@ -94,6 +94,24 @@
 #include <sys/vfs.h>
 #endif
 
+#ifdef DISABLE_OVERLAYS
+#define OverlaysChown    fchownat
+#define OverlaysAccess   faccessat
+#define OverlaysStat     fstatat
+#define OverlaysChdir    chdir
+#define OverlaysGetcwd   getcwd
+#define OverlaysMkdir    mkdirat
+#define OverlaysChmod    fchmodat
+#define OverlaysReadlink readlinkat
+#define OverlaysOpen     openat
+#define OverlaysSymlink  symlinkat
+#define OverlaysMkfifo   mkfifoat
+#define OverlaysUnlink   unlinkat
+#define OverlaysRename   renameat
+#define OverlaysLink     linkat
+#define OverlaysUtime    utimensat
+#endif
+
 #ifdef SO_LINGER_SEC
 #define SO_LINGER_ SO_LINGER_SEC
 #else
@@ -367,12 +385,15 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
     THR_LOGF("calling exit(%d)", rc);
     KillOtherThreads(m->system);
     FreeMachine(m);
+#if HAVE_JIT
     ShutdownJit();
+#endif
     exit(rc);
   }
 }
 
 _Noreturn void SysExit(struct Machine *m, int rc) {
+#ifndef DISABLE_THREADS
   THR_LOGF("pid=%d tid=%d SysExit", m->system->pid, m->tid);
   if (IsOrphan(m)) {
     SysExitGroup(m, rc);
@@ -381,6 +402,9 @@ _Noreturn void SysExit(struct Machine *m, int rc) {
     FreeMachine(m);
     pthread_exit(0);
   }
+#else
+  SysExitGroup(m, rc);
+#endif
 }
 
 static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
@@ -472,6 +496,7 @@ static void *OnSpawn(void *arg) {
   }
 }
 
+#ifndef DISABLE_THREADS
 static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
                     u64 tls, u64 func) {
   int tid;
@@ -551,6 +576,7 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   unassert(!pthread_sigmask(SIG_SETMASK, &oldss, 0));
   return tid;
 }
+#endif
 
 static bool IsForkOrVfork(u64 flags) {
   u64 supported = CLONE_CHILD_SETTID_LINUX | CLONE_CHILD_CLEARTID_LINUX;
@@ -563,9 +589,13 @@ static int SysClone(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
                     u64 tls, u64 func) {
   if (IsForkOrVfork(flags)) {
     return Fork(m, flags, stack, ctid);
-  } else {
-    return SysSpawn(m, flags, stack, ptid, ctid, tls, func);
   }
+#ifndef DISABLE_THREADS
+  return SysSpawn(m, flags, stack, ptid, ctid, tls, func);
+#else
+  LOGF("threading support disabled");
+  return enosys();
+#endif
 }
 
 static struct Futex *NewFutex(i64 addr) {
@@ -963,10 +993,12 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   }
   LOCK(&m->system->mmap_lock);
   rc = ProtectVirtual(m->system, addr, size, prot);
+#if HAVE_JIT
   if (rc != -1 && (prot & PROT_EXEC)) {
     LOGF("resetting jit hooks");
     ClearJitHooks(&m->system->jit);
   }
+#endif
   UNLOCK(&m->system->mmap_lock);
   InvalidateSystem(m->system, false, true);
   return rc;
@@ -1764,9 +1796,16 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
     msg.msg_name = &ss;
     msg.msg_namelen = len;
   }
+#ifndef DISABLE_ANCILLARY
   if (SendAncillary(m, &msg, gm) == -1) {
     return -1;
   }
+#else
+  if (Read64(gm->controllen)) {
+    LOGF("ancillary support disabled");
+    return einval();
+  }
+#endif
   iovaddr = Read64(gm->iov);
   iovlen = Read64(gm->iovlen);
   if (!iovlen || iovlen > IOV_MAX_LINUX) {
@@ -1803,8 +1842,13 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
     return -1;
   }
   if (Read64(gm.controllen)) {
+#ifndef DISABLE_ANCILLARY
     msg.msg_control = AddToFreeList(m, calloc(1, kMaxAncillary));
     msg.msg_controllen = kMaxAncillary;
+#else
+    LOGF("ancillary support disabled");
+    return einval();
+#endif
   }
   InitIovs(&iv);
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen, PROT_WRITE)) != -1) {
@@ -1819,9 +1863,11 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
     if (rc != -1) {
       Write32(gm.flags, UnXlatMsgFlags(msg.msg_flags));
       unassert(CopyToUserWrite(m, msgaddr, &gm, sizeof(gm)) != -1);
+#ifndef DISABLE_ANCILLARY
       if (ReceiveAncillary(m, &gm, &msg, flags) == -1) {
         return -1;
       }
+#endif
       if (Read64(gm.name)) {
         StoreSockaddr(m, Read64(gm.name),
                       msgaddr + offsetof(struct msghdr_linux, namelen),
@@ -2574,7 +2620,7 @@ static int SysFsync(struct Machine *m, i32 fildes) {
   if (CheckSyncable(fildes) == -1) return -1;
 #ifdef F_FULLSYNC
   int rc;
-  // macOS fsync() provides weaker guarantees than Linux fsync()
+  // MacOS fsync() provides weaker guarantees than Linux fsync()
   // https://mjtsai.com/blog/2022/02/17/apple-ssd-benchmarks-and-f_fullsync/
   if ((rc = fcntl(fildes, F_FULLFSYNC, 0))) {
     // If the FULLFSYNC failed, fall back to attempting an fsync(). It
@@ -2585,7 +2631,7 @@ static int SysFsync(struct Machine *m, i32 fildes) {
     // better to detect fullfsync support once and avoid the fcntl call
     // every time sync is called. ──Quoth SQLite (os_unix.c) It's also
     // possible for F_FULLFSYNC to fail on Cosmopolitan Libc when our
-    // binary isn't running on macOS.
+    // binary isn't running on MacOS.
     rc = fsync(fildes);
   }
   return rc;
@@ -4390,6 +4436,7 @@ static bool IsValidThreadId(struct System *s, int tid) {
 }
 
 static int SysTkill(struct Machine *m, int tid, int sig) {
+#ifndef DISABLE_THREADS
   int err;
   bool found;
   struct Dll *e;
@@ -4438,19 +4485,29 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
     }
   }
   UNLOCK(&m->system->machines_lock);
-  if (!sig && !found) err = ESRCH;
+  if (!found) {
+    return SysKill(m, tid, sig);
+  }
   if (!err) {
     return 0;
   } else {
     errno = err;
     return -1;
   }
+#else
+  return SysKill(m, tid, sig);
+#endif /* DISABLE_THREADS */
 }
 
 static int SysTgkill(struct Machine *m, int pid, int tid, int sig) {
   if (pid < 1 || tid < 1) return einval();
   if (pid != m->system->pid) return eperm();
+#ifndef DISABLE_THREADS
   return SysTkill(m, tid, sig);
+#else
+  if (tid != pid) return esrch();
+  return SysKill(m, tid, sig);
+#endif
 }
 
 static int SysPause(struct Machine *m) {
@@ -4766,9 +4823,11 @@ void OpSyscall(P) {
     SYSCALL3(0x026, SysSetitimer);
     SYSCALL0(0x027, SysGetpid);
     SYSCALL0(0x0BA, SysGettid);
+#ifndef DISABLE_SOCKETS
     SYSCALL3(0x029, SysSocket);
     SYSCALL3(0x02A, SysConnect);
     SYSCALL3(0x02B, SysAccept);
+    SYSCALL4(0x120, SysAccept4);
     SYSCALL6(0x02C, SysSendto);
     SYSCALL6(0x02D, SysRecvfrom);
     SYSCALL3(0x02E, SysSendmsg);
@@ -4778,9 +4837,10 @@ void OpSyscall(P) {
     SYSCALL2(0x032, SysListen);
     SYSCALL3(0x033, SysGetsockname);
     SYSCALL3(0x034, SysGetpeername);
-    SYSCALL4(0x035, SysSocketpair);
     SYSCALL5(0x036, SysSetsockopt);
     SYSCALL5(0x037, SysGetsockopt);
+#endif
+    SYSCALL4(0x035, SysSocketpair);
     SYSCALL6(0x038, SysClone);
     SYSCALL0(0x039, SysFork);
     SYSCALL0(0x03A, SysVfork);
@@ -4855,10 +4915,16 @@ void OpSyscall(P) {
     SYSCALL5(0x09D, SysPrctl);
     SYSCALL2(0x09E, SysArchPrctl);
     SYSCALL2(0x0A0, SysSetrlimit);
+#ifndef DISABLE_OVERLAYS
     SYSCALL1(0x0A1, SysChroot);
+#endif
     SYSCALL0(0x0A2, SysSync);
-    SYSCALL2(0x0C8, SysTkill);
+#ifndef DISABLE_THREADS
     SYSCALL6(0x0CA, SysFutex);
+    SYSCALL2(0x111, SysSetRobustList);
+    SYSCALL3(0x112, SysGetRobustList);
+#endif
+    SYSCALL2(0x0C8, SysTkill);
     SYSCALL3(0x0CB, SysSchedSetaffinity);
     SYSCALL3(0x0CC, SysSchedGetaffinity);
     SYSCALL3(0x0D9, SysGetdents);
@@ -4884,9 +4950,6 @@ void OpSyscall(P) {
     SYSCALL3(0x10D, SysFaccessat);
     SYSCALL5(0x10F, SysPpoll);
     SYSCALL4(0x1b7, SysFaccessat2);
-    SYSCALL4(0x120, SysAccept4);
-    SYSCALL2(0x111, SysSetRobustList);
-    SYSCALL3(0x112, SysGetRobustList);
     SYSCALL4(0x127, SysPreadv);
     SYSCALL4(0x128, SysPwritev);
     SYSCALL4(0x12E, SysPrlimit);

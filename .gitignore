@@ -8,8 +8,10 @@ blink.log
 /o
 /gf*
 /core*
-/HTAGS
 /TAGS
+/HTAGS
+/config.h
+/config.log
 /*.dump
 /gmon.out
 /perf.data

@@ -110,7 +110,7 @@ const u8 kJitRes[2] = {kJitRes0, kJitRes1};
 const u8 kJitArg[4] = {kJitArg0, kJitArg1, kJitArg2, kJitArg3};
 const u8 kJitSav[5] = {kJitSav0, kJitSav1, kJitSav2, kJitSav3, kJitSav4};
 
-#ifdef HAVE_JIT
+#if HAVE_JIT
 
 #define ACTION_MOVE    0x010000
 #define ACTION(a)      ((0xff0000 & a))
@@ -1125,30 +1125,4 @@ bool AppendJitTrap(struct JitBlock *jb) {
   return AppendJit(jb, buf, sizeof(buf));
 }
 
-#else
-// clang-format off
-#define STUB(RETURN, NAME, PARAMS, RESULT) RETURN NAME PARAMS { return RESULT; }
-STUB(int, InitJit, (struct Jit *jit), 0)
-STUB(int, DestroyJit, (struct Jit *jit), 0)
-STUB(int, ShutdownJit, (void), 0)
-STUB(int, DisableJit, (struct Jit *jit), 0)
-STUB(int, FixJitProtection, (struct Jit *jit), 0)
-STUB(bool, AppendJit, (struct JitBlock *jb, const void *data, long size), 0)
-STUB(bool, AppendJitMovReg, (struct JitBlock *jb, int dst, int src), 0)
-STUB(int, AbandonJit, (struct Jit *jit, struct JitBlock *jb), 0)
-STUB(int, FlushJit, (struct Jit *jit), 0)
-STUB(struct JitBlock *, StartJit, (struct Jit *jit), 0)
-STUB(bool, AlignJit, (struct JitBlock *jb, int align, int misalign), 0)
-STUB(bool, FinishJit, (struct Jit *jit, struct JitBlock *jb, u64 virt), 0)
-STUB(bool, RecordJitJump, (struct JitBlock *jb, u64 virt, int addend), 0)
-STUB(bool, AppendJitJump, (struct JitBlock *jb, void *code), 0)
-STUB(bool, AppendJitCall, (struct JitBlock *jb, void *func), 0)
-STUB(bool, AppendJitSetReg, (struct JitBlock *jb, int reg, u64 value), 0)
-STUB(bool, AppendJitRet, (struct JitBlock *jb), 0)
-STUB(bool, AppendJitNop, (struct JitBlock *jb), 0)
-STUB(bool, AppendJitTrap, (struct JitBlock *jb), 0)
-STUB(bool, CanJitForImmediateEffect, (void), 0)
-STUB(bool, SetJitHook, (struct Jit *jit, u64 virt, intptr_t func), 0)
-STUB(intptr_t, GetJitHook, (struct Jit *jit, u64 virt, intptr_t dflt), dflt)
-STUB(int, ClearJitHooks, (struct Jit *jit), 0)
-#endif
+#endif /* HAVE_JIT */

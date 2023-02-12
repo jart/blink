@@ -94,7 +94,6 @@ void OpCpuid(P) {
       cx |= 0 << 25;   // aes
       cx |= 1 << 13;   // cmpxchg16b
       cx |= 1u << 31;  // hypervisor
-      dx |= 1 << 0;    // fpu
       dx |= 1 << 4;    // tsc
       dx |= 1 << 6;    // pae
       dx |= 1 << 8;    // cmpxchg8b
@@ -106,6 +105,9 @@ void OpCpuid(P) {
       dx |= 1 << 26;   // sse2
       cx |= 0 << 19;   // sse4.1
       cx |= 0 << 20;   // sse4.2
+#ifndef DISABLE_X87
+      dx |= 1 << 0;  // fpu
+#endif
       break;
     case 2:  // Cache and TLB information
       ax = 0x76035a01;

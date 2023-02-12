@@ -583,6 +583,7 @@ static void OpMovslGdqpEd(P) {
 }
 
 void Connect(P, u64 pc, bool avoid_obvious_cycles) {
+#if HAVE_JIT
   void *jump;
   nexgen32e_f f;
   if (!(avoid_obvious_cycles && pc == m->path.start)) {
@@ -599,6 +600,7 @@ void Connect(P, u64 pc, bool avoid_obvious_cycles) {
     jump = (void *)m->system->ender;
   }
   AppendJitJump(m->path.jb, jump);
+#endif
 }
 
 static void AluRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
@@ -900,27 +902,35 @@ static aluop_f Bsubi(P, u64 y) {
 }
 
 static void OpBsubiCl(P) {
-  Jitter(A,
-         "B"      // res0 = GetRegOrMem(RexbRm)
-         "r0s1="  // sav1 = res0
-         "%cl"    //
-         "r0a2="  // arg2 = res0
-         "s1a1="  // arg1 = sav1
-         "q"      // arg0 = sav0 (machine)
-         "c"      // call function
-         "r0D",
-         Bsubi(A, m->cl));
+  aluop_f op;
+  op = Bsubi(A, m->cl);
+  if (IsMakingPath(m)) {
+    Jitter(A,
+           "B"      // res0 = GetRegOrMem(RexbRm)
+           "r0s1="  // sav1 = res0
+           "%cl"    //
+           "r0a2="  // arg2 = res0
+           "s1a1="  // arg1 = sav1
+           "q"      // arg0 = sav0 (machine)
+           "c"      // call function
+           "r0D",
+           op);
+  }
 }
 
 static void BsubiConstant(P, u64 y) {
-  Jitter(A,
-         "B"      // res0 = GetRegOrMem(RexbRm)
-         "r0a1="  // arg1 = res0
-         "q"      // arg0 = sav0 (machine)
-         "a2i"    //
-         "c"      // call function
-         "r0D",   //
-         y, Bsubi(A, y));
+  aluop_f op;
+  op = Bsubi(A, y);
+  if (IsMakingPath(m)) {
+    Jitter(A,
+           "B"      // res0 = GetRegOrMem(RexbRm)
+           "r0a1="  // arg1 = res0
+           "q"      // arg0 = sav0 (machine)
+           "a2i"    //
+           "c"      // call function
+           "r0D",   //
+           y, op);
+  }
 }
 
 static void OpBsubi1(P) {
@@ -1322,14 +1332,18 @@ static void OpFxsave(P) {
   u8 buf[32];
   memset(buf, 0, 32);
   Write16(buf + 0, m->fpu.cw);
+#ifndef DISABLE_X87
   Write16(buf + 2, m->fpu.sw);
   Write8(buf + 4, m->fpu.tw);
   Write16(buf + 6, m->fpu.op);
   Write32(buf + 8, m->fpu.ip);
+#endif
   Write32(buf + 24, m->mxcsr);
   v = ComputeAddress(A);
   CopyToUser(m, v + 0, buf, 32);
+#ifndef DISABLE_X87
   CopyToUser(m, v + 32, m->fpu.st, 128);
+#endif
   CopyToUser(m, v + 160, m->xmm, 256);
   SetWriteAddr(m, v, 416);
 }
@@ -1340,13 +1354,17 @@ static void OpFxrstor(P) {
   v = ComputeAddress(A);
   SetReadAddr(m, v, 416);
   CopyFromUser(m, buf, v + 0, 32);
+#ifndef DISABLE_X87
   CopyFromUser(m, m->fpu.st, v + 32, 128);
+#endif
   CopyFromUser(m, m->xmm, v + 160, 256);
   m->fpu.cw = Load16(buf + 0);
+#ifndef DISABLE_X87
   m->fpu.sw = Load16(buf + 2);
   m->fpu.tw = Load8(buf + 4);
   m->fpu.op = Load16(buf + 6);
   m->fpu.ip = Load32(buf + 8);
+#endif
   m->mxcsr = Load32(buf + 24);
 }
 
@@ -1556,7 +1574,9 @@ static relegated void OpRdmsr(P) {
 }
 
 static void OpEmms(P) {
+#ifndef DISABLE_X87
   m->fpu.tw = -1;
+#endif
 }
 
 int ClassifyOp(u64 rde) {
@@ -1630,6 +1650,19 @@ int ClassifyOp(u64 rde) {
       return kOpPrecious;
   }
 }
+
+#ifdef DISABLE_BCD
+#define OpDas OpUd
+#define OpAaa OpUd
+#define OpAas OpUd
+#define OpAam OpUd
+#define OpAad OpUd
+#define OpDaa OpUd
+#endif
+
+#ifdef DISABLE_X87
+#define OpFwait OpUd
+#endif
 
 static const nexgen32e_f kNexgen32e[] = {
     /*000*/ OpAlub,                  //
@@ -2202,7 +2235,7 @@ void JitlessDispatch(P) {
 }
 
 void GeneralDispatch(P) {
-#ifdef HAVE_JIT
+#if HAVE_JIT
   int opclass;
   intptr_t jitpc = 0;
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
@@ -2287,7 +2320,7 @@ void ExecuteInstruction(struct Machine *m) {
 #if LOG_CPU
   LogCpu(m);
 #endif
-#ifdef HAVE_JIT
+#if HAVE_JIT
   nexgen32e_f func;
   if (CanJit(m)) {
     func = (nexgen32e_f)GetJitHook(&m->system->jit, m->ip,

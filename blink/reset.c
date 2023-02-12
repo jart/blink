@@ -26,9 +26,14 @@
 #define RINT 0
 
 static void ResetFpu(struct Machine *m) {
+#ifndef DISABLE_X87
   long i;
+  for (i = 0; i < 8; ++i) {
+    m->fpu.st[i] = -NAN;
+  }
   m->fpu.sw = 0;
   m->fpu.tw = -1;
+#endif
   // We diverge from System V ABI here since we don't have long double
   // support yet. We only support double precision when using x87 fpu.
   //
@@ -46,9 +51,6 @@ static void ResetFpu(struct Machine *m) {
   //	                           ┌┤││  ││││││
   //	                          d││││rr││││││
   m->fpu.cw = 0b0000000000000000000001001111111;
-  for (i = 0; i < 8; ++i) {
-    m->fpu.st[i] = -NAN;
-  }
 }
 
 static void ResetSse(struct Machine *m) {

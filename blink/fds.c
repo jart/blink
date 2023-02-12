@@ -34,7 +34,7 @@
 
 void InitFds(struct Fds *fds) {
   fds->list = 0;
-  pthread_mutex_init(&fds->lock, 0);
+  unassert(!pthread_mutex_init(&fds->lock, 0));
 }
 
 struct Fd *AddFd(struct Fds *fds, int fildes, int oflags) {
@@ -45,7 +45,7 @@ struct Fd *AddFd(struct Fds *fds, int fildes, int oflags) {
       fd->cb = &kFdCbHost;
       fd->fildes = fildes;
       fd->oflags = oflags;
-      pthread_mutex_init(&fd->lock, 0);
+      unassert(!pthread_mutex_init(&fd->lock, 0));
       dll_make_first(&fds->list, &fd->elem);
     }
     return fd;

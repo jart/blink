@@ -82,12 +82,14 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   Write64(sf.uc.rip, m->ip);
   Write64(sf.uc.eflags, m->flags);
   Write16(sf.fp.cwd, m->fpu.cw);
+#ifndef DISABLE_X87
   Write16(sf.fp.swd, m->fpu.sw);
   Write16(sf.fp.ftw, m->fpu.tw);
   Write16(sf.fp.fop, m->fpu.op);
   Write64(sf.fp.rip, m->fpu.ip);
   Write64(sf.fp.rdp, m->fpu.dp);
   memcpy(sf.fp.st, m->fpu.st, 128);
+#endif
   memcpy(sf.fp.xmm, m->xmm, 256);
   // set the thread signal mask to the one specified by the signal
   // handler. by default, the signal being delivered will be added
@@ -172,12 +174,14 @@ void SigRestore(struct Machine *m) {
   memcpy(m->cx, sf.uc.rcx, 8);
   memcpy(m->sp, sf.uc.rsp, 8);
   m->fpu.cw = Read16(sf.fp.cwd);
+#ifndef DISABLE_X87
   m->fpu.sw = Read16(sf.fp.swd);
   m->fpu.tw = Read16(sf.fp.ftw);
   m->fpu.op = Read16(sf.fp.fop);
   m->fpu.ip = Read64(sf.fp.rip);
   m->fpu.dp = Read64(sf.fp.rdp);
   memcpy(m->fpu.st, sf.fp.st, 128);
+#endif
   memcpy(m->xmm, sf.fp.xmm, 256);
   m->restored = true;
 }

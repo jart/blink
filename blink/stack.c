@@ -183,7 +183,7 @@ static void OpCall(P, u64 func) {
 
 void OpCallJvds(P) {
   OpCall(A, m->ip + disp);
-  if (HasLinearMapping(m)) {
+  if (HasLinearMapping(m) && IsMakingPath(m)) {
     Terminate(A, FastCall);
   }
 }
@@ -222,7 +222,7 @@ void OpLeave(P) {
     case XED_MODE_LONG:
       Put64(m->sp, Get64(m->bp));
       Put64(m->bp, Pop(A, 0));
-      if (HasLinearMapping(m)) {
+      if (HasLinearMapping(m) && IsMakingPath(m)) {
         Jitter(A, "m", FastLeave);
       }
       break;

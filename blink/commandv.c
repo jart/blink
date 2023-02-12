@@ -25,8 +25,13 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "blink/builtin.h"
 #include "blink/overlays.h"
 #include "blink/util.h"
+
+#ifdef DISABLE_OVERLAYS
+#define OverlaysAccess faccessat
+#endif
 
 struct PathSearcher {
   char *path;

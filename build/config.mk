@@ -63,9 +63,9 @@ LDFLAGS_STATIC =			\
 	-fno-exceptions			\
 	-fno-unwind-tables		\
 	-fno-asynchronous-unwind-tables	\
-	-Wl,-z,norelro			\
 	-Wl,-z,max-page-size=4096	\
 	-Wl,-z,common-page-size=4096	\
+	-Wl,-z,norelro			\
 	-Wl,-Ttext-segment=$(IMAGE_BASE_VIRTUAL)
 
 TAGSFLAGS =				\
@@ -102,7 +102,7 @@ LDFLAGS += -no-pie
 endif
 
 ifeq ($(MODE), dbg)
-CFLAGS += -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
+CFLAGS = -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
 CPPFLAGS += -DDEBUG
 ifeq ($(HOST_SYSTEM), Linux)
 CFLAGS += -fno-pie

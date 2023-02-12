@@ -10,6 +10,10 @@ ARCHITECTURES = x86_64 x86_64-gcc49 i486 aarch64 riscv64 arm mips s390x mipsel m
 .FEATURES: output-sync
 .PHONY: o all clean check check2 test tags
 
+ifeq ($(wildcard config.h),)
+  $(error ./configure needs to be run, use ./configure --help for help)
+endif
+
 ifneq ($(m),)
 ifeq ($(MODE),)
 MODE := $(m)
@@ -63,8 +67,9 @@ include test/test.mk
 include test/asm/asm.mk
 include test/func/func.mk
 include test/flat/flat.mk
-include test/metal/metal.mk
 include test/blink/test.mk
+include test/metal/metal.mk
+include tool/config/config.mk
 include third_party/gcc/gcc.mk
 include third_party/ltp/ltp.mk
 include third_party/musl/musl.mk
@@ -163,6 +168,17 @@ HTAGS:	o/$(MODE)/hdrs.txt $(HDRS)
 
 clean:
 	rm -f $(OBJS) o/$(MODE)/blink/blink o/$(MODE)/blink/blinkenlights o/$(MODE)/blink/blink.a
+
+distclean:
+	rm -rf o
+	rm -f config.h TAGS HTAGS *.dump gmon.out perf.data perf.data.old
+	rm -f $(find third_party -name \*.elf)
+	rm -f $(find third_party -name \*.com)
+	rm -f $(find third_party -name \*.dbg)
+	rm -f $(find third_party -name \*.so.1)
+	rm -f $(find third_party -name \*.so)
+	rm -f $(find third_party -name \*.gz)
+	rm -f $(find third_party -name \*.xz)
 
 $(SRCS):
 $(HDRS):

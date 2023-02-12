@@ -36,7 +36,29 @@
 #define FPUREG 0
 #define MEMORY 1
 
-#define DISP(x, y, z) ((7 & (x)) << 4 | (y) << 3 | (z))
+#define DISP(x, y, z) ((7 & (x)) << 4 | (y) << 3 | (u32)(z))
+
+static i16 FpuGetMemoryShort(struct Machine *m) {
+  u8 b[2];
+  return Read16(Load(m, m->fpu.dp, 2, b));
+}
+
+static void FpuSetMemoryShort(struct Machine *m, i16 i) {
+  void *p[2];
+  u8 b[2];
+  Write16(BeginStore(m, m->fpu.dp, 2, p, b), i);
+  EndStore(m, m->fpu.dp, 2, p, b);
+}
+
+static void OpFstcw(struct Machine *m) {
+  FpuSetMemoryShort(m, m->fpu.cw);
+}
+
+static void OpFldcw(struct Machine *m) {
+  m->fpu.cw = FpuGetMemoryShort(m);
+}
+
+#ifndef DISABLE_X87
 
 static void OnFpuStackOverflow(struct Machine *m) {
   m->fpu.sw |= kFpuSwIe | kFpuSwC1 | kFpuSwSf;
@@ -90,11 +112,6 @@ static void FpuSetStRmPop(struct Machine *m, u64 rde, double x) {
   FpuSetStPop(m, ModrmRm(rde), x);
 }
 
-static i16 FpuGetMemoryShort(struct Machine *m) {
-  u8 b[2];
-  return Read16(Load(m, m->fpu.dp, 2, b));
-}
-
 static i32 FpuGetMemoryInt(struct Machine *m) {
   u8 b[4];
   return Read32(Load(m, m->fpu.dp, 4, b));
@@ -115,13 +132,6 @@ static double FpuGetMemoryDouble(struct Machine *m) {
   union DoublePun u;
   u.i = FpuGetMemoryLong(m);
   return u.f;
-}
-
-static void FpuSetMemoryShort(struct Machine *m, i16 i) {
-  void *p[2];
-  u8 b[2];
-  Write16(BeginStore(m, m->fpu.dp, 2, p, b), i);
-  EndStore(m, m->fpu.dp, 2, p, b);
 }
 
 static void FpuSetMemoryInt(struct Machine *m, i32 i) {
@@ -737,10 +747,6 @@ static void OpFxch(struct Machine *m, u64 rde) {
   FpuSetSt0(m, t);
 }
 
-static void OpFldcw(struct Machine *m) {
-  m->fpu.cw = FpuGetMemoryShort(m);
-}
-
 static void OpFldt(struct Machine *m) {
   FpuPush(m, FpuGetMemoryLdbl(m));
 }
@@ -791,10 +797,6 @@ static void OpFldConstant(struct Machine *m, u64 rde) {
       OpUdImpl(m);
   }
   FpuPush(m, x);
-}
-
-static void OpFstcw(struct Machine *m) {
-  FpuSetMemoryShort(m, m->fpu.cw);
 }
 
 static void OpFilds(struct Machine *m) {
@@ -1192,3 +1194,21 @@ void OpFpu(P) {
       OpUdImpl(m);
   }
 }
+
+#else /* DISABLE_X87 */
+
+void(OpFpu)(P) {
+  unsigned op;
+  bool ismemory;
+  op = Opcode(rde) & 7;
+  ismemory = ModrmMod(rde) != 3;
+  m->fpu.dp = ismemory ? ComputeAddress(A) : 0;
+  switch (DISP(op, ismemory, ModrmReg(rde))) {
+    CASE(DISP(0xD9, MEMORY, 5), OpFldcw(m));
+    CASE(DISP(0xD9, MEMORY, 7), OpFstcw(m));
+    default:
+      OpUdImpl(m);
+  }
+}
+
+#endif /* DISABLE_X87 */

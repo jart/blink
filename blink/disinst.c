@@ -23,6 +23,7 @@
 #include "blink/assert.h"
 #include "blink/dis.h"
 #include "blink/high.h"
+#include "blink/modrm.h"
 #include "blink/rde.h"
 #include "blink/util.h"
 

@@ -24,13 +24,17 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/debug.h"
 #include "blink/errno.h"
 #include "blink/likely.h"
 #include "blink/log.h"
 #include "blink/overlays.h"
+#include "blink/syscall.h"
 #include "blink/thompike.h"
 #include "blink/util.h"
+
+#ifndef DISABLE_OVERLAYS
 
 #define UNREACHABLE "(unreachable)"
 
@@ -321,7 +325,7 @@ int OverlaysStat(int dirfd, const char *path, struct stat *st, int flags) {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct Access {
-  int mode;
+  mode_t mode;
   int flags;
 };
 
@@ -330,7 +334,7 @@ static ssize_t Access(int dirfd, const char *path, void *vargs) {
   return faccessat(dirfd, path, args->mode, args->flags);
 }
 
-int OverlaysAccess(int dirfd, const char *path, int mode, int flags) {
+int OverlaysAccess(int dirfd, const char *path, mode_t mode, int flags) {
   struct Access args = {mode, flags};
   return OverlaysGeneric(dirfd, path, &args, Access);
 }
@@ -354,7 +358,7 @@ int OverlaysUnlink(int dirfd, const char *path, int flags) {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct Mkdir {
-  int mode;
+  mode_t mode;
 };
 
 static ssize_t Mkdir(int dirfd, const char *path, void *vargs) {
@@ -362,7 +366,7 @@ static ssize_t Mkdir(int dirfd, const char *path, void *vargs) {
   return mkdirat(dirfd, path, args->mode);
 }
 
-int OverlaysMkdir(int dirfd, const char *path, int mode) {
+int OverlaysMkdir(int dirfd, const char *path, mode_t mode) {
   struct Mkdir args = {mode};
   return OverlaysGeneric(dirfd, path, &args, Mkdir);
 }
@@ -370,24 +374,15 @@ int OverlaysMkdir(int dirfd, const char *path, int mode) {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct Mkfifo {
-  int mode;
+  mode_t mode;
 };
 
 static ssize_t Mkfifo(int dirfd, const char *path, void *vargs) {
   struct Mkfifo *args = (struct Mkfifo *)vargs;
-#ifdef __APPLE__  // Needs MacOS 13+ c. 2022
-  if (dirfd == AT_FDCWD) {
-    return mkfifo(path, args->mode);
-  } else {
-    LOGF("mkfifoat() needs MacOS 13+ (TODO: how do we detect it?)");
-    return enosys();
-  }
-#else
   return mkfifoat(dirfd, path, args->mode);
-#endif
 }
 
-int OverlaysMkfifo(int dirfd, const char *path, int mode) {
+int OverlaysMkfifo(int dirfd, const char *path, mode_t mode) {
   struct Mkfifo args = {mode};
   return OverlaysGeneric(dirfd, path, &args, Mkfifo);
 }
@@ -395,7 +390,7 @@ int OverlaysMkfifo(int dirfd, const char *path, int mode) {
 ////////////////////////////////////////////////////////////////////////////////
 
 struct Chmod {
-  int mode;
+  mode_t mode;
   int flags;
 };
 
@@ -404,7 +399,7 @@ static ssize_t Chmod(int dirfd, const char *path, void *vargs) {
   return fchmodat(dirfd, path, args->mode, args->flags);
 }
 
-int OverlaysChmod(int dirfd, const char *path, int mode, int flags) {
+int OverlaysChmod(int dirfd, const char *path, mode_t mode, int flags) {
   struct Chmod args = {mode, flags};
   return OverlaysGeneric(dirfd, path, &args, Chmod);
 }
@@ -587,3 +582,5 @@ int OverlaysLink(int srcdirfd, const char *srcpath, int dstdirfd,
   struct Link args = {flags};
   return OverlaysGeneric2(srcdirfd, srcpath, dstdirfd, dstpath, &args, Link);
 }
+
+#endif /* DISABLE_OVERLAYS */

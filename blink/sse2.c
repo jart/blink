@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "blink/endian.h"
+#include "blink/intrin.h"
 #include "blink/macros.h"
 #include "blink/sse.h"
 
@@ -74,15 +75,26 @@ static void SsePaddw(u8 x[16], const u8 y[16]) {
 }
 
 static void SsePaddusw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("paddusw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   COPY16_X_Y_FROM_x_y(u16);
   for (i = 0; i < 8; ++i) {
     X[i] = MIN(65535, X[i] + Y[i]);
   }
   COPY16_x_FROM_X;
+#endif
 }
 
 static void SsePhaddsw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("phaddsw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   i16 t[8];
   unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
@@ -94,9 +106,15 @@ static void SsePhaddsw(u8 x[16], const u8 y[16]) {
   }
   memcpy(X, t, 16);
   COPY16_x_FROM_X;
+#endif
 }
 
 static void SsePhsubsw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("phsubsw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   i16 t[8];
   unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
@@ -108,24 +126,37 @@ static void SsePhsubsw(u8 x[16], const u8 y[16]) {
   }
   memcpy(X, t, 16);
   COPY16_x_FROM_X;
+#endif
 }
 
 static void SsePsubsw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("psubsw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
   for (i = 0; i < 8; ++i) {
     X[i] = MAX(-32768, MIN(32767, X[i] - Y[i]));
   }
   COPY16_x_FROM_X;
+#endif
 }
 
 static void SsePaddsw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("paddsw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
   for (i = 0; i < 8; ++i) {
     X[i] = MAX(-32768, MIN(32767, X[i] + Y[i]));
   }
   COPY16_x_FROM_X;
+#endif
 }
 
 static void SsePcmpgtw(u8 x[16], const u8 y[16]) {
@@ -156,12 +187,18 @@ static void SsePavgw(u8 x[16], const u8 y[16]) {
 }
 
 static void SsePmulhw(u8 x[16], const u8 y[16]) {
+#if X86_INTRINSICS
+  asm("pmulhw\t%1,%0"
+      : "+x"(*(char_xmma_t *)x)
+      : "xm"(*(const char_xmma_t *)y));
+#else
   unsigned i;
   COPY16_X_Y_FROM_x_y(i16);
   for (i = 0; i < 8; ++i) {
     X[i] = (X[i] * Y[i]) >> 16;
   }
   COPY16_x_FROM_X;
+#endif
 }
 
 static void SsePmullw(u8 x[16], const u8 y[16]) {

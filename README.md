@@ -11,14 +11,15 @@ This project contains two programs:
 different operating systems and hardware architectures. It's designed to
 do the same thing as the `qemu-x86_64` command, except that
 
-1. blink is 190kb in size, whereas the qemu-x86_64 executable is 4mb
+1. Blink is 196kb in size (or 126kb if optional features are disabled),
+   whereas the qemu-x86_64 executable is 4mb in size.
 
-2. blink will run your Linux binaries on any POSIX platform, whereas
-   qemu-x86_64 only supports Linux
+2. Blink will run your Linux binaries on any POSIX platform, whereas
+   qemu-x86_64 only supports Linux.
 
-3. blink goes 2x faster than qemu-x86_64 on some benchmarks, such as SSE
-   integer / floating point math. Blink is also faster at running
-   ephemeral programs such as compilers
+3. Blink goes 2x faster than qemu-x86_64 on some benchmarks, such as SSE
+   integer / floating point math. Blink is also much faster at running
+   ephemeral programs such as compilers.
 
 [`blinkenlights`](https://justine.lol/blinkenlights) is a TUI interface
 that may be used for debugging x86_64-linux programs across platforms.
@@ -53,8 +54,9 @@ Blink can be compiled on UNIX systems that have:
 The instructions for compiling Blink are as follows:
 
 ```sh
-$ make -j4
-$ o//blink/blink -h
+./configure
+make -j4
+o//blink/blink -h
 Usage: o//blink/blink [-hjms] PROG [ARGS...]
 ```
 
@@ -75,7 +77,8 @@ o//blink/blinkenlights third_party/cosmo/tinyhello.elf
 ### Alternative Builds
 
 For maximum tinyness, use `MODE=tiny`, since it makes Blink's binary
-footprint 50% smaller. Performance isn't impacted. Please note that all
+footprint 50% smaller. The Blink executable should be on the order of
+200kb in size. Performance isn't impacted. Please note that all
 assertions will be removed, as well as all logging. Use this mode if
 you're confident that Blink is bug-free for your use case.
 
@@ -83,6 +86,28 @@ you're confident that Blink is bug-free for your use case.
 make MODE=tiny
 strip o/tiny/blink/blink
 ls -hal o/tiny/blink/blink
+```
+
+Some distros configure their compilers to add a lot of security bloat,
+which might add 60kb or more to the above binary size. You can work
+around that by using one of Blink's toolchains. This should produce
+consistently the smallest possible executable size.
+
+```sh
+make MODE=tiny o/tiny/x86_64/blink/blink
+o/third_party/gcc/x86_64/bin/x86_64-linux-musl-strip o/tiny/x86_64/blink/blink
+ls -hal o/tiny/x86_64/blink/blink
+```
+
+If you want to make Blink *even tinier* (more on the order of 120kb
+rather than 200kb) than you can tune the `./configure` script to disable
+optional features such as JIT, x87, threads, sockets, etc.
+
+```sh
+./configure --disable-all
+make MODE=tiny o/tiny/x86_64/blink/blink
+o/third_party/gcc/x86_64/bin/x86_64-linux-musl-strip o/tiny/x86_64/blink/blink
+ls -hal o/tiny/x86_64/blink/blink
 ```
 
 The traditional `MODE=rel` or `MODE=opt` modes are available. Use this
@@ -204,27 +229,9 @@ The following `FLAG` arguments are provided:
 
 ### `blinkenlights` Flags
 
-The Blinkenlights TUI interface command (named `blinkenlights` by
-convention) requires a UTF-8 VT100 / XTERM style terminal to use. We
-recommend the following terminals, ordered by preference:
-
-- [KiTTY](https://sw.kovidgoyal.net/kitty/) (Linux)
-- [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html) (Windows)
-- Gnome Terminal (Linux)
-- Terminal.app (macOS)
-- CMD.EXE (Windows 10+)
-- PowerShell (Windows 10+)
-- Xterm (Linux)
-
-The following fonts are recommended, ordered by preference:
-
-- [PragmataPro Regular Mono](https://fsd.it/shop/fonts/pragmatapro/) (€59)
-- Bitstream Vera Sans Mono (a.k.a. DejaVu Sans Mono)
-- Consolas
-- Menlo
-
-The `blinkenlights` command accepts its command line arguments in
-accordance with the following specification:
+The Blinkenlights ANSI TUI interface command (named `blinkenlights` by
+convention) accepts its command line arguments in accordance with the
+following specification:
 
 ```
 blinkenlights [FLAG...] PROGRAM [ARG...]
@@ -323,6 +330,26 @@ The following `FLAG` arguments are provided:
 - `-H` disables syntax highlighting
 
 - `-N` enables natural scrolling
+
+### Recommended Environments
+
+Blinkenlights' TUI requires a UTF-8 VT100 / XTERM style terminal to use.
+We recommend the following terminals, ordered by preference:
+
+- [KiTTY](https://sw.kovidgoyal.net/kitty/) (Linux)
+- [PuTTY](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html) (Windows)
+- Gnome Terminal (Linux)
+- Terminal.app (macOS)
+- CMD.EXE (Windows 10+)
+- PowerShell (Windows 10+)
+- Xterm (Linux)
+
+The following fonts are recommended, ordered by preference:
+
+- [PragmataPro Regular Mono](https://fsd.it/shop/fonts/pragmatapro/) (€59)
+- Bitstream Vera Sans Mono (a.k.a. DejaVu Sans Mono)
+- Consolas
+- Menlo
 
 #### JIT Path Glyphs
 

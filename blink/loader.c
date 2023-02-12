@@ -40,6 +40,11 @@
 #include "blink/util.h"
 #include "blink/x86.h"
 
+#ifdef DISABLE_OVERLAYS
+#define OverlaysOpen   openat
+#define OverlaysAccess faccessat
+#endif
+
 #define READ64(p) Read64((const u8 *)(p))
 #define READ32(p) Read32((const u8 *)(p))
 

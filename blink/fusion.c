@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
@@ -29,7 +30,7 @@
  */
 
 bool FuseBranchTest(P) {
-#ifdef HAVE_JIT
+#if HAVE_JIT
   i64 bdisp;
   u8 *p, jcc, jlen;
   if (RegLog2(rde) < 2) {
@@ -143,7 +144,7 @@ bool FuseBranchTest(P) {
 }
 
 bool FuseBranchCmp(P, bool imm) {
-#ifdef HAVE_JIT
+#if HAVE_JIT
   i64 bdisp;
   u8 *p, jcc, jlen;
   if (RegLog2(rde) < 2) {

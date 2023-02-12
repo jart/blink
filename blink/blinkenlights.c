@@ -1360,6 +1360,7 @@ static void DrawSegment(struct Panel *p, i64 i, struct DescriptorCache value,
 }
 
 static void DrawSt(struct Panel *p, i64 i, i64 r) {
+#ifndef DISABLE_X87
   char buf[32];
   bool isempty, chg;
   long double value;
@@ -1374,6 +1375,7 @@ static void DrawSt(struct Panel *p, i64 i, i64 r) {
   if (chg) AppendPanel(p, i, "\033[27m");
   AppendPanel(p, i, "  ");
   if (isempty) AppendPanel(p, i, "\033[39m");
+#endif
 }
 
 static void DrawCpu(struct Panel *p) {
@@ -1399,6 +1401,7 @@ static void DrawCpu(struct Panel *p) {
   DrawFlag(p, 8, 'D', GetFlag(m->flags, FLAGS_DF));
   DrawFlag(p, 8, 'O', GetFlag(m->flags, FLAGS_OF));
   AppendPanel(p, 8, "    ");
+#ifndef DISABLE_X87
   if (m->fpu.sw & kFpuSwIe) AppendPanel(p, 8, " IE");
   if (m->fpu.sw & kFpuSwDe) AppendPanel(p, 8, " DE");
   if (m->fpu.sw & kFpuSwZe) AppendPanel(p, 8, " ZE");
@@ -1411,6 +1414,7 @@ static void DrawCpu(struct Panel *p) {
   if (m->fpu.sw & kFpuSwC1) AppendPanel(p, 8, " C1");
   if (m->fpu.sw & kFpuSwC2) AppendPanel(p, 8, " C2");
   if (m->fpu.sw & kFpuSwBf) AppendPanel(p, 8, " BF");
+#endif
   DrawSegment(p, 9, m->fs, laststate.fs, "FS");
   DrawSegment(p, 9, m->ds, laststate.ds, "DS");
   DrawSegment(p, 9, m->cs, laststate.cs, "CS");
@@ -3631,15 +3635,21 @@ static void Tui(void) {
 
 static void GetOpts(int argc, char *argv[]) {
   int opt;
+#if HAVE_JIT
   bool wantjit = false;
+#endif
   bool wantunsafe = false;
   FLAG_nologstderr = true;
+#ifndef DISABLE_OVERLAYS
   FLAG_overlays = getenv("BLINK_OVERLAYS");
   if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
+#endif
   while ((opt = GetOpt(argc, argv, "hjmvtrzRNsSb:Hw:L:C:")) != -1) {
     switch (opt) {
       case 'j':
+#if HAVE_JIT
         wantjit = true;
+#endif
         break;
       case 't':
         tuimode = false;
@@ -3687,7 +3697,11 @@ static void GetOpts(int argc, char *argv[]) {
         FLAG_logpath = optarg_;
         break;
       case 'C':
+#ifndef DISABLE_OVERLAYS
         FLAG_overlays = optarg_;
+#else
+        WriteErrorString("error: overlays support was disabled\n");
+#endif
         break;
       case 'z':
         ++codeview.zoom;
@@ -3702,9 +3716,11 @@ static void GetOpts(int argc, char *argv[]) {
     }
   }
   LogInit(FLAG_logpath);
+#if HAVE_JIT
   if (!wantjit) {
     DisableJit(&m->system->jit);
   }
+#endif
   FLAG_nolinear = !wantunsafe;
 }
 
@@ -3817,7 +3833,9 @@ int main(int argc, char *argv[]) {
   tuimode = true;
   WriteErrorInit();
   InitBus();
+#if HAVE_JIT
   AddPath_StartOp_Hook = AddPath_StartOp_Tui;
+#endif
   unassert((pty = NewPty()));
   unassert((s = NewSystem(XED_MODE_REAL)));
   unassert((m = NewMachine(s, 0)));
@@ -3829,10 +3847,12 @@ int main(int argc, char *argv[]) {
   SetXmmSize(2);
   SetXmmDisp(kXmmHex);
   GetOpts(argc, argv);
+#ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");
     exit(1);
   }
+#endif
   sigfillset(&sa.sa_mask);
   sa.sa_flags = 0;
   sa.sa_handler = OnSigSys;

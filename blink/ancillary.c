@@ -24,6 +24,7 @@
 
 #include "blink/ancillary.h"
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
@@ -31,6 +32,8 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/util.h"
+
+#ifndef DISABLE_ANCILLARY
 
 /**
  * @fileoverview Ancillary Socket Data Marshalling
@@ -334,3 +337,5 @@ int ReceiveAncillary(struct Machine *m, struct msghdr_linux *gm,
   Write64(gm->controllen, offset);
   return 0;
 }
+
+#endif /* DISABLE_ANCILLARY */

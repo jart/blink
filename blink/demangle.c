@@ -237,7 +237,7 @@ char *Demangle(char *p, const char *symbol, size_t n) {
   sigset_t ss, oldss;
   sn = strlen(symbol);
   if (startswith(symbol, "_Z")) {
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs);
+    unassert(!pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs));
     pthread_once(&g_cxxfilt.once, InitCxxFilt);
     LOCK(&g_cxxfilt.lock);
     if (g_cxxfilt.pid != -1) {
@@ -262,7 +262,7 @@ char *Demangle(char *p, const char *symbol, size_t n) {
       r = 0;
     }
     UNLOCK(&g_cxxfilt.lock);
-    pthread_setcancelstate(cs, 0);
+    unassert(!pthread_setcancelstate(cs, 0));
   } else {
     r = 0;
   }

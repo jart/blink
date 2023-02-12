@@ -1,0 +1,217 @@
+#!/bin/sh
+
+if [ "$1" = "--help" ]; then
+  echo "usage: ./configure [FLAGS]"
+  echo
+  echo "flags"
+  echo
+  echo "  --help"
+  echo "    shows this help"
+  echo
+  echo "  --disable-jit"
+  echo "    forces jit compilation to be disabled (shaves ~25kb)"
+  echo
+  echo "  --disable-x87"
+  echo "    disables x87 fpu and long double support (shaves ~23kb)"
+  echo
+  echo "  --disable-threads"
+  echo "    disables clone() and removes locks / barriers (shaves ~12kb)"
+  echo
+  echo "  --disable-sockets"
+  echo "    disables socket() and related system calls (shaves ~5kb)"
+  echo
+  echo "  --disable-overlays"
+  echo "    disables filesystem overlays and chroot() support (shaves ~3kb)"
+  echo
+  echo "  --disable-ancillary"
+  echo "    disables sendmsg/recvmsg control data support (shaves ~2kb)"
+  echo
+  echo "  --disable-bcd"
+  echo "    disables i8086 binary coded decimal support (shaves ~1kb)"
+  echo
+  echo "  --disable-all"
+  echo "    disable all optional features (shaves ~69kb)"
+  echo "    you may use --enable-FOO to turn features back on"
+  echo
+  echo "environment variables"
+  echo
+  echo "  CC"
+  echo "    used to compile and link code [default: cc]"
+  echo
+  echo "  CFLAGS"
+  echo "    shall be passed to \$CC when compiling c sources"
+  echo
+  echo "  CPPFLAGS"
+  echo "    shall be passed to \$CC when using the c preprocessor"
+  echo
+  echo "  TARGET_ARCH"
+  echo "    shall be passed to \$CC when compiling objects"
+  echo
+  echo "  LDFLAGS"
+  echo "    shall be passed to \$CC when linking binaries"
+  echo
+  echo "  LDLIBS"
+  echo "    may supply additional libraries to link"
+  echo
+  echo "  AR"
+  echo "    used to create static archives [default: ar]"
+  echo
+  echo "  MODE"
+  echo "    tunes makefile by choosing a preset configuration. defaults"
+  echo "    to empty string which is recommended. may alternatively be"
+  echo "    set to: tiny, opt, rel, dbg, cosmo, prof, cov, asan, ubsan,"
+  echo "    tsan, msan, llvm, llvm++, rel-llvm, or tiny-llvm."
+  echo
+  exit 0
+fi
+
+if ! [ -f blink/blink.c ]; then
+  echo "error: not in blink project root directory" >&2
+  echo "please change the current directory" >&2
+  exit 1
+fi
+
+CONFIG="${TMPDIR:-/tmp}/config.h.$USER.$$"
+
+cp config.h.in "${CONFIG}" || exit
+mkdir -p o/tool/config || exit
+rm -f config.log
+
+compile() {
+  printf '%s\n' "${CC:-cc} ${LDFLAGS} ${CFLAGS} ${CPPFLAGS} ${CFLAGS} $*" >>config.log
+  ${CC:-cc} ${LDFLAGS} ${CFLAGS} ${CPPFLAGS} ${CFLAGS} "$@"
+}
+
+config() {
+  {
+    echo
+    echo ========================================================================
+    echo "configuring $1"
+    echo ========================================================================
+    echo
+  } >>config.log
+  if ! [ -f "tool/config/$1.c" ]; then
+    echo "tool/config/$1.c: not found" >&2
+    exit 1
+  fi
+  if (compile -o "o/tool/config/$1" "tool/config/$1.c" &&
+        "o/tool/config/$1") >>config.log 2>&1; then
+    echo yes >&2
+    return 0
+  else
+    echo no >&2
+    return 1
+  fi
+}
+
+replace() {
+  sed "s@$1@$2@" <"${CONFIG}" >"${CONFIG}.tmp" || exit
+  mv -f "${CONFIG}.tmp" "${CONFIG}" || exit
+}
+
+comment() {
+  replace "$1" "// $1"
+}
+
+uncomment() {
+  replace "// $1" "$1"
+}
+
+for x; do
+  if [ "$x" = "--disable-all" ]; then
+    uncomment "#define DISABLE"
+
+  elif [ "$x" = "--enable-jit" ]; then
+    comment "#define DISABLE_JIT"
+  elif [ "$x" = "--disable-jit" ]; then
+    uncomment "#define DISABLE_JIT"
+
+  elif [ "$x" = "--enable-x87" ]; then
+    comment "#define DISABLE_X87"
+  elif [ "$x" = "--disable-x87" ]; then
+    uncomment "#define DISABLE_X87"
+
+  elif [ "$x" = "--enable-threads" ]; then
+    comment "#define DISABLE_THREADS"
+  elif [ "$x" = "--disable-threads" ]; then
+    uncomment "#define DISABLE_THREADS"
+
+  elif [ "$x" = "--enable-sockets" ]; then
+    comment "#define DISABLE_SOCKETS"
+  elif [ "$x" = "--disable-sockets" ]; then
+    uncomment "#define DISABLE_SOCKETS"
+
+  elif [ "$x" = "--enable-overlays" ]; then
+    comment "#define DISABLE_OVERLAYS"
+  elif [ "$x" = "--disable-overlays" ]; then
+    uncomment "#define DISABLE_OVERLAYS"
+
+  elif [ "$x" = "--enable-ancillary" ]; then
+    comment "#define DISABLE_ANCILLARY"
+  elif [ "$x" = "--disable-ancillary" ]; then
+    uncomment "#define DISABLE_ANCILLARY"
+
+  elif [ "$x" = "--enable-bcd" ]; then
+    comment "#define DISABLE_BCD"
+  elif [ "$x" = "--disable-bcd" ]; then
+    uncomment "#define DISABLE_BCD"
+
+  else
+    echo "error: unrecognized flag: $x" >&2
+    echo "use $0 --help for help" >&2
+    exit 1
+  fi
+done
+
+printf "checking for sysctl()... " >&2
+if config sysctl; then
+  uncomment "#define HAVE_SYSCTL"
+fi
+
+printf "checking for sysinfo()... " >&2
+if config sysinfo; then
+  uncomment "#define HAVE_SYSINFO"
+fi
+
+printf "checking for mkfifoat()... " >&2
+if ! config mkfifoat; then
+  uncomment "#define POLYFILL_MKFIFOAT"
+fi
+
+printf "checking for getrandom()... " >&2
+if config getrandom; then
+  uncomment "#define HAVE_GETRANDOM"
+fi
+
+printf "checking for getentropy()... " >&2
+if config getentropy; then
+  uncomment "#define HAVE_GETENTROPY"
+fi
+
+printf "checking for /dev/urandom... " >&2
+if config dev_urandom; then
+  uncomment "#define HAVE_DEV_URANDOM"
+fi
+
+printf "checking for RtlGenRandom()... " >&2
+if config rtlgenrandom; then
+  uncomment "#define HAVE_RTLGENRANDOM"
+fi
+
+printf "checking for sysctl(KERN_ARND)... " >&2
+if config kern_arnd; then
+  uncomment "#define HAVE_KERN_ARND"
+fi
+
+printf "checking for syscall(SYS_getrandom)... " >&2
+if config sys_getrandom; then
+  uncomment "#define HAVE_SYS_GETRANDOM"
+fi
+
+printf "checking for preadv() and pwritev()... " >&2
+if ! config preadv; then
+  uncomment "#define POLYFILL_PREADV"
+fi
+
+echo "creating config.h" >&2
+mv "${CONFIG}" config.h || exit

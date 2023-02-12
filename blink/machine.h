@@ -81,7 +81,7 @@
 #define CanHaveLinearMemory() CAN_64BIT
 #endif
 
-#ifdef HAVE_JIT
+#if HAVE_JIT
 #define IsMakingPath(m) m->path.jb
 #else
 #define IsMakingPath(m) 0
@@ -124,12 +124,14 @@ struct HostPage {
 };
 
 struct MachineFpu {
+#ifndef DISABLE_X87
   double st[8];
-  u32 cw;
   u32 sw;
   int tw;
   int op;
   i64 ip;
+#endif
+  u32 cw;
   i64 dp;
 };
 
@@ -214,8 +216,6 @@ struct System {
   i64 codestart;
   unsigned long codesize;
   struct MachineMemstat memstat;
-  pthread_cond_t machines_cond;
-  pthread_mutex_t machines_lock;
   struct Dll *machines GUARDED_BY(machines_lock);
   unsigned next_tid GUARDED_BY(machines_lock);
   intptr_t ender;
@@ -223,12 +223,16 @@ struct System {
   struct Fds fds;
   struct Elf elf;
   sigset_t exec_sigmask;
-  pthread_mutex_t exec_lock;
-  pthread_mutex_t sig_lock;
   struct sigaction_linux hands[64] GUARDED_BY(sig_lock);
   u64 blinksigs;  // signals blink itself handles
-  pthread_mutex_t mmap_lock;
   struct rlimit_linux rlim[RLIM_NLIMITS_LINUX];
+#ifndef DISABLE_THREADS
+  pthread_cond_t machines_cond;
+  pthread_mutex_t machines_lock;
+  pthread_mutex_t exec_lock;
+  pthread_mutex_t sig_lock;
+  pthread_mutex_t mmap_lock;
+#endif
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
   int (*exec)(char *, char **, char **);
@@ -644,12 +648,13 @@ const char *GetBacktrace(struct Machine *);
 const char *DescribeOp(struct Machine *, i64);
 int GetInstruction(struct Machine *, i64, struct XedDecodedInst *);
 
-void SetupCod(struct Machine *);
 void FlushCod(struct JitBlock *);
 #if LOG_COD
+void SetupCod(struct Machine *);
 void WriteCod(const char *, ...) printf_attr(1);
 void LogCodOp(struct Machine *, const char *);
 #else
+#define SetupCod(m)    (void)0
 #define LogCodOp(m, s) (void)0
 #define WriteCod(...)  (void)0
 #endif

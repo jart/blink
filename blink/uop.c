@@ -46,6 +46,215 @@
 #define kMaxOps 256
 
 ////////////////////////////////////////////////////////////////////////////////
+// ESSENTIAL
+
+MICRO_OP static void Sax64(P) {
+  Put64(m->ax, (i32)Get32(m->ax));
+}
+MICRO_OP static void Sax32(P) {
+  Put64(m->ax, (u32)(i16)Get16(m->ax));
+}
+MICRO_OP static void Sax16(P) {
+  Put16(m->ax, (i8)Get8(m->ax));
+}
+const nexgen32e_f kSax[] = {Sax16, Sax32, Sax64};
+
+MICRO_OP i64 Not8(struct Machine *m, u64 x, u64 y) {
+  return ~x & 0xFF;
+}
+MICRO_OP i64 Not16(struct Machine *m, u64 x, u64 y) {
+  return ~x & 0xFFFF;
+}
+MICRO_OP i64 Not32(struct Machine *m, u64 x, u64 y) {
+  return ~x & 0xFFFFFFFF;
+}
+MICRO_OP i64 Not64(struct Machine *m, u64 x, u64 y) {
+  return ~x & 0xFFFFFFFFFFFFFFFF;
+}
+
+MICRO_OP static void Convert64(P) {
+  Put64(m->dx, Get64(m->ax) & 0x8000000000000000 ? 0xffffffffffffffff : 0);
+}
+MICRO_OP static void Convert32(P) {
+  Put64(m->dx, Get32(m->ax) & 0x80000000 ? 0xffffffff : 0);
+}
+MICRO_OP static void Convert16(P) {
+  Put16(m->dx, Get16(m->ax) & 0x8000 ? 0xffff : 0);
+}
+const nexgen32e_f kConvert[] = {Convert16, Convert32, Convert64};
+
+MICRO_OP i64 Adcx32(u64 x, u64 y, struct Machine *m) {
+  u32 t = x + !!(m->flags & CF);
+  u32 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~CF) | c << FLAGS_CF;
+  return z;
+}
+MICRO_OP i64 Adcx64(u64 x, u64 y, struct Machine *m) {
+  u64 t = x + !!(m->flags & CF);
+  u64 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~CF) | c << FLAGS_CF;
+  return z;
+}
+
+MICRO_OP i64 Adox32(u64 x, u64 y, struct Machine *m) {
+  u32 t = x + !!(m->flags & OF);
+  u32 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~OF) | c << FLAGS_OF;
+  return z;
+}
+MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
+  u64 t = x + !!(m->flags & OF);
+  u64 z = t + y;
+  int c = (t < x) | (z < y);
+  m->flags = (m->flags & ~OF) | c << FLAGS_OF;
+  return z;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// BRANCHING
+
+MICRO_OP void FastJmp(struct Machine *m, u64 disp) {
+  m->ip += disp;
+}
+MICRO_OP void FastJmpAbs(u64 addr, struct Machine *m) {
+  m->ip = addr;
+}
+
+MICRO_OP static u32 Jb(struct Machine *m) {
+  return !!(m->flags & CF);
+}
+MICRO_OP static u32 Jae(struct Machine *m) {
+  return !!(~m->flags & CF);
+}
+MICRO_OP static u32 Je(struct Machine *m) {
+  return !!(m->flags & ZF);
+}
+MICRO_OP static u32 Jne(struct Machine *m) {
+  return !!(~m->flags & ZF);
+}
+MICRO_OP static u32 Js(struct Machine *m) {
+  return !!(m->flags & SF);
+}
+MICRO_OP static u32 Jns(struct Machine *m) {
+  return !!(~m->flags & SF);
+}
+MICRO_OP static u32 Jo(struct Machine *m) {
+  return !!(m->flags & OF);
+}
+MICRO_OP static u32 Jno(struct Machine *m) {
+  return !!(~m->flags & OF);
+}
+MICRO_OP static u32 Ja(struct Machine *m) {
+  return IsAbove(m);
+}
+MICRO_OP static u32 Jbe(struct Machine *m) {
+  return IsBelowOrEqual(m);
+}
+MICRO_OP static u32 Jg(struct Machine *m) {
+  return IsGreater(m);
+}
+MICRO_OP static u32 Jge(struct Machine *m) {
+  return IsGreaterOrEqual(m);
+}
+MICRO_OP static u32 Jl(struct Machine *m) {
+  return IsLess(m);
+}
+MICRO_OP static u32 Jle(struct Machine *m) {
+  return IsLessOrEqual(m);
+}
+
+const cc_f kConditionCode[16] = {
+    Jo,   //
+    Jno,  //
+    Jb,   //
+    Jae,  //
+    Je,   //
+    Jne,  //
+    Jbe,  //
+    Ja,   //
+    Js,   //
+    Jns,  //
+    0,    //
+    0,    //
+    Jl,   //
+    Jge,  //
+    Jle,  //
+    Jg,   //
+};
+
+MICRO_OP u64 Pick(u32 p, u64 x, u64 y) {
+  return p ? x : y;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// FLOATING POINT
+
+MICRO_OP void OpPsdMuld1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = x.f * y.f;
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdAddd1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = x.f + y.f;
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdSubd1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = x.f - y.f;
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdDivd1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = x.f / y.f;
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdMind1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = MIN(x.f, y.f);
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdMaxd1(u8 *p, struct Machine *m, long reg) {
+  union DoublePun x, y;
+  y.i = Read64(p);
+  x.i = Read64(m->xmm[reg]);
+  x.f = MAX(x.f, y.f);
+  Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void Int64ToDouble(i64 x, struct Machine *m, long reg) {
+  union DoublePun d;
+  d.f = x;
+  Put64(m->xmm[reg], d.i);
+}
+
+MICRO_OP void Int32ToDouble(i32 x, struct Machine *m, long reg) {
+  union DoublePun d;
+  d.f = x;
+  Put64(m->xmm[reg], d.i);
+}
+
+#if HAVE_JIT
+
+////////////////////////////////////////////////////////////////////////////////
 // ACCOUNTING
 
 MICRO_OP void CountOp(long *instructions_jitted_ptr) {
@@ -501,19 +710,6 @@ static const store_f kStore[] = {Store8, Store16,   //
 ////////////////////////////////////////////////////////////////////////////////
 // ARITHMETIC
 
-MICRO_OP i64 Not8(struct Machine *m, u64 x, u64 y) {
-  return ~x & 0xFF;
-}
-MICRO_OP i64 Not16(struct Machine *m, u64 x, u64 y) {
-  return ~x & 0xFFFF;
-}
-MICRO_OP i64 Not32(struct Machine *m, u64 x, u64 y) {
-  return ~x & 0xFFFFFFFF;
-}
-MICRO_OP i64 Not64(struct Machine *m, u64 x, u64 y) {
-  return ~x & 0xFFFFFFFFFFFFFFFF;
-}
-
 MICRO_OP i64 JustAdd(struct Machine *m, u64 x, u64 y) {
   return x + y;
 }
@@ -879,36 +1075,6 @@ MICRO_OP void Mulx64(u64 x,              //
 }
 #endif
 
-MICRO_OP i64 Adcx32(u64 x, u64 y, struct Machine *m) {
-  u32 t = x + !!(m->flags & CF);
-  u32 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~CF) | c << FLAGS_CF;
-  return z;
-}
-MICRO_OP i64 Adcx64(u64 x, u64 y, struct Machine *m) {
-  u64 t = x + !!(m->flags & CF);
-  u64 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~CF) | c << FLAGS_CF;
-  return z;
-}
-
-MICRO_OP i64 Adox32(u64 x, u64 y, struct Machine *m) {
-  u32 t = x + !!(m->flags & OF);
-  u32 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~OF) | c << FLAGS_OF;
-  return z;
-}
-MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
-  u64 t = x + !!(m->flags & OF);
-  u64 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~OF) | c << FLAGS_OF;
-  return z;
-}
-
 MICRO_OP i64 JustNeg(u64 x) {
   return -x;
 }
@@ -994,82 +1160,6 @@ MICRO_OP void FastRet(struct Machine *m) {
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-// BRANCHING
-
-MICRO_OP void FastJmp(struct Machine *m, u64 disp) {
-  m->ip += disp;
-}
-MICRO_OP void FastJmpAbs(u64 addr, struct Machine *m) {
-  m->ip = addr;
-}
-
-MICRO_OP static u32 Jb(struct Machine *m) {
-  return !!(m->flags & CF);
-}
-MICRO_OP static u32 Jae(struct Machine *m) {
-  return !!(~m->flags & CF);
-}
-MICRO_OP static u32 Je(struct Machine *m) {
-  return !!(m->flags & ZF);
-}
-MICRO_OP static u32 Jne(struct Machine *m) {
-  return !!(~m->flags & ZF);
-}
-MICRO_OP static u32 Js(struct Machine *m) {
-  return !!(m->flags & SF);
-}
-MICRO_OP static u32 Jns(struct Machine *m) {
-  return !!(~m->flags & SF);
-}
-MICRO_OP static u32 Jo(struct Machine *m) {
-  return !!(m->flags & OF);
-}
-MICRO_OP static u32 Jno(struct Machine *m) {
-  return !!(~m->flags & OF);
-}
-MICRO_OP static u32 Ja(struct Machine *m) {
-  return IsAbove(m);
-}
-MICRO_OP static u32 Jbe(struct Machine *m) {
-  return IsBelowOrEqual(m);
-}
-MICRO_OP static u32 Jg(struct Machine *m) {
-  return IsGreater(m);
-}
-MICRO_OP static u32 Jge(struct Machine *m) {
-  return IsGreaterOrEqual(m);
-}
-MICRO_OP static u32 Jl(struct Machine *m) {
-  return IsLess(m);
-}
-MICRO_OP static u32 Jle(struct Machine *m) {
-  return IsLessOrEqual(m);
-}
-
-const cc_f kConditionCode[16] = {
-    Jo,   //
-    Jno,  //
-    Jb,   //
-    Jae,  //
-    Je,   //
-    Jne,  //
-    Jbe,  //
-    Ja,   //
-    Js,   //
-    Jns,  //
-    0,    //
-    0,    //
-    Jl,   //
-    Jge,  //
-    Jle,  //
-    Jg,   //
-};
-
-MICRO_OP u64 Pick(u32 p, u64 x, u64 y) {
-  return p ? x : y;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 // SIGN EXTENDING
 
 MICRO_OP static u64 Sex8(u64 x) {
@@ -1083,28 +1173,6 @@ MICRO_OP static u64 Sex32(u64 x) {
 }
 typedef u64 (*sex_f)(u64);
 static const sex_f kSex[] = {Sex8, Sex16, Sex32};
-
-MICRO_OP static void Sax64(P) {
-  Put64(m->ax, (i32)Get32(m->ax));
-}
-MICRO_OP static void Sax32(P) {
-  Put64(m->ax, (u32)(i16)Get16(m->ax));
-}
-MICRO_OP static void Sax16(P) {
-  Put16(m->ax, (i8)Get8(m->ax));
-}
-const nexgen32e_f kSax[] = {Sax16, Sax32, Sax64};
-
-MICRO_OP static void Convert64(P) {
-  Put64(m->dx, Get64(m->ax) & 0x8000000000000000 ? 0xffffffffffffffff : 0);
-}
-MICRO_OP static void Convert32(P) {
-  Put64(m->dx, Get32(m->ax) & 0x80000000 ? 0xffffffff : 0);
-}
-MICRO_OP static void Convert16(P) {
-  Put16(m->dx, Get16(m->ax) & 0x8000 ? 0xffff : 0);
-}
-const nexgen32e_f kConvert[] = {Convert16, Convert32, Convert64};
 
 ////////////////////////////////////////////////////////////////////////////////
 // ADDRESSING
@@ -1141,69 +1209,6 @@ static const baseindex_f kBaseIndex[] = {
     BaseIndex2,  //
     BaseIndex3,  //
 };
-
-////////////////////////////////////////////////////////////////////////////////
-// FLOATING POINT
-
-MICRO_OP void OpPsdMuld1(u8 *p, struct Machine *m, long reg) {
-  union DoublePun x, y;
-  y.i = Read64(p);
-  x.i = Read64(m->xmm[reg]);
-  x.f = x.f * y.f;
-  Write64(m->xmm[reg], x.i);
-}
-
-MICRO_OP void OpPsdAddd1(u8 *p, struct Machine *m, long reg) {
-  union DoublePun x, y;
-  y.i = Read64(p);
-  x.i = Read64(m->xmm[reg]);
-  x.f = x.f + y.f;
-  Write64(m->xmm[reg], x.i);
-}
-
-MICRO_OP void OpPsdSubd1(u8 *p, struct Machine *m, long reg) {
-  union DoublePun x, y;
-  y.i = Read64(p);
-  x.i = Read64(m->xmm[reg]);
-  x.f = x.f - y.f;
-  Write64(m->xmm[reg], x.i);
-}
-
-MICRO_OP void OpPsdDivd1(u8 *p, struct Machine *m, long reg) {
-  union DoublePun x, y;
-  y.i = Read64(p);
-  x.i = Read64(m->xmm[reg]);
-  x.f = x.f / y.f;
-  Write64(m->xmm[reg], x.i);
-}
-
-MICRO_OP void OpPsdMind1(u8 *p, struct Machine *m, long reg) {
-  union DoublePun x, y;
-  y.i = Read64(p);
-  x.i = Read64(m->xmm[reg]);
-  x.f = MIN(x.f, y.f);
-  Write64(m->xmm[reg], x.i);
-}
-
-MICRO_OP void OpPsdMaxd1(u8 *p, struct Machine *m, long reg) {
-  union DoublePun x, y;
-  y.i = Read64(p);
-  x.i = Read64(m->xmm[reg]);
-  x.f = MAX(x.f, y.f);
-  Write64(m->xmm[reg], x.i);
-}
-
-MICRO_OP void Int64ToDouble(i64 x, struct Machine *m, long reg) {
-  union DoublePun d;
-  d.f = x;
-  Put64(m->xmm[reg], d.i);
-}
-
-MICRO_OP void Int32ToDouble(i32 x, struct Machine *m, long reg) {
-  union DoublePun d;
-  d.f = x;
-  Put64(m->xmm[reg], d.i);
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 // JIT DEBUGGING UTILITIES
@@ -1800,12 +1805,12 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
  * Generates JIT code that implements x86 instructions.
  */
 void Jitter(P, const char *fmt, ...) {
-#ifdef HAVE_JIT
   va_list va;
   if (!IsMakingPath(m)) return;
   va_start(va, fmt);
   JitterImpl(A, fmt, va, 0, 0);
   unassert(!i);
   va_end(va);
-#endif
 }
+
+#endif /* HAVE_JIT */

@@ -17,24 +17,23 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <string.h>
-#include <sys/time.h>
-#ifdef __linux
-#include <sys/sysinfo.h>
-#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
-#include <sys/sysctl.h>
-#include <sys/types.h>
-#define HAVE_SYSCTL
-#elif defined(__NetBSD__)
 #include <sys/param.h>
-#include <sys/sysctl.h>
-#define HAVE_SYSCTL
-#endif
+#include <sys/time.h>
+#include <sys/types.h>
 
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/linux.h"
 #include "blink/macros.h"
 #include "blink/timespec.h"
 #include "blink/types.h"
+
+#ifdef HAVE_SYSINFO
+#include <sys/sysinfo.h>
+#endif
+#ifdef HAVE_SYSCTL
+#include <sys/sysctl.h>
+#endif
 
 #ifdef HAVE_SYSCTL
 
@@ -65,7 +64,7 @@ static i64 GetPhysmem(void) {
 
 int sysinfo_linux(struct sysinfo_linux *si) {
   memset(si, 0, sizeof(*si));
-#ifdef __linux
+#ifdef HAVE_SYSINFO
   struct sysinfo syssi;
   if (sysinfo(&syssi) == -1) return -1;
   Write64(si->uptime, syssi.uptime);

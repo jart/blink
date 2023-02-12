@@ -2,6 +2,8 @@
 #define BLINK_BUILTIN_H_
 #include <limits.h>
 
+#include "config.h"
+
 #if __GNUC__ + 0 < 2
 #undef __GNUC__
 #elif defined(__GNUC__) && defined(SWIG) /* lool */
@@ -200,14 +202,14 @@
 #endif
 #endif
 
-#ifndef smashmystack
+#ifndef nostackprotector
 #if __has_attribute(__no_stack_protector__)
-#define smashmystack __attribute__((__no_stack_protector__))
+#define nostackprotector __attribute__((__no_stack_protector__))
 #elif (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 407 || \
     __has_attribute(__optimize__)
-#define smashmystack __attribute__((__optimize__("-fno-stack-protector")))
+#define nostackprotector __attribute__((__optimize__("-fno-stack-protector")))
 #else
-#define smashmystack
+#define nostackprotector
 #endif
 #endif
 
@@ -243,19 +245,23 @@
 #define __SANITIZE_UNDEFINED__
 #endif
 
-#if (defined(__x86_64__) || defined(__aarch64__)) &&                     \
+#ifdef DISABLE_JIT
+#define HAVE_JIT 0
+#elif (defined(__x86_64__) || defined(__aarch64__)) &&                   \
     !defined(__SANITIZE_MEMORY__) && !defined(__SANITIZE_UNDEFINED__) && \
     !defined(__SANITIZE_THREAD__) && !defined(NOJIT)
-#define HAVE_JIT
+#define HAVE_JIT 1
+#else
+#define HAVE_JIT 0
 #endif
 
-#if defined(HAVE_JIT) && defined(__GNUC__) && \
-    !defined(__SANITIZE_ADDRESS__) && !defined(__SANITIZE_UNDEFINED__)
+#if HAVE_JIT && defined(__GNUC__) && !defined(__SANITIZE_ADDRESS__) && \
+    !defined(__SANITIZE_UNDEFINED__)
 #ifndef __OPTIMIZE__
 #define TRIVIALLY_RELOCATABLE \
-  noinstrument dontclone noubsan smashmystack optimizesize
+  noinstrument dontclone noubsan nostackprotector optimizesize
 #else
-#define TRIVIALLY_RELOCATABLE noinstrument dontclone noubsan smashmystack
+#define TRIVIALLY_RELOCATABLE noinstrument dontclone noubsan nostackprotector
 #endif
 #define MICRO_OP_SAFE TRIVIALLY_RELOCATABLE forceinline
 #define MICRO_OP      TRIVIALLY_RELOCATABLE

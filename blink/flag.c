@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/builtin.h"
 #include "blink/flag.h"
 
 bool FLAG_strace;
@@ -24,4 +25,7 @@ bool FLAG_noconnect;
 bool FLAG_nologstderr;
 bool FLAG_alsologtostderr;
 const char *FLAG_logpath;
+
+#ifndef DISABLE_OVERLAYS
 const char *FLAG_overlays;
+#endif

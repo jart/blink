@@ -130,12 +130,14 @@ LIBC_TEST_TESTS =										\
 	o/$(MODE)/third_party/libc-test/bin/3/regression/daemon-failure.elf.ok			\
 	o/$(MODE)/third_party/libc-test/bin/3/functional/inet_pton.elf.ok
 
-ifeq ($(shell [ -d /dev/shm ] && echo yes), yes)
+ifneq ($(wildcard /dev/shm),)
+ifneq ($(HOST_SYSTEM), FreeBSD)
 LIBC_TEST_TESTS +=										\
 	o/$(MODE)/third_party/libc-test/bin/2/functional/sem_open.elf.ok			\
 	o/$(MODE)/third_party/libc-test/bin/2/regression/sem_close-unmap.elf.ok			\
 	o/$(MODE)/third_party/libc-test/bin/2/regression/pthread_cancel-sem_wait.elf.ok		\
 	o/$(MODE)/third_party/libc-test/bin/2/functional/pthread_cancel-points.elf.ok
+endif
 endif
 
 # When creating files, Linux sets st_gid to getegid() but Darwin and

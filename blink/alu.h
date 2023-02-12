@@ -2,6 +2,7 @@
 #define BLINK_ALU_H_
 #include <stdbool.h>
 
+#include "blink/builtin.h"
 #include "blink/machine.h"
 #include "blink/types.h"
 
@@ -134,5 +135,9 @@ i64 Adcx32(u64, u64, struct Machine *);
 i64 Adcx64(u64, u64, struct Machine *);
 i64 Adox32(u64, u64, struct Machine *);
 i64 Adox64(u64, u64, struct Machine *);
+
+#ifdef DISABLE_JIT
+#define kAluFast kAlu
+#endif
 
 #endif /* BLINK_ALU_H_ */

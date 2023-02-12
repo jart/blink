@@ -4,6 +4,12 @@
 #include "blink/machine.h"
 #include "blink/rde.h"
 
+#ifndef DISABLE_THREADS
+#define Lock(x) ((x & 020000000000) >> 037)
+#else
+#define Lock(x) 0
+#endif
+
 #define RegRexbSrm(m, x)   m->weg[RexbSrm(x)]
 #define AddrByteReg(m, k)  (m->beg + kByteReg[k])
 #define ByteRexrReg(m, x)  AddrByteReg(m, RexRexr(x))

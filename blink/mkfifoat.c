@@ -16,72 +16,22 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #include "blink/errno.h"
-#include "blink/limits.h"
-#include "blink/macros.h"
-#include "blink/preadv.h"
+#include "blink/log.h"
+#include "blink/syscall.h"
 
-#ifdef POLYFILL_PREADV
+#ifdef POLYFILL_MKFIFOAT
 
-// preadv() and pwritev() need MacOS 11+ c. 2020
-
-ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
-  int i;
-  char *p;
-  ssize_t rc;
-  size_t j, n, m, t;
-  if (offset < 0 || iovcnt <= 0 || iovcnt > IOV_MAX) {
-    return einval();
+int mkfifoat(int dirfd, const char *path, mode_t mode) {
+  if (dirfd == AT_FDCWD) {
+    return mkfifo(path, mode);
+  } else {
+    LOGF("this platform doesn't have mkfifoat()");
+    return enosys();
   }
-  for (n = 0, i = 0; i < iovcnt; ++i) {
-    t = n + iov[i].iov_len;
-    if (t < n || n > NUMERIC_MAX(ssize_t)) {
-      return einval();
-    }
-    n = t;
-  }
-  if (!(p = malloc(n))) {
-    return enomem();
-  }
-  if ((rc = pread(fd, p, n, offset)) != -1) {
-    for (j = 0, i = 0; i < iovcnt && j < rc; ++i, j += m) {
-      m = MIN(iov[i].iov_len, rc - j);
-      memcpy(iov[i].iov_base, p + j, m);
-    }
-  }
-  free(p);
-  return rc;
 }
 
-ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
-  int i;
-  char *p;
-  ssize_t rc;
-  size_t j, n, m, t;
-  if (offset < 0 || iovcnt <= 0 || iovcnt > IOV_MAX) {
-    return einval();
-  }
-  for (n = 0, i = 0; i < iovcnt; ++i) {
-    t = n + iov[i].iov_len;
-    if (t < n || n > NUMERIC_MAX(ssize_t)) {
-      return einval();
-    }
-    n = t;
-  }
-  if (!(p = malloc(n))) {
-    return enomem();
-  }
-  for (j = 0, i = 0; i < iovcnt && j < n; ++i, j += m) {
-    m = MIN(iov[i].iov_len, n - j);
-    memcpy(p + j, iov[i].iov_base, m);
-  }
-  rc = pwrite(fd, p, n, offset);
-  free(p);
-  return rc;
-}
-
-#endif /* POLYFILL_PREADV */
+#endif /* POLYFILL_MKFIFOAT */

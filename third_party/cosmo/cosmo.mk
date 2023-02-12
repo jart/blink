@@ -288,7 +288,6 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/mips64el/third_party/cosmo/2/intrin_test.com.emulates			\
 		o/$(MODE)/mips64el/third_party/cosmo/2/palandprintf_test.com.emulates		\
 		o/$(MODE)/mips64el/third_party/cosmo/2/divmul_test.com.emulates			\
-		o/$(MODE)/mips64el/third_party/cosmo/2/test_suite_ecp.com.emulates		\
 		o/$(MODE)/mips64el/third_party/cosmo/2/lockscale_test.com.emulates		\
 		o/$(MODE)/mips64el/third_party/cosmo/2/palignr_test.com.emulates		\
 		o/$(MODE)/mips64el/third_party/cosmo/2/pmulhrsw_test.com.emulates		\
