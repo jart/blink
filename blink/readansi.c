@@ -34,7 +34,6 @@
 ssize_t readansi(int fd, char *buf, size_t size) {
   u8 c;
   int rc, i, j;
-  struct pollfd pfd[1];
   enum { kAscii, kUtf8, kEsc, kCsi, kSs } t;
   if (size) buf[0] = 0;
   for (j = i = 0, t = kAscii;;) {
@@ -50,9 +49,10 @@ ssize_t readansi(int fd, char *buf, size_t size) {
 #ifdef __EMSCRIPTEN__
         emscripten_sleep(50);
 #else
-        pfd[0].fd = fd;
-        pfd[0].events = POLLIN;
-        poll(pfd, 1, 0);
+        struct pollfd pfd;
+        pfd.fd = fd;
+        pfd.events = POLLIN;
+        poll(&pfd, 1, 0);
 #endif
         continue;
       }

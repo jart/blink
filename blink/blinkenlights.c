@@ -1461,7 +1461,13 @@ static void DrawXmm(struct Panel *p, i64 i, i64 r) {
         }
         if (xmmdisp == kXmmHex || xmmdisp == kXmmChar) {
           if (xmmdisp == kXmmChar && iswalnum(ival)) {
+#ifdef __EMSCRIPTEN__
+            // wat: format specifies type 'wint_t' (aka 'int') but the
+            //      argument has type 'wint_t' (aka 'unsigned int')
+            sprintf(buf, "%lc", (int)ival);
+#else
             sprintf(buf, "%lc", (wint_t)ival);
+#endif
           } else {
             sprintf(buf, "%.*x", xmmtype.size[r] * 8 / 4, (unsigned)ival);
           }
