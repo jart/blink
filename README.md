@@ -11,8 +11,8 @@ This project contains two programs:
 different operating systems and hardware architectures. It's designed to
 do the same thing as the `qemu-x86_64` command, except that
 
-1. Blink is 196kb in size (or 126kb if optional features are disabled),
-   whereas the qemu-x86_64 executable is 4mb in size.
+1. Blink is 196kb in size (126kb with optional features disabled),
+   whereas qemu-x86_64 is a 4mb binary.
 
 2. Blink will run your Linux binaries on any POSIX system, whereas
    qemu-x86_64 only supports Linux.
