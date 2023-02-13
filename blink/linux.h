@@ -207,6 +207,13 @@
 #define CLONE_CHILD_CLEARTID_LINUX 0x00200000
 #define CLONE_DETACHED_LINUX       0x00400000
 #define CLONE_CHILD_SETTID_LINUX   0x01000000
+#define CLONE_NEWCGROUP_LINUX      0x02000000
+#define CLONE_NEWUTS_LINUX         0x04000000
+#define CLONE_NEWIPC_LINUX         0x08000000
+#define CLONE_NEWUSER_LINUX        0x10000000
+#define CLONE_NEWPID_LINUX         0x20000000
+#define CLONE_NEWNET_LINUX         0x40000000
+#define CLONE_IO_LINUX             0x80000000
 
 #define FUTEX_WAIT_LINUX           0
 #define FUTEX_WAKE_LINUX           1
@@ -666,6 +673,7 @@
 #define IP_HDRINCL_LINUX           3
 #define IP_OPTIONS_LINUX           4
 #define IP_RETOPTS_LINUX           7
+#define IP_RECVERR_LINUX           11
 #define IP_RECVTTL_LINUX           12
 #define IP_MTU_LINUX               14
 #define TCP_NODELAY_LINUX          1
@@ -1099,6 +1107,12 @@ struct msghdr_linux {
   u8 controllen[8];  // u64 ancillary data buffer len
   u8 flags[4];       // u32 MSG_XXX (only applies to recvmsg)
   u8 pad2_[4];       //
+};
+
+struct mmsghdr_linux {
+  struct msghdr_linux hdr;
+  u8 len[4];
+  u8 pad_[4];
 };
 
 struct cmsghdr_linux {

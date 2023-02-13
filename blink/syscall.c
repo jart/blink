@@ -520,7 +520,7 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
               CLONE_CHILD_SETTID_LINUX | CLONE_SYSVSEM_LINUX;
   mandatory = CLONE_THREAD_LINUX | CLONE_VM_LINUX | CLONE_FS_LINUX |
               CLONE_FILES_LINUX | CLONE_SIGHAND_LINUX;
-  ignored = CLONE_DETACHED_LINUX;
+  ignored = CLONE_DETACHED_LINUX | CLONE_IO_LINUX;
   flags &= ~ignored;
   if (flags & ~supported) {
     LOGF("unsupported clone() flags: %#" PRIx64, flags & ~supported);
@@ -613,6 +613,31 @@ static struct Futex *NewFutex(i64 addr) {
 
 static void FreeFutex(struct Futex *f) {
   dll_make_first(&g_bus->futexes.free, &f->elem);
+}
+
+static int LoadTimespec(struct Machine *m, i64 addr, struct timespec *ts,
+                        u64 mask, u64 need) {
+  const struct timespec_linux *gt;
+  if ((gt = (const struct timespec_linux *)Schlep(m, addr, sizeof(*gt), mask,
+                                                  need))) {
+    ts->tv_sec = Read64(gt->sec);
+    ts->tv_nsec = Read64(gt->nsec);
+    if (0 <= ts->tv_sec && (0 <= ts->tv_nsec && ts->tv_nsec < 1000000000)) {
+      return 0;
+    } else {
+      return einval();
+    }
+  } else {
+    return -1;
+  }
+}
+
+static int LoadTimespecR(struct Machine *m, i64 addr, struct timespec *ts) {
+  return LoadTimespec(m, addr, ts, PAGE_U, PAGE_U);
+}
+
+static int LoadTimespecRW(struct Machine *m, i64 addr, struct timespec *ts) {
+  return LoadTimespec(m, addr, ts, PAGE_U | PAGE_RW, PAGE_U | PAGE_RW);
 }
 
 static int SysFutexWait(struct Machine *m,  //
@@ -1419,6 +1444,15 @@ static int LoadSockaddr(struct Machine *m, i64 sockaddr_addr, u32 sockaddr_size,
   }
 }
 
+static int CheckSockaddr(struct Machine *m, i64 sockaddr_addr,
+                         i64 sockaddr_size_addr) {
+  const u8 *size;
+  if (!sockaddr_size_addr) return 0;
+  if (!(size = (const u8 *)SchlepRW(m, sockaddr_size_addr, 4))) return -1;
+  if ((i32)Read32(size) < 0) return einval();
+  return 0;
+}
+
 static int StoreSockaddr(struct Machine *m, i64 sockaddr_addr,
                          i64 sockaddr_size_addr, const struct sockaddr *sa,
                          socklen_t salen) {
@@ -1752,6 +1786,7 @@ static i64 SysRecvfrom(struct Machine *m,  //
   struct sockaddr_storage addr;
   if ((hostflags = XlatRecvFlags(flags)) == -1) return -1;
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
+  if (CheckSockaddr(m, sockaddr_addr, sockaddr_size_addr) == -1) return -1;
   memset(&msg, 0, sizeof(msg));
   if (sockaddr_addr && sockaddr_size_addr) {
     msg.msg_name = &addr;
@@ -1763,9 +1798,8 @@ static i64 SysRecvfrom(struct Machine *m,  //
     msg.msg_iovlen = iv.i;
     INTERRUPTIBLE(!norestart, rc = recvmsg(fildes, &msg, hostflags));
     if (rc != -1) {
-      unassert(!StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
-                              (struct sockaddr *)msg.msg_name,
-                              msg.msg_namelen));
+      StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
+                    (struct sockaddr *)msg.msg_name, msg.msg_namelen);
     }
   }
   FreeIovs(&iv);
@@ -1888,6 +1922,101 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   }
   FreeIovs(&iv);
   return rc;
+}
+
+static i64 SysSendmmsg(struct Machine *m, i32 fildes, i64 msgsaddr, u32 msgcnt,
+                       i32 flags) {
+  u32 i;
+  i64 rc;
+  u8 word[4];
+  const struct mmsghdr_linux *msgs;
+  if (!(msgs = (const struct mmsghdr_linux *)SchlepRW(
+            m, msgsaddr, msgcnt * sizeof(*msgs)))) {
+    return -1;
+  }
+  for (i = 0; i < msgcnt; ++i) {
+    if ((rc = SysSendmsg(m, fildes, msgsaddr + i * sizeof(*msgs), flags)) !=
+        -1) {
+      Write32(word, rc);
+      unassert(CopyToUserWrite(m,
+                               msgsaddr + i * sizeof(*msgs) +
+                                   offsetof(struct mmsghdr_linux, len),
+                               word, 4) != -1);
+    } else {
+      if (!i) return -1;
+      if (errno == EINTR || errno == EWOULDBLOCK) break;
+      LOGF("%s raised %s after doing work", "sendmmsg",
+           DescribeHostErrno(errno));
+      break;
+    }
+  }
+  return i;
+}
+
+static i64 SysRecvmmsg(struct Machine *m, i32 fildes, i64 msgsaddr, u32 msgcnt,
+                       i32 flags, i64 timeoutaddr) {
+  u32 i;
+  i64 rc;
+  u8 word[4];
+  i32 flags2;
+  struct timespec_linux gt;
+  const struct mmsghdr_linux *msgs;
+  struct timespec ts, now, remain, deadline = {0};
+  if (!(msgs = (const struct mmsghdr_linux *)SchlepRW(
+            m, msgsaddr, msgcnt * sizeof(*msgs)))) {
+    return -1;
+  }
+  if (timeoutaddr) {
+    if (LoadTimespecR(m, timeoutaddr, &ts) == -1) return -1;
+    deadline = AddTime(GetTime(), ts);
+  }
+  for (i = 0; i < msgcnt; ++i) {
+    flags2 = flags & ~MSG_WAITFORONE_LINUX;
+    if ((flags & MSG_WAITFORONE_LINUX) && i) {
+      flags2 |= MSG_DONTWAIT_LINUX;
+    }
+    if ((rc = SysRecvmsg(m, fildes, msgsaddr + i * sizeof(*msgs), flags2)) !=
+        -1) {
+      Write32(word, rc);
+      unassert(CopyToUserWrite(m,
+                               msgsaddr + i * sizeof(*msgs) +
+                                   offsetof(struct mmsghdr_linux, len),
+                               word, 4) != -1);
+    } else {
+      if (!i) return -1;
+      if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+      // If an error occurs after at least one message has been
+      // received, the call succeeds, and returns the number of messages
+      // received. The error code is expected to be returned on a
+      // subsequent call to recvmmsg(). In the current implementation,
+      // however, the error code can be overwritten in the meantime by
+      // an unrelated network event on a socket, for example an incoming
+      // ICMP packet. ──Quoth the Linux Programmer's Manual § recvmmsg()
+      LOGF("%s raised %s after doing work", "recvmmsg",
+           DescribeHostErrno(errno));
+      break;
+    }
+    // The timeout argument does not work as intended. The timeout is
+    // checked only after the receipt of each datagram, so that if up to
+    // vlen-1 datagrams are received before the timeout expires, but
+    // then no further datagrams are received, the call will block
+    // forever. ──Quoth the Linux Programmer's Manual § recvmmsg()
+    if (timeoutaddr && CompareTime(GetTime(), deadline) >= 0) {
+      break;
+    }
+  }
+  if (timeoutaddr) {
+    now = GetTime();
+    if (CompareTime(now, deadline) >= 0) {
+      remain = GetZeroTime();
+    } else {
+      remain = SubtractTime(deadline, now);
+    }
+    Write64(gt.sec, remain.tv_sec);
+    Write64(gt.nsec, remain.tv_nsec);
+    CopyToUserWrite(m, timeoutaddr, &gt, sizeof(gt));
+  }
+  return i;
 }
 
 static int SysConnectBind(struct Machine *m, i32 fildes, i64 sockaddr_addr,
@@ -3841,7 +3970,7 @@ static int SysGettimeofday(struct Machine *m, i64 tv, i64 tz) {
       return -1;
     }
     // "If tzp is not a null pointer, the behavior is unspecified."
-    // -Quoth the POSIX.1 IEEE Std 1003.1-2017 for gettimeofday().
+    // ──Quoth the POSIX.1 IEEE Std 1003.1-2017 for gettimeofday().
     if (tz) {
 #ifdef HAVE_STRUCT_TIMEZONE
       Write32(gtimezone.minuteswest, htimezone.tz_minuteswest);
@@ -4087,7 +4216,6 @@ static i32 Select(struct Machine *m,          //
     if (LoadFdSet(m, nfds, &readfds, readfds_addr) != -1) {
       readfdsp = &readfds;
     } else {
-      LOGF("select() bad %s memory", "readfds");
       return -1;
     }
   } else {
@@ -4097,7 +4225,6 @@ static i32 Select(struct Machine *m,          //
     if (LoadFdSet(m, nfds, &writefds, writefds_addr) != -1) {
       writefdsp = &writefds;
     } else {
-      LOGF("select() bad %s memory", "writefds");
       return -1;
     }
   } else {
@@ -4107,7 +4234,6 @@ static i32 Select(struct Machine *m,          //
     if (LoadFdSet(m, nfds, &exceptfds, exceptfds_addr) != -1) {
       exceptfdsp = &exceptfds;
     } else {
-      LOGF("select() bad %s memory", "exceptfds");
       return -1;
     }
   } else {
@@ -4692,7 +4818,7 @@ static int SysSetreuid(struct Machine *m, u32 real, u32 effective) {
   // If the real user ID is set (i.e., ruid is not -1) or the effective
   // user ID is set to a value not equal to the previous real user ID,
   // the saved set-user-ID will be set to the new effective user ID.
-  // -Quoth the Linux Programmer's Manual § setreuid()
+  // ──Quoth the Linux Programmer's Manual § setreuid()
   if (real != -1 || (effective != -1 && effective != getuid())) {
     if (effective == -1) effective = geteuid();
     return setresuid(real, effective, effective);
@@ -4737,9 +4863,9 @@ static i32 SysGetresuid(struct Machine *m,  //
   euid = geteuid();
   suid = euid;
 #endif
-  Write32(real, uid);
-  Write32(saved, suid);
-  Write32(effective, euid);
+  if (real) Write32(real, uid);
+  if (saved) Write32(saved, suid);
+  if (effective) Write32(effective, euid);
   return 0;
 }
 
@@ -4763,9 +4889,9 @@ static i32 SysGetresgid(struct Machine *m,  //
   egid = getegid();
   sgid = egid;
 #endif
-  Write32(real, gid);
-  Write32(saved, sgid);
-  Write32(effective, egid);
+  if (real) Write32(real, gid);
+  if (saved) Write32(saved, sgid);
+  if (effective) Write32(effective, egid);
   return 0;
 }
 
@@ -4926,7 +5052,9 @@ void OpSyscall(P) {
     SYSCALL6(0x02C, SysSendto);
     SYSCALL6(0x02D, SysRecvfrom);
     SYSCALL3(0x02E, SysSendmsg);
+    SYSCALL4(0x133, SysSendmmsg);
     SYSCALL3(0x02F, SysRecvmsg);
+    SYSCALL5(0x12B, SysRecvmmsg);
     SYSCALL2(0x030, SysShutdown);
     SYSCALL3(0x031, SysBind);
     SYSCALL2(0x032, SysListen);

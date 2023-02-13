@@ -404,6 +404,7 @@ bool OverlapsPrecious(i64, i64) pureconst;
 char **CopyStrList(struct Machine *, i64);
 char *CopyStr(struct Machine *, i64);
 char *LoadStr(struct Machine *, i64);
+void *Schlep(struct Machine *, i64, size_t, u64, u64);
 void *SchlepR(struct Machine *, i64, size_t);
 void *SchlepW(struct Machine *, i64, size_t);
 void *SchlepRW(struct Machine *, i64, size_t);

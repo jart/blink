@@ -251,6 +251,7 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/1/setpgrp01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/setpgrp02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/setsid01.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/sigaction01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/sigaction02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/rt_sigaction02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/rt_sigaction03.elf.ok		\
@@ -313,7 +314,6 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/2/unlinkat01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/futimesat01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/unlink07.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/2/futex_wait03.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/send01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/2/sendmsg01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/sched_yield01.elf.ok		\
@@ -321,7 +321,11 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/2/readlinkat02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/readv02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/2/realpath01.elf.ok		\
-	o/$(MODE)/third_party/ltp/bin/2/openat01.elf.ok
+	o/$(MODE)/third_party/ltp/bin/2/openat01.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/2/recvmmsg01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sendmmsg01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sendmmsg02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/recvfrom01.elf.ok
 
 ifneq ($(HOST_SYSTEM), FreeBSD)
 # These tests make the system get wrekt.
@@ -364,7 +368,7 @@ ifneq ($(HOST_SYSTEM), FreeBSD)
 LTP_TESTS +=								\
 	o/$(MODE)/third_party/ltp/bin/1/clock_gettime04.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/futex_wait02.elf.ok		\
-	o/$(MODE)/third_party/ltp/bin/1/futex_wait03.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/futex_wait03.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/nanosleep04.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/getpgid02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/getppid01.elf.ok		\

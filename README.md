@@ -101,10 +101,10 @@ ls -hal o/tiny/x86_64/blink/blink
 
 If you want to make Blink *even tinier* (more on the order of 120kb
 rather than 200kb) than you can tune the `./configure` script to disable
-optional features such as JIT, x87, threads, sockets, etc.
+optional features such as jit, threads, sockets, x87, bcd, xsi, etc.
 
 ```sh
-./configure --disable-all
+./configure --disable-all --posix
 make MODE=tiny o/tiny/x86_64/blink/blink
 o/third_party/gcc/x86_64/bin/x86_64-linux-musl-strip o/tiny/x86_64/blink/blink
 ls -hal o/tiny/x86_64/blink/blink
@@ -831,7 +831,10 @@ reasons of performance is defined to include pushing and popping.
 
 ### Threads
 
-Blink currently doesn't unlock robust mutexes on process death.
+System calls do not explicitly lock the memory pages they're accessing;
+we haven't determined yet if that makes calling munmap() unsafe. Blink
+also lacks support right now for unlocking robust mutexes when a guest
+program crashes; this too is something we'd like to fix.
 
 ### Coherency
 
