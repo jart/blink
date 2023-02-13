@@ -289,6 +289,12 @@ else
   EXTRA_LDLIBS=-lpthread
   if config pthread "checking for -lpthread... "; then
     LDLIBS="${LDLIBS} -lpthread"
+  else
+    if config pthread "checking for pthreads... "; then
+      LDLIBS="${LDLIBS} -lpthread"
+    else
+      uncomment "#define DISABLE_THREADS"
+    fi
   fi
 fi
 

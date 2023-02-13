@@ -42,7 +42,9 @@ jobs:
       - name: Configure blink
         run: |
           . ./emsdk/emsdk_env.sh
+          export CFLAGS=-O2
           emconfigure ./configure
+          cat config.log
 
       - name: Build blink
         run: |

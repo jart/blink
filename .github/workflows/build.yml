@@ -29,7 +29,9 @@ jobs:
         run: sudo sh -c "echo ':APE:M::MZqFpD::/usr/bin/ape:' >/proc/sys/fs/binfmt_misc/register"
 
       - name: configure
-        run: ./configure
+        run: |
+          ./configure
+          cat config.log
 
       - name: make matrix
         run: make -j2 check o//test/blink o//test/asm o//test/func o//test/metal

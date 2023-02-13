@@ -37,5 +37,6 @@ jobs:
         run: |
           cd "$GITHUB_WORKSPACE"
           ./configure
+          cat config.log
           make -j$(nproc) check o//test/blink
         shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
