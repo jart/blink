@@ -17,21 +17,21 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <limits.h>
-#include <stdatomic.h>
 
 #include "blink/alu.h"
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/rde.h"
 #include "blink/stats.h"
 #include "blink/swap.h"
+#include "blink/thread.h"
 
 void LoadAluArgs(P) {
   if (IsMakingPath(m)) {

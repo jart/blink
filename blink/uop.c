@@ -252,7 +252,7 @@ MICRO_OP void Int32ToDouble(i32 x, struct Machine *m, long reg) {
   Put64(m->xmm[reg], d.i);
 }
 
-#if HAVE_JIT
+#ifdef HAVE_JIT
 
 ////////////////////////////////////////////////////////////////////////////////
 // ACCOUNTING

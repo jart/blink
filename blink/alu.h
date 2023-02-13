@@ -136,7 +136,7 @@ i64 Adcx64(u64, u64, struct Machine *);
 i64 Adox32(u64, u64, struct Machine *);
 i64 Adox64(u64, u64, struct Machine *);
 
-#ifdef DISABLE_JIT
+#ifndef HAVE_JIT
 #define kAluFast kAlu
 #endif
 

@@ -31,12 +31,12 @@
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/loader.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/overlays.h"
 #include "blink/stats.h"
+#include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/util.h"
 

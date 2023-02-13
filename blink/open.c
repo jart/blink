@@ -18,8 +18,6 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <fcntl.h>
-#include <pthread.h>
-#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -27,14 +25,15 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/debug.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/overlays.h"
 #include "blink/random.h"
 #include "blink/syscall.h"
+#include "blink/thread.h"
 #include "blink/xlat.h"
 
 #ifdef DISABLE_OVERLAYS

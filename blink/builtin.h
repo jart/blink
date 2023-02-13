@@ -249,18 +249,14 @@
 #define __SANITIZE_UNDEFINED__
 #endif
 
-#ifdef DISABLE_JIT
-#define HAVE_JIT 0
-#elif (defined(__x86_64__) || defined(__aarch64__)) &&                   \
-    !defined(__SANITIZE_MEMORY__) && !defined(__SANITIZE_UNDEFINED__) && \
+#if !defined(DISABLE_JIT) && (defined(__x86_64__) || defined(__aarch64__)) && \
+    !defined(__SANITIZE_MEMORY__) && !defined(__SANITIZE_UNDEFINED__) &&      \
     !defined(__SANITIZE_THREAD__) && !defined(NOJIT)
-#define HAVE_JIT 1
-#else
-#define HAVE_JIT 0
+#define HAVE_JIT
 #endif
 
-#if HAVE_JIT && defined(__GNUC__) && !defined(__SANITIZE_ADDRESS__) && \
-    !defined(__SANITIZE_UNDEFINED__)
+#if defined(HAVE_JIT) && defined(__GNUC__) && \
+    !defined(__SANITIZE_ADDRESS__) && !defined(__SANITIZE_UNDEFINED__)
 #ifndef __OPTIMIZE__
 #define TRIVIALLY_RELOCATABLE \
   noinstrument dontclone noubsan nostackprotector optimizesize

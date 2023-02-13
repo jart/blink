@@ -30,7 +30,7 @@
  */
 
 bool FuseBranchTest(P) {
-#if HAVE_JIT
+#ifdef HAVE_JIT
   i64 bdisp;
   u8 *p, jcc, jlen;
   if (RegLog2(rde) < 2) {
@@ -144,7 +144,7 @@ bool FuseBranchTest(P) {
 }
 
 bool FuseBranchCmp(P, bool imm) {
-#if HAVE_JIT
+#ifdef HAVE_JIT
   i64 bdisp;
   u8 *p, jcc, jlen;
   if (RegLog2(rde) < 2) {

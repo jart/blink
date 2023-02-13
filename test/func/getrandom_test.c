@@ -1,7 +1,7 @@
 /*-*- mode:c;indent-tabs-mode:nil;c-basic-offset:2;tab-width:8;coding:utf-8 -*-│
 │vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2022 Justine Alexandra Roberts Tunney                              │
+│ Copyright 2023 Justine Alexandra Roberts Tunney                              │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -16,49 +16,46 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
+#include <stdlib.h>
+#include <sys/syscall.h>
 #include <unistd.h>
 
-#include "blink/dll.h"
-#include "blink/jit.h"
-#include "blink/macros.h"
-#include "blink/thread.h"
-
-/**
- * Forces activation of committed JIT chunks.
- *
- * Normally JIT chunks become active and have their function pointer
- * hook updated automatically once the system block fills up with jit
- * code. In some cases, such as unit tests, it's necessary to ensure
- * that JIT code goes live sooner. The tradeoff of flushing is it'll
- * lead to wasted memory and less performance, due to the additional
- * mprotect() system call overhead.
+/*
+ * assuming the system is working correctly there's a 1 in
+ * 235716896562095165800448 chance this check should flake
  */
-int FlushJit(struct Jit *jit) {
-  int count = 0;
-  long pagesize;
-  struct Dll *e;
-  struct JitBlock *jb;
-  struct JitStage *js;
-  if (!CanJitForImmediateEffect()) {
-    pagesize = sysconf(_SC_PAGESIZE);
-    LOCK(&jit->lock);
-  StartOver:
-    for (e = dll_first(jit->blocks); e; e = dll_next(jit->blocks, e)) {
-      jb = JITBLOCK_CONTAINER(e);
-      if (jb->start >= jit->blocksize) break;
-      if (!dll_is_empty(jb->staged)) {
-        dll_remove(&jit->blocks, e);
-        UNLOCK(&jit->lock);
-        js = JITSTAGE_CONTAINER(dll_last(jb->staged));
-        jb->start = ROUNDUP(js->index, pagesize);
-        jb->index = jb->start;
-        count += CommitJit_(jit, jb);
-        LOCK(&jit->lock);
-        ReinsertJitBlock_(jit, jb);
-        goto StartOver;
-      }
+#define BYTES 9
+#define TRIES 16
+
+void TestDataSeemsRandom(void) {
+  ssize_t rc;
+  size_t i, j;
+  int haszero, fails = 0;
+  for (i = 0; i < TRIES; ++i) {
+    unsigned char x[BYTES] = {0};
+    rc = syscall(SYS_getrandom, x, BYTES, 0);
+    if (rc == -1) exit(1);
+    if (rc != BYTES) exit(2);
+    for (haszero = j = 0; j < BYTES; ++j) {
+      if (!x[j]) haszero = 1;
     }
-    UNLOCK(&jit->lock);
+    if (haszero) ++fails;
   }
-  return count;
+  if (fails >= TRIES) exit(3);
+}
+
+void TestApi(void) {
+  long x;
+  if (syscall(SYS_getrandom, 0, 0, 0) != 0) exit(4);
+  if (syscall(SYS_getrandom, (void *)-1, 1, 0) != -1) exit(5);
+  if (errno != EFAULT) exit(6);
+  if (syscall(SYS_getrandom, &x, sizeof(x), -1) != -1) exit(7);
+  if (errno != EINVAL) exit(8);
+}
+
+int main(int argc, char *argv[]) {
+  TestDataSeemsRandom();
+  TestApi();
+  return 0;
 }

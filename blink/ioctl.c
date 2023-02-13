@@ -33,11 +33,11 @@
 #include "blink/errno.h"
 #include "blink/fds.h"
 #include "blink/linux.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/syscall.h"
+#include "blink/thread.h"
 #include "blink/types.h"
 #include "blink/xlat.h"
 
@@ -346,8 +346,10 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlTiocgsid(m, fildes, addr);
     case TCFLSH_LINUX:
       return IoctlTcflsh(m, fildes, addr);
+#ifndef DISABLE_SOCKETS
     case SIOCATMARK_LINUX:
       return IoctlSiocatmark(m, fildes, addr);
+#endif
 #ifdef FIONREAD
     case FIONREAD_LINUX:
       return IoctlGetInt32(m, fildes, FIONREAD, addr);

@@ -41,6 +41,9 @@ if [ "$1" = "--help" ]; then
   echo "  --disable-sockets"
   echo "    disables socket() and related system calls (shaves ~5kb)"
   echo
+  echo "  --disable-fork"
+  echo "    disables fork() and interprocess communication (shaves ~3kb)"
+  echo
   echo "  --disable-overlays"
   echo "    disables filesystem overlays and chroot() support (shaves ~3kb)"
   echo
@@ -120,14 +123,35 @@ realpath() (
 )
 
 mkdir -p "${TMPDIR}" || exit
-
+mkdir -p o/tool/config || exit
 export TMPDIR=$(realpath "$TMPDIR")
+
+printf "checking for flock... " >&2
+if command -v flock >/dev/null; then
+  echo yes >&2
+  FLOCK=flock
+elif [ -x o/tool/flock ]; then
+  echo o/tool/flock >&2
+  FLOCK=o/tool/flock
+else
+  echo no >&2
+  printf "building tool/flock.c... " >&2
+  f=$(mktemp flock.XXXXXX)
+  if ${CC} -o "${f}" tool/flock.c; then
+    echo ok >&2
+    mv -f "${f}" o/tool/flock || exit
+    FLOCK=o/tool/flock
+  else
+    echo "error: need the flock command" >&2
+    exit 1
+  fi
+fi
+
 CONFIG=$(mktemp blink-config.h.XXXXXX)
 BUILD=$(mktemp blink-config.mk.XXXXXX)
 LOCK=$(mktemp blink-config.lock.XXXXXX)
 
 cp config.h.in "${CONFIG}" || exit
-mkdir -p o/tool/config || exit
 rm -f config.log
 
 run() {
@@ -202,7 +226,7 @@ hassstr() {
 
 replace() {
   exec 7<>"${LOCK}"
-  flock -x 7
+  "${FLOCK}" -x 7
   sed "s@$1@$2@" <"${CONFIG}" >"${CONFIG}.tmp" &&
   mv -f "${CONFIG}.tmp" "${CONFIG}"
   exec 7<&-
@@ -221,6 +245,14 @@ uncomment() {
 for x; do
   if [ "$x" = "--disable-all" ]; then
     uncomment "#define DISABLE"
+    DISABLE_THREADS=1
+    DISABLE_FORK=1
+    DISABLE_JIT=1
+
+  elif [ "$x" = "--enable-fork" ]; then
+    unset DISABLE_FORK
+  elif [ "$x" = "--disable-fork" ]; then
+    DISABLE_FORK=1
 
   elif [ "$x" = "--enable-jit" ]; then
     comment "#define DISABLE_JIT"
@@ -236,8 +268,10 @@ for x; do
 
   elif [ "$x" = "--enable-threads" ]; then
     comment "#define DISABLE_THREADS"
+    unset DISABLE_THREADS
   elif [ "$x" = "--disable-threads" ]; then
     uncomment "#define DISABLE_THREADS"
+    DISABLE_THREADS=1
 
   elif [ "$x" = "--enable-sockets" ]; then
     comment "#define DISABLE_SOCKETS"
@@ -272,12 +306,47 @@ for x; do
   fi
 done
 
-# position independence can help avoid an mmap crisis
+# position independent executables
+# 1. help ensure blink won't overlap static binaries in memory
+# 2. gcc and clang generates tinier code for switch statements
 EXTRA_CFLAGS=-fpie
 EXTRA_LDFLAGS=-pie
 if config noop "checking for pie... "; then
   CFLAGS="-fpie ${CFLAGS}"
   LDFLAGS="-pie ${LDFLAGS}"
+else
+  # otherwise relocate blink somewhere irregular
+  BASE=-Wl,--image-base=0x23000000
+  EXTRA_LDFLAGS="${BASE}"
+  if config noop "checking for ${BASE}... "; then
+    LDFLAGS="${BASE} ${LDFLAGS}"
+  else
+    BASE=-Wl,-Ttext-segment=0x23000000
+    EXTRA_LDFLAGS="${BASE}"
+    if config noop "checking for ${BASE}... "; then
+      LDFLAGS="${BASE} ${LDFLAGS}"
+    fi
+  fi
+fi
+
+# ensure binaries will run on apple m1, cygwin, etc.
+# blink can't map a program into memory without this
+GOODELF=-Wl,-z,common-page-size=65536,-z,max-page-size=65536
+EXTRA_LDFLAGS="${GOODELF}"
+if config noop "checking for ${GOODELF}..."; then
+  LDFLAGS="${GOODELF} ${LDFLAGS}"
+  # with 64kb pages these two security blankets would otherwise cause
+  # blink's minimum binary size to increase from 120kb to 250kb. yuck
+  NORELRO=-Wl,-z,norelro
+  EXTRA_LDFLAGS="${NORELRO}"
+  if config noop "checking for ${NORELRO}... "; then
+    LDFLAGS="${NORELRO} ${LDFLAGS}"
+  fi
+  NORODATAPHDR=-Wl,-z,noseparate-code
+  EXTRA_LDFLAGS="${NORODATAPHDR}"
+  if config noop "checking for ${NORODATAPHDR}... "; then
+    LDFLAGS="${NORODATAPHDR} ${LDFLAGS}"
+  fi
 fi
 
 # check for the math library
@@ -293,25 +362,27 @@ if config lrt "checking for -lrt... "; then
 fi
 
 # check for the posix threads library
-EXTRA_CFLAGS=-pthread
-EXTRA_LDFLAGS=-pthread
-if config pthread "checking for -pthread... "; then
-  CFLAGS="-pthread ${CFLAGS}"
-  LDFLAGS="-pthread ${LDFLAGS}"
-else
-  EXTRA_LDLIBS=-lpthread
-  if config pthread "checking for -lpthread... "; then
-    LDLIBS="${LDLIBS} -lpthread"
+if [ -z "${DISABLE_THREADS}" ]; then
+  EXTRA_CFLAGS=-pthread
+  EXTRA_LDFLAGS=-pthread
+  if config pthread "checking for -pthread... "; then
+    CFLAGS="-pthread ${CFLAGS}"
+    LDFLAGS="-pthread ${LDFLAGS}"
   else
-    if config pthread "checking for pthreads... "; then
+    EXTRA_LDLIBS=-lpthread
+    if config pthread "checking for -lpthread... "; then
       LDLIBS="${LDLIBS} -lpthread"
     else
-      uncomment "#define DISABLE_THREADS"
+      if config pthread "checking for pthreads... "; then
+        LDLIBS="${LDLIBS} -lpthread"
+      else
+        uncomment "#define DISABLE_THREADS"
+      fi
     fi
   fi
 fi
 
-# should be the default and effectively mandatory on macos
+# should be the default and macos build fails without it
 EXTRA_CFLAGS=-fno-common
 if config noop "checking for -fno-common... "; then
   CFLAGS="-fno-common ${CFLAGS}"
@@ -378,6 +449,12 @@ if ! config stdatomic "checking for stdatomic.h... "; then
   CPPFLAGS="-isystem tool/stdatomic"
 fi
 
+if [ -z "${DISABLE_FORK}" ]; then
+  ( config fork "checking for fork()... " uncomment "#define HAVE_FORK" ) &
+else
+  echo "checking for fork()... disabled"
+fi
+
 ( config sync "checking for sync()... " uncomment "#define HAVE_SYNC" ) &
 ( config dup3 "checking for dup3()... " uncomment "#define HAVE_DUP3" ) &
 ( config pipe2 "checking for pipe2()... " uncomment "#define HAVE_PIPE2" ) &
@@ -404,8 +481,11 @@ fi
 ( config scm_credentials "checking for SCM_CREDENTIALS... " uncomment "#define HAVE_SCM_CREDENTIALS" ) &
 ( config sa_len "checking for sockaddr::sa_len... " uncomment "#define HAVE_SA_LEN" ) &
 ( config kern_arnd "checking for sysctl(KERN_ARND)... " uncomment "#define HAVE_KERN_ARND" ) &
+( config map_shared "checking for mmap(MAP_SHARED)... " uncomment "#define HAVE_MAP_SHARED" ) &
 ( config map_anonymous "checking for mmap(MAP_ANONYMOUS)... " uncomment "#define HAVE_MAP_ANONYMOUS" ) &
 ( config sched_getaffinity "checking for sched_getaffinity()... " uncomment "#define HAVE_SCHED_GETAFFINITY" ) &
+( config sched_yield "checking for sched_yield()... " uncomment "#define HAVE_SCHED_YIELD" ) &
+( config sched_h "checking for sched.h... " uncomment "#define HAVE_SCHED_H" ) &
 ( config sys_getrandom "checking for syscall(SYS_getrandom)... " uncomment "#define HAVE_SYS_GETRANDOM" ) &
 ( config preadv "checking for preadv() and pwritev()... " uncomment "#define HAVE_PREADV" ) &
 ( config getentropy "checking for getentropy() in unistd.h... " uncomment "#define HAVE_GETENTROPY" ) &

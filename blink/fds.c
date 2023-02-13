@@ -18,7 +18,6 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <fcntl.h>
 #include <limits.h>
-#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -27,11 +26,13 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
+#include "blink/builtin.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/macros.h"
+#include "blink/thread.h"
 
 void InitFds(struct Fds *fds) {
   fds->list = 0;
@@ -136,6 +137,7 @@ static bool IsNoRestartSocket(int fildes) {
 }
 
 void InheritFd(struct Fd *fd) {
+#ifndef DISABLE_SOCKETS
   socklen_t addrlen;
   if (!fd) return;
   if (!GetFdSocketType(fd->fildes, &fd->socktype)) {
@@ -143,6 +145,7 @@ void InheritFd(struct Fd *fd) {
     addrlen = sizeof(fd->saddr);
     getsockname(fd->fildes, (struct sockaddr *)&fd->saddr, &addrlen);
   }
+#endif
 }
 
 void AddStdFd(struct Fds *fds, int fildes) {

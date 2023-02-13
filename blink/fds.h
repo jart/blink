@@ -4,13 +4,13 @@
 #include <limits.h>
 #include <netinet/in.h>
 #include <poll.h>
-#include <pthread.h>
 #include <stdbool.h>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <termios.h>
 
 #include "blink/dll.h"
+#include "blink/thread.h"
 #include "blink/types.h"
 
 #define FD_CONTAINER(e) DLL_CONTAINER(struct Fd, elem, e)
@@ -35,7 +35,7 @@ struct Fd {
   bool norestart;  // is SO_RCVTIMEO in play?
   DIR *dirstream;  // for getdents() lazilly
   struct Dll elem;
-  pthread_mutex_t lock;
+  pthread_mutex_t_ lock;
   const struct FdCb *cb;
   union {
     struct sockaddr sa;
@@ -46,7 +46,7 @@ struct Fd {
 
 struct Fds {
   struct Dll *list;
-  pthread_mutex_t lock;
+  pthread_mutex_t_ lock;
 };
 
 extern const struct FdCb kFdCbHost;

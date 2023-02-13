@@ -27,12 +27,12 @@
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/likely.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/pml4t.h"
 #include "blink/stats.h"
+#include "blink/thread.h"
 #include "blink/util.h"
 #include "blink/x86.h"
 

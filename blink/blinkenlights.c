@@ -3641,7 +3641,7 @@ static void Tui(void) {
 
 static void GetOpts(int argc, char *argv[]) {
   int opt;
-#if HAVE_JIT
+#ifdef HAVE_JIT
   bool wantjit = false;
 #endif
   bool wantunsafe = false;
@@ -3653,7 +3653,7 @@ static void GetOpts(int argc, char *argv[]) {
   while ((opt = GetOpt(argc, argv, "hjmvtrzRNsSb:Hw:L:C:")) != -1) {
     switch (opt) {
       case 'j':
-#if HAVE_JIT
+#ifdef HAVE_JIT
         wantjit = true;
 #endif
         break;
@@ -3722,7 +3722,7 @@ static void GetOpts(int argc, char *argv[]) {
     }
   }
   LogInit(FLAG_logpath);
-#if HAVE_JIT
+#ifdef HAVE_JIT
   if (!wantjit) {
     DisableJit(&m->system->jit);
   }
@@ -3839,7 +3839,7 @@ int main(int argc, char *argv[]) {
   tuimode = true;
   WriteErrorInit();
   InitBus();
-#if HAVE_JIT
+#ifdef HAVE_JIT
   AddPath_StartOp_Hook = AddPath_StartOp_Tui;
 #endif
   unassert((pty = NewPty()));

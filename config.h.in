@@ -9,6 +9,7 @@
 // #define DISABLE_ANCILLARY
 // #define DISABLE_BCD
 
+// #define HAVE_FORK
 // #define HAVE_SYNC
 // #define HAVE_DUP3
 // #define HAVE_PIPE2
@@ -18,6 +19,7 @@
 // #define HAVE_PREADV
 // #define HAVE_WCWIDTH
 // #define HAVE_SYSINFO
+// #define HAVE_SCHED_H
 // #define HAVE_MEMCCPY
 // #define HAVE_SEEKDIR
 // #define HAVE_MKFIFOAT
@@ -30,9 +32,11 @@
 // #define HAVE_GETRANDOM
 // #define HAVE_SETGROUPS
 // #define HAVE_GETENTROPY
+// #define HAVE_MAP_SHARED
 // #define HAVE_SIOCGIFCONF
 // #define HAVE_F_GETOWN_EX
 // #define HAVE_DEV_URANDOM
+// #define HAVE_SCHED_YIELD
 // #define HAVE_RTLGENRANDOM
 // #define HAVE_GETDOMAINNAME
 // #define HAVE_MAP_ANONYMOUS

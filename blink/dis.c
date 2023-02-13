@@ -136,7 +136,6 @@ static char *DisCode(struct Dis *d, char *p, int err) {
 }
 
 static char *DisLineCode(struct Dis *d, char *p, int err) {
-  intptr_t hook;
   int blen, plen;
   if (0 <= d->addr && d->addr < 0x10fff0) {
     plen = 2;
@@ -146,7 +145,9 @@ static char *DisLineCode(struct Dis *d, char *p, int err) {
     plen = PFIXLEN;
   }
   p = DisColumn(DisAddr(d, p), p, ADDRLEN);
+#ifdef HAVE_JIT
   if (d->m && !IsJitDisabled(&d->m->system->jit)) {
+    intptr_t hook;
     if ((hook = GetJitHook(&d->m->system->jit, d->addr, 0))) {
       if (hook == (intptr_t)GeneralDispatch) {
         *p++ = 'G';  // general explicit
@@ -159,6 +160,9 @@ static char *DisLineCode(struct Dis *d, char *p, int err) {
       *p++ = ' ';  // no hook
     }
   }
+#else
+  *p++ = ' ';  // no hook
+#endif
   if (!d->noraw) {
     p = DisColumn(DisRaw(d, p), p, plen * 2 + 1 + blen * 2);
   } else {

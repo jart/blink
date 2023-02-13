@@ -33,6 +33,7 @@
 #include "blink/macros.h"
 #include "blink/util.h"
 
+#ifndef DISABLE_SOCKETS
 #ifndef DISABLE_ANCILLARY
 
 /**
@@ -339,3 +340,4 @@ int ReceiveAncillary(struct Machine *m, struct msghdr_linux *gm,
 }
 
 #endif /* DISABLE_ANCILLARY */
+#endif /* DISABLE_SOCKETS */

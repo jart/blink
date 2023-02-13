@@ -26,11 +26,11 @@
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/linux.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/signal.h"
 #include "blink/syscall.h"
+#include "blink/thread.h"
 #include "blink/xlat.h"
 
 struct SignalFrame {

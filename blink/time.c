@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <sched.h>
 #include <time.h>
 
 #include "blink/assert.h"
@@ -25,12 +24,16 @@
 #include "blink/modrm.h"
 #include "blink/time.h"
 
+#ifdef HAVE_SCHED_H
+#include <sched.h>
+#endif
+
 void OpPause(P) {
 #if defined(__GNUC__) && defined(__aarch64__)
   asm volatile("yield");
 #elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
   asm volatile("pause");
-#else
+#elif defined(HAVE_SCHED_YIELD)
   sched_yield();
 #endif
 }

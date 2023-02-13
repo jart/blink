@@ -1,8 +1,8 @@
 #ifndef BLINK_LOG_H_
 #define BLINK_LOG_H_
-#include <stdatomic.h>
 #include <stdio.h>
 
+#include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/flag.h"
 

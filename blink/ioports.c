@@ -20,9 +20,9 @@
 #include <sys/uio.h>
 
 #include "blink/debug.h"
-#include "blink/lock.h"
 #include "blink/machine.h"
 #include "blink/syscall.h"
+#include "blink/thread.h"
 #include "blink/uart.h"
 
 static int OpE9Read(struct Machine *m) {

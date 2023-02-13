@@ -19,7 +19,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/uio.h>
@@ -28,21 +27,21 @@
 
 #include "blink/assert.h"
 #include "blink/debug.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/sigwinch.h"
+#include "blink/thread.h"
 #include "blink/util.h"
 
 struct CxxFilt {
-  pthread_once_t once;
-  pthread_mutex_t lock;
+  pthread_once_t_ once;
+  pthread_mutex_t_ lock;
   int reader;
   int writer;
   int pid;
 } g_cxxfilt = {
-    PTHREAD_ONCE_INIT,
+    PTHREAD_ONCE_INIT_,
 };
 
 static void InitCxxFilt(void) {
@@ -238,7 +237,7 @@ char *Demangle(char *p, const char *symbol, size_t n) {
   sn = strlen(symbol);
   if (startswith(symbol, "_Z")) {
     unassert(!pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs));
-    pthread_once(&g_cxxfilt.once, InitCxxFilt);
+    unassert(!pthread_once_(&g_cxxfilt.once, InitCxxFilt));
     LOCK(&g_cxxfilt.lock);
     if (g_cxxfilt.pid != -1) {
       unassert(!sigemptyset(&ss));

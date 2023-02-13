@@ -20,20 +20,20 @@
 #include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
-#include "blink/lock.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/random.h"
+#include "blink/thread.h"
 #include "blink/util.h"
 
 #define RESEED_INTERVAL 16
 
 static struct Rdrand {
-  pthread_mutex_t lock;
+  pthread_mutex_t_ lock;
   u64 state;
   unsigned count;
 } g_rdrand = {
-    .lock = PTHREAD_MUTEX_INITIALIZER,
+    .lock = PTHREAD_MUTEX_INITIALIZER_,
 };
 
 static void OpRand(P, u64 x) {

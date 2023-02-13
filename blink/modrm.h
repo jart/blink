@@ -3,8 +3,9 @@
 #include "blink/builtin.h"
 #include "blink/machine.h"
 #include "blink/rde.h"
+#include "blink/thread.h"
 
-#ifndef DISABLE_THREADS
+#ifdef HAVE_THREADS
 #define Lock(x) ((x & 020000000000) >> 037)
 #else
 #define Lock(x) 0

@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <pthread.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -33,7 +32,6 @@
 #include "blink/flag.h"
 #include "blink/jit.h"
 #include "blink/loader.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -43,6 +41,7 @@
 #include "blink/sigwinch.h"
 #include "blink/stats.h"
 #include "blink/syscall.h"
+#include "blink/thread.h"
 #include "blink/util.h"
 #include "blink/web.h"
 #include "blink/x86.h"
@@ -80,7 +79,7 @@ void TerminateSignal(struct Machine *m, int sig) {
   if ((syssig = XlatSignal(sig)) == -1) syssig = SIGTERM;
   KillOtherThreads(m->system);
   FreeMachine(m);
-#if HAVE_JIT
+#ifdef HAVE_JIT
   ShutdownJit();
 #endif
   sa.sa_flags = 0;
@@ -117,7 +116,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   struct Machine *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
   unassert((g_machine = NewMachine(NewSystem(XED_MODE_LONG), 0)));
-#if HAVE_JIT
+#ifdef HAVE_JIT
   if (FLAG_nojit) DisableJit(&g_machine->system->jit);
 #endif
   g_machine->system->exec = Exec;
@@ -146,7 +145,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
     // freeing the last machine in a system will free its system too
     FreeMachine(old);
     // restore the signal mask we had before execve() was called
-    pthread_sigmask(SIG_SETMASK, &oldmask, 0);
+    unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
   }
   // meta interpreter loop
   for (;;) {
@@ -232,12 +231,14 @@ static void HandleSigs(void) {
   struct sigaction sa;
   sigfillset(&sa.sa_mask);
   sa.sa_flags = 0;
+#ifdef HAVE_THREADS
   sa.sa_handler = OnSigSys;
   unassert(!sigaction(SIGSYS, &sa, 0));
+#endif
   sa.sa_sigaction = OnSignal;
-  unassert(!sigaction(SIGHUP, &sa, 0));
   unassert(!sigaction(SIGINT, &sa, 0));
   unassert(!sigaction(SIGQUIT, &sa, 0));
+  unassert(!sigaction(SIGHUP, &sa, 0));
   unassert(!sigaction(SIGPIPE, &sa, 0));
   unassert(!sigaction(SIGTERM, &sa, 0));
   unassert(!sigaction(SIGXCPU, &sa, 0));

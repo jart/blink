@@ -18,13 +18,13 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <limits.h>
-#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/bitscan.h"
 #include "blink/builtin.h"
 #include "blink/debug.h"
@@ -32,12 +32,12 @@
 #include "blink/end.h"
 #include "blink/endian.h"
 #include "blink/jit.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/memcpy.h"
 #include "blink/stats.h"
+#include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/util.h"
 
@@ -110,7 +110,7 @@ const u8 kJitRes[2] = {kJitRes0, kJitRes1};
 const u8 kJitArg[4] = {kJitArg0, kJitArg1, kJitArg2, kJitArg3};
 const u8 kJitSav[5] = {kJitSav0, kJitSav1, kJitSav2, kJitSav3, kJitSav4};
 
-#if HAVE_JIT
+#ifdef HAVE_JIT
 
 #define ACTION_MOVE    0x010000
 #define ACTION(a)      ((0xff0000 & a))
@@ -124,8 +124,8 @@ static u8 g_code[kJitMemorySize];
 
 static struct JitGlobals {
   pthread_mutex_t lock;
-  atomic_long prot;
-  atomic_long brk;
+  _Atomic(long) prot;
+  _Atomic(long) brk;
   struct Dll *freeblocks GUARDED_BY(lock);
 } g_jit = {
     PTHREAD_MUTEX_INITIALIZER,
@@ -334,7 +334,7 @@ int InitJit(struct Jit *jit) {
   memset(jit, 0, sizeof(*jit));
   jit->pagesize = GetSystemPageSize();
   jit->blocksize = blocksize = ROUNDUP(kJitMinBlockSize, jit->pagesize);
-  pthread_mutex_init(&jit->lock, 0);
+  unassert(!pthread_mutex_init(&jit->lock, 0));
   jit->hooks.n = RoundupTwoPow(kJitMemorySize / kJitAveragePath * 2);
   unassert(jit->hooks.virt = (_Atomic(intptr_t) *)calloc(
                jit->hooks.n, sizeof(*jit->hooks.virt)));
@@ -392,9 +392,9 @@ int DisableJit(struct Jit *jit) {
  * Fixes the memory protection for existing Just-In-Time code blocks.
  */
 int FixJitProtection(struct Jit *jit) {
+  int prot;
   struct Dll *e;
   LOCK(&jit->lock);
-  int prot;
   prot = atomic_load_explicit(&g_jit.prot, memory_order_relaxed);
   for (e = dll_first(jit->blocks); e; e = dll_next(jit->blocks, e)) {
     unassert(

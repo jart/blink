@@ -16,11 +16,11 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "blink/alu.h"
+#include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/bus.h"
 #include "blink/endian.h"

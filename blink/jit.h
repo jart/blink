@@ -1,21 +1,26 @@
 #ifndef BLINK_JIT_H_
 #define BLINK_JIT_H_
 #include <inttypes.h>
-#include <pthread.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 
+#include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/dll.h"
+#include "blink/thread.h"
 #include "blink/types.h"
 
 #define kJitFit          1000
 #define kJitAlign        16
 #define kJitJumpTries    16
-#define kJitMemorySize   32505856
 #define kJitMemoryAlign  65536
-#define kJitAveragePath  200
+#define kJitAveragePath  150
 #define kJitMinBlockSize 262144
+
+#ifdef __x86_64__
+#define kJitMemorySize 130023424
+#else
+#define kJitMemorySize 32505856
+#endif
 
 #ifdef __x86_64__
 #define kJitRes0 kAmdAx
@@ -141,7 +146,7 @@ struct Jit {
   long pagesize;
   _Atomic(bool) disabled;
   _Atomic(long) blocksize;
-  pthread_mutex_t lock;
+  pthread_mutex_t_ lock;
   struct JitHooks hooks;
   struct Dll *blocks;
   struct Dll *jumps;
@@ -201,7 +206,7 @@ static inline intptr_t GetJitPc(const struct JitBlock *jb) {
  * Returns true if DisableJit() was called or AcquireJit() had failed.
  */
 static inline bool IsJitDisabled(const struct Jit *jit) {
-#if HAVE_JIT
+#ifdef HAVE_JIT
   return atomic_load_explicit(&jit->disabled, memory_order_relaxed);
 #else
   return true;

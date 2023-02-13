@@ -17,19 +17,19 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <limits.h>
-#include <stdatomic.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/bus.h"
 #include "blink/dll.h"
 #include "blink/endian.h"
-#include "blink/lock.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/rde.h"
 #include "blink/swap.h"
+#include "blink/thread.h"
 #include "blink/tsan.h"
 
 #if CAN_PSHARE
@@ -38,20 +38,12 @@
 #define BUS_MEMORY MAP_PRIVATE
 #endif
 
-#ifndef DISABLE_THREADS
-#define ACQUIRE memory_order_acquire
-#define RELEASE memory_order_release
-#else
-#define ACQUIRE memory_order_relaxed
-#define RELEASE memory_order_relaxed
-#endif
-
 struct Bus *g_bus;
 
 void InitBus(void) {
   unsigned i;
-  pthread_condattr_t cattr;
-  pthread_mutexattr_t mattr;
+  pthread_condattr_t_ cattr;
+  pthread_mutexattr_t_ mattr;
 #if !CAN_PSHARE
   if (g_bus) FreeBig(g_bus, sizeof(*g_bus));
 #endif
@@ -83,19 +75,19 @@ void LockBus(const u8 *locality) {
   _Static_assert(IS2POW(kBusCount), "virtual bus count must be two-power");
   _Static_assert(IS2POW(kBusRegion), "virtual bus region must be two-power");
   _Static_assert(kBusRegion >= 16, "virtual bus region must be at least 16");
-#ifndef DISABLE_THREADS
+#ifdef HAVE_THREADS
   SpinLock(g_bus->lock[(uintptr_t)locality / kBusRegion % kBusCount]);
 #endif
 }
 
 void UnlockBus(const u8 *locality) {
-#ifndef DISABLE_THREADS
+#ifdef HAVE_THREADS
   SpinUnlock(g_bus->lock[(uintptr_t)locality / kBusRegion % kBusCount]);
 #endif
 }
 
 i64 Load8(const u8 p[1]) {
-  return atomic_load_explicit((_Atomic(u8) *)p, ACQUIRE);
+  return atomic_load_explicit((_Atomic(u8) *)p, memory_order_acquire);
 }
 
 i64 Load16(const u8 p[2]) {
@@ -105,7 +97,7 @@ i64 Load16(const u8 p[2]) {
   z = atomic_load_explicit((_Atomic(u16) *)p, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 1)) {
-    z = Little16(atomic_load_explicit((_Atomic(u16) *)p, ACQUIRE));
+    z = Little16(atomic_load_explicit((_Atomic(u16) *)p, memory_order_acquire));
   } else {
     z = Read16(p);
   }
@@ -120,7 +112,7 @@ i64 Load32(const u8 p[4]) {
   z = atomic_load_explicit((_Atomic(u32) *)p, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 3)) {
-    z = Little32(atomic_load_explicit((_Atomic(u32) *)p, ACQUIRE));
+    z = Little32(atomic_load_explicit((_Atomic(u32) *)p, memory_order_acquire));
   } else {
     z = Read32(p);
   }
@@ -135,7 +127,7 @@ i64 Load64(const u8 p[8]) {
   z = atomic_load_explicit((_Atomic(u64) *)p, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 7)) {
-    z = Little64(atomic_load_explicit((_Atomic(u64) *)p, ACQUIRE));
+    z = Little64(atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire));
   } else {
     z = Read64(p);
   }
@@ -159,7 +151,7 @@ i64 Load64Unlocked(const u8 p[8]) {
 }
 
 void Store8(u8 p[1], u64 x) {
-  atomic_store_explicit((_Atomic(u8) *)p, x, RELEASE);
+  atomic_store_explicit((_Atomic(u8) *)p, x, memory_order_release);
 }
 
 void Store16(u8 p[2], u64 x) {
@@ -168,7 +160,7 @@ void Store16(u8 p[2], u64 x) {
   atomic_store_explicit((_Atomic(u16) *)p, x, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 1)) {
-    atomic_store_explicit((_Atomic(u16) *)p, Little16(x), RELEASE);
+    atomic_store_explicit((_Atomic(u16) *)p, Little16(x), memory_order_release);
   } else {
     Write16(p, x);
   }
@@ -181,7 +173,7 @@ void Store32(u8 p[4], u64 x) {
   atomic_store_explicit((_Atomic(u32) *)p, x, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 3)) {
-    atomic_store_explicit((_Atomic(u32) *)p, Little32(x), RELEASE);
+    atomic_store_explicit((_Atomic(u32) *)p, Little32(x), memory_order_release);
   } else {
     Write32(p, x);
   }
@@ -194,7 +186,7 @@ void Store64(u8 p[8], u64 x) {
   atomic_store_explicit((_Atomic(u64) *)p, x, memory_order_relaxed);
 #else
   if (!((intptr_t)p & 7)) {
-    atomic_store_explicit((_Atomic(u64) *)p, Little64(x), RELEASE);
+    atomic_store_explicit((_Atomic(u64) *)p, Little64(x), memory_order_release);
   } else {
     Write64(p, x);
   }

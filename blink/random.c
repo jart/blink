@@ -35,15 +35,19 @@
 #ifdef HAVE_KERN_ARND
 #include <sys/sysctl.h>
 #endif
+
 #ifdef HAVE_SYS_GETRANDOM
 #include <sys/syscall.h>
 #endif
-#ifdef HAVE_SYS_GETENTROPY
-#include <sys/random.h>
-#endif
+
 #ifdef HAVE_RTLGENRANDOM
 #include <w32api/_mingw.h>
 bool __stdcall SystemFunction036(void *, __LONG32);
+#endif
+
+#if !defined(HAVE_SYS_GETRANDOM) && \
+    (defined(HAVE_GETRANDOM) || defined(HAVE_SYS_GETENTROPY))
+#include <sys/random.h>
 #endif
 
 #ifdef HAVE_DEV_URANDOM

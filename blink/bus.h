@@ -1,15 +1,16 @@
 #ifndef BLINK_MOP_H_
 #define BLINK_MOP_H_
 #include <limits.h>
-#include <pthread.h>
-#include <stdatomic.h>
 
+#include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/endian.h"
 #include "blink/spin.h"
+#include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/tunables.h"
+#include "blink/types.h"
 
 #define FUTEX_CONTAINER(e) DLL_CONTAINER(struct Futex, elem, e)
 
@@ -23,14 +24,14 @@ struct Futex {
   i64 addr;
   int waiters;
   struct Dll elem;
-  pthread_cond_t cond;
-  pthread_mutex_t lock;
+  pthread_cond_t_ cond;
+  pthread_mutex_t_ lock;
 };
 
 struct Futexes {
   struct Dll *active;
   struct Dll *free;
-  pthread_mutex_t lock;
+  pthread_mutex_t_ lock;
   struct Futex mem[kFutexMax];
 };
 
@@ -44,7 +45,7 @@ struct Bus {
      semaphore should be contained in a 128-byte block of memory that
      begins on a 128-byte boundary. The practice minimizes the bus traffic
      required to service locks. ──Intel V.3 §8.10.6.7 */
-  _Alignas(kSemSize) atomic_int lock[kBusCount][kSemSize / sizeof(int)];
+  _Alignas(kSemSize) _Atomic(u32) lock[kBusCount][kSemSize / sizeof(int)];
   struct Futexes futexes;
 };
 

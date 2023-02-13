@@ -19,19 +19,18 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
-#include <pthread.h>
-#include <stdatomic.h>
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/debug.h"
 #include "blink/dll.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/syscall.h"
+#include "blink/thread.h"
 
 static int CloseFd(struct Fd *fd) {
   int rc;

@@ -18,13 +18,13 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <fcntl.h>
-#include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#include "blink/lock.h"
+#include "blink/assert.h"
 #include "blink/log.h"
+#include "blink/thread.h"
 #include "blink/tunables.h"
 
 static int g_errfd;

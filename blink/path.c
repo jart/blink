@@ -41,7 +41,7 @@
 
 #define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
 
-#if HAVE_JIT
+#ifdef HAVE_JIT
 
 void (*AddPath_StartOp_Hook)(P);
 
@@ -87,7 +87,7 @@ void FuseOp(struct Machine *m, i64 pc) {
   JIX_LOGF("%" PRIx64 ":%" PRIx64 "   </op>", GetPc(m), pc);
 }
 
-#if HAVE_JIT
+#ifdef HAVE_JIT
 #if defined(__x86_64__)
 static const u8 kEnter[] = {
     0x55,                    // push %rbp
@@ -144,7 +144,7 @@ static const u32 kLeave[] = {
 #endif /* HAVE_JIT */
 
 long GetPrologueSize(void) {
-#if HAVE_JIT
+#ifdef HAVE_JIT
   return sizeof(kEnter);
 #else
   return 0;
@@ -526,7 +526,7 @@ static bool MustUpdateIp(P) {
 }
 
 static void InitPaths(struct System *s) {
-#if HAVE_JIT
+#ifdef HAVE_JIT
   struct JitBlock *jb;
   if (!s->ender) {
     unassert((jb = StartJit(&s->jit)));
@@ -545,7 +545,7 @@ static void InitPaths(struct System *s) {
 }
 
 bool CreatePath(P) {
-#if HAVE_JIT
+#ifdef HAVE_JIT
   bool res;
   i64 pc, jpc;
   unassert(!IsMakingPath(m));

@@ -43,7 +43,7 @@ ssize_t preadv_(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
     }
     n = t;
   }
-  if (!(p = malloc(n))) {
+  if (!(p = (char *)malloc(n))) {
     return enomem();
   }
   if ((rc = pread(fd, p, n, offset)) != -1) {
@@ -71,7 +71,7 @@ ssize_t pwritev_(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
     }
     n = t;
   }
-  if (!(p = malloc(n))) {
+  if (!(p = (char *)malloc(n))) {
     return enomem();
   }
   for (j = 0, i = 0; i < iovcnt && j < n; ++i, j += m) {

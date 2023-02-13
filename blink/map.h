@@ -1,10 +1,10 @@
 #ifndef BLINK_MAP_H_
 #define BLINK_MAP_H_
 #include <errno.h>
-#include <pthread.h>
 #include <sys/mman.h>
 
 #include "blink/builtin.h"
+#include "blink/thread.h"
 #include "blink/types.h"
 
 #ifndef MAP_32BIT

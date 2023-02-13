@@ -16,34 +16,33 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <pthread.h>
-#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/bus.h"
 #include "blink/debug.h"
 #include "blink/errno.h"
 #include "blink/linux.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/pml4t.h"
+#include "blink/thread.h"
 #include "blink/types.h"
 #include "blink/util.h"
 #include "blink/x86.h"
 
 struct Allocator {
-  pthread_mutex_t lock;
-  _Atomic(u8 *) brk;
+  pthread_mutex_t_ lock;
+  _Atomic(intptr_t) brk;
   struct HostPage *pages GUARDED_BY(lock);
 } g_allocator = {
-    PTHREAD_MUTEX_INITIALIZER,
+    PTHREAD_MUTEX_INITIALIZER_,
 };
 
 static void FillPage(void *p, int c) {
@@ -102,8 +101,8 @@ void *AllocateBig(size_t n, int prot, int flags, int fd, off_t off) {
   p = Mmap(0, n, prot, flags, fd, off, "big");
   return p != MAP_FAILED ? p : 0;
 #else
-  u8 *brk;
   size_t m;
+  intptr_t brk;
   if (!(brk = atomic_load_explicit(&g_allocator.brk, memory_order_relaxed))) {
     // we're going to politely ask the kernel for addresses starting
     // arbitrary megabytes past the end of our own executable's .bss
@@ -112,17 +111,17 @@ void *AllocateBig(size_t n, int prot, int flags, int fd, off_t off) {
     // already allocated memory in this space. the reason it matters
     // is because the x86 and arm isas impose limits on displacement
     atomic_compare_exchange_strong_explicit(
-        &g_allocator.brk, &brk, (u8 *)kPreciousStart, memory_order_relaxed,
+        &g_allocator.brk, &brk, kPreciousStart, memory_order_relaxed,
         memory_order_relaxed);
   }
   m = GetBigSize(n);
   do {
     brk = atomic_fetch_add_explicit(&g_allocator.brk, m, memory_order_relaxed);
-    if (brk + m > (u8 *)kPreciousEnd) {
+    if (brk + m > kPreciousEnd) {
       enomem();
       return 0;
     }
-    p = Mmap(brk, n, prot, flags | MAP_DEMAND, fd, off, "big");
+    p = Mmap((void *)brk, n, prot, flags | MAP_DEMAND, fd, off, "big");
   } while (p == MAP_FAILED && errno == MAP_DENIED);
   return p != MAP_FAILED ? p : 0;
 #endif
@@ -207,7 +206,7 @@ struct System *NewSystem(int mode) {
       return 0;
     }
   }
-#if HAVE_JIT
+#ifdef HAVE_JIT
   InitJit(&s->jit);
 #endif
   InitFds(&s->fds);
@@ -259,6 +258,7 @@ bool IsOrphan(struct Machine *m) {
 }
 
 void KillOtherThreads(struct System *s) {
+#ifdef HAVE_THREADS
   struct Dll *e;
   struct Machine *m;
   unassert(s == g_machine->system);
@@ -275,9 +275,11 @@ void KillOtherThreads(struct System *s) {
     unassert(!pthread_cond_wait(&s->machines_cond, &s->machines_lock));
     UNLOCK(&s->machines_lock);
   }
+#endif
 }
 
 void RemoveOtherThreads(struct System *s) {
+#ifdef HAVE_THREADS
   struct Dll *e, *g;
   struct Machine *m;
   LOCK(&s->machines_lock);
@@ -290,6 +292,7 @@ void RemoveOtherThreads(struct System *s) {
     }
   }
   UNLOCK(&s->machines_lock);
+#endif
 }
 
 void FreeSystem(struct System *s) {
@@ -302,7 +305,7 @@ void FreeSystem(struct System *s) {
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));
   DestroyFds(&s->fds);
-#if HAVE_JIT
+#ifdef HAVE_JIT
   DestroyJit(&s->jit);
 #endif
   free(s);
@@ -445,6 +448,7 @@ bool IsValidAddrSize(i64 virt, i64 size) {
 }
 
 void InvalidateSystem(struct System *s, bool tlb, bool icache) {
+#ifdef HAVE_THREADS
   struct Dll *e;
   struct Machine *m;
   LOCK(&s->machines_lock);
@@ -459,6 +463,7 @@ void InvalidateSystem(struct System *s, bool tlb, bool icache) {
     }
   }
   UNLOCK(&s->machines_lock);
+#endif
 }
 
 static void TallyFreePage(struct System *s, u64 entry) {
@@ -740,8 +745,8 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                        (fd == -1 ? MAP_ANONYMOUS_ : 0);
             mug = AllocateBig(mugsize, prot, mugflags, fd, mugoff);
             if (!mug) {
-              ERRF("mmap(virt=%" PRIx64
-                   ", brk=%p size=%ld, flags=%#x, fd=%d, offset=%#" PRIx64
+              ERRF("mmap(virt=%" PRIx64 ", brk=%" PRIxPTR
+                   " size=%ld, flags=%#x, fd=%d, offset=%#" PRIx64
                    ") crisis: %s",
                    virt, g_allocator.brk, mugsize, mugflags, fd, (u64)mugoff,
                    DescribeHostErrno(errno));

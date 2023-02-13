@@ -18,13 +18,13 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <limits.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 #include "blink/alu.h"
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/bitscan.h"
 #include "blink/builtin.h"
 #include "blink/bus.h"
@@ -36,7 +36,6 @@
 #include "blink/fpu.h"
 #include "blink/jit.h"
 #include "blink/likely.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -47,6 +46,7 @@
 #include "blink/string.h"
 #include "blink/swap.h"
 #include "blink/syscall.h"
+#include "blink/thread.h"
 #include "blink/time.h"
 #include "blink/util.h"
 #include "blink/x86.h"
@@ -583,7 +583,7 @@ static void OpMovslGdqpEd(P) {
 }
 
 void Connect(P, u64 pc, bool avoid_obvious_cycles) {
-#if HAVE_JIT
+#ifdef HAVE_JIT
   void *jump;
   nexgen32e_f f;
   if (!(avoid_obvious_cycles && pc == m->path.start)) {
@@ -2235,7 +2235,7 @@ void JitlessDispatch(P) {
 }
 
 void GeneralDispatch(P) {
-#if HAVE_JIT
+#ifdef HAVE_JIT
   int opclass;
   intptr_t jitpc = 0;
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
@@ -2291,6 +2291,7 @@ void GeneralDispatch(P) {
 }
 
 static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
+#ifdef HAVE_JIT
   if (func == JitlessDispatch) {
     JIT_LOGF("abandoning path starting at %" PRIx64
              " due to running into staged path",
@@ -2314,13 +2315,14 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
   } else {
     GeneralDispatch(DISPATCH_NOTHING);
   }
+#endif
 }
 
 void ExecuteInstruction(struct Machine *m) {
 #if LOG_CPU
   LogCpu(m);
 #endif
-#if HAVE_JIT
+#ifdef HAVE_JIT
   nexgen32e_f func;
   if (CanJit(m)) {
     func = (nexgen32e_f)GetJitHook(&m->system->jit, m->ip,

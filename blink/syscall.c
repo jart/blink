@@ -16,7 +16,6 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -28,10 +27,8 @@
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <poll.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdarg.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -53,6 +50,7 @@
 
 #include "blink/ancillary.h"
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/bus.h"
 #include "blink/case.h"
 #include "blink/debug.h"
@@ -62,7 +60,6 @@
 #include "blink/limits.h"
 #include "blink/linux.h"
 #include "blink/loader.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -75,6 +72,7 @@
 #include "blink/stats.h"
 #include "blink/swap.h"
 #include "blink/syscall.h"
+#include "blink/thread.h"
 #include "blink/timespec.h"
 #include "blink/util.h"
 #include "blink/xlat.h"
@@ -88,7 +86,7 @@
 #include <sys/sockio.h>
 #endif
 
-#ifdef HAVE_SCHED_GETAFFINITY
+#ifdef HAVE_SCHED_H
 #include <sched.h>
 #endif
 
@@ -357,16 +355,18 @@ static int SysFutexWake(struct Machine *m, i64 uaddr, u32 count) {
 }
 
 static void ClearChildTid(struct Machine *m) {
-  atomic_int *ctid;
+#if defined(HAVE_FORK) || defined(HAVE_THREADS)
+  _Atomic(int) *ctid;
   if (m->ctid) {
     THR_LOGF("ClearChildTid(%#" PRIx64 ")", m->ctid);
-    if ((ctid = (atomic_int *)LookupAddress(m, m->ctid))) {
+    if ((ctid = (_Atomic(int) *)LookupAddress(m, m->ctid))) {
       atomic_store_explicit(ctid, 0, memory_order_seq_cst);
     } else {
       THR_LOGF("invalid clear child tid address %#" PRIx64, m->ctid);
     }
   }
   SysFutexWake(m, m->ctid, INT_MAX);
+#endif
 }
 
 _Noreturn void SysExitGroup(struct Machine *m, int rc) {
@@ -376,6 +376,7 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
     PrintStats();
   }
 #endif
+  ClearChildTid(m);
   if (m->system->isfork) {
     THR_LOGF("calling _Exit(%d)", rc);
     _Exit(rc);
@@ -383,7 +384,7 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
     THR_LOGF("calling exit(%d)", rc);
     KillOtherThreads(m->system);
     FreeMachine(m);
-#if HAVE_JIT
+#ifdef HAVE_JIT
     ShutdownJit();
 #endif
     exit(rc);
@@ -391,7 +392,7 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
 }
 
 _Noreturn void SysExit(struct Machine *m, int rc) {
-#ifndef DISABLE_THREADS
+#ifdef HAVE_THREADS
   THR_LOGF("pid=%d tid=%d SysExit", m->system->pid, m->tid);
   if (IsOrphan(m)) {
     SysExitGroup(m, rc);
@@ -407,11 +408,11 @@ _Noreturn void SysExit(struct Machine *m, int rc) {
 
 static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
   int pid, newpid = 0;
-  atomic_int *ctid_ptr;
+  _Atomic(int) *ctid_ptr;
   unassert(!m->path.jb);
   if ((flags & CLONE_CHILD_SETTID_LINUX) &&
       ((ctid & (sizeof(int) - 1)) ||
-       !(ctid_ptr = (atomic_int *)LookupAddress(m, ctid)))) {
+       !(ctid_ptr = (_Atomic(int) *)LookupAddress(m, ctid)))) {
     LOGF("bad clone() ptid / ctid pointers: %#" PRIx64, flags);
     return efault();
   }
@@ -494,7 +495,7 @@ static void *OnSpawn(void *arg) {
   }
 }
 
-#ifndef DISABLE_THREADS
+#ifdef HAVE_THREADS
 static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
                     u64 tls, u64 func) {
   int tid;
@@ -505,8 +506,8 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   pthread_t thread;
   sigset_t ss, oldss;
   pthread_attr_t attr;
-  atomic_int *ptid_ptr;
-  atomic_int *ctid_ptr;
+  _Atomic(int) *ptid_ptr;
+  _Atomic(int) *ctid_ptr;
   struct Machine *m2 = 0;
   THR_LOGF("pid=%d tid=%d SysSpawn", m->system->pid, m->tid);
   if ((flags & 255) != 0 && (flags & 255) != SIGCHLD_LINUX) {
@@ -534,10 +535,10 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   }
   if (((flags & CLONE_PARENT_SETTID_LINUX) &&
        ((ptid & (sizeof(int) - 1)) ||
-        !(ptid_ptr = (atomic_int *)LookupAddress(m, ptid)))) ||
+        !(ptid_ptr = (_Atomic(int) *)LookupAddress(m, ptid)))) ||
       ((flags & CLONE_CHILD_SETTID_LINUX) &&
        ((ctid & (sizeof(int) - 1)) ||
-        !(ctid_ptr = (atomic_int *)LookupAddress(m, ctid))))) {
+        !(ctid_ptr = (_Atomic(int) *)LookupAddress(m, ctid))))) {
     LOGF("bad clone() ptid / ctid pointers: %#" PRIx64, flags);
     return efault();
   }
@@ -586,9 +587,14 @@ static bool IsForkOrVfork(u64 flags) {
 static int SysClone(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
                     u64 tls, u64 func) {
   if (IsForkOrVfork(flags)) {
+#ifdef HAVE_FORK
     return Fork(m, flags, stack, ctid);
+#else
+    LOGF("forking support disabled");
+    return enosys();
+#endif
   }
-#ifndef DISABLE_THREADS
+#ifdef HAVE_THREADS
   return SysSpawn(m, flags, stack, ptid, ctid, tls, func);
 #else
   LOGF("threading support disabled");
@@ -1016,7 +1022,7 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   }
   LOCK(&m->system->mmap_lock);
   rc = ProtectVirtual(m->system, addr, size, prot);
-#if HAVE_JIT
+#ifdef HAVE_JIT
   if (rc != -1 && (prot & PROT_EXEC)) {
     LOGF("resetting jit hooks");
     ClearJitHooks(&m->system->jit);
@@ -1660,7 +1666,7 @@ static int UnXlatMsgFlags(int flags) {
 }
 
 static i64 ConvertEnotconnToSigpipe(struct Machine *m, i64 rc) {
-#ifdef __linux
+#if defined(__linux) || !defined(HAVE_FORK)
   return rc;
 #else
   if (!(rc == -1 && errno == ENOTCONN)) return rc;
@@ -2740,9 +2746,11 @@ static int SysLchown(struct Machine *m, i64 pathaddr, u32 uid, u32 gid) {
                      AT_SYMLINK_NOFOLLOW_LINUX);
 }
 
+#ifndef DISABLE_OVERLAYS
 static int SysChroot(struct Machine *m, i64 path) {
   return SetOverlays(LoadStr(m, path), false);
 }
+#endif
 
 static int SysSync(struct Machine *m) {
 #ifdef HAVE_SYNC
@@ -3338,7 +3346,7 @@ static void ExecveBlink(struct Machine *m, char *prog, char **argv,
     // and the same could apply to calling close() on our cloexec fds
     execfn = prog;
     sigfillset(&block);
-    pthread_sigmask(SIG_BLOCK, &block, &m->system->exec_sigmask);
+    unassert(!pthread_sigmask(SIG_BLOCK, &block, &m->system->exec_sigmask));
     if (CanEmulateExecutable(m, &prog, &argv)) {
       // TODO(jart): Prevent possibility of stack overflow.
       SYS_LOGF("m->system->exec(%s)", prog);
@@ -3347,7 +3355,7 @@ static void ExecveBlink(struct Machine *m, char *prog, char **argv,
       ResetSignalDispositions(m->system);
       _Exit(m->system->exec(execfn, prog, argv, envp));
     }
-    pthread_sigmask(SIG_SETMASK, &m->system->exec_sigmask, 0);
+    unassert(!pthread_sigmask(SIG_SETMASK, &m->system->exec_sigmask, 0));
   }
 }
 
@@ -3803,7 +3811,6 @@ static int SigsuspendActual(struct Machine *m, u64 mask) {
   oldmask = m->sigmask;
   unassert(!sigfillset(&block_host));
   unassert(!pthread_sigmask(SIG_BLOCK, &block_host, &oldmask_host));
-  assert(sigismember(&oldmask_host, SIGSYS) == 0);
   m->sigmask = mask;
   SIG_LOGF("sigmask push %" PRIx64, m->sigmask);
   m->issigsuspend = true;
@@ -3825,7 +3832,9 @@ static int SigsuspendPolyfill(struct Machine *m, u64 mask) {
   while (!CheckInterrupt(m, false)) {
     if (nanos > 256) {
       if (nanos < 10 * 1000) {
+#ifdef HAVE_SCHED_YIELD
         sched_yield();
+#endif
       } else {
         ts = FromNanoseconds(nanos);
         if (nanosleep(&ts, 0)) {
@@ -4609,7 +4618,7 @@ static bool IsValidThreadId(struct System *s, int tid) {
 }
 
 static int SysTkill(struct Machine *m, int tid, int sig) {
-#ifndef DISABLE_THREADS
+#if defined(HAVE_FORK) || defined(HAVE_THREADS)
   int err;
   bool found;
   struct Dll *e;
@@ -4669,13 +4678,13 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
   }
 #else
   return SysKill(m, tid, sig);
-#endif /* DISABLE_THREADS */
+#endif /* HAVE_THREADS */
 }
 
 static int SysTgkill(struct Machine *m, int pid, int tid, int sig) {
   if (pid < 1 || tid < 1) return einval();
   if (pid != m->system->pid) return eperm();
-#ifndef DISABLE_THREADS
+#ifdef HAVE_THREADS
   return SysTkill(m, tid, sig);
 #else
   if (tid != pid) return esrch();
@@ -4896,7 +4905,11 @@ static i32 SysGetresgid(struct Machine *m,  //
 }
 
 static int SysSchedYield(struct Machine *m) {
+#ifdef HAVE_SCHED_YIELD
   return sched_yield();
+#else
+  return 0;
+#endif
 }
 
 static int SysUmask(struct Machine *m, int mask) {
@@ -5030,8 +5043,6 @@ void OpSyscall(P) {
     SYSCALL3(0x013, SysReadv);
     SYSCALL3(0x014, SysWritev);
     SYSCALL2(0x015, SysAccess);
-    SYSCALL1(0x016, SysPipe);
-    SYSCALL2(0x125, SysPipe2);
     SYSCALL0(0x018, SysSchedYield);
     SYSCALL3(0x01C, SysMadvise);
     SYSCALL1(0x020, SysDup1);
@@ -5063,13 +5074,36 @@ void OpSyscall(P) {
     SYSCALL5(0x036, SysSetsockopt);
     SYSCALL5(0x037, SysGetsockopt);
 #endif
-    SYSCALL4(0x035, SysSocketpair);
-    SYSCALL6(0x038, SysClone);
+#ifdef HAVE_FORK
     SYSCALL0(0x039, SysFork);
     SYSCALL0(0x03A, SysVfork);
-    SYSCALL3(0x03B, SysExecve);
     SYSCALL4(0x03D, SysWait4);
     SYSCALL2(0x03E, SysKill);
+#endif
+#ifdef HAVE_THREADS
+    SYSCALL6(0x0CA, SysFutex);
+#endif
+#if defined(HAVE_FORK) || defined(HAVE_THREADS)
+    SYSCALL1(0x016, SysPipe);
+    SYSCALL2(0x125, SysPipe2);
+    SYSCALL6(0x038, SysClone);
+    SYSCALL2(0x0C8, SysTkill);
+    SYSCALL3(0x0EA, SysTgkill);
+    SYSCALL3(0x03B, SysExecve);
+    SYSCALL4(0x035, SysSocketpair);
+    SYSCALL2(0x111, SysSetRobustList);
+    SYSCALL3(0x112, SysGetRobustList);
+    SYSCALL2(0x08C, SysGetpriority);
+    SYSCALL3(0x08D, SysSetpriority);
+    SYSCALL2(0x08E, SysSchedSetparam);
+    SYSCALL2(0x08F, SysSchedGetparam);
+    SYSCALL3(0x090, SysSchedSetscheduler);
+    SYSCALL1(0x091, SysSchedGetscheduler);
+    SYSCALL1(0x092, SysSchedGetPriorityMax);
+    SYSCALL1(0x093, SysSchedGetPriorityMin);
+    SYSCALL3(0x0CB, SysSchedSetaffinity);
+#endif
+    SYSCALL3(0x0CC, SysSchedGetaffinity);
     SYSCALL1(0x03F, SysUname);
     SYSCALL3(0x048, SysFcntl);
     SYSCALL2(0x049, SysFlock);
@@ -5127,14 +5161,6 @@ void OpSyscall(P) {
     SYSCALL2(0x083, SysSigaltstack);
     SYSCALL3(0x085, SysMknod);
     SYSCALL4(0x103, SysMknodat);
-    SYSCALL2(0x08C, SysGetpriority);
-    SYSCALL3(0x08D, SysSetpriority);
-    SYSCALL2(0x08E, SysSchedSetparam);
-    SYSCALL2(0x08F, SysSchedGetparam);
-    SYSCALL3(0x090, SysSchedSetscheduler);
-    SYSCALL1(0x091, SysSchedGetscheduler);
-    SYSCALL1(0x092, SysSchedGetPriorityMax);
-    SYSCALL1(0x093, SysSchedGetPriorityMin);
     SYSCALL5(0x09D, SysPrctl);
     SYSCALL2(0x09E, SysArchPrctl);
     SYSCALL2(0x0A0, SysSetrlimit);
@@ -5142,21 +5168,12 @@ void OpSyscall(P) {
     SYSCALL1(0x0A1, SysChroot);
 #endif
     SYSCALL0(0x0A2, SysSync);
-#ifndef DISABLE_THREADS
-    SYSCALL6(0x0CA, SysFutex);
-    SYSCALL2(0x111, SysSetRobustList);
-    SYSCALL3(0x112, SysGetRobustList);
-#endif
-    SYSCALL2(0x0C8, SysTkill);
-    SYSCALL3(0x0CB, SysSchedSetaffinity);
-    SYSCALL3(0x0CC, SysSchedGetaffinity);
     SYSCALL3(0x0D9, SysGetdents);
     SYSCALL1(0x0DA, SysSetTidAddress);
     SYSCALL4(0x0DD, SysFadvise);
     SYSCALL2(0x0E3, SysClockSettime);
     SYSCALL2(0x0E5, SysClockGetres);
     SYSCALL4(0x0E6, SysClockNanosleep);
-    SYSCALL3(0x0EA, SysTgkill);
     SYSCALL2(0x084, SysUtime);
     SYSCALL2(0x0EB, SysUtimes);
     SYSCALL3(0x105, SysFutimesat);

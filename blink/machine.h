@@ -1,12 +1,11 @@
 #ifndef BLINK_MACHINE_H_
 #define BLINK_MACHINE_H_
 #include <limits.h>
-#include <pthread.h>
 #include <setjmp.h>
 #include <signal.h>
-#include <stdatomic.h>
 #include <stdbool.h>
 
+#include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/elf.h"
@@ -14,6 +13,7 @@
 #include "blink/jit.h"
 #include "blink/linux.h"
 #include "blink/log.h"
+#include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/tunables.h"
 
@@ -81,7 +81,7 @@
 #define CanHaveLinearMemory() CAN_64BIT
 #endif
 
-#if HAVE_JIT
+#ifdef HAVE_JIT
 #define IsMakingPath(m) m->path.jb
 #else
 #define IsMakingPath(m) 0
@@ -96,7 +96,7 @@
 #endif
 
 #if !defined(__m68k__) && !defined(__mips__)
-typedef atomic_uint memstat_t;
+typedef _Atomic(unsigned) memstat_t;
 #else
 typedef unsigned memstat_t;
 #endif
@@ -226,7 +226,7 @@ struct System {
   struct sigaction_linux hands[64] GUARDED_BY(sig_lock);
   u64 blinksigs;  // signals blink itself handles
   struct rlimit_linux rlim[RLIM_NLIMITS_LINUX];
-#ifndef DISABLE_THREADS
+#ifdef HAVE_THREADS
   pthread_cond_t machines_cond;
   pthread_mutex_t machines_lock;
   pthread_mutex_t exec_lock;

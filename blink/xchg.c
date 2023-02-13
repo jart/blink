@@ -17,15 +17,15 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <limits.h>
-#include <stdatomic.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/bus.h"
 #include "blink/endian.h"
-#include "blink/lock.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/thread.h"
 
 void OpXchgGbEb(P) {
   u8 *p, *q, x, y;
@@ -35,7 +35,7 @@ void OpXchgGbEb(P) {
      §7.3.1.2 */
   if (!IsModrmRegister(rde)) {
     p = ComputeReserveAddressWrite1(A);
-    *q = atomic_exchange_explicit((atomic_uchar *)p, *q, memory_order_acq_rel);
+    *q = atomic_exchange_explicit((_Atomic(u8) *)p, *q, memory_order_acq_rel);
   } else {
     p = ByteRexbRm(m, rde);
     x = Get8(q);

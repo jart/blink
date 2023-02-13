@@ -16,23 +16,24 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdatomic.h>
 #include <sys/param.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/macros.h"
 #include "blink/util.h"
 
-#ifdef HAVE_SCHED_GETAFFINITY
+#ifdef HAVE_SCHED_H
 #include <sched.h>
 #endif
+
 #ifdef HAVE_SYSCTL
 #include <sys/sysctl.h>
 #endif
 
-static atomic_int g_cpucount;
+static _Atomic(int) g_cpucount;
 
 static int GetCpuCountImpl(void) {
 #ifdef HAVE_SCHED_GETAFFINITY

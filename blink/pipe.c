@@ -18,19 +18,19 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <fcntl.h>
-#include <stdatomic.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
-#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/syscall.h"
+#include "blink/thread.h"
 #include "blink/xlat.h"
 
 int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
