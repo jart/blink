@@ -27,6 +27,7 @@
 #include "blink/macros.h"
 #include "blink/panel.h"
 #include "blink/types.h"
+#include "blink/util.h"
 
 static int tpdecode(const char *s, wint_t *out) {
   u32 wc, cb, need, msb, j, i = 0;

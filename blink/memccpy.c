@@ -16,42 +16,16 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <fcntl.h>
-#include <stdbool.h>
-#include <string.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
-#include "blink/assert.h"
-#include "blink/elf.h"
-#include "blink/endian.h"
 #include "blink/util.h"
 
-#define READ32(p) Read32((const u8 *)(p))
-
-// Returns true if file is almost certainly a Haiku executable.
-bool IsHaikuExecutable(int fd) {
-  int i, n;
-  struct stat fi;
-  bool res = false;
-  const char *stab;
-  Elf64_Ehdr_ *ehdr;
-  const Elf64_Sym_ *st;
-  if (fstat(fd, &fi) == -1) return false;
-  ehdr = (Elf64_Ehdr_ *)mmap(0, fi.st_size, PROT_READ, MAP_SHARED, fd, 0);
-  if ((void *)ehdr == MAP_FAILED) return false;
-  if (READ32(ehdr) == READ32("\177ELF") &&
-      (stab = GetElfStringTable(ehdr, fi.st_size)) &&
-      (st = GetElfSymbolTable(ehdr, fi.st_size, &n))) {
-    for (i = 0; i < n; ++i) {
-      if (ELF64_ST_TYPE_(st[i].info) == STT_OBJECT_ &&
-          !strcmp(stab + Read32(st[i].name), "_gSharedObjectHaikuVersion")) {
-        res = true;
-        break;
-      }
+void *memccpy_(void *dst, const void *src, int c, size_t n) {
+  size_t i;
+  unsigned char *d = (unsigned char *)dst;
+  const unsigned char *s = (const unsigned char *)src;
+  for (i = 0; i < n; ++i) {
+    if ((d[i] = s[i]) == (c & 255)) {
+      return d + i + 1;
     }
   }
-  unassert(!munmap(ehdr, fi.st_size));
-  return res;
+  return 0;
 }

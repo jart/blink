@@ -53,6 +53,16 @@
 #define st_mtim st_mtimespec
 #endif
 
+// NSIG isn't POSIX but it's more common than SIGRTMAX which is.
+// Note: OpenBSD defines NSIG as 33, even though it only has 32.
+#ifdef NSIG
+#define TOPSIG NSIG
+#elif defined(SIGRTMAX)
+#define TOPSIG SIGRTMAX
+#else
+#define TOPSIG 32
+#endif
+
 int XlatErrno(int x) {
   if (x == EPERM) return EPERM_LINUX;
   if (x == ENOENT) return ENOENT_LINUX;
@@ -1034,7 +1044,7 @@ void XlatWinsizeToHost(struct winsize *dst, const struct winsize_linux *src) {
 void XlatSigsetToLinux(u8 dst[8], const sigset_t *src) {
   u64 set = 0;
   int syssig, linuxsig;
-  for (syssig = 1; syssig <= MIN(64, NSIG); ++syssig) {
+  for (syssig = 1; syssig <= MIN(64, TOPSIG); ++syssig) {
     if (sigismember(src, syssig) == 1 &&
         (linuxsig = UnXlatSignal(syssig)) != -1) {
       set |= 1ull << (linuxsig - 1);
@@ -1048,7 +1058,7 @@ void XlatLinuxToSigset(sigset_t *dst, const u8 src[8]) {
   int syssig, linuxsig;
   set = Read64(src);
   sigemptyset(dst);
-  for (linuxsig = 1; linuxsig <= MIN(64, NSIG); ++linuxsig) {
+  for (linuxsig = 1; linuxsig <= MIN(64, TOPSIG); ++linuxsig) {
     if (((1ull << (linuxsig - 1)) & set) &&
         (syssig = XlatSignal(linuxsig)) != -1) {
       sigaddset(dst, syssig);

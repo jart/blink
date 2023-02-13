@@ -22,28 +22,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 #include <sys/socket.h>
 #include <termios.h>
 #include <unistd.h>
 
-#include "blink/lock.h"
-
-#ifdef __HAIKU__
-#include <OS.h>
-#include <sys/sockio.h>
-#endif
-
 #include "blink/assert.h"
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
 #include "blink/linux.h"
+#include "blink/lock.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/syscall.h"
 #include "blink/types.h"
 #include "blink/xlat.h"
+
+#ifdef __HAIKU__
+#include <OS.h>
+#include <sys/sockio.h>
+#endif
 
 static int IoctlTiocgwinsz(struct Machine *m, int fd, i64 addr,
                            int fn(int, struct winsize *)) {
@@ -107,6 +108,8 @@ static int IoctlTiocspgrp(struct Machine *m, int fd, i64 addr) {
   return tcsetpgrp(fd, Read32(pgrp));
 }
 
+#ifdef HAVE_SIOCGIFCONF
+
 static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
   size_t i;
   char *buf;
@@ -118,30 +121,25 @@ static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
   struct ifconf ifconf;
   struct ifreq_linux ifreq_linux;
   struct ifconf_linux ifconf_linux;
+  const struct ifconf_linux *ifconf_linuxp;
   memset(&ifreq_linux, 0, sizeof(ifreq_linux));
-  if (CopyFromUserRead(m, &ifconf_linux, ifconf_addr, sizeof(ifconf_linux)) ==
-      -1) {
-    return -1;
+  if (!(ifconf_linuxp = (const struct ifconf_linux *)SchlepRW(
+            m, ifconf_addr, sizeof(*ifconf_linuxp))) ||
+      !IsValidMemory(m, Read64(ifconf_linuxp->buf), Read32(ifconf_linuxp->len),
+                     PROT_WRITE)) {
+    return efault();
   }
-  bufsize = MIN(16384, Read64(ifconf_linux.len));
-  if (!(buf = (char *)malloc(bufsize))) return -1;
-  if (!(buf_linux = (char *)malloc(bufsize))) {
-    free(buf);
-    return -1;
-  }
+  bufsize = MIN(16384, Read32(ifconf_linuxp->len));
+  if (!(buf = (char *)AddToFreeList(m, malloc(bufsize)))) return -1;
+  if (!(buf_linux = (char *)AddToFreeList(m, malloc(bufsize)))) return -1;
   ifconf.ifc_len = bufsize;
   ifconf.ifc_buf = buf;
-  if (ioctl(systemfd, SIOCGIFCONF, &ifconf)) {
-    free(buf_linux);
-    free(buf);
-    return -1;
-  }
+  if (ioctl(systemfd, SIOCGIFCONF, &ifconf)) return -1;
   len_linux = 0;
   ifreq = ifconf.ifc_req;
   for (i = 0; i < ifconf.ifc_len;) {
     if (len_linux + sizeof(ifreq_linux) > bufsize) break;
-#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || \
-    defined(__NetBSD__)
+#ifdef HAVE_SA_LEN
     len = IFNAMSIZ + ifreq->ifr_addr.sa_len;
 #else
     len = sizeof(*ifreq);
@@ -161,11 +159,11 @@ static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
     ifreq = (struct ifreq *)((char *)ifreq + len);
     i += len;
   }
-  Write64(ifconf_linux.len, len_linux);
-  CopyToUserWrite(m, ifconf_addr, &ifconf_linux, sizeof(ifconf_linux));
+  Write32(ifconf_linux.len, len_linux);
+  Write32(ifconf_linux.pad, 0);
+  Write64(ifconf_linux.buf, Read64(ifconf_linuxp->buf));
   CopyToUserWrite(m, Read64(ifconf_linux.buf), buf_linux, len_linux);
-  free(buf_linux);
-  free(buf);
+  CopyToUserWrite(m, ifconf_addr, &ifconf_linux, sizeof(ifconf_linux));
   return 0;
 }
 
@@ -173,10 +171,11 @@ static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
                             unsigned long kind) {
   struct ifreq ifreq;
   struct ifreq_linux ifreq_linux;
-  if (CopyFromUserRead(m, &ifreq_linux, ifreq_addr, sizeof(ifreq_linux)) ==
-      -1) {
-    return -1;
+  if (!IsValidMemory(m, ifreq_addr, sizeof(ifreq_linux),
+                     PROT_READ | PROT_WRITE)) {
+    return efault();
   }
+  CopyFromUserRead(m, &ifreq_linux, ifreq_addr, sizeof(ifreq_linux));
   memset(ifreq.ifr_name, 0, sizeof(ifreq.ifr_name));
   memcpy(ifreq.ifr_name, ifreq_linux.name,
          MIN(sizeof(ifreq_linux.name) - 1, sizeof(ifreq.ifr_name)));
@@ -196,6 +195,8 @@ static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
   CopyToUserWrite(m, ifreq_addr, &ifreq_linux, sizeof(ifreq_linux));
   return 0;
 }
+
+#endif /* HAVE_SIOCGIFCONF */
 
 static int IoctlFionbio(struct Machine *m, int fildes) {
   int oflags;
@@ -327,16 +328,6 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlTcsets(m, fildes, TCSADRAIN, addr, tcsetattr_impl);
     case TCSETSF_LINUX:
       return IoctlTcsets(m, fildes, TCSAFLUSH, addr, tcsetattr_impl);
-    case SIOCGIFCONF_LINUX:
-      return IoctlSiocgifconf(m, fildes, addr);
-    case SIOCGIFADDR_LINUX:
-      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFADDR);
-    case SIOCGIFNETMASK_LINUX:
-      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFNETMASK);
-    case SIOCGIFBRDADDR_LINUX:
-      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFBRDADDR);
-    case SIOCGIFDSTADDR_LINUX:
-      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFDSTADDR);
     case TIOCGPGRP_LINUX:
       return IoctlTiocgpgrp(m, fildes, addr);
     case TIOCSPGRP_LINUX:
@@ -384,6 +375,18 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
 #ifdef SIOCGPGRP
     case SIOCGPGRP_LINUX:
       return IoctlGetInt32(m, fildes, SIOCGPGRP, addr);
+#endif
+#ifdef HAVE_SIOCGIFCONF
+    case SIOCGIFCONF_LINUX:
+      return IoctlSiocgifconf(m, fildes, addr);
+    case SIOCGIFADDR_LINUX:
+      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFADDR);
+    case SIOCGIFNETMASK_LINUX:
+      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFNETMASK);
+    case SIOCGIFBRDADDR_LINUX:
+      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFBRDADDR);
+    case SIOCGIFDSTADDR_LINUX:
+      return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFDSTADDR);
 #endif
     default:
       LOGF("missing ioctl %#" PRIx64, request);

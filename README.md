@@ -14,7 +14,7 @@ do the same thing as the `qemu-x86_64` command, except that
 1. Blink is 196kb in size (or 126kb if optional features are disabled),
    whereas the qemu-x86_64 executable is 4mb in size.
 
-2. Blink will run your Linux binaries on any POSIX platform, whereas
+2. Blink will run your Linux binaries on any POSIX system, whereas
    qemu-x86_64 only supports Linux.
 
 3. Blink goes 2x faster than qemu-x86_64 on some benchmarks, such as SSE
@@ -44,11 +44,11 @@ following platforms:
 
 Blink depends on the following libraries:
 
-- libc (POSIX.1-2017)
+- libc (POSIX.1-2017 baseline, XSI not required)
 
 Blink can be compiled on UNIX systems that have:
 
-- A C11 compiler (e.g. GCC 4.9.4+)
+- A C11 compiler with atomics (e.g. GCC 4.9.4+)
 - Modern GNU Make (i.e. not the one that comes with XCode)
 
 The instructions for compiling Blink are as follows:
@@ -128,6 +128,14 @@ You can hunt down bugs in Blink using the following build modes:
 - `MODE=tsan` helps find threading related bugs
 - `MODE=ubsan` to find violations of the C standard
 - `MODE=msan` helps find uninitialized memory errors
+
+You can check Blink's compliance with the POSIX standard using the
+following configuration flags:
+
+```sh
+./configure --posix  # only use c11 with baseline posix standard
+./configure --xopen  # same but also allow use of xsi extensions
+```
 
 ### Testing
 

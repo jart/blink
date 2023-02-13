@@ -102,7 +102,7 @@ int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr, u64 size,
     mask |= PAGE_RW;
     need |= PAGE_RW;
   }
-  while (size && ib->i < IOV_MAX) {
+  while (size && ib->i < GetIovMax()) {
     if (!(real = LookupAddress2(m, addr, mask, need))) return efault();
     have = 4096 - (addr & 4095);
     got = MIN(size, have);
@@ -121,7 +121,7 @@ int AppendIovsGuest(struct Machine *m, struct Iovs *iv, i64 iovaddr, int iovlen,
   if (iovlen > IOV_MAX_LINUX) return einval();
   iovsize = iovlen * sizeof(struct iovec_linux);
   if ((guestiovs = (const struct iovec_linux *)SchlepR(m, iovaddr, iovsize))) {
-    for (rc = i = 0; i < iovlen && iv->i < IOV_MAX; ++i) {
+    for (rc = i = 0; i < iovlen && iv->i < GetIovMax(); ++i) {
       if (AppendIovsReal(m, iv, Read64(guestiovs[i].base),
                          Read64(guestiovs[i].len), prot) == -1) {
         rc = -1;

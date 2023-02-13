@@ -23,9 +23,7 @@
 #include "blink/log.h"
 #include "blink/syscall.h"
 
-#ifdef POLYFILL_MKFIFOAT
-
-int mkfifoat(int dirfd, const char *path, mode_t mode) {
+int mkfifoat_(int dirfd, const char *path, mode_t mode) {
   if (dirfd == AT_FDCWD) {
     return mkfifo(path, mode);
   } else {
@@ -33,5 +31,3 @@ int mkfifoat(int dirfd, const char *path, mode_t mode) {
     return enosys();
   }
 }
-
-#endif /* POLYFILL_MKFIFOAT */

@@ -5,48 +5,11 @@ TAGS ?= /usr/bin/ctags
 
 IMAGE_BASE_VIRTUAL = 0x23000000
 
-CFLAGS +=				\
-	-g				\
-	-O2				\
-	-fpie				\
-	-fno-ident			\
-	-fno-common			\
-	-fstrict-aliasing		\
-	-fstrict-overflow
-
-ifneq ($(HOST_OS), Haiku)
-CFLAGS += -pthread
-endif
-
 ifeq ($(HOST_SYSTEM), Haiku)
 CFLAGS += -fpic
 endif
 
-CPPFLAGS +=				\
-	-iquote.			\
-	-D_FILE_OFFSET_BITS=64		\
-	-D_POSIX_C_SOURCE=200809L	\
-	-D_XOPEN_SOURCE=700		\
-	-D_DARWIN_C_SOURCE		\
-	-D_DEFAULT_SOURCE		\
-	-D_BSD_SOURCE			\
-	-D_GNU_SOURCE			\
-	-D__BSD_VISIBLE
-
-LDLIBS +=				\
-	-lm
-
-ifneq ($(HOST_SYSTEM), Darwin)
-ifneq ($(HOST_SYSTEM), OpenBSD)
-ifneq ($(HOST_SYSTEM), Haiku)
-LDLIBS += -lrt
-endif
-endif
-endif
-
-ifneq ($(HOST_SYSTEM), Haiku)
-LDLIBS += -pthread
-endif
+CPPFLAGS += -iquote.
 
 ifeq ($(HOST_SYSTEM), Haiku)
 LDLIBS += -lroot -lnetwork -lbsd
@@ -84,15 +47,10 @@ TAGSFLAGS =				\
 # moving values to/from the cpu register file therefore the size and
 # boundaries are always known, and as such, fortification needlessly
 # causes an explosive growth in object code size in files like sse.c
-CFLAGS +=				\
-	-U_FORTIFY_SOURCE
+CFLAGS += -U_FORTIFY_SOURCE
 
 ifeq ($(USER), jart)
-CFLAGS +=				\
-	-fno-stack-protector		\
-	-Wall				\
-	-Werror				\
-	-Wno-unused-function
+CFLAGS += -Wall -Werror -Wno-unused-function
 endif
 
 ifeq ($(MODE), cosmo)
@@ -129,8 +87,8 @@ endif
 
 ifeq ($(MODE), tiny)
 CPPFLAGS += -DNDEBUG -DTINY
-CFLAGS += -Os -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables
-LDFLAGS += #-Wl,--cref,-Map=$@.map
+CFLAGS += -Os -fomit-frame-pointer -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables
+LDFLAGS += -no-pie #-Wl,--cref,-Map=$@.map
 endif
 
 ifeq ($(MODE), tiny-llvm)

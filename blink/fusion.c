@@ -109,7 +109,7 @@ bool FuseBranchTest(P) {
   }
   u8 code[] = {
       0x85, 0300 | kJitRes0 << 3 | kJitRes0,  // test %eax,%eax
-      0x70 | jcc, 5,                          // jz/jnz +5
+      (u8)(0x70 | jcc), 5,                    // jz/jnz +5
   };
 #elif defined(__aarch64__)
   Jitter(A, "A"      // res0 = GetReg(RexrReg)
@@ -248,11 +248,11 @@ bool FuseBranchCmp(P, bool imm) {
   AlignJit(m->path.jb, 8, 3);
   u8 code[] = {
       // cmp %r12,%rax
-      (Rexw(rde) ? kAmdRexw : 0) | (kJitSav1 > 7 ? kAmdRexr : 0),
+      (u8)((Rexw(rde) ? kAmdRexw : 0) | (kJitSav1 > 7 ? kAmdRexr : 0)),
       0x39,
       0300 | (kJitSav1 & 7) << 3 | kJitRes0,
       // jz/jnz +5
-      0x70 | jcc,
+      (u8)(0x70 | jcc),
       5,
   };
 #elif defined(__aarch64__)

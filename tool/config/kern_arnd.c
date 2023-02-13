@@ -1,5 +1,4 @@
 // tests for non-buggy sysctl(KERN_ARND)
-// author: justine tunney <jtunney@gmail.com>
 #include <sys/types.h>
 // order sometimes matters
 #include <string.h>

@@ -37,6 +37,7 @@
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/overlays.h"
+#include "blink/tunables.h"
 #include "blink/util.h"
 #include "blink/x86.h"
 
@@ -47,6 +48,8 @@
 
 #define READ64(p) Read64((const u8 *)(p))
 #define READ32(p) Read32((const u8 *)(p))
+
+static bool CanEmulateImpl(struct Machine *, char **, char ***, bool);
 
 static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
                               const Elf64_Phdr_ *phdr, i64 last_end, u64 aslr,
@@ -196,18 +199,72 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
   return end;
 }
 
-bool IsSupportedExecutable(const char *path, void *image) {
-  Elf64_Ehdr_ *ehdr;
-  if (READ32(image) == READ32("\177ELF")) {
-    ehdr = (Elf64_Ehdr_ *)image;
-    return (Read16(ehdr->type) == ET_EXEC_ ||
-            (Read16(ehdr->type) == ET_DYN_ &&
-             ehdr->ident[EI_OSABI_] != ELFOSABI_FREEBSD_)) &&
-           ehdr->ident[EI_CLASS_] == ELFCLASS64_ &&
-           Read16(ehdr->machine) == EM_NEXGEN32E_;
+static bool IsFreebsdExecutable(Elf64_Ehdr_ *ehdr, size_t size) {
+  // APE uses the FreeBSD OS ABI too, but never with ET_DYN
+  return Read16(ehdr->type) == ET_DYN_ &&
+         ehdr->ident[EI_OSABI_] == ELFOSABI_FREEBSD_;
+}
+
+static bool IsOpenbsdExecutable(struct Elf64_Ehdr_ *ehdr, size_t size) {
+  size_t off;
+  unsigned i;
+  Elf64_Phdr_ *phdr;
+  if (Read64(ehdr->phoff) < size) {
+    for (i = 0; i < Read16(ehdr->phnum); ++i) {
+      off = Read64(ehdr->phoff) + Read16(ehdr->phentsize) * i;
+      if (off + Read16(ehdr->phentsize) > size) {
+        return false;
+      }
+      phdr = (Elf64_Phdr_ *)((u8 *)ehdr + off);
+      if (Read32(phdr->type) == PT_OPENBSD_RANDOMIZE_) {
+        return true;
+      }
+    }
   }
-  return READ64(image) == READ64("MZqFpD='") ||  //
-         READ64(image) == READ64("jartsr='") ||  //
+  return false;
+}
+
+static bool IsHaikuExecutable(Elf64_Ehdr_ *ehdr, size_t size) {
+#ifdef __HAIKU__
+  int i, n;
+  bool res = false;
+  const char *stab;
+  const Elf64_Sym_ *st;
+  if ((stab = GetElfStringTable(ehdr, size)) &&
+      (st = GetElfSymbolTable(ehdr, size, &n))) {
+    for (i = 0; i < n; ++i) {
+      if (ELF64_ST_TYPE_(st[i].info) == STT_OBJECT_ &&
+          !strcmp(stab + Read32(st[i].name), "_gSharedObjectHaikuVersion")) {
+        res = true;
+        break;
+      }
+    }
+  }
+  return res;
+#else
+  return false;
+#endif
+}
+
+bool IsSupportedExecutable(const char *path, void *image, size_t size) {
+  bool res;
+  Elf64_Ehdr_ *ehdr;
+  if (size >= sizeof(Elf64_Ehdr_) && READ32(image) == READ32("\177ELF")) {
+    ehdr = (Elf64_Ehdr_ *)image;
+    res = (Read16(ehdr->type) == ET_EXEC_ ||  //
+           Read16(ehdr->type) == ET_DYN_) &&
+          ehdr->ident[EI_CLASS_] == ELFCLASS64_ &&
+          Read16(ehdr->machine) == EM_NEXGEN32E_ &&
+          !IsFreebsdExecutable(ehdr, size) &&  //
+          !IsOpenbsdExecutable(ehdr, size) &&  //
+          !IsHaikuExecutable(ehdr, size);
+#if defined(__ELF__) && !defined(__linux)
+    if (res) LOGF("blink believes %s is an x86_64-linux executable", path);
+#endif
+    return res;
+  }
+  return (size >= 4096 && (READ64(image) == READ64("MZqFpD='") ||    //
+                           READ64(image) == READ64("jartsr='"))) ||  //
          endswith(path, ".bin");
 }
 
@@ -275,7 +332,7 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
         (ehdr = (Elf64_Ehdr_ *)Mmap(0, st.st_size, PROT_READ | PROT_WRITE,
                                     MAP_PRIVATE, fd, 0, "loader")) ==
             MAP_FAILED ||
-        !IsSupportedExecutable(interpreter, ehdr)) {
+        !IsSupportedExecutable(interpreter, ehdr, st.st_size)) {
       WriteErrorString(interpreter);
       WriteErrorString(": failed to load interpreter (errno ");
       FormatInt64(ibuf, errno);
@@ -372,9 +429,137 @@ static void FreeProgName(void) {
   free(g_progname);
 }
 
-void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
+static int CheckExecutableFile(const struct stat *st) {
+  if (!S_ISREG(st->st_mode)) {
+    LOGF("execve needs regular file");
+    errno = EACCES;
+    return -1;
+  }
+  if (!(st->st_mode & 0111)) {
+    LOGF("execve needs chmod +x");
+    errno = EACCES;
+    return -1;
+  }
+  if (!st->st_size) {
+    LOGF("executable file empty");
+    errno = ENOEXEC;
+    return -1;
+  }
+  return 0;
+}
+
+// SHELL RUNS
+//   ./script.sh foo bar
+// SCRIPT HAS
+//   #!/bin/interp one arg
+// BLINK DOES
+//   AT_EXECFN = ./script.sh
+//   argv[0] = /bin/interp
+//   argv[1] = one arg
+//   argv[2] = ./script.sh
+//   argv[3] = foo
+//   argv[4] = bar
+static bool HasShebang(struct Machine *m, const char *p, size_t n, char **prog,
+                       char **args) {
+  char *b;
+  size_t i, j, t;
+  n = MIN(n, kMaxShebang);
+  if (n < 4) return false;
+  if (p[0] != '#') return false;
+  if (p[1] != '!') return false;
+  if (!(b = (char *)AddToFreeList(m, calloc(1, n + 1)))) return false;
+  for (t = 0, j = 0, i = 2; i < n; ++i) {
+    if (!(32 <= p[i] && p[i] < 0177) && p[i] != '\n') return false;
+    if (!t) {
+      // STATE 0: COPY INTERPRETER FILENAME
+      if (p[i] == ' ') {
+        *prog = b;
+        b = 0;
+        j = 0;
+        t = 1;
+      } else if (p[i] == '\n') {
+        *prog = b;
+        *args = 0;
+        return true;
+      } else {
+        b[j++] = p[i];
+        b[j] = 0;
+      }
+    } else if (t == 1) {
+      // STATE 1: HANDLE SPACES BETWEEN INTERPRETER AND ITS ARGS
+      if (p[i] == ' ') {
+        // do nothing
+      } else if (p[i] == '\n') {
+        *args = 0;
+        return true;
+      } else {
+        if (!(b = (char *)AddToFreeList(m, calloc(1, n + 1)))) return false;
+        b[j++] = p[i];
+        b[j] = 0;
+        t = 2;
+      }
+    } else if (t == 2) {
+      // STATE 2: COPY INTERPRETER ARGS AS A SINGLE ARGUMENT
+      if (p[i] == '\n') {
+        *args = b;
+        return true;
+      } else {
+        b[j++] = p[i];
+        b[j] = 0;
+      }
+    } else {
+      __builtin_unreachable();
+    }
+  }
+  return false;
+}
+
+static size_t CountStrList(char **a) {
+  size_t n = 0;
+  while (*a++) ++n;
+  return n;
+}
+
+static char **ConcatStrLists(struct Machine *m, char **a, char **b) {
+  size_t i, n;
+  char **c, *e;
+  if ((c = (char **)AddToFreeList(
+           m, malloc(((n = CountStrList(a) + CountStrList(b)) + 2) *
+                     sizeof(*c))))) {
+    i = 0;
+    while ((e = *a++)) c[i++] = e;
+    while ((e = *b++)) c[i++] = e;
+    unassert(i == n);
+    c[i++] = 0;
+    c[i] = 0;
+  }
+  return c;
+}
+
+static int CanEmulateData(struct Machine *m, char **prog, char ***argv,
+                          bool isfirst, char *img, size_t imglen) {
+  char **newargv;
+  char *interp[3] = {0};
+  if (IsSupportedExecutable(*prog, img, imglen)) {
+    return 1;
+  } else if (isfirst && HasShebang(m, img, imglen, interp, interp + 1) &&
+             CanEmulateImpl(m, interp, 0, false) &&
+             (newargv = ConcatStrLists(m, interp, *argv))) {
+    newargv[1 + !!interp[1]] = *prog;
+    *prog = interp[0];
+    *argv = newargv;
+    return 2;
+  } else {
+    return 0;
+  }
+}
+
+void LoadProgram(struct Machine *m, char *execfn, char *prog, char **args,
+                 char **vars) {
   int fd;
   i64 sp;
+  int status;
+  bool isfirst;
   char ibuf[21];
   char ehdr[64];
   long pagesize;
@@ -386,35 +571,53 @@ void LoadProgram(struct Machine *m, char *prog, char **args, char **vars) {
     atexit(FreeProgName);
     once = true;
   }
-  unassert(prog);
-  elf = &m->system->elf;
-  elf->prog = prog;
-  elf->at_phdr = 0;
-  elf->at_base = -1;
-  elf->at_phent = 56;
-  free(g_progname);
-  g_progname = strdup(prog);
-  SYS_LOGF("LoadProgram %s", prog);
-  if ((fd = OverlaysOpen(AT_FDCWD, prog, O_RDONLY, 0)) == -1 ||
-      (fstat(fd, &st) == -1 || !st.st_size) ||
-      (elf->map =
-           (char *)Mmap(0, (elf->mapsize = st.st_size), PROT_READ | PROT_WRITE,
-                        MAP_PRIVATE, fd, 0, "loader")) == MAP_FAILED) {
-    WriteErrorString(prog);
-    WriteErrorString(": failed to load executable (errno ");
-    FormatInt64(ibuf, errno);
-    WriteErrorString(ibuf);
-    WriteErrorString(")\n");
-    exit(127);
-  }
-  // TODO(jart): Punt shell scripts to _PATH_BSHELL
-  if (!IsSupportedExecutable(prog, elf->map)) {
-    WriteErrorString("\
+  for (isfirst = true;;) {
+    unassert(prog);
+    elf = &m->system->elf;
+    elf->prog = prog;
+    elf->at_phdr = 0;
+    elf->at_base = -1;
+    elf->at_phent = 56;
+    free(g_progname);
+    g_progname = strdup(prog);
+    SYS_LOGF("LoadProgram %s", prog);
+    if ((fd = OverlaysOpen(AT_FDCWD, prog, O_RDONLY, 0)) == -1 ||
+        fstat(fd, &st) == -1 || CheckExecutableFile(&st) == -1 ||
+        (elf->map = (char *)Mmap(0, (elf->mapsize = st.st_size),
+                                 PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0,
+                                 "loader")) == MAP_FAILED) {
+      WriteErrorString(prog);
+      WriteErrorString(": failed to load executable (errno ");
+      FormatInt64(ibuf, errno);
+      WriteErrorString(ibuf);
+      WriteErrorString(")\n");
+      exit(127);
+    }
+    status = CanEmulateData(m, &prog, &args, isfirst, elf->map, elf->mapsize);
+    if (!status) {
+      WriteErrorString("\
 error: unsupported executable; we need:\n\
 - x86_64-linux elf executables\n\
 - flat executables (.bin files)\n\
-- actually portable executables (MZqFpD/jartsr)\n");
-    exit(127);
+- actually portable executables (MZqFpD/jartsr)\n\
+- scripts with #!shebang meeting above criteria\n");
+      exit(127);
+    } else if (status == 1) {
+      break;  // file is a real executable
+    } else if (status == 2) {
+      // turns out it's a shell script
+      if (isfirst) {
+        // start over using the shebang interpreter instead
+        unassert(!munmap(elf->map, elf->mapsize));
+        unassert(!close(fd));
+        isfirst = false;
+      } else {
+        LOGF("shell scripts can't interpret shell scripts");
+        exit(127);
+      }
+    } else {
+      __builtin_unreachable();
+    }
   }
   ResetCpu(m);
   m->system->codesize = 0;
@@ -451,10 +654,41 @@ error: unsupported executable; we need:\n\
       LOGF("failed to reserve stack memory");
       exit(127);
     }
-    LoadArgv(m, prog, args, vars);
+    LoadArgv(m, execfn, prog, args, vars);
   }
   pagesize = GetSystemPageSize();
   pagesize = MAX(4096, pagesize);
   m->system->brk = ROUNDUP(m->system->brk, pagesize);
   unassert(!close(fd));
+}
+
+static bool CanEmulateImpl(struct Machine *m, char **prog, char ***argv,
+                           bool isfirst) {
+  int fd;
+  bool res;
+  void *img;
+  struct stat st;
+  if ((fd = OverlaysOpen(AT_FDCWD, *prog, O_RDONLY | O_CLOEXEC, 0)) == -1) {
+    return false;
+  }
+  unassert(!fstat(fd, &st));
+  if (CheckExecutableFile(&st) == -1) {
+    close(fd);
+    return false;
+  }
+  img = mmap(0, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+  close(fd);
+  if (img == MAP_FAILED) return false;
+  res = !!CanEmulateData(m, prog, argv, isfirst, (char *)img, st.st_size);
+  unassert(!munmap(img, st.st_size));
+  return res;
+}
+
+bool CanEmulateExecutable(struct Machine *m, char **prog, char ***argv) {
+  int err;
+  bool res;
+  err = errno;
+  res = CanEmulateImpl(m, prog, argv, true);
+  errno = err;
+  return res;
 }

@@ -693,9 +693,14 @@
 
 #define IOV_MAX_LINUX 1024
 
-#define WNOHANG_LINUX    1
-#define WUNTRACED_LINUX  2
-#define WCONTINUED_LINUX 8
+#define WNOHANG_LINUX     0x00000001
+#define WUNTRACED_LINUX   0x00000002
+#define WEXITED_LINUX     0x00000004
+#define WCONTINUED_LINUX  0x00000008
+#define WNOWAIT_LINUX     0x01000000
+#define __WNOTHREAD_LINUX 0x20000000
+#define __WALL_LINUX      0x40000000
+#define __WCLONE_LINUX    0x80000000
 
 #define MS_SYNC_LINUX       4
 #define MS_ASYNC_LINUX      1
@@ -773,6 +778,10 @@
 #define POLL_ERR_LINUX      4
 #define POLL_PRI_LINUX      5
 #define POLL_HUP_LINUX      6
+
+#define RENAME_NOREPLACE_LINUX 1
+#define RENAME_EXCHANGE_LINUX  2
+#define RENAME_WHITEOUT_LINUX  4
 
 struct iovec_linux {
   u8 base[8];
@@ -978,7 +987,8 @@ struct dirent_linux {
 };
 
 struct ifconf_linux {
-  u8 len[8];
+  u8 len[4];
+  u8 pad[4];
   u8 buf[8];
 };
 

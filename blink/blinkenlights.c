@@ -2957,7 +2957,7 @@ static void SetStatus(const char *fmt, ...) {
   va_list va;
   struct itimerval it;
   va_start(va, fmt);
-  unassert(vasprintf_(&s, fmt, va) >= 0);
+  unassert(vasprintf(&s, fmt, va) >= 0);
   va_end(va);
   free(statusmessage);
   statusmessage = s;
@@ -3748,11 +3748,11 @@ int VirtualMachine(int argc, char *argv[]) {
   optind_++;
   do {
     action = 0;
-    LoadProgram(m, codepath, argv + optind_ - 1, environ);
+    LoadProgram(m, codepath, codepath, argv + optind_ - 1, environ);
     if (m->system->codesize) {
       ophits = (unsigned long *)AllocateBig(
           m->system->codesize * sizeof(unsigned long), PROT_READ | PROT_WRITE,
-          MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+          MAP_ANONYMOUS_ | MAP_PRIVATE, -1, 0);
     }
     ScrollMemoryViews();
     AddStdFd(&m->system->fds, 0);

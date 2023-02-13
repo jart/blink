@@ -8,15 +8,38 @@
 // #define DISABLE_OVERLAYS
 // #define DISABLE_ANCILLARY
 // #define DISABLE_BCD
+
+// #define HAVE_SYNC
+// #define HAVE_DUP3
+// #define HAVE_PIPE2
+// #define HAVE_WAIT4
 // #define HAVE_SYSCTL
+// #define HAVE_SA_LEN
+// #define HAVE_PREADV
+// #define HAVE_WCWIDTH
 // #define HAVE_SYSINFO
+// #define HAVE_MEMCCPY
+// #define HAVE_SEEKDIR
+// #define HAVE_MKFIFOAT
+// #define HAVE_REALPATH
+// #define HAVE_SETREUID
+// #define HAVE_STRCHRNUL
+// #define HAVE_VASPRINTF
+// #define HAVE_SETRESUID
 // #define HAVE_KERN_ARND
 // #define HAVE_GETRANDOM
+// #define HAVE_SETGROUPS
 // #define HAVE_GETENTROPY
+// #define HAVE_SIOCGIFCONF
+// #define HAVE_F_GETOWN_EX
 // #define HAVE_DEV_URANDOM
 // #define HAVE_RTLGENRANDOM
+// #define HAVE_GETDOMAINNAME
+// #define HAVE_MAP_ANONYMOUS
 // #define HAVE_SYS_GETRANDOM
-// #define POLYFILL_PREADV
-// #define POLYFILL_MKFIFOAT
+// #define HAVE_SYS_GETENTROPY
+// #define HAVE_SCM_CREDENTIALS
+// #define HAVE_STRUCT_TIMEZONE
+// #define HAVE_SCHED_GETAFFINITY
 
 #endif /* BLINK_CONFIG_H_ */

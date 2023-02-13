@@ -19,6 +19,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "blink/builtin.h"
 #include "blink/high.h"
 
 struct High g_high = {

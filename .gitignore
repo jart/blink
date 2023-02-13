@@ -11,6 +11,7 @@ blink.log
 /TAGS
 /HTAGS
 /config.h
+/config.mk
 /config.log
 /*.dump
 /gmon.out

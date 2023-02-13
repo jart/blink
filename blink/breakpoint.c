@@ -20,6 +20,7 @@
 #include <string.h>
 
 #include "blink/breakpoint.h"
+#include "blink/builtin.h"
 
 void PopBreakpoint(struct Breakpoints *bps) {
   if (bps->i) {

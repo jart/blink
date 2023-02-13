@@ -8,8 +8,8 @@
 #include <unistd.h>
 
 int main(int argc, char *argv[]) {
-  char path[] = "/tmp/blXXXXXX";
-  if (!mkstemp(path)) return 1;
+  char path[128];
+  snprintf(path, 128, "/tmp/blink.config.%d", getpid());
   if (mkfifoat(AT_FDCWD, path, 0644)) return 2;
   if (unlink(path)) return 3;
   return 0;

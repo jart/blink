@@ -396,7 +396,7 @@ u64 AllocatePage(struct System *s) {
   }
   n = 64;
   page = (u8 *)AllocateBig(n * 4096, PROT_READ | PROT_WRITE,
-                           MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+                           MAP_ANONYMOUS_ | MAP_PRIVATE, -1, 0);
   if (!page) return -1;
   s->memstat.allocated += n;
   s->memstat.committed += 1;
@@ -665,7 +665,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     want = ToHost(virt);
     if ((got = Mmap(want, size, prot,                       //
                     (method |                               //
-                     (fd == -1 ? MAP_ANONYMOUS : 0) |       //
+                     (fd == -1 ? MAP_ANONYMOUS_ : 0) |      //
                      (shared ? MAP_SHARED : MAP_PRIVATE)),  //
                     fd, offset, "linear")) != want) {
       if (got == MAP_FAILED && errno == ENOMEM && !no_retreat_no_surrender) {
@@ -737,7 +737,7 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
               mugskew = 0;
             }
             mugflags = (shared ? MAP_SHARED : MAP_PRIVATE) |
-                       (fd == -1 ? MAP_ANONYMOUS : 0);
+                       (fd == -1 ? MAP_ANONYMOUS_ : 0);
             mug = AllocateBig(mugsize, prot, mugflags, fd, mugoff);
             if (!mug) {
               ERRF("mmap(virt=%" PRIx64

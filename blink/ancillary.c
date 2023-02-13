@@ -63,7 +63,7 @@ static int AppendCmsg(struct Machine *m, struct msghdr *msg, int level,
   return 0;
 }
 
-#ifdef SCM_CREDENTIALS
+#ifdef HAVE_SCM_CREDENTIALS
 static int SendScmCredentials(struct Machine *m, struct msghdr *msg,
                               const struct ucred_linux *payload,
                               size_t elements) {
@@ -103,7 +103,7 @@ static ssize_t GetAncillaryElementLength(const struct cmsghdr_linux *gcmsg) {
         case SCM_RIGHTS_LINUX:
           return 4;
 #endif
-#ifdef SCM_CREDENTIALS
+#ifdef HAVE_SCM_CREDENTIALS
         case SCM_CREDENTIALS_LINUX:
           return sizeof(struct ucred_linux);
 #endif
@@ -179,7 +179,7 @@ int SendAncillary(struct Machine *m, struct msghdr *msg,
               return -1;
             break;
 #endif
-#ifdef SCM_CREDENTIALS
+#ifdef HAVE_SCM_CREDENTIALS
           case SCM_CREDENTIALS_LINUX:
             if (SendScmCredentials(m, msg, (const struct ucred_linux *)payload,
                                    elements) == -1)
@@ -271,7 +271,7 @@ static i64 ReceiveScmRights(struct Machine *m, struct msghdr_linux *gm,
 }
 #endif
 
-#ifdef SCM_CREDENTIALS
+#ifdef HAVE_SCM_CREDENTIALS
 static i64 ReceiveScmCredentials(struct Machine *m, struct msghdr_linux *gm,
                                  struct cmsghdr *cmsg, u64 offset) {
   struct ucred_linux gucred;
@@ -301,7 +301,7 @@ static i64 ReceiveControlMessage(struct Machine *m, struct msghdr_linux *gm,
       return ReceiveScmRights(m, gm, cmsg, offset, flags);
     }
 #endif
-#ifdef SCM_CREDENTIALS
+#ifdef HAVE_SCM_CREDENTIALS
     if (cmsg->cmsg_type == SCM_CREDENTIALS) {
       return ReceiveScmCredentials(m, gm, cmsg, offset);
     }

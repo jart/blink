@@ -111,7 +111,7 @@ static void OnSigSegv(int sig, siginfo_t *si, void *ptr) {
   siglongjmp(g_machine->onhalt, kMachineSegmentationFault);
 }
 
-static int Exec(char *prog, char **argv, char **envp) {
+static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   int i;
   sigset_t oldmask;
   struct Machine *old;
@@ -123,7 +123,7 @@ static int Exec(char *prog, char **argv, char **envp) {
   g_machine->system->exec = Exec;
   if (!old) {
     // this is the first time a program is being loaded
-    LoadProgram(g_machine, prog, argv, envp);
+    LoadProgram(g_machine, execfn, prog, argv, envp);
     SetupCod(g_machine);
     for (i = 0; i < 10; ++i) {
       AddStdFd(&g_machine->system->fds, i);
@@ -137,7 +137,7 @@ static int Exec(char *prog, char **argv, char **envp) {
     }
     memcpy(g_machine->system->rlim, old->system->rlim,
            sizeof(old->system->rlim));
-    LoadProgram(g_machine, prog, argv, envp);
+    LoadProgram(g_machine, execfn, prog, argv, envp);
     g_machine->system->fds.list = old->system->fds.list;
     old->system->fds.list = 0;
     // releasing the execve() lock must come after unlocking fds
@@ -286,5 +286,6 @@ int main(int argc, char *argv[]) {
     WriteErrorString("\n");
     exit(127);
   }
-  return Exec(g_pathbuf, argv + optind_ + FLAG_zero, environ);
+  argv[optind_] = g_pathbuf;
+  return Exec(g_pathbuf, g_pathbuf, argv + optind_ + FLAG_zero, environ);
 }

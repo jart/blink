@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <wchar.h>
 
+#include "blink/builtin.h"
 #include "blink/types.h"
 
 extern int optind_;
@@ -23,7 +24,6 @@ bool endswith(const char *, const char *);
 bool startswith(const char *, const char *);
 const char *doublenul(const char *, unsigned);
 ssize_t readansi(int, char *, size_t);
-int vasprintf_(char **, const char *, va_list);
 char *FormatInt64(char *, int64_t);
 char *FormatUint64(char *, uint64_t);
 char *FormatInt64Thousands(char *, int64_t);
@@ -34,9 +34,49 @@ char *Demangle(char *, const char *, size_t);
 void *Deflate(const void *, unsigned, unsigned *);
 void Inflate(void *, unsigned, const void *, unsigned);
 ssize_t UninterruptibleWrite(int, const void *, size_t);
-bool IsHaikuExecutable(int);
 long IsProcessTainted(void);
 long Magikarp(u8 *, long);
 int GetCpuCount(void);
+char *strchrnul_(const char *, int);
+int vasprintf_(char **, const char *, va_list);
+char *realpath_(const char *, char *);
+void *memccpy_(void *, const void *, int, size_t);
+int wcwidth_(wchar_t);
+u64 Vigna(u64[1]);
+
+#ifndef HAVE_STRCHRNUL
+#ifdef strchrnul
+#undef strchrnul
+#endif
+#define strchrnul strchrnul_
+#endif
+
+#ifndef HAVE_VASPRINTF
+#ifdef vasprintf
+#undef vasprintf
+#endif
+#define vasprintf vasprintf_
+#endif
+
+#ifndef HAVE_REALPATH
+#ifdef realpath
+#undef realpath
+#endif
+#define realpath realpath_
+#endif
+
+#ifndef HAVE_MEMCCPY
+#ifdef memccpy
+#undef memccpy
+#endif
+#define memccpy memccpy_
+#endif
+
+#ifndef HAVE_WCWIDTH
+#ifdef wcwidth
+#undef wcwidth
+#endif
+#define wcwidth wcwidth_
+#endif
 
 #endif /* BLINK_UTIL_H_ */

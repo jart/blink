@@ -3,8 +3,9 @@
 #include "blink/elf.h"
 #include "blink/machine.h"
 
-void LoadProgram(struct Machine *, char *, char **, char **);
+bool CanEmulateExecutable(struct Machine *, char **, char ***);
+void LoadProgram(struct Machine *, char *, char *, char **, char **);
 void LoadDebugSymbols(struct Elf *);
-bool IsSupportedExecutable(const char *, void *);
+bool IsSupportedExecutable(const char *, void *, size_t);
 
 #endif /* BLINK_LOADER_H_ */

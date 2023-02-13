@@ -104,26 +104,27 @@
 #define SYMINFO_FLG_COPY_      0x0004
 #define SYMINFO_FLG_LAZYLOAD_  0x0008
 
-#define PT_NULL_         0
-#define PT_LOAD_         1
-#define PT_DYNAMIC_      2
-#define PT_INTERP_       3
-#define PT_NOTE_         4
-#define PT_SHLIB_        5
-#define PT_PHDR_         6
-#define PT_TLS_          7
-#define PT_NUM_          8
-#define PT_LOOS_         0x60000000
-#define PT_GNU_EH_FRAME_ 0x6474e550
-#define PT_GNU_STACK_    0x6474e551
-#define PT_GNU_RELRO_    0x6474e552
-#define PT_LOSUNW_       0x6ffffffa
-#define PT_SUNWBSS_      0x6ffffffa
-#define PT_SUNWSTACK_    0x6ffffffb
-#define PT_HISUNW_       0x6fffffff
-#define PT_HIOS_         0x6fffffff
-#define PT_LOPROC_       0x70000000
-#define PT_HIPROC_       0x7fffffff
+#define PT_NULL_              0
+#define PT_LOAD_              1
+#define PT_DYNAMIC_           2
+#define PT_INTERP_            3
+#define PT_NOTE_              4
+#define PT_SHLIB_             5
+#define PT_PHDR_              6
+#define PT_TLS_               7
+#define PT_NUM_               8
+#define PT_LOOS_              0x60000000
+#define PT_GNU_EH_FRAME_      0x6474e550
+#define PT_GNU_STACK_         0x6474e551
+#define PT_GNU_RELRO_         0x6474e552
+#define PT_OPENBSD_RANDOMIZE_ 0x65a3dbe6
+#define PT_LOSUNW_            0x6ffffffa
+#define PT_SUNWBSS_           0x6ffffffa
+#define PT_SUNWSTACK_         0x6ffffffb
+#define PT_HISUNW_            0x6fffffff
+#define PT_HIOS_              0x6fffffff
+#define PT_LOPROC_            0x70000000
+#define PT_HIPROC_            0x7fffffff
 
 #define PN_XNUM_ 0xffff
 

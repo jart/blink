@@ -159,7 +159,8 @@ char *OverlaysGetcwd(char *output, size_t size) {
   if (IsRestrictedRoot(g_overlays)) {
     m = strlen(g_overlays[0]);
     if (n == m && !memcmp(cwd, g_overlays[0], n)) {
-      cwd = "/";
+      cwd[0] = '/';
+      cwd[1] = 0;
     } else if (n > m && !memcmp(cwd, g_overlays[0], m) && cwd[m] == '/') {
       cwd += m;
     } else if (strlen(UNREACHABLE) + n + 1 < sizeof(buf)) {

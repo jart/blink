@@ -74,10 +74,7 @@ static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
   unassert(!pthread_sigmask(SIG_BLOCK, &ss, &oldss));
   if ((tmpdir = OverlaysOpen(GetDirFildes(dirfildes), LoadStr(m, pathaddr),
                              O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0)) != -1) {
-    if (GetRandom(&rng, 8) != 8) {
-      LOGF("GetRandom() for O_TMPFILE failed");
-      abort();
-    }
+    unassert(GetRandom(&rng, 8, 0) == 8);
     for (i = 0; i < 12; ++i) {
       name[i] = "0123456789abcdefghijklmnopqrstuvwxyz"[rng % 36];
       rng /= 36;

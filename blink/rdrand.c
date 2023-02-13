@@ -24,6 +24,7 @@
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/random.h"
+#include "blink/util.h"
 
 #define RESEED_INTERVAL 16
 
@@ -35,13 +36,6 @@ static struct Rdrand {
     .lock = PTHREAD_MUTEX_INITIALIZER,
 };
 
-static u64 Vigna(u64 s[1]) {
-  u64 z = (s[0] += 0x9e3779b97f4a7c15);
-  z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9;
-  z = (z ^ (z >> 27)) * 0x94d049bb133111eb;
-  return z ^ (z >> 31);
-}
-
 static void OpRand(P, u64 x) {
   WriteRegister(rde, RegRexbRm(m, rde), x);
   m->flags = SetFlag(m->flags, FLAGS_CF, true);
@@ -50,7 +44,7 @@ static void OpRand(P, u64 x) {
 void OpRdrand(P) {
   LOCK(&g_rdrand.lock);
   if (!(g_rdrand.count++ % RESEED_INTERVAL)) {
-    unassert(GetRandom(&g_rdrand.state, 8) == 8);
+    unassert(GetRandom(&g_rdrand.state, 8, 0) == 8);
   }
   OpRand(A, Vigna(&g_rdrand.state));
   UNLOCK(&g_rdrand.lock);
@@ -58,6 +52,6 @@ void OpRdrand(P) {
 
 void OpRdseed(P) {
   u64 x;
-  unassert(GetRandom(&x, 8) == 8);
+  unassert(GetRandom(&x, 8, 0) == 8);
   OpRand(A, x);
 }

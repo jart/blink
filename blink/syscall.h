@@ -1,6 +1,7 @@
 #ifndef BLINK_SYSCALL_H_
 #define BLINK_SYSCALL_H_
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #include "blink/builtin.h"
@@ -73,9 +74,13 @@ struct Fd *GetAndLockFd(struct Machine *, int);
 bool CheckInterrupt(struct Machine *, bool);
 int SysStatfs(struct Machine *, i64, i64);
 int SysFstatfs(struct Machine *, i32, i64);
+int mkfifoat_(int, const char *, mode_t);
 
-#ifdef POLYFILL_MKFIFOAT
-int mkfifoat(int, const char *, mode_t);
+#ifndef HAVE_MKFIFOAT
+#ifdef mkfifoat
+#undef mkfifoat
+#endif
+#define mkfifoat mkfifoat_
 #endif
 
 #endif /* BLINK_SYSCALL_H_ */

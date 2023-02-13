@@ -17,26 +17,25 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <stdatomic.h>
+#include <sys/param.h>
 #include <sys/types.h>
 #include <unistd.h>
-#ifdef __linux
-#include <sched.h>
-#elif defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__APPLE__)
-#include <sys/sysctl.h>
-#define HAVE_SYSCTL
-#elif defined(__NetBSD__)
-#include <sys/param.h>
-#include <sys/sysctl.h>
-#define HAVE_SYSCTL
-#endif
 
+#include "blink/builtin.h"
 #include "blink/macros.h"
 #include "blink/util.h"
+
+#ifdef HAVE_SCHED_GETAFFINITY
+#include <sched.h>
+#endif
+#ifdef HAVE_SYSCTL
+#include <sys/sysctl.h>
+#endif
 
 static atomic_int g_cpucount;
 
 static int GetCpuCountImpl(void) {
-#if defined(__linux)
+#ifdef HAVE_SCHED_GETAFFINITY
   cpu_set_t s;
   if (sched_getaffinity(0, sizeof(s), &s) == -1) return -1;
   return CPU_COUNT(&s);

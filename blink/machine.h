@@ -235,7 +235,7 @@ struct System {
 #endif
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
-  int (*exec)(char *, char **, char **);
+  int (*exec)(char *, char *, char **, char **);
   void (*redraw)(bool);
 };
 
@@ -385,7 +385,7 @@ char *FormatPml4t(struct Machine *);
 i64 FindVirtual(struct System *, i64, i64);
 int FreeVirtual(struct System *, i64, i64);
 void CleanseMemory(struct System *, size_t);
-void LoadArgv(struct Machine *, char *, char **, char **);
+void LoadArgv(struct Machine *, char *, char *, char **, char **);
 _Noreturn void HaltMachine(struct Machine *, int);
 _Noreturn void RaiseDivideError(struct Machine *);
 _Noreturn void ThrowSegmentationFault(struct Machine *, i64);

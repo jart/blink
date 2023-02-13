@@ -66,13 +66,14 @@ static long GetGuestPageSize(struct Machine *m) {
   }
 }
 
-void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
+void LoadArgv(struct Machine *m, char *execfn, char *prog, char **args,
+              char **vars) {
   u8 *bytes;
   char rng[16];
   struct Elf *elf;
   i64 sp, *p, *bloc;
   size_t i, narg, nenv, naux, nall;
-  GetRandom(rng, 16);
+  unassert(GetRandom(rng, 16, 0) == 16);
   elf = &m->system->elf;
   naux = 10;
   if (elf->at_entry) {
@@ -95,7 +96,7 @@ void LoadArgv(struct Machine *m, char *prog, char **args, char **vars) {
   PUSH_AUXV(AT_PAGESZ_LINUX, GetGuestPageSize(m));
   PUSH_AUXV(AT_CLKTCK_LINUX, sysconf(_SC_CLK_TCK));
   PUSH_AUXV(AT_RANDOM_LINUX, PushBuffer(m, rng, 16));
-  PUSH_AUXV(AT_EXECFN_LINUX, PushString(m, g_blink_path));
+  PUSH_AUXV(AT_EXECFN_LINUX, PushString(m, execfn));
   if (elf->at_entry) {
     PUSH_AUXV(AT_PHDR_LINUX, elf->at_phdr);
     PUSH_AUXV(AT_PHENT_LINUX, elf->at_phent);

@@ -29,7 +29,6 @@
 #include <netinet/ip.h>
 #include <poll.h>
 #include <pthread.h>
-#include <sched.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdatomic.h>
@@ -89,9 +88,8 @@
 #include <sys/sockio.h>
 #endif
 
-#ifdef __linux
+#ifdef HAVE_SCHED_GETAFFINITY
 #include <sched.h>
-#include <sys/vfs.h>
 #endif
 
 #ifdef DISABLE_OVERLAYS
@@ -877,7 +875,7 @@ static int SysSchedSetaffinity(struct Machine *m,  //
                                u64 cpusetsize,     //
                                i64 maskaddr) {
   if (ValidateAffinityPid(m, pid) == -1) return -1;
-#ifdef __linux
+#ifdef HAVE_SCHED_GETAFFINITY
   int rc;
   u8 *mask;
   size_t i, n;
@@ -908,7 +906,7 @@ static int SysSchedGetaffinity(struct Machine *m,  //
                                u64 cpusetsize,     //
                                i64 maskaddr) {
   if (ValidateAffinityPid(m, pid) == -1) return -1;
-#ifdef __linux
+#ifdef HAVE_SCHED_GETAFFINITY
   int rc;
   u8 *mask;
   size_t i, n;
@@ -1217,6 +1215,15 @@ static int Dup2(struct Machine *m, int fildes, int newfildes) {
   return rc;
 }
 
+#ifdef HAVE_DUP3
+static int Dup3(struct Machine *m, int fildes, int newfildes, int flags) {
+  int rc;
+  // The Linux Programmer's Manual also lists this as interruptible.
+  RESTARTABLE(rc = dup3(fildes, newfildes, flags));
+  return rc;
+}
+#endif
+
 static int SysDup2(struct Machine *m, i32 fildes, i32 newfildes) {
   int rc;
   int oflags;
@@ -1255,10 +1262,14 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
   if (newfildes < 0) return ebadf();
   if (fildes == newfildes) return einval();
   if (flags & ~O_CLOEXEC_LINUX) return einval();
+#ifdef HAVE_DUP3
+  if ((rc = Dup3(m, fildes, newfildes, XlatOpenFlags(flags))) != -1) {
+#else
   if ((rc = Dup2(m, fildes, newfildes)) != -1) {
     if (flags & O_CLOEXEC_LINUX) {
       unassert(!fcntl(newfildes, F_SETFD, FD_CLOEXEC));
     }
+#endif
     LOCK(&m->system->fds.lock);
     if ((fd = GetFd(&m->system->fds, newfildes))) {
       dll_remove(&m->system->fds.list, &fd->elem);
@@ -1318,7 +1329,7 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
   gethostname(u.host, sizeof(u.host) - 1);
   strcpy(uts.nodename, u.host);
   memset(u.domain, 0, sizeof(u.domain));
-#ifndef __HAIKU__
+#ifdef HAVE_GETDOMAINNAME
   getdomainname(u.domain, sizeof(u.domain) - 1);
 #endif
   strcpy(uts.domainname, u.domain);
@@ -2326,7 +2337,6 @@ static i64 Getdents(struct Machine *m, i32 fildes, i64 addr, i64 size,
   i64 i;
   int type;
   off_t off;
-  long tell;
   int reclen;
   size_t len;
   struct stat st;
@@ -2341,10 +2351,15 @@ static i64 Getdents(struct Machine *m, i32 fildes, i64 addr, i64 size,
   }
   for (i = 0; i + sizeof(rec) <= size; i += reclen) {
     // telldir() can actually return negative on ARM/MIPS/i386
+#ifdef HAVE_SEEKDIR
+    long tell;
     errno = 0;
     tell = telldir(fd->dirstream);
     unassert(tell != -1 || errno == 0);
     off = tell;
+#else
+    off = -1;
+#endif
     if (!(ent = readdir(fd->dirstream))) break;
     len = strlen(ent->d_name);
     if (len + 1 > sizeof(rec.name)) {
@@ -2423,10 +2438,16 @@ static i64 SysLseek(struct Machine *m, i32 fildes, i64 offset, int whence) {
   } else if (whence == SEEK_SET_LINUX) {
     if (!offset) {
       rewinddir(fd->dirstream);
+      rc = 0;
     } else {
+#ifdef HAVE_SEEKDIR
       seekdir(fd->dirstream, offset);
+      rc = 0;
+#else
+      LOGF("host platform doesn't support seekdir()");
+      rc = enotsup();
+#endif
     }
-    rc = 0;
   } else {
     rc = einval();
   }
@@ -2595,8 +2616,33 @@ static int SysChroot(struct Machine *m, i64 path) {
 }
 
 static int SysSync(struct Machine *m) {
+#ifdef HAVE_SYNC
   sync();
   return 0;
+#else
+  // sync() is an xsi extension to posix. not having sync() puts us in a
+  // difficult position because the libc wrapper for sync() can't report
+  // errors. the best we can do is sync what we know and report an error
+  struct Dll *e;
+  int *p2, *p = 0;
+  size_t i, n = 0;
+  LOGF("host platform doesn't support sync()");
+  LOCK(&m->system->fds.lock);
+  for (e = dll_first(m->system->fds.list); e;
+       e = dll_next(m->system->fds.list, e)) {
+    if ((p2 = (int *)realloc(p, (n + 1) * sizeof(*p)))) {
+      (p = p2)[n++] = FD_CONTAINER(e)->fildes;
+    } else {
+      break;
+    }
+  }
+  UNLOCK(&m->system->fds.lock);
+  for (i = 0; i < n; ++i) {
+    fsync(p[i]);
+  }
+  free(p);
+  return enosys();
+#endif
 }
 
 static int CheckSyncable(int fildes) {
@@ -2770,7 +2816,7 @@ static int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
   return rc;
 }
 
-#ifdef F_GETOWN_EX
+#ifdef HAVE_F_GETOWN_EX
 static int UnxlatFownerType(int type) {
   if (type == F_OWNER_TID) return F_OWNER_TID_LINUX;
   if (type == F_OWNER_PID) return F_OWNER_PID_LINUX;
@@ -2787,7 +2833,7 @@ static int SysFcntlSetownEx(struct Machine *m, i32 fildes, i64 addr) {
                                                           sizeof(*gowner)))) {
     return -1;
   }
-#ifdef F_SETOWN_EX
+#ifdef HAVE_F_GETOWN_EX
   struct f_owner_ex howner;
   switch (Read32(gowner->type)) {
     case F_OWNER_TID_LINUX:
@@ -2836,7 +2882,7 @@ static int SysFcntlGetownEx(struct Machine *m, i32 fildes, i64 addr) {
   int rc;
   struct f_owner_ex_linux gowner;
   if (!IsValidMemory(m, addr, sizeof(gowner), PROT_WRITE)) return efault();
-#ifdef F_GETOWN_EX
+#ifdef HAVE_F_GETOWN_EX
   int type;
   struct f_owner_ex howner;
   if ((rc = fcntl(fildes, F_GETOWN_EX, &howner)) != -1) {
@@ -2907,12 +2953,16 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
 #ifdef F_SETOWN
   } else if (cmd == F_SETOWN_LINUX) {
     rc = fcntl(fd->fildes, F_SETOWN, arg);
+#endif
+#ifdef HAVE_F_GETOWN_EX
   } else if (cmd == F_SETOWN_EX_LINUX) {
     rc = SysFcntlSetownEx(m, fd->fildes, arg);
 #endif
 #ifdef F_GETOWN
   } else if (cmd == F_GETOWN_LINUX) {
     rc = fcntl(fd->fildes, F_GETOWN);
+#endif
+#ifdef HAVE_F_GETOWN_EX
   } else if (cmd == F_GETOWN_EX_LINUX) {
     rc = SysFcntlGetownEx(m, fd->fildes, arg);
 #endif
@@ -3060,10 +3110,31 @@ static int SysRmdir(struct Machine *m, i64 path) {
   return SysUnlinkat(m, AT_FDCWD_LINUX, path, AT_REMOVEDIR_LINUX);
 }
 
+static int SysRenameat2(struct Machine *m, int srcdirfd, i64 srcpath,
+                        int dstdirfd, i64 dstpathaddr, i32 flags) {
+  struct stat st;
+  i32 unsupported;
+  const char *dstpath;
+  i32 supported = RENAME_NOREPLACE_LINUX;
+  if ((unsupported = flags & ~supported)) {
+    LOGF("%s flags not supported yet: %#" PRIx32, "renameat2", unsupported);
+    return einval();
+  }
+  if (!(dstpath = LoadStr(m, dstpathaddr))) return -1;
+  // TODO: check for renameat2 in configure script
+  if ((flags & RENAME_NOREPLACE_LINUX) &&
+      !OverlaysStat(GetDirFildes(dstdirfd), dstpath, &st,
+                    AT_SYMLINK_NOFOLLOW)) {
+    errno = EEXIST;
+    return -1;
+  }
+  return OverlaysRename(GetDirFildes(srcdirfd), LoadStr(m, srcpath),
+                        GetDirFildes(dstdirfd), dstpath);
+}
+
 static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
                        int dstdirfd, i64 dstpath) {
-  return OverlaysRename(GetDirFildes(srcdirfd), LoadStr(m, srcpath),
-                        GetDirFildes(dstdirfd), LoadStr(m, dstpath));
+  return SysRenameat2(m, srcdirfd, srcpath, dstdirfd, dstpath, 0);
 }
 
 static int SysRename(struct Machine *m, i64 src, i64 dst) {
@@ -3101,45 +3172,6 @@ static int SysLink(struct Machine *m, i64 existingpath, i64 newpath) {
   return SysLinkat(m, AT_FDCWD_LINUX, existingpath, AT_FDCWD_LINUX, newpath, 0);
 }
 
-static bool CanEmulateExecutableImpl(const char *prog) {
-  int fd;
-  bool res;
-  ssize_t rc;
-  char hdr[64];
-  struct stat st;
-  if ((fd = OverlaysOpen(AT_FDCWD, prog, O_RDONLY | O_CLOEXEC, 0)) == -1) {
-    return false;
-  }
-  unassert(!fstat(fd, &st));
-  if (!(st.st_mode & 0111)) {
-    LOGF("execve %s needs chmod +x", prog);
-    close(fd);
-    return false;
-  }
-#ifdef __HAIKU__
-  if (IsHaikuExecutable(fd)) {
-    close(fd);
-    return false;
-  }
-#endif
-  if ((rc = pread(fd, hdr, 64, 0)) == 64) {
-    res = IsSupportedExecutable(prog, hdr);
-  } else {
-    res = false;
-  }
-  close(fd);
-  return res;
-}
-
-static bool CanEmulateExecutable(const char *prog) {
-  int err;
-  bool res;
-  err = errno;
-  res = CanEmulateExecutableImpl(prog);
-  errno = err;
-  return res;
-}
-
 static bool IsBlinkSig(struct System *s, int sig) {
   unassert(1 <= sig && sig <= 64);
   return !!(s->blinksigs & (1ull << (sig - 1)));
@@ -3169,20 +3201,22 @@ static void ResetSignalDispositions(struct System *s) {
 
 static void ExecveBlink(struct Machine *m, char *prog, char **argv,
                         char **envp) {
+  char *execfn;
   sigset_t block;
   if (m->system->exec) {
     // it's worth blocking signals on the outside of the if statement
     // since open() during the executable check, might possibly EINTR
     // and the same could apply to calling close() on our cloexec fds
+    execfn = prog;
     sigfillset(&block);
     pthread_sigmask(SIG_BLOCK, &block, &m->system->exec_sigmask);
-    if (CanEmulateExecutable(prog)) {
+    if (CanEmulateExecutable(m, &prog, &argv)) {
       // TODO(jart): Prevent possibility of stack overflow.
       SYS_LOGF("m->system->exec(%s)", prog);
       SysCloseExec(m->system);
       ResetTimerDispositions(m->system);
       ResetSignalDispositions(m->system);
-      _Exit(m->system->exec(prog, argv, envp));
+      _Exit(m->system->exec(execfn, prog, argv, envp));
     }
     pthread_sigmask(SIG_SETMASK, &m->system->exec_sigmask, 0);
   }
@@ -3216,10 +3250,15 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
        !IsValidMemory(m, opt_out_rusage_addr, sizeof(grusage), PROT_WRITE))) {
     return efault();
   }
-#ifndef __EMSCRIPTEN__
+#ifdef HAVE_WAIT4
   RESTARTABLE(rc = wait4(pid, &wstatus, options, &hrusage));
 #else
   memset(&hrusage, 0, sizeof(hrusage));
+  if (opt_out_rusage_addr && (!pid || pid == -1)) {
+    LOGF("wait4(rusage) with indeterminate pid not possible on this platform");
+  } else {
+    getrusage(pid < 0 ? -pid : pid, &hrusage);
+  }
   RESTARTABLE(rc = waitpid(pid, &wstatus, options));
 #endif
   if (rc != -1 && rc != 0) {
@@ -3246,11 +3285,6 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
         termsig = UnXlatSignal(WTERMSIG(wstatus));
         SYS_LOGF("pid %d terminated %s", rc, DescribeSignal(termsig));
         gwstatus = termsig & 127;
-#ifdef WCOREDUMP
-        if (WCOREDUMP(wstatus)) {
-          gwstatus |= 128;
-        }
-#endif
       }
       Write32(gwstatusb, gwstatus);
       CopyToUserWrite(m, opt_out_wstatus_addr, gwstatusb, sizeof(gwstatusb));
@@ -3381,15 +3415,15 @@ static i64 SysGetcwd(struct Machine *m, i64 bufaddr, i64 size) {
 static ssize_t SysGetrandom(struct Machine *m, i64 a, size_t n, int f) {
   char *p;
   ssize_t rc;
-  int ignored;
-  ignored = GRND_NONBLOCK_LINUX | GRND_RANDOM_LINUX;
-  if ((f &= ~ignored)) {
-    LOGF("%s() flags %d not supported", "getrandom", f);
+  int besteffort, unsupported;
+  besteffort = GRND_NONBLOCK_LINUX | GRND_RANDOM_LINUX;
+  if ((unsupported = f & ~besteffort)) {
+    LOGF("%s() flags %d not supported", "getrandom", unsupported);
     return einval();
   }
   if (n) {
     if (!(p = (char *)malloc(n))) return -1;
-    RESTARTABLE(rc = GetRandom(p, n));
+    RESTARTABLE(rc = GetRandom(p, n, f));
     if (rc != -1) {
       if (CopyToUserWrite(m, a, p, rc) == -1) {
         rc = -1;
@@ -3789,22 +3823,35 @@ static int SysClockGetres(struct Machine *m, int clock, i64 ts) {
 
 static int SysGettimeofday(struct Machine *m, i64 tv, i64 tz) {
   int rc;
+  void *htimezonep;
   struct timeval htimeval;
-  struct timezone htimezone;
   struct timeval_linux gtimeval;
+#ifdef HAVE_STRUCT_TIMEZONE
+  struct timezone htimezone;
   struct timezone_linux gtimezone;
-  if ((rc = gettimeofday(&htimeval, tz ? &htimezone : 0)) != -1) {
+  memset(&htimezone, 0, sizeof(htimezone));
+  htimezonep = tz ? &htimezone : 0;
+#else
+  htimezonep = 0;
+#endif
+  if ((rc = gettimeofday(&htimeval, htimezonep)) != -1) {
     Write64(gtimeval.sec, htimeval.tv_sec);
     Write64(gtimeval.usec, htimeval.tv_usec);
     if (CopyToUserWrite(m, tv, &gtimeval, sizeof(gtimeval)) == -1) {
       return -1;
     }
+    // "If tzp is not a null pointer, the behavior is unspecified."
+    // -Quoth the POSIX.1 IEEE Std 1003.1-2017 for gettimeofday().
     if (tz) {
+#ifdef HAVE_STRUCT_TIMEZONE
       Write32(gtimezone.minuteswest, htimezone.tz_minuteswest);
       Write32(gtimezone.dsttime, htimezone.tz_dsttime);
       if (CopyToUserWrite(m, tz, &gtimezone, sizeof(gtimezone)) == -1) {
         return -1;
       }
+#else
+      rc = enotsup();
+#endif
     }
   }
   return rc;
@@ -4583,6 +4630,7 @@ static i32 SysGetgroups(struct Machine *m, i32 size, i64 addr) {
 }
 
 static i32 SysSetgroups(struct Machine *m, i32 size, i64 addr) {
+#ifdef HAVE_SETGROUPS
   int i, rc;
   gid_t *group;
   const u8 *group_linux;
@@ -4596,17 +4644,27 @@ static i32 SysSetgroups(struct Machine *m, i32 size, i64 addr) {
   rc = setgroups(size, group);
   free(group);
   return rc;
+#else
+  return enosys();
+#endif
 }
 
 static i32 SysSetresuid(struct Machine *m,  //
                         u32 real,           //
                         u32 effective,      //
                         u32 saved) {
-#ifdef __linux
+#ifdef HAVE_SETRESUID
   return setresuid(real, effective, saved);
-#else
-  if (saved != (u32)-1) return enosys();
+#elif defined(HAVE_SETREUID)
+  // we're going to assume "saved uids" don't exist if the platform
+  // doesn't provide the api for changing them. this lets us ignore
+  // complexity regarding how setruid() vs. setresuid() impact uids
   return setreuid(real, effective);
+#else
+  if (real == -1 && effective == -1) return 0;
+  if (real == -1) return seteuid(effective);
+  if (real != effective) return enosys();
+  return setuid(real);
 #endif
 }
 
@@ -4614,11 +4672,48 @@ static i32 SysSetresgid(struct Machine *m,  //
                         u32 real,           //
                         u32 effective,      //
                         u32 saved) {
-#ifdef __linux
+#ifdef HAVE_SETRESGID
   return setresgid(real, effective, saved);
-#else
-  if (saved != (u32)-1) return enosys();
+#elif defined(HAVE_SETREGID)
+  // we're going to assume "saved gids" don't exist if the platform
+  // doesn't provide the api for changing them. this lets us ignore
+  // complexity regarding how setrgid() vs. setresgid() impact gids
   return setregid(real, effective);
+#else
+  if (real == -1 && effective == -1) return 0;
+  if (real == -1) return setegid(effective);
+  if (real != effective) return enosys();
+  return setgid(real);
+#endif
+}
+
+static int SysSetreuid(struct Machine *m, u32 real, u32 effective) {
+#ifdef HAVE_SETRESUID
+  // If the real user ID is set (i.e., ruid is not -1) or the effective
+  // user ID is set to a value not equal to the previous real user ID,
+  // the saved set-user-ID will be set to the new effective user ID.
+  // -Quoth the Linux Programmer's Manual § setreuid()
+  if (real != -1 || (effective != -1 && effective != getuid())) {
+    if (effective == -1) effective = geteuid();
+    return setresuid(real, effective, effective);
+  } else {
+    return setresuid(real, effective, -1);
+  }
+#else
+  return SysSetresuid(m, real, effective, -1);
+#endif
+}
+
+static int SysSetregid(struct Machine *m, u32 real, u32 effective) {
+#ifdef HAVE_SETRESUID
+  if (real != -1 || (effective != -1 && effective != getgid())) {
+    if (effective == -1) effective = getegid();
+    return setresgid(real, effective, effective);
+  } else {
+    return setresgid(real, effective, -1);
+  }
+#else
+  return SysSetresgid(m, real, effective, -1);
 #endif
 }
 
@@ -4626,26 +4721,24 @@ static i32 SysGetresuid(struct Machine *m,  //
                         i64 realaddr,       //
                         i64 effectiveaddr,  //
                         i64 savedaddr) {
-  uid_t uid;
-  gid_t euid;
   u8 *real = 0;
+  u8 *saved = 0;
   u8 *effective = 0;
+  uid_t uid, euid, suid;
   if ((realaddr && !(real = (u8 *)SchlepW(m, realaddr, 4))) ||
+      (savedaddr && !(saved = (u8 *)SchlepW(m, savedaddr, 4))) ||
       (effectiveaddr && !(effective = (u8 *)SchlepW(m, effectiveaddr, 4)))) {
     return -1;
   }
-#ifdef __linux
-  gid_t suid;
-  u8 *saved = 0;
-  if ((savedaddr && !(saved = (u8 *)SchlepW(m, savedaddr, 4)))) return -1;
+#ifdef HAVE_SETRESUID
   if (getresuid(&uid, &euid, &suid) == -1) return -1;
-  Write32(saved, uid);
 #else
-  if (savedaddr) return enosys();
   uid = getuid();
   euid = geteuid();
+  suid = euid;
 #endif
   Write32(real, uid);
+  Write32(saved, suid);
   Write32(effective, euid);
   return 0;
 }
@@ -4655,14 +4748,24 @@ static i32 SysGetresgid(struct Machine *m,  //
                         i64 effectiveaddr,  //
                         i64 savedaddr) {
   u8 *real = 0;
+  u8 *saved = 0;
   u8 *effective = 0;
-  if (savedaddr) return enosys();
+  gid_t gid, egid, sgid;
   if ((realaddr && !(real = (u8 *)SchlepW(m, realaddr, 4))) ||
+      (savedaddr && !(saved = (u8 *)SchlepW(m, savedaddr, 4))) ||
       (effectiveaddr && !(effective = (u8 *)SchlepW(m, effectiveaddr, 4)))) {
     return -1;
   }
-  Write32(real, getgid());
-  Write32(effective, getegid());
+#ifdef HAVE_SETRESUID
+  if (getresgid(&gid, &egid, &sgid) == -1) return -1;
+#else
+  gid = getgid();
+  egid = getegid();
+  sgid = egid;
+#endif
+  Write32(real, gid);
+  Write32(saved, sgid);
+  Write32(effective, egid);
   return 0;
 }
 
@@ -4680,14 +4783,6 @@ static int SysSetuid(struct Machine *m, int uid) {
 
 static int SysSetgid(struct Machine *m, int gid) {
   return setgid(gid);
-}
-
-static int SysSetreuid(struct Machine *m, u32 uid, u32 euid) {
-  return setreuid(uid, euid);
-}
-
-static int SysSetregid(struct Machine *m, u32 gid, u32 egid) {
-  return setregid(gid, egid);
 }
 
 static int SysGetpgid(struct Machine *m, int pid) {
@@ -4943,6 +5038,7 @@ void OpSyscall(P) {
     SYSCALL4(0x106, SysFstatat);
     SYSCALL3(0x107, SysUnlinkat);
     SYSCALL4(0x108, SysRenameat);
+    SYSCALL5(0x13C, SysRenameat2);
     SYSCALL5(0x109, SysLinkat);
     SYSCALL3(0x10A, SysSymlinkat);
     SYSCALL4(0x10B, SysReadlinkat);

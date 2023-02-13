@@ -57,7 +57,7 @@ void InitBus(void) {
 #endif
   unassert(g_bus =
                (struct Bus *)AllocateBig(sizeof(*g_bus), PROT_READ | PROT_WRITE,
-                                         BUS_MEMORY | MAP_ANONYMOUS, -1, 0));
+                                         BUS_MEMORY | MAP_ANONYMOUS_, -1, 0));
   unassert(!pthread_condattr_init(&cattr));
   unassert(!pthread_mutexattr_init(&mattr));
 #if CAN_PSHARE

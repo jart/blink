@@ -5,9 +5,10 @@
 #include <sys/time.h>
 
 int features_we_care_about[] = {
-    CTL_HW,
-    CTL_KERN,
-    KERN_BOOTTIME,
+    CTL_HW,         //
+    CTL_KERN,       //
+    KERN_BOOTTIME,  //
+    HW_NCPU,        //
 #ifdef HW_MEMSIZE
     HW_MEMSIZE,
 #else

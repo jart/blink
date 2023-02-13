@@ -336,8 +336,10 @@ int InitJit(struct Jit *jit) {
   jit->blocksize = blocksize = ROUNDUP(kJitMinBlockSize, jit->pagesize);
   pthread_mutex_init(&jit->lock, 0);
   jit->hooks.n = RoundupTwoPow(kJitMemorySize / kJitAveragePath * 2);
-  unassert(jit->hooks.virt = calloc(jit->hooks.n, sizeof(*jit->hooks.virt)));
-  unassert(jit->hooks.func = calloc(jit->hooks.n, sizeof(*jit->hooks.func)));
+  unassert(jit->hooks.virt = (_Atomic(intptr_t) *)calloc(
+               jit->hooks.n, sizeof(*jit->hooks.virt)));
+  unassert(jit->hooks.func =
+               (_Atomic(int) *)calloc(jit->hooks.n, sizeof(*jit->hooks.func)));
   return 0;
 }
 
@@ -503,7 +505,7 @@ static bool PrepareJitMemory(void *addr, size_t size) {
   }
   return CheckMmapResult(
       addr, Mmap(addr, size, PROT_READ | PROT_WRITE | PROT_EXEC,
-                 MAP_JIT | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0, "jit"));
+                 MAP_JIT | MAP_PRIVATE | MAP_ANONYMOUS_, -1, 0, "jit"));
 #else
   int prot;
   prot = atomic_load_explicit(&g_jit.prot, memory_order_relaxed);
@@ -521,7 +523,7 @@ static bool PrepareJitMemory(void *addr, size_t size) {
   prot &= ~PROT_EXEC;
   atomic_store_explicit(&g_jit.prot, prot, memory_order_relaxed);
   return CheckMmapResult(
-      addr, Mmap(addr, size, prot, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1,
+      addr, Mmap(addr, size, prot, MAP_PRIVATE | MAP_ANONYMOUS_ | MAP_FIXED, -1,
                  0, "jit"));
 #endif
 }

@@ -20,6 +20,10 @@
 #define __GNUC_PATCHLEVEL__ 0
 #endif
 
+#ifdef __STRICT_ANSI__
+#define asm __asm__
+#endif
+
 #if __GNUC__ + 0 < 2
 #define __attribute__(x)
 #endif

@@ -1,5 +1,26 @@
 #!/bin/sh
 
+CC="${CC:-cc}"
+AR="${AR:-ar}"
+MODE="${MODE:-${m}}"
+TMPDIR="${TMPDIR:-o/tmp}"
+CFLAGS="${CFLAGS:--g -O2}"
+UOPFLAGS="${UOPFLAGS:--O2}"
+CPPFLAGS="${CPPFLAGS:--D_FILE_OFFSET_BITS=64 -D_DARWIN_C_SOURCE -D_DEFAULT_SOURCE -D_BSD_SOURCE -D_GNU_SOURCE}"
+
+HOST_ARCH=$(uname -m)
+HOST_SYSTEM=$(uname -s)
+HOST_OS=$(uname -o 2>/dev/null)
+
+if [ "${HOST_ARCH}" = "amd64" ] ||
+   [ "${HOST_ARCH}" = "x86_64" ] ||
+   [ "${HOST_ARCH}" = "arm64" ] ||
+   [ "${HOST_ARCH}" = "aarch64" ]; then
+  JIT_POSSIBLE=1
+else
+  JIT_POSSIBLE=
+fi
+
 if [ "$1" = "--help" ]; then
   echo "usage: ./configure [FLAGS]"
   echo
@@ -33,28 +54,40 @@ if [ "$1" = "--help" ]; then
   echo "    disable all optional features (shaves ~69kb)"
   echo "    you may use --enable-FOO to turn features back on"
   echo
+  echo "  --xopen"
+  echo "    strictly conform to C11 and POSIX.1-2008 with XSI extensions (clobbers \$CPPFLAGS)"
+  echo
+  echo "  --posix"
+  echo "    strictly conform to baseline POSIX.1-2008 and C11 standard (clobbers \$CPPFLAGS)"
+  echo
   echo "environment variables"
   echo
   echo "  CC"
-  echo "    used to compile and link code [default: cc]"
+  echo "    used to compile and link code [currently: $CC]"
   echo
   echo "  CFLAGS"
-  echo "    shall be passed to \$CC when compiling c sources"
+  echo "    shall be passed to \$CC when compiling c sources [currently: $CFLAGS]"
   echo
   echo "  CPPFLAGS"
-  echo "    shall be passed to \$CC when using the c preprocessor"
-  echo
-  echo "  TARGET_ARCH"
-  echo "    shall be passed to \$CC when compiling objects"
+  echo "    shall be passed to \$CC when using the c preprocessor [currently: $CPPFLAGS]"
   echo
   echo "  LDFLAGS"
-  echo "    shall be passed to \$CC when linking binaries"
+  echo "    shall be passed to \$CC when linking binaries [currently: $LDFLAGS]"
+  echo
+  echo "  TARGET_ARCH"
+  echo "    shall be passed to \$CC when compiling objects [currently: $TARGET_ARCH]"
+  echo
+  echo "  LOADLIBES"
+  echo "    may supply additional libraries to link earlier [currently: $LOADLIBES]"
   echo
   echo "  LDLIBS"
-  echo "    may supply additional libraries to link"
+  echo "    may supply additional libraries to link [currently: $LDLIBS]"
+  echo
+  echo "  TMPDIR"
+  echo "    used to store temporary files [currently: $TMPDIR]"
   echo
   echo "  AR"
-  echo "    used to create static archives [default: ar]"
+  echo "    used to create static archives [currently: $AR]"
   echo
   echo "  MODE"
   echo "    tunes makefile by choosing a preset configuration. defaults"
@@ -71,36 +104,93 @@ if ! [ -f blink/blink.c ]; then
   exit 1
 fi
 
-CONFIG="${TMPDIR:-/tmp}/config.h.$USER.$$"
+# POSIX compliant realpath solution for Darwin
+# https://stackoverflow.com/a/18443300/1653720
+realpath() (
+  OURPWD=$PWD
+  cd "$(dirname "$1")"
+  LINK=$(readlink "$(basename "$1")")
+  while [ "$LINK" ]; do
+    cd "$(dirname "$LINK")"
+    LINK=$(readlink "$(basename "$1")")
+  done
+  REALPATH="$PWD/$(basename "$1")"
+  cd "$OURPWD"
+  echo "$REALPATH"
+)
+
+mkdir -p "${TMPDIR}" || exit
+
+TMPDIR=$(realpath "$TMPDIR")
+CONFIG="$TMPDIR/config.h.$USER.$$"
+BUILD="$TMPDIR/config.mk.$USER.$$"
 
 cp config.h.in "${CONFIG}" || exit
 mkdir -p o/tool/config || exit
 rm -f config.log
 
+run() {
+  (
+    printf '%s\n' "$*"
+    if "$@"; then
+      exit 0
+    else
+      rc=$?
+      echo "exit code $rc"
+      exit $rc
+    fi
+  ) >>config.log 2>&1
+}
+
 compile() {
-  printf '%s\n' "${CC:-cc} ${LDFLAGS} ${CFLAGS} ${CPPFLAGS} ${CFLAGS} $*" >>config.log
-  ${CC:-cc} ${LDFLAGS} ${CFLAGS} ${CPPFLAGS} ${CFLAGS} "$@"
+  run ${CC:-cc} \
+      ${EXTRA_CFLAGS} \
+      ${CFLAGS} \
+      ${EXTRA_CPPFLAGS} \
+      ${CPPFLAGS} \
+      ${EXTRA_LDFLAGS} \
+      ${LDFLAGS} \
+      ${TARGET_ARCH} \
+      "$@" \
+      ${LOADLIBES} \
+      ${LDLIBS} \
+      ${EXTRA_LDLIBS}
 }
 
 config() {
+  PROGRAM="$1"
+  MESSAGE="$2"
+  printf '%s' "${MESSAGE}" >&2
   {
     echo
     echo ========================================================================
-    echo "configuring $1"
+    echo "${MESSAGE}"
     echo ========================================================================
     echo
   } >>config.log
-  if ! [ -f "tool/config/$1.c" ]; then
-    echo "tool/config/$1.c: not found" >&2
+  if ! [ -f "tool/config/${PROGRAM}.c" ]; then
+    echo "tool/config/${PROGRAM}.c: not found" >&2
     exit 1
   fi
-  if (compile -o "o/tool/config/$1" "tool/config/$1.c" &&
-        "o/tool/config/$1") >>config.log 2>&1; then
+  if compile -Werror -o "o/tool/config/${PROGRAM}" "tool/config/${PROGRAM}.c" &&
+     run "o/tool/config/${PROGRAM}"; then
     echo yes >&2
-    return 0
+    rc=0
   else
     echo no >&2
-    return 1
+    rc=1
+  fi
+  EXTRA_CFLAGS=
+  EXTRA_CPPFLAGS=
+  EXTRA_LDFLAGS=
+  EXTRA_LDLIBS=
+  return $rc
+}
+
+hassstr() {
+  if ! grep "$1" <"${CONFIG}" >/dev/null 2>&1; then
+    echo "config.h.in didn't contain $1" >&2
+    exit 1
   fi
 }
 
@@ -110,10 +200,12 @@ replace() {
 }
 
 comment() {
+  hassstr "$1"
   replace "$1" "// $1"
 }
 
 uncomment() {
+  hassstr "$1"
   replace "// $1" "$1"
 }
 
@@ -123,8 +215,10 @@ for x; do
 
   elif [ "$x" = "--enable-jit" ]; then
     comment "#define DISABLE_JIT"
+    unset DISABLE_JIT
   elif [ "$x" = "--disable-jit" ]; then
     uncomment "#define DISABLE_JIT"
+    DISABLE_JIT=1
 
   elif [ "$x" = "--enable-x87" ]; then
     comment "#define DISABLE_X87"
@@ -156,6 +250,12 @@ for x; do
   elif [ "$x" = "--disable-bcd" ]; then
     uncomment "#define DISABLE_BCD"
 
+  elif [ "$x" = "--posix" ]; then
+    CPPFLAGS="-D_POSIX_C_SOURCE=200809L -std=c11"
+
+  elif [ "$x" = "--xopen" ]; then
+    CPPFLAGS="-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -std=c11"
+
   else
     echo "error: unrecognized flag: $x" >&2
     echo "use $0 --help for help" >&2
@@ -163,55 +263,153 @@ for x; do
   fi
 done
 
-printf "checking for sysctl()... " >&2
-if config sysctl; then
-  uncomment "#define HAVE_SYSCTL"
+EXTRA_CFLAGS=-fpie
+EXTRA_LDFLAGS=-pie
+if config noop "checking for pie... "; then
+  CFLAGS="-fpie ${CFLAGS}"
+  LDFLAGS="-pie ${LDFLAGS}"
 fi
 
-printf "checking for sysinfo()... " >&2
-if config sysinfo; then
-  uncomment "#define HAVE_SYSINFO"
+EXTRA_LDLIBS=-lm
+if config lm "checking for -lm... "; then
+  LDLIBS="${LDLIBS} -lm"
 fi
 
-printf "checking for mkfifoat()... " >&2
-if ! config mkfifoat; then
-  uncomment "#define POLYFILL_MKFIFOAT"
+EXTRA_LDLIBS=-lrt
+if config lrt "checking for -lrt... "; then
+  LDLIBS="${LDLIBS} -lrt"
 fi
 
-printf "checking for getrandom()... " >&2
-if config getrandom; then
-  uncomment "#define HAVE_GETRANDOM"
+EXTRA_CFLAGS=-pthread
+EXTRA_LDFLAGS=-pthread
+if config pthread "checking for -pthread... "; then
+  CFLAGS="-pthread ${CFLAGS}"
+  LDFLAGS="-pthread ${LDFLAGS}"
+else
+  EXTRA_LDLIBS=-lpthread
+  if config pthread "checking for -lpthread... "; then
+    LDLIBS="${LDLIBS} -lpthread"
+  fi
 fi
 
-printf "checking for getentropy()... " >&2
-if config getentropy; then
-  uncomment "#define HAVE_GETENTROPY"
+EXTRA_CFLAGS=-fno-common
+if config noop "checking for -fno-common... "; then
+  CFLAGS="-fno-common ${CFLAGS}"
 fi
 
-printf "checking for /dev/urandom... " >&2
-if config dev_urandom; then
-  uncomment "#define HAVE_DEV_URANDOM"
+EXTRA_CFLAGS=-mno-fentry
+if config noop "checking for -mno-fentry... "; then
+  UOPFLAGS="-mno-fentry ${UOPFLAGS}"
 fi
 
-printf "checking for RtlGenRandom()... " >&2
-if config rtlgenrandom; then
-  uncomment "#define HAVE_RTLGENRANDOM"
+EXTRA_CFLAGS=-fstrict-aliasing
+if config noop "checking for -fstrict-aliasing... "; then
+  CFLAGS="-fstrict-aliasing ${CFLAGS}"
 fi
 
-printf "checking for sysctl(KERN_ARND)... " >&2
-if config kern_arnd; then
-  uncomment "#define HAVE_KERN_ARND"
+EXTRA_CFLAGS=-fstrict-overflow
+if config noop "checking for -fstrict-overflow... "; then
+  CFLAGS="-fstrict-overflow ${CFLAGS}"
 fi
 
-printf "checking for syscall(SYS_getrandom)... " >&2
-if config sys_getrandom; then
-  uncomment "#define HAVE_SYS_GETRANDOM"
+EXTRA_CFLAGS=-fno-sanitize=all
+if config noop "checking for -fno-sanitize=all... "; then
+  UOPFLAGS="-fno-sanitize=all ${UOPFLAGS}"
 fi
 
-printf "checking for preadv() and pwritev()... " >&2
-if ! config preadv; then
-  uncomment "#define POLYFILL_PREADV"
+# Blink's JIT will align the functions that matter.
+if [ -n "${JIT_POSSIBLE}" ] && [ -z "${DISABLE_JIT}" ]; then
+  EXTRA_CFLAGS=-fno-align-functions
+  if config noop "checking for -fno-align-functions... "; then
+    CFLAGS="-fno-align-functions ${CFLAGS}"
+  fi
 fi
+
+# Blink's JIT can't extract and relocate micro-op function bodies if the
+# compiler inserts things like static memory references into them.
+EXTRA_CFLAGS=-fno-stack-protector
+if config noop "checking for -fno-stack-protector... "; then
+  UOPFLAGS="-fno-stack-protector ${UOPFLAGS}"
+fi
+
+EXTRA_CFLAGS=-fomit-frame-pointer
+if config noop "checking for -fomit-frame-pointer... "; then
+  UOPFLAGS="${UOPFLAGS} -fomit-frame-pointer"
+fi
+
+if [ "${MODE}" != "tiny" ]; then
+  EXTRA_CFLAGS=-fno-omit-frame-pointer
+  if config noop "checking for -fno-omit-frame-pointer... "; then
+    CFLAGS="${CFLAGS} -fno-omit-frame-pointer"
+  fi
+fi
+
+EXTRA_CFLAGS=-fno-instrument-functions
+if config noop "checking for -fno-instrument-functions... "; then
+  UOPFLAGS="-fno-instrument-functions ${UOPFLAGS}"
+fi
+
+if [ -z "${MODE}" ]; then
+  EXTRA_CFLAGS=-fno-optimize-sibling-calls
+  if config noop "checking for -fno-optimize-sibling-calls... "; then
+    CFLAGS="${CFLAGS} -fno-optimize-sibling-calls"
+  fi
+fi
+
+if ! config stdatomic "checking for stdatomic.h... "; then
+  CPPFLAGS="-isystem tool/stdatomic"
+fi
+
+config sync "checking for sync()... " && uncomment "#define HAVE_SYNC"
+config dup3 "checking for dup3()... " && uncomment "#define HAVE_DUP3"
+config pipe2 "checking for pipe2()... " && uncomment "#define HAVE_PIPE2"
+config wait4 "checking for wait4()... " && uncomment "#define HAVE_WAIT4"
+config sysctl "checking for sysctl()... " && uncomment "#define HAVE_SYSCTL"
+config sysinfo "checking for sysinfo()... " && uncomment "#define HAVE_SYSINFO"
+config wcwidth "checking for wcwidth()... " && uncomment "#define HAVE_WCWIDTH"
+config memccpy "checking for memccpy()... " && uncomment "#define HAVE_MEMCCPY"
+config seekdir "checking for seekdir()... " && uncomment "#define HAVE_SEEKDIR"
+config realpath "checking for realpath()... " && uncomment "#define HAVE_REALPATH"
+config mkfifoat "checking for mkfifoat()... " && uncomment "#define HAVE_MKFIFOAT"
+config setreuid "checking for setreuid()... " && uncomment "#define HAVE_SETREUID"
+config strchrnul "checking for strchrnul()... " && uncomment "#define HAVE_STRCHRNUL"
+config getrandom "checking for getrandom()... " && uncomment "#define HAVE_GETRANDOM"
+config vasprintf "checking for vasprintf()... " && uncomment "#define HAVE_VASPRINTF"
+config setresuid "checking for setresuid()... " && uncomment "#define HAVE_SETRESUID"
+config setgroups "checking for setgroups()... " && uncomment "#define HAVE_SETGROUPS"
+config f_getown_ex "checking for F_GETOWN_EX... " && uncomment "#define HAVE_F_GETOWN_EX"
+config siocgifconf "checking for SIOCGIFCONF... " && uncomment "#define HAVE_SIOCGIFCONF"
+config dev_urandom "checking for /dev/urandom... " && uncomment "#define HAVE_DEV_URANDOM"
+config rtlgenrandom "checking for RtlGenRandom()... " && uncomment "#define HAVE_RTLGENRANDOM"
+config getdomainname "checking for getdomainname()... " && uncomment "#define HAVE_GETDOMAINNAME"
+config struct_timezone "checking for struct timezone... " && uncomment "#define HAVE_STRUCT_TIMEZONE"
+config scm_credentials "checking for SCM_CREDENTIALS... " && uncomment "#define HAVE_SCM_CREDENTIALS"
+config sa_len "checking for sockaddr::sa_len... " && uncomment "#define HAVE_SA_LEN"
+config kern_arnd "checking for sysctl(KERN_ARND)... " && uncomment "#define HAVE_KERN_ARND"
+config map_anonymous "checking for mmap(MAP_ANONYMOUS)... " && uncomment "#define HAVE_MAP_ANONYMOUS"
+config sched_getaffinity "checking for sched_getaffinity()... " && uncomment "#define HAVE_SCHED_GETAFFINITY"
+config sys_getrandom "checking for syscall(SYS_getrandom)... " && uncomment "#define HAVE_SYS_GETRANDOM"
+config preadv "checking for preadv() and pwritev()... " && uncomment "#define HAVE_PREADV"
+config getentropy "checking for getentropy() in unistd.h... " && uncomment "#define HAVE_GETENTROPY"
+config sys_getentropy "checking for getentropy() in sys/random.h... " && uncomment "#define HAVE_SYS_GETENTROPY"
+
+cat >"${BUILD}" <<EOF || exit
+CC = ${CC}
+AR = ${AR}
+TMPDIR = ${TMPDIR}
+CFLAGS = ${CFLAGS}
+CPPFLAGS = ${CPPFLAGS}
+UOPFLAGS = ${UOPFLAGS}
+TARGET_ARCH = ${TARGET_ARCH}
+LDFLAGS = ${LDFLAGS}
+LDLIBS = ${LDLIBS}
+HOST_OS = ${HOST_OS}
+HOST_ARCH = ${HOST_ARCH}
+HOST_SYSTEM = ${HOST_SYSTEM}
+EOF
+
+echo "creating config.mk" >&2
+mv "${BUILD}" config.mk || exit
 
 echo "creating config.h" >&2
 mv "${CONFIG}" config.h || exit

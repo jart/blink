@@ -1,6 +1,7 @@
 #ifndef BLINK_LOCK_H_
 #define BLINK_LOCK_H_
 #include <pthread.h>
+#include <stdatomic.h>
 
 #include "blink/assert.h"
 #include "blink/builtin.h"
@@ -21,8 +22,30 @@
 #endif
 
 #else /* DISABLE_THREADS */
-#define LOCK(x)                            (void)0
-#define UNLOCK(x)                          (void)0
+
+#define LOCK(x)   (void)0
+#define UNLOCK(x) (void)0
+
+#ifdef memory_order_acquire
+#undef memory_order_acquire
+#endif
+#define memory_order_acquire memory_order_relaxed
+
+#ifdef memory_order_release
+#undef memory_order_release
+#endif
+#define memory_order_release memory_order_relaxed
+
+#ifdef memory_order_acq_rel
+#undef memory_order_acq_rel
+#endif
+#define memory_order_acq_rel memory_order_relaxed
+
+#ifdef memory_order_seq_cst
+#undef memory_order_seq_cst
+#endif
+#define memory_order_seq_cst memory_order_relaxed
+
 #define pthread_setcancelstate(x, y)       ((void)(y), 0)
 #define pthread_mutex_init(x, y)           ((void)(y), 0)
 #define pthread_mutex_destroy(x)           0
@@ -37,5 +60,6 @@
 #define pthread_mutexattr_init(x)          0
 #define pthread_mutexattr_setpshared(x, y) 0
 #define pthread_mutexattr_destroy(x)       0
+
 #endif /* DISABLE_THREADS */
 #endif /* BLINK_LOCK_H_ */

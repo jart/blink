@@ -1,5 +1,6 @@
 #ifndef BLINK_IOVS_H_
 #define BLINK_IOVS_H_
+#include <limits.h>
 #include <stddef.h>
 #include <sys/uio.h>
 

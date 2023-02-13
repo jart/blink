@@ -5,6 +5,7 @@
 #include <sys/mman.h>
 
 #include "blink/builtin.h"
+#include "blink/types.h"
 
 #ifndef MAP_32BIT
 #define MAP_32BIT 0
@@ -23,12 +24,10 @@
   __builtin___clear_cache((char *)(addr), (char *)(addr) + (size));
 #endif
 
-#ifndef MAP_ANONYMOUS
-#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
-#define MAP_ANONYMOUS 0x00001000
+#ifdef HAVE_MAP_ANONYMOUS
+#define MAP_ANONYMOUS_ MAP_ANONYMOUS
 #else
-#error "MAP_ANONYMOUS isn't defined by your platform"
-#endif
+#define MAP_ANONYMOUS_ 0x10000000
 #endif
 
 // MAP_DEMAND means use MAP_FIXED only if it won't clobber other maps

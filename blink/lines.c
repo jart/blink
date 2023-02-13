@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "blink/builtin.h"
 #include "blink/lines.h"
 
 struct Lines *NewLines(void) {

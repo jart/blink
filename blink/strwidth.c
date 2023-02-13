@@ -22,6 +22,7 @@
 #include "blink/macros.h"
 #include "blink/strwidth.h"
 #include "blink/thompike.h"
+#include "blink/util.h"
 
 /**
  * Returns monospace display width of UTF-8 string.

@@ -3,7 +3,7 @@
 
 SHELL = /bin/sh
 MAKEFLAGS += --no-builtin-rules
-ARCHITECTURES = x86_64 x86_64-gcc49 i486 aarch64 riscv64 arm mips s390x mipsel mips64 mips64el powerpc powerpc64le
+ARCHITECTURES = x86_64 x86_64-gcc49 i486 aarch64 arm mips s390x mipsel mips64 mips64el powerpc powerpc64le
 
 .SUFFIXES:
 .DELETE_ON_ERROR:
@@ -20,10 +20,7 @@ MODE := $(m)
 endif
 endif
 
-HOST_SYSTEM := $(shell uname -s)
-HOST_ARCH := $(shell uname -m)
-HOST_OS := $(shell uname -o 2>/dev/null)
-TMPDIR := $(shell mkdir -p o/tmp; echo $(shell pwd)/o/tmp)
+include config.mk
 
 ifneq ($(HOST_SYSTEM), Linux)
 VM = o/$(MODE)/blink/blink
@@ -167,7 +164,7 @@ HTAGS:	o/$(MODE)/hdrs.txt $(HDRS)
 	build/htags -L $< -o $@
 
 clean:
-	rm -f $(OBJS) o/$(MODE)/blink/blink o/$(MODE)/blink/blinkenlights o/$(MODE)/blink/blink.a
+	rm -f $(OBJS) o/$(MODE)/blink/blink o/$(MODE)/blink/blinkenlights o/$(MODE)/blink/blink.a o/$(MODE)/third_party/zlib/zlib.a
 
 distclean:
 	rm -rf o
