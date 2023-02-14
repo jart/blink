@@ -46,7 +46,7 @@ void XlatTermiosToLinux(struct termios_linux *, const struct termios *);
 void XlatWinsizeToLinux(struct winsize_linux *, const struct winsize *);
 void XlatWinsizeToHost(struct winsize *, const struct winsize_linux *);
 void XlatSigsetToLinux(u8[8], const sigset_t *);
-void XlatLinuxToSigset(sigset_t *, const u8[8]);
+void XlatLinuxToSigset(sigset_t *, u64);
 void XlatRlimitToLinux(struct rlimit_linux *, const struct rlimit *);
 void XlatLinuxToRlimit(int, struct rlimit *, const struct rlimit_linux *);
 

@@ -1056,10 +1056,8 @@ void XlatSigsetToLinux(u8 dst[8], const sigset_t *src) {
   Write64(dst, set);
 }
 
-void XlatLinuxToSigset(sigset_t *dst, const u8 src[8]) {
-  u64 set;
+void XlatLinuxToSigset(sigset_t *dst, u64 set) {
   int syssig, linuxsig;
-  set = Read64(src);
   sigemptyset(dst);
   for (linuxsig = 1; linuxsig <= MIN(64, TOPSIG); ++linuxsig) {
     if (((1ull << (linuxsig - 1)) & set) &&

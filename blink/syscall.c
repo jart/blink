@@ -4586,6 +4586,7 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
                           i64 oldsetaddr, u64 sigsetsize) {
   u64 set;
   u8 word[8];
+  sigset_t ss;
   const u8 *neu;
   if (sigsetsize != 8) {
     return einval();
@@ -4620,7 +4621,10 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
     } else {
       __builtin_unreachable();
     }
-    SIG_LOGF("sigmask becomes %" PRIx64, m->sigmask);
+    XlatLinuxToSigset(&ss, m->sigmask & (1ull << (SIGTSTP_LINUX - 1) |
+                                         1ull << (SIGTTIN_LINUX - 1) |
+                                         1ull << (SIGTTOU_LINUX - 1)));
+    sigprocmask(SIG_BLOCK, &ss, 0);
   }
   return 0;
 }
