@@ -65,6 +65,7 @@ u8 *GetPageAddress(struct System *s, u64 entry) {
 
 u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
   u64 x, res, page;
+  if (m->system->nofault) return 0;
   unassert(entry & PAGE_RSRV);
   LOCK(&m->system->mmap_lock);
   // page faults should only happen in non-linear mode
@@ -84,15 +85,17 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
     unassert((entry & (PAGE_HOST | PAGE_MAP)) == (PAGE_HOST | PAGE_MAP));
     --m->system->memstat.reserved;
     ++m->system->memstat.committed;
+    ++m->system->rss;
     x = entry & ~PAGE_RSRV;
     Store64(GetPageAddress(m->system, table) + index * 8, x);
     res = x;
   }
+  unassert(CheckMemoryInvariants(m->system));
   UNLOCK(&m->system->mmap_lock);
   return res;
 }
 
-static u64 FindPageTableEntry(struct Machine *m, u64 page) {
+u64 FindPageTableEntry(struct Machine *m, u64 page) {
   long i;
   i64 table;
   u64 entry, res;
@@ -115,7 +118,7 @@ static u64 FindPageTableEntry(struct Machine *m, u64 page) {
   do {
     table = entry;
     index = (page >> level) & 511;
-    entry = Load64(GetPageAddress(m->system, table) + index * 8);
+    entry = Get64(GetPageAddress(m->system, table) + index * 8);
     if (!(entry & PAGE_V)) return 0;
   } while ((level -= 9) >= 12);
   if ((entry & PAGE_RSRV) &&
@@ -132,7 +135,7 @@ u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
   u64 entry, page;
   if (m->mode == XED_MODE_LONG ||
       (m->mode != XED_MODE_REAL && (m->system->cr0 & CR0_PG))) {
-    if (atomic_load_explicit(&m->invalidated, memory_order_relaxed)) {
+    if (atomic_load_explicit(&m->invalidated, memory_order_acquire)) {
       ResetTlb(m);
       atomic_store_explicit(&m->invalidated, false, memory_order_relaxed);
     }

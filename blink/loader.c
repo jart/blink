@@ -51,9 +51,9 @@
 
 static bool CanEmulateImpl(struct Machine *, char **, char ***, bool);
 
-static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
-                              const Elf64_Phdr_ *phdr, i64 last_end, u64 aslr,
-                              int fd) {
+static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
+                              size_t imagesize, const Elf64_Phdr_ *phdr,
+                              i64 last_end, u64 aslr, int fd) {
   i64 bulk;
   struct System *s = m->system;
   u32 flags = Read32(phdr->flags);
@@ -163,6 +163,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, void *image, size_t imagesize,
         LOGF("failed to map elf program header file data");
         exit(127);
       }
+      unassert(AddFileMap(m->system, start, bulk, path, offset));
     }
     start += bulk;
     offset += bulk;
@@ -278,7 +279,7 @@ static void LoadFlatExecutable(struct Machine *m, intptr_t base,
   Write64(phdr.vaddr, base);
   Write64(phdr.filesz, imagesize);
   Write64(phdr.memsz, ROUNDUP(imagesize + kRealSize, 4096));
-  LoadElfLoadSegment(m, image, imagesize, &phdr, 0, 0, fd);
+  LoadElfLoadSegment(m, prog, image, imagesize, &phdr, 0, 0, fd);
   m->ip = base;
 }
 
@@ -287,7 +288,6 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
   Elf64_Phdr_ *phdr;
   i64 end = INT64_MIN;
   bool execstack = true;
-  const char *interpreter = 0;
   elf->aslr = aslr;
   m->ip = elf->base = elf->at_entry = Read64(elf->ehdr->entry) + aslr;
   elf->at_phent = Read16(elf->ehdr->phentsize);
@@ -304,11 +304,12 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
         break;
       case PT_LOAD_:
         elf->base = MIN(elf->base, (i64)Read64(phdr->vaddr) + aslr);
-        end = LoadElfLoadSegment(m, elf->ehdr, elf->size, phdr, end, aslr, fd);
+        end = LoadElfLoadSegment(m, elf->execfn, elf->ehdr, elf->size, phdr,
+                                 end, aslr, fd);
         break;
       case PT_INTERP_:
-        interpreter = (char *)elf->ehdr + Read64(phdr->offset);
-        if (interpreter[Read64(phdr->filesz) - 1]) {
+        elf->interpreter = (char *)elf->ehdr + Read64(phdr->offset);
+        if (elf->interpreter[Read64(phdr->filesz) - 1]) {
           ELF_LOGF("elf interpreter not nul terminated");
           exit(127);
         }
@@ -318,22 +319,22 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
     }
   }
   elf->at_phdr = elf->base + Read64(elf->ehdr->phoff);
-  if (interpreter) {
+  if (elf->interpreter) {
     int fd;
     char ibuf[21];
     struct stat st;
     Elf64_Ehdr_ *ehdr;
     end = INT64_MIN;
-    ELF_LOGF("loading elf interpreter %s", interpreter);
+    ELF_LOGF("loading elf interpreter %s", elf->interpreter);
     errno = 0;
-    SYS_LOGF("LoadInterpreter %s", interpreter);
-    if ((fd = OverlaysOpen(AT_FDCWD, interpreter, O_RDONLY, 0)) == -1 ||
+    SYS_LOGF("LoadInterpreter %s", elf->interpreter);
+    if ((fd = OverlaysOpen(AT_FDCWD, elf->interpreter, O_RDONLY, 0)) == -1 ||
         (fstat(fd, &st) == -1 || !st.st_size) ||
         (ehdr = (Elf64_Ehdr_ *)Mmap(0, st.st_size, PROT_READ | PROT_WRITE,
                                     MAP_PRIVATE, fd, 0, "loader")) ==
             MAP_FAILED ||
-        !IsSupportedExecutable(interpreter, ehdr, st.st_size)) {
-      WriteErrorString(interpreter);
+        !IsSupportedExecutable(elf->interpreter, ehdr, st.st_size)) {
+      WriteErrorString(elf->interpreter);
       WriteErrorString(": failed to load interpreter (errno ");
       FormatInt64(ibuf, errno);
       WriteErrorString(ibuf);
@@ -349,7 +350,8 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, u64 aslr, int fd) {
       switch (Read32(phdr->type)) {
         case PT_LOAD_:
           elf->at_base = MIN(elf->at_base, (i64)Read64(phdr->vaddr) + aslr);
-          end = LoadElfLoadSegment(m, ehdr, st.st_size, phdr, end, aslr, fd);
+          end = LoadElfLoadSegment(m, elf->interpreter, ehdr, st.st_size, phdr,
+                                   end, aslr, fd);
           break;
         default:
           break;
@@ -574,7 +576,9 @@ void LoadProgram(struct Machine *m, char *execfn, char *prog, char **args,
   for (isfirst = true;;) {
     unassert(prog);
     elf = &m->system->elf;
+    elf->execfn = execfn;
     elf->prog = prog;
+    elf->interpreter = 0;
     elf->at_phdr = 0;
     elf->at_base = -1;
     elf->at_phent = 56;
@@ -648,6 +652,7 @@ error: unsupported executable; we need:\n\
     }
     sp = kStackTop;
     Put64(m->sp, sp);
+    unassert(AddFileMap(m->system, sp - kStackSize, kStackSize, "[stack]", -1));
     if (ReserveVirtual(m->system, sp - kStackSize, kStackSize,
                        PAGE_U | PAGE_RW | (execstack ? 0 : PAGE_XD), -1, 0,
                        false) == -1) {
@@ -659,6 +664,12 @@ error: unsupported executable; we need:\n\
   pagesize = GetSystemPageSize();
   pagesize = MAX(4096, pagesize);
   m->system->brk = ROUNDUP(m->system->brk, pagesize);
+  if (elf->interpreter) {
+    elf->interpreter = strdup(elf->interpreter);
+  }
+  unassert(CheckMemoryInvariants(m->system));
+  elf->execfn = strdup(elf->execfn);
+  elf->prog = strdup(elf->prog);
   unassert(!close(fd));
 }
 

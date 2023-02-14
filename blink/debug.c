@@ -32,6 +32,7 @@
 #include "blink/flags.h"
 #include "blink/loader.h"
 #include "blink/log.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/overlays.h"
@@ -60,23 +61,26 @@ char *ubsan_backtrace_pointer = ((char *)ubsan_backtrace_memory) + 1;
 
 void PrintBacktrace(void) {
 #ifdef UNWIND
+  int o = 0;
+  char b[2048];
   char sym[256];
+  int n = sizeof(b);
   unw_cursor_t cursor;
   unw_context_t context;
   unw_word_t offset, pc;
-  LOGF("blink backtrace:");
   unw_getcontext(&context);
   unw_init_local(&cursor, &context);
   while (unw_step(&cursor) > 0) {
     unw_get_reg(&cursor, UNW_REG_IP, &pc);
     if (!pc) break;
-    fprintf(stderr, "%lx ", pc);
+    APPEND("\n\t%lx ", pc);
     if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset) == 0) {
-      fprintf(stderr, "%s+%ld\n", sym, offset);
+      APPEND("%s+%ld", sym, offset);
     } else {
-      fprintf(stderr, "<unknown>\n");
+      APPEND("<unknown>");
     }
   }
+  ERRF("blink backtrace%s", b);
 #elif defined(__SANITIZE_ADDRESS__)
   volatile int x;
   x = asan_backtrace_buffer[asan_backtrace_index + 1];
@@ -554,4 +558,20 @@ void LogCpu(struct Machine *m) {
           Read64(m->r8), Read64(m->r9), Read64(m->r10), Read64(m->r11),
           Read64(m->r12), Read64(m->r13), Read64(m->r14), Read64(m->r15),
           DescribeFlags(m->flags), DescribeOp(m, GetPc(m)));
+}
+
+bool CheckMemoryInvariants(struct System *s) {
+  if (s->rss == s->memstat.tables + s->memstat.committed &&
+      s->vss == s->memstat.committed + s->memstat.reserved) {
+    return true;
+  } else {
+    ERRF("%-10s = %" PRIx64 " vs. %ld", "rss", s->rss,
+         s->memstat.tables + s->memstat.committed);
+    ERRF("%-10s = %" PRIx64 " vs. %ld", "vss", s->vss,
+         s->memstat.committed + s->memstat.reserved);
+    ERRF("%-10s = %ld", "tables", s->memstat.tables);
+    ERRF("%-10s = %ld", "reserved", s->memstat.reserved);
+    ERRF("%-10s = %ld", "committed", s->memstat.committed);
+    return false;
+  }
 }

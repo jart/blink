@@ -41,6 +41,7 @@
 #define kMachineFpuException         -7
 #define kMachineProtectionFault      -8
 #define kMachineSimdException        -9
+#define kMachineExitTrap             -10
 
 #define CR0_PE 0x01        // protected mode enabled
 #define CR0_MP 0x02        // monitor coprocessor
@@ -65,6 +66,7 @@
 #define PAGE_MAP  0x0800  // PAGE_TA bits were mmmap()'d
 #define PAGE_EOF  0x0010000000000000
 #define PAGE_MUG  0x0020000000000000  // each 4096 byte page is a system page
+#define PAGE_FILE 0x0040000000000000
 #define PAGE_XD   0x8000000000000000
 #define PAGE_TA   0x00007ffffffff000
 
@@ -73,6 +75,7 @@
 #define DISPATCH_NOTHING m, 0, 0, 0
 
 #define MACHINE_CONTAINER(e)  DLL_CONTAINER(struct Machine, elem, e)
+#define FILEMAP_CONTAINER(e)  DLL_CONTAINER(struct FileMap, elem, e)
 #define HOSTPAGE_CONTAINER(e) DLL_CONTAINER(struct HostPage, elem, e)
 
 #if defined(NOLINEAR) || defined(__SANITIZE_THREAD__) || defined(__CYGWIN__)
@@ -93,12 +96,6 @@
 #define _Atomicish(t) _Atomic(t)
 #else
 #define _Atomicish(t) t
-#endif
-
-#if !defined(__m68k__) && !defined(__mips__)
-typedef _Atomic(unsigned) memstat_t;
-#else
-typedef unsigned memstat_t;
 #endif
 
 MICRO_OP_SAFE u8 *ToHost(i64 v) {
@@ -123,6 +120,16 @@ struct HostPage {
   struct HostPage *next;
 };
 
+struct FileMap {
+  i64 virt;         // start address of map
+  i64 size;         // bytes originally mapped
+  u64 pages;        // population count of present
+  i64 offset;       // file offset (-1 if descriptive)
+  char *path;       // duplicated (owned) pointer to filename
+  u64 *present;     // bitset of present pages in [virt,virt+size)
+  struct Dll elem;  // see System::filemaps
+};
+
 struct MachineFpu {
 #ifndef DISABLE_X87
   double st[8];
@@ -136,12 +143,9 @@ struct MachineFpu {
 };
 
 struct MachineMemstat {
-  memstat_t freed;
-  memstat_t reserved;
-  memstat_t committed;
-  memstat_t allocated;
-  memstat_t reclaimed;
-  memstat_t pagetables;
+  long tables;
+  long reserved;
+  long committed;
 };
 
 // Segment descriptor cache
@@ -169,7 +173,9 @@ struct MachineState {
 };
 
 struct Elf {
-  const char *prog;
+  char *prog;
+  char *execfn;
+  char *interpreter;
   Elf64_Ehdr_ *ehdr;
   long size;
   i64 base;
@@ -198,6 +204,8 @@ struct System {
   u8 mode;
   bool dlab;
   bool isfork;
+  bool exited;
+  bool trapexit;
   u16 gdt_limit;
   u16 idt_limit;
   int pid;
@@ -214,6 +222,8 @@ struct System {
   i64 automap;
   i64 memchurn;
   i64 codestart;
+  _Atomic(int) nofault;
+  struct Dll *filemaps;
   unsigned long codesize;
   struct MachineMemstat memstat;
   struct Dll *machines GUARDED_BY(machines_lock);
@@ -380,8 +390,10 @@ int LoadInstruction2(struct Machine *, u64);
 void ExecuteInstruction(struct Machine *);
 u64 AllocatePage(struct System *);
 u64 AllocatePageTable(struct System *);
+u64 FindPageTableEntry(struct Machine *, u64);
+bool CheckMemoryInvariants(struct System *) nosideeffect dontdiscard;
 int ReserveVirtual(struct System *, i64, i64, u64, int, i64, bool);
-char *FormatPml4t(struct Machine *);
+char *FormatPml4t(struct System *);
 i64 FindVirtual(struct System *, i64, i64);
 int FreeVirtual(struct System *, i64, i64);
 void CleanseMemory(struct System *, size_t);
@@ -648,6 +660,10 @@ void LogCpu(struct Machine *);
 const char *GetBacktrace(struct Machine *);
 const char *DescribeOp(struct Machine *, i64);
 int GetInstruction(struct Machine *, i64, struct XedDecodedInst *);
+
+struct FileMap *GetFileMap(struct System *, i64);
+const char *GetDirFildesPath(struct System *, int);
+bool AddFileMap(struct System *, i64, i64, const char *, u64);
 
 void FlushCod(struct JitBlock *);
 #if LOG_COD

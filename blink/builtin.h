@@ -206,6 +206,16 @@
 #endif
 #endif
 
+#ifndef dontdiscard
+#if !defined(__STRICT_ANSI__) &&                           \
+    ((__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 304 || \
+     __has_attribute(__warn_unused_result__))
+#define dontdiscard __attribute__((__warn_unused_result__))
+#else
+#define dontdiscard
+#endif
+#endif
+
 #ifndef nostackprotector
 #if __has_attribute(__no_stack_protector__)
 #define nostackprotector __attribute__((__no_stack_protector__))

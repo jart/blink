@@ -25,6 +25,7 @@
 #include "blink/buffer.h"
 #include "blink/endian.h"
 #include "blink/flag.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/pml4t.h"
 #include "blink/util.h"
@@ -65,9 +66,10 @@ static void FormatStartPage(struct Pml4tFormater *pp, i64 start) {
   AppendFmt(&pp->b, "%012" PRIx64 "-", start);
 }
 
-static void FormatEndPage(struct Machine *m, struct Pml4tFormater *pp,
-                          i64 end) {
+static void FormatEndPage(struct System *s, struct Pml4tFormater *pp, i64 end) {
+  int i;
   char size[16];
+  struct FileMap *fm;
   pp->t = false;
   FormatSize(size, end - pp->start, 1024);
   AppendFmt(&pp->b, "%012" PRIx64 " %5s ", end - 1, size);
@@ -75,51 +77,67 @@ static void FormatEndPage(struct Machine *m, struct Pml4tFormater *pp,
     AppendFmt(&pp->b, "%3d%% ",
               (int)ceil((double)pp->committed / pp->count * 100));
   }
-  if (pp->flags & PAGE_U) AppendFmt(&pp->b, "r");
-  if (pp->flags & PAGE_RW) AppendFmt(&pp->b, "w");
-  if (~pp->flags & PAGE_XD) AppendFmt(&pp->b, "x");
+  i = 0;
+  if (pp->flags & PAGE_U) {
+    AppendFmt(&pp->b, "r");
+    ++i;
+  }
+  if (pp->flags & PAGE_RW) {
+    AppendFmt(&pp->b, "w");
+    ++i;
+  }
+  if (~pp->flags & PAGE_XD) {
+    AppendFmt(&pp->b, "x");
+    ++i;
+  }
+  while (i++ < 4) {
+    AppendFmt(&pp->b, " ");
+  }
+  if ((fm = GetFileMap(s, pp->start))) {
+    AppendFmt(&pp->b, "%s", fm->path);
+  }
 }
 
-static u8 *GetPt(struct Machine *m, u64 entry) {
-  return GetPageAddress(m->system, entry);
+static u8 *GetPt(struct System *s, u64 entry) {
+  return GetPageAddress(s, entry);
 }
 
-char *FormatPml4t(struct Machine *m) {
+char *FormatPml4t(struct System *s) {
   u8 *pd[4];
   u64 entry;
   u16 i, a[4];
   struct Pml4tFormater pp = {0};
   u16 range[][2] = {{256, 512}, {0, 256}};
-  if (m->mode != XED_MODE_LONG) return strdup("");
-  unassert(m->system->cr3);
-  pd[0] = GetPt(m, m->system->cr3);
+  if (s->mode != XED_MODE_LONG) return strdup("");
+  unassert(s->cr3);
+  pd[0] = GetPt(s, s->cr3);
   for (i = 0; i < ARRAYLEN(range); ++i) {
     a[0] = range[i][0];
     do {
       a[1] = a[2] = a[3] = 0;
       if (~*(pd[0] + a[0] * 8) & PAGE_V) {
-        if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
+        if (pp.t) FormatEndPage(s, &pp, MakeAddress(a));
       } else {
-        pd[1] = GetPt(m, Read64(pd[0] + a[0] * 8));
+        pd[1] = GetPt(s, Read64(pd[0] + a[0] * 8));
         do {
           a[2] = a[3] = 0;
           if (~*(pd[1] + a[1] * 8) & PAGE_V) {
-            if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
+            if (pp.t) FormatEndPage(s, &pp, MakeAddress(a));
           } else {
-            pd[2] = GetPt(m, Read64(pd[1] + a[1] * 8));
+            pd[2] = GetPt(s, Read64(pd[1] + a[1] * 8));
             do {
               a[3] = 0;
               if (~*(pd[2] + a[2] * 8) & PAGE_V) {
-                if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
+                if (pp.t) FormatEndPage(s, &pp, MakeAddress(a));
               } else {
-                pd[3] = GetPt(m, Read64(pd[2] + a[2] * 8));
+                pd[3] = GetPt(s, Read64(pd[2] + a[2] * 8));
                 do {
                   entry = Read64(pd[3] + a[3] * 8);
                   if (~entry & PAGE_V) {
-                    if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
+                    if (pp.t) FormatEndPage(s, &pp, MakeAddress(a));
                   } else {
                     if (pp.t && (pp.flags != (entry & INTERESTING_FLAGS))) {
-                      FormatEndPage(m, &pp, MakeAddress(a));
+                      FormatEndPage(s, &pp, MakeAddress(a));
                     }
                     if (!pp.t) {
                       FormatStartPage(&pp, MakeAddress(a));
@@ -139,7 +157,7 @@ char *FormatPml4t(struct Machine *m) {
     } while (++a[0] != range[i][1]);
   }
   if (pp.t) {
-    FormatEndPage(m, &pp, 0x800000000000);
+    FormatEndPage(s, &pp, 0x800000000000);
   }
   if (pp.b.p) {
     return (char *)realloc(pp.b.p, pp.b.i + 1);

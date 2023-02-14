@@ -72,6 +72,7 @@ static void DisLoadElfSyms(struct Dis *d, struct Elf *elf) {
   i64 stablen;
   const Elf64_Sym_ *st;
   bool isabs, isweak, islocal, isprotected, isfunc, isobject;
+  ELF_LOGF("DisLoadElfSyms %s", elf->prog);
   j = 0;
   if ((d->syms.stab = GetElfStringTable(elf->ehdr, elf->size))) {
     if ((st = GetElfSymbolTable(elf->ehdr, elf->size, &n))) {
@@ -192,6 +193,7 @@ long DisFindSymByName(struct Dis *d, const char *s) {
 }
 
 void DisLoadElf(struct Dis *d, struct Elf *elf) {
+  ELF_LOGF("DisLoadElf %s", elf->prog);
   if (!elf || !elf->ehdr) return;
   DisLoadElfLoads(d, elf);
   DisLoadElfSyms(d, elf);

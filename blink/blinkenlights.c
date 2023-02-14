@@ -80,7 +80,7 @@
 #include "blink/xmmtype.h"
 
 #define USAGE \
-  " [-?HhrRsStv] [ROM] [ARGS...]\n\
+  " [-?HhrRsZtv] [ROM] [ARGS...]\n\
 \n\
 DESCRIPTION\n\
 \n\
@@ -91,14 +91,15 @@ FLAGS\n\
   -h        help\n\
   -z        zoom\n\
   -v        verbosity\n\
-  -r        real mode\n\
-  -s        statistics\n\
+  -r        real mode (i8086)\n\
+  -s        system call trace\n\
   -H        disable highlight\n\
   -t        disable tui mode\n\
   -R        disable reactive\n\
   -b ADDR   push a breakpoint\n\
   -w ADDR   push a watchpoint\n\
   -L PATH   log file location\n\
+  -Z        internal statistics\n\
 \n\
 ARGUMENTS\n\
 \n\
@@ -120,7 +121,7 @@ KEYBOARD SHORTCUTS                CLI FLAGS\n\
 \n\
 ctrl-c  interrupt                 -t       no tui\n\
 s       step                      -r       real mode\n\
-n       next                      -s       statistics\n\
+n       next                      -Z       statistics\n\
 c       continue                  -b ADDR  push breakpoint\n\
 C       continue harder           -w ADDR  push watchpoint\n\
 q       quit                      -L PATH  log file location\n\
@@ -130,7 +131,7 @@ x       hex                       -v       increase verbosity\n\
 ?       help                      -j       enables jit\n\
 t       sse type                  -m       disables memory safety\n\
 w       sse width                 -N       natural scroll wheel\n\
-B       pop breakpoint            -S       system call logging\n\
+B       pop breakpoint            -s       system call logging\n\
 p       profiling mode            -C PATH  chroot directory\n\
 ctrl-t  turbo                     -?       help\n\
 alt-t   slowmo"
@@ -151,7 +152,7 @@ alt-t   slowmo"
 #define STEP     0x008
 #define NEXT     0x010
 #define FINISH   0x020
-#define FAILURE  0x040
+#define MODAL    0x040
 #define WINCHED  0x080
 #define INT      0x100
 #define QUIT     0x200
@@ -291,9 +292,12 @@ static bool react;
 static bool tuimode;
 static bool alarmed;
 static bool natural;
+static bool wantjit;
 static bool mousemode;
+static bool wantmetal;
 static bool showhighsse;
 static bool showprofile;
+static bool ptyisenabled;
 static bool readingteletype;
 
 static int tyn;
@@ -315,6 +319,8 @@ static u64 cycle;
 static i64 oldlen;
 static i64 opstart;
 static int lastfds;
+static i64 lastrss;
+static i64 lastvss;
 static u64 readaddr;
 static u64 readsize;
 static u64 writeaddr;
@@ -380,6 +386,15 @@ invalid mode\0\
 bad evex ll\0\
 unimplemented\0\
 ";
+
+static char *xasprintf(const char *fmt, ...) {
+  char *s;
+  va_list va;
+  va_start(va, fmt);
+  unassert(vasprintf(&s, fmt, va) != -1);
+  va_end(va);
+  return s;
+}
 
 static char *FormatDouble(char buf[32], double x) {
   snprintf(buf, 32, "%g", x);
@@ -1016,6 +1031,11 @@ static int GetAddrHexWidth(void) {
   }
 }
 
+bool ShouldShowDisplay(void) {
+  if (vidya) return true;  // in bios video mode
+  return ptyisenabled;
+}
+
 void SetupDraw(void) {
   int i, j, n, a, b, yn, fit, cpuy, ssey, dx[2], c2y[3], c3y[5];
 
@@ -1062,15 +1082,21 @@ void SetupDraw(void) {
   yn = tyn - 1;
   a = 1 / 8. * yn;
   b = 3 / 8. * yn;
-  c2y[0] = a * .7;
-  c2y[1] = a * 2;
-  c2y[2] = a * 2 + b;
-  if (yn - c2y[2] > 26) {
-    c2y[1] -= yn - c2y[2] - 26;
-    c2y[2] = yn - 26;
-  }
-  if (yn - c2y[2] < 26) {
-    c2y[2] = yn - 26;
+  if (ShouldShowDisplay()) {
+    c2y[0] = breakpoints.i ? a * .7 : 0;
+    c2y[1] = a * 2.3;
+    c2y[2] = a * 2 + b;
+    if (yn - c2y[2] > 26) {
+      c2y[1] -= yn - c2y[2] - 26;
+      c2y[2] = yn - 26;
+    }
+    if (yn - c2y[2] < 26) {
+      c2y[2] = yn - 26;
+    }
+  } else {
+    c2y[0] = breakpoints.i ? a * .7 : 1;
+    c2y[1] = yn / 2;
+    c2y[2] = yn - 1;
   }
 
   a = (yn - (cpuy + ssey) - 3) / 4;
@@ -1329,7 +1355,7 @@ static void DrawFlag(struct Panel *p, i64 i, char name, bool value) {
   AppendPanel(p, i, str);
 }
 
-static void DrawRegister(struct Panel *p, i64 i, i64 r) {
+static void DrawRegister(struct Panel *p, i64 i, i64 r, bool first) {
   char buf[32];
   u64 value, previous;
   value = Read64(m->weg[r]);
@@ -1352,7 +1378,7 @@ static void DrawSegment(struct Panel *p, i64 i, struct DescriptorCache value,
   snprintf(buf, sizeof(buf), "%-3s", name);
   AppendPanel(p, i, buf);
   AppendPanel(p, i, " ");
-  snprintf(buf, sizeof(buf), "%04" PRIx16 " (@%08" PRIx64 ")", value.sel,
+  snprintf(buf, sizeof(buf), "%04" PRIx16 " @ %012" PRIx64, value.sel,
            value.base);
   AppendPanel(p, i, buf);
   if (changed) AppendPanel(p, i, "\033[27m");
@@ -1381,14 +1407,14 @@ static void DrawSt(struct Panel *p, i64 i, i64 r) {
 static void DrawCpu(struct Panel *p) {
   char buf[48];
   if (p->top == p->bottom) return;
-  DrawRegister(p, 0, 7), DrawRegister(p, 0, 0), DrawSt(p, 0, 0);
-  DrawRegister(p, 1, 6), DrawRegister(p, 1, 3), DrawSt(p, 1, 1);
-  DrawRegister(p, 2, 2), DrawRegister(p, 2, 5), DrawSt(p, 2, 2);
-  DrawRegister(p, 3, 1), DrawRegister(p, 3, 4), DrawSt(p, 3, 3);
-  DrawRegister(p, 4, 8), DrawRegister(p, 4, 12), DrawSt(p, 4, 4);
-  DrawRegister(p, 5, 9), DrawRegister(p, 5, 13), DrawSt(p, 5, 5);
-  DrawRegister(p, 6, 10), DrawRegister(p, 6, 14), DrawSt(p, 6, 6);
-  DrawRegister(p, 7, 11), DrawRegister(p, 7, 15), DrawSt(p, 7, 7);
+  DrawRegister(p, 0, 7, 1), DrawRegister(p, 0, 0, 0), DrawSt(p, 0, 0);
+  DrawRegister(p, 1, 6, 1), DrawRegister(p, 1, 3, 0), DrawSt(p, 1, 1);
+  DrawRegister(p, 2, 2, 1), DrawRegister(p, 2, 5, 0), DrawSt(p, 2, 2);
+  DrawRegister(p, 3, 1, 1), DrawRegister(p, 3, 4, 0), DrawSt(p, 3, 3);
+  DrawRegister(p, 4, 8, 1), DrawRegister(p, 4, 12, 0), DrawSt(p, 4, 4);
+  DrawRegister(p, 5, 9, 1), DrawRegister(p, 5, 13, 0), DrawSt(p, 5, 5);
+  DrawRegister(p, 6, 10, 1), DrawRegister(p, 6, 14, 0), DrawSt(p, 6, 6);
+  DrawRegister(p, 7, 11, 1), DrawRegister(p, 7, 15, 0), DrawSt(p, 7, 7);
   snprintf(buf, sizeof(buf), "%-3s %0*" PRIx64 "  FLG", kRipName[m->mode],
            GetRegHexWidth(), m->ip);
   AppendPanel(p, 8, buf);
@@ -1683,7 +1709,7 @@ static void DrawMaps(struct Panel *p) {
   int i;
   char *text, *p1, *p2;
   if (p->top == p->bottom) return;
-  p1 = text = FormatPml4t(m);
+  p1 = text = FormatPml4t(m->system);
   for (i = 0; p1; ++i, p1 = p2) {
     if ((p2 = strchr(p1, '\n'))) *p2++ = '\0';
     if (i >= mapsstart) {
@@ -1825,7 +1851,7 @@ static void CheckFramePointer(void) {
 }
 
 static bool IsExecuting(void) {
-  return (action & (CONTINUE | STEP | NEXT | FINISH)) && !(action & FAILURE);
+  return (action & (CONTINUE | STEP | NEXT | FINISH)) && !(action & MODAL);
 }
 
 static int AppendStat(struct Buffer *b, int width, const char *name, i64 value,
@@ -1849,7 +1875,7 @@ static const char *DescribeAction(void) {
   if (action & STEP) p = stpcpy(p, "|STEP");
   if (action & NEXT) p = stpcpy(p, "|NEXT");
   if (action & FINISH) p = stpcpy(p, "|FINISH");
-  if (action & FAILURE) p = stpcpy(p, "|FAILURE");
+  if (action & MODAL) p = stpcpy(p, "|MODAL");
   if (action & WINCHED) p = stpcpy(p, "|WINCHED");
   if (action & INT) p = stpcpy(p, "|INT");
   if (action & QUIT) p = stpcpy(p, "|QUIT");
@@ -1891,7 +1917,6 @@ static char *GetStatus(int m) {
 
 static void DrawStatus(struct Panel *p) {
 #define MEMSTAT(f) m->system->memstat.f, m->system->memstat.f != lastmemstat.f
-  long toto;
   char *status;
   struct Buffer *s;
   int yn, xn, rw, fds;
@@ -1904,19 +1929,28 @@ static void DrawStatus(struct Panel *p) {
   memset(s, 0, sizeof(*s));
   rw += AppendStr(s, DescribeAction());
   rw += AppendStat(s, 12, "ips", ips, false);
-  toto = kRealSize + (long)m->system->memstat.allocated * 4096;
-  rw += AppendStat(s, 10, "kb", toto / 1024, false);
-  if (FLAG_nolinear) rw += AppendStat(s, 8, "reserve", MEMSTAT(reserved));
-  if (FLAG_nolinear) rw += AppendStat(s, 8, "commit", MEMSTAT(committed));
-  if (FLAG_nolinear) rw += AppendStat(s, 5, "freed", MEMSTAT(freed));
-  rw += AppendStat(s, 5, "tables", MEMSTAT(pagetables));
-  rw += AppendStat(s, 3, "fds", fds, fds != lastfds);
+  rw += AppendChar(s, ' ');
+  rw += AppendStat(s, 1, "fds", fds, fds != lastfds);
+  rw += AppendChar(s, ' ');
+  rw += AppendStat(s, 1, "rss", m->system->rss, m->system->rss != lastrss);
+  rw += AppendChar(s, ' ');
+  rw += AppendStat(s, 1, "vss", m->system->vss, m->system->vss != lastvss);
+  rw += AppendChar(s, ' ');
+  if (FLAG_nolinear) {
+    rw += AppendStat(s, 1, "reserve", MEMSTAT(reserved));
+    rw += AppendChar(s, ' ');
+    rw += AppendStat(s, 1, "commit", MEMSTAT(committed));
+    rw += AppendChar(s, ' ');
+  }
+  rw += AppendStat(s, 1, "tables", MEMSTAT(tables));
   status = GetStatus(xn - rw);
   AppendFmt(&p->lines[0], "\033[7m%-*s%s\033[0m", xn - rw, status, s->p);
   free(status);
   free(s->p);
   free(s);
   lastmemstat = m->system->memstat;
+  lastvss = m->system->vss;
+  lastrss = m->system->rss;
   lastfds = fds;
 #undef MEMSTAT
 }
@@ -1987,7 +2021,7 @@ static void RewindHistory(int delta) {
   }
   g_history.viewing = MIN(g_history.viewing, g_history.count);
   // clear the crash dialog box if it exists.
-  action &= ~FAILURE;
+  action &= ~MODAL;
 }
 
 static void ShowHistory(void) {
@@ -2029,6 +2063,7 @@ static void Redraw(bool force) {
     return;
   }
   start_draw = GetTime();
+  m->system->nofault = true;
   execsecs = ToNanoseconds(SubtractTime(start_draw, last_draw)) * 1e-9;
   oldlen = m->xedd->length;
   if (!IsShadow(m->readaddr) && !IsShadow(m->readaddr + m->readsize)) {
@@ -2078,12 +2113,13 @@ static void Redraw(bool force) {
   DrawMemory(&pan.stack, &stackview, GetSp(), GetSp() + GetPointerWidth());
   DrawStatus(&pan.status);
   unassert(ansi = RenderPanels(ARRAYLEN(pan.p), pan.p, tyn, txn, &size));
+  m->system->nofault = false;
   end_draw = GetTime();
   (void)end_draw;
   STATISTIC(AVERAGE(redraw_latency_us,
                     ToMicroseconds(SubtractTime(end_draw, start_draw))));
   if (force || PreventBufferbloat()) {
-    unassert(UninterruptibleWrite(ttyout, ansi, size) != -1);
+    UninterruptibleWrite(ttyout, ansi, size);
   }
   AddHistory(ansi, size);
   free(ansi);
@@ -2264,6 +2300,7 @@ static ssize_t OnPtyFdReadv(int fd, const struct iovec *iov, int iovlen) {
   ssize_t rc;
   void *data;
   size_t size;
+  ptyisenabled = true;
   for (size = i = 0; i < iovlen; ++i) {
     if (iov[i].iov_len) {
       data = iov[i].iov_base;
@@ -2290,6 +2327,7 @@ static int OnPtyFdPoll(struct pollfd *fds, nfds_t nfds, int ms) {
   int i, t, re;
   struct pollfd p2;
   ms &= INT_MAX;
+  ptyisenabled = true;
   for (once = false, t = i = 0; i < nfds; ++i) {
     re = 0;
     if (fds[i].fd >= 0) {
@@ -2354,6 +2392,7 @@ static void DrawDisplayOnly(struct Panel *p) {
 static ssize_t OnPtyFdWritev(int fd, const struct iovec *iov, int iovlen) {
   int i;
   size_t size;
+  ptyisenabled = true;
   for (size = i = 0; i < iovlen; ++i) {
     PtyWrite(pty, iov[i].iov_base, iov[i].iov_len);
     size += iov[i].iov_len;
@@ -2465,12 +2504,13 @@ static const struct FdCb kFdCbPty = {
 static void LaunchDebuggerReactively(void) {
   LOGF("LaunchDebuggerReactively");
   LOGF("%s", systemfailure);
+  action &= ~CONTINUE;
   if (tuimode) {
-    action |= FAILURE;
+    action |= MODAL;
   } else {
     if (react) {
       tuimode = true;
-      action |= FAILURE;
+      action |= MODAL;
     } else {
       fprintf(stderr, "ERROR: %s\n", systemfailure);
       exit(1);
@@ -2481,6 +2521,13 @@ static void LaunchDebuggerReactively(void) {
 static void OnDebug(void) {
   strcpy(systemfailure, "IT'S A TRAP");
   LaunchDebuggerReactively();
+}
+
+static void OnExitTrap(void) {
+  tuimode = true;
+  action |= MODAL;
+  action &= ~CONTINUE;
+  strcpy(systemfailure, "program called exit_group()");
 }
 
 static void OnSegmentationFault(void) {
@@ -2884,8 +2931,8 @@ static void OnInt15h(void) {
 }
 
 static bool OnHalt(int interrupt) {
-  LOGF("%" PRIx64 " %s OnHalt(%#x)", GetPc(m), tuimode ? "TUI" : "EXEC",
-       interrupt);
+  SYS_LOGF("%" PRIx64 " %s OnHalt(%#x)", GetPc(m), tuimode ? "TUI" : "EXEC",
+           interrupt);
   ReactiveDraw();
   switch (interrupt) {
     case 1:
@@ -2927,6 +2974,9 @@ static bool OnHalt(int interrupt) {
     case kMachineFpuException:
       OnFpuException();
       return false;
+    case kMachineExitTrap:
+      OnExitTrap();
+      return true;
     case kMachineHalt:
     default:
       OnExit(interrupt & 255);
@@ -3020,7 +3070,7 @@ static void OnEnd(void) {
 }
 
 static void OnEnter(void) {
-  action &= ~FAILURE;
+  action &= ~MODAL;
 }
 
 static void OnTab(void) {
@@ -3034,14 +3084,14 @@ static void OnDown(void) {
 }
 
 static void OnStep(void) {
-  if (action & FAILURE) return;
+  if (action & MODAL) return;
   action |= STEP;
   action &= ~NEXT;
   action &= ~CONTINUE;
 }
 
 static void OnNext(void) {
-  if (action & FAILURE) return;
+  if (action & MODAL) return;
   action ^= NEXT;
   action &= ~STEP;
   action &= ~FINISH;
@@ -3049,10 +3099,10 @@ static void OnNext(void) {
 }
 
 static void OnFinish(void) {
-  if (action & FAILURE) return;
+  if (action & MODAL) return;
   action ^= FINISH;
   action &= ~NEXT;
-  action &= ~FAILURE;
+  action &= ~MODAL;
   action &= ~CONTINUE;
 }
 
@@ -3061,7 +3111,7 @@ static void OnContinueTui(void) {
   action &= ~STEP;
   action &= ~NEXT;
   action &= ~FINISH;
-  action &= ~FAILURE;
+  action &= ~MODAL;
 }
 
 static void OnContinueExec(void) {
@@ -3070,7 +3120,7 @@ static void OnContinueExec(void) {
   action &= ~STEP;
   action &= ~NEXT;
   action &= ~FINISH;
-  action &= ~FAILURE;
+  action &= ~MODAL;
 }
 
 static void OnInt(void) {
@@ -3371,7 +3421,7 @@ static void EnterWatchpoint(long bp) {
            watchpoints.p[bp].symbol ? watchpoints.p[bp].symbol : "");
   dialog = systemfailure;
   action &= ~(FINISH | NEXT | CONTINUE);
-  action |= FAILURE;
+  action |= MODAL;
   tuimode = true;
 }
 
@@ -3495,11 +3545,12 @@ static void Tui(void) {
   LOGF("Tui");
   TuiSetup();
   SetupDraw();
+  m->system->trapexit = true;
   ScrollOp(&pan.disassembly, GetDisIndex());
   if (!(interrupt = sigsetjmp(m->onhalt, 1))) {
     m->canhalt = true;
     do {
-      if (!(action & FAILURE)) {
+      if (!(action & MODAL)) {
         LoadInstruction(m, GetPc(m));
         if ((action & (FINISH | NEXT | CONTINUE)) &&
             (bp = IsAtBreakpoint(&breakpoints, m->ip)) != -1) {
@@ -3530,7 +3581,7 @@ static void Tui(void) {
       if (action & ALARM) {
         HandleAlarm();
       }
-      if (action & FAILURE) {
+      if (action & MODAL) {
         ScrollMemoryViews();
       }
       if (!(action & CONTINUE) || interactive) {
@@ -3541,8 +3592,8 @@ static void Tui(void) {
       if (dialog) {
         PrintMessageBox(ttyout, dialog, tyn, txn);
       }
-      if (action & FAILURE) {
-        LOGF("TUI FAILURE");
+      if (action & MODAL) {
+        LOGF("TUI MODAL");
         PrintMessageBox(ttyout, systemfailure, tyn, txn);
         ReadKeyboard();
         if (action & INT) {
@@ -3641,16 +3692,13 @@ static void Tui(void) {
 
 static void GetOpts(int argc, char *argv[]) {
   int opt;
-#ifdef HAVE_JIT
-  bool wantjit = false;
-#endif
   bool wantunsafe = false;
   FLAG_nologstderr = true;
 #ifndef DISABLE_OVERLAYS
   FLAG_overlays = getenv("BLINK_OVERLAYS");
   if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
 #endif
-  while ((opt = GetOpt(argc, argv, "hjmvtrzRNsSb:Hw:L:C:")) != -1) {
+  while ((opt = GetOpt(argc, argv, "hjmvtrzRNsZb:Hw:L:C:")) != -1) {
     switch (opt) {
       case 'j':
 #ifdef HAVE_JIT
@@ -3660,7 +3708,7 @@ static void GetOpts(int argc, char *argv[]) {
       case 't':
         tuimode = false;
         break;
-      case 'S':
+      case 's':
         FLAG_strace = true;
         break;
       case 'm':
@@ -3680,11 +3728,9 @@ static void GetOpts(int argc, char *argv[]) {
         natural = true;
         break;
       case 'r':
-        m->metal = true;
-        SetMachineMode(m, XED_MODE_REAL);
-        g_disisprog_disable = true;
+        wantmetal = true;
         break;
-      case 's':
+      case 'Z':
         FLAG_statistics = true;
         break;
       case 'b':
@@ -3722,11 +3768,6 @@ static void GetOpts(int argc, char *argv[]) {
     }
   }
   LogInit(FLAG_logpath);
-#ifdef HAVE_JIT
-  if (!wantjit) {
-    DisableJit(&m->system->jit);
-  }
-#endif
   FLAG_nolinear = !wantunsafe;
 }
 
@@ -3816,8 +3857,9 @@ static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
   RestoreIp(g_machine);
   // TODO(jart): Fix address translation in non-linear mode.
   g_machine->faultaddr = ToGuest(si->si_addr);
-  LOGF("SIGSEGV AT ADDRESS %" PRIx64 " (OR %p)\n\t%s", g_machine->faultaddr,
-       si->si_addr, GetBacktrace(g_machine));
+  ERRF("SIGSEGV AT ADDRESS %" PRIx64 " (OR %p) at RIP=%" PRIx64,
+       g_machine->faultaddr, si->si_addr, m->ip);
+  ERRF("BACKTRACE\n\t%s", GetBacktrace(g_machine));
   if (!react) DeliverSignalToUser(g_machine, SIGSEGV_LINUX);
   siglongjmp(g_machine->onhalt, kMachineSegmentationFault);
 }
@@ -3838,21 +3880,29 @@ int main(int argc, char *argv[]) {
   react = true;
   tuimode = true;
   WriteErrorInit();
+  GetOpts(argc, argv);
   InitBus();
 #ifdef HAVE_JIT
   AddPath_StartOp_Hook = AddPath_StartOp_Tui;
 #endif
   unassert((pty = NewPty()));
-  unassert((s = NewSystem(XED_MODE_REAL)));
+  unassert((s = NewSystem(wantmetal ? XED_MODE_REAL : XED_MODE_LONG)));
   unassert((m = NewMachine(s, 0)));
-  SetMachineMode(m, XED_MODE_LONG);
+#ifdef HAVE_JIT
+  if (!wantjit || wantmetal) {
+    DisableJit(&m->system->jit);
+  }
+#endif
+  if (wantmetal) {
+    m->metal = true;
+    g_disisprog_disable = true;
+  }
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;
   m->system->onlongbranch = OnLongBranch;
   speed = 1;
   SetXmmSize(2);
   SetXmmDisp(kXmmHex);
-  GetOpts(argc, argv);
 #ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");

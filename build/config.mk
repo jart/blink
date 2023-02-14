@@ -60,7 +60,7 @@ LDFLAGS += -no-pie
 endif
 
 ifeq ($(MODE), dbg)
-CFLAGS = -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
+CFLAGS += -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
 CPPFLAGS += -DDEBUG
 ifeq ($(HOST_SYSTEM), Linux)
 CFLAGS += -fno-pie

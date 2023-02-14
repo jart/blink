@@ -8,7 +8,7 @@ struct ContiguousMemoryRange {
 };
 
 struct ContiguousMemoryRanges {
-  size_t i;
+  unsigned i, n;
   struct ContiguousMemoryRange *p;
 };
 

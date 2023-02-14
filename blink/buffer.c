@@ -46,10 +46,11 @@ void AppendData(struct Buffer *b, const char *data, int len) {
   b->p[b->i += len] = 0;
 }
 
-void AppendChar(struct Buffer *b, char c) {
-  if (b->i + 2 > b->n && !GrowBuffer(b, 2)) return;
+int AppendChar(struct Buffer *b, char c) {
+  if (b->i + 2 > b->n && !GrowBuffer(b, 2)) return 0;
   b->p[b->i++] = c;
   b->p[b->i] = 0;
+  return 1;
 }
 
 int AppendStr(struct Buffer *b, const char *s) {
@@ -58,18 +59,19 @@ int AppendStr(struct Buffer *b, const char *s) {
   return n;
 }
 
-void AppendWide(struct Buffer *b, wint_t wc) {
+int AppendWide(struct Buffer *b, wint_t wc) {
   u64 wb;
   if (0 <= wc && wc <= 0x7f) {
     AppendChar(b, wc);
   } else {
-    if (b->i + 8 > b->n && !GrowBuffer(b, 8)) return;
+    if (b->i + 8 > b->n && !GrowBuffer(b, 8)) return 0;
     wb = tpenc(wc);
     do {
       b->p[b->i++] = wb & 0xFF;
     } while ((wb >>= 8));
     b->p[b->i] = 0;
   }
+  return 1;
 }
 
 int AppendFmt(struct Buffer *b, const char *fmt, ...) {

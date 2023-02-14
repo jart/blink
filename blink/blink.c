@@ -47,7 +47,7 @@
 #include "blink/x86.h"
 #include "blink/xlat.h"
 
-#define OPTS "hjemsS0L:C:"
+#define OPTS "hjemZs0L:C:"
 #define USAGE \
   " [-" OPTS "] PROG [ARGS...]\n\
   -h                   help\n\
@@ -55,8 +55,8 @@
   -e                   also log to stderr\n\
   -0                   to specify argv[0]\n\
   -m                   enable memory safety\n\
-  -s                   print statistics on exit\n\
-  -S                   enable system call logging\n\
+  -s                   enable system call logging\n\
+  -Z                   print internal statistics on exit\n\
   -L PATH              log filename (default ${TMPDIR:-/tmp}/blink.log)\n\
   -C PATH              sets chroot dir or overlay spec [default \":o\"]\n\
   $BLINK_OVERLAYS      file system roots [default \":o\"]\n\
@@ -98,9 +98,10 @@ static void OnSigSegv(int sig, siginfo_t *si, void *ptr) {
   // TODO: Fix memory leak with FormatPml4t()
   // TODO(jart): Fix address translation in non-linear mode.
   g_machine->faultaddr = ToGuest(si->si_addr);
-  ERRF("SEGMENTATION FAULT (%s) AT ADDRESS %" PRIx64 "\n\t%s\n%s",
-       strsignal(sig), g_machine->faultaddr, GetBacktrace(g_machine),
-       FormatPml4t(g_machine));
+  ERRF("SEGMENTATION FAULT (%s) AT ADDRESS %" PRIx64 " at RIP=%" PRIx64,
+       strsignal(sig), g_machine->faultaddr, g_machine->ip);
+  ERRF("ADDITIONAL INFORMATION\n\t%s\n%s", GetBacktrace(g_machine),
+       FormatPml4t(g_machine->system));
 #ifdef DEBUG
   PrintBacktrace();
 #endif
@@ -194,13 +195,13 @@ static void GetOpts(int argc, char *argv[]) {
       case 'j':
         FLAG_nojit = true;
         break;
-      case 'S':
+      case 's':
         FLAG_strace = true;
         break;
       case 'm':
         FLAG_nolinear = true;
         break;
-      case 's':
+      case 'Z':
         FLAG_statistics = true;
         break;
       case 'e':

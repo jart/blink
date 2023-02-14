@@ -244,6 +244,13 @@ int GetDirFildes(int fildes) {
   return fildes;
 }
 
+const char *GetDirFildesPath(struct System *s, int fildes) {
+  struct Fd *fd;
+  if (fildes == AT_FDCWD_LINUX) return ".";
+  if ((fd = GetFd(&s->fds, fildes))) return fd->path;
+  return 0;
+}
+
 void SignalActor(struct Machine *mm) {
 #ifdef __CYGWIN__
   // TODO: Why does JIT clobber %rbx on Cygwin?
@@ -383,6 +390,10 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
   } else {
     THR_LOGF("calling exit(%d)", rc);
     KillOtherThreads(m->system);
+    if (m->system->trapexit && !m->system->exited) {
+      m->system->exited = true;
+      HaltMachine(m, kMachineExitTrap);
+    }
     FreeMachine(m);
 #ifdef HAVE_JIT
     ShutdownJit();
@@ -1028,6 +1039,7 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
     ClearJitHooks(&m->system->jit);
   }
 #endif
+  unassert(CheckMemoryInvariants(m->system));
   UNLOCK(&m->system->mmap_lock);
   InvalidateSystem(m->system, false, true);
   return rc;
@@ -1072,6 +1084,7 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
     }
   }
   rc = m->system->brk;
+  unassert(CheckMemoryInvariants(m->system));
   UNLOCK(&m->system->mmap_lock);
   return rc;
 }
@@ -1080,6 +1093,7 @@ static int SysMunmap(struct Machine *m, i64 virt, u64 size) {
   int rc;
   LOCK(&m->system->mmap_lock);
   rc = FreeVirtual(m->system, virt, size);
+  unassert(CheckMemoryInvariants(m->system));
   UNLOCK(&m->system->mmap_lock);
   return rc;
 }
@@ -1170,6 +1184,7 @@ static i64 SysMmap(struct Machine *m, i64 virt, u64 size, int prot, int flags,
   i64 res;
   LOCK(&m->system->mmap_lock);
   res = SysMmapImpl(m, virt, size, prot, flags, fildes, offset);
+  unassert(CheckMemoryInvariants(m->system));
   UNLOCK(&m->system->mmap_lock);
   return res;
 }

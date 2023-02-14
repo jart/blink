@@ -1,7 +1,7 @@
 /*-*- mode:c;indent-tabs-mode:nil;c-basic-offset:2;tab-width:8;coding:utf-8 -*-│
 │vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2022 Justine Alexandra Roberts Tunney                              │
+│ Copyright 2023 Justine Alexandra Roberts Tunney                              │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -16,35 +16,28 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <errno.h>
-#include <limits.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include "blink/assert.h"
-#include "blink/debug.h"
-#include "blink/endian.h"
-#include "blink/log.h"
-#include "blink/machine.h"
-#include "blink/macros.h"
-#include "blink/util.h"
+#include "blink/fspath.h"
 
-void AssertFailed(const char *file, int line, const char *msg) {
-  _Thread_local static bool noreentry;
-  char b[512];
-  FLAG_nologstderr = false;
-  snprintf(b, sizeof(b), "%s:%d: assertion failed: %s (%s)\n", file, line, msg,
-           DescribeHostErrno(errno));
-  b[sizeof(b) - 1] = 0;
-  WriteErrorString(b);
-  if (g_machine && !noreentry) {
-    noreentry = true;
-    RestoreIp(g_machine);
-    WriteErrorString("\t");
-    WriteErrorString(GetBacktrace(g_machine));
-    WriteErrorString("\n");
+char *JoinPath(const char *x, const char *y) {
+  char *z, *p;
+  size_t n, m;
+  if (!y || !*y) {
+    return strdup(x);
   }
-  PrintBacktrace();
-  Abort();
+  if (!x || !*x || *y == '/' || (*x == '.' && !x[1])) {
+    return strdup(y);
+  }
+  n = strlen(x);
+  m = strlen(y);
+  if (!(z = (char *)malloc(n + 1 + m + 1))) return 0;
+  memcpy(z, x, n);
+  p = z + n;
+  if (x[n - 1] != '/') {
+    *p++ = '/';
+  }
+  memcpy(p, y, m + 1);
+  return z;
 }

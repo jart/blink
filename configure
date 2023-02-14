@@ -509,6 +509,8 @@ HOST_ARCH = ${HOST_ARCH}
 HOST_SYSTEM = ${HOST_SYSTEM}
 EOF
 
+echo "creating config.log" >&2
+
 echo "creating config.mk" >&2
 mv "${BUILD}" config.mk || exit
 

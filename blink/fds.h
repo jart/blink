@@ -37,6 +37,7 @@ struct Fd {
   struct Dll elem;
   pthread_mutex_t_ lock;
   const struct FdCb *cb;
+  char *path;
   union {
     struct sockaddr sa;
     struct sockaddr_in sin;

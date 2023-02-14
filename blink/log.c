@@ -54,8 +54,8 @@ static struct Log {
 static char *GetTimestamp(void) {
   int x;
   struct timespec ts;
-  static _Thread_local char s[27];
   static _Thread_local i64 last;
+  static _Thread_local char s[27];
   static _Thread_local struct tm tm;
   IGNORE_RACES_START();
   clock_gettime(CLOCK_REALTIME, &ts);

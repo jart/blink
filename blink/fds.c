@@ -109,6 +109,7 @@ int CountFds(struct Fds *fds) {
 void FreeFd(struct Fd *fd) {
   if (fd) {
     unassert(!pthread_mutex_destroy(&fd->lock));
+    free(fd->path);
     free(fd);
   }
 }

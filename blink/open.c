@@ -29,6 +29,7 @@
 #include "blink/debug.h"
 #include "blink/errno.h"
 #include "blink/fds.h"
+#include "blink/fspath.h"
 #include "blink/log.h"
 #include "blink/overlays.h"
 #include "blink/random.h"
@@ -103,6 +104,7 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
               i32 mode) {
   int fildes;
   int sysflags;
+  struct Fd *fd;
   const char *path;
 #ifndef O_TMPFILE
   if ((oflags & O_TMPFILE_LINUX) == O_TMPFILE_LINUX) {
@@ -115,7 +117,8 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
                   OverlaysOpen(GetDirFildes(dirfildes), path, sysflags, mode));
   if (fildes != -1) {
     LOCK(&m->system->fds.lock);
-    unassert(AddFd(&m->system->fds, fildes, sysflags));
+    unassert(fd = AddFd(&m->system->fds, fildes, sysflags));
+    fd->path = JoinPath(GetDirFildesPath(m->system, dirfildes), path);
     UNLOCK(&m->system->fds.lock);
   } else {
 #ifdef __FreeBSD__
