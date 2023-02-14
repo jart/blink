@@ -1182,7 +1182,7 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
             LOGF("msync(%p [pt=%#" PRIx64
                  "], size=%#lx, flags=%d) failed: %s\n%s",
                  (void *)page, pt, pagesize, sysflags, DescribeHostErrno(errno),
-                 FormatPml4t(g_machine->system));
+                 FormatPml4t(g_machine));
             rc = -1;
           }
         }

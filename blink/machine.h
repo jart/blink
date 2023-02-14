@@ -323,8 +323,8 @@ struct Machine {                           //
   struct XedDecodedInst *xedd;             // ->opcache->icache if non-jit
   i64 readaddr;                            // so tui can show memory reads
   i64 writeaddr;                           // so tui can show memory write
-  u32 readsize;                            // bytes length of last read op
-  u32 writesize;                           // byte length of last write op
+  i64 readsize;                            // bytes length of last read op
+  i64 writesize;                           // byte length of last write op
   union {                                  //
     struct DescriptorCache seg[8];         //
     struct {                               //
@@ -393,7 +393,7 @@ u64 AllocatePageTable(struct System *);
 u64 FindPageTableEntry(struct Machine *, u64);
 bool CheckMemoryInvariants(struct System *) nosideeffect dontdiscard;
 int ReserveVirtual(struct System *, i64, i64, u64, int, i64, bool);
-char *FormatPml4t(struct System *);
+char *FormatPml4t(struct Machine *);
 i64 FindVirtual(struct System *, i64, i64);
 int FreeVirtual(struct System *, i64, i64);
 void CleanseMemory(struct System *, size_t);

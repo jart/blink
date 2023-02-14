@@ -111,8 +111,7 @@ void LoadInstruction(struct Machine *m, u64 pc) {
     case kMachineSegmentationFault:
       m->faultaddr = pc;
       // TODO: Fix memory leak with FormatPml4t()
-      ERRF("CODE PROTECTION CRISIS\n\t%s\n%s", GetBacktrace(m),
-           FormatPml4t(m->system));
+      ERRF("CODE PROTECTION CRISIS\n\t%s\n%s", GetBacktrace(m), FormatPml4t(m));
       HaltMachine(m, rc);
     case kMachineDecodeError:
       ERRF("INSTRUCTION DECODING CRISIS\n\t%s", GetBacktrace(m));

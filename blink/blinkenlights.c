@@ -1094,9 +1094,9 @@ void SetupDraw(void) {
       c2y[2] = yn - 26;
     }
   } else {
-    c2y[0] = breakpoints.i ? a * .7 : 1;
+    c2y[0] = breakpoints.i ? a * .7 : 0;
     c2y[1] = yn / 2;
-    c2y[2] = yn - 1;
+    c2y[2] = yn;
   }
 
   a = (yn - (cpuy + ssey) - 3) / 4;
@@ -1117,7 +1117,7 @@ void SetupDraw(void) {
 
   pan.breakpointshr.top = 0;
   pan.breakpointshr.left = dx[0];
-  pan.breakpointshr.bottom = 1;
+  pan.breakpointshr.bottom = !!breakpoints.i;
   pan.breakpointshr.right = dx[1] - 1;
 
   pan.breakpoints.top = 1;
@@ -1147,7 +1147,7 @@ void SetupDraw(void) {
 
   pan.displayhr.top = c2y[2];
   pan.displayhr.left = dx[0];
-  pan.displayhr.bottom = c2y[2] + 1;
+  pan.displayhr.bottom = c2y[2] + ShouldShowDisplay();
   pan.displayhr.right = dx[1] - 1;
 
   pan.display.top = c2y[2] + 1;
@@ -1709,7 +1709,7 @@ static void DrawMaps(struct Panel *p) {
   int i;
   char *text, *p1, *p2;
   if (p->top == p->bottom) return;
-  p1 = text = FormatPml4t(m->system);
+  p1 = text = FormatPml4t(m);
   for (i = 0; p1; ++i, p1 = p2) {
     if ((p2 = strchr(p1, '\n'))) *p2++ = '\0';
     if (i >= mapsstart) {
@@ -2842,6 +2842,10 @@ static void OnKeyboardServiceReadKeyPress(void) {
   static char buf[32];
   static size_t pending;
   LOGF("OnKeyboardServiceReadKeyPress");
+  if (!ptyisenabled) {
+    ptyisenabled = true;
+    ReactiveDraw();
+  }
   if (!tuimode) {
     tuimode = true;
     action |= CONTINUE;
