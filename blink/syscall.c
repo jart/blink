@@ -1725,7 +1725,7 @@ static bool IsSockAddrEmpty(const struct sockaddr *sa) {
 // Exchange question: https://unix.stackexchange.com/a/419881/451352
 static void EnsureSockAddrHasDestination(struct Machine *m, int fildes,
                                          struct sockaddr_storage *ss) {
-#ifndef __linux
+#ifndef HAVE_SENDTO_ZERO
   struct Fd *fd;
   if (!IsSockAddrEmpty((const struct sockaddr *)ss)) return;
   LOCK(&m->system->fds.lock);

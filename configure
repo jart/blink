@@ -448,6 +448,7 @@ fi
 ( config pipe2 "checking for pipe2()... " uncomment "#define HAVE_PIPE2" ) &
 ( config wait4 "checking for wait4()... " uncomment "#define HAVE_WAIT4" ) &
 ( config sysctl "checking for sysctl()... " uncomment "#define HAVE_SYSCTL" ) &
+( config memccpy "checking for __int128... " uncomment "#define HAVE_INT128" ) &
 ( config sysinfo "checking for sysinfo()... " uncomment "#define HAVE_SYSINFO" ) &
 ( config wcwidth "checking for wcwidth()... " uncomment "#define HAVE_WCWIDTH" ) &
 ( config memccpy "checking for memccpy()... " uncomment "#define HAVE_MEMCCPY" ) &
@@ -463,6 +464,7 @@ fi
 ( config f_getown_ex "checking for F_GETOWN_EX... " uncomment "#define HAVE_F_GETOWN_EX" ) &
 ( config siocgifconf "checking for SIOCGIFCONF... " uncomment "#define HAVE_SIOCGIFCONF" ) &
 ( config dev_urandom "checking for /dev/urandom... " uncomment "#define HAVE_DEV_URANDOM" ) &
+( config sendto_zero "checking for sendto(0.0.0.0)... " uncomment "#define HAVE_SENDTO_ZERO" ) &
 ( config rtlgenrandom "checking for RtlGenRandom()... " uncomment "#define HAVE_RTLGENRANDOM" ) &
 ( config getdomainname "checking for getdomainname()... " uncomment "#define HAVE_GETDOMAINNAME" ) &
 ( config struct_timezone "checking for struct timezone... " uncomment "#define HAVE_STRUCT_TIMEZONE" ) &

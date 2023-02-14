@@ -15,6 +15,7 @@
 // #define HAVE_PIPE2
 // #define HAVE_WAIT4
 // #define HAVE_SYSCTL
+// #define HAVE_INT128
 // #define HAVE_SA_LEN
 // #define HAVE_PREADV
 // #define HAVE_WCWIDTH
@@ -33,6 +34,7 @@
 // #define HAVE_SETGROUPS
 // #define HAVE_GETENTROPY
 // #define HAVE_MAP_SHARED
+// #define HAVE_SENDTO_ZERO
 // #define HAVE_SIOCGIFCONF
 // #define HAVE_F_GETOWN_EX
 // #define HAVE_DEV_URANDOM

@@ -249,12 +249,6 @@
 #define CAN_PSHARE 1
 #endif
 
-#if CAN_64BIT
-#if (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 406 || defined(__llvm__)
-#define HAVE_INT128
-#endif
-#endif
-
 #if !defined(__SANITIZE_UNDEFINED__) && defined(UBSAN)
 #define __SANITIZE_UNDEFINED__
 #endif
