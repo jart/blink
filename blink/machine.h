@@ -222,7 +222,6 @@ struct System {
   i64 automap;
   i64 memchurn;
   i64 codestart;
-  _Atomic(int) nofault;
   struct Dll *filemaps;
   unsigned long codesize;
   struct MachineMemstat memstat;
@@ -348,6 +347,7 @@ struct Machine {                           //
   u32 tlbindex;                            //
   struct System *system;                   //
   int sigdepth;                            //
+  bool nofault;                            //
   bool canhalt;                            //
   bool metal;                              //
   bool restored;                           //
@@ -675,5 +675,15 @@ void LogCodOp(struct Machine *, const char *);
 #define LogCodOp(m, s) (void)0
 #define WriteCod(...)  (void)0
 #endif
+
+#define BEGIN_NO_PAGE_FAULTS \
+  {                          \
+    bool nofault;            \
+    nofault = m->nofault;    \
+    m->nofault = true
+
+#define END_NO_PAGE_FAULTS \
+  m->nofault = nofault;    \
+  }
 
 #endif /* BLINK_MACHINE_H_ */

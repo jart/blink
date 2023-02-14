@@ -1031,6 +1031,7 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
     LOGF("unsupported mprotect() protection: %#x", unsupported);
     return einval();
   }
+  BEGIN_NO_PAGE_FAULTS;
   LOCK(&m->system->mmap_lock);
   rc = ProtectVirtual(m->system, addr, size, prot);
 #ifdef HAVE_JIT
@@ -1041,6 +1042,7 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
 #endif
   unassert(CheckMemoryInvariants(m->system));
   UNLOCK(&m->system->mmap_lock);
+  END_NO_PAGE_FAULTS;
   InvalidateSystem(m->system, false, true);
   return rc;
 }
@@ -1052,6 +1054,7 @@ static int SysMadvise(struct Machine *m, i64 addr, u64 len, int advice) {
 static i64 SysBrk(struct Machine *m, i64 addr) {
   i64 rc, size;
   long pagesize;
+  BEGIN_NO_PAGE_FAULTS;
   LOCK(&m->system->mmap_lock);
   MEM_LOGF("brk(%#" PRIx64 ") currently %#" PRIx64, addr, m->system->brk);
   pagesize = GetSystemPageSize();
@@ -1086,15 +1089,18 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
   rc = m->system->brk;
   unassert(CheckMemoryInvariants(m->system));
   UNLOCK(&m->system->mmap_lock);
+  END_NO_PAGE_FAULTS;
   return rc;
 }
 
 static int SysMunmap(struct Machine *m, i64 virt, u64 size) {
   int rc;
+  BEGIN_NO_PAGE_FAULTS;
   LOCK(&m->system->mmap_lock);
   rc = FreeVirtual(m->system, virt, size);
   unassert(CheckMemoryInvariants(m->system));
   UNLOCK(&m->system->mmap_lock);
+  END_NO_PAGE_FAULTS;
   return rc;
 }
 
@@ -1182,10 +1188,12 @@ Finished:
 static i64 SysMmap(struct Machine *m, i64 virt, u64 size, int prot, int flags,
                    int fildes, i64 offset) {
   i64 res;
+  BEGIN_NO_PAGE_FAULTS;
   LOCK(&m->system->mmap_lock);
   res = SysMmapImpl(m, virt, size, prot, flags, fildes, offset);
   unassert(CheckMemoryInvariants(m->system));
   UNLOCK(&m->system->mmap_lock);
+  END_NO_PAGE_FAULTS;
   return res;
 }
 

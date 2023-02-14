@@ -388,12 +388,6 @@ if config noop "checking for -fno-common... "; then
   CFLAGS="-fno-common ${CFLAGS}"
 fi
 
-# prevent compiler from inserting function calls into micro-ops
-EXTRA_CFLAGS=-mno-fentry
-if config noop "checking for -mno-fentry... "; then
-  UOPFLAGS="-mno-fentry ${UOPFLAGS}"
-fi
-
 # make sure sanitizers aren't enabled on micro-op functions
 EXTRA_CFLAGS=-fno-sanitize=all
 if config noop "checking for -fno-sanitize=all... "; then
@@ -427,12 +421,6 @@ if [ "${MODE}" != "tiny" ]; then
   if config noop "checking for -fno-omit-frame-pointer... "; then
     CFLAGS="${CFLAGS} -fno-omit-frame-pointer"
   fi
-fi
-
-# prevent compiler from inserting function calls into micro-ops
-EXTRA_CFLAGS=-fno-instrument-functions
-if config noop "checking for -fno-instrument-functions... "; then
-  UOPFLAGS="-fno-instrument-functions ${UOPFLAGS}"
 fi
 
 # this optimization harms our ability to backtrace binaries

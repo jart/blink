@@ -103,34 +103,37 @@ static i64 ReadWord(struct Machine *m, u8 *p) {
 }
 
 int GetInstruction(struct Machine *m, i64 pc, struct XedDecodedInst *x) {
-  int i, err;
+  int i, rc, err;
   u8 copy[15], *toil, *addr;
+  BEGIN_NO_PAGE_FAULTS;
   if ((addr = LookupAddress(m, pc))) {
     if ((i = 4096 - (pc & 4095)) >= 15) {
       if (!DecodeInstruction(x, addr, 15, m->mode)) {
-        return 0;
+        rc = 0;
       } else {
-        return kMachineDecodeError;
+        rc = kMachineDecodeError;
       }
     } else if ((toil = LookupAddress(m, pc + i))) {
       memcpy(copy, addr, i);
       memcpy(copy + i, toil, 15 - i);
       if (!DecodeInstruction(x, copy, 15, m->mode)) {
-        return 0;
+        rc = 0;
       } else {
-        return kMachineDecodeError;
+        rc = kMachineDecodeError;
       }
     } else if (!(err = DecodeInstruction(x, addr, i, m->mode))) {
-      return 0;
+      rc = 0;
     } else if (err == XED_ERROR_BUFFER_TOO_SHORT) {
-      return kMachineSegmentationFault;
+      rc = kMachineSegmentationFault;
     } else {
-      return kMachineDecodeError;
+      rc = kMachineDecodeError;
     }
   } else {
     memset(x, 0, sizeof(*x));
-    return kMachineSegmentationFault;
+    rc = kMachineSegmentationFault;
   }
+  END_NO_PAGE_FAULTS;
+  return rc;
 }
 
 const char *DescribeProt(int prot) {
@@ -460,6 +463,8 @@ const char *GetBacktrace(struct Machine *m) {
   i64 sym, sp, bp, rp;
   struct Dis dis = {true};
   char kAlignmentMask[] = {3, 3, 15};
+
+  BEGIN_NO_PAGE_FAULTS;
   LoadDebugSymbols(&m->system->elf);
   DisLoadElf(&dis, &m->system->elf);
 
@@ -524,6 +529,7 @@ const char *GetBacktrace(struct Machine *m) {
     rp = ReadWord(m, r + 8);
   }
 
+  END_NO_PAGE_FAULTS;
   DisFree(&dis);
   return b;
 }

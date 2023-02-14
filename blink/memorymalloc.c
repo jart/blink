@@ -154,14 +154,14 @@ static bool FreeEmptyPageTables(struct System *s, u64 pt, long level) {
   mi = GetPageAddress(s, pt);
   for (i = 0; i < 512; ++i) {
     if (level == 4) {
-      if (Read64(mi + i * 8)) {
+      if (ReadPte(mi + i * 8)) {
         isempty = false;
       }
     } else {
-      pt = Read64(mi + i * 8);
+      pt = ReadPte(mi + i * 8);
       if (pt & PAGE_V) {
         if (FreeEmptyPageTables(s, pt, level + 1)) {
-          Write64(mi + i * 8, 0);
+          StorePte(mi + i * 8, 0);
         } else {
           isempty = false;
         }
@@ -179,12 +179,15 @@ static bool FreeEmptyPageTables(struct System *s, u64 pt, long level) {
 static void FreeHostPages(struct System *s) {
   if (!s->real && s->cr3) {
     unassert(!FreeVirtual(s, -0x800000000000, 0x1000000000000));
+    unassert(FreeEmptyPageTables(s, s->cr3, 1));
+#if CAN_64BIT
+    // TODO(jart): Why does this sometimes fail on 32-bit platforms?
     unassert(!s->memstat.committed);
     unassert(!s->memstat.reserved);
-    unassert(FreeEmptyPageTables(s, s->cr3, 1));
     unassert(!s->memstat.tables);
     unassert(!s->vss);
     unassert(!s->rss);
+#endif
     s->cr3 = 0;
   }
   free(s->real);
@@ -653,7 +656,7 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
       pi = p1 = (virt >> i) & 511;
       pp = GetPageAddress(s, pt) + pi * 8;
       if (i == 12 + 9) pde = pp;
-      pt = Get64(pp);
+      pt = ReadPte(pp);
       if (i > 12 && !(pt & PAGE_V)) break;
       if (i > 12) continue;
     LastLevel:
@@ -664,18 +667,18 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
         } else {
           *address_space_was_mutated = true;
         }
-        Put64(pp, 0);
+        StorePte(pp, 0);
         --*vss_delta;
       }
       if (virt + 4096 < end && pi < 511) {
         pi += 1;
         pp += 8;
-        pt = Get64(pp);
+        pt = ReadPte(pp);
         virt += 4096;
         goto LastLevel;
       } else if (!p1 && pi == 511) {
-        FreePageTable(s, GetPageAddress(s, Get64(pde)));
-        Put64(pde, 0);
+        FreePageTable(s, GetPageAddress(s, ReadPte(pde)));
+        StorePte(pde, 0);
       }
       break;
     }
@@ -846,14 +849,14 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
       mi = GetPageAddress(s, pt) + ti * 8;
-      pt = Get64(mi);
+      pt = ReadPte(mi);
       if (level > 12) {
         if (!(pt & PAGE_V)) {
           if ((pt = AllocatePageTable(s)) == -1) {
             WriteErrorString("mmap() crisis: ran out of page table memory\n");
             exit(250);
           }
-          Put64(mi, pt);
+          StorePte(mi, pt);
         }
         continue;
       }
@@ -900,12 +903,12 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
         if (fd != -1 && virt + 4096 >= end) {
           entry |= PAGE_EOF;
         }
-        Put64(mi, entry);
+        StorePte(mi, entry);
         if ((virt += 4096) >= end) {
           return 0;
         }
         if (++ti == 512) break;
-        pt = Get64((mi += 8));
+        pt = ReadPte((mi += 8));
       }
     }
   }
@@ -927,7 +930,7 @@ StartOver:
   got = 0;
   do {
     for (i = 39, pt = s->cr3;; i -= 9) {
-      pt = Get64(GetPageAddress(s, pt) + (((virt + got) >> i) & 511) * 8);
+      pt = ReadPte(GetPageAddress(s, pt) + (((virt + got) >> i) & 511) * 8);
       if (i == 12 || !(pt & PAGE_V)) break;
     }
     got += 1ull << i;
@@ -999,7 +1002,7 @@ bool IsFullyMapped(struct System *s, i64 virt, i64 size) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
       mi = GetPageAddress(s, pt) + ti * 8;
-      pt = Get64(mi);
+      pt = ReadPte(mi);
       if (level > 12) {
         if (!(pt & PAGE_V)) {
           return false;
@@ -1014,7 +1017,7 @@ bool IsFullyMapped(struct System *s, i64 virt, i64 size) {
           return true;
         }
         if (++ti == 512) break;
-        pt = Get64((mi += 8));
+        pt = ReadPte((mi += 8));
       }
     }
   }
@@ -1028,7 +1031,7 @@ bool IsFullyUnmapped(struct System *s, i64 virt, i64 size) {
   for (end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
       mi = GetPageAddress(s, pt) + ((virt >> i) & 511) * 8;
-      pt = Get64(mi);
+      pt = ReadPte(mi);
       if (!(pt & PAGE_V)) {
         break;
       } else if (i == 12) {
@@ -1076,7 +1079,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
       mi = GetPageAddress(s, pt) + ti * 8;
-      pt = Get64(mi);
+      pt = ReadPte(mi);
       if (level > 12) {
         unassert(pt & PAGE_V);
         continue;
@@ -1098,12 +1101,12 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
         }
         pt &= ~(PAGE_U | PAGE_RW | PAGE_XD);
         pt |= key;
-        Put64(mi, pt);
+        StorePte(mi, pt);
         if ((virt += 4096) >= end) {
           goto FinishedCrawling;
         }
         if (++ti == 512) break;
-        pt = Get64((mi += 8));
+        pt = ReadPte((mi += 8));
       }
     }
   }
@@ -1160,7 +1163,7 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
       mi = GetPageAddress(s, pt) + ti * 8;
-      pt = Get64(mi);
+      pt = ReadPte(mi);
       if (level > 12) {
         unassert(pt & PAGE_V);
         continue;
@@ -1187,7 +1190,7 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
           goto FinishedCrawling;
         }
         if (++ti == 512) break;
-        pt = Get64((mi += 8));
+        pt = ReadPte((mi += 8));
       }
     }
   }

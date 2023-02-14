@@ -2062,8 +2062,8 @@ static void Redraw(bool force) {
     ShowHistory();
     return;
   }
+  BEGIN_NO_PAGE_FAULTS;
   start_draw = GetTime();
-  m->system->nofault = true;
   execsecs = ToNanoseconds(SubtractTime(start_draw, last_draw)) * 1e-9;
   oldlen = m->xedd->length;
   if (!IsShadow(m->readaddr) && !IsShadow(m->readaddr + m->readsize)) {
@@ -2113,7 +2113,7 @@ static void Redraw(bool force) {
   DrawMemory(&pan.stack, &stackview, GetSp(), GetSp() + GetPointerWidth());
   DrawStatus(&pan.status);
   unassert(ansi = RenderPanels(ARRAYLEN(pan.p), pan.p, tyn, txn, &size));
-  m->system->nofault = false;
+  END_NO_PAGE_FAULTS;
   end_draw = GetTime();
   (void)end_draw;
   STATISTIC(AVERAGE(redraw_latency_us,
@@ -3701,9 +3701,7 @@ static void GetOpts(int argc, char *argv[]) {
   while ((opt = GetOpt(argc, argv, "hjmvtrzRNsZb:Hw:L:C:")) != -1) {
     switch (opt) {
       case 'j':
-#ifdef HAVE_JIT
         wantjit = true;
-#endif
         break;
       case 't':
         tuimode = false;

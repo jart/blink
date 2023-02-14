@@ -65,7 +65,7 @@ u8 *GetPageAddress(struct System *s, u64 entry) {
 
 u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
   u64 x, res, page;
-  if (m->system->nofault) return 0;
+  if (m->nofault) return 0;
   unassert(entry & PAGE_RSRV);
   LOCK(&m->system->mmap_lock);
   // page faults should only happen in non-linear mode

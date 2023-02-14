@@ -83,4 +83,22 @@ void WriteRegisterBW(u64, u8[8], u64);
 i64 ReadRegisterOrMemoryBW(u64, u8[8]);
 void WriteRegisterOrMemoryBW(u64, u8[8], u64);
 
+static inline u64 ReadPte(const u8 *pte) {
+#if CAN_64BIT
+  return Little64(
+      atomic_load_explicit((_Atomic(u64) *)pte, memory_order_acquire));
+#else
+  return Load64(pte);
+#endif
+}
+
+static inline void StorePte(u8 *pte, u64 val) {
+#if CAN_64BIT
+  atomic_store_explicit((_Atomic(u64) *)pte, Little64(val),
+                        memory_order_release);
+#else
+  Store64(pte, val);
+#endif
+}
+
 #endif /* BLINK_MOP_H_ */
