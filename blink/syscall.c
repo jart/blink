@@ -437,7 +437,7 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
   LOCK(&m->system->mmap_lock);
   LOCK(&m->system->fds.lock);
   LOCK(&m->system->machines_lock);
-#if !CAN_PSHARE
+#ifndef HAVE_PTHREAD_PROCESS_SHARED
   LOCK(&g_bus->futexes.lock);
 #endif
   pid = fork();
@@ -446,7 +446,7 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
   // https://dev.haiku-os.org/ticket/17896
   if (!pid) g_machine = m;
 #endif
-#if !CAN_PSHARE
+#ifndef HAVE_PTHREAD_PROCESS_SHARED
   UNLOCK(&g_bus->futexes.lock);
 #endif
   UNLOCK(&m->system->machines_lock);
@@ -465,7 +465,7 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
     if (stack) {
       Put64(m->sp, stack);
     }
-#if !CAN_PSHARE
+#ifndef HAVE_PTHREAD_PROCESS_SHARED
     InitBus();
 #endif
     THR_LOGF("pid=%d tid=%d SysFork -> pid=%d tid=%d",  //

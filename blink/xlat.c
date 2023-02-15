@@ -388,6 +388,7 @@ int XlatSocketType(int x) {
 int XlatSocketProtocol(int x) {
   switch (x) {
     XLAT(0, 0);
+    XLAT(IPPROTO_RAW_LINUX, IPPROTO_RAW);
     XLAT(IPPROTO_TCP_LINUX, IPPROTO_TCP);
     XLAT(IPPROTO_UDP_LINUX, IPPROTO_UDP);
     XLAT(IPPROTO_ICMP_LINUX, IPPROTO_ICMP);
@@ -406,6 +407,7 @@ int XlatSocketLevel(int x, int *level) {
   switch (x) {
     CASE(SOL_SOCKET_LINUX, res = SOL_SOCKET);
     CASE(SOL_IP_LINUX, res = IPPROTO_IP);
+    CASE(SOL_IPV6_LINUX, res = IPPROTO_IPV6);
     CASE(SOL_TCP_LINUX, res = IPPROTO_TCP);
     CASE(SOL_UDP_LINUX, res = IPPROTO_UDP);
     default:
@@ -456,6 +458,15 @@ int XlatSocketOptname(int level, int optname) {
 #endif
 #ifdef IP_RETOPTS
         XLAT(IP_RETOPTS_LINUX, IP_RETOPTS);
+#endif
+        default:
+          break;
+      }
+      break;
+    case SOL_IPV6_LINUX:
+      switch (optname) {
+#ifdef IPV6_RECVERR
+        XLAT(IPV6_RECVERR_LINUX, IPV6_RECVERR);
 #endif
         default:
           break;

@@ -480,6 +480,7 @@ fi
 ( config preadv "checking for preadv() and pwritev()... " uncomment "#define HAVE_PREADV" ) &
 ( config getentropy "checking for getentropy() in unistd.h... " uncomment "#define HAVE_GETENTROPY" ) &
 ( config sys_getentropy "checking for getentropy() in sys/random.h... " uncomment "#define HAVE_SYS_GETENTROPY" ) &
+( config pthread_process_shared "checking for PTHREAD_PROCESS_SHARED... " uncomment "#define HAVE_PTHREAD_PROCESS_SHARED" ) &
 
 wait
 rm -f "${LOCK}"

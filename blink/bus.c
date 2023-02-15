@@ -32,7 +32,7 @@
 #include "blink/thread.h"
 #include "blink/tsan.h"
 
-#if CAN_PSHARE
+#ifdef HAVE_PTHREAD_PROCESS_SHARED
 #define BUS_MEMORY MAP_SHARED
 #else
 #define BUS_MEMORY MAP_PRIVATE
@@ -44,7 +44,7 @@ void InitBus(void) {
   unsigned i;
   pthread_condattr_t_ cattr;
   pthread_mutexattr_t_ mattr;
-#if !CAN_PSHARE
+#ifndef HAVE_PTHREAD_PROCESS_SHARED
   if (g_bus) FreeBig(g_bus, sizeof(*g_bus));
 #endif
   unassert(g_bus =
@@ -52,7 +52,7 @@ void InitBus(void) {
                                          BUS_MEMORY | MAP_ANONYMOUS_, -1, 0));
   unassert(!pthread_condattr_init(&cattr));
   unassert(!pthread_mutexattr_init(&mattr));
-#if CAN_PSHARE
+#ifdef HAVE_PTHREAD_PROCESS_SHARED
   unassert(!pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED));
   unassert(!pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
 #endif

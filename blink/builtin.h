@@ -241,14 +241,6 @@
 #define CAN_64BIT 0
 #endif
 
-// Whether or not POSIX threads synchronization primitives can be shared
-// across multiple processes.
-#if defined(__CYGWIN__) || defined(__OpenBSD__)
-#define CAN_PSHARE 0
-#else
-#define CAN_PSHARE 1
-#endif
-
 #if !defined(__SANITIZE_UNDEFINED__) && defined(UBSAN)
 #define __SANITIZE_UNDEFINED__
 #endif

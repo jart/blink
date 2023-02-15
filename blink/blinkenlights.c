@@ -3597,7 +3597,6 @@ static void Tui(void) {
         PrintMessageBox(ttyout, dialog, tyn, txn);
       }
       if (action & MODAL) {
-        LOGF("TUI MODAL");
         PrintMessageBox(ttyout, systemfailure, tyn, txn);
         ReadKeyboard();
         if (action & INT) {

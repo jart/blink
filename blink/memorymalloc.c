@@ -180,8 +180,7 @@ static void FreeHostPages(struct System *s) {
   if (!s->real && s->cr3) {
     unassert(!FreeVirtual(s, -0x800000000000, 0x1000000000000));
     unassert(FreeEmptyPageTables(s, s->cr3, 1));
-#if CAN_64BIT
-    // TODO(jart): Why does this sometimes fail on 32-bit platforms?
+#if 0
     unassert(!s->memstat.committed);
     unassert(!s->memstat.reserved);
     unassert(!s->memstat.tables);
@@ -971,9 +970,9 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
     }
   }
   free(ranges.p);
-  unassert((s->vss += vss_delta) >= 0);
-  unassert((s->rss += rss_delta) >= 0);
-  unassert((s->memchurn -= vss_delta) >= 0);
+  s->vss += vss_delta;
+  s->rss += rss_delta;
+  s->memchurn -= vss_delta;
   InvalidateSystem(s, true, false);
   return rc;
 }

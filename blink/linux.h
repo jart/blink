@@ -337,12 +337,14 @@
 #define SOL_SOCKET_LINUX 1
 #define SOL_TCP_LINUX    6
 #define SOL_UDP_LINUX    17
+#define SOL_IPV6_LINUX   41
 
 #define IPPROTO_IP_LINUX     0
 #define IPPROTO_ICMP_LINUX   1
 #define IPPROTO_TCP_LINUX    6
 #define IPPROTO_UDP_LINUX    17
 #define IPPROTO_ICMPV6_LINUX 58
+#define IPPROTO_RAW_LINUX    255
 
 #define SA_NOCLDSTOP_LINUX 1
 #define SA_NOCLDWAIT_LINUX 2
@@ -676,6 +678,7 @@
 #define IP_RECVERR_LINUX           11
 #define IP_RECVTTL_LINUX           12
 #define IP_MTU_LINUX               14
+#define IPV6_RECVERR_LINUX         25
 #define TCP_NODELAY_LINUX          1
 #define TCP_MAXSEG_LINUX           2
 #define TCP_CORK_LINUX             3
