@@ -2,7 +2,6 @@
 
 [![Test Status](https://github.com/jart/blink/actions/workflows/build.yml/badge.svg)](https://github.com/jart/blink/actions/workflows/build.yml)
 [![Cygwin Test Status](https://github.com/jart/blink/actions/workflows/cygwin.yml/badge.svg)](https://github.com/jart/blink/actions/workflows/cygwin.yml)
-[![Emscripten Test Status](https://github.com/jart/blink/actions/workflows/emscripten.yml/badge.svg)](https://github.com/jart/blink/actions/workflows/emscripten.yml)
 # Blinkenlights
 
 This project contains two programs:
