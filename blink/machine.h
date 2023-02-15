@@ -223,6 +223,7 @@ struct System {
   i64 memchurn;
   i64 codestart;
   struct Dll *filemaps;
+  _Atomic(bool) killer;
   unsigned long codesize;
   struct MachineMemstat memstat;
   struct Dll *machines GUARDED_BY(machines_lock);

@@ -33,6 +33,7 @@
 #include "blink/map.h"
 #include "blink/pml4t.h"
 #include "blink/thread.h"
+#include "blink/timespec.h"
 #include "blink/types.h"
 #include "blink/util.h"
 #include "blink/x86.h"
@@ -293,6 +294,11 @@ void KillOtherThreads(struct System *s) {
 #ifdef HAVE_THREADS
   struct Dll *e;
   struct Machine *m;
+  struct timespec deadline;
+  if (atomic_exchange(&s->killer, true)) {
+    FreeMachine(g_machine);
+    pthread_exit(0);
+  }
   unassert(s == g_machine->system);
   unassert(!dll_is_empty(s->machines));
   while (!IsOrphan(g_machine)) {
@@ -302,9 +308,11 @@ void KillOtherThreads(struct System *s) {
         THR_LOGF("pid=%d tid=%d is killing tid %d", s->pid, g_machine->tid,
                  m->tid);
         atomic_store_explicit(&m->killed, true, memory_order_release);
+        pthread_kill(m->thread, SIGSYS);
       }
     }
-    unassert(!pthread_cond_wait(&s->machines_cond, &s->machines_lock));
+    deadline = AddTime(GetTime(), FromMilliseconds(kPollingMs));
+    pthread_cond_timedwait(&s->machines_cond, &s->machines_lock, &deadline);
     UNLOCK(&s->machines_lock);
   }
 #endif
