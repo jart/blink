@@ -35,6 +35,9 @@ if [ "$1" = "--help" ]; then
   echo "  --disable-x87"
   echo "    disables x87 fpu and long double support (shaves ~23kb)"
   echo
+  echo "  --disable-strace"
+  echo "    disables system call logging functionality (shaves ~12kb)"
+  echo
   echo "  --disable-threads"
   echo "    disables clone() and removes locks / barriers (shaves ~12kb)"
   echo
@@ -448,7 +451,6 @@ fi
 ( config pipe2 "checking for pipe2()... " uncomment "#define HAVE_PIPE2" ) &
 ( config wait4 "checking for wait4()... " uncomment "#define HAVE_WAIT4" ) &
 ( config sysctl "checking for sysctl()... " uncomment "#define HAVE_SYSCTL" ) &
-( config memccpy "checking for __int128... " uncomment "#define HAVE_INT128" ) &
 ( config sysinfo "checking for sysinfo()... " uncomment "#define HAVE_SYSINFO" ) &
 ( config wcwidth "checking for wcwidth()... " uncomment "#define HAVE_WCWIDTH" ) &
 ( config memccpy "checking for memccpy()... " uncomment "#define HAVE_MEMCCPY" ) &

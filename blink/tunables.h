@@ -26,9 +26,9 @@
 #define kDynExecAddr   0x41000000
 #endif
 
-#define kRealSize  (16 * 1024 * 1024)  // size of ram for real mode
-#define kStackSize (8 * 1024 * 1024)   // size of stack for user mode
-#define kMinBrk    (2 * 1024 * 1024)   // minimum user mode image address
+#define kRealSize     (16 * 1024 * 1024)  // size of ram for real mode
+#define kStackSize    (8 * 1024 * 1024)   // size of stack for user mode
+#define kNullPageSize (2 * 1024 * 1024)   // minimum user mode image address
 
 #define kMinBlinkFd   123       // fds owned by the vm start here
 #define kPollingMs    50        // busy loop for futex(), poll(), etc.
@@ -43,5 +43,8 @@
 #define kMaxAncillary 1000
 #define kMaxShebang   512
 #define kMaxSigDepth  8
+
+#define kStraceArgMax 256
+#define kStraceBufMax 32
 
 #endif /* BLINK_TUNABLES_H_ */

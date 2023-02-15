@@ -23,7 +23,6 @@
 
 #include "blink/assert.h"
 #include "blink/bitscan.h"
-#include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/linux.h"
 #include "blink/log.h"
@@ -31,6 +30,7 @@
 #include "blink/signal.h"
 #include "blink/syscall.h"
 #include "blink/thread.h"
+#include "blink/util.h"
 #include "blink/xlat.h"
 
 struct SignalFrame {

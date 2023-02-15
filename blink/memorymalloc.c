@@ -41,7 +41,6 @@
 struct Allocator {
   pthread_mutex_t_ lock;
   long count;
-  _Atomic(intptr_t) brk;
   struct HostPage *pages GUARDED_BY(lock);
 } g_allocator = {
     PTHREAD_MUTEX_INITIALIZER_,
@@ -75,17 +74,6 @@ static void FreeAnonymousPage(struct System *s, u8 *page) {
   UNLOCK(&g_allocator.lock);
 }
 
-static void CleanupAllocator(void) {
-  struct HostPage *h;
-  LOCK(&g_allocator.lock);
-  while ((h = g_allocator.pages)) {
-    g_allocator.pages = h->next;
-    FreeHostPage(h);
-  }
-  unassert(!g_allocator.count);
-  UNLOCK(&g_allocator.lock);
-}
-
 static size_t GetBigSize(size_t n) {
   unassert(n);
   long z = GetSystemPageSize();
@@ -106,40 +94,8 @@ void FreeBig(void *p, size_t n) {
 }
 
 void *AllocateBig(size_t n, int prot, int flags, int fd, off_t off) {
-  void *p;
-  static bool once;
-  if (!once) {
-    atexit(CleanupAllocator);
-    once = true;
-  }
-#if defined(__CYGWIN__) || defined(__EMSCRIPTEN__)
-  p = Mmap(0, n, prot, flags, fd, off, "big");
+  void *p = Mmap(0, n, prot, flags, fd, off, "big");
   return p != MAP_FAILED ? p : 0;
-#else
-  size_t m;
-  intptr_t brk;
-  if (!(brk = atomic_load_explicit(&g_allocator.brk, memory_order_relaxed))) {
-    // we're going to politely ask the kernel for addresses starting
-    // arbitrary megabytes past the end of our own executable's .bss
-    // section. we'll cross our fingers, and hope that gives us room
-    // away from a brk()-based libc malloc() function which may have
-    // already allocated memory in this space. the reason it matters
-    // is because the x86 and arm isas impose limits on displacement
-    atomic_compare_exchange_strong_explicit(
-        &g_allocator.brk, &brk, kPreciousStart, memory_order_relaxed,
-        memory_order_relaxed);
-  }
-  m = GetBigSize(n);
-  do {
-    brk = atomic_fetch_add_explicit(&g_allocator.brk, m, memory_order_relaxed);
-    if (brk + m > kPreciousEnd) {
-      enomem();
-      return 0;
-    }
-    p = Mmap((void *)brk, n, prot, flags | MAP_DEMAND, fd, off, "big");
-  } while (p == MAP_FAILED && errno == MAP_DENIED);
-  return p != MAP_FAILED ? p : 0;
-#endif
 }
 
 static void FreePageTable(struct System *s, u8 *page) {
@@ -212,11 +168,11 @@ void CleanseMemory(struct System *s, size_t size) {
   }
 }
 
-i64 GetMaxVss(struct System *s) {
+long GetMaxVss(struct System *s) {
   return MIN(kMaxVirtual, Read64(s->rlim[RLIMIT_AS_LINUX].cur)) / 4096;
 }
 
-i64 GetMaxRss(struct System *s) {
+long GetMaxRss(struct System *s) {
   return MIN(kMaxResident, Read64(s->rlim[RLIMIT_AS_LINUX].cur)) / 4096;
 }
 
@@ -624,7 +580,7 @@ static bool FreePage(struct System *s, i64 virt, u64 entry, u64 size,
     --s->memstat.reserved;
     return false;
   } else {
-    unassert((entry & PAGE_TA) < kRealSize);
+    unassert(!"impossible memory");
     return false;
   }
 }
@@ -890,10 +846,10 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                        (fd == -1 ? MAP_ANONYMOUS_ : 0);
             mug = AllocateBig(mugsize, prot, mugflags, fd, mugoff);
             if (!mug) {
-              ERRF("mmap(virt=%" PRIx64 ", brk=%" PRIxPTR
-                   " size=%ld, flags=%#x, fd=%d, offset=%#" PRIx64
+              ERRF("mmap(virt=%" PRIx64
+                   ", size=%ld, flags=%#x, fd=%d, offset=%#" PRIx64
                    ") crisis: %s",
-                   virt, g_allocator.brk, mugsize, mugflags, fd, (u64)mugoff,
+                   virt, mugsize, mugflags, fd, (u64)mugoff,
                    DescribeHostErrno(errno));
               PanicDueToMmap();
             }

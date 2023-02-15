@@ -37,7 +37,6 @@
 
 #include "blink/builtin.h"
 #include "blink/case.h"
-#include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/linux.h"
@@ -45,6 +44,7 @@
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/sigwinch.h"
+#include "blink/util.h"
 #include "blink/xlat.h"
 
 #if defined(__APPLE__) || defined(__NetBSD__)

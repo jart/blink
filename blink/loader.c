@@ -626,7 +626,7 @@ error: unsupported executable; we need:\n\
   ResetCpu(m);
   m->system->codesize = 0;
   m->system->codestart = 0;
-  m->system->brk = kMinBrk;
+  m->system->brk = kNullPageSize;
   if (m->mode == XED_MODE_REAL) {
     BootProgram(m, elf, elf->mapsize);
   } else {

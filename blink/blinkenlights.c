@@ -20,6 +20,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
+#include <locale.h>
 #include <poll.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -3869,6 +3870,7 @@ int main(int argc, char *argv[]) {
   int rc;
   struct System *s;
   static struct sigaction sa;
+  setlocale(LC_ALL, "");
   g_exitdontabort = true;
   SetupWeb();
   // Ensure utf-8 is printed correctly on windows, this method

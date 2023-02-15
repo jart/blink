@@ -68,7 +68,7 @@
 #define PAGE_MUG  0x0020000000000000  // each 4096 byte page is a system page
 #define PAGE_FILE 0x0040000000000000
 #define PAGE_XD   0x8000000000000000
-#define PAGE_TA   0x00007ffffffff000
+#define PAGE_TA   0x0000fffffffff000  // extended by one bit for raspberry pi
 
 #define P                struct Machine *m, u64 rde, i64 disp, u64 uimm0
 #define A                m, rde, disp, uimm0
@@ -217,8 +217,8 @@ struct System {
   u64 cr3;
   u64 cr4;
   i64 brk;
-  i64 rss;
-  i64 vss;
+  long rss;
+  long vss;
   i64 automap;
   i64 memchurn;
   i64 codestart;
@@ -455,8 +455,8 @@ int GetProtection(u64);
 u64 SetProtection(int);
 int ClassifyOp(u64) pureconst;
 void Terminate(P, void (*)(struct Machine *, u64));
-i64 GetMaxRss(struct System *);
-i64 GetMaxVss(struct System *);
+long GetMaxRss(struct System *);
+long GetMaxVss(struct System *);
 
 void CountOp(long *);
 void FastPush(struct Machine *, long);

@@ -70,12 +70,12 @@
 #define __builtin___clear_cache(x, y) (void)0
 #endif
 
-#ifndef pureconst
-#ifndef __STRICT_ANSI__
-#define pureconst __attribute__((__const__))
-#else
-#define pureconst
+#ifndef thatispacked
+#define thatispacked __attribute__((__packed__))
 #endif
+
+#ifndef pureconst
+#define pureconst __attribute__((__const__))
 #endif
 
 #ifndef dontinline
@@ -207,8 +207,7 @@
 #endif
 
 #ifndef dontdiscard
-#if !defined(__STRICT_ANSI__) &&                           \
-    ((__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 304 || \
+#if ((__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 304 || \
      __has_attribute(__warn_unused_result__))
 #define dontdiscard __attribute__((__warn_unused_result__))
 #else
@@ -239,6 +238,11 @@
 #define CAN_64BIT 1
 #else
 #define CAN_64BIT 0
+#endif
+
+#if CAN_64BIT && \
+    ((__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 406 || defined(__llvm__))
+#define HAVE_INT128
 #endif
 
 #if !defined(__SANITIZE_UNDEFINED__) && defined(UBSAN)

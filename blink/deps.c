@@ -50,7 +50,8 @@ static int CrawlFlags(struct Machine *m,  //
     pc += Oplength(m->xedd->op.rde);
     deps = GetFlagDeps(m->xedd->op.rde);
     if (deps) {
-      WriteCod("/\top at %" PRIx64 " needs %s\n", place, DescribeFlags(deps));
+      WriteCod("/\top at %" PRIx64 " needs %s\n", place,
+               DescribeCpuFlags(deps));
     }
     need |= deps & myflags;
     if (!(myflags &= ~GetFlagClobbers(m->xedd->op.rde))) {
@@ -73,7 +74,7 @@ static int CrawlFlags(struct Machine *m,  //
 // returns bitset of flags read by code at pc, or -1 if unknown
 int GetNeededFlags(struct Machine *m, i64 pc, int myflags) {
   int rc = CrawlFlags(m, pc, myflags, 32, 0);
-  WriteCod("/\t%" PRIx64 " needs flags %s\n", pc, DescribeFlags(rc));
+  WriteCod("/\t%" PRIx64 " needs flags %s\n", pc, DescribeCpuFlags(rc));
   return rc;
 }
 

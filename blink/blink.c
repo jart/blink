@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <locale.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -263,6 +264,7 @@ void exit(int status) {
 
 int main(int argc, char *argv[]) {
   SetupWeb();
+  setlocale(LC_ALL, "");
   // Ensure utf-8 is printed correctly on windows, this method
   // has issues(http://stackoverflow.com/a/10884364/4279) but
   // should work for at least windows 7 and newer.

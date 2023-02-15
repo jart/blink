@@ -20,6 +20,8 @@ char *ExpandUser(const char *);
 int GetOpt(int, char *const[], const char *);
 u64 tpenc(wint_t);
 bool mulo(u64, u64, u64 *);
+const char *DescribeSignal(int);
+const char *DescribeHostErrno(int);
 bool endswith(const char *, const char *);
 bool startswith(const char *, const char *);
 const char *doublenul(const char *, unsigned);

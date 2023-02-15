@@ -398,7 +398,10 @@ void *SchlepRW(struct Machine *m, i64 addr, size_t size) {
   return Schlep(m, addr, size, PAGE_U | PAGE_RW, PAGE_U | PAGE_RW);
 }
 
-static char *LoadStrImpl(struct Machine *m, i64 addr) {
+// Returns pointer to string in guest memory. If the string overlaps a
+// page boundary, then it's copied, and the temporary memory is pushed
+// to the free list. Returns NULL w/ EFAULT or ENOMEM on error.
+char *LoadStr(struct Machine *m, i64 addr) {
   size_t have;
   char *copy, *page, *p;
   have = 4096 - (addr & 4095);
@@ -422,17 +425,6 @@ static char *LoadStrImpl(struct Machine *m, i64 addr) {
   }
   free(copy);
   return 0;
-}
-
-// Returns pointer to string in guest memory. If the string overlaps a
-// page boundary, then it's copied, and the temporary memory is pushed
-// to the free list. Returns NULL w/ EFAULT or ENOMEM on error.
-char *LoadStr(struct Machine *m, i64 addr) {
-  char *res;
-  if ((res = LoadStrImpl(m, addr))) {
-    SYS_LOGF("LoadStr(%#" PRIx64 ") -> \"%s\"", addr, res);
-  }
-  return res;
 }
 
 // Copies string from guest memory. The returned memory is pushed to the

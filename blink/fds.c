@@ -61,6 +61,7 @@ struct Fd *ForkFd(struct Fds *fds, struct Fd *fd, int fildes, int oflags) {
   struct Fd *fd2;
   if ((fd2 = AddFd(fds, fildes, oflags))) {
     if (fd) {
+      fd2->path = fd->path ? strdup(fd->path) : 0;
       fd2->socktype = fd->socktype;
       fd2->norestart = fd->norestart;
       memcpy(&fd2->saddr, &fd->saddr, sizeof(fd->saddr));
