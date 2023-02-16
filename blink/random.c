@@ -128,7 +128,6 @@ ssize_t GetRandom(void *p, size_t n, int flags) {
 #elif defined(HAVE_DEV_URANDOM)
   return GetDevRandom((char *)p, n);
 #else
-  GetWeakRandom((char *)p, n);
-  return enosys();
+  return GetWeakRandom((char *)p, n);
 #endif
 }

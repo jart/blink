@@ -488,9 +488,9 @@ export CC="gcc -Wl,-z,common-page-size=65536,-z,max-page-size=65536"
 make menuconfig
 make
 cp -R output/target ~/blinkroot
-sudo mount -t devtmpfs none ~/blinkroot/dev
-sudo mount -t sysfs none ~/blinkroot/sys
-sudo mount -t proc none ~/blinkroot/proc
+doas mount -t devtmpfs none ~/blinkroot/dev
+doas mount -t sysfs none ~/blinkroot/sys
+doas mount -t proc none ~/blinkroot/proc
 cd ~/blink
 make -j8
 export BLINK_OVERLAYS=$HOME/blinkroot
@@ -557,19 +557,16 @@ like the following:
 
 ```sh
 #!/bin/sh
-exec cc \
-  -g \
-  -Os \
-  -no-pie \
-  -fno-pie \
-  -static \
-  "$@" \
-  -U_FORTIFY_SOURCE \
-  -fno-stack-protector \
-  -fno-omit-frame-pointer \
-  -mno-omit-leaf-frame-pointer \
-  -Wl,-z,common-page-size=65536 \
-  -Wl,-z,max-page-size=65536
+set /usr/bin/gcc "$@" -g \
+    -fno-omit-frame-pointer \
+    -fno-optimize-sibling-calls \
+    -mno-omit-leaf-frame-pointer \
+    -Wl,-z,norelro \
+    -Wl,-z,noseparate-code \
+    -Wl,-z,max-page-size=65536 \
+    -Wl,-z,common-page-size=65536
+printf '%s\n' "$*" >>/tmp/gcc.log
+exec "$@"
 ```
 
 Those flags will go a long way towards helping your Linux binaries be

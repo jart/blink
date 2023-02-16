@@ -97,7 +97,7 @@ void *Mmap(void *addr,     //
   _Static_assert(!(MAP_ANONYMOUS_ & MAP_SHARED), "");
   _Static_assert(!(MAP_ANONYMOUS_ & MAP_PRIVATE), "");
   FILE *f;
-  if (flags & MAP_ANONYMOUS_) {
+  if (~flags & MAP_ANONYMOUS_) {
     res = mmap(addr, length, prot, flags, fd, offset);
   } else if ((f = tmpfile())) {
     if (!ftruncate(fileno(f), length)) {

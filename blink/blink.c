@@ -50,14 +50,14 @@
 #include "blink/xlat.h"
 
 #define VERSION \
-  "Blink Virtual Machine " kBlinkVersion " (" BUILD_TIMESTAMP ")\n\
+  "Blink Virtual Machine " BLINK_VERSION " (" BUILD_TIMESTAMP ")\n\
 Copyright (c) 2023 Justine Alexandra Roberts Tunney\n\
 Blink comes with absolutely NO WARRANTY of any kind.\n\
 You may redistribute copies of Blink under the ISC License.\n\
 For more information, see the file named LICENSE.\n\
 Toolchain: " BUILD_TOOLCHAIN "\n\
-Revision: " BUILD_GITSHA "\n\
-Config: ./configure MODE=" BUILD_MODE " " BUILD_CONFIGURATION "\n"
+Revision: #" BLINK_COMMITS " " BLINK_GITSHA "\n\
+Config: ./configure MODE=" BUILD_MODE " " CONFIG_ARGUMENTS "\n"
 
 #define OPTS "hvjemZs0L:C:"
 

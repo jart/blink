@@ -45,6 +45,7 @@
 #define I32_FAMILY     "\020"
 #define I32_SOCKTYPE   "\021"
 #define I32_SOCKFLAGS  "\022"
+#define I32_SIGHOW     "\023"
 #define I64            "\100"
 #define I64_HEX        "\101"
 #define I_BUF          "\200"
@@ -90,6 +91,7 @@
 #define WAITFLAGS  I32_WAITFLAGS
 #define SOCKFLAGS  I32_SOCKFLAGS
 #define CLONEFLAGS I32_CLONEFLAGS
+#define SIGHOW     I32_SIGHOW
 #define SIZE       I64_HEX
 #define SSIZE      I64
 #define OFF        I64_HEX
@@ -115,9 +117,10 @@
 #define STRACE_OPENAT       I32    DIRFD      STR        OFLAGS    MODE      UN       UN
 #define STRACE_CREAT        I32    PATH       MODE       UN        UN        UN       UN
 #define STRACE_CLOSE        RC0    FD         UN         UN        UN        UN       UN
-#define STRACE_STAT         RC0    PATH       STAT       UN        UN        UN       UN
-#define STRACE_FSTAT        RC0    FD         STAT       UN        UN        UN       UN
-#define STRACE_LSTAT        RC0    PATH       STAT       UN        UN        UN       UN
+#define STRACE_STAT         RC0    PATH       O_STAT     UN        UN        UN       UN
+#define STRACE_FSTAT        RC0    FD         O_STAT     UN        UN        UN       UN
+#define STRACE_LSTAT        RC0    PATH       O_STAT     UN        UN        UN       UN
+#define STRACE_FSTATAT      RC0    DIRFD      PATH       O_STAT    ATFLAGS   UN       UN
 #define STRACE_POLL         I32    IO_POLL    I32        UN        UN        UN       UN
 #define STRACE_PPOLL        RC0    IO_POLL    IO_TIME    I_SIGSET  SSIZE     UN       UN
 #define STRACE_LSEEK        OFF    FD         OFF        WHENCE    UN        UN       UN
@@ -137,8 +140,9 @@
 #define STRACE_MPROTECT     RC0    PTR        SIZE       PROT      UN        UN       UN
 #define STRACE_MUNMAP       RC0    PTR        SIZE       UN        UN        UN       UN
 #define STRACE_SIGACTION    RC0    SIG        I_HAND     O_HAND    SSIZE     UN       UN
-#define STRACE_SIGPROCMASK  RC0    SIG        I_SIGSET   O_SIGSET  SSIZE     UN       UN
+#define STRACE_SIGPROCMASK  RC0    SIGHOW     I_SIGSET   O_SIGSET  SSIZE     UN       UN
 #define STRACE_CLOCK_SLEEP  RC0    CLOCK      I32        I_TIME    O_TIME    UN       UN
+#define STRACE_SIGSUSPEND   RC0    I_SIGSET   SSIZE      UN        UN        UN       UN
 #define STRACE_NANOSLEEP    RC0    I_TIME     O_TIME     UN        UN        UN       UN
 #define STRACE_IOCTL        I32    FD         WAT_IOCTL  UN        UN        UN       UN
 #define STRACE_PREAD        SSIZE  FD         O_BUF      BUFSZ     OFF       UN       UN
@@ -190,10 +194,15 @@
 #define STRACE_GETEGID      GID    UN         UN         UN        UN        UN       UN
 #define STRACE_SETSID       PID    UN         UN         UN        UN        UN       UN
 #define STRACE_GETPGRP      PID    UN         UN         UN        UN        UN       UN
-#define STRACE_SETUID       RC0    GID        UN         UN        UN        UN       UN
+#define STRACE_SETUID       RC0    UID        UN         UN        UN        UN       UN
 #define STRACE_SETGID       RC0    GID        UN         UN        UN        UN       UN
+#define STRACE_SETREUID     RC0    UID        UID        UN        UN        UN       UN
+#define STRACE_SETREGID     RC0    GID        GID        UN        UN        UN       UN
+#define STRACE_SETRESUID    RC0    UID        UID        UID       UN        UN       UN
+#define STRACE_SETRESGID    RC0    GID        GID        GID       UN        UN       UN
 #define STRACE_UMASK        MODE   MODE       UN         UN        UN        UN       UN
 #define STRACE_CHDIR        RC0    PATH       UN         UN        UN        UN       UN
+#define STRACE_CHROOT       RC0    PATH       UN         UN        UN        UN       UN
 #define STRACE_FCHDIR       RC0    FD         UN         UN        UN        UN       UN
 #define STRACE_CLONE        PID    CLONEFLAGS PTR        PTR       PTR       PTR      PTR
 #define STRACE_SOCKET       I32    FAMILY     SOCKTYPE   I32       UN        UN       UN

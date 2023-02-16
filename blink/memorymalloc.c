@@ -248,6 +248,7 @@ bool IsOrphan(struct Machine *m) {
 
 void KillOtherThreads(struct System *s) {
 #ifdef HAVE_THREADS
+  int r, t;
   struct Dll *e;
   struct Machine *m;
   struct timespec deadline;
@@ -257,18 +258,24 @@ void KillOtherThreads(struct System *s) {
   }
   unassert(s == g_machine->system);
   unassert(!dll_is_empty(s->machines));
-  while (!IsOrphan(g_machine)) {
+  for (t = 0; !IsOrphan(g_machine); ++t) {
     LOCK(&s->machines_lock);
     for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
       if ((m = MACHINE_CONTAINER(e)) != g_machine) {
         THR_LOGF("pid=%d tid=%d is killing tid %d", s->pid, g_machine->tid,
                  m->tid);
         atomic_store_explicit(&m->killed, true, memory_order_release);
-        pthread_kill(m->thread, SIGSYS);
+        if (t < 10) {
+          pthread_kill(m->thread, SIGSYS);
+        } else {
+          LOGF("kill9'd thread after 10 tries");
+          pthread_kill(m->thread, SIGKILL);
+        }
       }
     }
     deadline = AddTime(GetTime(), FromMilliseconds(kPollingMs));
-    pthread_cond_timedwait(&s->machines_cond, &s->machines_lock, &deadline);
+    r = pthread_cond_timedwait(&s->machines_cond, &s->machines_lock, &deadline);
+    unassert(r == 0 || r == ETIMEDOUT);
     UNLOCK(&s->machines_lock);
   }
 #endif

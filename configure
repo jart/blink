@@ -2,10 +2,14 @@
 # Blinkenlights Configuration Script
 # Run ./configure --help for usage
 
+CONFIG_COMMAND="$0 $*"
+
+# Evaluate FOO=bar environment variables passed as arguments (carefully
+# ignoring --foo=bar flags) and then remove MODE=foo from the arguments
 cleared=
 for x; do
   test "$cleared" || set -- ; cleared=1
-  if [ "${x%%=*}" != "$x" ]; then
+  if [ "${x%%=*}" != "$x" ] && [ "${x#--}" = "$x" ]; then
     eval "$x"
   fi
   if [ "${x%%=*}" != "MODE" ]; then
@@ -15,6 +19,7 @@ done
 
 CC="${CC:-cc}"
 AR="${AR:-ar}"
+PREFIX="/usr/local"
 MODE="${MODE:-${m}}"
 TMPDIR="${TMPDIR:-o/tmp}"
 CFLAGS="${CFLAGS:--g -O2}"
@@ -44,6 +49,9 @@ if [ "$1" = "--help" ]; then
   echo
   echo "  --static"
   echo "    compile blink as a statically-linked binary"
+  echo
+  echo "  --prefix=PATH"
+  echo "    configures system install path (defaults to /usr/local)"
   echo
   echo "  --disable-jit"
   echo "    forces jit compilation to be disabled (shaves ~26kb off MODE=tiny)"
@@ -177,7 +185,7 @@ elif [ -x o/tool/flock ]; then
 else
   echo no >&2
   printf "building tool/flock.c... " >&2
-  f=$(mktemp flock.XXXXXX)
+  f=$(mktemp "${TMPDIR}/flock.XXXXXX")
   if ${CC} -o "${f}" tool/flock.c; then
     echo ok >&2
     mv -f "${f}" o/tool/flock || exit
@@ -233,7 +241,7 @@ config() {
   fi
   MESSAGE="$2"
   shift 2
-  LOG=$(mktemp blink-config.log.XXXXXX)
+  LOG=$(mktemp "${TMPDIR}/blink-config.log.XXXXXX")
   exec 6<>"${LOG}"
   echo >&6
   echo ======================================================================== >&6
@@ -290,15 +298,21 @@ uncomment() {
 }
 
 for x; do
-  if [ "${x%=*}" != "$x" ]; then
+  if [ "${x%=*}" != "$x" ] && [ "${x#--}" = "$x" ]; then
     continue
   fi
 
   if [ "$x" = "--disable-all" ]; then
     uncomment "#define DISABLE"
+    DISABLE_NONPOSIX=1
     DISABLE_THREADS=1
+    DISABLE_SOCKETS=1
     DISABLE_FORK=1
+    DISABLE_X87=1
     DISABLE_JIT=1
+
+  elif [ "${x%%=*}" = "--prefix" ]; then
+    PREFIX="${x#*=}"
 
   elif [ "$x" = "--static" ]; then
     STATIC=1
@@ -317,8 +331,10 @@ for x; do
 
   elif [ "$x" = "--enable-x87" ]; then
     comment "#define DISABLE_X87"
+    unset DISABLE_X87
   elif [ "$x" = "--disable-x87" ]; then
     uncomment "#define DISABLE_X87"
+    DISABLE_X87=1
 
   elif [ "$x" = "--enable-mmx" ]; then
     comment "#define DISABLE_MMX"
@@ -344,8 +360,10 @@ for x; do
 
   elif [ "$x" = "--enable-sockets" ]; then
     comment "#define DISABLE_SOCKETS"
+    unset DISABLE_SOCKETS
   elif [ "$x" = "--disable-sockets" ]; then
     uncomment "#define DISABLE_SOCKETS"
+    DISABLE_SOCKETS=1
 
   elif [ "$x" = "--enable-overlays" ]; then
     comment "#define DISABLE_OVERLAYS"
@@ -369,8 +387,10 @@ for x; do
 
   elif [ "$x" = "--enable-nonposix" ]; then
     comment "#define DISABLE_NONPOSIX"
+    unset DISABLE_NONPOSIX
   elif [ "$x" = "--disable-nonposix" ]; then
     uncomment "#define DISABLE_NONPOSIX"
+    DISABLE_NONPOSIX=1
 
   elif [ "$x" = "--enable-bcd" ]; then
     comment "#define DISABLE_BCD"
@@ -540,51 +560,69 @@ else
 fi
 
 if [ -z "${POSIX}" ]; then
-  ( config sys_getrandom "checking for syscall(SYS_getrandom)... " uncomment "#define HAVE_SYS_GETRANDOM" ) &
+  ( config dup3 "checking for dup3()... " uncomment "#define HAVE_DUP3" ) &
+  ( config pipe2 "checking for pipe2()... " uncomment "#define HAVE_PIPE2" ) &
   ( config getrandom "checking for getrandom()... " uncomment "#define HAVE_GETRANDOM" ) &
+  ( config getentropy "checking for getentropy() in unistd.h... " uncomment "#define HAVE_GETENTROPY" ) &
+  ( config dev_urandom "checking for /dev/urandom... " uncomment "#define HAVE_DEV_URANDOM" ) &
+  ( config rtlgenrandom "checking for RtlGenRandom()... " uncomment "#define HAVE_RTLGENRANDOM" ) &
+  ( config sys_getrandom "checking for syscall(SYS_getrandom)... " uncomment "#define HAVE_SYS_GETRANDOM" ) &
+  ( config sys_getentropy "checking for getentropy() in sys/random.h... " uncomment "#define HAVE_SYS_GETENTROPY" ) &
+  ( config getdomainname "checking for getdomainname()... " uncomment "#define HAVE_GETDOMAINNAME" ) &
+  ( config kern_arnd "checking for sysctl(KERN_ARND)... " uncomment "#define HAVE_KERN_ARND" ) &
+  ( config siocgifconf "checking for SIOCGIFCONF... " uncomment "#define HAVE_SIOCGIFCONF" ) &
+  ( config map_anonymous "checking for mmap(MAP_ANONYMOUS)... " uncomment "#define HAVE_MAP_ANONYMOUS" ) &
+  ( config sched_getaffinity "checking for sched_getaffinity()... " uncomment "#define HAVE_SCHED_GETAFFINITY" ) &
+  ( config scm_credentials "checking for SCM_CREDENTIALS... " uncomment "#define HAVE_SCM_CREDENTIALS" ) &
+  ( config f_getown_ex "checking for F_GETOWN_EX... " uncomment "#define HAVE_F_GETOWN_EX" ) &
+  ( config setgroups "checking for setgroups()... " uncomment "#define HAVE_SETGROUPS" ) &
+  ( config vasprintf "checking for vasprintf()... " uncomment "#define HAVE_VASPRINTF" ) &
+  ( config strchrnul "checking for strchrnul()... " uncomment "#define HAVE_STRCHRNUL" ) &
+  ( config mkfifoat "checking for mkfifoat()... " uncomment "#define HAVE_MKFIFOAT" ) &
+  ( config preadv "checking for preadv() and pwritev()... " uncomment "#define HAVE_PREADV" ) &
+  ( config wait4 "checking for wait4()... " uncomment "#define HAVE_WAIT4" ) &
+  ( config setresuid "checking for setresuid()... " uncomment "#define HAVE_SETRESUID" ) &
 fi
 
 ( config sync "checking for sync()... " uncomment "#define HAVE_SYNC" ) &
-( config dup3 "checking for dup3()... " uncomment "#define HAVE_DUP3" ) &
-( config pipe2 "checking for pipe2()... " uncomment "#define HAVE_PIPE2" ) &
-( config wait4 "checking for wait4()... " uncomment "#define HAVE_WAIT4" ) &
 ( config sysctl "checking for sysctl()... " uncomment "#define HAVE_SYSCTL" ) &
 ( config sysinfo "checking for sysinfo()... " uncomment "#define HAVE_SYSINFO" ) &
 ( config wcwidth "checking for wcwidth()... " uncomment "#define HAVE_WCWIDTH" ) &
 ( config memccpy "checking for memccpy()... " uncomment "#define HAVE_MEMCCPY" ) &
 ( config seekdir "checking for seekdir()... " uncomment "#define HAVE_SEEKDIR" ) &
 ( config realpath "checking for realpath()... " uncomment "#define HAVE_REALPATH" ) &
-( config mkfifoat "checking for mkfifoat()... " uncomment "#define HAVE_MKFIFOAT" ) &
 ( config setreuid "checking for setreuid()... " uncomment "#define HAVE_SETREUID" ) &
-( config strchrnul "checking for strchrnul()... " uncomment "#define HAVE_STRCHRNUL" ) &
-( config vasprintf "checking for vasprintf()... " uncomment "#define HAVE_VASPRINTF" ) &
-( config setresuid "checking for setresuid()... " uncomment "#define HAVE_SETRESUID" ) &
-( config setgroups "checking for setgroups()... " uncomment "#define HAVE_SETGROUPS" ) &
-( config f_getown_ex "checking for F_GETOWN_EX... " uncomment "#define HAVE_F_GETOWN_EX" ) &
-( config siocgifconf "checking for SIOCGIFCONF... " uncomment "#define HAVE_SIOCGIFCONF" ) &
-( config dev_urandom "checking for /dev/urandom... " uncomment "#define HAVE_DEV_URANDOM" ) &
 ( config sendto_zero "checking for sendto(0.0.0.0)... " uncomment "#define HAVE_SENDTO_ZERO" ) &
-( config rtlgenrandom "checking for RtlGenRandom()... " uncomment "#define HAVE_RTLGENRANDOM" ) &
-( config getdomainname "checking for getdomainname()... " uncomment "#define HAVE_GETDOMAINNAME" ) &
 ( config struct_timezone "checking for struct timezone... " uncomment "#define HAVE_STRUCT_TIMEZONE" ) &
-( config scm_credentials "checking for SCM_CREDENTIALS... " uncomment "#define HAVE_SCM_CREDENTIALS" ) &
 ( config sa_len "checking for sockaddr::sa_len... " uncomment "#define HAVE_SA_LEN" ) &
-( config kern_arnd "checking for sysctl(KERN_ARND)... " uncomment "#define HAVE_KERN_ARND" ) &
 ( config map_shared "checking for mmap(MAP_SHARED)... " uncomment "#define HAVE_MAP_SHARED" ) &
-( config map_anonymous "checking for mmap(MAP_ANONYMOUS)... " uncomment "#define HAVE_MAP_ANONYMOUS" ) &
-( config sched_getaffinity "checking for sched_getaffinity()... " uncomment "#define HAVE_SCHED_GETAFFINITY" ) &
 ( config sched_yield "checking for sched_yield()... " uncomment "#define HAVE_SCHED_YIELD" ) &
 ( config sched_h "checking for sched.h... " uncomment "#define HAVE_SCHED_H" ) &
-( config preadv "checking for preadv() and pwritev()... " uncomment "#define HAVE_PREADV" ) &
-( config getentropy "checking for getentropy() in unistd.h... " uncomment "#define HAVE_GETENTROPY" ) &
-( config sys_getentropy "checking for getentropy() in sys/random.h... " uncomment "#define HAVE_SYS_GETENTROPY" ) &
 ( config pthread_process_shared "checking for PTHREAD_PROCESS_SHARED... " uncomment "#define HAVE_PTHREAD_PROCESS_SHARED" ) &
 
 wait
 rm -f "${LOCK}"
 
+BLINK_UNAME_V=
+if test "${DISABLE_NONPOSIX}"; then
+  BLINK_UNAME_V="${BLINK_UNAME_V} POSIX"
+fi
+if test "${DISABLE_JIT}" || test -z "${JIT_POSSIBLE}"; then
+  BLINK_UNAME_V="${BLINK_UNAME_V} NOJIT"
+fi
+if test "${DISABLE_SOCKETS}"; then
+  BLINK_UNAME_V="${BLINK_UNAME_V} NOSOCK"
+fi
+if test -z "${BLINK_UNAME_V}"; then
+  if test -z "$*"; then
+    BLINK_UNAME_V="${BLINK_UNAME_V:-DEFAULT}"
+  else
+    BLINK_UNAME_V="${BLINK_UNAME_V:-CUSTOM}"
+  fi
+fi
+
 for x; do
-  if [ "${x%=*}" != "$x" ]; then
+  if [ "${x%=*}" != "$x" ] && [ "${x#--}" = "$x" ]; then
     printf '%s\n' "$x" >>"${BUILD}"
   fi
 done
@@ -594,8 +632,9 @@ CC = ${CC}
 AR = ${AR}
 MODE ?= ${MODE}
 TMPDIR = ${TMPDIR}
+PREFIX = ${PREFIX}
 CFLAGS = ${CFLAGS}
-CPPFLAGS = ${CPPFLAGS} -DBUILD_CONFIGURATION="\"$*\""
+CPPFLAGS = ${CPPFLAGS}
 UOPFLAGS = ${UOPFLAGS}
 TARGET_ARCH = ${TARGET_ARCH}
 LDFLAGS = ${LDFLAGS}
@@ -603,9 +642,10 @@ LDLIBS = ${LDLIBS}
 HOST_OS = ${HOST_OS}
 HOST_ARCH = ${HOST_ARCH}
 HOST_SYSTEM = ${HOST_SYSTEM}
-BUILD_TOOLCHAIN := -DBUILD_TOOLCHAIN="\"$(${CC} --version | head -n1)\""
-BUILD_TIMESTAMP := -DBUILD_TIMESTAMP="\"$(TZ=UTC date +%Y-%m-%dT%H:%M:%SZ)\""
-BUILD_GITSHA := -DBUILD_GITSHA="\"$(git rev-parse --verify HEAD)\""
+CONFIG_HOSTNAME = $(hostname)
+CONFIG_COMMAND = ${CONFIG_COMMAND}
+CONFIG_ARGUMENTS = -DCONFIG_ARGUMENTS="\"$*\""
+BLINK_UNAME_V = -DBLINK_UNAME_V="\"$(echo ${BLINK_UNAME_V})\""
 EOF
 
 echo "creating config.log" >&2

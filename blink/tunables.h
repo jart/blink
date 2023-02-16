@@ -2,7 +2,18 @@
 #define BLINK_TUNABLES_H_
 #include "blink/builtin.h"
 
-#define kBlinkVersion "0.9.0"
+#define BLINK_MAJOR 0
+#define BLINK_MINOR 9
+#define BLINK_PATCH 0
+
+#define LINUX_MAJOR 4
+#define LINUX_MINOR 5
+#define LINUX_PATCH 0
+
+#define MKVERSION_(x, y, z) #x "." #y "." #z
+#define MKVERSION(x, y, z)  MKVERSION_(x, y, z)
+#define LINUX_VERSION       MKVERSION(LINUX_MAJOR, LINUX_MINOR, LINUX_PATCH)
+#define BLINK_VERSION       MKVERSION(BLINK_MAJOR, BLINK_MINOR, BLINK_PATCH)
 
 #if CAN_64BIT
 #ifdef __APPLE__

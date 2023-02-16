@@ -80,6 +80,16 @@
 #include "blink/xlat.h"
 #include "blink/xmmtype.h"
 
+#define VERSION \
+  "Blinkenlights " BLINK_VERSION " (" BUILD_TIMESTAMP ")\n\
+Copyright (c) 2023 Justine Alexandra Roberts Tunney\n\
+Blinkenlights comes with absolutely NO WARRANTY of any kind.\n\
+You may redistribute copies of Blinkenlights under the ISC License.\n\
+For more information, see the file named LICENSE.\n\
+Toolchain: " BUILD_TOOLCHAIN "\n\
+Revision: #" BLINK_COMMITS " " BLINK_GITSHA "\n\
+Config: ./configure MODE=" BUILD_MODE " " CONFIG_ARGUMENTS "\n"
+
 #define USAGE \
   " [-?HhrRsZtv] [ROM] [ARGS...]\n\
 \n\
@@ -91,7 +101,7 @@ FLAGS\n\
 \n\
   -h        help\n\
   -z        zoom\n\
-  -v        verbosity\n\
+  -v        version\n\
   -r        real mode (i8086)\n\
   -s        system call trace\n\
   -H        disable highlight\n\
@@ -115,7 +125,7 @@ FEATURES\n\
 \n"
 
 #define HELP \
-  "\033[1mBlinkenlights v2.o\033[22m\
+  "\033[1mBlinkenlights " BLINK_VERSION "\033[22m\
                 https://github.com/jart/blink/\n\
 \n\
 KEYBOARD SHORTCUTS                CLI FLAGS\n\
@@ -128,7 +138,7 @@ C       continue harder           -w ADDR  push watchpoint\n\
 q       quit                      -L PATH  log file location\n\
 f       finish                    -R       deliver crash sigs\n\
 R       restart                   -H       disable highlighting\n\
-x       hex                       -v       increase verbosity\n\
+x       hex                       -v       blinkenlights version\n\
 ?       help                      -j       enables jit\n\
 t       sse type                  -m       disables memory safety\n\
 w       sse width                 -N       natural scroll wheel\n\
@@ -3694,6 +3704,11 @@ static void Tui(void) {
   TuiCleanup();
 }
 
+_Noreturn static void PrintVersion(void) {
+  fputs(VERSION, stdout);
+  exit(0);
+}
+
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   bool wantunsafe = false;
@@ -3702,7 +3717,7 @@ static void GetOpts(int argc, char *argv[]) {
   FLAG_overlays = getenv("BLINK_OVERLAYS");
   if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
 #endif
-  while ((opt = GetOpt(argc, argv, "hjmvtrzRNsZb:Hw:L:C:")) != -1) {
+  while ((opt = GetOpt(argc, argv, "hjmvVtrzRNsZb:Hw:L:C:")) != -1) {
     switch (opt) {
       case 'j':
         wantjit = true;
@@ -3745,6 +3760,9 @@ static void GetOpts(int argc, char *argv[]) {
         memset(&g_high, 0, sizeof(g_high));
         break;
       case 'v':
+        PrintVersion();
+        break;
+      case 'V':
         ++verbose;
         break;
       case 'L':

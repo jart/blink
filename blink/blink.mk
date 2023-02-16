@@ -8,6 +8,17 @@ BLINK_HDRS = $(filter %.h,$(BLINK_FILES))
 BLINK_SRCS = $(filter %.c,$(BLINK_FILES))
 BLINK_OBJS = $(BLINK_SRCS:%.c=o/$(MODE)/%.o)
 
+BLINK_NEED_BUILDINFO_SRCS =				\
+	blink/blink.c					\
+	blink/syscall.c					\
+	blink/blinkenlights.c
+
+BLINK_NEED_BUILDINFO_OBJS =				\
+	$(BLINK_NEED_BUILDINFO_SRCS:%.c=o/$(MODE)/%.o)	\
+	$(foreach ARCH,$(ARCHITECTURES),$(foreach SRC,$(BLINK_NEED_BUILDINFO_SRCS),$(SRC:%.c=o/$(MODE)/$(ARCH)/%.o)))
+
+$(BLINK_NEED_BUILDINFO_OBJS): private CPPFLAGS += $(CONFIG_CPPFLAGS)
+
 # micro-ops need to be compiled with the greatest of care
 o/$(MODE)/blink/uop.o: private CFLAGS += $(UOPFLAGS)
 

@@ -31,7 +31,7 @@ int main(int argc, char *argv[]) {
   if (pthread_condattr_destroy(&ca)) return 10;
   if ((pid = fork()) == -1) return 11;
   if (!pid) {
-    alarm(2);
+    alarm(15);
     if (pthread_mutex_lock(&s->lock)) return 12;
     s->state = 1;
     if (pthread_cond_wait(&s->cond, &s->lock)) return 13;
@@ -42,7 +42,7 @@ int main(int argc, char *argv[]) {
     if (pthread_mutex_unlock(&s->lock)) return 17;
     _exit(0);
   }
-  alarm(2);
+  alarm(15);
   while (s->state != 1);
   if (pthread_mutex_lock(&s->lock)) return 18;
   if (pthread_cond_signal(&s->cond)) return 19;

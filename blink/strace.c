@@ -160,6 +160,21 @@ static const struct DescribeFlags kSockFlags[] = {
 };
 #endif
 
+static const char *DescribeSigHow(int x) {
+  _Thread_local static char ibuf[21];
+  switch (x) {
+    case SIG_BLOCK_LINUX:
+      return "SIG_BLOCK";
+    case SIG_UNBLOCK_LINUX:
+      return "SIG_UNBLOCK";
+    case SIG_SETMASK_LINUX:
+      return "SIG_SETMASK";
+    default:
+      FormatInt64(ibuf, x);
+      return ibuf;
+  }
+}
+
 static const char *DescribeSocketFamily(int af) {
   _Thread_local static char ibuf[21];
   switch (af) {
@@ -442,6 +457,8 @@ void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
       } else {
         APPEND("%#" PRIx64, arg);
       }
+    } else if (c == I32_SIGHOW[0]) {
+      APPEND("%s", DescribeSigHow(arg));
 #ifndef DISABLE_SOCKETS
     } else if (c == I32_FAMILY[0]) {
       APPEND("%s", DescribeSocketFamily(arg));

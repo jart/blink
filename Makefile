@@ -13,8 +13,20 @@ ARCHITECTURES = x86_64 x86_64-gcc49 i486 aarch64 arm mips s390x mipsel mips64 mi
 ifeq ($(wildcard config.h),)
   $(error ./configure needs to be run, use ./configure --help for help)
 endif
-
 include config.mk
+CONFIG_COMMAND ?= ./configure
+ifneq ($(CONFIG_HOSTNAME), $(shell hostname))
+  undefine CC
+  undefine AR
+  undefine TMPDIR
+  undefine CFLAGS
+  undefine LDFLAGS
+  undefine UOPFLAGS
+  undefine CPPFLAGS
+  undefine TARGET_ARCH
+  $(shell $(CONFIG_COMMAND))
+  $(error please run $(MAKE) $(MAKEFLAGS) $(MAKECMDGOALS))
+endif
 
 ifneq ($(m),)
 ifeq ($(MODE),)
@@ -29,7 +41,9 @@ ifneq ($(HOST_ARCH), x86_64)
 VM = o/$(MODE)/blink/blink
 endif
 
-o:	o/$(MODE)/blink
+o:	o/ok
+o/ok:	o/$(MODE)/blink
+	touch $@
 	@echo ""
 	@echo "Your Blink Virtual Machine successfully compiled:"
 	@echo ""
@@ -39,7 +53,7 @@ o:	o/$(MODE)/blink
 	@echo "You may also want to run:"
 	@echo ""
 	@echo "  make check"
-	@echo "  sudo make install"
+	@echo "  doas make install"
 	@echo ""
 
 test:	o/$(MODE)/blink				\
@@ -85,7 +99,19 @@ include third_party/qemu/qemu.mk
 include third_party/cosmo/cosmo.mk
 include third_party/libc-test/libc-test.mk
 
-CPPFLAGS += $(BUILD_TOOLCHAIN) $(BUILD_TIMESTAMP) $(BUILD_GITSHA) -DBUILD_MODE="\"$(MODE)\""
+BUILD_TOOLCHAIN := -DBUILD_TOOLCHAIN="\"$(shell $(CC) --version | head -n1)\""
+BUILD_TIMESTAMP := -DBUILD_TIMESTAMP="\"$(shell LC_ALL=C TZ=UTC date +"%a %b %e %T %Z %Y")\""
+BLINK_COMMITS := -DBLINK_COMMITS="\"$(shell git rev-list HEAD --count)\""
+BLINK_GITSHA := -DBLINK_GITSHA="\"$(shell git rev-parse --verify HEAD)\""
+
+CONFIG_CPPFLAGS =			\
+	$(CONFIG_ARGUMENTS)		\
+	$(BUILD_TOOLCHAIN)		\
+	$(BUILD_TIMESTAMP)		\
+	$(BLINK_COMMITS)		\
+	$(BLINK_UNAME_V)		\
+	$(BLINK_GITSHA)			\
+	-DBUILD_MODE="\"$(MODE)\""
 
 OBJS	 = $(foreach x,$(PKGS),$($(x)_OBJS))
 SRCS	:= $(foreach x,$(PKGS),$($(x)_SRCS))
@@ -114,6 +140,15 @@ o/$(MODE)/srcs.txt: o/$(MODE)/.x $(MAKEFILES) $(SRCS) $(call uniq,$(foreach x,$(
 	$(file >$@) $(foreach x,$(SRCS),$(file >>$@,$(x)))
 o/$(MODE)/hdrs.txt: o/$(MODE)/.x $(MAKEFILES) $(HDRS) $(call uniq,$(foreach x,$(HDRS) $(INCS),$(dir $(x))))
 	$(file >$@) $(foreach x,blink/types.h $(HDRS) $(INCS),$(file >>$@,$(x)))
+
+MAKEFILES =				\
+	Makefile			\
+	build/config.mk			\
+	build/rules.mk			\
+	blink/blink.mk			\
+	third_party/zlib/zlib.mk
+
+$(OBJS): $(MAKEFILES)
 
 DEPENDS =				\
 	o/$(MODE)/depend.host		\
@@ -175,6 +210,16 @@ TAGS:	o/$(MODE)/srcs.txt $(SRCS)
 HTAGS:	o/$(MODE)/hdrs.txt $(HDRS)
 	$(RM) $@
 	build/htags -L $< -o $@
+
+$(OBJS): config.h
+
+config.h: configure
+	$(CONFIG_COMMAND)
+
+install: o/$(MODE)/blink
+	mkdir -p $(PREFIX)/bin
+	install -m 0755 o//blink/blink $(PREFIX)/bin/blink
+	install -m 0755 o//blink/blinkenlights $(PREFIX)/bin/blinkenlights
 
 clean:
 	rm -f $(OBJS) o/$(MODE)/blink/blink o/$(MODE)/blink/blinkenlights o/$(MODE)/blink/blink.a o/$(MODE)/third_party/zlib/zlib.a
