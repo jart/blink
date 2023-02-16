@@ -39,9 +39,10 @@ void TearDown(void) {
 
 TEST(largefile, test) {
   struct stat st;
-  char path[] = "/tmp/blXXXXXX";
+  char path[] = "/tmp/blink.test.XXXXXX";
   char b3[8], b2[8], b1[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-  ASSERT_NE(0, (intptr_t)mktemp(path));
+  ASSERT_EQ(3, mkstemp(path));
+  ASSERT_EQ(0, close(3));
   EXPECT_EQ(3, open(path, O_RDWR | O_CREAT | O_TRUNC, 0644));
   EXPECT_EQ(0, ftruncate(3, SIZE));
   EXPECT_EQ(0, fstat(3, &st));

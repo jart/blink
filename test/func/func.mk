@@ -24,6 +24,9 @@ o/$(MODE)/test/func/%.com.ok:						\
 	$<
 	@touch $@
 
+$(TEST_FUNC_OBJS): private CFLAGS = -O
+$(TEST_FUNC_OBJS): private CPPFLAGS = -isystem.
+
 .PRECIOUS: o/$(MODE)/test/func/%.elf
 o/$(MODE)/test/func/%.elf:						\
 		o/$(MODE)/x86_64/test/func/%.o				\

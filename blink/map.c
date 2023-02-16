@@ -18,7 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <inttypes.h>
-#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -96,17 +96,18 @@ void *Mmap(void *addr,     //
   _Static_assert(!(MAP_ANONYMOUS_ & MAP_FIXED), "");
   _Static_assert(!(MAP_ANONYMOUS_ & MAP_SHARED), "");
   _Static_assert(!(MAP_ANONYMOUS_ & MAP_PRIVATE), "");
-  FILE *f;
+  int tfd;
+  char path[] = "/tmp/blink.dat.XXXXXX";
   if (~flags & MAP_ANONYMOUS_) {
     res = mmap(addr, length, prot, flags, fd, offset);
-  } else if ((f = tmpfile())) {
-    if (!ftruncate(fileno(f), length)) {
-      flags &= ~MAP_ANONYMOUS_;
-      res = mmap(addr, length, prot, flags, fileno(f), 0);
+  } else if ((tfd = mkstemp(path)) != -1) {
+    unlink(path);
+    if (!ftruncate(tfd, length)) {
+      res = mmap(addr, length, prot, flags & ~MAP_ANONYMOUS_, tfd, 0);
     } else {
       res = MAP_FAILED;
     }
-    fclose(f);
+    close(tfd);
   } else {
     res = MAP_FAILED;
   }

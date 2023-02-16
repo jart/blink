@@ -71,6 +71,24 @@ int SysClose(struct Machine *m, i32 fildes) {
   return FinishClose(m, CloseFd(fd));
 }
 
+void SysCloseExec(struct System *s) {
+  struct Fd *fd;
+  struct Dll *e, *e2, *fds;
+  LOCK(&s->fds.lock);
+  for (fds = 0, e = dll_first(s->fds.list); e; e = e2) {
+    fd = FD_CONTAINER(e);
+    e2 = dll_next(s->fds.list, e);
+    if (fd->oflags & O_CLOEXEC) {
+      dll_remove(&s->fds.list, e);
+      dll_make_last(&fds, e);
+    }
+  }
+  UNLOCK(&s->fds.lock);
+  CloseFds(fds);
+}
+
+#ifndef DISABLE_NONPOSIX
+
 static int SysCloseRangeCloexec(struct Machine *m, u32 first, u32 last) {
   struct Fd *fd;
   struct Dll *e;
@@ -118,18 +136,4 @@ int SysCloseRange(struct Machine *m, u32 first, u32 last, u32 flags) {
   return rc;
 }
 
-void SysCloseExec(struct System *s) {
-  struct Fd *fd;
-  struct Dll *e, *e2, *fds;
-  LOCK(&s->fds.lock);
-  for (fds = 0, e = dll_first(s->fds.list); e; e = e2) {
-    fd = FD_CONTAINER(e);
-    e2 = dll_next(s->fds.list, e);
-    if (fd->oflags & O_CLOEXEC) {
-      dll_remove(&s->fds.list, e);
-      dll_make_last(&fds, e);
-    }
-  }
-  UNLOCK(&s->fds.lock);
-  CloseFds(fds);
-}
+#endif /* DISABLE_NONPOSIX */
