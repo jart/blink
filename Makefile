@@ -14,13 +14,13 @@ ifeq ($(wildcard config.h),)
   $(error ./configure needs to be run, use ./configure --help for help)
 endif
 
+include config.mk
+
 ifneq ($(m),)
 ifeq ($(MODE),)
 MODE := $(m)
 endif
 endif
-
-include config.mk
 
 ifneq ($(HOST_SYSTEM), Linux)
 VM = o/$(MODE)/blink/blink
@@ -30,8 +30,19 @@ VM = o/$(MODE)/blink/blink
 endif
 
 o:	o/$(MODE)/blink
+	@echo ""
+	@echo "Your Blink Virtual Machine successfully compiled:"
+	@echo ""
+	@echo "  o/$(MODE)/blink/blink"
+	@echo "  o/$(MODE)/blink/blinkenlights"
+	@echo ""
+	@echo "You may also want to run:"
+	@echo ""
+	@echo "  make check"
+	@echo "  sudo make install"
+	@echo ""
 
-test:	o					\
+test:	o/$(MODE)/blink				\
 	o/$(MODE)/test
 
 check:	test					\
@@ -73,6 +84,8 @@ include third_party/musl/musl.mk
 include third_party/qemu/qemu.mk
 include third_party/cosmo/cosmo.mk
 include third_party/libc-test/libc-test.mk
+
+CPPFLAGS += $(BUILD_TOOLCHAIN) $(BUILD_TIMESTAMP) $(BUILD_GITSHA) -DBUILD_MODE="\"$(MODE)\""
 
 OBJS	 = $(foreach x,$(PKGS),$($(x)_OBJS))
 SRCS	:= $(foreach x,$(PKGS),$($(x)_SRCS))

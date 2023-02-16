@@ -16,10 +16,13 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <arpa/inet.h>
 #include <errno.h>
 #include <inttypes.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <string.h>
+#include <sys/wait.h>
 #include <wchar.h>
 
 #include "blink/assert.h"
@@ -28,6 +31,7 @@
 #include "blink/endian.h"
 #include "blink/fds.h"
 #include "blink/linux.h"
+#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/strace.h"
 #include "blink/util.h"
@@ -106,6 +110,7 @@ static const struct DescribeFlags kAtFlags[] = {
     {AT_EMPTY_PATH_LINUX, "EMPTY_PATH"},              //
 };
 
+#ifndef DISABLE_THREADS
 static const struct DescribeFlags kCloneFlags[] = {
     {CLONE_VM_LINUX, "VM"},                          //
     {CLONE_THREAD_LINUX, "THREAD"},                  //
@@ -127,6 +132,99 @@ static const struct DescribeFlags kCloneFlags[] = {
     {CLONE_NEWNET_LINUX, "NEWNET"},                  //
     {CLONE_IO_LINUX, "IO"},                          //
 };
+#endif
+
+static const struct DescribeFlags kRenameFlags[] = {
+    {RENAME_NOREPLACE_LINUX, "NOREPLACE"},  //
+    {RENAME_EXCHANGE_LINUX, "EXCHANGE"},    //
+    {RENAME_WHITEOUT_LINUX, "WHITEOUT"},    //
+};
+
+#ifdef HAVE_FORK
+static const struct DescribeFlags kWaitFlags[] = {
+    {WNOHANG_LINUX, "WNOHANG"},          //
+    {WUNTRACED_LINUX, "WUNTRACED"},      //
+    {WEXITED_LINUX, "WEXITED"},          //
+    {WCONTINUED_LINUX, "WCONTINUED"},    //
+    {WNOWAIT_LINUX, "WNOWAIT"},          //
+    {__WNOTHREAD_LINUX, "__WNOTHREAD"},  //
+    {__WALL_LINUX, "__WALL"},            //
+    {__WCLONE_LINUX, "__WCLONE"},        //
+};
+#endif
+
+#ifndef DISABLE_SOCKETS
+static const struct DescribeFlags kSockFlags[] = {
+    {SOCK_CLOEXEC_LINUX, "CLOEXEC"},    //
+    {SOCK_NONBLOCK_LINUX, "NONBLOCK"},  //
+};
+#endif
+
+static const char *DescribeSocketFamily(int af) {
+  _Thread_local static char ibuf[21];
+  switch (af) {
+    case AF_UNSPEC_LINUX:
+      return "AF_UNSPEC";
+    case AF_UNIX_LINUX:
+      return "AF_UNIX";
+    case AF_INET_LINUX:
+      return "AF_INET";
+    case AF_INET6_LINUX:
+      return "AF_INET6";
+    case AF_NETLINK_LINUX:
+      return "AF_NETLINK";
+    case AF_PACKET_LINUX:
+      return "AF_PACKET";
+    case AF_VSOCK_LINUX:
+      return "AF_VSOCK";
+    default:
+      FormatInt64(ibuf, af);
+      return ibuf;
+  }
+}
+
+static const char *DescribeSocketType(int af) {
+  _Thread_local static char ibuf[21];
+  switch (af) {
+    case SOCK_STREAM_LINUX:
+      return "SOCK_STREAM";
+    case SOCK_DGRAM_LINUX:
+      return "SOCK_DGRAM";
+    case SOCK_RAW_LINUX:
+      return "SOCK_RAW";
+    default:
+      FormatInt64(ibuf, af);
+      return ibuf;
+  }
+}
+
+static const char *DescribeSockaddr(const struct sockaddr_storage_linux *ss) {
+  _Thread_local static char abuf[64], sabuf[80];
+  switch (Read16(ss->family)) {
+    case AF_UNIX_LINUX:
+      return !ss->storage[sizeof(struct sockaddr_un_linux)]
+                 ? ((const struct sockaddr_un_linux *)ss)->path
+                 : 0;
+    case AF_INET_LINUX:
+      snprintf(sabuf, sizeof(sabuf), "{\"%s\", %d}",
+               inet_ntop(Read16(ss->family),
+                         &((const struct sockaddr_in_linux *)ss)->addr, abuf,
+                         sizeof(abuf)),
+               htons(((const struct sockaddr_in6_linux *)ss)->port));
+      return sabuf;
+    case AF_INET6_LINUX:
+      snprintf(sabuf, sizeof(sabuf), "{\"%s\", %d}",
+               inet_ntop(Read16(ss->family),
+                         &((const struct sockaddr_in6_linux *)ss)->addr, abuf,
+                         sizeof(abuf)),
+               htons(((const struct sockaddr_in6_linux *)ss)->port));
+      return sabuf;
+    default:
+      snprintf(abuf, sizeof(abuf), "{%s}",
+               DescribeSocketFamily(Read16(ss->family)));
+      return abuf;
+  }
+}
 
 static void DescribeSigset(char *bp, int bn, u64 ss) {
   int sig, got = 0, bi = 0;
@@ -174,7 +272,7 @@ void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
       APPEND("-%s", DescribeHostErrno(errno));
       continue;
     }
-    if (IS_MEM_O(c)) APPEND("[");
+    if (arg && IS_MEM_O(c) && !IS_ADDR(c)) APPEND("[");
     if (arg == -1) {
       APPEND("-1");
     } else if (c == I64_HEX[0] || (ax == -1 && (IS_MEM_O(c) || IS_MEM_IO(c)))) {
@@ -199,14 +297,17 @@ void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
         }
         UNLOCK(&m->system->fds.lock);
       }
-    } else if (c == I_BUF[0] || c == O_BUF[0]) {
+    } else if (IS_BUF(c)) {
       u8 *data;
       u64 len = va_arg(va, i64);
       unsigned j, preview = MIN(len, kStraceBufMax);
-      if (c == O_BUF[0]) preview = MIN(preview, ax);
-      APPEND("%#" PRIx64, arg);
-      if ((data = (u8 *)Schlep(m, arg, preview, PAGE_U, PAGE_U))) {
-        APPEND(" \"");
+      if (c == O_BUF[0]) {
+        len = MIN(len, ax);
+        preview = MIN(preview, ax);
+      }
+      // APPEND("%#" PRIx64, arg);
+      if ((data = (u8 *)SchlepR(m, arg, preview))) {
+        APPEND("\"");
         for (j = 0; j < preview; ++j) {
           APPEND("%lc", (wint_t)kCp437[data[j]]);
         }
@@ -226,6 +327,28 @@ void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
       }
     } else if (c == I32_SIG[0]) {
       APPEND("%s", DescribeSignal(arg));
+#ifdef HAVE_FORK
+    } else if (c == I32_WAITFLAGS[0]) {
+      DescribeFlags(tmp, sizeof(tmp), kWaitFlags, ARRAYLEN(kWaitFlags), "",
+                    arg);
+      APPEND("%s", DescribeSignal(arg));
+    } else if (c == O_WSTATUS[0]) {
+      const u8 *p;
+      if ((p = (const u8 *)SchlepR(m, arg, 4))) {
+        i32 s = Read32(p);
+        if (WIFEXITED(s)) {
+          APPEND("{WIFEXITED(s) && WEXITSTATUS(s) == %d}", WEXITSTATUS(s));
+        } else if (WIFSTOPPED(s)) {
+          APPEND("{WIFSTOPPED(s) && WSTOPSIG(s) == %s}",
+                 DescribeSignal(WSTOPSIG(s)));
+        } else if (WIFSIGNALED(s)) {
+          APPEND("{WIFSIGNALED(s) && WTERMSIG(s) == %s}",
+                 DescribeSignal(WSTOPSIG(s)));
+        } else {
+          APPEND("{%#" PRIx32 "}", s);
+        }
+      }
+#endif
     } else if (c == I32_PROT[0]) {
       if (arg) {
         DescribeFlags(tmp, sizeof(tmp), kProtFlags, ARRAYLEN(kProtFlags),
@@ -255,23 +378,42 @@ void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
     } else if (c == I32_ATFLAGS[0]) {
       DescribeFlags(tmp, sizeof(tmp), kAtFlags, ARRAYLEN(kAtFlags), "AT_", arg);
       APPEND("%s", tmp);
+#ifndef DISABLE_THREADS
     } else if (c == I32_CLONEFLAGS[0]) {
       DescribeFlags(tmp, sizeof(tmp), kCloneFlags, ARRAYLEN(kCloneFlags),
                     "CLONE_", arg);
       APPEND("%s", tmp);
+#endif
     } else if (IS_SIGSET(c)) {
       const struct sigset_linux *ss;
-      if ((ss = (const struct sigset_linux *)Schlep(
-               m, arg, sizeof(struct sigset_linux), PAGE_U, PAGE_U))) {
+      if ((ss = (const struct sigset_linux *)SchlepR(
+               m, arg, sizeof(struct sigset_linux)))) {
         DescribeSigset(tmp, sizeof(tmp), Read64(ss->sigmask));
         APPEND("%s", tmp);
       } else {
         APPEND("%#" PRIx64, arg);
       }
+#if defined(HAVE_FORK) || defined(HAVE_THREADS)
+    } else if (c == O_PFDS[0]) {
+      const u8 *pfds;
+      if ((pfds = (const u8 *)SchlepR(m, arg, 8))) {
+        APPEND("{%" PRId32 ", %" PRId32 "}", Read32(pfds), Read32(pfds + 4));
+      } else {
+        APPEND("%#" PRIx64, arg);
+      }
+#endif
+    } else if (IS_TIME(c)) {
+      const struct timespec_linux *ts;
+      if ((ts = (const struct timespec_linux *)SchlepR(
+               m, arg, sizeof(struct timespec_linux)))) {
+        APPEND("{%" PRId64 ", %" PRId64 "}", Read64(ts->sec), Read64(ts->nsec));
+      } else {
+        APPEND("%#" PRIx64, arg);
+      }
     } else if (IS_HAND(c)) {
       const struct sigaction_linux *sa;
-      if ((sa = (const struct sigaction_linux *)Schlep(
-               m, arg, sizeof(struct sigaction_linux), PAGE_U, PAGE_U))) {
+      if ((sa = (const struct sigaction_linux *)SchlepR(
+               m, arg, sizeof(struct sigaction_linux)))) {
         APPEND("{.sa_handler=");
         switch (Read64(sa->handler)) {
           case SIG_DFL_LINUX:
@@ -300,6 +442,48 @@ void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
       } else {
         APPEND("%#" PRIx64, arg);
       }
+#ifndef DISABLE_SOCKETS
+    } else if (c == I32_FAMILY[0]) {
+      APPEND("%s", DescribeSocketFamily(arg));
+    } else if (c == I32_SOCKTYPE[0]) {
+      APPEND("%s", DescribeSocketType(arg));
+    } else if (c == I32_SOCKFLAGS[0]) {
+      DescribeFlags(tmp, sizeof(tmp), kSockFlags, ARRAYLEN(kSockFlags), "SOCK_",
+                    arg);
+      APPEND("%s", tmp);
+    } else if (IS_ADDR(c)) {
+      const u8 *p = 0;
+      i64 len = va_arg(va, i64);
+      struct sockaddr_storage_linux ss;
+      memset(&ss, 0, sizeof(ss));
+      if (c == I_ADDR[0]) len = (u32)len;
+      if (c != I_ADDR[0] && !(p = (const u8 *)SchlepR(m, len, 4))) {
+        APPEND("%#" PRIx64 ", %" PRId32, arg, Read32(p));
+      } else {
+        if (c == I_ADDR[0]) {
+          len = (u32)len;
+        } else {
+          len = Read32(p);
+        }
+        if (c != I_ADDR[0]) APPEND("[");
+        if (arg && CopyFromUserRead(m, &ss, arg, MIN(len, sizeof(ss))) != -1) {
+          APPEND("%s", DescribeSockaddr(&ss));
+        } else {
+          APPEND("%#" PRIx64, arg);
+        }
+        if (c != I_ADDR[0]) APPEND("]");
+        if (c == I_ADDR[0]) {
+          APPEND(", %" PRId64, len);
+        } else {
+          APPEND(", [%" PRId64 "]", len);
+        }
+      }
+      ++i;
+#endif
+    } else if (c == I32_RENFLAGS[0]) {
+      DescribeFlags(tmp, sizeof(tmp), kRenameFlags, ARRAYLEN(kRenameFlags),
+                    "RENAME_", arg);
+      APPEND("%s", tmp);
     } else {
       unassert(!"missing strace signature specifier");
       __builtin_unreachable();
@@ -311,7 +495,7 @@ void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
       bp[bi++] = '.';
       bp[bi++] = 0;
     }
-    if (IS_MEM_O(c)) APPEND("]");
+    if (arg && IS_MEM_O(c) && !IS_ADDR(c)) APPEND("]");
   }
   va_end(va);
   SYS_LOGF("%s(%s%s%s%s%s%s) -> %s", func, buf[1], buf[2], buf[3], buf[4],

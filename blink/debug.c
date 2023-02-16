@@ -48,10 +48,6 @@
 
 #define MAX_BACKTRACE_LINES 64
 
-#ifdef DISABLE_OVERLAYS
-#define OverlaysOpen openat
-#endif
-
 #define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
 
 int asan_backtrace_index;
@@ -136,38 +132,6 @@ int GetInstruction(struct Machine *m, i64 pc, struct XedDecodedInst *x) {
   return rc;
 }
 
-const char *DescribeProt(int prot) {
-  char *p;
-  bool gotsome;
-  _Thread_local static char buf[64];
-  if (!prot) return "PROT_NONE";
-  p = buf;
-  gotsome = false;
-  if (prot & PROT_READ) {
-    if (gotsome) *p++ = '|';
-    p = stpcpy(p, "PROT_READ");
-    prot &= ~PROT_READ;
-    gotsome = true;
-  }
-  if (prot & PROT_WRITE) {
-    if (gotsome) *p++ = '|';
-    p = stpcpy(p, "PROT_WRITE");
-    prot &= ~PROT_WRITE;
-    gotsome = true;
-  }
-  if (prot & PROT_EXEC) {
-    if (gotsome) *p++ = '|';
-    p = stpcpy(p, "PROT_EXEC");
-    prot &= ~PROT_EXEC;
-    gotsome = true;
-  }
-  if (prot) {
-    if (gotsome) *p++ = '|';
-    p = FormatInt64(p, prot);
-  }
-  return buf;
-}
-
 const char *DescribeCpuFlags(int flags) {
   _Thread_local static char b[7];
   b[0] = (flags & OF) ? 'O' : '.';
@@ -183,9 +147,13 @@ const char *DescribeOp(struct Machine *m, i64 pc) {
   _Thread_local static char b[256];
   int e, i, k, o = 0, n = sizeof(b);
   struct Dis d = {true};
-  char spec[64];
   if (!(e = GetInstruction(m, pc, d.xedd))) {
+#ifndef DISABLE_DISASSEMBLER
+    char spec[64];
     o = DisInst(&d, b, DisSpec(d.xedd, spec)) - b;
+#else
+    APPEND(".byte");
+#endif
   }
   if (e != kMachineSegmentationFault) {
     k = MAX(8, d.xedd->length);
@@ -195,27 +163,10 @@ const char *DescribeOp(struct Machine *m, i64 pc) {
   } else {
     APPEND("segfault");
   }
+#ifndef DISABLE_DISASSEMBLER
   DisFree(&d);
+#endif
   return b;
-}
-
-void LoadDebugSymbols(struct Elf *elf) {
-  int fd, n;
-  void *elfmap;
-  char buf[1024];
-  struct stat st;
-  if (elf->ehdr && GetElfSymbolTable(elf->ehdr, elf->size, &n) && n) return;
-  unassert(elf->prog);
-  snprintf(buf, sizeof(buf), "%s.dbg", elf->prog);
-  if ((fd = OverlaysOpen(AT_FDCWD, buf, O_RDONLY, 0)) != -1) {
-    if (fstat(fd, &st) != -1 &&
-        (elfmap = Mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0,
-                       "debug")) != MAP_FAILED) {
-      elf->ehdr = (Elf64_Ehdr_ *)elfmap;
-      elf->size = st.st_size;
-    }
-    close(fd);
-  }
 }
 
 void PrintFds(struct Fds *fds) {
@@ -228,17 +179,22 @@ void PrintFds(struct Fds *fds) {
 
 const char *GetBacktrace(struct Machine *m) {
   _Thread_local static char b[4096];
-  u8 *r;
-  int i;
   int o = 0;
   int n = sizeof(b);
-  i64 sym, sp, bp, rp;
+#ifndef DISABLE_BACKTRACE
   struct Dis dis = {true};
+  u8 *r;
+  int i;
+  i64 sym, sp, bp, rp;
   char kAlignmentMask[] = {3, 3, 15};
+#endif
 
   BEGIN_NO_PAGE_FAULTS;
+
+#ifndef DISABLE_BACKTRACE
   LoadDebugSymbols(&m->system->elf);
   DisLoadElf(&dis, &m->system->elf);
+#endif
 
   APPEND(" PC %" PRIx64 " %s\n\t"
          " AX %016" PRIx64 " "
@@ -270,6 +226,7 @@ const char *GetBacktrace(struct Machine *m) {
          GET_COUNTER(instructions_decoded), GET_COUNTER(instructions_jitted),
          g_progname);
 
+#ifndef DISABLE_BACKTRACE
   rp = m->ip;
   bp = Get64(m->bp);
   sp = Get64(m->sp);
@@ -300,42 +257,11 @@ const char *GetBacktrace(struct Machine *m) {
     bp = ReadWord(m, r + 0);
     rp = ReadWord(m, r + 8);
   }
+  DisFree(&dis);
+#endif
 
   END_NO_PAGE_FAULTS;
-  DisFree(&dis);
   return b;
-}
-
-// use cosmopolitan/tool/build/fastdiff.c
-void LogCpu(struct Machine *m) {
-  static FILE *f;
-  if (!f) f = fopen("/tmp/cpu.log", "w");
-  fprintf(f,
-          "\n"
-          "IP %" PRIx64 "\n"
-          "AX %#" PRIx64 "\n"
-          "CX %#" PRIx64 "\n"
-          "DX %#" PRIx64 "\n"
-          "BX %#" PRIx64 "\n"
-          "SP %#" PRIx64 "\n"
-          "BP %#" PRIx64 "\n"
-          "SI %#" PRIx64 "\n"
-          "DI %#" PRIx64 "\n"
-          "R8 %#" PRIx64 "\n"
-          "R9 %#" PRIx64 "\n"
-          "R10 %#" PRIx64 "\n"
-          "R11 %#" PRIx64 "\n"
-          "R12 %#" PRIx64 "\n"
-          "R13 %#" PRIx64 "\n"
-          "R14 %#" PRIx64 "\n"
-          "R15 %#" PRIx64 "\n"
-          "FLAGS %s\n"
-          "%s\n",
-          m->ip, Read64(m->ax), Read64(m->cx), Read64(m->dx), Read64(m->bx),
-          Read64(m->sp), Read64(m->bp), Read64(m->si), Read64(m->di),
-          Read64(m->r8), Read64(m->r9), Read64(m->r10), Read64(m->r11),
-          Read64(m->r12), Read64(m->r13), Read64(m->r14), Read64(m->r15),
-          DescribeCpuFlags(m->flags), DescribeOp(m, GetPc(m)));
 }
 
 bool CheckMemoryInvariants(struct System *s) {

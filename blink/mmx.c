@@ -22,6 +22,8 @@
 #include "blink/macros.h"
 #include "blink/sse.h"
 
+#ifndef DISABLE_MMX
+
 relegated void MmxPsubb(u8 x[8], const u8 y[8]) {
   unsigned i;
   for (i = 0; i < 8; ++i) {
@@ -183,3 +185,5 @@ relegated void MmxPhaddsw(u8 x[8], const u8 y[8]) {
 relegated void MmxPhsubsw(u8 x[8], const u8 y[8]) {
   Phsw(x, y, Sub);
 }
+
+#endif /* DISABLE_MMX */

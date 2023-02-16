@@ -332,12 +332,14 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlTiocgpgrp(m, fildes, addr);
     case TIOCSPGRP_LINUX:
       return IoctlTiocspgrp(m, fildes, addr);
+#ifndef DISABLE_NONPOSIX
     case FIONBIO_LINUX:
       return IoctlFionbio(m, fildes);
     case FIOCLEX_LINUX:
       return IoctlFioclex(m, fildes);
     case FIONCLEX_LINUX:
       return IoctlFionclex(m, fildes);
+#endif
     case TCSBRK_LINUX:
       return IoctlTcsbrk(m, fildes, addr);
     case TCXONC_LINUX:
@@ -379,6 +381,7 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlGetInt32(m, fildes, SIOCGPGRP, addr);
 #endif
 #ifdef HAVE_SIOCGIFCONF
+#ifndef DISABLE_NONPOSIX
     case SIOCGIFCONF_LINUX:
       return IoctlSiocgifconf(m, fildes, addr);
     case SIOCGIFADDR_LINUX:
@@ -389,6 +392,7 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFBRDADDR);
     case SIOCGIFDSTADDR_LINUX:
       return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFDSTADDR);
+#endif
 #endif
     default:
       LOGF("missing ioctl %#" PRIx64, request);

@@ -27,6 +27,7 @@
 #include "blink/flags.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/modrm.h"
 #include "blink/rde.h"
 #include "blink/string.h"
 #include "blink/tsan.h"

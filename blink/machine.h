@@ -444,6 +444,7 @@ int CopyToUser(struct Machine *, i64, void *, u64);
 int CopyToUserWrite(struct Machine *, i64, void *, u64);
 void EndStore(struct Machine *, i64, size_t, void *[2], u8 *);
 void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
+int GetDescriptor(struct Machine *, int, u64 *);
 void ResetRam(struct Machine *);
 void SetReadAddr(struct Machine *, i64, u32);
 void SetWriteAddr(struct Machine *, i64, u32);
@@ -607,6 +608,24 @@ void OpHaddpsd(P);
 void OpHsubpsd(P);
 void OpAddsubpsd(P);
 void OpMovmskpsd(P);
+
+void OpIncZv(P);
+void OpDecZv(P);
+void OpLes(P);
+void OpLds(P);
+void OpJmpf(P);
+void OpInAlImm(P);
+void OpInAxImm(P);
+void OpInAlDx(P);
+void OpInAxDx(P);
+void OpOutImmAl(P);
+void OpOutImmAx(P);
+void OpOutDxAl(P);
+void OpOutDxAx(P);
+void OpMovSwEvqp(P);
+void OpMovEvqpSw(P);
+void OpPushSeg(P);
+void OpPopSeg(P);
 
 extern void (*AddPath_StartOp_Hook)(P);
 

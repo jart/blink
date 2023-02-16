@@ -132,6 +132,7 @@ void Op101(P) {
   bool ismem;
   ismem = !IsModrmRegister(rde);
   switch (ModrmReg(rde)) {
+#ifndef DISABLE_METAL
     case 0:
       if (ismem) {
         SgdtMs(A);
@@ -190,6 +191,7 @@ void Op101(P) {
     case 6:
       Lmsw(A);
       break;
+#endif
     case 7:
       if (ismem) {
         InvlpgM(A);

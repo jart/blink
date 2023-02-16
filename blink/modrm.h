@@ -4,12 +4,7 @@
 #include "blink/machine.h"
 #include "blink/rde.h"
 #include "blink/thread.h"
-
-#ifdef HAVE_THREADS
-#define Lock(x) ((x & 020000000000) >> 037)
-#else
-#define Lock(x) 0
-#endif
+#include "blink/x86.h"
 
 #define RegRexbSrm(m, x)   m->weg[RexbSrm(x)]
 #define AddrByteReg(m, k)  (m->beg + kByteReg[k])
@@ -26,6 +21,24 @@
 #define MmReg(m, x)        m->xmm[(x & 00000000007) >> 0]
 #define XmmRexbRm(m, x)    m->xmm[RexbRm(x)]
 #define XmmRexrReg(m, x)   m->xmm[RexrReg(x)]
+
+#ifdef HAVE_THREADS
+#define Lock(x) ((x & 020000000000) >> 037)
+#else
+#define Lock(x) 0
+#endif
+
+#ifndef DISABLE_METAL
+#define Mode(x)   ((x & 001400000000) >> 032)
+#define Eamode(x) ((x & 000300000000) >> 030)
+#else
+#define Mode(x) XED_MODE_LONG
+static inline u32 Eamode(u32 x) {
+  u32 res = (x & 000300000000) >> 030;
+  if (res == XED_MODE_REAL) __builtin_unreachable();
+  return res;
+}
+#endif
 
 struct AddrSeg {
   i64 addr;

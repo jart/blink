@@ -1,4 +1,17 @@
 #!/bin/sh
+# Blinkenlights Configuration Script
+# Run ./configure --help for usage
+
+cleared=
+for x; do
+  test "$cleared" || set -- ; cleared=1
+  if [ "${x%%=*}" != "$x" ]; then
+    eval "$x"
+  fi
+  if [ "${x%%=*}" != "MODE" ]; then
+    set -- "$@" "$x"
+  fi
+done
 
 CC="${CC:-cc}"
 AR="${AR:-ar}"
@@ -22,51 +35,82 @@ else
 fi
 
 if [ "$1" = "--help" ]; then
-  echo "usage: ./configure [FLAGS]"
+  echo "usage: ./configure [OPTION]... [VARIABLE=VAL]..."
   echo
-  echo "flags"
+  echo "options"
   echo
   echo "  --help"
   echo "    shows this help"
   echo
+  echo "  --static"
+  echo "    compile blink as a statically-linked binary"
+  echo
   echo "  --disable-jit"
-  echo "    forces jit compilation to be disabled (shaves ~25kb)"
+  echo "    forces jit compilation to be disabled (shaves ~26kb off MODE=tiny)"
   echo
   echo "  --disable-x87"
-  echo "    disables x87 fpu and long double support (shaves ~23kb)"
-  echo
-  echo "  --disable-strace"
-  echo "    disables system call logging functionality (shaves ~12kb)"
+  echo "    disables x87 fpu and long double support (shaves ~23kb off MODE=tiny)"
   echo
   echo "  --disable-threads"
-  echo "    disables clone() and removes locks / barriers (shaves ~12kb)"
+  echo "    disables clone() and removes locks / barriers (shaves ~12kb off MODE=tiny)"
   echo
   echo "  --disable-sockets"
-  echo "    disables socket() and related system calls (shaves ~5kb)"
+  echo "    disables socket() and related system calls (shaves ~5kb off MODE=tiny)"
+  echo
+  if [ "${MODE%%-*}" != "tiny" ] && [ "${MODE%%-*}" != "rel" ] && [ "${MODE%%-*}" != "opt" ]; then
+    echo "  --disable-disassembler"
+    echo "    disables printing disassembled opcodes on crash (shaves ~48kb off MODE='')"
+    echo
+    echo "  --disable-strace"
+    echo "    disables system call logging functionality (shaves ~40kb off MODE='')"
+    echo
+    echo "  --disable-backtrace"
+    echo "    disables printing guest backtrace on crash (shaves ~5kb off MODE='')"
+    echo
+  fi
+  echo "  --disable-metal"
+  echo "    disables i8086, i386, and ring-0 instructions (shaves ~3kb off MODE=tiny)"
+  echo
+  echo "  --disable-mmx"
+  echo "    disables rarely used intel mmx legacy instructions (shaves ~3kb off MODE=tiny)"
   echo
   echo "  --disable-fork"
-  echo "    disables fork() and interprocess communication (shaves ~3kb)"
+  echo "    disables fork() and interprocess communication (shaves ~3kb off MODE=tiny)"
   echo
   echo "  --disable-overlays"
-  echo "    disables filesystem overlays and chroot() support (shaves ~3kb)"
+  echo "    disables filesystem overlays and chroot() support (shaves ~3kb off MODE=tiny)"
+  echo
+  echo "  --disable-nonposix"
+  echo "    disables linux apis that aren't part of posix (shaves ~6kb off MODE=tiny)"
+  echo "    intended for testing compliance of guest programs"
   echo
   echo "  --disable-ancillary"
-  echo "    disables sendmsg/recvmsg control data support (shaves ~2kb)"
+  echo "    disables sendmsg/recvmsg control data support (shaves ~2kb off MODE=tiny)"
   echo
   echo "  --disable-bcd"
-  echo "    disables i8086 binary coded decimal support (shaves ~1kb)"
+  echo "    disables i8086 binary coded decimal support (shaves ~1kb off MODE=tiny)"
   echo
   echo "  --disable-all"
-  echo "    disable all optional features (shaves ~69kb)"
+  echo "    disable all optional features (shaves ~81kb off MODE=tiny)"
   echo "    you may use --enable-FOO to turn features back on"
   echo
   echo "  --xopen"
   echo "    strictly conform to C11 and POSIX.1-2008 with XSI extensions (clobbers \$CPPFLAGS)"
+  echo "    linux-specific apis are still provided by blink when they can be polyfilled"
+  echo "    intended for testing compliance of blink's codebase"
   echo
   echo "  --posix"
   echo "    strictly conform to baseline POSIX.1-2008 and C11 standard (clobbers \$CPPFLAGS)"
+  echo "    linux-specific apis are still provided by blink when they can be polyfilled"
+  echo "    intended for testing compliance of blink's codebase"
   echo
-  echo "environment variables"
+  echo "variables"
+  echo
+  echo "  MODE"
+  echo "    tunes makefile by choosing a preset configuration. defaults"
+  echo "    to empty string which is recommended. may alternatively be"
+  echo "    set to: tiny, opt, rel, dbg, cosmo, prof, cov, asan, ubsan,"
+  echo "    tsan, msan, llvm, llvm++, rel-llvm, or tiny-llvm."
   echo
   echo "  CC"
   echo "    used to compile and link code [currently: $CC]"
@@ -94,12 +138,6 @@ if [ "$1" = "--help" ]; then
   echo
   echo "  AR"
   echo "    used to create static archives [currently: $AR]"
-  echo
-  echo "  MODE"
-  echo "    tunes makefile by choosing a preset configuration. defaults"
-  echo "    to empty string which is recommended. may alternatively be"
-  echo "    set to: tiny, opt, rel, dbg, cosmo, prof, cov, asan, ubsan,"
-  echo "    tsan, msan, llvm, llvm++, rel-llvm, or tiny-llvm."
   echo
   exit 0
 fi
@@ -150,9 +188,9 @@ else
   fi
 fi
 
-CONFIG=$(mktemp blink-config.h.XXXXXX)
-BUILD=$(mktemp blink-config.mk.XXXXXX)
-LOCK=$(mktemp blink-config.lock.XXXXXX)
+CONFIG=$(mktemp "${TMPDIR}/blink-config.h.XXXXXX")
+BUILD=$(mktemp "${TMPDIR}/blink-config.mk.XXXXXX")
+LOCK=$(mktemp "${TMPDIR}/blink-config.lock.XXXXXX")
 
 cp config.h.in "${CONFIG}" || exit
 rm -f config.log
@@ -246,11 +284,18 @@ uncomment() {
 }
 
 for x; do
+  if [ "${x%=*}" != "$x" ]; then
+    continue
+  fi
+
   if [ "$x" = "--disable-all" ]; then
     uncomment "#define DISABLE"
     DISABLE_THREADS=1
     DISABLE_FORK=1
     DISABLE_JIT=1
+
+  elif [ "$x" = "--static" ]; then
+    STATIC=1
 
   elif [ "$x" = "--enable-fork" ]; then
     unset DISABLE_FORK
@@ -268,6 +313,21 @@ for x; do
     comment "#define DISABLE_X87"
   elif [ "$x" = "--disable-x87" ]; then
     uncomment "#define DISABLE_X87"
+
+  elif [ "$x" = "--enable-mmx" ]; then
+    comment "#define DISABLE_MMX"
+  elif [ "$x" = "--disable-mmx" ]; then
+    uncomment "#define DISABLE_MMX"
+
+  elif [ "$x" = "--enable-metal" ]; then
+    comment "#define DISABLE_METAL"
+  elif [ "$x" = "--disable-metal" ]; then
+    uncomment "#define DISABLE_METAL"
+
+  elif [ "$x" = "--enable-strace" ]; then
+    comment "#define DISABLE_STRACE"
+  elif [ "$x" = "--disable-strace" ]; then
+    uncomment "#define DISABLE_STRACE"
 
   elif [ "$x" = "--enable-threads" ]; then
     comment "#define DISABLE_THREADS"
@@ -291,6 +351,21 @@ for x; do
   elif [ "$x" = "--disable-ancillary" ]; then
     uncomment "#define DISABLE_ANCILLARY"
 
+  elif [ "$x" = "--enable-disassembler" ]; then
+    comment "#define DISABLE_DISASSEMBLER"
+  elif [ "$x" = "--disable-disassembler" ]; then
+    uncomment "#define DISABLE_DISASSEMBLER"
+
+  elif [ "$x" = "--enable-backtrace" ]; then
+    comment "#define DISABLE_BACKTRACE"
+  elif [ "$x" = "--disable-backtrace" ]; then
+    uncomment "#define DISABLE_BACKTRACE"
+
+  elif [ "$x" = "--enable-nonposix" ]; then
+    comment "#define DISABLE_NONPOSIX"
+  elif [ "$x" = "--disable-nonposix" ]; then
+    uncomment "#define DISABLE_NONPOSIX"
+
   elif [ "$x" = "--enable-bcd" ]; then
     comment "#define DISABLE_BCD"
   elif [ "$x" = "--disable-bcd" ]; then
@@ -298,9 +373,11 @@ for x; do
 
   elif [ "$x" = "--posix" ]; then
     CPPFLAGS="-D_POSIX_C_SOURCE=200809L -std=c11"
+    POSIX=1
 
   elif [ "$x" = "--xopen" ]; then
     CPPFLAGS="-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -std=c11"
+    POSIX=1
 
   else
     echo "error: unrecognized flag: $x" >&2
@@ -309,12 +386,22 @@ for x; do
   fi
 done
 
+if [ "${STATIC}" ]; then
+  LDFLAGS="-static ${LDFLAGS}"
+  EXTRA_CFLAGS=-fno-pie
+  EXTRA_LDFLAGS=-no-pie
+  if config noop "checking for no-pie... "; then
+    CFLAGS="-fno-pie ${CFLAGS}"
+    LDFLAGS="-no-pie ${LDFLAGS}"
+  fi
+fi
+
 # position independent executables
 # 1. help ensure blink won't overlap static binaries in memory
 # 2. gcc and clang generates tinier code for switch statements
 EXTRA_CFLAGS=-fpie
 EXTRA_LDFLAGS=-pie
-if config noop "checking for pie... "; then
+if [ -z "${STATIC}" ] && config noop "checking for pie... "; then
   CFLAGS="-fpie ${CFLAGS}"
   LDFLAGS="-pie ${LDFLAGS}"
 else
@@ -446,6 +533,11 @@ else
   echo "checking for fork()... disabled"
 fi
 
+if [ -z "${POSIX}" ]; then
+  ( config sys_getrandom "checking for syscall(SYS_getrandom)... " uncomment "#define HAVE_SYS_GETRANDOM" ) &
+  ( config getrandom "checking for getrandom()... " uncomment "#define HAVE_GETRANDOM" ) &
+fi
+
 ( config sync "checking for sync()... " uncomment "#define HAVE_SYNC" ) &
 ( config dup3 "checking for dup3()... " uncomment "#define HAVE_DUP3" ) &
 ( config pipe2 "checking for pipe2()... " uncomment "#define HAVE_PIPE2" ) &
@@ -459,7 +551,6 @@ fi
 ( config mkfifoat "checking for mkfifoat()... " uncomment "#define HAVE_MKFIFOAT" ) &
 ( config setreuid "checking for setreuid()... " uncomment "#define HAVE_SETREUID" ) &
 ( config strchrnul "checking for strchrnul()... " uncomment "#define HAVE_STRCHRNUL" ) &
-( config getrandom "checking for getrandom()... " uncomment "#define HAVE_GETRANDOM" ) &
 ( config vasprintf "checking for vasprintf()... " uncomment "#define HAVE_VASPRINTF" ) &
 ( config setresuid "checking for setresuid()... " uncomment "#define HAVE_SETRESUID" ) &
 ( config setgroups "checking for setgroups()... " uncomment "#define HAVE_SETGROUPS" ) &
@@ -478,7 +569,6 @@ fi
 ( config sched_getaffinity "checking for sched_getaffinity()... " uncomment "#define HAVE_SCHED_GETAFFINITY" ) &
 ( config sched_yield "checking for sched_yield()... " uncomment "#define HAVE_SCHED_YIELD" ) &
 ( config sched_h "checking for sched.h... " uncomment "#define HAVE_SCHED_H" ) &
-( config sys_getrandom "checking for syscall(SYS_getrandom)... " uncomment "#define HAVE_SYS_GETRANDOM" ) &
 ( config preadv "checking for preadv() and pwritev()... " uncomment "#define HAVE_PREADV" ) &
 ( config getentropy "checking for getentropy() in unistd.h... " uncomment "#define HAVE_GETENTROPY" ) &
 ( config sys_getentropy "checking for getentropy() in sys/random.h... " uncomment "#define HAVE_SYS_GETENTROPY" ) &
@@ -487,12 +577,19 @@ fi
 wait
 rm -f "${LOCK}"
 
-cat >"${BUILD}" <<EOF || exit
+for x; do
+  if [ "${x%=*}" != "$x" ]; then
+    printf '%s\n' "$x" >>"${BUILD}"
+  fi
+done
+
+cat >>"${BUILD}" <<EOF || exit
 CC = ${CC}
 AR = ${AR}
+MODE ?= ${MODE}
 TMPDIR = ${TMPDIR}
 CFLAGS = ${CFLAGS}
-CPPFLAGS = ${CPPFLAGS}
+CPPFLAGS = ${CPPFLAGS} -DBUILD_CONFIGURATION="\"$*\""
 UOPFLAGS = ${UOPFLAGS}
 TARGET_ARCH = ${TARGET_ARCH}
 LDFLAGS = ${LDFLAGS}
@@ -500,6 +597,9 @@ LDLIBS = ${LDLIBS}
 HOST_OS = ${HOST_OS}
 HOST_ARCH = ${HOST_ARCH}
 HOST_SYSTEM = ${HOST_SYSTEM}
+BUILD_TOOLCHAIN := -DBUILD_TOOLCHAIN="\"$(${CC} --version | head -n1)\""
+BUILD_TIMESTAMP := -DBUILD_TIMESTAMP="\"$(TZ=UTC date +%Y-%m-%dT%H:%M:%SZ)\""
+BUILD_GITSHA := -DBUILD_GITSHA="\"$(git rev-parse --verify HEAD)\""
 EOF
 
 echo "creating config.log" >&2

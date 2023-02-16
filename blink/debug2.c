@@ -1,7 +1,7 @@
 /*-*- mode:c;indent-tabs-mode:nil;c-basic-offset:2;tab-width:8;coding:utf-8 -*-│
 │vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2022 Justine Alexandra Roberts Tunney                              │
+│ Copyright 2023 Justine Alexandra Roberts Tunney                              │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -16,80 +16,36 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <fcntl.h>
+#include <sys/stat.h>
+
 #include "blink/assert.h"
 #include "blink/builtin.h"
-#include "blink/endian.h"
+#include "blink/elf.h"
+#include "blink/loader.h"
 #include "blink/machine.h"
-#include "blink/modrm.h"
-#include "blink/rde.h"
-#include "blink/x86.h"
+#include "blink/map.h"
+#include "blink/overlays.h"
 
-i64 GetPc(struct Machine *m) {
-  return m->cs.base + GetIp(m);
-}
+#ifdef DISABLE_OVERLAYS
+#define OverlaysOpen openat
+#endif
 
-i64 GetIp(struct Machine *m) {
-  return MaskAddress(m->mode, m->ip);
-}
-
-u64 MaskAddress(u32 mode, u64 x) {
-  if (mode != XED_MODE_LONG) {
-    if (mode == XED_MODE_REAL) {
-      x &= 0xffff;
-    } else {
-      x &= 0xffffffff;
+void LoadDebugSymbols(struct Elf *elf) {
+  int fd, n;
+  void *elfmap;
+  char buf[1024];
+  struct stat st;
+  if (elf->ehdr && GetElfSymbolTable(elf->ehdr, elf->size, &n) && n) return;
+  unassert(elf->prog);
+  snprintf(buf, sizeof(buf), "%s.dbg", elf->prog);
+  if ((fd = OverlaysOpen(AT_FDCWD, buf, O_RDONLY, 0)) != -1) {
+    if (fstat(fd, &st) != -1 &&
+        (elfmap = Mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0,
+                       "debug")) != MAP_FAILED) {
+      elf->ehdr = (Elf64_Ehdr_ *)elfmap;
+      elf->size = st.st_size;
     }
-  }
-  return x;
-}
-
-i64 AddSegment(P, u64 i, u64 s) {
-  if (!Sego(rde)) {
-    return i + s;
-  } else {
-    return i + m->seg[Sego(rde) - 1].base;
-  }
-}
-
-u64 AddressOb(P) {
-  return AddSegment(A, disp, m->ds.base);
-}
-
-u64 GetSegmentBase(P, unsigned s) {
-  if (s < 6) {
-    return m->seg[s].base;
-  } else {
-    OpUdImpl(m);
-  }
-}
-
-i64 DataSegment(P, u64 i) {
-  return AddSegment(A, i, m->ds.base);
-}
-
-i64 AddressSi(P) {
-  switch (Eamode(rde)) {
-    case XED_MODE_LONG:
-      return DataSegment(A, Get64(m->si));
-    case XED_MODE_REAL:
-      return DataSegment(A, Get16(m->si));
-    case XED_MODE_LEGACY:
-      return DataSegment(A, Get32(m->si));
-    default:
-      __builtin_unreachable();
-  }
-}
-
-u64 AddressDi(P) {
-  u64 i = m->es.base;
-  switch (Eamode(rde)) {
-    case XED_MODE_LONG:
-      return i + Get64(m->di);
-    case XED_MODE_REAL:
-      return i + Get16(m->di);
-    case XED_MODE_LEGACY:
-      return i + Get32(m->di);
-    default:
-      __builtin_unreachable();
+    close(fd);
   }
 }

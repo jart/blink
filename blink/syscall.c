@@ -1580,12 +1580,14 @@ static int XlatSendFlags(int flags, int socktype) {
 
 static int XlatRecvFlags(int flags) {
   int supported, hostflags;
-  supported = MSG_OOB_LINUX |       //
-              MSG_PEEK_LINUX |      //
-              MSG_TRUNC_LINUX |     //
-              MSG_WAITALL_LINUX |   //
-              MSG_DONTWAIT_LINUX |  //
-              MSG_CMSG_CLOEXEC_LINUX;
+  supported = MSG_OOB_LINUX |    //
+              MSG_PEEK_LINUX |   //
+              MSG_TRUNC_LINUX |  //
+#ifndef DISABLE_NONPOSIX
+              MSG_DONTWAIT_LINUX |      //
+              MSG_CMSG_CLOEXEC_LINUX |  //
+#endif
+              MSG_WAITALL_LINUX;
   if (flags & ~supported) {
     LOGF("unsupported %s flags %#x", "recv", flags & ~supported);
     return einval();
@@ -1641,10 +1643,12 @@ static int UnXlatMsgFlags(int flags) {
   }
 #endif
 #ifdef MSG_CMSG_CLOEXEC
+#ifndef DISABLE_NONPOSIX
   if (flags & MSG_CMSG_CLOEXEC) {
     guestflags |= MSG_CMSG_CLOEXEC_LINUX;
     flags &= ~MSG_CMSG_CLOEXEC;
   }
+#endif
 #endif
   if (flags) {
     LOGF("unsupported %s flags %#x", "msg", flags);
@@ -2639,10 +2643,12 @@ static int XlatFstatatFlags(int x) {
     x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
   }
 #ifdef AT_EMPTY_PATH
+#ifndef DISABLE_NONPOSIX
   if (x & AT_EMPTY_PATH_LINUX) {
     res |= AT_EMPTY_PATH;
     x &= ~AT_EMPTY_PATH_LINUX;
   }
+#endif
 #endif
   if (x) {
     LOGF("%s() flags %d not supported", "fstatat", x);
@@ -2659,6 +2665,7 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
   struct stat_linux gst;
   if (!(path = LoadStr(m, pathaddr))) return -1;
 #ifndef AT_EMPTY_PATH
+#ifndef DISABLE_NONPOSIX
   if (flags & AT_EMPTY_PATH_LINUX) {
     flags &= AT_EMPTY_PATH_LINUX;
     if (!*path) {
@@ -2669,6 +2676,7 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
       return SysFstat(m, dirfd, staddr);
     }
   }
+#endif
 #endif
   if ((rc = OverlaysStat(GetDirFildes(dirfd), path, &st,
                          XlatFstatatFlags(flags))) != -1) {
@@ -2688,10 +2696,12 @@ static int XlatFchownatFlags(int x) {
     x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
   }
 #ifdef AT_EMPTY_PATH
+#ifndef DISABLE_NONPOSIX
   if (x & AT_EMPTY_PATH_LINUX) {
     res |= AT_EMPTY_PATH;
     x &= ~AT_EMPTY_PATH_LINUX;
   }
+#endif
 #endif
   if (x) {
     LOGF("%s() flags %#x not supported", "fchownat", x);
@@ -2709,6 +2719,7 @@ static int SysFchownat(struct Machine *m, i32 dirfd, i64 pathaddr, u32 uid,
   const char *path;
   if (!(path = LoadStr(m, pathaddr))) return -1;
 #ifndef AT_EMPTY_PATH
+#ifndef DISABLE_NONPOSIX
   if (flags & AT_EMPTY_PATH_LINUX) {
     flags &= AT_EMPTY_PATH_LINUX;
     if (!*path) {
@@ -2719,6 +2730,7 @@ static int SysFchownat(struct Machine *m, i32 dirfd, i64 pathaddr, u32 uid,
       return SysFchown(m, dirfd, uid, gid);
     }
   }
+#endif
 #endif
   return OverlaysChown(GetDirFildes(dirfd), path, uid, gid,
                        XlatFchownatFlags(flags));
@@ -3078,17 +3090,19 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
   } else if (cmd == F_SETOWN_LINUX) {
     rc = fcntl(fd->fildes, F_SETOWN, arg);
 #endif
-#ifdef HAVE_F_GETOWN_EX
-  } else if (cmd == F_SETOWN_EX_LINUX) {
-    rc = SysFcntlSetownEx(m, fd->fildes, arg);
-#endif
 #ifdef F_GETOWN
   } else if (cmd == F_GETOWN_LINUX) {
     rc = fcntl(fd->fildes, F_GETOWN);
 #endif
+#ifndef DISABLE_NONPOSIX
+#ifdef HAVE_F_GETOWN_EX
+  } else if (cmd == F_SETOWN_EX_LINUX) {
+    rc = SysFcntlSetownEx(m, fd->fildes, arg);
+#endif
 #ifdef HAVE_F_GETOWN_EX
   } else if (cmd == F_GETOWN_EX_LINUX) {
     rc = SysFcntlGetownEx(m, fd->fildes, arg);
+#endif
 #endif
   } else {
     LOGF("missing fcntl() command %" PRId32, cmd);
@@ -4280,6 +4294,7 @@ static i32 Select(struct Machine *m,          //
       return -1;
     }
   }
+#ifndef DISABLE_NONPOSIX
   if (timeoutp) {
     now = GetTime();
     if (CompareTime(now, deadline) < 0) {
@@ -4288,6 +4303,7 @@ static i32 Select(struct Machine *m,          //
       *timeoutp = GetZeroTime();
     }
   }
+#endif
   return rc;
 }
 
@@ -4295,7 +4311,9 @@ static i32 SysSelect(struct Machine *m, i32 nfds, i64 readfds_addr,
                      i64 writefds_addr, i64 exceptfds_addr, i64 timeout_addr) {
   i32 rc;
   struct timespec timeout, *timeoutp;
+#ifndef DISABLE_NONPOSIX
   struct timeval_linux timeout_linux;
+#endif
   const struct timeval_linux *timeoutp_linux;
   if (timeout_addr) {
     if ((timeoutp_linux = (const struct timeval_linux *)SchlepRW(
@@ -4318,11 +4336,13 @@ static i32 SysSelect(struct Machine *m, i32 nfds, i64 readfds_addr,
   }
   rc =
       Select(m, nfds, readfds_addr, writefds_addr, exceptfds_addr, timeoutp, 0);
+#ifndef DISABLE_NONPOSIX
   if (timeout_addr && (rc != -1 || errno == EINTR)) {
     Write64(timeout_linux.sec, timeout.tv_sec);
     Write64(timeout_linux.usec, (timeout.tv_nsec + 999) / 1000);
     CopyToUserWrite(m, timeout_addr, &timeout_linux, sizeof(timeout_linux));
   }
+#endif
   return rc;
 }
 
@@ -4334,7 +4354,9 @@ static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
   const struct sigset_linux *sm;
   const struct pselect6_linux *ps;
   struct timespec timeout, *timeoutp;
+#ifndef DISABLE_NONPOSIX
   struct timespec_linux timeout_linux;
+#endif
   const struct timespec_linux *timeoutp_linux;
   if (timeout_addr) {
     if ((timeoutp_linux = (const struct timespec_linux *)SchlepRW(
@@ -4380,11 +4402,13 @@ static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
   }
   rc = Select(m, nfds, readfds_addr, writefds_addr, exceptfds_addr, timeoutp,
               sigmaskp);
+#ifndef DISABLE_NONPOSIX
   if (timeout_addr && (rc != -1 || errno == EINTR)) {
     Write64(timeout_linux.sec, timeout.tv_sec);
     Write64(timeout_linux.nsec, timeout.tv_nsec);
     CopyToUserWrite(m, timeout_addr, &timeout_linux, sizeof(timeout_linux));
   }
+#endif
   return rc;
 }
 
@@ -5027,7 +5051,9 @@ void OpSyscall(P) {
     SYSCALL3(0x01A, "msync", SysMsync, STRACE_3);
     SYSCALL3(0x00A, "mprotect", SysMprotect, STRACE_MPROTECT);
     SYSCALL2(0x00B, "munmap", SysMunmap, STRACE_MUNMAP);
+#ifndef DISABLE_NONPOSIX
     SYSCALL1(0x00C, "brk", SysBrk, STRACE_1);
+#endif
     SYSCALL4(0x00D, "rt_sigaction", SysSigaction, STRACE_SIGACTION);
     SYSCALL4(0x00E, "rt_sigprocmask", SysSigprocmask, STRACE_SIGPROCMASK);
     SYSCALL3(0x010, "ioctl", SysIoctl, STRACE_3);
@@ -5038,50 +5064,58 @@ void OpSyscall(P) {
     SYSCALL3(0x01C, "madvise", SysMadvise, STRACE_3);
     SYSCALL1(0x020, "dup", SysDup1, STRACE_DUP);
     SYSCALL2(0x021, "dup2", SysDup2, STRACE_DUP2);
+#ifndef DISABLE_NONPOSIX
     SYSCALL3(0x124, "dup3", SysDup3, STRACE_DUP3);
+#endif
     SYSCALL0(0x022, "pause", SysPause, STRACE_PAUSE);
-    SYSCALL2(0x023, "nanosleep", SysNanosleep, STRACE_2);
+    SYSCALL2(0x023, "nanosleep", SysNanosleep, STRACE_NANOSLEEP);
     SYSCALL2(0x024, "getitimer", SysGetitimer, STRACE_2);
     SYSCALL1(0x025, "alarm", SysAlarm, STRACE_ALARM);
     SYSCALL3(0x026, "setitimer", SysSetitimer, STRACE_3);
     SYSCALL0(0x027, "getpid", SysGetpid, STRACE_GETPID);
     SYSCALL0(0x0BA, "gettid", SysGettid, STRACE_GETTID);
 #ifndef DISABLE_SOCKETS
-    SYSCALL3(0x029, "socket", SysSocket, STRACE_3);
-    SYSCALL3(0x02A, "connect", SysConnect, STRACE_3);
-    SYSCALL3(0x02B, "accept", SysAccept, STRACE_3);
-    SYSCALL4(0x120, "accept4", SysAccept4, STRACE_4);
-    SYSCALL6(0x02C, "sendto", SysSendto, STRACE_6);
-    SYSCALL6(0x02D, "recvfrom", SysRecvfrom, STRACE_6);
+    SYSCALL3(0x029, "socket", SysSocket, STRACE_SOCKET);
+    SYSCALL3(0x02A, "connect", SysConnect, STRACE_CONNECT);
+    SYSCALL3(0x02B, "accept", SysAccept, STRACE_ACCEPT);
+    SYSCALL4(0x120, "accept4", SysAccept4, STRACE_ACCEPT4);
+    SYSCALL6(0x02C, "sendto", SysSendto, STRACE_SENDTO);
+    SYSCALL6(0x02D, "recvfrom", SysRecvfrom, STRACE_RECVFROM);
     SYSCALL3(0x02E, "sendmsg", SysSendmsg, STRACE_3);
-    SYSCALL4(0x133, "sendmmsg", SysSendmmsg, STRACE_4);
     SYSCALL3(0x02F, "recvmsg", SysRecvmsg, STRACE_3);
+#ifndef DISABLE_NONPOSIX
+    SYSCALL4(0x133, "sendmmsg", SysSendmmsg, STRACE_4);
     SYSCALL5(0x12B, "recvmmsg", SysRecvmmsg, STRACE_5);
+#endif
     SYSCALL2(0x030, "shutdown", SysShutdown, STRACE_2);
-    SYSCALL3(0x031, "bind", SysBind, STRACE_3);
-    SYSCALL2(0x032, "listen", SysListen, STRACE_2);
-    SYSCALL3(0x033, "getsockname", SysGetsockname, STRACE_3);
-    SYSCALL3(0x034, "getpeername", SysGetpeername, STRACE_3);
+    SYSCALL3(0x031, "bind", SysBind, STRACE_BIND);
+    SYSCALL2(0x032, "listen", SysListen, STRACE_LISTEN);
+    SYSCALL3(0x033, "getsockname", SysGetsockname, STRACE_GETSOCKNAME);
+    SYSCALL3(0x034, "getpeername", SysGetpeername, STRACE_GETPEERNAME);
     SYSCALL5(0x036, "setsockopt", SysSetsockopt, STRACE_5);
     SYSCALL5(0x037, "getsockopt", SysGetsockopt, STRACE_5);
 #endif
 #ifdef HAVE_FORK
     SYSCALL0(0x039, "fork", SysFork, STRACE_FORK);
+#ifndef DISABLE_NONPOSIX
     SYSCALL0(0x03A, "vfork", SysVfork, STRACE_VFORK);
-    SYSCALL4(0x03D, "wait4", SysWait4, STRACE_4);
+#endif
+    SYSCALL4(0x03D, "wait4", SysWait4, STRACE_WAIT4);
     SYSCALL2(0x03E, "kill", SysKill, STRACE_KILL);
 #endif
 #ifdef HAVE_THREADS
     SYSCALL6(0x0CA, "futex", SysFutex, STRACE_6);
 #endif
 #if defined(HAVE_FORK) || defined(HAVE_THREADS)
-    SYSCALL1(0x016, "pipe", SysPipe, STRACE_1);
-    SYSCALL2(0x125, "pipe2", SysPipe2, STRACE_2);
+    SYSCALL1(0x016, "pipe", SysPipe, STRACE_PIPE);
+#ifndef DISABLE_NONPOSIX
+    SYSCALL2(0x125, "pipe2", SysPipe2, STRACE_PIPE2);
+#endif
     SYSCALL6(0x038, "clone", SysClone, STRACE_CLONE);
     SYSCALL2(0x0C8, "tkill", SysTkill, STRACE_TKILL);
     SYSCALL3(0x0EA, "tgkill", SysTgkill, STRACE_3);
     SYSCALL3(0x03B, "execve", SysExecve, STRACE_3);
-    SYSCALL4(0x035, "socketpair", SysSocketpair, STRACE_4);
+    SYSCALL4(0x035, "socketpair", SysSocketpair, STRACE_SOCKETPAIR);
     SYSCALL2(0x111, "set_robust_list", SysSetRobustList, STRACE_2);
     SYSCALL3(0x112, "get_robust_list", SysGetRobustList, STRACE_3);
     SYSCALL2(0x08C, "getpriority", SysGetpriority, STRACE_2);
@@ -5092,9 +5126,13 @@ void OpSyscall(P) {
     SYSCALL1(0x091, "sched_get_scheduler", SysSchedGetscheduler, STRACE_1);
     SYSCALL1(0x092, "sched_get_priority_max", SysSchedGetPriorityMax, STRACE_1);
     SYSCALL1(0x093, "sched_get_priority_min", SysSchedGetPriorityMin, STRACE_1);
+#ifndef DISABLE_NONPOSIX
     SYSCALL3(0x0CB, "sched_set_affinity", SysSchedSetaffinity, STRACE_3);
 #endif
+#endif
+#ifndef DISABLE_NONPOSIX
     SYSCALL3(0x0CC, "sched_get_affinity", SysSchedGetaffinity, STRACE_3);
+#endif
     SYSCALL1(0x03F, "uname", SysUname, STRACE_1);
     SYSCALL3(0x048, "fcntl", SysFcntl, STRACE_3);
     SYSCALL2(0x049, "flock", SysFlock, STRACE_2);
@@ -5123,16 +5161,20 @@ void OpSyscall(P) {
     SYSCALL2(0x060, "gettimeofday", SysGettimeofday, STRACE_2);
     SYSCALL2(0x061, "getrlimit", SysGetrlimit, STRACE_2);
     SYSCALL2(0x062, "getrusage", SysGetrusage, STRACE_2);
+#ifndef DISABLE_NONPOSIX
     SYSCALL1(0x063, "sysinfo", SysSysinfo, STRACE_1);
+#endif
     SYSCALL1(0x064, "times", SysTimes, STRACE_1);
     SYSCALL0(0x06F, "getpgrp", SysGetpgrp, STRACE_GETPGRP);
     SYSCALL0(0x070, "setsid", SysSetsid, STRACE_SETSID);
     SYSCALL2(0x073, "getgroups", SysGetgroups, STRACE_2);
+#ifndef DISABLE_NONPOSIX
     SYSCALL2(0x074, "setgroups", SysSetgroups, STRACE_2);
     SYSCALL3(0x075, "setresuid", SysSetresuid, STRACE_3);
     SYSCALL3(0x076, "getresuid", SysGetresuid, STRACE_3);
     SYSCALL3(0x077, "setresgid", SysSetresgid, STRACE_3);
     SYSCALL3(0x078, "getresgid", SysGetresgid, STRACE_3);
+#endif
     SYSCALL1(0x079, "getpgid", SysGetpgid, STRACE_1);
     SYSCALL1(0x07C, "getsid", SysGetsid, STRACE_1);
     SYSCALL1(0x07F, "rt_sigpending", SysSigpending, STRACE_1);
@@ -5151,8 +5193,10 @@ void OpSyscall(P) {
     SYSCALL2(0x082, "rt_sigsuspend", SysSigsuspend, STRACE_2);
     SYSCALL2(0x083, "sigaltstack", SysSigaltstack, STRACE_2);
     SYSCALL3(0x085, "mknod", SysMknod, STRACE_3);
+#ifndef DISABLE_NONPOSIX
     SYSCALL4(0x103, "mknodat", SysMknodat, STRACE_4);
     SYSCALL5(0x09D, "prctl", SysPrctl, STRACE_5);
+#endif
     SYSCALL2(0x09E, "arch_prctl", SysArchPrctl, STRACE_2);
     SYSCALL2(0x0A0, "setrlimit", SysSetrlimit, STRACE_2);
 #ifndef DISABLE_OVERLAYS
@@ -5164,24 +5208,27 @@ void OpSyscall(P) {
     SYSCALL4(0x0DD, "fadvise", SysFadvise, STRACE_4);
     SYSCALL2(0x0E3, "clock_settime", SysClockSettime, STRACE_2);
     SYSCALL2(0x0E5, "clock_getres", SysClockGetres, STRACE_2);
-    SYSCALL4(0x0E6, "clock_nanosleep", SysClockNanosleep, STRACE_4);
+    SYSCALL4(0x0E6, "clock_nanosleep", SysClockNanosleep, STRACE_CLOCK_SLEEP);
     SYSCALL2(0x084, "utime", SysUtime, STRACE_2);
     SYSCALL2(0x0EB, "utimes", SysUtimes, STRACE_2);
     SYSCALL3(0x105, "futimesat", SysFutimesat, STRACE_3);
     SYSCALL4(0x118, "utimensat", SysUtimensat, STRACE_4);
     SYSCALL4(0x101, "openat", SysOpenat, STRACE_OPENAT);
-    SYSCALL3(0x102, "mkdirat", SysMkdirat, STRACE_3);
+    SYSCALL3(0x102, "mkdirat", SysMkdirat, STRACE_MKDIRAT);
     SYSCALL4(0x106, "fstatat", SysFstatat, STRACE_4);
-    SYSCALL3(0x107, "unlinkat", SysUnlinkat, STRACE_3);
-    SYSCALL4(0x108, "renameat", SysRenameat, STRACE_4);
-    SYSCALL5(0x13C, "renameat2", SysRenameat2, STRACE_5);
-    SYSCALL5(0x109, "linkat", SysLinkat, STRACE_5);
+    SYSCALL3(0x107, "unlinkat", SysUnlinkat, STRACE_UNLINKAT);
+    SYSCALL4(0x108, "renameat", SysRenameat, STRACE_RENAMEAT);
+#ifndef DISABLE_NONPOSIX
+    SYSCALL5(0x13C, "renameat2", SysRenameat2, STRACE_RENAMEAT2);
+#endif
+    SYSCALL5(0x109, "linkat", SysLinkat, STRACE_LINKAT);
     SYSCALL3(0x10A, "symlinkat", SysSymlinkat, STRACE_SYMLINKAT);
     SYSCALL4(0x10B, "readlinkat", SysReadlinkat, STRACE_READLINKAT);
-    SYSCALL3(0x10C, "fchmodat", SysFchmodat, STRACE_3);
+    SYSCALL3(0x10C, "fchmodat", SysFchmodat, STRACE_FCHMODAT);
     SYSCALL3(0x10D, "faccessat", SysFaccessat, STRACE_FACCESSAT);
-    SYSCALL5(0x10F, "ppoll", SysPpoll, STRACE_5);
     SYSCALL4(0x1b7, "faccessat2", SysFaccessat2, STRACE_FACCESSAT);
+#ifndef DISABLE_NONPOSIX
+    SYSCALL5(0x10F, "ppoll", SysPpoll, STRACE_5);
     SYSCALL4(0x127, "preadv", SysPreadv, STRACE_4);
     SYSCALL4(0x128, "pwritev", SysPwritev, STRACE_4);
     SYSCALL4(0x12E, "prlimit", SysPrlimit, STRACE_4);
@@ -5189,6 +5236,7 @@ void OpSyscall(P) {
     SYSCALL5(0x147, "preadv2", SysPreadv2, STRACE_5);
     SYSCALL5(0x148, "pwritev2", SysPwritev2, STRACE_5);
     SYSCALL3(0x1B4, "close_range", SysCloseRange, STRACE_3);
+#endif
     case 0x3C:
       SYS_LOGF("%s(%#" PRIx64 ")", "exit", di);
       SysExit(m, di);

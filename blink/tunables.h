@@ -2,6 +2,8 @@
 #define BLINK_TUNABLES_H_
 #include "blink/builtin.h"
 
+#define kBlinkVersion "0.9.0"
+
 #if CAN_64BIT
 #ifdef __APPLE__
 #define kSkew 0x088800000000

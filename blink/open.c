@@ -107,9 +107,11 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
   struct Fd *fd;
   const char *path;
 #ifndef O_TMPFILE
+#ifndef DISABLE_NONPOSIX
   if ((oflags & O_TMPFILE_LINUX) == O_TMPFILE_LINUX) {
     return SysTmpfile(m, dirfildes, pathaddr, oflags & ~O_TMPFILE_LINUX, mode);
   }
+#endif
 #endif
   if ((sysflags = XlatOpenFlags(oflags)) == -1) return -1;
   if (!(path = LoadStr(m, pathaddr))) return efault();

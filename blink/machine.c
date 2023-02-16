@@ -112,16 +112,14 @@ static void OpLeaGvqpM(P) {
   }
 }
 
-static relegated const struct DescriptorCache *GetSegment(P, unsigned s) {
-  if (s < 6) {
-    return m->seg + s;
-  } else {
-    OpUdImpl(m);
-  }
+static relegated u64 GetDescriptorLimit(u64 d) {
+  u64 lim = (d & 0x000f000000000000) >> 32 | (d & 0xffff);
+  if ((d & 0x0080000000000000) != 0) lim = (lim << 12) | 0xfff;
+  return lim;
 }
 
-static relegated int GetDescriptor(struct Machine *m, int selector,
-                                   u64 *out_descriptor) {
+relegated int GetDescriptor(struct Machine *m, int selector,
+                            u64 *out_descriptor) {
   u64 base = m->system->gdt_base, daddr;
   selector &= -8;
   if (8 <= selector && selector + 7 <= m->system->gdt_limit) {
@@ -133,65 +131,6 @@ static relegated int GetDescriptor(struct Machine *m, int selector,
   } else {
     return -1;
   }
-}
-
-static relegated u64 GetDescriptorBase(u64 d) {
-  return (d & 0xff00000000000000) >> 32 | (d & 0x000000ffffff0000) >> 16;
-}
-
-static relegated u64 GetDescriptorLimit(u64 d) {
-  u64 lim = (d & 0x000f000000000000) >> 32 | (d & 0xffff);
-  if ((d & 0x0080000000000000) != 0) lim = (lim << 12) | 0xfff;
-  return lim;
-}
-
-static relegated int GetDescriptorMode(u64 d) {
-  u8 kMode[] = {XED_MODE_REAL, XED_MODE_LONG, XED_MODE_LEGACY, XED_MODE_LONG};
-  return kMode[(d & 0x0060000000000000) >> 53];
-}
-
-static relegated bool IsProtectedMode(struct Machine *m) {
-  return m->system->cr0 & CR0_PE;
-}
-
-static relegated void SetSegment(P, unsigned sr, u16 sel, bool jumping) {
-  u64 descriptor;
-  if (sr == 1 && !jumping) OpUdImpl(m);
-  if (!IsProtectedMode(m)) {
-    m->seg[sr].sel = sel;
-    m->seg[sr].base = sel << 4;
-  } else if (GetDescriptor(m, sel, &descriptor) != -1) {
-    m->seg[sr].sel = sel;
-    m->seg[sr].base = GetDescriptorBase(descriptor);
-    if (sr == 1) ChangeMachineMode(m, GetDescriptorMode(descriptor));
-  } else {
-    ThrowProtectionFault(m);
-  }
-}
-
-relegated void SetCs(P, u16 sel) {
-  SetSegment(A, 1, sel, true);
-}
-
-static relegated void OpPushSeg(P) {
-  u8 seg = (Opcode(rde) & 070) >> 3;
-  Push(A, GetSegment(A, seg)->sel);
-}
-
-static relegated void OpPopSeg(P) {
-  u8 seg = (Opcode(rde) & 070) >> 3;
-  SetSegment(A, seg, Pop(A, 0), false);
-}
-
-static relegated void OpMovEvqpSw(P) {
-  WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
-                        GetSegment(A, ModrmReg(rde))->sel);
-}
-
-static relegated void OpMovSwEvqp(P) {
-  u64 x;
-  x = ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A));
-  SetSegment(A, ModrmReg(rde), x, false);
 }
 
 static relegated void OpLsl(P) {
@@ -216,68 +155,12 @@ void ChangeMachineMode(struct Machine *m, int mode) {
   SetMachineMode(m, mode);
 }
 
-static relegated void OpJmpf(P) {
-  SetCs(A, uimm0);
-  m->ip = disp;
-  if (m->system->onlongbranch) {
-    m->system->onlongbranch(m);
-  }
-}
-
 static relegated void OpXlatAlBbb(P) {
   i64 v;
   v = MaskAddress(Eamode(rde), Get64(m->bx) + Get8(m->ax));
   v = DataSegment(A, v);
   SetReadAddr(m, v, 1);
   m->al = Load8(ResolveAddress(m, v));
-}
-
-static void PutEaxAx(P, u32 x) {
-  if (!Osz(rde)) {
-    Put64(m->ax, x);
-  } else {
-    Put16(m->ax, x);
-  }
-}
-
-static u32 GetEaxAx(P) {
-  if (!Osz(rde)) {
-    return Get32(m->ax);
-  } else {
-    return Get16(m->ax);
-  }
-}
-
-static relegated void OpInAlImm(P) {
-  Put8(m->ax, OpIn(m, uimm0));
-}
-
-static relegated void OpInAxImm(P) {
-  PutEaxAx(A, OpIn(m, uimm0));
-}
-
-static relegated void OpInAlDx(P) {
-  Put8(m->ax, OpIn(m, Get16(m->dx)));
-}
-
-static relegated void OpInAxDx(P) {
-  PutEaxAx(A, OpIn(m, Get16(m->dx)));
-}
-
-static relegated void OpOutImmAl(P) {
-  OpOut(m, uimm0, Get8(m->ax));
-}
-
-static relegated void OpOutImmAx(P) {
-  OpOut(m, uimm0, GetEaxAx(A));
-}
-
-static relegated void OpOutDxAl(P) {
-  OpOut(m, Get16(m->dx), Get8(m->ax));
-}
-
-static relegated void OpOutDxAx(P) {
-  OpOut(m, Get16(m->dx), GetEaxAx(A));
 }
 
 static void OpXchgZvqp(P) {
@@ -485,22 +368,6 @@ static void OpMovZvqpIvqp(P) {
              "wF",  // PutReg[force16+bit](RexbSrm, arg2)
              uimm0);
     }
-  }
-}
-
-static relegated void OpIncZv(P) {
-  if (!Osz(rde)) {
-    Put32(RegSrm(m, rde), Inc32(m, Get32(RegSrm(m, rde)), 0));
-  } else {
-    Put16(RegSrm(m, rde), Inc16(m, Get16(RegSrm(m, rde)), 0));
-  }
-}
-
-static relegated void OpDecZv(P) {
-  if (!Osz(rde)) {
-    Put32(RegSrm(m, rde), Dec32(m, Get32(RegSrm(m, rde)), 0));
-  } else {
-    Put16(RegSrm(m, rde), Dec16(m, Get16(RegSrm(m, rde)), 0));
   }
 }
 
@@ -1206,42 +1073,6 @@ static void Op1b8(P) {
   }
 }
 
-static relegated void LoadFarPointer(P, unsigned sr) {
-  unsigned n;
-  u8 *p;
-  u64 fp;
-  switch (Eamode(rde)) {
-    case XED_MODE_LONG:
-    case XED_MODE_LEGACY:
-      OpUdImpl(m);
-      break;
-    case XED_MODE_REAL:
-      n = 1 << WordLog2(rde);
-      p = ComputeReserveAddressRead(A, n + 2);
-      LockBus(p);
-      fp = Load32(p);
-      if (n >= 4) {
-        fp |= (u64)Load16(p + 4) << 32;
-        SetSegment(A, sr, fp >> 32 & 0x0000ffff, false);
-      } else {
-        SetSegment(A, sr, fp >> 16 & 0x0000ffff, false);
-      }
-      UnlockBus(p);
-      WriteRegister(rde, RegRexrReg(m, rde), fp);  // offset portion
-      break;
-    default:
-      __builtin_unreachable();
-  }
-}
-
-static relegated void OpLes(P) {
-  LoadFarPointer(A, 0);
-}
-
-static relegated void OpLds(P) {
-  LoadFarPointer(A, 3);
-}
-
 static relegated void Loop(P, bool cond) {
   u64 cx;
   cx = Get64(m->cx) - 1;
@@ -1650,6 +1481,30 @@ int ClassifyOp(u64 rde) {
       return kOpPrecious;
   }
 }
+
+#ifdef DISABLE_METAL
+#define OpIncZv     OpUd
+#define OpDecZv     OpUd
+#define OpLes       OpUd
+#define OpLds       OpUd
+#define OpJmpf      OpUd
+#define OpInAlImm   OpUd
+#define OpInAxImm   OpUd
+#define OpInAlDx    OpUd
+#define OpInAxDx    OpUd
+#define OpOutImmAl  OpUd
+#define OpOutImmAx  OpUd
+#define OpOutDxAl   OpUd
+#define OpOutDxAx   OpUd
+#define OpMovSwEvqp OpUd
+#define OpMovEvqpSw OpUd
+#define OpPushSeg   OpUd
+#define OpPopSeg    OpUd
+#define OpCallf     OpUd
+#define OpRetf      OpUd
+#define OpPopa      OpUd
+#define OpPusha     OpUd
+#endif
 
 #ifdef DISABLE_BCD
 #define OpDas OpUd

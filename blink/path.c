@@ -31,6 +31,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/modrm.h"
 #include "blink/overlays.h"
 #include "blink/rde.h"
 #include "blink/stats.h"

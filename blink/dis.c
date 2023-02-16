@@ -284,24 +284,3 @@ const char *DisGetLine(struct Dis *d, struct Machine *m, int i) {
   if (DisLineCode(d, d->buf, err) - d->buf >= (int)sizeof(d->buf)) Abort();
   return d->buf;
 }
-
-void DisFreeOp(struct DisOp *o) {
-  free(o->s);
-}
-
-void DisFreeOps(struct DisOps *ops) {
-  long i;
-  for (i = 0; i < ops->i; ++i) {
-    DisFreeOp(&ops->p[i]);
-  }
-  free(ops->p);
-  memset(ops, 0, sizeof(*ops));
-}
-
-void DisFree(struct Dis *d) {
-  DisFreeOps(&d->ops);
-  free(d->edges.p);
-  free(d->loads.p);
-  free(d->syms.p);
-  memset(d, 0, sizeof(*d));
-}

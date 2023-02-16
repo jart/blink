@@ -6,8 +6,13 @@
 // #define DISABLE_THREADS
 // #define DISABLE_SOCKETS
 // #define DISABLE_OVERLAYS
+// #define DISABLE_NONPOSIX
 // #define DISABLE_ANCILLARY
+// #define DISABLE_DISASSEMBLER
+// #define DISABLE_BACKTRACE
 // #define DISABLE_STRACE
+// #define DISABLE_METAL
+// #define DISABLE_MMX
 // #define DISABLE_BCD
 
 // #define HAVE_FORK

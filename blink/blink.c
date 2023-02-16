@@ -43,25 +43,57 @@
 #include "blink/stats.h"
 #include "blink/syscall.h"
 #include "blink/thread.h"
+#include "blink/tunables.h"
 #include "blink/util.h"
 #include "blink/web.h"
 #include "blink/x86.h"
 #include "blink/xlat.h"
 
-#define OPTS "hjemZs0L:C:"
-#define USAGE \
-  " [-" OPTS "] PROG [ARGS...]\n\
-  -h                   help\n\
-  -j                   disable jit\n\
-  -e                   also log to stderr\n\
-  -0                   to specify argv[0]\n\
-  -m                   enable memory safety\n\
-  -s                   enable system call logging\n\
-  -Z                   print internal statistics on exit\n\
-  -L PATH              log filename (default ${TMPDIR:-/tmp}/blink.log)\n\
-  -C PATH              sets chroot dir or overlay spec [default \":o\"]\n\
-  $BLINK_OVERLAYS      file system roots [default \":o\"]\n\
-  $BLINK_LOG_FILENAME  log filename (same as -L flag)\n"
+#define VERSION \
+  "Blink Virtual Machine " kBlinkVersion " (" BUILD_TIMESTAMP ")\n\
+Copyright (c) 2023 Justine Alexandra Roberts Tunney\n\
+Blink comes with absolutely NO WARRANTY of any kind.\n\
+You may redistribute copies of Blink under the ISC License.\n\
+For more information, see the file named LICENSE.\n\
+Toolchain: " BUILD_TOOLCHAIN "\n\
+Revision: " BUILD_GITSHA "\n\
+Config: ./configure MODE=" BUILD_MODE " " BUILD_CONFIGURATION "\n"
+
+#define OPTS "hvjemZs0L:C:"
+
+static const char USAGE[] =
+    " [-" OPTS "] PROG [ARGS...]\n"
+    "Options:\n"
+    "  -h                   help\n"
+#ifndef DISABLE_JIT
+    "  -j                   disable jit\n"
+#endif
+    "  -v                   show version\n"
+#ifndef NDEBUG
+    "  -e                   also log to stderr\n"
+#endif
+    "  -0                   to specify argv[0]\n"
+    "  -m                   enable memory safety\n"
+#if !defined(DISABLE_STRACE) && !defined(TINY)
+    "  -s                   enable system call logging\n"
+#endif
+#ifndef NDEBUG
+    "  -Z                   print internal statistics on exit\n"
+    "  -L PATH              log filename (default is blink.log)\n"
+#endif
+#ifndef DISABLE_OVERLAYS
+    "  -C PATH              sets chroot dir or overlay spec [default \":o\"]\n"
+#endif
+#if !defined(DISABLE_OVERLAYS) || !defined(NDEBUG)
+    "Environment:\n"
+#endif
+#ifndef DISABLE_OVERLAYS
+    "  $BLINK_OVERLAYS      file system roots [default \":o\"]\n"
+#endif
+#ifndef NDEBUG
+    "  $BLINK_LOG_FILENAME  log filename (same as -L flag)\n"
+#endif
+    ;
 
 extern char **environ;
 static bool FLAG_zero;
@@ -172,6 +204,11 @@ _Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {
   exit(rc);
 }
 
+_Noreturn static void PrintVersion(void) {
+  Print(1, VERSION);
+  exit(0);
+}
+
 static void GetOpts(int argc, char *argv[]) {
   int opt;
   FLAG_nolinear = !CanHaveLinearMemory();
@@ -218,6 +255,8 @@ static void GetOpts(int argc, char *argv[]) {
         WriteErrorString("error: overlays support was disabled\n");
 #endif
         break;
+      case 'v':
+        PrintVersion();
       case 'h':
         PrintUsage(argc, argv, 0, 1);
       default:

@@ -1350,6 +1350,76 @@ static void SsePmaddubsw(u8 x[16], const u8 y[16]) {
 #endif
 }
 
+#ifdef DISABLE_MMX
+relegated void NoMmx(u8 x[8], const u8 y[8]) {
+  OpUdImpl(g_machine);
+}
+static void NoMmxK(u8 x[8], unsigned k) {
+  OpUdImpl(g_machine);
+}
+#define MmxKernel     NoMmx
+#define MmxPabsd      NoMmx
+#define MmxPabsw      NoMmx
+#define MmxPackssdw   NoMmx
+#define MmxPacksswb   NoMmx
+#define MmxPackuswb   NoMmx
+#define MmxPaddd      NoMmx
+#define MmxPaddq      NoMmx
+#define MmxPaddsb     NoMmx
+#define MmxPaddusb    NoMmx
+#define MmxPalignr    NoMmx
+#define MmxPcmpeqd    NoMmx
+#define MmxPcmpgtd    NoMmx
+#define MmxPhaddd     NoMmx
+#define MmxPhaddw     NoMmx
+#define MmxPhsubd     NoMmx
+#define MmxPhsubw     NoMmx
+#define MmxPmaddubsw  NoMmx
+#define MmxPmaddwd    NoMmx
+#define MmxPmaxsw     NoMmx
+#define MmxPminsw     NoMmx
+#define MmxPmulhrsw   NoMmx
+#define MmxPmulhuw    NoMmx
+#define MmxPmulld     NoMmx
+#define MmxPmuludq    NoMmx
+#define MmxPsadbw     NoMmx
+#define MmxPshufb     NoMmx
+#define MmxPsignb     NoMmx
+#define MmxPsignd     NoMmx
+#define MmxPsignw     NoMmx
+#define MmxPslld      NoMmxK
+#define MmxPslldq     NoMmxK
+#define MmxPslldv     NoMmx
+#define MmxPsllq      NoMmxK
+#define MmxPsllqv     NoMmx
+#define MmxPsllw      NoMmxK
+#define MmxPsllwv     NoMmx
+#define MmxPsrad      NoMmxK
+#define MmxPsradv     NoMmx
+#define MmxPsraw      NoMmxK
+#define MmxPsrawv     NoMmx
+#define MmxPsrld      NoMmxK
+#define MmxPsrldq     NoMmxK
+#define MmxPsrldv     NoMmx
+#define MmxPsrlq      NoMmxK
+#define MmxPsrlqv     NoMmx
+#define MmxPsrlw      NoMmxK
+#define MmxPsrlwv     NoMmx
+#define MmxPsubd      NoMmx
+#define MmxPsubq      NoMmx
+#define MmxPsubsb     NoMmx
+#define MmxPsubusb    NoMmx
+#define MmxPsubusw    NoMmx
+#define MmxPunpckhbw  NoMmx
+#define MmxPunpckhdq  NoMmx
+#define MmxPunpckhqdq NoMmx
+#define MmxPunpckhwd  NoMmx
+#define MmxPunpcklbw  NoMmx
+#define MmxPunpckldq  NoMmx
+#define MmxPunpcklqdq NoMmx
+#define MmxPunpcklwd  NoMmx
+#endif
+
 static void OpPsb(P, void MmxKernel(u8[8], unsigned),
                   void SseKernel(u8[16], unsigned)) {
   if (Osz(rde)) {
@@ -1414,7 +1484,11 @@ void OpSsePalignr(P) {
   if (Osz(rde)) {
     SsePalignr(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead16(A), uimm0);
   } else {
+#ifndef DISABLE_MMX
     MmxPalignr(XmmRexrReg(m, rde), GetModrmRegisterXmmPointerRead8(A), uimm0);
+#else
+    OpUdImpl(m);
+#endif
   }
 }
 
@@ -1424,7 +1498,11 @@ void OpSse(P, void MmxKernel(u8[8], const u8[8]),
   if (Osz(rde)) {
     SseKernel(XmmRexrReg(m, rde), GetXmmAddress(A));
   } else {
+#ifndef DISABLE_MMX
     MmxKernel(XmmRexrReg(m, rde), GetMmxAddress(A));
+#else
+    OpUdImpl(m);
+#endif
   }
   IGNORE_RACES_END();
   if (IsMakingPath(m)) {

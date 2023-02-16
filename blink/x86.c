@@ -24,6 +24,7 @@
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/macros.h"
+#include "blink/modrm.h"
 #include "blink/rde.h"
 #include "blink/types.h"
 #include "blink/x86.h"

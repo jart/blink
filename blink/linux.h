@@ -340,10 +340,13 @@
 #define SIOCGSTAMP_LINUX   0x8906  // struct timeval_linux *
 #define SIOCGSTAMPNS_LINUX 0x8907  // struct timespec_linux *
 
-#define AF_UNSPEC_LINUX 0
-#define AF_UNIX_LINUX   1
-#define AF_INET_LINUX   2
-#define AF_INET6_LINUX  10
+#define AF_UNSPEC_LINUX  0
+#define AF_UNIX_LINUX    1
+#define AF_INET_LINUX    2
+#define AF_INET6_LINUX   10
+#define AF_NETLINK_LINUX 16
+#define AF_PACKET_LINUX  17
+#define AF_VSOCK_LINUX   40
 
 #define SOL_IP_LINUX     0
 #define SOL_SOCKET_LINUX 1

@@ -386,6 +386,38 @@ static void SsePmaxub(u8 x[16], const u8 y[16]) {
   memcpy(x, X, 16);
 }
 
+#ifdef DISABLE_MMX
+void NoMmx(u8[8], const u8[8]) relegated;
+#define MmxPor     NoMmx
+#define MmxPxor    NoMmx
+#define MmxPand    NoMmx
+#define MmxPandn   NoMmx
+#define MmxPcmpgtb NoMmx
+#define MmxPcmpgtw NoMmx
+#define MmxPcmpeqb NoMmx
+#define MmxPcmpeqw NoMmx
+#define MmxPmullw  NoMmx
+#define MmxPminub  NoMmx
+#define MmxPand    NoMmx
+#define MmxPaddusw NoMmx
+#define MmxPmaxub  NoMmx
+#define MmxPandn   NoMmx
+#define MmxPavgb   NoMmx
+#define MmxPavgw   NoMmx
+#define MmxPmulhw  NoMmx
+#define MmxPsubsw  NoMmx
+#define MmxPor     NoMmx
+#define MmxPaddsw  NoMmx
+#define MmxPxor    NoMmx
+#define MmxPsubb   NoMmx
+#define MmxPsubw   NoMmx
+#define MmxPaddb   NoMmx
+#define MmxPaddw   NoMmx
+#define MmxPhaddsw NoMmx
+#define MmxPhsubsw NoMmx
+#define MmxPabsb   NoMmx
+#endif
+
 // clang-format off
 void OpSsePcmpgtb(P) { OpSse(A, MmxPcmpgtb, SsePcmpgtb); }
 void OpSsePcmpgtw(P) { OpSse(A, MmxPcmpgtw, SsePcmpgtw); }

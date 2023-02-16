@@ -105,8 +105,10 @@ static ssize_t GetAncillaryElementLength(const struct cmsghdr_linux *gcmsg) {
           return 4;
 #endif
 #ifdef HAVE_SCM_CREDENTIALS
+#ifndef DISABLE_NONPOSIX
         case SCM_CREDENTIALS_LINUX:
           return sizeof(struct ucred_linux);
+#endif
 #endif
         default:
           break;
@@ -181,11 +183,13 @@ int SendAncillary(struct Machine *m, struct msghdr *msg,
             break;
 #endif
 #ifdef HAVE_SCM_CREDENTIALS
+#ifndef DISABLE_NONPOSIX
           case SCM_CREDENTIALS_LINUX:
             if (SendScmCredentials(m, msg, (const struct ucred_linux *)payload,
                                    elements) == -1)
               return -1;
             break;
+#endif
 #endif
           default:
             unassert(!"inconsistent ancillary type");
@@ -303,9 +307,11 @@ static i64 ReceiveControlMessage(struct Machine *m, struct msghdr_linux *gm,
     }
 #endif
 #ifdef HAVE_SCM_CREDENTIALS
+#ifndef DISABLE_NONPOSIX
     if (cmsg->cmsg_type == SCM_CREDENTIALS) {
       return ReceiveScmCredentials(m, gm, cmsg, offset);
     }
+#endif
 #endif
   }
   LOGF("%s ancillary level=%d type=%d", "unsupported", cmsg->cmsg_level,
