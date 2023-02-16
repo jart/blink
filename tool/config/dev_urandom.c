@@ -3,6 +3,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifdef _WIN32
+#error posix /dev does not exist on windows.
+#endif
+
 /*
  * assuming the system is working correctly there's a 1 in
  * 235716896562095165800448 chance this check should flake

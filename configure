@@ -225,6 +225,12 @@ compile() {
 
 config() {
   PROGRAM="$1"
+  # If running on cygwin, msys2 or wsl then enable testing mingw-w64 produced binaries
+  if test "${CC#*w64-mingw}" != "${CC}"; then
+    RUNPROGRAM="$1.exe"
+  else
+    RUNPROGRAM="$1"
+  fi
   MESSAGE="$2"
   shift 2
   LOG=$(mktemp blink-config.log.XXXXXX)
@@ -239,7 +245,7 @@ config() {
     exit 1
   fi
   if compile -Werror -o "o/tool/config/${PROGRAM}" "tool/config/${PROGRAM}.c" &&
-     run "o/tool/config/${PROGRAM}"; then
+     run "o/tool/config/${RUNPROGRAM}"; then
     printf '%s\n' "${MESSAGE} yes" >&2
     if [ $# -gt 0 ]; then
       "$@"
