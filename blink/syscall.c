@@ -4677,8 +4677,6 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
 #if defined(HAVE_FORK) || defined(HAVE_THREADS)
   int err;
   bool found;
-  struct Dll *e;
-  struct Machine *m2;
   if (tid < 0) return einval();
   if (!(0 <= sig && sig <= 64)) {
     LOGF("tkill(%d, %d) failed due to bogus signal", tid, sig);
@@ -4707,9 +4705,13 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
     return esrch();
   }
   err = 0;
+  found = 0;
+#ifndef DISABLE_THREADS
   LOCK(&m->system->machines_lock);
   for (e = dll_first(m->system->machines); e;
        e = dll_next(m->system->machines, e)) {
+    struct Dll *e;
+    struct Machine *m2;
     m2 = MACHINE_CONTAINER(e);
     if (m2->tid == tid) {
       if (sig) {
@@ -4723,6 +4725,7 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
     }
   }
   UNLOCK(&m->system->machines_lock);
+#endif
   if (!found) {
     return SysKill(m, tid, sig);
   }

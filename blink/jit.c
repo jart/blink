@@ -123,12 +123,12 @@ const u8 kJitSav[5] = {kJitSav0, kJitSav1, kJitSav2, kJitSav3, kJitSav4};
 static u8 g_code[kJitMemorySize];
 
 static struct JitGlobals {
-  pthread_mutex_t lock;
+  pthread_mutex_t_ lock;
   _Atomic(long) prot;
   _Atomic(long) brk;
   struct Dll *freeblocks GUARDED_BY(lock);
 } g_jit = {
-    PTHREAD_MUTEX_INITIALIZER,
+    PTHREAD_MUTEX_INITIALIZER_,
     PROT_READ | PROT_WRITE | PROT_EXEC,
 };
 
