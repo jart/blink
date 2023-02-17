@@ -3791,10 +3791,6 @@ static void GetOpts(int argc, char *argv[]) {
   FLAG_nolinear = !wantunsafe;
 }
 
-static int OpenDevTty(void) {
-  return open("/dev/tty", O_RDWR | O_NOCTTY);
-}
-
 static void AddPath_StartOp_Tui(P) {
   Jitter(m, rde, 0, 0, "qc", StartOp_Tui);
 }
@@ -3820,8 +3816,23 @@ int VirtualMachine(int argc, char *argv[]) {
     AddStdFd(&m->system->fds, 1);
     AddStdFd(&m->system->fds, 2);
     if (tuimode) {
-      ttyin = isatty(0) ? 0 : OpenDevTty();
-      ttyout = isatty(1) ? 1 : OpenDevTty();
+      int tty;
+      if (isatty(0)) {
+        tty = 0;
+      } else if (isatty(1)) {
+        tty = 1;
+      } else {
+        tty = open("/dev/tty", O_RDWR | O_NOCTTY);
+      }
+      if (tty != -1) {
+        tty = fcntl(tty, F_DUPFD_CLOEXEC, kMinBlinkFd);
+      }
+      if (tty == -1) {
+        WriteErrorString("failed to open /dev/tty\n");
+        exit(1);
+      }
+      ttyin = tty;
+      ttyout = tty;
     } else {
       ttyin = -1;
       ttyout = -1;
