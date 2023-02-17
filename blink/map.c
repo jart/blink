@@ -87,9 +87,6 @@ void *Mmap(void *addr,     //
 #endif
 #ifdef HAVE_MAP_ANONYMOUS
   res = mmap(addr, length, prot, flags, fd, offset);
-  if (res == MAP_FAILED)
-    LOGF("wut %p %p %zu, %d, %d, %d, %ld", res, addr, length, prot, flags, fd,
-         (long)offset);
 #else
   // MAP_ANONYMOUS isn't defined by POSIX.1
   // they do however define the unlink hack
