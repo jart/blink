@@ -36,6 +36,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/map.h"
 #include "blink/overlays.h"
 #include "blink/pml4t.h"
 #include "blink/signal.h"
@@ -313,6 +314,7 @@ int main(int argc, char *argv[]) {
   g_blink_path = argc > 0 ? argv[0] : 0;
   WriteErrorInit();
   GetOpts(argc, argv);
+  InitMap();
   if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
 #ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {

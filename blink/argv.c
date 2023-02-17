@@ -26,7 +26,6 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/map.h"
-#include "blink/random.h"
 #include "blink/syscall.h"
 #include "blink/util.h"
 
@@ -67,13 +66,11 @@ static long GetGuestPageSize(struct Machine *m) {
 }
 
 void LoadArgv(struct Machine *m, char *execfn, char *prog, char **args,
-              char **vars) {
+              char **vars, u8 rng[16]) {
   u8 *bytes;
-  char rng[16];
   struct Elf *elf;
   i64 sp, *p, *bloc;
   size_t i, narg, nenv, naux, nall;
-  unassert(GetRandom(rng, 16, 0) == 16);
   elf = &m->system->elf;
   naux = 10;
   if (elf->at_entry) {

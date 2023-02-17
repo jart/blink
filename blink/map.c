@@ -18,17 +18,72 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/bitscan.h"
 #include "blink/debug.h"
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/map.h"
+#include "blink/tunables.h"
 #include "blink/types.h"
 #include "blink/util.h"
+
+static int GetBitsInAddressSpace(void) {
+  int i;
+  void *ptr;
+  uint64_t want;
+  for (i = 16; i < 40; ++i) {
+    want = 0x8123000000000000ull >> i;
+    if (want > UINTPTR_MAX) continue;
+    ptr = Mmap((void *)(uintptr_t)want, 1, PROT_READ,
+               MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS_, -1, 0, "test");
+    if (ptr != MAP_FAILED) {
+      munmap(ptr, 1);
+      return 64 - i;
+    }
+  }
+  Abort();
+}
+
+static u64 GetVirtualAddressSpace(int vabits, long pagesize) {
+  u64 vaspace;
+  vaspace = 1ull << (vabits - 1);  // 0000400000000000
+  vaspace |= vaspace - 1;          // 00007fffffffffff
+  vaspace &= ~(pagesize - 1);      // 00007ffffffff000
+  return vaspace;
+}
+
+static u64 ScaleAddress(u64 address) {
+  long pagesize;
+  u64 result, vaspace;
+  vaspace = FLAG_vaspace;
+  pagesize = GetSystemPageSize();
+  result = address;
+  do result &= ~(pagesize - 1);
+  while ((result & ~vaspace) && (result >>= 1));
+  return result;
+}
+
+// if the guest used mmap(0, ...) to let blink decide the address,
+// then the goal is to supply mmap(0, ...) to the host kernel too;
+// but we can't do that on systems like rasberry pi, since they'll
+// assign addresses greater than 2**47 which won't fit with x86_64
+void InitMap(void) {
+  long pagesize;
+  pagesize = GetSystemPageSize();
+  FLAG_vaspace = GetVirtualAddressSpace(FLAG_vabits, pagesize);
+  FLAG_aslrmask = ScaleAddress(kAslrMask);
+  FLAG_imagestart = ScaleAddress(kImageStart);
+  FLAG_automapstart = ScaleAddress(kAutomapStart);
+  FLAG_automapend = ScaleAddress(kAutomapEnd);
+  FLAG_dyninterpaddr = ScaleAddress(kDynInterpAddr);
+  FLAG_stacktop = ScaleAddress(kStackTop);
+}
 
 long GetSystemPageSize(void) {
 #ifdef __EMSCRIPTEN__
@@ -41,37 +96,6 @@ long GetSystemPageSize(void) {
   unassert(IS2POW(z));
   return MAX(4096, z);
 #endif
-}
-
-static const char *DescribeSync(int prot) {
-  char *p;
-  bool gotsome;
-  _Thread_local static char buf[64];
-  p = buf;
-  gotsome = false;
-  if (prot & MS_SYNC) {
-    if (gotsome) *p++ = '|';
-    p = stpcpy(p, "MS_SYNC");
-    prot &= ~MS_SYNC;
-    gotsome = true;
-  }
-  if (prot & MS_ASYNC) {
-    if (gotsome) *p++ = '|';
-    p = stpcpy(p, "MS_ASYNC");
-    prot &= ~MS_ASYNC;
-    gotsome = true;
-  }
-  if (prot & MS_INVALIDATE) {
-    if (gotsome) *p++ = '|';
-    p = stpcpy(p, "MS_INVALIDATE");
-    prot &= ~MS_INVALIDATE;
-    gotsome = true;
-  }
-  if (prot) {
-    if (gotsome) *p++ = '|';
-    p = FormatInt64(p, prot);
-  }
-  return buf;
 }
 
 void *Mmap(void *addr,     //
@@ -171,12 +195,11 @@ int Msync(void *addr,     //
   char szbuf[16];
   FormatSize(szbuf, length, 1024);
   if (res != -1) {
-    MEM_LOGF("%s synced %s byte map [%p,%p) as %s", owner, szbuf, addr,
-             (u8 *)addr + length, DescribeSync(flags));
+    MEM_LOGF("%s synced %s byte map [%p,%p) as %#x", owner, szbuf, addr,
+             (u8 *)addr + length, flags);
   } else {
-    MEM_LOGF("%s failed to sync %s byte map [%p,%p) as %s: %s", owner, szbuf,
-             (u8 *)addr, (u8 *)addr + length, DescribeSync(flags),
-             DescribeHostErrno(errno));
+    MEM_LOGF("%s failed to sync %s byte map [%p,%p) as %#x: %s", owner, szbuf,
+             (u8 *)addr, (u8 *)addr + length, flags, DescribeHostErrno(errno));
   }
 #endif
   return res;

@@ -32,6 +32,7 @@
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/pml4t.h"
+#include "blink/random.h"
 #include "blink/thread.h"
 #include "blink/timespec.h"
 #include "blink/types.h"
@@ -213,7 +214,6 @@ struct System *NewSystem(int mode) {
     Write64(s->rlim[i].cur, RLIM_INFINITY_LINUX);
     Write64(s->rlim[i].max, RLIM_INFINITY_LINUX);
   }
-  s->automap = kAutomapStart;
   s->pid = getpid();
   return s;
 }
@@ -432,17 +432,8 @@ u64 AllocatePageTable(struct System *s) {
   return res;
 }
 
-bool OverlapsPrecious(i64 virt, i64 size) {
-  uint64_t BegA, EndA, BegB, EndB;
-  if (size <= 0) return false;
-  BegA = virt + kSkew;
-  EndA = virt + kSkew + (size - 1);
-  BegB = kPreciousStart;
-  EndB = kPreciousEnd - 1;
-  return MAX(BegA, BegB) < MIN(EndA, EndB);
-}
-
 bool IsValidAddrSize(i64 virt, i64 size) {
+  virt = (i64)((u64)virt << 16) >> 16;
   return size > 0 &&                 //
          !(virt & 4095) &&           //
          virt >= -0x800000000000 &&  //
@@ -621,6 +612,7 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
   u64 i, pt;
   u8 *pp, *pde;
   unsigned pi, p1;
+  MEM_LOGF("RemoveVirtual(%#" PRIx64 ", %#" PRIx64 ")", virt, size);
   for (pde = 0, end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
       pi = p1 = (virt >> i) & 511;
@@ -666,17 +658,28 @@ _Noreturn static void PanicDueToMmap(void) {
   exit(250);
 }
 
-int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
-                   i64 offset, bool shared) {
+static int FailDueToHostAlignment(i64 virt, long pagesize, const char *kind) {
+  LOGF("app chose mmap %s (%#" PRIx64 ") that's not aligned "
+       "to the platform page size (%#lx) while using linear mode "
+       "(try using `blink -m`)",
+       kind, virt, pagesize);
+  return einval();
+}
+
+i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
+                   i64 offset, bool shared, bool fixedmap) {
   u8 *mi;
   int prot;
+  int demand;
   int method;
+  i64 result;
+  bool mutated;
   void *got, *want;
   long i, pagesize;
   long vss_delta, rss_delta;
-  bool no_retreat_no_surrender;
   i64 ti, pt, end, pages, level, entry;
   struct ContiguousMemoryRanges ranges;
+  MEM_LOGF("ReserveVirtual(%#" PRIx64 ", %#" PRIx64 ")", virt, size);
 
   // we determine these
   unassert(!(flags & PAGE_TA));
@@ -691,13 +694,6 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     return einval();
   }
 
-  if (HasLinearMapping(s) && OverlapsPrecious(virt, size)) {
-    LOGF("mmap(addr=%#" PRIx64 ", size=%#" PRIx64
-         ") overlaps memory blink reserves for itself",
-         virt, size);
-    return enomem();
-  }
-
   if (fd != -1 && (offset & 4095)) {
     LOGF("mmap(offset=%#" PRIx64 ") isn't 4096-byte page aligned", offset);
     return einval();
@@ -706,56 +702,56 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   pagesize = GetSystemPageSize();
 
   if (HasLinearMapping(s)) {
-    if (virt <= 0) {
-      LOGF("app attempted to map %#" PRIx64 " in linear mode", virt);
-      return enotsup();
-    }
     if (virt & (pagesize - 1)) {
-      LOGF("app chose mmap %s (%#" PRIx64 ") that's not aligned "
-           "to the platform page size (%#lx) while using linear mode",
-           "address (try using `blink -m`)", virt, pagesize);
-      return einval();
+      return FailDueToHostAlignment(virt, pagesize, "address");
     }
     if (offset & (pagesize - 1)) {
-      LOGF("app chose mmap %s (%#" PRIx64 ") that's not aligned "
-           "to the platform page size (%#lx) while using linear mode",
-           "file offset (try using `blink -m`)", offset, pagesize);
-      return einval();
+      return FailDueToHostAlignment(virt, pagesize, "file offset");
     }
   }
 
-  MEM_LOGF("reserving virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
-           virt, virt + size, size / 1024);
-
   // remove existing mapping
-  // this may be the point of no return
   vss_delta = 0;
   rss_delta = 0;
-  no_retreat_no_surrender = false;
-  memset(&ranges, 0, sizeof(ranges));
+  mutated = false;
   pages = ROUNDUP(size, 4096) / 4096;
-  RemoveVirtual(s, virt, size, &ranges, &no_retreat_no_surrender, &vss_delta,
-                &rss_delta);
-  if (HasLinearMapping(m) && ranges.i) {
-    // linear mappings exist within the requested interval
-    if (ranges.i == 1 &&          //
-        ranges.p[0].a == virt &&  //
-        ranges.p[0].b == virt + size) {
-      // it should be 100% safe to let the kernel blow it away
+  if (HasLinearMapping(s) && FLAG_vabits <= 47) {
+    if (fixedmap) {
       method = MAP_FIXED;
-    } else {
-      // holes exist; try to create a greenfield
-      for (i = 0; i < ranges.i; ++i) {
-        Munmap(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a);
-        no_retreat_no_surrender = true;
-      }
-      // errors in Munmap() should propagate to Mmap() below
+    } else if (virt) {
       method = MAP_DEMAND;
+    } else {
+      method = 0;
     }
-    free(ranges.p);
   } else {
-    // requested interval should be a greenfield
-    method = MAP_DEMAND;
+    if (FLAG_vabits <= 47) {
+      demand = MAP_DEMAND;
+    } else {
+      demand = MAP_FIXED;
+    }
+    memset(&ranges, 0, sizeof(ranges));
+    RemoveVirtual(s, virt, size, &ranges, &mutated, &vss_delta, &rss_delta);
+    if (ranges.i) {
+      // linear mappings exist within the requested interval
+      if (ranges.i == 1 &&          //
+          ranges.p[0].a == virt &&  //
+          ranges.p[0].b == virt + size) {
+        // it should be 100% safe to let the kernel blow it away
+        method = MAP_FIXED;
+      } else {
+        // holes exist; try to create a greenfield
+        for (i = 0; i < ranges.i; ++i) {
+          Munmap(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a);
+          mutated = true;
+        }
+        // errors in Munmap() should propagate to Mmap() below
+        method = demand;
+      }
+      free(ranges.p);
+    } else {
+      // requested interval should be a greenfield
+      method = demand;
+    }
   }
 
   prot = ((flags & PAGE_U ? PROT_READ : 0) |
@@ -769,26 +765,30 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     // the solution is most likely to rebuild with -Wl,-Ttext-segment=
     // please note we need to take off the seatbelt after an execve().
     errno = 0;
-    want = ToHost(virt);
+    want = virt ? ToHost(virt) : 0;
     if ((got = Mmap(want, size, prot,                       //
                     (method |                               //
                      (fd == -1 ? MAP_ANONYMOUS_ : 0) |      //
                      (shared ? MAP_SHARED : MAP_PRIVATE)),  //
                     fd, offset, "linear")) != want) {
-      if (got == MAP_FAILED && errno == ENOMEM && !no_retreat_no_surrender) {
+      if (got == MAP_FAILED && errno == ENOMEM && !mutated) {
         LOGF("host system returned ENOMEM");
         return -1;
+      } else if (got != MAP_FAILED && !want) {
+        virt = ToGuest(got);
+        unassert(IsValidAddrSize(virt, size));
+      } else {
+        ERRF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ")"
+             " -> %#" PRIx64 "[%p] crisis: %s",
+             virt, want, size, ToGuest(got), got,
+             (method == MAP_DEMAND && errno == MAP_DENIED)
+                 ? "requested memory overlapped blink image or system memory. "
+                   "try using `blink -m` to disable memory optimizations, or "
+                   "try compiling blink using -Wl,--image-base=0x23000000 or "
+                   "possibly -Wl,-Ttext-segment=0x23000000 in LDFLAGS"
+                 : DescribeHostErrno(errno));
+        PanicDueToMmap();
       }
-      ERRF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ")"
-           " -> %#" PRIx64 "[%p] crisis: %s",
-           virt, want, size, ToGuest(got), got,
-           (method == MAP_DEMAND && errno == MAP_DENIED)
-               ? "requested memory overlapped blink image or system memory. "
-                 "try using `blink -m` to disable memory optimizations, or "
-                 "try compiling blink using -Wl,--image-base=0x23000000 or "
-                 "possibly -Wl,-Ttext-segment=0x23000000 in LDFLAGS"
-               : DescribeHostErrno(errno));
-      PanicDueToMmap();
     }
     s->memstat.committed += pages;
     flags |= PAGE_HOST | PAGE_MAP;
@@ -804,9 +804,8 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     s->memstat.reserved += pages;
   }
 
-  // account for the decrease/increase of resident and virtual memory
-  unassert((s->rss += rss_delta) >= 0);
-  unassert((s->vss += vss_delta) >= 0);
+  MEM_LOGF("reserving virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
+           virt, virt + size, size / 1024);
 
   // create a filemap object
   if (fd != -1) {
@@ -815,12 +814,12 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   }
 
   // add pml4t entries ensuring intermediary tables exist
-  for (end = virt + size;;) {
+  for (result = virt, end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
       mi = GetPageAddress(s, pt) + ti * 8;
-      pt = ReadPte(mi);
       if (level > 12) {
+        pt = ReadPte(mi);
         if (!(pt & PAGE_V)) {
           if ((pt = AllocatePageTable(s)) == -1) {
             WriteErrorString("mmap() crisis: ran out of page table memory\n");
@@ -831,7 +830,6 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
         continue;
       }
       for (;;) {
-        unassert(~pt & PAGE_V);
         intptr_t real;
         if (flags & PAGE_MAP) {
           if (flags & PAGE_MUG) {
@@ -875,10 +873,12 @@ int ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
         }
         StorePte(mi, entry);
         if ((virt += 4096) >= end) {
-          return 0;
+          unassert((s->rss += rss_delta) >= 0);
+          unassert((s->vss += vss_delta) >= 0);
+          return result;
         }
         if (++ti == 512) break;
-        pt = ReadPte((mi += 8));
+        mi += 8;
       }
     }
   }

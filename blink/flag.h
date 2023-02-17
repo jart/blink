@@ -2,11 +2,25 @@
 #define BLINK_FLAG_H_
 #include <stdbool.h>
 
-extern int FLAG_strace;
+#include "blink/types.h"
+
 extern bool FLAG_nolinear;
 extern bool FLAG_noconnect;
 extern bool FLAG_nologstderr;
 extern bool FLAG_alsologtostderr;
+
+extern int FLAG_strace;
+extern int FLAG_vabits;
+
+extern u64 FLAG_skew;
+extern u64 FLAG_vaspace;
+extern u64 FLAG_stacktop;
+extern u64 FLAG_aslrmask;
+extern u64 FLAG_imagestart;
+extern u64 FLAG_automapend;
+extern u64 FLAG_automapstart;
+extern u64 FLAG_dyninterpaddr;
+
 extern const char *FLAG_logpath;
 extern const char *FLAG_overlays;
 

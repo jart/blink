@@ -1011,14 +1011,14 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
   MEM_LOGF("brk(%#" PRIx64 ") currently %#" PRIx64, addr, m->system->brk);
   pagesize = GetSystemPageSize();
   addr = ROUNDUP(addr, pagesize);
-  if (addr >= kNullPageSize) {
+  if (addr >= kNullSize) {
     if (addr > m->system->brk) {
       size = addr - m->system->brk;
       CleanseMemory(m->system, size);
       if (m->system->rss < GetMaxRss(m->system)) {
         if (size / 4096 + m->system->vss < GetMaxVss(m->system)) {
           if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
-                             PAGE_RW | PAGE_U, -1, 0, false) != -1) {
+                             PAGE_RW | PAGE_U, -1, 0, 0, 0) != -1) {
             MEM_LOGF("increased break %" PRIx64 " -> %" PRIx64, m->system->brk,
                      addr);
             m->system->brk = addr;
@@ -1073,8 +1073,7 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, u64 size, int prot,
                        int flags, int fildes, i64 offset) {
   u64 key;
   int oflags;
-  ssize_t rc;
-  long pagesize;
+  bool fixedmap;
   i64 newautomap;
   if (!IsValidAddrSize(virt, size)) return einval();
   if (flags & MAP_GROWSDOWN_LINUX) return enotsup();
@@ -1113,7 +1112,9 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, u64 size, int prot,
     }
   }
   newautomap = -1;
+  fixedmap = false;
   if (flags & MAP_FIXED_LINUX) {
+    fixedmap = true;
     goto CreateTheMap;
   }
   if (flags & MAP_FIXED_NOREPLACE_LINUX) {
@@ -1128,23 +1129,24 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, u64 size, int prot,
       goto Finished;
     }
   }
+  if (HasLinearMapping(m) && FLAG_vabits <= 47 && !kSkew && !virt) {
+    goto CreateTheMap;
+  }
   if ((!virt || !IsFullyUnmapped(m->system, virt, size))) {
     if ((virt = FindVirtual(m->system, m->system->automap, size)) == -1) {
       goto Finished;
     }
-    pagesize = GetSystemPageSize();
-    newautomap = ROUNDUP(virt + size, pagesize);
-    if (newautomap >= kAutomapEnd) {
-      newautomap = kAutomapStart;
+    newautomap = ROUNDUP(virt + size, GetSystemPageSize());
+    if (newautomap >= FLAG_automapend) {
+      newautomap = FLAG_automapstart;
     }
   }
 CreateTheMap:
-  rc = ReserveVirtual(m->system, virt, size, key, fildes, offset,
-                      !!(flags & MAP_SHARED_LINUX));
-  if (rc != -1 && newautomap != -1) {
+  virt = ReserveVirtual(m->system, virt, size, key, fildes, offset,
+                        !!(flags & MAP_SHARED_LINUX), fixedmap);
+  if (virt != -1 && newautomap != -1) {
     m->system->automap = newautomap;
   }
-  if (rc == -1) virt = -1;
 Finished:
   return virt;
 }

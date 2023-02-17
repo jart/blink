@@ -7,10 +7,6 @@
 #include "blink/thread.h"
 #include "blink/types.h"
 
-#ifndef MAP_32BIT
-#define MAP_32BIT 0
-#endif
-
 #ifndef MAP_NORESERVE
 #define MAP_NORESERVE 0
 #endif
@@ -55,6 +51,7 @@
 #define _COMM_PAGE_APRR_WRITE_ENABLE  (_COMM_PAGE_START_ADDRESS + 0x110)
 #define _COMM_PAGE_APRR_WRITE_DISABLE (_COMM_PAGE_START_ADDRESS + 0x118)
 
+void InitMap(void);
 int Munmap(void *, size_t);
 int Msync(void *, size_t, int, const char *);
 void *Mmap(void *, size_t, int, int, int, off_t, const char *);
