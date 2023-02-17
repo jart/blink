@@ -4707,24 +4707,26 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
   err = 0;
   found = 0;
 #ifndef DISABLE_THREADS
-  LOCK(&m->system->machines_lock);
-  for (e = dll_first(m->system->machines); e;
-       e = dll_next(m->system->machines, e)) {
+  {
     struct Dll *e;
-    struct Machine *m2;
-    m2 = MACHINE_CONTAINER(e);
-    if (m2->tid == tid) {
-      if (sig) {
-        EnqueueSignal(m2, sig);
-        err = pthread_kill(m2->thread, SIGSYS);
-      } else {
-        err = pthread_kill(m2->thread, 0);
+    LOCK(&m->system->machines_lock);
+    for (e = dll_first(m->system->machines); e;
+         e = dll_next(m->system->machines, e)) {
+      struct Machine *m2;
+      m2 = MACHINE_CONTAINER(e);
+      if (m2->tid == tid) {
+        if (sig) {
+          EnqueueSignal(m2, sig);
+          err = pthread_kill(m2->thread, SIGSYS);
+        } else {
+          err = pthread_kill(m2->thread, 0);
+        }
+        found = true;
+        break;
       }
-      found = true;
-      break;
     }
+    UNLOCK(&m->system->machines_lock);
   }
-  UNLOCK(&m->system->machines_lock);
 #endif
   if (!found) {
     return SysKill(m, tid, sig);
