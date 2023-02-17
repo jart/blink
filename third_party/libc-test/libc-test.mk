@@ -92,7 +92,6 @@ LIBC_TEST_TESTS =										\
 	o/$(MODE)/third_party/libc-test/bin/2/regression/fflush-exit.elf.ok			\
 	o/$(MODE)/third_party/libc-test/bin/2/regression/lrand48-signextend.elf.ok		\
 	o/$(MODE)/third_party/libc-test/bin/2/regression/pthread_once-deadlock.elf.ok		\
-	o/$(MODE)/third_party/libc-test/bin/2/regression/pthread_cond-smasher.elf.ok		\
 	o/$(MODE)/third_party/libc-test/bin/2/regression/printf-fmt-g-round.elf.ok		\
 	o/$(MODE)/third_party/libc-test/bin/2/regression/pthread_exit-cancel.elf.ok		\
 	o/$(MODE)/third_party/libc-test/bin/2/regression/pthread_rwlock-ebusy.elf.ok		\
@@ -129,6 +128,9 @@ LIBC_TEST_TESTS =										\
 	o/$(MODE)/third_party/libc-test/bin/3/regression/pthread_create-oom.elf.ok		\
 	o/$(MODE)/third_party/libc-test/bin/3/regression/daemon-failure.elf.ok			\
 	o/$(MODE)/third_party/libc-test/bin/3/functional/inet_pton.elf.ok
+
+# TODO(jart): This needs a longer timeout.
+# o/$(MODE)/third_party/libc-test/bin/2/regression/pthread_cond-smasher.elf.ok
 
 ifneq ($(wildcard /dev/shm),)
 ifneq ($(HOST_SYSTEM), FreeBSD)

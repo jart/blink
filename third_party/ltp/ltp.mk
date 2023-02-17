@@ -325,7 +325,15 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/2/recvmmsg01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/sendmmsg01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/sendmmsg02.elf.ok		\
-	o/$(MODE)/third_party/ltp/bin/2/recvfrom01.elf.ok
+	o/$(MODE)/third_party/ltp/bin/2/recvfrom01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sendfile02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sendfile03.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sendfile04.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sendfile05.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sendfile06.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sendfile07.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sendfile08.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/2/sendfile09.elf.ok
 
 ifneq ($(HOST_SYSTEM), FreeBSD)
 # These tests make the system get wrekt.

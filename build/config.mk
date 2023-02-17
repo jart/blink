@@ -15,6 +15,10 @@ ifeq ($(HOST_SYSTEM), Haiku)
 LDLIBS += -lroot -lnetwork -lbsd
 endif
 
+ifneq ($(HOST_SYSTEM), OpenBSD)
+CFLAGS += -gdwarf-2
+endif
+
 # FreeBSD loads executables to 0x200000 by default which is likely to
 # overlap the static Linux guest binary, we usually load to 0x400000.
 ifeq ($(HOST_SYSTEM), FreeBSD)

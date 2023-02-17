@@ -39,6 +39,11 @@
 
 #define APPEND(...) bi += snprintf(bp + bi, bn - bi, __VA_ARGS__)
 
+struct thatispacked MagicNumber {
+  int x;
+  const char *s;
+};
+
 static const char *const kOpenAccmode[] = {
     "O_RDONLY",  //
     "O_WRONLY",  //
@@ -161,57 +166,52 @@ static const struct DescribeFlags kSockFlags[] = {
 };
 #endif
 
-static const char *DescribeSigHow(int x) {
-  _Thread_local static char ibuf[21];
-  switch (x) {
-    case SIG_BLOCK_LINUX:
-      return "SIG_BLOCK";
-    case SIG_UNBLOCK_LINUX:
-      return "SIG_UNBLOCK";
-    case SIG_SETMASK_LINUX:
-      return "SIG_SETMASK";
-    default:
-      FormatInt64(ibuf, x);
-      return ibuf;
-  }
-}
+const struct MagicNumber kSigHow[] = {
+    {SIG_BLOCK, "SIG_BLOCK"},      //
+    {SIG_UNBLOCK, "SIG_UNBLOCK"},  //
+    {SIG_SETMASK, "SIG_SETMASK"},  //
+};
 
-static const char *DescribeSocketFamily(int af) {
-  _Thread_local static char ibuf[21];
-  switch (af) {
-    case AF_UNSPEC_LINUX:
-      return "AF_UNSPEC";
-    case AF_UNIX_LINUX:
-      return "AF_UNIX";
-    case AF_INET_LINUX:
-      return "AF_INET";
-    case AF_INET6_LINUX:
-      return "AF_INET6";
-    case AF_NETLINK_LINUX:
-      return "AF_NETLINK";
-    case AF_PACKET_LINUX:
-      return "AF_PACKET";
-    case AF_VSOCK_LINUX:
-      return "AF_VSOCK";
-    default:
-      FormatInt64(ibuf, af);
-      return ibuf;
-  }
-}
+const struct MagicNumber kSocketFamily[] = {
+    {AF_UNSPEC_LINUX, "AF_UNSPEC"},    //
+    {AF_UNIX_LINUX, "AF_UNIX"},        //
+    {AF_INET_LINUX, "AF_INET"},        //
+    {AF_INET6_LINUX, "AF_INET6"},      //
+    {AF_NETLINK_LINUX, "AF_NETLINK"},  //
+    {AF_PACKET_LINUX, "AF_PACKET"},    //
+    {AF_VSOCK_LINUX, "AF_VSOCK"},      //
+};
 
-static const char *DescribeSocketType(int af) {
+const struct MagicNumber kSocketType[] = {
+    {SOCK_STREAM_LINUX, "SOCK_STREAM"},  //
+    {SOCK_DGRAM_LINUX, "SOCK_DGRAM"},    //
+    {SOCK_RAW_LINUX, "SOCK_RAW"},        //
+};
+
+const struct MagicNumber kClock[] = {
+    {CLOCK_REALTIME_LINUX, "CLOCK_REALTIME"},                      //
+    {CLOCK_MONOTONIC_LINUX, "CLOCK_MONOTONIC"},                    //
+    {CLOCK_PROCESS_CPUTIME_ID_LINUX, "CLOCK_PROCESS_CPUTIME_ID"},  //
+    {CLOCK_THREAD_CPUTIME_ID_LINUX, "CLOCK_THREAD_CPUTIME_ID"},    //
+    {CLOCK_MONOTONIC_RAW_LINUX, "CLOCK_MONOTONIC_RAW"},            //
+    {CLOCK_REALTIME_COARSE_LINUX, "CLOCK_REALTIME_COARSE"},        //
+    {CLOCK_MONOTONIC_COARSE_LINUX, "CLOCK_MONOTONIC_COARSE"},      //
+    {CLOCK_BOOTTIME_LINUX, "CLOCK_BOOTTIME"},                      //
+    {CLOCK_REALTIME_ALARM_LINUX, "CLOCK_REALTIME_ALARM"},          //
+    {CLOCK_BOOTTIME_ALARM_LINUX, "CLOCK_BOOTTIME_ALARM"},          //
+    {CLOCK_TAI_LINUX, "CLOCK_TAI"},                                //
+};
+
+static const char *GetMagicNumber(const struct MagicNumber *p, int n, int x) {
+  int i;
   _Thread_local static char ibuf[21];
-  switch (af) {
-    case SOCK_STREAM_LINUX:
-      return "SOCK_STREAM";
-    case SOCK_DGRAM_LINUX:
-      return "SOCK_DGRAM";
-    case SOCK_RAW_LINUX:
-      return "SOCK_RAW";
-    default:
-      FormatInt64(ibuf, af);
-      return ibuf;
+  for (i = 0; i < n; ++i) {
+    if (p[i].x == x) {
+      return p[i].s;
+    }
   }
+  FormatInt64(ibuf, x);
+  return ibuf;
 }
 
 static const char *DescribeSockaddr(const struct sockaddr_storage_linux *ss) {
@@ -237,7 +237,8 @@ static const char *DescribeSockaddr(const struct sockaddr_storage_linux *ss) {
       return sabuf;
     default:
       snprintf(abuf, sizeof(abuf), "{%s}",
-               DescribeSocketFamily(Read16(ss->family)));
+               GetMagicNumber(kSocketFamily, ARRAYLEN(kSocketFamily),
+                              Read16(ss->family)));
       return abuf;
   }
 }
@@ -460,12 +461,14 @@ static void Strace(struct Machine *m, const char *func, const char *fmt,
         APPEND("%#" PRIx64, arg);
       }
     } else if (c == I32_SIGHOW[0]) {
-      APPEND("%s", DescribeSigHow(arg));
+      APPEND("%s", GetMagicNumber(kSigHow, ARRAYLEN(kSigHow), arg));
 #ifndef DISABLE_SOCKETS
+    } else if (c == I32_CLOCK[0]) {
+      APPEND("%s", GetMagicNumber(kClock, ARRAYLEN(kClock), arg));
     } else if (c == I32_FAMILY[0]) {
-      APPEND("%s", DescribeSocketFamily(arg));
+      APPEND("%s", GetMagicNumber(kSocketFamily, ARRAYLEN(kSocketFamily), arg));
     } else if (c == I32_SOCKTYPE[0]) {
-      APPEND("%s", DescribeSocketType(arg));
+      APPEND("%s", GetMagicNumber(kSocketType, ARRAYLEN(kSocketType), arg));
     } else if (c == I32_SOCKFLAGS[0]) {
       DescribeFlags(tmp, sizeof(tmp), kSockFlags, ARRAYLEN(kSockFlags), "SOCK_",
                     arg);

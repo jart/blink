@@ -2441,6 +2441,45 @@ static i64 SysPwritev(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
   return SysPwritev2(m, fildes, iovaddr, iovlen, offset, 0);
 }
 
+static i64 SysSendfile(struct Machine *m, i32 out_fd, i32 in_fd, i64 offsetaddr,
+                       u64 count) {
+  u64 toto, offset;
+  ssize_t got, wrote;
+  u8 *buf, *offsetp = 0;
+  size_t chunk, maxchunk = 16384;
+  if (CheckFdAccess(m, out_fd, true, EBADF) == -1) return -1;
+  if (CheckFdAccess(m, in_fd, false, EBADF) == -1) return -1;
+  if (offsetaddr && !(offsetp = (u8 *)SchlepRW(m, offsetaddr, 8))) return -1;
+  if (!(buf = (u8 *)AddToFreeList(m, malloc(maxchunk)))) return -1;
+  if (offsetp) {
+    offset = Read64(offsetp);
+    if ((i64)offset < 0) return einval();
+    if (Read64(offsetp) + count < count ||
+        Read64(offsetp) + count > NUMERIC_MAX(off_t)) {
+      return eoverflow();
+    }
+  }
+  for (toto = 0; toto < count; toto += wrote) {
+    chunk = MIN(count - toto, maxchunk);
+    if (offsetp) {
+      got = pread(in_fd, buf, chunk, offset + toto);
+    } else {
+      got = read(in_fd, buf, chunk);
+    }
+    if (got == -1) goto OnFailure;
+    if (offsetp) Write64(offsetp, offset + toto + got);
+    if ((wrote = write(out_fd, buf, got)) == -1) goto OnFailure;
+  }
+  return count;
+OnFailure:
+  if (toto) {
+    LOGF("sendfile() partial failure: %s", DescribeHostErrno(errno));
+    return toto;
+  } else {
+    return -1;
+  }
+}
+
 static int UnXlatDt(int x) {
 #ifndef DT_UNKNOWN
   return DT_UNKNOWN_LINUX;
@@ -2784,7 +2823,7 @@ static int SysSync(struct Machine *m) {
 }
 
 static int CheckSyncable(int fildes) {
-#ifdef __FreeBSD__
+#ifndef __linux
   // FreeBSD doesn't return EINVAL like Linux does when trying to
   // synchronize character devices, e.g. /dev/null. An unresolved
   // question though is if FreeBSD actually does something here.
@@ -5206,6 +5245,7 @@ void OpSyscall(P) {
 #endif /* defined(HAVE_FORK) || defined(HAVE_THREADS) */
 
 #ifndef DISABLE_NONPOSIX
+    SYSCALL4(0x028, "sendfile", SysSendfile, STRACE_4);
     SYSCALL3(0x0CC, "sched_get_affinity", SysSchedGetaffinity, STRACE_3);
     SYSCALL1(0x00C, "brk", SysBrk, STRACE_1);
     SYSCALL1(0x063, "sysinfo", SysSysinfo, STRACE_1);

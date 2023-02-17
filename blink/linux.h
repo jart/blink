@@ -811,6 +811,18 @@
 #define RENAME_EXCHANGE_LINUX  2
 #define RENAME_WHITEOUT_LINUX  4
 
+#define CLOCK_REALTIME_LINUX           0
+#define CLOCK_MONOTONIC_LINUX          1
+#define CLOCK_PROCESS_CPUTIME_ID_LINUX 2
+#define CLOCK_THREAD_CPUTIME_ID_LINUX  3
+#define CLOCK_MONOTONIC_RAW_LINUX      4
+#define CLOCK_REALTIME_COARSE_LINUX    5
+#define CLOCK_MONOTONIC_COARSE_LINUX   6
+#define CLOCK_BOOTTIME_LINUX           7
+#define CLOCK_REALTIME_ALARM_LINUX     8
+#define CLOCK_BOOTTIME_ALARM_LINUX     9
+#define CLOCK_TAI_LINUX                11
+
 struct iovec_linux {
   u8 base[8];
   u8 len[8];

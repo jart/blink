@@ -29,7 +29,7 @@
 void CheckElfAddress(const Elf64_Ehdr_ *elf, size_t mapsize, intptr_t addr,
                      size_t addrsize) {
   if (addr < (intptr_t)elf || addr + addrsize > (intptr_t)elf + mapsize) {
-    LOGF("CheckElfAddress failed: %#" PRIxPTR "..%#" PRIxPTR " %p..%#" PRIxPTR,
+    ERRF("CheckElfAddress failed: %#" PRIxPTR "..%#" PRIxPTR " %p..%#" PRIxPTR,
          addr, addr + addrsize, (void *)elf, (intptr_t)elf + mapsize);
     exit(202);
   }
