@@ -2,7 +2,7 @@
 #define BLINK_FLAG_H_
 #include <stdbool.h>
 
-extern bool FLAG_strace;
+extern int FLAG_strace;
 extern bool FLAG_nolinear;
 extern bool FLAG_noconnect;
 extern bool FLAG_nologstderr;

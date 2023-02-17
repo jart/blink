@@ -25,7 +25,7 @@ ifneq ($(CONFIG_HOSTNAME), $(shell hostname))
   undefine CPPFLAGS
   undefine TARGET_ARCH
   $(shell $(CONFIG_COMMAND))
-  $(error please run $(MAKE) $(MAKEFLAGS) $(MAKECMDGOALS))
+  $(error please run $(MAKE) again)
 endif
 
 ifneq ($(m),)

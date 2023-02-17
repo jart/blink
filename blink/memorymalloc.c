@@ -894,9 +894,6 @@ StartOver:
          orig_virt, orig_virt + size, virt, virt + size);
     return enomem();
   }
-  if (HasLinearMapping(s) && OverlapsPrecious(virt, size)) {
-    virt = kPreciousEnd + kSkew;
-  }
   got = 0;
   do {
     for (i = 39, pt = s->cr3;; i -= 9) {
@@ -997,7 +994,6 @@ bool IsFullyUnmapped(struct System *s, i64 virt, i64 size) {
   u8 *mi;
   i64 end;
   u64 i, pt;
-  if (HasLinearMapping(s) && OverlapsPrecious(virt, size)) return false;
   for (end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
       mi = GetPageAddress(s, pt) + ((virt >> i) & 511) * 8;

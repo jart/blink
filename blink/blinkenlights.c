@@ -206,8 +206,6 @@ alt-t   slowmo"
 
 #define Ctrl(C) ((C) ^ 0100)
 
-#define m g_machine
-
 #ifdef IUTF8
 #define HR   L'─'
 #define BULB "◎"
@@ -341,6 +339,7 @@ static u64 last_cycle;
 static char *codepath;
 static i64 framesstart;
 static struct Pty *pty;
+static struct Machine *m;
 static jmp_buf *onbusted;
 static const char *dialog;
 static char *statusmessage;
@@ -3726,7 +3725,7 @@ static void GetOpts(int argc, char *argv[]) {
         tuimode = false;
         break;
       case 's':
-        FLAG_strace = true;
+        ++FLAG_strace;
         break;
       case 'm':
         wantunsafe = true;
@@ -3919,7 +3918,7 @@ int main(int argc, char *argv[]) {
 #endif
   unassert((pty = NewPty()));
   unassert((s = NewSystem(wantmetal ? XED_MODE_REAL : XED_MODE_LONG)));
-  unassert((m = NewMachine(s, 0)));
+  unassert((m = g_machine = NewMachine(s, 0)));
 #ifdef HAVE_JIT
   if (!wantjit || wantmetal) {
     DisableJit(&m->system->jit);

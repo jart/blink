@@ -234,7 +234,7 @@ static void GetOpts(int argc, char *argv[]) {
         FLAG_nojit = true;
         break;
       case 's':
-        FLAG_strace = true;
+        ++FLAG_strace;
         break;
       case 'm':
         FLAG_nolinear = true;

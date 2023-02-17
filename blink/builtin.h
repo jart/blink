@@ -245,6 +245,10 @@
 #define HAVE_INT128
 #endif
 
+#if !defined(__SANITIZE_THREAD__) && defined(TSAN)
+#define __SANITIZE_THREAD__
+#endif
+
 #if !defined(__SANITIZE_UNDEFINED__) && defined(UBSAN)
 #define __SANITIZE_UNDEFINED__
 #endif

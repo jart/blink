@@ -217,7 +217,7 @@
 #define STRACE_RECVFROM     SSIZE  FD         O_BUF      SIZE      I32       O_ADDR   I64
 // clang-format on
 
-void EnterStrace(struct Machine *, const char *, ...);
+void EnterStrace(struct Machine *, const char *, const char *, ...);
 void LeaveStrace(struct Machine *, const char *, const char *, ...);
 
 #endif /* BLINK_STRACE_H_ */

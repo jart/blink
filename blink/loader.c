@@ -69,6 +69,12 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
             (flags & PF_W_ ? PAGE_RW : 0) |  //
             (flags & PF_X_ ? 0 : PAGE_XD);
 
+  SYS_LOGF("PT_LOAD %c%c%c [%" PRIx64 ",%" PRIx64 ") %s",  //
+           (flags & PF_R_ ? 'R' : '.'),                    //
+           (flags & PF_W_ ? 'W' : '.'),                    //
+           (flags & PF_X_ ? 'X' : '.'),                    //
+           vaddr, vaddr + memsz, path);
+
   ELF_LOGF("PROGRAM HEADER");
   ELF_LOGF("  aslr = %" PRIx64, aslr);
   ELF_LOGF("  flags = %s%s%s",          //
@@ -85,19 +91,19 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
   ELF_LOGF("  skew = %lx", skew);
 
   if (offset > imagesize) {
-    LOGF("bad phdr offset");
+    ERRF("bad phdr offset");
     exit(127);
   }
   if (filesz > imagesize) {
-    LOGF("bad phdr filesz");
+    ERRF("bad phdr filesz");
     exit(127);
   }
   if (offset + filesz > imagesize) {
-    LOGF("corrupt elf program header");
+    ERRF("corrupt elf program header");
     exit(127);
   }
   if (end < last_end) {
-    LOGF("program headers aren't ordered, expected %" PRIx64 " >= %" PRIx64,
+    ERRF("program headers aren't ordered, expected %" PRIx64 " >= %" PRIx64,
          end, last_end);
     exit(127);
   }
@@ -160,7 +166,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
       ELF_LOGF("load %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64, start,
                start + bulk, offset, offset + bulk);
       if (ReserveVirtual(s, start, bulk, key, fd, offset, 0) == -1) {
-        LOGF("failed to map elf program header file data");
+        ERRF("failed to map elf program header file data");
         exit(127);
       }
       unassert(AddFileMap(m->system, start, bulk, path, offset));
@@ -172,7 +178,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
       // allocate .bss zero-initialized memory.
       ELF_LOGF("alloc %" PRIx64 "-%" PRIx64, start, end);
       if (ReserveVirtual(s, start, end - start, key, -1, 0, 0) == -1) {
-        LOGF("failed to allocate program header bss");
+        ERRF("failed to allocate program header bss");
         exit(127);
       }
       // copy the tail skew.

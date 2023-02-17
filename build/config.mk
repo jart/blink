@@ -142,7 +142,7 @@ endif
 
 ifeq ($(MODE), tsan)
 CC = clang++
-CPPFLAGS +=
+CPPFLAGS += -DTSAN
 CFLAGS += -xc++ -Werror -Wno-unused-parameter -Wno-missing-field-initializers
 CFLAGS += -fsanitize=thread
 LDLIBS += -fsanitize=thread

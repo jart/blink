@@ -30,6 +30,7 @@
 #include "blink/describeflags.h"
 #include "blink/endian.h"
 #include "blink/fds.h"
+#include "blink/flag.h"
 #include "blink/linux.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -261,12 +262,9 @@ static void DescribeSigset(char *bp, int bn, u64 ss) {
   APPEND("}");
 }
 
-void EnterStrace(struct Machine *m, const char *fmt, ...) {
-}
-
-void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
+static void Strace(struct Machine *m, const char *func, const char *fmt,
+                   bool isentry, va_list va) {
   char *bp;
-  va_list va;
   i64 ax, arg;
   int c, i, bi, bn;
   char tmp[kStraceArgMax];
@@ -274,8 +272,12 @@ void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
   for (i = 0; i < 7; ++i) {
     buf[i][0] = 0;
   }
-  va_start(va, fmt);
-  for (i = ax = 0; (c = fmt[i]); ++i) {
+  i = 0;
+  if (isentry) {
+    strcpy(buf[0], "...");
+    ++i;
+  }
+  for (ax = 0; (c = fmt[i]); ++i) {
     bi = 0;
     bp = buf[i];
     bn = sizeof(buf[i]);
@@ -514,7 +516,22 @@ void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
     }
     if (arg && IS_MEM_O(c) && !IS_ADDR(c)) APPEND("]");
   }
-  va_end(va);
   SYS_LOGF("%s(%s%s%s%s%s%s) -> %s", func, buf[1], buf[2], buf[3], buf[4],
            buf[5], buf[6], buf[0]);
+}
+
+void EnterStrace(struct Machine *m, const char *func, const char *fmt, ...) {
+  va_list va;
+  if (FLAG_strace > 1) {
+    va_start(va, fmt);
+    Strace(m, func, fmt, true, va);
+    va_end(va);
+  }
+}
+
+void LeaveStrace(struct Machine *m, const char *func, const char *fmt, ...) {
+  va_list va;
+  va_start(va, fmt);
+  Strace(m, func, fmt, false, va);
+  va_end(va);
 }
