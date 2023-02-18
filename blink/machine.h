@@ -70,6 +70,13 @@
 #define PAGE_XD   0x8000000000000000
 #define PAGE_TA   0x0000fffffffff000  // extended by one bit for raspberry pi
 
+#define SREG_ES 0
+#define SREG_CS 1
+#define SREG_SS 2
+#define SREG_DS 3
+#define SREG_FS 4
+#define SREG_GS 5
+
 #define P                struct Machine *m, u64 rde, i64 disp, u64 uimm0
 #define A                m, rde, disp, uimm0
 #define DISPATCH_NOTHING m, 0, 0, 0
@@ -250,6 +257,10 @@ struct System {
   void (*redraw)(bool);
 };
 
+// Default segment selector values in non-metal mode, per Linux 5.9
+#define USER_DS_LINUX 0x2b                 // default selector for ss (N.B.)
+#define USER_CS_LINUX 0x33                 // default selector for cs
+
 struct JitPath {
   int skip;
   int elements;
@@ -423,7 +434,7 @@ void *SchlepW(struct Machine *, i64, size_t);
 void *SchlepRW(struct Machine *, i64, size_t);
 bool IsValidMemory(struct Machine *, i64, i64, int);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
-u8 *GetPageAddress(struct System *, u64);
+u8 *GetPageAddress(struct System *, u64, bool);
 u8 *GetHostAddress(struct Machine *, u64, long);
 u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *, bool);
 u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2], u8 *);
@@ -695,6 +706,10 @@ void LogCodOp(struct Machine *, const char *);
 #define LogCodOp(m, s) (void)0
 #define WriteCod(...)  (void)0
 #endif
+
+MICRO_OP_SAFE u8 Cpl(struct Machine *m) {
+  return m->cs.sel & 3u;
+}
 
 #define BEGIN_NO_PAGE_FAULTS \
   {                          \

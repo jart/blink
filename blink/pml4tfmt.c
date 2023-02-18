@@ -114,8 +114,8 @@ static void FormatEndPage(struct Machine *m, struct Pml4tFormater *pp,
   }
 }
 
-static u8 *GetPt(struct Machine *m, u64 entry) {
-  return GetPageAddress(m->system, entry);
+static u8 *GetPt(struct Machine *m, u64 entry, bool is_cr3) {
+  return GetPageAddress(m->system, entry, is_cr3);
 }
 
 char *FormatPml4t(struct Machine *m) {
@@ -126,7 +126,7 @@ char *FormatPml4t(struct Machine *m) {
   u16 range[][2] = {{256, 512}, {0, 256}};
   if (m->mode != XED_MODE_LONG) return strdup("");
   unassert(m->system->cr3);
-  pd[0] = GetPt(m, m->system->cr3);
+  pd[0] = GetPt(m, m->system->cr3, true);
   for (i = 0; i < ARRAYLEN(range); ++i) {
     a[0] = range[i][0];
     do {
@@ -134,19 +134,19 @@ char *FormatPml4t(struct Machine *m) {
       if (~*(pd[0] + a[0] * 8) & PAGE_V) {
         if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
       } else {
-        pd[1] = GetPt(m, Read64(pd[0] + a[0] * 8));
+        pd[1] = GetPt(m, Read64(pd[0] + a[0] * 8), false);
         do {
           a[2] = a[3] = 0;
           if (~*(pd[1] + a[1] * 8) & PAGE_V) {
             if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
           } else {
-            pd[2] = GetPt(m, Read64(pd[1] + a[1] * 8));
+            pd[2] = GetPt(m, Read64(pd[1] + a[1] * 8), false);
             do {
               a[3] = 0;
               if (~*(pd[2] + a[2] * 8) & PAGE_V) {
                 if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
               } else {
-                pd[3] = GetPt(m, Read64(pd[2] + a[2] * 8));
+                pd[3] = GetPt(m, Read64(pd[2] + a[2] * 8), false);
                 do {
                   entry = Read64(pd[3] + a[3] * 8);
                   if (~entry & PAGE_V) {

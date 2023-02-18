@@ -50,8 +50,8 @@ void SetWriteAddr(struct Machine *m, i64 addr, u32 size) {
   }
 }
 
-u8 *GetPageAddress(struct System *s, u64 entry) {
-  unassert(entry & PAGE_V);
+u8 *GetPageAddress(struct System *s, u64 entry, bool is_cr3) {
+  unassert(is_cr3 || (entry & PAGE_V));
   unassert(~entry & PAGE_RSRV);
   if (entry & PAGE_HOST) {
     return (u8 *)(intptr_t)(entry & PAGE_TA);
@@ -75,7 +75,7 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
       --m->system->memstat.reserved;
       ++m->system->memstat.committed;
       x = (page & (PAGE_TA | PAGE_HOST)) | (entry & ~(PAGE_TA | PAGE_RSRV));
-      Store64(GetPageAddress(m->system, table) + index * 8, x);
+      Store64(GetPageAddress(m->system, table, false) + index * 8, x);
       res = x;
     } else {
       res = 0;
@@ -87,7 +87,7 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
     ++m->system->memstat.committed;
     ++m->system->rss;
     x = entry & ~PAGE_RSRV;
-    Store64(GetPageAddress(m->system, table) + index * 8, x);
+    Store64(GetPageAddress(m->system, table, false) + index * 8, x);
     res = x;
   }
   unassert(CheckMemoryInvariants(m->system));
@@ -118,7 +118,7 @@ u64 FindPageTableEntry(struct Machine *m, u64 page) {
   do {
     table = entry;
     index = (page >> level) & 511;
-    entry = Get64(GetPageAddress(m->system, table) + index * 8);
+    entry = Get64(GetPageAddress(m->system, table, level == 39) + index * 8);
     if (!(entry & PAGE_V)) return 0;
   } while ((level -= 9) >= 12);
   if ((entry & PAGE_RSRV) &&
@@ -159,7 +159,7 @@ u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
   if ((entry & mask) != need) {
     return (u8 *)efault0();
   }
-  if ((host = GetPageAddress(m->system, entry))) {
+  if ((host = GetPageAddress(m->system, entry, false))) {
     return host + (virt & 4095);
   } else {
     return (u8 *)efault0();
@@ -167,7 +167,9 @@ u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
 }
 
 u8 *LookupAddress(struct Machine *m, i64 virt) {
-  return LookupAddress2(m, virt, PAGE_U, PAGE_U);
+  u64 need = 0;
+  if (Cpl(m) == 3) need = PAGE_U;
+  return LookupAddress2(m, virt, need, need);
 }
 
 u8 *GetAddress(struct Machine *m, i64 v) {

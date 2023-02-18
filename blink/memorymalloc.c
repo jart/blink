@@ -109,7 +109,7 @@ static bool FreeEmptyPageTables(struct System *s, u64 pt, long level) {
   u8 *mi;
   long i;
   bool isempty = true;
-  mi = GetPageAddress(s, pt);
+  mi = GetPageAddress(s, pt, level == 39);
   for (i = 0; i < 512; ++i) {
     if (level == 4) {
       if (ReadPte(mi + i * 8)) {
@@ -616,7 +616,7 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
   for (pde = 0, end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
       pi = p1 = (virt >> i) & 511;
-      pp = GetPageAddress(s, pt) + pi * 8;
+      pp = GetPageAddress(s, pt, i == 39) + pi * 8;
       if (i == 12 + 9) pde = pp;
       pt = ReadPte(pp);
       if (i > 12 && !(pt & PAGE_V)) break;
@@ -639,7 +639,7 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
         virt += 4096;
         goto LastLevel;
       } else if (!p1 && pi == 511) {
-        FreePageTable(s, GetPageAddress(s, ReadPte(pde)));
+        FreePageTable(s, GetPageAddress(s, ReadPte(pde), i == 39));
         StorePte(pde, 0);
       }
       break;
@@ -817,7 +817,7 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   for (result = virt, end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
-      mi = GetPageAddress(s, pt) + ti * 8;
+      mi = GetPageAddress(s, pt, level == 39) + ti * 8;
       if (level > 12) {
         pt = ReadPte(mi);
         if (!(pt & PAGE_V)) {
@@ -897,7 +897,7 @@ StartOver:
   got = 0;
   do {
     for (i = 39, pt = s->cr3;; i -= 9) {
-      pt = ReadPte(GetPageAddress(s, pt) + (((virt + got) >> i) & 511) * 8);
+      pt = ReadPte(GetPageAddress(s, pt, i == 39) + (((virt + got) >> i) & 511) * 8);
       if (i == 12 || !(pt & PAGE_V)) break;
     }
     got += 1ull << i;
@@ -968,7 +968,7 @@ bool IsFullyMapped(struct System *s, i64 virt, i64 size) {
   for (end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
-      mi = GetPageAddress(s, pt) + ti * 8;
+      mi = GetPageAddress(s, pt, level == 39) + ti * 8;
       pt = ReadPte(mi);
       if (level > 12) {
         if (!(pt & PAGE_V)) {
@@ -996,7 +996,7 @@ bool IsFullyUnmapped(struct System *s, i64 virt, i64 size) {
   u64 i, pt;
   for (end = virt + size; virt < end; virt += 1ull << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
-      mi = GetPageAddress(s, pt) + ((virt >> i) & 511) * 8;
+      mi = GetPageAddress(s, pt, i == 39) + ((virt >> i) & 511) * 8;
       pt = ReadPte(mi);
       if (!(pt & PAGE_V)) {
         break;
@@ -1044,7 +1044,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
   for (rc = 0, end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
-      mi = GetPageAddress(s, pt) + ti * 8;
+      mi = GetPageAddress(s, pt, level == 39) + ti * 8;
       pt = ReadPte(mi);
       if (level > 12) {
         unassert(pt & PAGE_V);
@@ -1128,7 +1128,7 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
   for (rc = 0, end = virt + size;;) {
     for (pt = s->cr3, level = 39; level >= 12; level -= 9) {
       ti = (virt >> level) & 511;
-      mi = GetPageAddress(s, pt) + ti * 8;
+      mi = GetPageAddress(s, pt, level == 39) + ti * 8;
       pt = ReadPte(mi);
       if (level > 12) {
         unassert(pt & PAGE_V);

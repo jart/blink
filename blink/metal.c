@@ -46,6 +46,10 @@ static relegated bool IsProtectedMode(struct Machine *m) {
   return m->system->cr0 & CR0_PE;
 }
 
+static relegated bool IsNullSelector(u16 sel) {
+  return (sel & -4u) == 0;
+}
+
 static relegated void SetSegment(P, unsigned sr, u16 sel, bool jumping) {
   u64 descriptor;
   if (sr == 1 && !jumping) OpUdImpl(m);
@@ -55,14 +59,23 @@ static relegated void SetSegment(P, unsigned sr, u16 sel, bool jumping) {
   } else if (GetDescriptor(m, sel, &descriptor) != -1) {
     m->seg[sr].sel = sel;
     m->seg[sr].base = GetDescriptorBase(descriptor);
-    if (sr == 1) ChangeMachineMode(m, GetDescriptorMode(descriptor));
+    if (sr == SREG_CS) ChangeMachineMode(m, GetDescriptorMode(descriptor));
+  } else if (IsNullSelector(sel)) {
+    switch (sr) {
+      case SREG_CS:
+        ThrowProtectionFault(m);
+        break;
+      case SREG_SS:
+        if (Cpl(m) == 3) ThrowProtectionFault(m);
+    }
+    m->seg[sr].sel = sel;
   } else {
     ThrowProtectionFault(m);
   }
 }
 
 relegated void SetCs(P, u16 sel) {
-  SetSegment(A, 1, sel, true);
+  SetSegment(A, SREG_CS, sel, true);
 }
 
 relegated void OpPushSeg(P) {
