@@ -358,6 +358,8 @@ static bool LoadElf(struct Machine *m, struct Elf *elf, int fd) {
   bool execstack = true;
   elf->aslr = ChooseAslr(elf->ehdr, elf->size, m->system->brk, &elf->base);
   m->ip = elf->at_entry = elf->aslr + Read64(elf->ehdr->entry);
+  m->cs.sel = USER_CS_LINUX;
+  m->ss.sel = USER_DS_LINUX;
   elf->at_phdr = elf->base + Read64(elf->ehdr->phoff);
   elf->at_phent = Read16(elf->ehdr->phentsize);
   elf->at_phnum = 0;

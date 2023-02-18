@@ -257,6 +257,10 @@ struct System {
   void (*redraw)(bool);
 };
 
+// Default segment selector values in non-metal mode, per Linux 5.9
+#define USER_DS_LINUX 0x2b                 // default selector for ss (N.B.)
+#define USER_CS_LINUX 0x33                 // default selector for cs
+
 struct JitPath {
   int skip;
   int elements;
