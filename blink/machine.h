@@ -430,7 +430,7 @@ void *SchlepW(struct Machine *, i64, size_t);
 void *SchlepRW(struct Machine *, i64, size_t);
 bool IsValidMemory(struct Machine *, i64, i64, int);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
-u8 *GetPageAddress(struct System *, u64);
+u8 *GetPageAddress(struct System *, u64, bool);
 u8 *GetHostAddress(struct Machine *, u64, long);
 u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *, bool);
 u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2], u8 *);

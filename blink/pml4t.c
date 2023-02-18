@@ -38,7 +38,7 @@ static void FindContiguousMemoryRangesImpl(
   u64 entry;
   i64 i, page;
   for (i = a; i < b; ++i) {
-    entry = Load64(GetPageAddress(m->system, pt) + i * 8);
+    entry = Load64(GetPageAddress(m->system, pt, level == 39) + i * 8);
     if (!(entry & PAGE_V)) continue;
     page = (addr | i << level) << 16 >> 16;
     if (level == 12) {
