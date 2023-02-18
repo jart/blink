@@ -70,6 +70,13 @@
 #define PAGE_XD   0x8000000000000000
 #define PAGE_TA   0x0000fffffffff000  // extended by one bit for raspberry pi
 
+#define SREG_ES 0
+#define SREG_CS 1
+#define SREG_SS 2
+#define SREG_DS 3
+#define SREG_FS 4
+#define SREG_GS 5
+
 #define P                struct Machine *m, u64 rde, i64 disp, u64 uimm0
 #define A                m, rde, disp, uimm0
 #define DISPATCH_NOTHING m, 0, 0, 0
@@ -695,6 +702,10 @@ void LogCodOp(struct Machine *, const char *);
 #define LogCodOp(m, s) (void)0
 #define WriteCod(...)  (void)0
 #endif
+
+MICRO_OP_SAFE u8 Cpl(struct Machine *m) {
+  return m->cs.sel & 3u;
+}
 
 #define BEGIN_NO_PAGE_FAULTS \
   {                          \
