@@ -1387,9 +1387,11 @@ static relegated void OpMovCqRq(P) {
       break;
     case 3:
       m->system->cr3 = Get64(RegRexbRm(m, rde));
+      ResetTlb(m);
       break;
     case 4:
       m->system->cr4 = Get64(RegRexbRm(m, rde));
+      ResetTlb(m);
       break;
     default:
       OpUdImpl(m);
