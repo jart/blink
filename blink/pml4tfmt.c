@@ -114,6 +114,21 @@ static void FormatEndPage(struct Machine *m, struct Pml4tFormater *pp,
   }
 }
 
+static void FormatPdeOrPte(struct Machine *m, struct Pml4tFormater *pp,
+                           u64 entry, u16 a[4], int n) {
+  if (pp->t && (pp->flags != (entry & INTERESTING_FLAGS))) {
+    FormatEndPage(m, pp, MakeAddress(a));
+  }
+  if (!pp->t) {
+    FormatStartPage(pp, MakeAddress(a));
+    pp->flags = entry & INTERESTING_FLAGS;
+  }
+  pp->count += n;
+  if (~entry & PAGE_RSRV) {
+    pp->committed += n;
+  }
+}
+
 static u8 *GetPt(struct Machine *m, u64 entry, bool is_cr3) {
   return GetPageAddress(m->system, entry, is_cr3);
 }
@@ -131,38 +146,37 @@ char *FormatPml4t(struct Machine *m) {
     a[0] = range[i][0];
     do {
       a[1] = a[2] = a[3] = 0;
-      if (~*(pd[0] + a[0] * 8) & PAGE_V) {
+      entry = Read64(pd[0] + a[0] * 8);
+      if (!(entry & PAGE_V)) {
         if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
+      } else if (entry & PAGE_PS) {
+        FormatPdeOrPte(m, &pp, entry, a, 1 << 27);
       } else {
-        pd[1] = GetPt(m, Read64(pd[0] + a[0] * 8), false);
+        pd[1] = GetPt(m, entry, false);
         do {
           a[2] = a[3] = 0;
-          if (~*(pd[1] + a[1] * 8) & PAGE_V) {
+          entry = Read64(pd[1] + a[1] * 8);
+          if (!(entry & PAGE_V)) {
             if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
+          } else if (entry & PAGE_PS) {
+            FormatPdeOrPte(m, &pp, entry, a, 1 << 18);
           } else {
-            pd[2] = GetPt(m, Read64(pd[1] + a[1] * 8), false);
+            pd[2] = GetPt(m, entry, false);
             do {
               a[3] = 0;
-              if (~*(pd[2] + a[2] * 8) & PAGE_V) {
+              entry = Read64(pd[2] + a[2] * 8);
+              if (!(entry & PAGE_V)) {
                 if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
+              } else if (entry & PAGE_PS) {
+                FormatPdeOrPte(m, &pp, entry, a, 1 << 9);
               } else {
-                pd[3] = GetPt(m, Read64(pd[2] + a[2] * 8), false);
+                pd[3] = GetPt(m, entry, false);
                 do {
                   entry = Read64(pd[3] + a[3] * 8);
                   if (~entry & PAGE_V) {
                     if (pp.t) FormatEndPage(m, &pp, MakeAddress(a));
                   } else {
-                    if (pp.t && (pp.flags != (entry & INTERESTING_FLAGS))) {
-                      FormatEndPage(m, &pp, MakeAddress(a));
-                    }
-                    if (!pp.t) {
-                      FormatStartPage(&pp, MakeAddress(a));
-                      pp.flags = entry & INTERESTING_FLAGS;
-                    }
-                    ++pp.count;
-                    if (~entry & PAGE_RSRV) {
-                      ++pp.committed;
-                    }
+                    FormatPdeOrPte(m, &pp, entry, a, 1);
                   }
                 } while (++a[3] != 512);
               }

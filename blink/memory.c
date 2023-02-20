@@ -120,6 +120,21 @@ u64 FindPageTableEntry(struct Machine *m, u64 page) {
     index = (page >> level) & 511;
     entry = Get64(GetPageAddress(m->system, table, level == 39) + index * 8);
     if (!(entry & PAGE_V)) return 0;
+    if (m->metal) {
+      entry &= ~(u64)(PAGE_RSRV | PAGE_HOST | PAGE_MAP |
+                      PAGE_EOF | PAGE_MUG | PAGE_FILE);
+    }
+    if ((entry & PAGE_PS) && level > 12) {
+      // huge (1 GiB or 2 MiB) page; "rewrite" the TLB copy of the page table
+      // entry, to point to the 4 KiB subpage being accessed
+      // TODO: if partial TLB flushes are implemented in the future, we will
+      // also need to somehow record the original huge page size in the TLB,
+      // so we can correctly invalidate all TLB entries for the huge page
+      u64 submask = (1ULL << level) - 4096;
+      entry &= ~submask;
+      entry |= page & submask;
+      break;
+    }
   } while ((level -= 9) >= 12);
   if ((entry & PAGE_RSRV) &&
       !(entry = HandlePageFault(m, entry, table, index))) {
