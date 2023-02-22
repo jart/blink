@@ -47,6 +47,7 @@
 #include "blink/thread.h"
 #include "blink/tunables.h"
 #include "blink/util.h"
+#include "blink/vfs.h"
 #include "blink/web.h"
 #include "blink/x86.h"
 #include "blink/xlat.h"
@@ -353,6 +354,12 @@ int main(int argc, char *argv[]) {
 #ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");
+    exit(1);
+  }
+#endif
+#ifndef DISABLE_VFS
+  if (VfsInit()) {
+    WriteErrorString("error: vfs initialization failed\n");
     exit(1);
   }
 #endif

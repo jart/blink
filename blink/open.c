@@ -36,9 +36,14 @@
 #include "blink/syscall.h"
 #include "blink/thread.h"
 #include "blink/xlat.h"
+#include "blink/vfs.h"
 
-#ifdef DISABLE_OVERLAYS
-#define OverlaysOpen openat
+#if !defined(DISABLE_OVERLAYS)
+#define BlinkOpen OverlaysOpen
+#elif !defined(DISABLE_VFS)
+#define BlinkOpen VfsOpen
+#else
+#define BlinkOpen openat
 #endif
 
 static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
@@ -72,7 +77,7 @@ static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
   }
   unassert(!sigfillset(&ss));
   unassert(!pthread_sigmask(SIG_BLOCK, &ss, &oldss));
-  if ((tmpdir = OverlaysOpen(GetDirFildes(dirfildes), LoadStr(m, pathaddr),
+  if ((tmpdir = BlinkOpen(GetDirFildes(dirfildes), LoadStr(m, pathaddr),
                              O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0)) != -1) {
     unassert(GetRandom(&rng, 8, 0) == 8);
     for (i = 0; i < 12; ++i) {
@@ -118,7 +123,7 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
   if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   if (!(path = LoadStr(m, pathaddr))) return -1;
   RESTARTABLE(fildes =
-                  OverlaysOpen(GetDirFildes(dirfildes), path, sysflags, mode));
+                  BlinkOpen(GetDirFildes(dirfildes), path, sysflags, mode));
   if (fildes != -1) {
     if (fildes >= lim) {
       close(fildes);
