@@ -370,8 +370,15 @@ for x; do
 
   elif [ "$x" = "--enable-overlays" ]; then
     comment "#define DISABLE_OVERLAYS"
+    uncomment "#define DISABLE_VFS"
   elif [ "$x" = "--disable-overlays" ]; then
     uncomment "#define DISABLE_OVERLAYS"
+
+  elif [ "$x" = "--enable-vfs" ]; then
+    comment "#define DISABLE_VFS"
+    uncomment "#define DISABLE_OVERLAYS"
+  elif [ "$x" = "--disable-vfs" ]; then
+    uncomment "#define DISABLE_VFS"
 
   elif [ "$x" = "--enable-ancillary" ]; then
     comment "#define DISABLE_ANCILLARY"

@@ -78,6 +78,7 @@
 #include "blink/thread.h"
 #include "blink/timespec.h"
 #include "blink/util.h"
+#include "blink/vfs.h"
 #include "blink/xlat.h"
 
 #ifdef __linux
@@ -101,22 +102,54 @@
 #include <sys/epoll.h>
 #endif
 
-#ifdef DISABLE_OVERLAYS
-#define OverlaysChown    fchownat
-#define OverlaysAccess   faccessat
-#define OverlaysStat     fstatat
-#define OverlaysChdir    chdir
-#define OverlaysGetcwd   getcwd
-#define OverlaysMkdir    mkdirat
-#define OverlaysChmod    fchmodat
-#define OverlaysReadlink readlinkat
-#define OverlaysOpen     openat
-#define OverlaysSymlink  symlinkat
-#define OverlaysMkfifo   mkfifoat
-#define OverlaysUnlink   unlinkat
-#define OverlaysRename   renameat
-#define OverlaysLink     linkat
-#define OverlaysUtime    utimensat
+#if !defined(DISABLE_OVERLAYS)
+#define BlinkChown    OverlaysChown
+#define BlinkAccess   OverlaysAccess
+#define BlinkStat     OverlaysStat
+#define BlinkChdir    OverlaysChdir
+#define BlinkGetcwd   OverlaysGetcwd
+#define BlinkMkdir    OverlaysMkdir
+#define BlinkChmod    OverlaysChmod
+#define BlinkReadlink OverlaysReadlink
+#define BlinkOpen     OverlaysOpen
+#define BlinkSymlink  OverlaysSymlink
+#define BlinkMkfifo   OverlaysMkfifo
+#define BlinkUnlink   OverlaysUnlink
+#define BlinkRename   OverlaysRename
+#define BlinkLink     OverlaysLink
+#define BlinkUtime    OverlaysUtime
+#elif !defined(DISABLE_VFS)
+#define BlinkChown    VfsChown
+#define BlinkAccess   VfsAccess
+#define BlinkStat     VfsStat
+#define BlinkChdir    VfsChdir
+#define BlinkGetcwd   VfsGetcwd
+#define BlinkMkdir    VfsMkdir
+#define BlinkChmod    VfsChmod
+#define BlinkReadlink VfsReadlink
+#define BlinkOpen     VfsOpen
+#define BlinkSymlink  VfsSymlink
+#define BlinkMkfifo   VfsMkfifo
+#define BlinkUnlink   VfsUnlink
+#define BlinkRename   VfsRename
+#define BlinkLink     VfsLink
+#define BlinkUtime    VfsUtime
+#else
+#define BlinkChown    fchownat
+#define BlinkAccess   faccessat
+#define BlinkStat     fstatat
+#define BlinkChdir    chdir
+#define BlinkGetcwd   getcwd
+#define BlinkMkdir    mkdirat
+#define BlinkChmod    fchmodat
+#define BlinkReadlink readlinkat
+#define BlinkOpen     openat
+#define BlinkSymlink  symlinkat
+#define BlinkMkfifo   mkfifoat
+#define BlinkUnlink   unlinkat
+#define BlinkRename   renameat
+#define BlinkLink     linkat
+#define BlinkUtime    utimensat
 #endif
 
 #ifdef SO_LINGER_SEC
@@ -2787,8 +2820,8 @@ static int XlatFaccessatFlags(int x) {
 
 static int SysFaccessat2(struct Machine *m, i32 dirfd, i64 path, i32 mode,
                          i32 flags) {
-  return OverlaysAccess(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode),
-                        XlatFaccessatFlags(flags));
+  return BlinkAccess(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode),
+                     XlatFaccessatFlags(flags));
 }
 
 static int SysFaccessat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
@@ -2851,8 +2884,8 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
   }
 #endif
 #endif
-  if ((rc = OverlaysStat(GetDirFildes(dirfd), path, &st,
-                         XlatFstatatFlags(flags))) != -1) {
+  if ((rc = BlinkStat(GetDirFildes(dirfd), path, &st,
+                      XlatFstatatFlags(flags))) != -1) {
     XlatStatToLinux(&gst, &st);
     if (CopyToUserWrite(m, staddr, &gst, sizeof(gst)) == -1) rc = -1;
   }
@@ -2905,8 +2938,8 @@ static int SysFchownat(struct Machine *m, i32 dirfd, i64 pathaddr, u32 uid,
   }
 #endif
 #endif
-  return OverlaysChown(GetDirFildes(dirfd), path, uid, gid,
-                       XlatFchownatFlags(flags));
+  return BlinkChown(GetDirFildes(dirfd), path, uid, gid,
+                    XlatFchownatFlags(flags));
 }
 
 static int SysChown(struct Machine *m, i64 pathaddr, u32 uid, u32 gid) {
@@ -3017,7 +3050,7 @@ static int SysFdatasync(struct Machine *m, i32 fildes) {
 }
 
 static int SysChdir(struct Machine *m, i64 path) {
-  return OverlaysChdir(LoadStr(m, path));
+  return BlinkChdir(LoadStr(m, path));
 }
 
 static int SysFchdir(struct Machine *m, i32 fildes) {
@@ -3056,7 +3089,7 @@ static int SysListen(struct Machine *m, i32 fd, i32 backlog) {
 }
 
 static int SysMkdirat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
-  return OverlaysMkdir(GetDirFildes(dirfd), LoadStr(m, path), mode);
+  return BlinkMkdir(GetDirFildes(dirfd), LoadStr(m, path), mode);
 }
 
 static int SysMkdir(struct Machine *m, i64 path, i32 mode) {
@@ -3068,7 +3101,7 @@ static int SysFchmod(struct Machine *m, i32 fd, u32 mode) {
 }
 
 static int SysFchmodat(struct Machine *m, i32 dirfd, i64 path, u32 mode) {
-  return OverlaysChmod(GetDirFildes(dirfd), LoadStr(m, path), mode, 0);
+  return BlinkChmod(GetDirFildes(dirfd), LoadStr(m, path), mode, 0);
 }
 
 static int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
@@ -3294,7 +3327,7 @@ static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
   // implementations (e.g. Musl) consider it to be posixly incorrect.
   if (bufsiz <= 0) return einval();
   if (!(buf = (char *)AddToFreeList(m, malloc(bufsiz)))) return -1;
-  if ((rc = OverlaysReadlink(GetDirFildes(dirfd), LoadStr(m, path), buf,
+  if ((rc = BlinkReadlink(GetDirFildes(dirfd), LoadStr(m, path), buf,
                              bufsiz)) != -1) {
     if (CopyToUserWrite(m, bufaddr, buf, rc) == -1) rc = -1;
   }
@@ -3311,7 +3344,7 @@ static int SysTruncate(struct Machine *m, i64 pathaddr, i64 length) {
   if (length < 0) return einval();
   if (length > NUMERIC_MAX(off_t)) return eoverflow();
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  RESTARTABLE(fd = OverlaysOpen(AT_FDCWD, path, O_RDWR | O_CLOEXEC, 0));
+  RESTARTABLE(fd = BlinkOpen(AT_FDCWD, path, O_RDWR | O_CLOEXEC, 0));
   if (fd == -1) return -1;
   rc = ftruncate(fd, length);
   close(fd);
@@ -3320,8 +3353,8 @@ static int SysTruncate(struct Machine *m, i64 pathaddr, i64 length) {
 
 static int SysSymlinkat(struct Machine *m, i64 targetpath, i32 newdirfd,
                         i64 linkpath) {
-  return OverlaysSymlink(LoadStr(m, targetpath), GetDirFildes(newdirfd),
-                         LoadStr(m, linkpath));
+  return BlinkSymlink(LoadStr(m, targetpath), GetDirFildes(newdirfd),
+                      LoadStr(m, linkpath));
 }
 
 static int SysSymlink(struct Machine *m, i64 targetpath, i64 linkpath) {
@@ -3343,8 +3376,7 @@ static int SysMknodat(struct Machine *m, i32 dirfd, i64 path, i32 mode,
   _Static_assert(S_IFSOCK == 0140000, "");  // socket
   _Static_assert(S_IFMT == 0170000, "");    // mask of file types above
   if ((mode & S_IFMT) == S_IFIFO) {
-    return OverlaysMkfifo(GetDirFildes(dirfd), LoadStr(m, path),
-                          mode & ~S_IFMT);
+    return BlinkMkfifo(GetDirFildes(dirfd), LoadStr(m, path), mode & ~S_IFMT);
   } else {
     LOGF("mknod mode %#o not supported yet", mode);
     return enosys();
@@ -3396,7 +3428,7 @@ static int SysUnlinkat(struct Machine *m, i32 dirfd, i64 pathaddr, i32 flags) {
   dirfd = GetDirFildes(dirfd);
   if ((flags = XlatUnlinkatFlags(flags)) == -1) return -1;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  rc = OverlaysUnlink(dirfd, path, flags);
+  rc = BlinkUnlink(dirfd, path, flags);
 #ifndef __linux
   // POSIX.1 says unlink(directory) raises EPERM but on Linux
   // it always raises EISDIR, which is so much less ambiguous
@@ -3433,13 +3465,12 @@ static int SysRenameat2(struct Machine *m, int srcdirfd, i64 srcpath,
   if (!(dstpath = LoadStr(m, dstpathaddr))) return -1;
   // TODO: check for renameat2 in configure script
   if ((flags & RENAME_NOREPLACE_LINUX) &&
-      !OverlaysStat(GetDirFildes(dstdirfd), dstpath, &st,
-                    AT_SYMLINK_NOFOLLOW)) {
+      !BlinkStat(GetDirFildes(dstdirfd), dstpath, &st, AT_SYMLINK_NOFOLLOW)) {
     errno = EEXIST;
     return -1;
   }
-  return OverlaysRename(GetDirFildes(srcdirfd), LoadStr(m, srcpath),
-                        GetDirFildes(dstdirfd), dstpath);
+  return BlinkRename(GetDirFildes(srcdirfd), LoadStr(m, srcpath),
+                     GetDirFildes(dstdirfd), dstpath);
 }
 
 static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
@@ -3473,9 +3504,9 @@ static i32 SysLinkat(struct Machine *m,  //
                      i32 newdirfd,       //
                      i64 newpath,        //
                      i32 flags) {
-  return OverlaysLink(GetDirFildes(olddirfd), LoadStr(m, oldpath),
-                      GetDirFildes(newdirfd), LoadStr(m, newpath),
-                      XlatLinkatFlags(flags));
+  return BlinkLink(GetDirFildes(olddirfd), LoadStr(m, oldpath),
+                   GetDirFildes(newdirfd), LoadStr(m, newpath),
+                   XlatLinkatFlags(flags));
 }
 
 static int SysLink(struct Machine *m, i64 existingpath, i64 newpath) {
@@ -3717,7 +3748,7 @@ static i64 SysGetcwd(struct Machine *m, i64 bufaddr, i64 size) {
   size_t n;
   char buf[PATH_MAX + 1];
   if (size < 0) return enomem();
-  if (OverlaysGetcwd(buf, sizeof(buf))) {
+  if (BlinkGetcwd(buf, sizeof(buf))) {
     n = strlen(buf) + 1;
     if (size < n) {
       res = erange();
@@ -4281,13 +4312,13 @@ static int SysUtime(struct Machine *m, i64 pathaddr, i64 timesaddr) {
   struct timespec ts[2];
   const struct utimbuf_linux *t;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  if (!timesaddr) return OverlaysUtime(AT_FDCWD, path, 0, 0);
+  if (!timesaddr) return BlinkUtime(AT_FDCWD, path, 0, 0);
   if ((t = (const struct utimbuf_linux *)SchlepR(m, timesaddr, sizeof(*t)))) {
     ts[0].tv_sec = Read64(t->actime);
     ts[0].tv_nsec = 0;
     ts[1].tv_sec = Read64(t->modtime);
     ts[1].tv_nsec = 0;
-    return OverlaysUtime(AT_FDCWD, path, ts, 0);
+    return BlinkUtime(AT_FDCWD, path, ts, 0);
   } else {
     return -1;
   }
@@ -4298,11 +4329,11 @@ static int SysUtimes(struct Machine *m, i64 pathaddr, i64 tvsaddr) {
   struct timespec ts[2];
   const struct timeval_linux *tv;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  if (!tvsaddr) return OverlaysUtime(AT_FDCWD, path, 0, 0);
+  if (!tvsaddr) return BlinkUtime(AT_FDCWD, path, 0, 0);
   if ((tv = (const struct timeval_linux *)SchlepR(
            m, tvsaddr, sizeof(struct timeval_linux) * 2))) {
     ConvertUtimeTimevals(ts, tv);
-    return OverlaysUtime(AT_FDCWD, path, ts, 0);
+    return BlinkUtime(AT_FDCWD, path, ts, 0);
   } else {
     return -1;
   }
@@ -4314,11 +4345,11 @@ static int SysFutimesat(struct Machine *m, i32 dirfd, i64 pathaddr,
   struct timespec ts[2];
   const struct timeval_linux *tv;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  if (!tvsaddr) return OverlaysUtime(GetDirFildes(dirfd), path, 0, 0);
+  if (!tvsaddr) return BlinkUtime(GetDirFildes(dirfd), path, 0, 0);
   if ((tv = (const struct timeval_linux *)SchlepR(
            m, tvsaddr, sizeof(struct timeval_linux) * 2))) {
     ConvertUtimeTimevals(ts, tv);
-    return OverlaysUtime(GetDirFildes(dirfd), path, ts, 0);
+    return BlinkUtime(GetDirFildes(dirfd), path, ts, 0);
   } else {
     return -1;
   }
@@ -4347,7 +4378,7 @@ static int SysUtimensat(struct Machine *m, i32 fd, i64 pathaddr, i64 tvsaddr,
   }
   if ((flags = XlatUtimensatFlags(flags)) == -1) return -1;
   if (path) {
-    return OverlaysUtime(GetDirFildes(fd), path, tsp, flags);
+    return BlinkUtime(GetDirFildes(fd), path, tsp, flags);
   } else {
     if (flags) {
       LOGF("%s() flags %d not supported", "utimensat(path=null)", flags);
