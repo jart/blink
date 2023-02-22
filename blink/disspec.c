@@ -511,7 +511,7 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0x76, DisOpPqQqVdqWdq(x, p, "pcmpeqd"));
     RCASE(0x77, "emms");
     RCASE(0x80 ... 0x8f, "jCC Jvds");
-    RCASE(0x90 ... 0x9f, "setCC Jvds");
+    RCASE(0x90 ... 0x9f, "setCC Eb");
     RCASE(0xA0, "push %fs");
     RCASE(0xA1, "pop %fs");
     RCASE(0xA2, "cpuid");

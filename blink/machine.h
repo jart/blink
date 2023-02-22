@@ -58,9 +58,8 @@
 #define PAGE_V    0x0001  // valid
 #define PAGE_RW   0x0002  // writeable
 #define PAGE_U    0x0004  // permit user-mode access
-#define PAGE_4KB  0x0080  // IsPage (if PDPTE/PDE) or PAT (if PT)
-#define PAGE_2MB  0x0180
-#define PAGE_1GB  0x0180
+#define PAGE_PS   0x0080  // IsPage (if PDPTE/PDE) or PAT (if PT)
+#define PAGE_G    0x0100  // global
 #define PAGE_RSRV 0x0200  // no actual memory associated
 #define PAGE_HOST 0x0400  // PAGE_TA bits point to host (not real) memory
 #define PAGE_MAP  0x0800  // PAGE_TA bits were mmmap()'d
