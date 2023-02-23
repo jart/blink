@@ -3139,7 +3139,6 @@ static void OnContinueExec(void) {
 
 static void OnInt(void) {
   action |= INT;
-  ReactiveDraw();
 }
 
 static void OnRestart(void) {
@@ -3624,7 +3623,8 @@ static void Tui(void) {
         action &= ~INT;
         RecordKeystroke("\3");
         if (action & (CONTINUE | NEXT | FINISH)) {
-          action &= ~(CONTINUE | NEXT | FINISH);
+          action &= ~(CONTINUE | NEXT | FINISH | STEP);
+          ReactiveDraw();
         } else {
           EnqueueSignal(m, SIGINT_LINUX);
           action |= STEP;
