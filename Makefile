@@ -101,8 +101,8 @@ include third_party/libc-test/libc-test.mk
 
 BUILD_TOOLCHAIN := -DBUILD_TOOLCHAIN="\"$(shell $(CC) --version | head -n1)\""
 BUILD_TIMESTAMP := -DBUILD_TIMESTAMP="\"$(shell LC_ALL=C TZ=UTC date +"%a %b %e %T %Z %Y")\""
-BLINK_COMMITS := -DBLINK_COMMITS="\"$(shell git rev-list HEAD --count)\""
-BLINK_GITSHA := -DBLINK_GITSHA="\"$(shell git rev-parse --verify HEAD)\""
+BLINK_COMMITS := -DBLINK_COMMITS="\"$(shell git rev-list HEAD --count 2>/dev/null)\""
+BLINK_GITSHA := -DBLINK_GITSHA="\"$(shell git rev-parse --verify HEAD 2>/dev/null)\""
 
 CONFIG_CPPFLAGS =			\
 	$(CONFIG_ARGUMENTS)		\
@@ -216,7 +216,7 @@ $(OBJS): config.h
 config.h: configure
 	$(CONFIG_COMMAND)
 
-install: o/$(MODE)/blink
+install:
 	mkdir -p $(PREFIX)/bin
 	install -m 0755 o//blink/blink $(PREFIX)/bin/blink
 	install -m 0755 o//blink/blinkenlights $(PREFIX)/bin/blinkenlights
