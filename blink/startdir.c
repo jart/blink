@@ -18,35 +18,24 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
-#include "blink/fspath.h"
+#include "blink/util.h"
 
-char *JoinPath(const char *x, const char *y) {
-  char *z, *p;
-  size_t n, m;
-  if (!y || !*y) {
-    return strdup(x);
-  }
-  if (!x || !*x || *y == '/' || (*x == '.' && !x[1])) {
-    return strdup(y);
-  }
-  n = strlen(x);
-  m = strlen(y);
-  if (!(z = (char *)malloc(n + 1 + m + 1))) return 0;
-  memcpy(z, x, n);
-  p = z + n;
-  if (x[n - 1] != '/') {
-    *p++ = '/';
-  }
-  memcpy(p, y, m + 1);
-  return z;
+static char *g_startdir;
+
+static void FreeStartDir(void) {
+  free(g_startdir);
+  g_startdir = 0;
 }
 
-char *ExpandUser(const char *path) {
-  const char *home;
-  if (*path == '~' && (home = getenv("HOME"))) {
-    return JoinPath(home, path);
-  } else {
-    return strdup(path);
+char *GetStartDir(void) {
+  if (!g_startdir) {
+    char cwd[PATH_MAX];
+    strcpy(cwd, ".");
+    getcwd(cwd, sizeof(cwd));
+    g_startdir = strdup(cwd);
+    atexit(FreeStartDir);
   }
+  return g_startdir;
 }

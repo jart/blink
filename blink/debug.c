@@ -178,7 +178,7 @@ void PrintFds(struct Fds *fds) {
 }
 
 const char *GetBacktrace(struct Machine *m) {
-  _Thread_local static char b[4096];
+  _Thread_local static char b[16384];
   int o = 0;
   int n = sizeof(b);
 #ifndef DISABLE_BACKTRACE

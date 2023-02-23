@@ -47,15 +47,3 @@ void WriteErrorInit(void) {
   g_errfd = fcntl(2, F_DUPFD_CLOEXEC, kMinBlinkFd);
   if (g_errfd == -1) exit(200);
 }
-
-char *ExpandUser(const char *path) {
-  char *path2;
-  const char *home;
-  if (*path == '~' && (home = getenv("HOME"))) {
-    path2 = (char *)malloc(strlen(home) + 1 + strlen(path) + 1);
-    stpcpy(stpcpy(stpcpy(path2, home), "/"), path);
-    return path2;
-  } else {
-    return strdup(path);
-  }
-}

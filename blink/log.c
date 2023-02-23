@@ -27,6 +27,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/fspath.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -103,6 +104,7 @@ static char *GetTimestamp(void) {
 
 static void OpenLog(void) {
   int fd;
+  if (!g_log.path) return;
   if (!strcmp(g_log.path, "-") ||  //
       !strcmp(g_log.path, "/dev/stderr")) {
     fd = 2;
@@ -169,17 +171,14 @@ void LogSys(const char *file, int line, const char *fmt, ...) {
 
 static void FreeLogPath(void) {
   free(g_log.path);
+  g_log.path = 0;
 }
 
 static void SetLogPath(const char *path) {
-  char cwd[PATH_MAX];
   if (path) {
     g_log.path = ExpandUser(path);
   } else {
-    strcpy(cwd, ".");
-    getcwd(cwd, sizeof(cwd));
-    g_log.path = (char *)malloc(strlen(cwd) + 1 + strlen(DEFAULT_LOG_PATH) + 1);
-    stpcpy(stpcpy(stpcpy(g_log.path, cwd), "/"), DEFAULT_LOG_PATH);
+    g_log.path = JoinPath(GetStartDir(), DEFAULT_LOG_PATH);
   }
   atexit(FreeLogPath);
 }

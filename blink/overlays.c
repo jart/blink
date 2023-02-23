@@ -27,6 +27,7 @@
 #include "blink/builtin.h"
 #include "blink/debug.h"
 #include "blink/errno.h"
+#include "blink/fspath.h"
 #include "blink/likely.h"
 #include "blink/log.h"
 #include "blink/overlays.h"

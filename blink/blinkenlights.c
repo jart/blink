@@ -3906,6 +3906,7 @@ int main(int argc, char *argv[]) {
   setlocale(LC_ALL, "");
   g_exitdontabort = true;
   SetupWeb();
+  GetStartDir();
   // Ensure utf-8 is printed correctly on windows, this method
   // has issues(http://stackoverflow.com/a/10884364/4279) but
   // should work for at least windows 7 and newer.

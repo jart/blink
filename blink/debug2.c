@@ -16,16 +16,20 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
 #include <fcntl.h>
+#include <string.h>
 #include <sys/stat.h>
 
 #include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/elf.h"
+#include "blink/fspath.h"
 #include "blink/loader.h"
 #include "blink/machine.h"
 #include "blink/map.h"
 #include "blink/overlays.h"
+#include "blink/util.h"
 
 #ifdef DISABLE_OVERLAYS
 #define OverlaysOpen openat
@@ -33,19 +37,27 @@
 
 void LoadDebugSymbols(struct Elf *elf) {
   int fd, n;
+  char *path;
   void *elfmap;
-  char buf[1024];
   struct stat st;
+  bool ok = false;
+  char buf[PATH_MAX];
   if (elf->ehdr && GetElfSymbolTable(elf->ehdr, elf->size, &n) && n) return;
   unassert(elf->prog);
   snprintf(buf, sizeof(buf), "%s.dbg", elf->prog);
-  if ((fd = OverlaysOpen(AT_FDCWD, buf, O_RDONLY, 0)) != -1) {
+  path = JoinPath(GetStartDir(), buf);
+  if ((fd = OverlaysOpen(AT_FDCWD, path, O_RDONLY, 0)) != -1) {
     if (fstat(fd, &st) != -1 &&
         (elfmap = Mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0,
                        "debug")) != MAP_FAILED) {
       elf->ehdr = (Elf64_Ehdr_ *)elfmap;
       elf->size = st.st_size;
+      ok = true;
     }
     close(fd);
   }
+  if (!ok) {
+    LOGF("LoadDebugSymbols(%s) failed: %s", path, strerror(errno));
+  }
+  free(path);
 }

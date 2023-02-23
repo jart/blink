@@ -305,6 +305,7 @@ void exit(int status) {
 
 int main(int argc, char *argv[]) {
   SetupWeb();
+  GetStartDir();
   setlocale(LC_ALL, "");
   // Ensure utf-8 is printed correctly on windows, this method
   // has issues(http://stackoverflow.com/a/10884364/4279) but

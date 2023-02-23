@@ -16,7 +16,7 @@ extern const short kCp437[256];
 extern bool g_exitdontabort;
 
 _Noreturn void Abort(void);
-char *ExpandUser(const char *);
+char *GetStartDir(void);
 int GetOpt(int, char *const[], const char *);
 u64 tpenc(wint_t);
 bool mulo(u64, u64, u64 *);
