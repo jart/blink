@@ -76,6 +76,7 @@ static u64 ScaleAddress(u64 address) {
 void InitMap(void) {
   long pagesize;
   pagesize = GetSystemPageSize();
+  FLAG_vabits = GetBitsInAddressSpace();
   FLAG_vaspace = GetVirtualAddressSpace(FLAG_vabits, pagesize);
   FLAG_aslrmask = ScaleAddress(kAslrMask);
   FLAG_imagestart = ScaleAddress(kImageStart);
