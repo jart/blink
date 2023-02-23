@@ -30,8 +30,11 @@ int main(int argc, char *argv[]) {
   int ax, bx, cx, dx;
   ax = cx = 0;
   asm volatile("cpuid" : "+a"(ax), "=b"(bx), "+c"(cx), "=d"(dx));
-  if (syscall(SYS_arch_prctl, ARCH_GET_CPUID_) != 1) return 1;
-  if (syscall(SYS_arch_prctl, ARCH_SET_CPUID_, 0) != 0) return 2;
+  if (syscall(SYS_arch_prctl, ARCH_GET_CPUID_) != 1 ||
+      syscall(SYS_arch_prctl, ARCH_SET_CPUID_, 0) != 0) {
+    fprintf(stderr, "skipping %s\n", argv[0]);
+    return 0;
+  }
   if (syscall(SYS_arch_prctl, ARCH_GET_CPUID_) != 0) return 3;
   struct sigaction sa = {.sa_sigaction = OnSigSegv};
   if (sigaction(SIGSEGV, &sa, 0)) return 4;
