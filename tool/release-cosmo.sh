@@ -1,6 +1,15 @@
 #!/bin/sh
-set -ex
 m=tiny
+
+echo -n 'did you update blink/tunables.h and ape/ape.s? [n] '
+read didit
+if [ "$didit" != "y" ]; then
+  exit 1
+fi
+
+set -ex
+./configure
+make -j8 check
 
 # create the linux arm64 build
 make m=$m -j8 o/$m/aarch64/blink/blink
@@ -39,8 +48,7 @@ scp ~/cosmo/o//test/libc/thread/pthread_create_test.com pi:
 ssh pi ./pthread_create_test.com
 
 # we're finished
+o//blink/blink -v
 ls -hal \
    ~/cosmo/ape/blink-aarch64.gz \
    ~/cosmo/ape/blink-darwin-arm64.gz
-
-echo BE SURE TO UPDATE THE VERSION IN APE/APE.S
