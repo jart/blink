@@ -10,6 +10,13 @@ ARCHITECTURES = x86_64 x86_64-gcc49 i486 aarch64 arm mips s390x mipsel mips64 mi
 .FEATURES: output-sync
 .PHONY: o all clean check check2 test tags
 
+ifeq ($(MAKE_VERSION), 3.81)
+$(error please "brew install make" and use the "gmake" command)
+endif
+ifneq ($(shell echo -e "4.3\n$(MAKE_VERSION)" | sort -ct. -k1,1n -k2,2n 2>/dev/null && echo YES), YES)
+$(error please use GNU Make 4.3 or newer)
+endif
+
 ifeq ($(wildcard config.h),)
   $(error ./configure needs to be run, use ./configure --help for help)
 endif
