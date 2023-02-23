@@ -3645,11 +3645,6 @@ static void Tui(void) {
       if (action & MODAL) {
         PrintMessageBox(ttyout, systemfailure, tyn, txn);
         ReadKeyboard();
-        if (action & INT) {
-          LOGF("TUI INT");
-          LeaveScreen();
-          exit(1);
-        }
       } else if (dialog || !IsExecuting() ||
                  (!(action & CONTINUE) && !(action & INT) &&
                   HasPendingKeyboard())) {
@@ -3662,9 +3657,15 @@ static void Tui(void) {
         if (action & (CONTINUE | NEXT | FINISH)) {
           action &= ~(CONTINUE | NEXT | FINISH | STEP);
           ReactiveDraw();
-        } else {
+        } else if ((~m->sigmask & (1ull << (SIGINT_LINUX - 1))) &&
+                   Read64(m->system->hands[SIGINT_LINUX - 1].handler) !=
+                       SIG_DFL_LINUX &&
+                   Read64(m->system->hands[SIGINT_LINUX - 1].handler) !=
+                       SIG_IGN_LINUX) {
           EnqueueSignal(m, SIGINT_LINUX);
           action |= STEP;
+        } else {
+          SetStatus("press q to quit");
         }
       }
       if (action & EXIT) {
