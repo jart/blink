@@ -118,7 +118,7 @@ u64 FindPageTableEntry(struct Machine *m, u64 page) {
   do {
     table = entry;
     index = (page >> level) & 511;
-    entry = Get64(GetPageAddress(m->system, table, level == 39) + index * 8);
+    entry = ReadPte(GetPageAddress(m->system, table, level == 39) + index * 8);
     if (!(entry & PAGE_V)) return 0;
     if (m->metal) {
       entry &= ~(u64)(PAGE_RSRV | PAGE_HOST | PAGE_MAP | PAGE_EOF | PAGE_MUG |
