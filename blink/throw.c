@@ -106,14 +106,11 @@ void ThrowProtectionFault(struct Machine *m) {
 void ThrowSegmentationFault(struct Machine *m, i64 va) {
   RestoreIp(m);
   m->faultaddr = va;
-  ERRF("SEGMENTATION FAULT AT ADDRESS %" PRIx64 "\n\t%s\n%s", va,
-       GetBacktrace(m), FormatPml4t(m));
   HaltMachine(m, kMachineSegmentationFault);
 }
 
 void OpUdImpl(struct Machine *m) {
   RestoreIp(m);
-  ERRF("UNDEFINED INSTRUCTION\n\t%s\n%s", GetBacktrace(m), FormatPml4t(m));
   HaltMachine(m, kMachineUndefinedInstruction);
 }
 
