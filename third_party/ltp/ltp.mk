@@ -18,8 +18,10 @@ o/$(MODE)/third_party/ltp/bin/%.elf.ok:					\
 		o/proc/cpuinfo						\
 		o/proc/meminfo
 	@mkdir -p $(@D)
-	o/$(MODE)/blink/blink $<
+	o/$(MODE)/blink/blink $< $(LTP_ARGS)
 	@touch $@
+
+o/$(MODE)/third_party/ltp/bin/1/growfiles.elf.ok: private LTP_ARGS = -f "$(TMPDIR)/gf"
 
 .PRECIOUS: o/proc/%
 o/proc/%: third_party/ltp/%
