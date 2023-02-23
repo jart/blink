@@ -219,8 +219,10 @@ void SignalActor(struct Machine *mm) {
     STATISTIC(++interps);
 #endif
     ExecuteInstruction(m);
-    if (m->restored) break;
-    CheckForSignals(m);
+    if (atomic_load_explicit(&m->attention, memory_order_acquire)) {
+      if (m->restored) break;
+      CheckForSignals(m);
+    }
   }
 }
 

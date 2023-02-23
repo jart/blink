@@ -279,12 +279,10 @@ struct Machine {                           //
   u64 ip;                                  // instruction pointer
   u8 oplen;                                // length of operation
   u8 mode;                                 // [dup] XED_MODE_{REAL,LEGACY,LONG}
-  bool reserving;                          // did it call ReserveAddress?
+  _Atomic(bool) attention;                 // signals main interpreter loop
+  _Atomic(bool) invalidated;               // the tlb must be flushed
   u32 flags;                               // x86 eflags register
   i64 stashaddr;                           // page overlap buffer
-  _Atomic(bool) killed;                    // used to send a soft SIGKILL
-  _Atomic(bool) invalidated;               // the tlb must be flushed
-  _Atomicish(u64) signals;                 // signals waiting for delivery
   union {                                  // GENERAL REGISTER FILE
     u64 align8_;                           //
     u8 beg[128];                           //
@@ -355,16 +353,19 @@ struct Machine {                           //
   pthread_t thread;                        // POSIX thread of this machine
   struct FreeList freelist;                // to make system calls simpler
   struct JitPath path;                     // under construction jit route
+  _Atomicish(u64) signals;                 // [attention] pending delivery
   i64 bofram[2];                           // helps debug bootloading code
   i64 faultaddr;                           // used for tui error reporting
   _Atomicish(u64) sigmask;                 // signals that've been blocked
   u32 tlbindex;                            //
   struct System *system;                   //
   int sigdepth;                            //
+  _Atomic(bool) killed;                    // [attention] slay this thread
+  bool restored;                           // [attention] rt_sigreturn()'d
+  bool reserving;                          //
   bool nofault;                            //
   bool canhalt;                            //
   bool metal;                              //
-  bool restored;                           //
   bool interrupted;                        //
   bool issigsuspend;                       //
   bool traprdtsc;                          //

@@ -22,6 +22,7 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/bitscan.h"
 #include "blink/endian.h"
 #include "blink/linux.h"
@@ -189,6 +190,7 @@ void SigRestore(struct Machine *m) {
 #endif
   memcpy(m->xmm, sf.fp.xmm, 256);
   m->restored = true;
+  atomic_store_explicit(&m->attention, true, memory_order_release);
 }
 
 static int ConsumeSignalImpl(struct Machine *m, int *delivered, bool *restart) {
@@ -238,6 +240,21 @@ int ConsumeSignal(struct Machine *m, int *delivered, bool *restart) {
 
 void EnqueueSignal(struct Machine *m, int sig) {
   if (m && (1 <= sig && sig <= 64)) {
-    m->signals |= 1ul << (sig - 1);
+    if ((m->signals |= 1ul << (sig - 1)) & ~m->sigmask) {
+      atomic_store_explicit(&m->attention, true, memory_order_release);
+    }
+  }
+}
+
+void CheckForSignals(struct Machine *m) {
+  int sig;
+  if (atomic_load_explicit(&m->killed, memory_order_acquire)) {
+    SysExit(m, 0);
+  } else if (m->signals & ~m->sigmask) {
+    if ((sig = ConsumeSignal(m, 0, 0))) {
+      TerminateSignal(m, sig);
+    }
+  } else {
+    atomic_store_explicit(&m->attention, false, memory_order_release);
   }
 }

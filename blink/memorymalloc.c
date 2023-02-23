@@ -265,6 +265,7 @@ void KillOtherThreads(struct System *s) {
         THR_LOGF("pid=%d tid=%d is killing tid %d", s->pid, g_machine->tid,
                  m->tid);
         atomic_store_explicit(&m->killed, true, memory_order_release);
+        atomic_store_explicit(&m->attention, true, memory_order_release);
         if (t < 10) {
           pthread_kill(m->thread, SIGSYS);
         } else {
@@ -336,6 +337,7 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
     memset(&m->path, 0, sizeof(m->path));
     memset(&m->freelist, 0, sizeof(m->freelist));
     ResetInstructionCache(m);
+    m->signals = 0;
   } else {
     memset(m, 0, sizeof(*m));
     ResetCpu(m);
@@ -897,7 +899,8 @@ StartOver:
   got = 0;
   do {
     for (i = 39, pt = s->cr3;; i -= 9) {
-      pt = ReadPte(GetPageAddress(s, pt, i == 39) + (((virt + got) >> i) & 511) * 8);
+      pt = ReadPte(GetPageAddress(s, pt, i == 39) +
+                   (((virt + got) >> i) & 511) * 8);
       if (i == 12 || !(pt & PAGE_V)) break;
     }
     got += 1ull << i;

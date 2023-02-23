@@ -2198,18 +2198,6 @@ void ExecuteInstruction(struct Machine *m) {
 #endif
 }
 
-void CheckForSignals(struct Machine *m) {
-  int sig;
-  if (atomic_load_explicit(&m->killed, memory_order_relaxed)) {
-    SysExit(m, 0);
-  }
-  if (m->signals &&                  //
-      (m->signals & ~m->sigmask) &&  //
-      (sig = ConsumeSignal(m, 0, 0))) {
-    TerminateSignal(m, sig);
-  }
-}
-
 void Actor(struct Machine *mm) {
 #ifdef __CYGWIN__
   // TODO: Why does JIT clobber %rbx on Cygwin?
@@ -2222,6 +2210,8 @@ void Actor(struct Machine *mm) {
     STATISTIC(++interps);
 #endif
     ExecuteInstruction(m);
-    CheckForSignals(m);
+    if (atomic_load_explicit(&m->attention, memory_order_acquire)) {
+      CheckForSignals(m);
+    }
   }
 }
