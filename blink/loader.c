@@ -293,26 +293,57 @@ static bool IsHaikuExecutable(Elf64_Ehdr_ *ehdr, size_t size) {
 #endif
 }
 
+static bool IsShebangExecutable(void *image, size_t size) {
+  return size >= 2 && ((char *)image)[0] == '#' && ((char *)image)[1] == '!';
+}
+
+static void ExplainWhyItCantBeEmulated(const char *path, const char *reason) {
+  LOGF("%s: can't emulate: %s", path, reason);
+}
+
 bool IsSupportedExecutable(const char *path, void *image, size_t size) {
-  bool res;
   Elf64_Ehdr_ *ehdr;
   if (size >= sizeof(Elf64_Ehdr_) && READ32(image) == READ32("\177ELF")) {
     ehdr = (Elf64_Ehdr_ *)image;
-    res = (Read16(ehdr->type) == ET_EXEC_ ||  //
-           Read16(ehdr->type) == ET_DYN_) &&
-          ehdr->ident[EI_CLASS_] == ELFCLASS64_ &&
-          Read16(ehdr->machine) == EM_NEXGEN32E_ &&
-          !IsFreebsdExecutable(ehdr, size) &&  //
-          !IsOpenbsdExecutable(ehdr, size) &&  //
-          !IsHaikuExecutable(ehdr, size);
+    if (Read16(ehdr->type) != ET_EXEC_ &&  //
+        Read16(ehdr->type) != ET_DYN_) {
+      ExplainWhyItCantBeEmulated(path, "ELF is neither ET_EXEC or ET_DYN");
+      return false;
+    }
+    if (ehdr->ident[EI_CLASS_] != ELFCLASS64_) {
+      ExplainWhyItCantBeEmulated(path, "ELF is not 64-bit");
+      return false;
+    }
+    if (Read16(ehdr->machine) != EM_NEXGEN32E_) {
+      ExplainWhyItCantBeEmulated(path, "ELF is not AMD64");
+      return false;
+    }
+    if (IsFreebsdExecutable(ehdr, size)) {
+      ExplainWhyItCantBeEmulated(path, "ELF is FreeBSD executable");
+      return false;
+    }
+    if (IsOpenbsdExecutable(ehdr, size)) {
+      ExplainWhyItCantBeEmulated(path, "ELF is OpenBSD executable");
+      return false;
+    }
+    if (IsHaikuExecutable(ehdr, size)) {
+      ExplainWhyItCantBeEmulated(path, "ELF is Haiku executable");
+      return false;
+    }
 #if defined(__ELF__) && !defined(__linux)
-    if (res) LOGF("blink believes %s is an x86_64-linux executable", path);
+    LOGF("blink believes %s is an x86_64-linux executable", path);
 #endif
-    return res;
+    return true;
   }
-  return (size >= 4096 && (READ64(image) == READ64("MZqFpD='") ||    //
-                           READ64(image) == READ64("jartsr='"))) ||  //
-         endswith(path, ".bin");
+  if ((size >= 4096 && (READ64(image) == READ64("MZqFpD='") ||    //
+                        READ64(image) == READ64("jartsr='"))) ||  //
+      endswith(path, ".bin")) {
+    return true;
+  }
+  if (!IsShebangExecutable(image, size)) {
+    ExplainWhyItCantBeEmulated(path, "not ELF, not APE, and not a .bin file");
+  }
+  return false;
 }
 
 static void LoadFlatExecutable(struct Machine *m, intptr_t base,
@@ -757,6 +788,8 @@ static bool CanEmulateImpl(struct Machine *m, char **prog, char ***argv,
   void *img;
   struct stat st;
   if ((fd = OverlaysOpen(AT_FDCWD, *prog, O_RDONLY | O_CLOEXEC, 0)) == -1) {
+  CantEmulate:
+    LOGF("%s: can't emulate: %s", *prog, strerror(errno));
     return false;
   }
   unassert(!fstat(fd, &st));
@@ -766,7 +799,7 @@ static bool CanEmulateImpl(struct Machine *m, char **prog, char ***argv,
   }
   img = mmap(0, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
   close(fd);
-  if (img == MAP_FAILED) return false;
+  if (img == MAP_FAILED) goto CantEmulate;
   res = !!CanEmulateData(m, prog, argv, isfirst, (char *)img, st.st_size);
   unassert(!munmap(img, st.st_size));
   return res;
