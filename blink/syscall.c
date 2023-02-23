@@ -4458,7 +4458,7 @@ static i32 SysSelect(struct Machine *m, i32 nfds, i64 readfds_addr,
   rc =
       Select(m, nfds, readfds_addr, writefds_addr, exceptfds_addr, timeoutp, 0);
 #ifndef DISABLE_NONPOSIX
-  if (timeout_addr && (rc != -1 || errno == EINTR)) {
+  if (timeout_addr) {
     Write64(timeout_linux.sec, timeout.tv_sec);
     Write64(timeout_linux.usec, (timeout.tv_nsec + 999) / 1000);
     CopyToUserWrite(m, timeout_addr, &timeout_linux, sizeof(timeout_linux));
@@ -4524,7 +4524,7 @@ static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
   rc = Select(m, nfds, readfds_addr, writefds_addr, exceptfds_addr, timeoutp,
               sigmaskp);
 #ifndef DISABLE_NONPOSIX
-  if (timeout_addr && (rc != -1 || errno == EINTR)) {
+  if (timeout_addr) {
     Write64(timeout_linux.sec, timeout.tv_sec);
     Write64(timeout_linux.nsec, timeout.tv_nsec);
     CopyToUserWrite(m, timeout_addr, &timeout_linux, sizeof(timeout_linux));
@@ -4667,17 +4667,15 @@ static int SysPpoll(struct Machine *m, i64 fdsaddr, u64 nfds, i64 timeoutaddr,
       }
       deadline = AddTime(GetTime(), timeout);
       rc = Poll(m, fdsaddr, nfds, deadline);
-      if (rc != -1 || errno == EINTR) {
-        now = GetTime();
-        if (CompareTime(now, deadline) >= 0) {
-          remain = FromMilliseconds(0);
-        } else {
-          remain = SubtractTime(deadline, now);
-        }
-        Write64(timeout_linux.sec, remain.tv_sec);
-        Write64(timeout_linux.nsec, remain.tv_nsec);
-        CopyToUserWrite(m, timeoutaddr, &timeout_linux, sizeof(timeout_linux));
+      now = GetTime();
+      if (CompareTime(now, deadline) >= 0) {
+        remain = FromMilliseconds(0);
+      } else {
+        remain = SubtractTime(deadline, now);
       }
+      Write64(timeout_linux.sec, remain.tv_sec);
+      Write64(timeout_linux.nsec, remain.tv_nsec);
+      CopyToUserWrite(m, timeoutaddr, &timeout_linux, sizeof(timeout_linux));
     } else {
       rc = Poll(m, fdsaddr, nfds, GetMaxTime());
     }
