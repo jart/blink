@@ -121,8 +121,8 @@ u64 FindPageTableEntry(struct Machine *m, u64 page) {
     entry = Get64(GetPageAddress(m->system, table, level == 39) + index * 8);
     if (!(entry & PAGE_V)) return 0;
     if (m->metal) {
-      entry &= ~(u64)(PAGE_RSRV | PAGE_HOST | PAGE_MAP |
-                      PAGE_EOF | PAGE_MUG | PAGE_FILE);
+      entry &= ~(u64)(PAGE_RSRV | PAGE_HOST | PAGE_MAP | PAGE_EOF | PAGE_MUG |
+                      PAGE_FILE);
     }
     if ((entry & PAGE_PS) && level > 12) {
       // huge (1 GiB or 2 MiB) page; "rewrite" the TLB copy of the page table

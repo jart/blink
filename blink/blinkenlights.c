@@ -1894,9 +1894,9 @@ static const char *DescribeAction(void) {
 }
 
 static char *GetStatus(int m) {
-  bool first;
+  bool once;
   unsigned i, n;
-  struct timespec t;
+  struct timespec now;
   struct Buffer s = {0};
   if (statusmessage && CompareTime(GetTime(), statusexpires)) {
     AppendStr(&s, statusmessage);
@@ -1904,21 +1904,21 @@ static char *GetStatus(int m) {
     AppendStr(&s, "das blinkenlights");
   }
   n = ARRAYLEN(keystrokes.p);
-  for (first = true, t = GetTime(), i = 1; i <= n; --i) {
-    if (!keystrokes.p[(keystrokes.i - i) % n][0]) continue;
-    if (CompareTime(SubtractTime(t, keystrokes.s[(keystrokes.i - i) % n]),
+  for (once = false, now = GetTime(), i = 1; i <= n; --i) {
+    if (!keystrokes.p[(keystrokes.i - i) % n][0] ||
+        CompareTime(SubtractTime(now, keystrokes.s[(keystrokes.i - i) % n]),
                     FromSeconds(1)) > 0) {
-      continue;
+      break;
     }
-    if (first) {
-      first = false;
+    if (!once) {
       AppendStr(&s, " (keystroke: ");
+      once = true;
     } else {
       AppendChar(&s, ' ');
     }
     AppendStr(&s, keystrokes.p[(keystrokes.i - i) % n]);
   }
-  if (!first) {
+  if (once) {
     AppendChar(&s, ')');
   }
   return s.p;
@@ -2071,6 +2071,8 @@ static void Redraw(bool force) {
     ShowHistory();
     return;
   }
+  LookupAddress(m, m->ip);
+  LookupAddress(m, Get64(m->sp));
   BEGIN_NO_PAGE_FAULTS;
   start_draw = GetTime();
   execsecs = ToNanoseconds(SubtractTime(start_draw, last_draw)) * 1e-9;
@@ -2161,11 +2163,23 @@ static void DescribeKeystroke(char *b, const char *p) {
   } while (*p);
 }
 
+static void SetStatusDeadline(void) {
+  struct itimerval it;
+  statusexpires = AddTime(GetTime(), FromSeconds(1));
+  it.it_interval.tv_sec = 0;
+  it.it_interval.tv_usec = 0;
+  it.it_value.tv_sec = 1;
+  it.it_value.tv_usec = 0;
+  setitimer(ITIMER_REAL, &it, 0);
+}
+
 static void RecordKeystroke(const char *k) {
   if (!strchr(k, '[')) {
     keystrokes.s[keystrokes.i] = GetTime();
     DescribeKeystroke(keystrokes.p[keystrokes.i], k);
     keystrokes.i = (keystrokes.i + 1) % ARRAYLEN(keystrokes.p);
+    ReactiveDraw();
+    SetStatusDeadline();
   }
 }
 
@@ -3018,18 +3032,12 @@ static void OnLongBranch(struct Machine *m) {
 static void SetStatus(const char *fmt, ...) {
   char *s;
   va_list va;
-  struct itimerval it;
   va_start(va, fmt);
   unassert(vasprintf(&s, fmt, va) >= 0);
   va_end(va);
   free(statusmessage);
   statusmessage = s;
-  statusexpires = AddTime(GetTime(), FromSeconds(1));
-  it.it_interval.tv_sec = 0;
-  it.it_interval.tv_usec = 0;
-  it.it_value.tv_sec = 1;
-  it.it_value.tv_usec = 0;
-  setitimer(ITIMER_REAL, &it, 0);
+  SetStatusDeadline();
 }
 
 static int ClampSpeed(int s) {
@@ -3286,7 +3294,6 @@ static void OnHelp(void) {
 
 static void HandleKeyboard(const char *k) {
   const char *p = k;
-  // LOGF("HandleKeyboard(%#x [%c])", *k, isprint(*k) ? *k : '.');
   switch (*p++) {
     CASE('q', OnQ());
     CASE('v', OnV());
@@ -3356,7 +3363,6 @@ static void HandleKeyboard(const char *k) {
 
 static void ReadKeyboard(void) {
   char buf[64];
-  // LOGF("ReadKeyboard");
   memset(buf, 0, sizeof(buf));
   dialog = NULL;
   if (readansi(ttyin, buf, sizeof(buf)) == -1) {
