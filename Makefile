@@ -13,8 +13,8 @@ ARCHITECTURES = x86_64 x86_64-gcc49 i486 aarch64 arm mips s390x mipsel mips64 mi
 ifeq ($(MAKE_VERSION), 3.81)
 $(error please "brew install make" and use the "gmake" command)
 endif
-ifneq ($(shell echo -e "4.3\n$(MAKE_VERSION)" | sort -ct. -k1,1n -k2,2n 2>/dev/null && echo YES), YES)
-$(error please use GNU Make 4.3 or newer)
+ifneq ($(shell echo -e "4.0\n$(MAKE_VERSION)" | sort -ct. -k1,1n -k2,2n 2>/dev/null && echo YES), YES)
+$(error please use GNU Make 4.0 or newer)
 endif
 
 ifeq ($(wildcard config.h),)

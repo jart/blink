@@ -80,6 +80,34 @@
 #include "blink/xlat.h"
 #include "blink/xmmtype.h"
 
+#ifndef BUILD_TIMESTAMP
+#define BUILD_TIMESTAMP __TIMESTAMP__
+#endif
+#ifndef BUILD_MODE
+#define BUILD_MODE "BUILD_MODE_UNKNOWN"
+#warning "-DBUILD_MODE=... should be passed to blink/blinkenlights.c"
+#endif
+#ifndef BUILD_TOOLCHAIN
+#define BUILD_TOOLCHAIN "BUILD_TOOLCHAIN_UNKNOWN"
+#warning "-DBUILD_TOOLCHAIN=... should be passed to blink/blinkenlights.c"
+#endif
+#ifndef BLINK_VERSION
+#define BLINK_VERSION "BLINK_VERSION_UNKNOWN"
+#warning "-DBLINK_VERSION=... should be passed to blink/blinkenlights.c"
+#endif
+#ifndef BLINK_COMMITS
+#define BLINK_COMMITS "BLINK_COMMITS_UNKNOWN"
+#warning "-DBLINK_COMMITS=... should be passed to blink/blinkenlights.c"
+#endif
+#ifndef BLINK_GITSHA
+#define BLINK_GITSHA "BLINK_GITSHA_UNKNOWN"
+#warning "-DBLINK_GITSHA=... should be passed to blink/blinkenlights.c"
+#endif
+#ifndef CONFIG_ARGUMENTS
+#define CONFIG_ARGUMENTS "CONFIG_ARGUMENTS_UNKNOWN"
+#warning "-DCONFIG_ARGUMENTS=... should be passed to blink/blinkenlights.c"
+#endif
+
 #define VERSION \
   "Blinkenlights " BLINK_VERSION " (" BUILD_TIMESTAMP ")\n\
 Copyright (c) 2023 Justine Alexandra Roberts Tunney\n\
@@ -1100,7 +1128,7 @@ void SetupDraw(void) {
   a = 1 / 8. * yn;
   b = 3 / 8. * yn;
   if (ShouldShowDisplay()) {
-    c2y[0] = breakpoints.i ? a * .7 : 0;
+    c2y[0] = breakpoints.i || watchpoints.i ? a * .7 : 0;
     c2y[1] = a * 2.3;
     c2y[2] = a * 2 + b;
     if (yn - c2y[2] > 26) {
@@ -1111,7 +1139,7 @@ void SetupDraw(void) {
       c2y[2] = yn - 26;
     }
   } else {
-    c2y[0] = breakpoints.i ? a * .7 : 0;
+    c2y[0] = breakpoints.i || watchpoints.i ? a * .7 : 0;
     c2y[1] = yn / 2;
     c2y[2] = yn;
   }
@@ -1134,7 +1162,7 @@ void SetupDraw(void) {
 
   pan.breakpointshr.top = 0;
   pan.breakpointshr.left = dx[0];
-  pan.breakpointshr.bottom = !!breakpoints.i;
+  pan.breakpointshr.bottom = breakpoints.i || watchpoints.i;
   pan.breakpointshr.right = dx[1] - 1;
 
   pan.breakpoints.top = 1;

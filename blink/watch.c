@@ -62,8 +62,25 @@ ssize_t IsAtWatchpoint(struct Watchpoints *wps, struct Machine *m) {
     if (wps->p[i].disable) continue;
     oldip = m->ip;
     m->ip += Oplength(x.op.rde);
-    if (hasop && !IsModrmRegister(x.op.rde) &&
-        ComputeAddress(m, x.op.rde, x.op.disp, x.op.uimm0) == wps->p[i].addr) {
+    if ((hasop && !IsModrmRegister(x.op.rde) &&
+         ComputeAddress(m, x.op.rde, x.op.disp, x.op.uimm0) ==
+             wps->p[i].addr) ||
+        Get64(m->ax) == wps->p[i].addr ||   //
+        Get64(m->cx) == wps->p[i].addr ||   //
+        Get64(m->dx) == wps->p[i].addr ||   //
+        Get64(m->bx) == wps->p[i].addr ||   //
+        Get64(m->sp) == wps->p[i].addr ||   //
+        Get64(m->bp) == wps->p[i].addr ||   //
+        Get64(m->si) == wps->p[i].addr ||   //
+        Get64(m->di) == wps->p[i].addr ||   //
+        Get64(m->r8) == wps->p[i].addr ||   //
+        Get64(m->r9) == wps->p[i].addr ||   //
+        Get64(m->r10) == wps->p[i].addr ||  //
+        Get64(m->r11) == wps->p[i].addr ||  //
+        Get64(m->r12) == wps->p[i].addr ||  //
+        Get64(m->r13) == wps->p[i].addr ||  //
+        Get64(m->r14) == wps->p[i].addr ||  //
+        Get64(m->r15) == wps->p[i].addr) {  //
       return i;
     }
     m->ip = oldip;

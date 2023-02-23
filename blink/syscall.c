@@ -79,6 +79,10 @@
 #include "blink/util.h"
 #include "blink/xlat.h"
 
+#ifdef __linux
+#include <sys/prctl.h>
+#endif
+
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
@@ -727,9 +731,11 @@ static int SysFutex(struct Machine *m,  //
     case FUTEX_WAIT_BITSET_LINUX | FUTEX_CLOCK_REALTIME_LINUX:
       // will be supported soon
       // avoid logging when cosmo feature checks this
+      if (!m->system->iscosmo) goto DefaultCase;
       return einval();
     default:
-      LOGF("unsupported futex op %#x", op);
+    DefaultCase:
+      LOGF("unsupported %s op %#x", "futex", op);
       return einval();
   }
 }
@@ -945,26 +951,72 @@ static int SysSchedGetaffinity(struct Machine *m,  //
 #endif
 }
 
-static int SysPrctl(struct Machine *m, int op, i64 a, i64 b, i64 c, i64 d) {
-  return einval();
+static int SysPrctlGetTsc(struct Machine *m, i64 arg2) {
+  u8 word[4];
+  Write32(word, m->traprdtsc ? PR_TSC_SIGSEGV_LINUX : PR_TSC_ENABLE_LINUX);
+  return CopyToUserWrite(m, arg2, word, sizeof(word));
 }
 
-static int SysArchPrctl(struct Machine *m, int code, i64 addr) {
-  u8 buf[8];
-  switch (code) {
-    case ARCH_SET_GS_LINUX:
-      m->gs.base = addr;
+static int SysPrctlSetTsc(struct Machine *m, i64 arg2) {
+  switch (arg2) {
+    case PR_TSC_ENABLE_LINUX:
+      m->traprdtsc = false;
       return 0;
+    case PR_TSC_SIGSEGV_LINUX:
+      m->traprdtsc = true;
+      return 0;
+    default:
+      return einval();
+  }
+}
+
+static int SysPrctl(struct Machine *m, int op, i64 arg2, i64 arg3, i64 arg4,
+                    i64 arg5) {
+  switch (op) {
+    case PR_GET_TSC_LINUX:
+      return SysPrctlGetTsc(m, arg2);
+    case PR_SET_TSC_LINUX:
+      return SysPrctlSetTsc(m, arg2);
+#ifdef PR_SET_NO_NEW_PRIVS
+    case PR_SET_NO_NEW_PRIVS_LINUX:
+      return prctl(PR_SET_NO_NEW_PRIVS, arg2, arg3, arg4, arg5);
+#endif
+    case PR_GET_SECCOMP_LINUX:
+    case PR_SET_SECCOMP_LINUX:
+      // avoid noisy feature check warnings in cosmopolitan
+      if (!m->system->iscosmo) goto DefaultCase;
+      return einval();
+    default:
+    DefaultCase:
+      LOGF("unsupported %s op %#x", "prctl", op);
+      return einval();
+  }
+}
+
+static int SysArchPrctl(struct Machine *m, int op, i64 addr) {
+  u8 buf[8];
+  switch (op) {
     case ARCH_SET_FS_LINUX:
       m->fs.base = addr;
       return 0;
-    case ARCH_GET_GS_LINUX:
-      Write64(buf, m->gs.base);
-      return CopyToUserWrite(m, addr, buf, 8);
+#ifndef DISABLE_NONPOSIX
+    case ARCH_SET_GS_LINUX:
+      m->gs.base = addr;
+      return 0;
     case ARCH_GET_FS_LINUX:
       Write64(buf, m->fs.base);
       return CopyToUserWrite(m, addr, buf, 8);
+    case ARCH_GET_GS_LINUX:
+      Write64(buf, m->gs.base);
+      return CopyToUserWrite(m, addr, buf, 8);
+    case ARCH_GET_CPUID_LINUX:
+      return !m->trapcpuid;
+    case ARCH_SET_CPUID_LINUX:
+      m->trapcpuid = !addr;
+      return 0;
+#endif
     default:
+      LOGF("unsupported %s op %#x", "arch_prctl", op);
       return einval();
   }
 }
@@ -1339,6 +1391,26 @@ static void FixupSock(int fd, int flags) {
     unassert(!fcntl(fd, F_SETFL, O_NDELAY));
   }
 }
+
+#ifndef BUILD_TIMESTAMP
+#define BUILD_TIMESTAMP __TIMESTAMP__
+#endif
+#ifndef BLINK_VERSION
+#define BLINK_VERSION "BLINK_VERSION_UNKNOWN"
+#warning "-DBLINK_VERSION=... should be passed to blink/syscall.c"
+#endif
+#ifndef LINUX_VERSION
+#define LINUX_VERSION "LINUX_VERSION_UNKNOWN"
+#warning "-DLINUX_VERSION=... should be passed to blink/syscall.c"
+#endif
+#ifndef BLINK_COMMITS
+#define BLINK_COMMITS "BLINK_COMMITS_UNKNOWN"
+#warning "-DBLINK_COMMITS=... should be passed to blink/syscall.c"
+#endif
+#ifndef BLINK_UNAME_V
+#define BLINK_UNAME_V "BLINK_UNAME_V_UNKNOWN"
+#warning "-DBLINK_UNAME_V=... should be passed to blink/syscall.c"
+#endif
 
 static int SysUname(struct Machine *m, i64 utsaddr) {
   // glibc binaries won't run unless we report blink as a
@@ -5314,8 +5386,11 @@ void OpSyscall(P) {
       SYS_LOGF("rt_sigreturn()");
       SigRestore(m);
       return;
+    case 0x1BC:
+      // avoid noisy landlock_create_ruleset() feature check in cosmo
     case 0x500:
       // Cosmopolitan uses this number to trigger ENOSYS for testing.
+      if (!m->system->iscosmo) goto DefaultCase;
       ax = enosys();
       break;
     case 0x0E4:
@@ -5332,6 +5407,7 @@ void OpSyscall(P) {
       break;
 
     default:
+    DefaultCase:
       LOGF("missing syscall 0x%03" PRIx64, ax);
       ax = enosys();
       break;

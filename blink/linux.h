@@ -162,26 +162,28 @@
 #define SOCK_CLOEXEC_LINUX  O_CLOEXEC_LINUX
 #define SOCK_NONBLOCK_LINUX O_NDELAY_LINUX
 
-#define TIOCGWINSZ_LINUX    0x5413
-#define TIOCSWINSZ_LINUX    0x5414
-#define TCGETS_LINUX        0x5401
-#define TCSETS_LINUX        0x5402
-#define TCSETSW_LINUX       0x5403
-#define TCSETSF_LINUX       0x5404
-#define TIOCGPGRP_LINUX     0x540f
-#define TIOCSPGRP_LINUX     0x5410
-#define ARCH_SET_GS_LINUX   0x1001
-#define ARCH_SET_FS_LINUX   0x1002
-#define ARCH_GET_FS_LINUX   0x1003
-#define ARCH_GET_GS_LINUX   0x1004
-#define O_CLOEXEC_LINUX     0x080000
-#define POLLIN_LINUX        0x01
-#define POLLPRI_LINUX       0x02
-#define POLLOUT_LINUX       0x04
-#define POLLERR_LINUX       0x08
-#define POLLHUP_LINUX       0x10
-#define POLLNVAL_LINUX      0x20
-#define TIMER_ABSTIME_LINUX 0x01
+#define TIOCGWINSZ_LINUX     0x5413
+#define TIOCSWINSZ_LINUX     0x5414
+#define TCGETS_LINUX         0x5401
+#define TCSETS_LINUX         0x5402
+#define TCSETSW_LINUX        0x5403
+#define TCSETSF_LINUX        0x5404
+#define TIOCGPGRP_LINUX      0x540f
+#define TIOCSPGRP_LINUX      0x5410
+#define ARCH_SET_GS_LINUX    0x1001
+#define ARCH_SET_FS_LINUX    0x1002
+#define ARCH_GET_FS_LINUX    0x1003
+#define ARCH_GET_GS_LINUX    0x1004
+#define ARCH_GET_CPUID_LINUX 0x1011
+#define ARCH_SET_CPUID_LINUX 0x1012
+#define O_CLOEXEC_LINUX      0x080000
+#define POLLIN_LINUX         0x01
+#define POLLPRI_LINUX        0x02
+#define POLLOUT_LINUX        0x04
+#define POLLERR_LINUX        0x08
+#define POLLHUP_LINUX        0x10
+#define POLLNVAL_LINUX       0x20
+#define TIMER_ABSTIME_LINUX  0x01
 
 #define MAP_TYPE_LINUX            0x0000000f
 #define MAP_FILE_LINUX            0x00000000
@@ -822,6 +824,15 @@
 #define CLOCK_REALTIME_ALARM_LINUX     8
 #define CLOCK_BOOTTIME_ALARM_LINUX     9
 #define CLOCK_TAI_LINUX                11
+
+#define PR_GET_SECCOMP_LINUX      21
+#define PR_SET_SECCOMP_LINUX      22
+#define PR_GET_TSC_LINUX          25
+#define PR_SET_TSC_LINUX          26
+#define PR_TSC_ENABLE_LINUX       1
+#define PR_TSC_SIGSEGV_LINUX      2
+#define PR_SET_NO_NEW_PRIVS_LINUX 38
+#define PR_GET_TID_ADDRESS_LINUX  40
 
 struct iovec_linux {
   u8 base[8];

@@ -61,6 +61,9 @@
 
 void OpCpuid(P) {
   u32 ax, bx, cx, dx, jit;
+  if (m->trapcpuid) {
+    ThrowSegmentationFault(m, 0);
+  }
   ax = bx = cx = dx = 0;
   switch (Get32(m->ax)) {
     case 0:

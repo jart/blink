@@ -19,8 +19,10 @@
 #include <time.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
+#include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/time.h"
 
@@ -40,6 +42,9 @@ void OpPause(P) {
 
 void OpRdtsc(P) {
   u64 c;
+  if (m->traprdtsc) {
+    ThrowSegmentationFault(m, 0);
+  }
 #if defined(__GNUC__) && defined(__aarch64__)
   asm volatile("mrs %0, cntvct_el0" : "=r"(c));
   c *= 48;  // the fudge factor

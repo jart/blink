@@ -744,6 +744,7 @@ error: unsupported executable; we need:\n\
       execstack = LoadElf(m, elf, fd);
     } else if (READ64(elf->map) == READ64("MZqFpD='") ||
                READ64(elf->map) == READ64("jartsr='")) {
+      m->system->iscosmo = true;
       if (GetElfHeader(ehdr, prog, elf->map) == -1) exit(127);
       memcpy(elf->map, ehdr, 64);
       elf->ehdr = (Elf64_Ehdr_ *)elf->map;

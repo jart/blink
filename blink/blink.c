@@ -50,6 +50,34 @@
 #include "blink/x86.h"
 #include "blink/xlat.h"
 
+#ifndef BUILD_TIMESTAMP
+#define BUILD_TIMESTAMP __TIMESTAMP__
+#endif
+#ifndef BUILD_MODE
+#define BUILD_MODE "BUILD_MODE_UNKNOWN"
+#warning "-DBUILD_MODE=... should be passed to blink/blink.c"
+#endif
+#ifndef BUILD_TOOLCHAIN
+#define BUILD_TOOLCHAIN "BUILD_TOOLCHAIN_UNKNOWN"
+#warning "-DBUILD_TOOLCHAIN=... should be passed to blink/blink.c"
+#endif
+#ifndef BLINK_VERSION
+#define BLINK_VERSION "BLINK_VERSION_UNKNOWN"
+#warning "-DBLINK_VERSION=... should be passed to blink/blink.c"
+#endif
+#ifndef BLINK_COMMITS
+#define BLINK_COMMITS "BLINK_COMMITS_UNKNOWN"
+#warning "-DBLINK_COMMITS=... should be passed to blink/blink.c"
+#endif
+#ifndef BLINK_GITSHA
+#define BLINK_GITSHA "BLINK_GITSHA_UNKNOWN"
+#warning "-DBLINK_GITSHA=... should be passed to blink/blink.c"
+#endif
+#ifndef CONFIG_ARGUMENTS
+#define CONFIG_ARGUMENTS "CONFIG_ARGUMENTS_UNKNOWN"
+#warning "-DCONFIG_ARGUMENTS=... should be passed to blink/blink.c"
+#endif
+
 #define VERSION \
   "Blink Virtual Machine " BLINK_VERSION " (" BUILD_TIMESTAMP ")\n\
 Copyright (c) 2023 Justine Alexandra Roberts Tunney\n\

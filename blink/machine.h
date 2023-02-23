@@ -213,6 +213,7 @@ struct System {
   bool dlab;
   bool isfork;
   bool exited;
+  bool iscosmo;
   bool trapexit;
   u16 gdt_limit;
   u16 idt_limit;
@@ -366,6 +367,8 @@ struct Machine {                           //
   bool restored;                           //
   bool interrupted;                        //
   bool issigsuspend;                       //
+  bool traprdtsc;                          //
+  bool trapcpuid;                          //
   sigjmp_buf onhalt;                       //
   struct sigaltstack_linux sigaltstack;    //
   i64 robust_list;                         //
