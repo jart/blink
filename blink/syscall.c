@@ -5386,6 +5386,8 @@ void OpSyscall(P) {
       SYS_LOGF("rt_sigreturn()");
       SigRestore(m);
       return;
+    case 0x146:
+      // avoid noisy copy_file_range() feature check in cosmo
     case 0x1BC:
       // avoid noisy landlock_create_ruleset() feature check in cosmo
     case 0x500:

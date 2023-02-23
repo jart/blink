@@ -207,15 +207,15 @@ static void Shufpd(P) {
   union DoublePun x[2], y[2], z[2];
   p = GetModrmRegisterXmmPointerRead16(A);
   IGNORE_RACES_START();
-  y[0].i = Read64(p + 0 * 4);
-  y[1].i = Read64(p + 1 * 4);
+  y[0].i = Read64(p + 0 * 8);
+  y[1].i = Read64(p + 1 * 8);
   p = XmmRexrReg(m, rde);
-  x[0].i = Read64(p + 0 * 4);
-  x[1].i = Read64(p + 1 * 4);
+  x[0].i = Read64(p + 0 * 8);
+  x[1].i = Read64(p + 1 * 8);
   z[0].f = y[(uimm0 & 0001) >> 0].f;
   z[1].f = x[(uimm0 & 0002) >> 1].f;
-  Write64(p + 0 * 4, z[0].i);
-  Write64(p + 1 * 4, z[1].i);
+  Write64(p + 0 * 8, z[0].i);
+  Write64(p + 1 * 8, z[1].i);
   IGNORE_RACES_END();
 }
 
