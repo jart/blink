@@ -382,6 +382,7 @@ extern const nexgen32e_f kSax[3];
 struct System *NewSystem(int);
 void FreeSystem(struct System *);
 _Noreturn void Actor(struct Machine *);
+void SignalActor(struct Machine *);
 void SetMachineMode(struct Machine *, int);
 void ChangeMachineMode(struct Machine *, int);
 struct Machine *NewMachine(struct System *, struct Machine *);

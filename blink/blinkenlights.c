@@ -689,7 +689,9 @@ static void HideCursor(void) {
 }
 
 static void ShowCursor(void) {
-  TtyWriteString("\033[?25h");
+  if (tuimode) {
+    TtyWriteString("\033[?25h");
+  }
 }
 
 static void EnableMouseTracking(void) {
@@ -698,8 +700,10 @@ static void EnableMouseTracking(void) {
 }
 
 static void DisableMouseTracking(void) {
-  mousemode = false;
-  TtyWriteString("\033[?1000;1002;1015;1006l");
+  if (mousemode) {
+    TtyWriteString("\033[?1000;1002;1015;1006l");
+    mousemode = false;
+  }
 }
 
 static void ToggleMouseTracking(void) {
@@ -712,8 +716,10 @@ static void ToggleMouseTracking(void) {
 
 static void LeaveScreen(void) {
   char buf[64];
-  sprintf(buf, "\033[%d;%dH\033[S\n", tyn, txn);
-  TtyWriteString(buf);
+  if (tuimode) {
+    sprintf(buf, "\033[%d;%dH\033[S\n", tyn, txn);
+    TtyWriteString(buf);
+  }
 }
 
 static void GetTtySize(int fd) {
@@ -786,33 +792,32 @@ static void OnSigAlrm(int sig, siginfo_t *si, void *uc) {
   action |= ALARM;
 }
 
+static void TtyRestore(void) {
+  LOGF("TtyRestore");
+  TtyWriteString("\033[0m");
+  DisableMouseTracking();
+  ShowCursor();
+  tcsetattr(ttyout, TCSANOW, &oldterm);
+}
+
+static void TuiCleanup(void) {
+  LOGF("TuiCleanup");
+  sigaction(SIGCONT, oldsig + 2, 0);
+  TtyRestore();
+  tuimode = false;
+}
+
+static void OnSigTstp(int sig, siginfo_t *si, void *uc) {
+  TtyRestore();
+  raise(SIGSTOP);
+}
+
 static void OnSigCont(int sig, siginfo_t *si, void *uc) {
   if (tuimode) {
     TuiRejuvinate();
     Redraw(true);
   }
   EnqueueSignal(m, SIGCONT);
-}
-
-static void TtyRestore1(void) {
-  LOGF("TtyRestore1");
-  ShowCursor();
-  TtyWriteString("\033[0m");
-}
-
-static void TtyRestore2(void) {
-  LOGF("TtyRestore2");
-  tcsetattr(ttyout, TCSANOW, &oldterm);
-  DisableMouseTracking();
-}
-
-static void TuiCleanup(void) {
-  LOGF("TuiCleanup");
-  sigaction(SIGCONT, oldsig + 2, 0);
-  TtyRestore1();
-  DisableMouseTracking();
-  tuimode = false;
-  // LeaveScreen();
 }
 
 static void ResolveBreakpoints(void) {
@@ -924,7 +929,7 @@ void TuiSetup(void) {
     LOGF("loaded program %s\n%s", codepath, FormatPml4t(m));
     CommonSetup();
     tcgetattr(ttyout, &oldterm);
-    atexit(TtyRestore2);
+    atexit(TtyRestore);
     once = true;
     report = true;
   }
@@ -934,6 +939,8 @@ void TuiSetup(void) {
   sa.sa_sigaction = OnSigCont;
   sa.sa_flags = SA_RESTART | SA_NODEFER | SA_SIGINFO;
   sigaction(SIGCONT, &sa, oldsig + 2);
+  sa.sa_sigaction = OnSigTstp;
+  sigaction(SIGTSTP, &sa, 0);
   CopyMachineState(&laststate);
   TuiRejuvinate();
   if (report) {
@@ -2212,10 +2219,7 @@ static void HandleAppReadInterrupt(void) {
     if (action & CONTINUE) {
       action &= ~CONTINUE;
     } else {
-      if (tuimode) {
-        LeaveScreen();
-        TuiCleanup();
-      }
+      LeaveScreen();
       exit(0);
     }
   }
@@ -3842,7 +3846,6 @@ int VirtualMachine(int argc, char *argv[]) {
       ttyout = -1;
     }
     if (ttyout != -1) {
-      atexit(TtyRestore1);
       tyn = 24;
       txn = 80;
       GetTtySize(ttyout);
@@ -3895,7 +3898,7 @@ static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
   ERRF("SIGSEGV AT ADDRESS %" PRIx64 " (OR %p) at RIP=%" PRIx64,
        g_machine->faultaddr, si->si_addr, m->ip);
   ERRF("BACKTRACE\n\t%s", GetBacktrace(g_machine));
-  if (!react) DeliverSignalToUser(g_machine, SIGSEGV_LINUX);
+  if (!react) DeliverSignalToUser(g_machine, UnXlatSignal(sig));
   siglongjmp(g_machine->onhalt, kMachineSegmentationFault);
 }
 
@@ -3960,6 +3963,7 @@ int main(int argc, char *argv[]) {
   unassert(!sigaction(SIGALRM, &sa, 0));
 #ifndef __SANITIZE_THREAD__
   sa.sa_sigaction = OnSigSegv;
+  unassert(!sigaction(SIGBUS, &sa, 0));
   unassert(!sigaction(SIGSEGV, &sa, 0));
 #endif
   m->system->blinksigs |= 1ull << (SIGINT_LINUX - 1) |   //
