@@ -220,48 +220,55 @@ void SignalActor(struct Machine *mm) {
   }
 }
 
-bool CheckInterrupt(struct Machine *m, bool restartable) {
-  int sig, delivered;
+bool DeliverSignalRecursively(struct Machine *m) {
+  bool issigsuspend;
   sigset_t unblock, oldmask;
-  bool res, restart, issigsuspend;
+  if (m->sigdepth >= kMaxSigDepth) {
+    LOGF("exceeded max signal depth");
+    return false;
+  }
+  // we're officially calling a signal handler
+  // run the signal handler code inside the i/o routine
+  // it's very important that no locks are currently held
+  // garbage may exist on the freelist for calls like sendmsg
+  ++m->sigdepth;
+  if ((issigsuspend = m->issigsuspend)) {
+    m->issigsuspend = false;
+    unassert(!sigemptyset(&unblock));
+    unassert(!pthread_sigmask(SIG_BLOCK, &unblock, &oldmask));
+  }
+  m->restored = false;
+  SignalActor(m);
+  m->restored = false;
+  if (issigsuspend) {
+    unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
+    m->issigsuspend = true;
+  }
+  --m->sigdepth;
+  return true;
+}
+
+bool CheckInterrupt(struct Machine *m, bool restartable) {
+  bool res, restart;
+  int sig, delivered;
   // an actual i/o call just received EINTR from the kernel
-GetSome:
+HandleSomeMoreInterrupts:
   // determine if there's any signals pending for our guest
   Put64(m->ax, -EINTR_LINUX);
   if ((sig = ConsumeSignal(m, &delivered, &restart))) {
     TerminateSignal(m, sig);
   }
   if (delivered) {
-    if (m->sigdepth < kMaxSigDepth) {
-      // we're officially calling a signal handler
-      // run the signal handler code inside the i/o routine
-      // it's very important that no locks are currently held
-      // garbage may exist on the freelist for calls like sendmsg
-      ++m->sigdepth;
-      if ((issigsuspend = m->issigsuspend)) {
-        m->issigsuspend = false;
-        unassert(!sigemptyset(&unblock));
-        unassert(!pthread_sigmask(SIG_BLOCK, &unblock, &oldmask));
-      }
-      m->restored = false;
-      SignalActor(m);
-      unassert(Read64(m->ax) == -EINTR_LINUX);
-      m->restored = false;
-      if (issigsuspend) {
-        unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
-        m->issigsuspend = true;
-      }
-      --m->sigdepth;
+    if (DeliverSignalRecursively(m)) {
       if (restart && restartable) {
         // try to consume some more signals while we're here
-        goto GetSome;
+        goto HandleSomeMoreInterrupts;
       } else {
         // let the i/o routine return eintr
         errno = EINTR;
         res = true;
       }
     } else {
-      LOGF("exceeded max signal depth");
       errno = EINTR;
       res = true;
     }
@@ -4618,6 +4625,7 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
   u8 word[8];
   sigset_t ss;
   const u8 *neu;
+  int sig, delivered;
   if (sigsetsize != 8) {
     return einval();
   }
@@ -4656,6 +4664,12 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
                                          1ull << (SIGTTOU_LINUX - 1)));
     sigprocmask(SIG_BLOCK, &ss, 0);
   }
+  Put64(m->ax, 0);
+  do {
+    if ((sig = ConsumeSignal(m, &delivered, 0))) {
+      TerminateSignal(m, sig);
+    }
+  } while (delivered && DeliverSignalRecursively(m));
   return 0;
 }
 
@@ -4676,29 +4690,42 @@ static bool IsValidThreadId(struct System *s, int tid) {
 
 static int SysTkill(struct Machine *m, int tid, int sig) {
 #if defined(HAVE_FORK) || defined(HAVE_THREADS)
-  int err;
   bool found;
+  int rc, err;
   if (tid < 0) return einval();
   if (!(0 <= sig && sig <= 64)) {
     LOGF("tkill(%d, %d) failed due to bogus signal", tid, sig);
     return einval();
   }
   // trigger signal immediately if possible
-  if (tid == m->tid && (~m->sigmask & (1ull << (sig - 1)))) {
-    switch (Read64(m->system->hands[sig - 1].handler)) {
-      case SIG_DFL_LINUX:
-        if (!IsSignalIgnoredByDefault(sig)) {
-          TerminateSignal(m, sig);
-          return 0;
-        }
-        // fallthrough
-      case SIG_IGN_LINUX:
-        return 0;
-      default:
-        Put64(m->ax, 0);
-        m->interrupted = true;
-        DeliverSignal(m, sig, SI_TKILL_LINUX);
-        return -1;
+  if (tid == m->tid) {
+    if (sig == SIGSTOP_LINUX || sig == SIGKILL_LINUX) {
+      return raise(XlatSignal(sig));
+    } else if (~m->sigmask & (1ull << (sig - 1))) {
+      LOCK(&m->system->sig_lock);
+      switch (Read64(m->system->hands[sig - 1].handler)) {
+        case SIG_DFL_LINUX:
+          if (!IsSignalIgnoredByDefault(sig)) {
+            UNLOCK(&m->system->sig_lock);
+            TerminateSignal(m, sig);
+            return 0;
+          }
+          // fallthrough
+        case SIG_IGN_LINUX:
+          rc = 0;
+          break;
+        default:
+          Put64(m->ax, 0);
+          m->interrupted = true;
+          DeliverSignal(m, sig, SI_TKILL_LINUX);
+          rc = -1;
+          break;
+      }
+      UNLOCK(&m->system->sig_lock);
+      return rc;
+    } else {
+      m->signals |= 1ull << (sig - 1);
+      return 0;
     }
   }
   if (!IsValidThreadId(m->system, tid)) {

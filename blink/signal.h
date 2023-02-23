@@ -2,6 +2,8 @@
 #define BLINK_SIGNAL_H_
 #include "blink/machine.h"
 
+bool IsSignalSerious(int);
+bool IsSignalQueueable(int);
 void SigRestore(struct Machine *);
 bool IsSignalIgnoredByDefault(int);
 void OnSignal(int, siginfo_t *, void *);

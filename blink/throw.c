@@ -36,7 +36,21 @@ void RestoreIp(struct Machine *m) {
 }
 
 void DeliverSignalToUser(struct Machine *m, int sig) {
-  EnqueueSignal(m, sig);
+  if (m->sigmask & (1ull << (sig - 1))) {
+    TerminateSignal(m, sig);
+  }
+  LOCK(&m->system->sig_lock);
+  switch (Read64(m->system->hands[sig - 1].handler)) {
+    case SIG_IGN_LINUX:
+    case SIG_DFL_LINUX:
+      UNLOCK(&m->system->sig_lock);
+      TerminateSignal(m, sig);
+      return;
+    default:
+      DeliverSignal(m, sig, SI_KERNEL_LINUX);
+      break;
+  }
+  UNLOCK(&m->system->sig_lock);
   if ((sig = ConsumeSignal(m, 0, 0))) {
     TerminateSignal(m, sig);
   }

@@ -100,6 +100,7 @@ extern char **environ;
 static bool FLAG_zero;
 static bool FLAG_nojit;
 static char g_pathbuf[PATH_MAX];
+static siginfo_t g_siginfo;
 
 static void OnSigSys(int sig) {
   // do nothing
@@ -109,8 +110,18 @@ void TerminateSignal(struct Machine *m, int sig) {
   int syssig;
   struct sigaction sa;
   unassert(!IsSignalIgnoredByDefault(sig));
-  ERRF("terminating due to signal %s", DescribeSignal(sig));
-  if ((syssig = XlatSignal(sig)) == -1) syssig = SIGTERM;
+  if (IsSignalSerious(sig)) {
+    ERRF("terminating due to %s (rip=%" PRIx64 " faultaddr=%" PRIx64 ")",
+         DescribeSignal(sig), m->ip, m->faultaddr);
+    ERRF("additional information\n"
+         "\t%s\n"
+         "%s",
+         GetBacktrace(m), FormatPml4t(m));
+#ifdef DEBUG
+    PrintBacktrace();
+#endif
+  }
+  if ((syssig = XlatSignal(sig)) == -1) syssig = SIGKILL;
   KillOtherThreads(m->system);
   FreeMachine(m);
 #ifdef HAVE_JIT
@@ -126,54 +137,47 @@ void TerminateSignal(struct Machine *m, int sig) {
   Abort();
 }
 
-static void OnSigSegv(int sig, siginfo_t *si, void *ptr) {
-  int sig_linux;
-  RestoreIp(g_machine);
+static void OnFatalSystemSignal(int sig, siginfo_t *si, void *ptr) {
+  g_siginfo = *si;
+  siglongjmp(g_machine->onhalt, kMachineFatalSystemSignal);
+}
+
+static void HandleFatalSystemSignal(struct Machine *m) {
+  int sig;
+  RestoreIp(m);
   // TODO(jart): Fix address translation in non-linear mode.
-  g_machine->faultaddr = ToGuest(si->si_addr);
-  ERRF("SEGMENTATION FAULT (%s) AT ADDRESS %" PRIx64 " at RIP=%" PRIx64,
-       strsignal(sig), g_machine->faultaddr, g_machine->ip);
-  ERRF("ADDITIONAL INFORMATION\n"
-       "\t%s\n"
-       "%s",
-       GetBacktrace(g_machine), FormatPml4t(g_machine));
-#ifdef DEBUG
-  PrintBacktrace();
-#endif
-  if ((sig_linux = UnXlatSignal(sig)) != -1) {
-    DeliverSignalToUser(g_machine, sig_linux);
-  }
-  siglongjmp(g_machine->onhalt, kMachineSegmentationFault);
+  sig = UnXlatSignal(g_siginfo.si_signo);
+  m->faultaddr = ToGuest(g_siginfo.si_addr);
+  DeliverSignalToUser(m, sig);
 }
 
 static int Exec(char *execfn, char *prog, char **argv, char **envp) {
-  int i;
+  int i, rc;
   sigset_t oldmask;
-  struct Machine *old;
+  struct Machine *m, *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
-  unassert((g_machine = NewMachine(NewSystem(XED_MODE_LONG), 0)));
+  unassert((g_machine = m = NewMachine(NewSystem(XED_MODE_LONG), 0)));
 #ifdef HAVE_JIT
-  if (FLAG_nojit) DisableJit(&g_machine->system->jit);
+  if (FLAG_nojit) DisableJit(&m->system->jit);
 #endif
-  g_machine->system->exec = Exec;
+  m->system->exec = Exec;
   if (!old) {
     // this is the first time a program is being loaded
-    LoadProgram(g_machine, execfn, prog, argv, envp);
-    SetupCod(g_machine);
+    LoadProgram(m, execfn, prog, argv, envp);
+    SetupCod(m);
     for (i = 0; i < 10; ++i) {
-      AddStdFd(&g_machine->system->fds, i);
+      AddStdFd(&m->system->fds, i);
     }
   } else {
     unassert(!FreeVirtual(old->system, -0x800000000000, 0x1000000000000));
     for (i = 1; i <= 64; ++i) {
       if (Read64(old->system->hands[i - 1].handler) == SIG_IGN_LINUX) {
-        Write64(g_machine->system->hands[i - 1].handler, SIG_IGN_LINUX);
+        Write64(m->system->hands[i - 1].handler, SIG_IGN_LINUX);
       }
     }
-    memcpy(g_machine->system->rlim, old->system->rlim,
-           sizeof(old->system->rlim));
-    LoadProgram(g_machine, execfn, prog, argv, envp);
-    g_machine->system->fds.list = old->system->fds.list;
+    memcpy(m->system->rlim, old->system->rlim, sizeof(old->system->rlim));
+    LoadProgram(m, execfn, prog, argv, envp);
+    m->system->fds.list = old->system->fds.list;
     old->system->fds.list = 0;
     // releasing the execve() lock must come after unlocking fds
     memcpy(&oldmask, &old->system->exec_sigmask, sizeof(oldmask));
@@ -185,12 +189,15 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   }
   // meta interpreter loop
   for (;;) {
-    if (!sigsetjmp(g_machine->onhalt, 1)) {
-      g_machine->canhalt = true;
-      Actor(g_machine);
+    if (!(rc = sigsetjmp(m->onhalt, 1))) {
+      m->canhalt = true;
+      Actor(m);
     }
-    if (IsMakingPath(g_machine)) {
-      AbandonPath(g_machine);
+    if (IsMakingPath(m)) {
+      AbandonPath(m);
+    }
+    if (rc == kMachineFatalSystemSignal) {
+      HandleFatalSystemSignal(m);
     }
   }
 }
@@ -287,7 +294,7 @@ static void HandleSigs(void) {
   unassert(!sigaction(SIGXCPU, &sa, 0));
   unassert(!sigaction(SIGXFSZ, &sa, 0));
 #if !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_ADDRESS__)
-  sa.sa_sigaction = OnSigSegv;
+  sa.sa_sigaction = OnFatalSystemSignal;
   sa.sa_flags = SA_SIGINFO;
   unassert(!sigaction(SIGBUS, &sa, 0));
   unassert(!sigaction(SIGILL, &sa, 0));

@@ -47,10 +47,15 @@ bool IsSignalIgnoredByDefault(int sig) {
          sig == SIGWINCH_LINUX;
 }
 
-bool IsSignalTooDangerousToIgnore(int sig) {
-  return sig == SIGFPE_LINUX ||  //
-         sig == SIGILL_LINUX ||  //
-         sig == SIGSEGV_LINUX;
+bool IsSignalSerious(int sig) {
+  return sig == SIGFPE_LINUX ||   //
+         sig == SIGILL_LINUX ||   //
+         sig == SIGBUS_LINUX ||   //
+         sig == SIGQUIT_LINUX ||  //
+         sig == SIGTRAP_LINUX ||  //
+         sig == SIGSEGV_LINUX ||  //
+         sig == SIGSTOP_LINUX ||  //
+         sig == SIGKILL_LINUX;
 }
 
 void DeliverSignal(struct Machine *m, int sig, int code) {
@@ -193,44 +198,31 @@ static int ConsumeSignalImpl(struct Machine *m, int *delivered, bool *restart) {
   if (delivered) *delivered = 0;
   if (restart) *restart = true;
   // look for a pending signal that isn't currently masked
-  for (signals = m->signals; signals; signals &= ~(1ull << (sig - 1))) {
+  while ((signals = m->signals & ~m->sigmask)) {
     sig = bsr(signals) + 1;
-    if (~m->sigmask & (1ull << (sig - 1))) {
-      m->signals &= ~(1ull << (sig - 1));
-      handler = Read64(m->system->hands[sig - 1].handler);
-      if (handler == SIG_DFL_LINUX) {
-        if (IsSignalIgnoredByDefault(sig)) {
-          SIG_LOGF("default action is to ignore signal %s",
-                   DescribeSignal(sig));
-          return 0;
-        } else {
-          SIG_LOGF("default action is to terminate upon signal %s",
-                   DescribeSignal(sig));
-          return sig;
-        }
-      } else if (handler == SIG_IGN_LINUX) {
-        if (!IsSignalTooDangerousToIgnore(sig)) {
-          SIG_LOGF("explicitly ignoring signal %s", DescribeSignal(sig));
-          return 0;
-        } else {
-          SIG_LOGF("won't ignore signal %s", DescribeSignal(sig));
-          return sig;
-        }
+    m->signals &= ~(1ull << (sig - 1));
+    handler = Read64(m->system->hands[sig - 1].handler);
+    if (handler == SIG_DFL_LINUX) {
+      if (IsSignalIgnoredByDefault(sig)) {
+        SIG_LOGF("default action is to ignore signal %s", DescribeSignal(sig));
+        return 0;
+      } else {
+        SIG_LOGF("default action is to terminate upon signal %s",
+                 DescribeSignal(sig));
+        return sig;
       }
-      if (delivered) {
-        *delivered = sig;
-      }
-      if (restart) {
-        *restart =
-            !!(Read64(m->system->hands[sig - 1].flags) & SA_RESTART_LINUX);
-      }
-      DeliverSignal(m, sig, SI_KERNEL_LINUX);
+    } else if (handler == SIG_IGN_LINUX) {
+      SIG_LOGF("explicitly ignoring signal %s", DescribeSignal(sig));
       return 0;
-    } else if (IsSignalTooDangerousToIgnore(sig)) {
-      // signal is too dangerous to be deferred
-      // TODO(jart): permit defer if sent by kill() or tkill()
-      return sig;
     }
+    if (delivered) {
+      *delivered = sig;
+    }
+    if (restart) {
+      *restart = !!(Read64(m->system->hands[sig - 1].flags) & SA_RESTART_LINUX);
+    }
+    DeliverSignal(m, sig, SI_KERNEL_LINUX);
+    return 0;
   }
   return 0;
 }
