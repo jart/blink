@@ -129,13 +129,14 @@ void TerminateSignal(struct Machine *m, int sig) {
 static void OnSigSegv(int sig, siginfo_t *si, void *ptr) {
   int sig_linux;
   RestoreIp(g_machine);
-  // TODO: Fix memory leak with FormatPml4t()
   // TODO(jart): Fix address translation in non-linear mode.
   g_machine->faultaddr = ToGuest(si->si_addr);
   ERRF("SEGMENTATION FAULT (%s) AT ADDRESS %" PRIx64 " at RIP=%" PRIx64,
        strsignal(sig), g_machine->faultaddr, g_machine->ip);
-  ERRF("ADDITIONAL INFORMATION\n\t%s\n%s", GetBacktrace(g_machine),
-       FormatPml4t(g_machine));
+  ERRF("ADDITIONAL INFORMATION\n"
+       "\t%s\n"
+       "%s",
+       GetBacktrace(g_machine), FormatPml4t(g_machine));
 #ifdef DEBUG
   PrintBacktrace();
 #endif

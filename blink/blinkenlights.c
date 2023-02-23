@@ -921,7 +921,7 @@ void TuiSetup(void) {
   struct sigaction sa;
   report = false;
   if (!once) {
-    /* LOGF("loaded program %s\n%s", codepath, gc(FormatPml4t(m))); */
+    LOGF("loaded program %s\n%s", codepath, FormatPml4t(m));
     CommonSetup();
     tcgetattr(ttyout, &oldterm);
     atexit(TtyRestore2);
@@ -1717,16 +1717,15 @@ static void DrawMemory(struct Panel *p, struct MemoryView *view, i64 histart,
 
 static void DrawMaps(struct Panel *p) {
   int i;
-  char *text, *p1, *p2;
+  char *p1, *p2;
   if (p->top == p->bottom) return;
-  p1 = text = FormatPml4t(m);
+  p1 = FormatPml4t(m);
   for (i = 0; p1; ++i, p1 = p2) {
     if ((p2 = strchr(p1, '\n'))) *p2++ = '\0';
     if (i >= mapsstart) {
       AppendPanel(p, i - mapsstart, p1);
     }
   }
-  free(text);
 }
 
 static void DrawBreakpoints(struct Panel *p) {

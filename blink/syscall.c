@@ -1121,8 +1121,9 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, u64 size, int prot,
     if (IsFullyUnmapped(m->system, virt, size)) {
       goto CreateTheMap;
     } else {
-      MEM_LOGF("memory already exists on the interval [%" PRIx64 ",%" PRIx64
-               ")\n%s",
+      MEM_LOGF("memory already exists on the interval"
+               " [%" PRIx64 ",%" PRIx64 ")\n"
+               "%s",
                virt, virt + size, FormatPml4t(g_machine));
       errno = EEXIST;
       virt = -1;

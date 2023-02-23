@@ -14,7 +14,8 @@ TEST_FUNC_LINK =							\
 		$(VM)							\
 		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc	\
 		-static							\
-		-Wl,-z,common-page-size=65536,-z,max-page-size=65536	\
+		-Wl,-z,max-page-size=65536				\
+		-Wl,-z,common-page-size=65536				\
 		$<							\
 		-o $@
 
@@ -53,18 +54,6 @@ o/$(MODE)/test/func/%.com:						\
 	@echo "o/$(MODE)/blink/blink -m $< || exit" >>$@
 	@echo "echo [test] o/$(MODE)/blink/blink -j $< >&2" >>$@
 	@echo "o/$(MODE)/blink/blink -j $< || exit" >>$@
-	@chmod +x $@
-
-.PRECIOUS: o/$(MODE)/test/func/mmap4096_test.com
-o/$(MODE)/test/func/mmap4096_test.com:					\
-		o/$(MODE)/test/func/mmap4096_test.elf			\
-		o/$(MODE)/blink/blink
-	@mkdir -p $(@D)
-	@echo "#!/bin/sh" >$@
-	@echo "echo [test] o/$(MODE)/blink/blink -jm $< >&2" >>$@
-	@echo "o/$(MODE)/blink/blink -jm $< || exit" >>$@
-	@echo "echo [test] o/$(MODE)/blink/blink -m $< >&2" >>$@
-	@echo "o/$(MODE)/blink/blink -m $< || exit" >>$@
 	@chmod +x $@
 
 .PHONY: o/$(MODE)/test/func
