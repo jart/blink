@@ -1,8 +1,6 @@
 #ifndef BLINK_STRACE_H_
 #define BLINK_STRACE_H_
-#include "blink/builtin.h"
 #include "blink/machine.h"
-#include "blink/types.h"
 
 #if !defined(DISABLE_STRACE) && !defined(TINY)
 #define STRACE 1
@@ -17,16 +15,20 @@
 #define IS_MEM_I(c)  (0200 == (0340 & (c)))
 #define IS_MEM_O(c)  (0300 == (0340 & (c)))
 #define IS_MEM_IO(c) (0340 == (0340 & (c)))
-#define IS_BUF(c)    (0200 == (0237 & (c)))
+#define IS_BUF(c)    (0200 == (0277 & (c)))
 #define IS_TIME(c)   (0202 == (0237 & (c)))
-#define IS_HAND(c)   (0203 == (0237 & (c)))
-#define IS_ADDR(c)   (0210 == (0237 & (c)))
-#define IS_SIGSET(c) (0204 == (0237 & (c)))
+#define IS_HAND(c)   (0203 == (0277 & (c)))
+#define IS_ADDR(c)   (0210 == (0277 & (c)))
+#define IS_SIGSET(c) (0204 == (0277 & (c)))
 
 #define ST_HAS(s, f) \
   (f(s[1]) || f(s[2]) || f(s[3]) || f(s[4]) || f(s[5]) || f(s[6]))
 
-#define UN             "\000"
+#define NORMAL "\000"  // (1) unlikely to block and (2) has no io_* args
+#define TWOWAY "\001"  // (1) likely to block, or (2) has io args
+
+#define UN
+#define NUL            "\000"
 #define I32            "\001"
 #define I32_FD         "\002"
 #define I32_DIRFD      "\003"
@@ -62,9 +64,11 @@
 #define O_PFDS         "\306"
 #define O_WSTATUS      "\307"
 #define O_ADDR         "\310"
+#define O_TIME2        "\311"
 #define IO_POLL        "\340"
 #define IO_TIME        "\342"
 #define IO_TIMEV       "\343"
+#define IO_FDSET       "\344"
 #define WAT_IOCTL      "\375"
 #define WAT_FCNTL      "\376"
 #define WAT_PSELECT    "\377"
@@ -99,122 +103,124 @@
 #define PTR        I64_HEX
 #define STR        I_STR
 #define PATH       I_STR
-#define BUFSZ      I64_HEX
+#define BUFSZ      I64
 #define O_RUSAGE   I64_HEX
 
 // clang-format off
-//      SYSCALL             RET    ARG1       ARG2       ARG3      ARG4      ARG5     ARG6
-#define STRACE_0            HEX    UN         UN         UN        UN        UN       UN
-#define STRACE_1            HEX    HEX        UN         UN        UN        UN       UN
-#define STRACE_2            HEX    HEX        HEX        UN        UN        UN       UN
-#define STRACE_3            HEX    HEX        HEX        HEX       UN        UN       UN
-#define STRACE_4            HEX    HEX        HEX        HEX       HEX       UN       UN
-#define STRACE_5            HEX    HEX        HEX        HEX       HEX       HEX      UN
-#define STRACE_6            HEX    HEX        HEX        HEX       HEX       HEX      HEX
-#define STRACE_READ         SSIZE  FD         O_BUF      BUFSZ     UN        UN       UN
-#define STRACE_WRITE        SSIZE  FD         I_BUF      BUFSZ     UN        UN       UN
-#define STRACE_OPEN         I32    PATH       OFLAGS     MODE      UN        UN       UN
-#define STRACE_OPENAT       I32    DIRFD      STR        OFLAGS    MODE      UN       UN
-#define STRACE_CREAT        I32    PATH       MODE       UN        UN        UN       UN
-#define STRACE_CLOSE        RC0    FD         UN         UN        UN        UN       UN
-#define STRACE_STAT         RC0    PATH       O_STAT     UN        UN        UN       UN
-#define STRACE_FSTAT        RC0    FD         O_STAT     UN        UN        UN       UN
-#define STRACE_LSTAT        RC0    PATH       O_STAT     UN        UN        UN       UN
-#define STRACE_FSTATAT      RC0    DIRFD      PATH       O_STAT    ATFLAGS   UN       UN
-#define STRACE_POLL         I32    IO_POLL    I32        UN        UN        UN       UN
-#define STRACE_PPOLL        RC0    IO_POLL    IO_TIME    I_SIGSET  SSIZE     UN       UN
-#define STRACE_LSEEK        OFF    FD         OFF        WHENCE    UN        UN       UN
-#define STRACE_MMAP         PTR    PTR        SIZE       PROT      MAPFLAGS  FD       OFF
-#define STRACE_PAUSE        RC0    UN         UN         UN        UN        UN       UN
-#define STRACE_SYNC         RC0    UN         UN         UN        UN        UN       UN
-#define STRACE_FSYNC        RC0    FD         UN         UN        UN        UN       UN
-#define STRACE_FDATASYNC    RC0    FD         UN         UN        UN        UN       UN
-#define STRACE_DUP          I32    FD         UN         UN        UN        UN       UN
-#define STRACE_DUP2         I32    FD         I32        UN        UN        UN       UN
-#define STRACE_DUP3         I32    FD         I32        OFLAGS    UN        UN       UN
-#define STRACE_MSYNC        RC0    PTR        SIZE       MSFLAGS   UN        UN       UN
-#define STRACE_ALARM        I32    I32        UN         UN        UN        UN       UN
-#define STRACE_GETCWD       SSIZE  O_BUF      BUFSZ      UN        UN        UN       UN
-#define STRACE_TRUNCATE     RC0    STR        OFF        UN        UN        UN       UN
-#define STRACE_FTRUNCATE    RC0    FD         OFF        UN        UN        UN       UN
-#define STRACE_MPROTECT     RC0    PTR        SIZE       PROT      UN        UN       UN
-#define STRACE_MUNMAP       RC0    PTR        SIZE       UN        UN        UN       UN
-#define STRACE_SIGACTION    RC0    SIG        I_HAND     O_HAND    SSIZE     UN       UN
-#define STRACE_SIGPROCMASK  RC0    SIGHOW     I_SIGSET   O_SIGSET  SSIZE     UN       UN
-#define STRACE_CLOCK_SLEEP  RC0    CLOCK      I32        I_TIME    O_TIME    UN       UN
-#define STRACE_SIGSUSPEND   RC0    I_SIGSET   SSIZE      UN        UN        UN       UN
-#define STRACE_NANOSLEEP    RC0    I_TIME     O_TIME     UN        UN        UN       UN
-#define STRACE_IOCTL        I32    FD         WAT_IOCTL  UN        UN        UN       UN
-#define STRACE_PREAD        SSIZE  FD         O_BUF      BUFSZ     OFF       UN       UN
-#define STRACE_PWRITE       SSIZE  FD         I_BUF      BUFSZ     OFF       UN       UN
-#define STRACE_READV        SSIZE  FD         O_IOVEC    BUFSZ     OFF       UN       UN
-#define STRACE_WRITEV       SSIZE  FD         I_IOVEC    BUFSZ     OFF       UN       UN
-#define STRACE_PIPE         SSIZE  O_PFDS     UN         UN        UN        UN       UN
-#define STRACE_PIPE2        SSIZE  O_PFDS     OFLAGS     UN        UN        UN       UN
-#define STRACE_SOCKETPAIR   RC0    FAMILY     SOCKTYPE   I32       O_PFDS    UN       UN
-#define STRACE_SELECT       SSIZE  I32        FDSET      FDSET     FDSET     IO_TIMEV UN
-#define STRACE_PSELECT      SSIZE  I32        FDSET      FDSET     FDSET     IO_TIME  WAT_PSELECT
-#define STRACE_SCHED_YIELD  RC0    UN         UN         UN        UN        UN       UN
-#define STRACE_FCNTL        I64    FD         WAT_FCNTL  UN        UN        UN       UN
-#define STRACE_FORK         PID    UN         UN         UN        UN        UN       UN
-#define STRACE_VFORK        PID    UN         UN         UN        UN        UN       UN
-#define STRACE_WAIT4        PID    PID        O_WSTATUS  WAITFLAGS O_RUSAGE  UN       UN
-#define STRACE_KILL         RC0    PID        SIG        UN        UN        UN       UN
-#define STRACE_TKILL        RC0    PID        SIG        UN        UN        UN       UN
-#define STRACE_ACCESS       RC0    PATH       MODE       UN        UN        UN       UN
-#define STRACE_FACCESSAT    RC0    DIRFD      PATH       MODE      UN        UN       UN
-#define STRACE_FACCESSAT2   RC0    DIRFD      PATH       MODE      ATFLAGS   UN       UN
-#define STRACE_READLINK     SSIZE  PATH       O_BUF      BUFSZ     UN        UN       UN
-#define STRACE_READLINKAT   SSIZE  DIRFD      STR        O_BUF     BUFSZ     UN       UN
-#define STRACE_SYMLINK      RC0    PATH       PATH       UN        UN        UN       UN
-#define STRACE_SYMLINKAT    RC0    PATH       DIRFD      PATH      UN        UN       UN
-#define STRACE_UNLINK       RC0    PATH       UN         UN        UN        UN       UN
-#define STRACE_UNLINKAT     RC0    DIRFD      PATH       ATFLAGS   UN        UN       UN
-#define STRACE_LINK         RC0    PATH       PATH       UN        UN        UN       UN
-#define STRACE_LINKAT       RC0    DIRFD      PATH       DIRFD     PATH      ATFLAGS  UN
-#define STRACE_RENAME       RC0    PATH       PATH       UN        UN        UN       UN
-#define STRACE_RENAMEAT     RC0    DIRFD      PATH       DIRFD     PATH      UN       UN
-#define STRACE_RENAMEAT2    RC0    DIRFD      PATH       DIRFD     PATH      ATFLAGS  UN
-#define STRACE_MKDIR        RC0    PATH       MODE       UN        UN        RENFLAGS UN
-#define STRACE_MKDIRAT      RC0    DIRFD      PATH       MODE      UN        UN       UN
-#define STRACE_RMDIR        RC0    PATH       UN         UN        UN        UN       UN
-#define STRACE_CHMOD        RC0    PATH       MODE       UN        UN        UN       UN
-#define STRACE_FCHMOD       RC0    FD         MODE       UN        UN        UN       UN
-#define STRACE_FCHMODAT     RC0    DIRFD      PATH       MODE      ATFLAGS   UN       UN
-#define STRACE_CHOWN        RC0    PATH       UID        GID       UN        UN       UN
-#define STRACE_LCHOWN       RC0    PATH       UID        GID       UN        UN       UN
-#define STRACE_FCHOWN       RC0    FD         UID        GID       UN        UN       UN
-#define STRACE_CHOWNAT      RC0    DIRFD      PATH       UID       GID       ATFLAGS  UN
-#define STRACE_GETTID       PID    UN         UN         UN        UN        UN       UN
-#define STRACE_GETPID       PID    UN         UN         UN        UN        UN       UN
-#define STRACE_GETPPID      PID    UN         UN         UN        UN        UN       UN
-#define STRACE_GETUID       UID    UN         UN         UN        UN        UN       UN
-#define STRACE_GETGID       GID    UN         UN         UN        UN        UN       UN
-#define STRACE_GETEUID      UID    UN         UN         UN        UN        UN       UN
-#define STRACE_GETEGID      GID    UN         UN         UN        UN        UN       UN
-#define STRACE_SETSID       PID    UN         UN         UN        UN        UN       UN
-#define STRACE_GETPGRP      PID    UN         UN         UN        UN        UN       UN
-#define STRACE_SETUID       RC0    UID        UN         UN        UN        UN       UN
-#define STRACE_SETGID       RC0    GID        UN         UN        UN        UN       UN
-#define STRACE_SETREUID     RC0    UID        UID        UN        UN        UN       UN
-#define STRACE_SETREGID     RC0    GID        GID        UN        UN        UN       UN
-#define STRACE_SETRESUID    RC0    UID        UID        UID       UN        UN       UN
-#define STRACE_SETRESGID    RC0    GID        GID        GID       UN        UN       UN
-#define STRACE_UMASK        MODE   MODE       UN         UN        UN        UN       UN
-#define STRACE_CHDIR        RC0    PATH       UN         UN        UN        UN       UN
-#define STRACE_CHROOT       RC0    PATH       UN         UN        UN        UN       UN
-#define STRACE_FCHDIR       RC0    FD         UN         UN        UN        UN       UN
-#define STRACE_CLONE        PID    CLONEFLAGS PTR        PTR       PTR       PTR      PTR
-#define STRACE_SOCKET       I32    FAMILY     SOCKTYPE   I32       UN        UN       UN
-#define STRACE_CONNECT      I32    FD         I_ADDR     ADDRLEN   UN        UN       UN
-#define STRACE_LISTEN       RC0    FD         UN         UN        UN        UN       UN
-#define STRACE_ACCEPT       FD     FD         O_ADDR     I64       UN        UN       UN
-#define STRACE_ACCEPT4      FD     FD         O_ADDR     I64       SOCKFLAGS UN       UN
-#define STRACE_BIND         RC0    FD         I_ADDR     ADDRLEN   UN        UN       UN
-#define STRACE_GETSOCKNAME  RC0    FD         O_ADDR     I64       UN        UN       UN
-#define STRACE_GETPEERNAME  RC0    FD         O_ADDR     I64       UN        UN       UN
-#define STRACE_SENDTO       SSIZE  FD         I_BUF      SIZE      I32       I_ADDR   ADDRLEN
-#define STRACE_RECVFROM     SSIZE  FD         O_BUF      SIZE      I32       O_ADDR   I64
+//      SYSCALL             KIND    RET    ARG1       ARG2       ARG3      ARG4      ARG5     ARG6
+#define STRACE_0            NORMAL  HEX    NUL        UN         UN        UN        UN       UN
+#define STRACE_1            NORMAL  HEX    HEX        NUL        UN        UN        UN       UN
+#define STRACE_2            NORMAL  HEX    HEX        HEX        NUL       UN        UN       UN
+#define STRACE_3            NORMAL  HEX    HEX        HEX        HEX       NUL       UN       UN
+#define STRACE_4            NORMAL  HEX    HEX        HEX        HEX       HEX       NUL      UN
+#define STRACE_5            NORMAL  HEX    HEX        HEX        HEX       HEX       HEX      UN
+#define STRACE_6            NORMAL  HEX    HEX        HEX        HEX       HEX       HEX      HEX
+#define STRACE_READ         TWOWAY  SSIZE  FD         O_BUF      BUFSZ     NUL       UN       UN
+#define STRACE_WRITE        NORMAL  SSIZE  FD         I_BUF      BUFSZ     NUL       UN       UN
+#define STRACE_OPEN         NORMAL  I32    PATH       OFLAGS     MODE      NUL       UN       UN
+#define STRACE_OPENAT       NORMAL  I32    DIRFD      STR        OFLAGS    MODE      NUL      UN
+#define STRACE_CREAT        NORMAL  I32    PATH       MODE       NUL       UN        UN       UN
+#define STRACE_CLOSE        NORMAL  RC0    FD         NUL        UN        UN        UN       UN
+#define STRACE_STAT         NORMAL  RC0    PATH       O_STAT     NUL       UN        UN       UN
+#define STRACE_FSTAT        NORMAL  RC0    FD         O_STAT     NUL       UN        UN       UN
+#define STRACE_LSTAT        NORMAL  RC0    PATH       O_STAT     NUL       UN        UN       UN
+#define STRACE_FSTATAT      NORMAL  RC0    DIRFD      PATH       O_STAT    ATFLAGS   NUL      UN
+#define STRACE_UTIMENSAT    NORMAL  RC0    DIRFD      PATH       O_TIME2   ATFLAGS   NUL      UN
+#define STRACE_POLL         TWOWAY  I32    IO_POLL    I32        NUL       UN        UN       UN
+#define STRACE_PPOLL        TWOWAY  RC0    IO_POLL    IO_TIME    I_SIGSET  SSIZE     NUL      UN
+#define STRACE_LSEEK        NORMAL  OFF    FD         OFF        WHENCE    NUL       UN       UN
+#define STRACE_MMAP         NORMAL  PTR    PTR        SIZE       PROT      MAPFLAGS  FD       OFF
+#define STRACE_PAUSE        TWOWAY  RC0    NUL        UN         UN        UN        UN       UN
+#define STRACE_SYNC         TWOWAY  RC0    NUL        UN         UN        UN        UN       UN
+#define STRACE_FSYNC        TWOWAY  RC0    FD         NUL        UN        UN        UN       UN
+#define STRACE_FDATASYNC    TWOWAY  RC0    FD         NUL        UN        UN        UN       UN
+#define STRACE_DUP          NORMAL  I32    FD         NUL        UN        UN        UN       UN
+#define STRACE_DUP2         NORMAL  I32    FD         I32        NUL       UN        UN       UN
+#define STRACE_DUP3         NORMAL  I32    FD         I32        OFLAGS    NUL       UN       UN
+#define STRACE_MSYNC        NORMAL  RC0    PTR        SIZE       MSFLAGS   NUL       UN       UN
+#define STRACE_ALARM        NORMAL  I32    I32        NUL        UN        UN        UN       UN
+#define STRACE_GETCWD       NORMAL  SSIZE  O_BUF      BUFSZ      NUL       UN        UN       UN
+#define STRACE_TRUNCATE     TWOWAY  RC0    STR        OFF        NUL       UN        UN       UN
+#define STRACE_FTRUNCATE    NORMAL  RC0    FD         OFF        NUL       UN        UN       UN
+#define STRACE_MPROTECT     NORMAL  RC0    PTR        SIZE       PROT      NUL       UN       UN
+#define STRACE_MUNMAP       NORMAL  RC0    PTR        SIZE       NUL       UN        UN       UN
+#define STRACE_SIGACTION    NORMAL  RC0    SIG        I_HAND     O_HAND    SSIZE     NUL      UN
+#define STRACE_SIGPROCMASK  NORMAL  RC0    SIGHOW     I_SIGSET   O_SIGSET  SSIZE     NUL      UN
+#define STRACE_CLOCK_SLEEP  TWOWAY  RC0    CLOCK      I32        I_TIME    O_TIME    NUL      UN
+#define STRACE_SIGSUSPEND   TWOWAY  RC0    I_SIGSET   SSIZE      NUL       UN        UN       UN
+#define STRACE_NANOSLEEP    TWOWAY  RC0    I_TIME     O_TIME     NUL       UN        UN       UN
+#define STRACE_IOCTL        NORMAL  I32    FD         WAT_IOCTL  NUL       UN        UN       UN
+#define STRACE_PREAD        TWOWAY  SSIZE  FD         O_BUF      BUFSZ     OFF       NUL      UN
+#define STRACE_PWRITE       NORMAL  SSIZE  FD         I_BUF      BUFSZ     OFF       NUL      UN
+#define STRACE_READV        TWOWAY  SSIZE  FD         O_IOVEC    BUFSZ     OFF       NUL      UN
+#define STRACE_WRITEV       NORMAL  SSIZE  FD         I_IOVEC    BUFSZ     OFF       NUL      UN
+#define STRACE_PIPE         NORMAL  SSIZE  O_PFDS     NUL        UN        UN        UN       UN
+#define STRACE_PIPE2        NORMAL  SSIZE  O_PFDS     OFLAGS     NUL       UN        UN       UN
+#define STRACE_SOCKETPAIR   NORMAL  RC0    FAMILY     SOCKTYPE   I32       O_PFDS    NUL      UN
+#define STRACE_SELECT       TWOWAY  SSIZE  I32        IO_FDSET   IO_FDSET  IO_FDSET  IO_TIMEV UN
+#define STRACE_PSELECT      TWOWAY  SSIZE  I32        IO_FDSET   IO_FDSET  IO_FDSET  IO_TIME  WAT_PSELECT
+#define STRACE_SCHED_YIELD  NORMAL  RC0    NUL        UN         UN        UN        UN       UN
+#define STRACE_FCNTL        NORMAL  I64    FD         WAT_FCNTL  NUL       UN        UN       UN
+#define STRACE_FORK         NORMAL  PID    NUL        UN         UN        UN        UN       UN
+#define STRACE_VFORK        NORMAL  PID    NUL        UN         UN        UN        UN       UN
+#define STRACE_WAIT4        TWOWAY  PID    PID        O_WSTATUS  WAITFLAGS O_RUSAGE  NUL      UN
+#define STRACE_KILL         NORMAL  RC0    PID        SIG        NUL       UN        UN       UN
+#define STRACE_TKILL        NORMAL  RC0    PID        SIG        NUL       UN        UN       UN
+#define STRACE_ACCESS       NORMAL  RC0    PATH       MODE       NUL       UN        UN       UN
+#define STRACE_FACCESSAT    NORMAL  RC0    DIRFD      PATH       MODE      NUL       UN       UN
+#define STRACE_FACCESSAT2   NORMAL  RC0    DIRFD      PATH       MODE      ATFLAGS   NUL      UN
+#define STRACE_READLINK     NORMAL  SSIZE  PATH       O_BUF      BUFSZ     NUL       UN       UN
+#define STRACE_READLINKAT   NORMAL  SSIZE  DIRFD      STR        O_BUF     BUFSZ     NUL      UN
+#define STRACE_SYMLINK      NORMAL  RC0    PATH       PATH       NUL       UN        UN       UN
+#define STRACE_SYMLINKAT    NORMAL  RC0    PATH       DIRFD      PATH      NUL       UN       UN
+#define STRACE_UNLINK       NORMAL  RC0    PATH       NUL        UN        UN        UN       UN
+#define STRACE_UNLINKAT     NORMAL  RC0    DIRFD      PATH       ATFLAGS   NUL       UN       UN
+#define STRACE_LINK         NORMAL  RC0    PATH       PATH       NUL       UN        UN       UN
+#define STRACE_LINKAT       NORMAL  RC0    DIRFD      PATH       DIRFD     PATH      ATFLAGS  UN
+#define STRACE_RENAME       NORMAL  RC0    PATH       PATH       NUL       UN        UN       UN
+#define STRACE_RENAMEAT     NORMAL  RC0    DIRFD      PATH       DIRFD     PATH      NUL      UN
+#define STRACE_RENAMEAT2    NORMAL  RC0    DIRFD      PATH       DIRFD     PATH      ATFLAGS  UN
+#define STRACE_MKDIR        NORMAL  RC0    PATH       MODE       NUL       UN        RENFLAGS UN
+#define STRACE_MKDIRAT      NORMAL  RC0    DIRFD      PATH       MODE      NUL       UN       UN
+#define STRACE_RMDIR        NORMAL  RC0    PATH       NUL        UN        UN        UN       UN
+#define STRACE_CHMOD        NORMAL  RC0    PATH       MODE       NUL       UN        UN       UN
+#define STRACE_FCHMOD       NORMAL  RC0    FD         MODE       NUL       UN        UN       UN
+#define STRACE_FCHMODAT     NORMAL  RC0    DIRFD      PATH       MODE      ATFLAGS   NUL      UN
+#define STRACE_CHOWN        NORMAL  RC0    PATH       UID        GID       NUL       UN       UN
+#define STRACE_LCHOWN       NORMAL  RC0    PATH       UID        GID       NUL       UN       UN
+#define STRACE_FCHOWN       NORMAL  RC0    FD         UID        GID       NUL       UN       UN
+#define STRACE_CHOWNAT      NORMAL  RC0    DIRFD      PATH       UID       GID       ATFLAGS  UN
+#define STRACE_GETTID       NORMAL  PID    NUL        UN         UN        UN        UN       UN
+#define STRACE_GETPID       NORMAL  PID    NUL        UN         UN        UN        UN       UN
+#define STRACE_GETPPID      NORMAL  PID    NUL        UN         UN        UN        UN       UN
+#define STRACE_GETPGID      NORMAL  PID    PID        NUL        UN        UN        UN       UN
+#define STRACE_GETUID       NORMAL  UID    NUL        UN         UN        UN        UN       UN
+#define STRACE_GETGID       NORMAL  GID    NUL        UN         UN        UN        UN       UN
+#define STRACE_GETEUID      NORMAL  UID    NUL        UN         UN        UN        UN       UN
+#define STRACE_GETEGID      NORMAL  GID    NUL        UN         UN        UN        UN       UN
+#define STRACE_SETSID       NORMAL  PID    NUL        UN         UN        UN        UN       UN
+#define STRACE_GETPGRP      NORMAL  PID    NUL        UN         UN        UN        UN       UN
+#define STRACE_SETUID       NORMAL  RC0    UID        NUL        UN        UN        UN       UN
+#define STRACE_SETGID       NORMAL  RC0    GID        NUL        UN        UN        UN       UN
+#define STRACE_SETREUID     NORMAL  RC0    UID        UID        NUL       UN        UN       UN
+#define STRACE_SETREGID     NORMAL  RC0    GID        GID        NUL       UN        UN       UN
+#define STRACE_SETRESUID    NORMAL  RC0    UID        UID        UID       NUL       UN       UN
+#define STRACE_SETRESGID    NORMAL  RC0    GID        GID        GID       NUL       UN       UN
+#define STRACE_UMASK        NORMAL  MODE   MODE       NUL        UN        UN        UN       UN
+#define STRACE_CHDIR        NORMAL  RC0    PATH       NUL        UN        UN        UN       UN
+#define STRACE_CHROOT       NORMAL  RC0    PATH       NUL        UN        UN        UN       UN
+#define STRACE_FCHDIR       NORMAL  RC0    FD         NUL        UN        UN        UN       UN
+#define STRACE_CLONE        NORMAL  PID    CLONEFLAGS PTR        PTR       PTR       PTR      PTR
+#define STRACE_SOCKET       NORMAL  I32    FAMILY     SOCKTYPE   I32       NUL       UN       UN
+#define STRACE_CONNECT      NORMAL  I32    FD         I_ADDR     ADDRLEN   NUL       UN       UN
+#define STRACE_LISTEN       NORMAL  RC0    FD         NUL        UN        UN        UN       UN
+#define STRACE_ACCEPT       TWOWAY  FD     FD         O_ADDR     I64       NUL       UN       UN
+#define STRACE_ACCEPT4      TWOWAY  FD     FD         O_ADDR     I64       SOCKFLAGS NUL      UN
+#define STRACE_BIND         NORMAL  RC0    FD         I_ADDR     ADDRLEN   NUL       UN       UN
+#define STRACE_GETSOCKNAME  NORMAL  RC0    FD         O_ADDR     I64       NUL       UN       UN
+#define STRACE_GETPEERNAME  NORMAL  RC0    FD         O_ADDR     I64       NUL       UN       UN
+#define STRACE_SENDTO       NORMAL  SSIZE  FD         I_BUF      SIZE      I32       I_ADDR   ADDRLEN
+#define STRACE_RECVFROM     TWOWAY  SSIZE  FD         O_BUF      SIZE      I32       O_ADDR   I64
 // clang-format on
 
 void EnterStrace(struct Machine *, const char *, const char *, ...);

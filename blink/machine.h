@@ -254,6 +254,7 @@ struct System {
   pthread_mutex_t mmap_lock;
 #endif
   void (*onfilemap)(struct System *, struct FileMap *);
+  void (*onsymbols)(struct System *);
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
   int (*exec)(char *, char *, char **, char **);

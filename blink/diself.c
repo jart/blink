@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "blink/assert.h"
 #include "blink/dis.h"
 #include "blink/elf.h"
 #include "blink/endian.h"

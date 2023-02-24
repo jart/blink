@@ -76,6 +76,8 @@ int SysStatfs(struct Machine *, i64, i64);
 int SysFstatfs(struct Machine *, i32, i64);
 int mkfifoat_(int, const char *, mode_t);
 
+void Strace(struct Machine *, const char *, bool, const char *, ...);
+
 #ifndef HAVE_MKFIFOAT
 #ifdef mkfifoat
 #undef mkfifoat

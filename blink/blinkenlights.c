@@ -80,6 +80,12 @@
 #include "blink/xlat.h"
 #include "blink/xmmtype.h"
 
+#ifdef DISABLE_OVERLAYS
+#define OverlaysOpen   openat
+#define OverlaysStat   fstatat
+#define OverlaysAccess faccessat
+#endif
+
 #ifndef BUILD_TIMESTAMP
 #define BUILD_TIMESTAMP __TIMESTAMP__
 #endif
@@ -853,11 +859,6 @@ static void ResolveBreakpoints(void) {
     if (breakpoints.p[i].symbol && !breakpoints.p[i].addr) {
       if ((sym = DisFindSymByName(dis, breakpoints.p[i].symbol)) != -1) {
         breakpoints.p[i].addr = dis->syms.p[sym].addr;
-      } else {
-        fprintf(stderr,
-                "error: breakpoint not found: %s (out of %d loaded symbols)\n",
-                breakpoints.p[i].symbol, dis->syms.i);
-        exit(1);
       }
     }
   }
@@ -869,11 +870,6 @@ static void ResolveWatchpoints(void) {
     if (watchpoints.p[i].symbol && !watchpoints.p[i].addr) {
       if ((sym = DisFindSymByName(dis, watchpoints.p[i].symbol)) != -1) {
         watchpoints.p[i].addr = dis->syms.p[sym].addr;
-      } else {
-        fprintf(stderr,
-                "error: watchpoint not found: %s (out of %d loaded symbols)\n",
-                watchpoints.p[i].symbol, dis->syms.i);
-        exit(1);
       }
     }
   }
@@ -927,14 +923,18 @@ static int GetCursorPosition(int *out_y, int *out_x) {
   return ReadCursorPosition(out_y, out_x);
 }
 
+void OnSymbols(struct System *s) {
+  ResolveBreakpoints();
+  ResolveWatchpoints();
+}
+
 void CommonSetup(void) {
   static bool once;
   if (!once) {
     if (tuimode || breakpoints.i || watchpoints.i) {
       m->system->dis = dis;
+      m->system->onsymbols = OnSymbols;
       LoadDebugSymbols(m->system);
-      ResolveBreakpoints();
-      ResolveWatchpoints();
     }
     once = true;
   }
@@ -1769,7 +1769,9 @@ static void DrawBreakpoints(struct Panel *p) {
     if (line >= breakpointsstart) {
       addr = watchpoints.p[i].addr;
       sym = DisFindSym(dis, addr);
-      name = sym != -1 ? dis->syms.p[sym].name : "UNKNOWN";
+      if (!(name = watchpoints.p[i].symbol)) {
+        name = sym != -1 ? dis->syms.p[sym].name : "UNKNOWN";
+      }
       snprintf(buf, sizeof(buf), "%0*" PRIx64 " %s", GetAddrHexWidth(), addr,
                name);
       AppendPanel(p, line - breakpointsstart, buf);
@@ -1787,7 +1789,9 @@ static void DrawBreakpoints(struct Panel *p) {
     if (line >= breakpointsstart) {
       addr = breakpoints.p[i].addr;
       sym = DisFindSym(dis, addr);
-      name = sym != -1 ? dis->syms.p[sym].name : "UNKNOWN";
+      if (!(name = breakpoints.p[i].symbol)) {
+        name = sym != -1 ? dis->syms.p[sym].name : "UNKNOWN";
+      }
       s = buf;
       s += sprintf(s, "%0*" PRIx64 " ", GetAddrHexWidth(), addr);
       strcpy(s, name);

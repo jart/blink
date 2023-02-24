@@ -31,7 +31,6 @@
 #include "blink/macros.h"
 #include "blink/timespec.h"
 #include "blink/types.h"
-#include "blink/util.h"
 
 int main(int argc, char *argv[]) {
   return 0;

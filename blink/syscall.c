@@ -72,7 +72,6 @@
 #include "blink/stats.h"
 #include "blink/strace.h"
 #include "blink/swap.h"
-#include "blink/syscall-macro.h"
 #include "blink/syscall.h"
 #include "blink/thread.h"
 #include "blink/timespec.h"
@@ -119,6 +118,25 @@
 #else
 #define SO_LINGER_ SO_LINGER
 #endif
+
+#define SYSARGS0
+#define SYSARGS1 , di
+#define SYSARGS2 , di, si
+#define SYSARGS3 , di, si, dx
+#define SYSARGS4 , di, si, dx, r0
+#define SYSARGS5 , di, si, dx, r0, r8
+#define SYSARGS6 , di, si, dx, r0, r8, r9
+
+#define SYSCALL(arity, ordinal, name, func, signature)            \
+  case ordinal:                                                   \
+    if (STRACE && signature[0] == TWOWAY[0] && FLAG_strace > 1) { \
+      Strace(m, name, true, &signature[1] SYSARGS##arity);        \
+    }                                                             \
+    ax = func(m SYSARGS##arity);                                  \
+    if (STRACE && FLAG_strace) {                                  \
+      Strace(m, name, false, &signature[1], ax SYSARGS##arity);   \
+    }                                                             \
+    break
 
 char *g_blink_path;
 bool FLAG_statistics;
@@ -996,7 +1014,9 @@ static int SysPrctl(struct Machine *m, int op, i64 arg2, i64 arg3, i64 arg4,
 }
 
 static int SysArchPrctl(struct Machine *m, int op, i64 addr) {
+#ifndef DISABLE_NONPOSIX
   u8 buf[8];
+#endif
   switch (op) {
     case ARCH_SET_FS_LINUX:
       m->fs.base = addr;
@@ -5184,201 +5204,203 @@ void OpSyscall(P) {
   mark = m->freelist.n;
   m->interrupted = false;
   switch (ax & 0xfff) {
-    SYSCALL3(0x000, "read", SysRead, STRACE_READ);
-    SYSCALL3(0x001, "write", SysWrite, STRACE_WRITE);
-    SYSCALL3(0x002, "open", SysOpen, STRACE_OPEN);
-    SYSCALL1(0x003, "close", SysClose, STRACE_CLOSE);
-    SYSCALL2(0x004, "stat", SysStat, STRACE_2);
-    SYSCALL2(0x005, "fstat", SysFstat, STRACE_2);
-    SYSCALL2(0x006, "lstat", SysLstat, STRACE_2);
-    SYSCALL3(0x007, "poll", SysPoll, STRACE_3);
-    SYSCALL3(0x008, "lseek", SysLseek, STRACE_3);
-    SYSCALL6(0x009, "mmap", SysMmap, STRACE_MMAP);
-    SYSCALL4(0x011, "pread", SysPread, STRACE_PREAD);
-    SYSCALL4(0x012, "pwrite", SysPwrite, STRACE_PWRITE);
-    SYSCALL5(0x017, "select", SysSelect, STRACE_5);
-    SYSCALL5(0x019, "mremap", SysMremap, STRACE_5);
-    SYSCALL6(0x10E, "pselect6", SysPselect, STRACE_6);
-    SYSCALL3(0x01A, "msync", SysMsync, STRACE_3);
-    SYSCALL3(0x00A, "mprotect", SysMprotect, STRACE_MPROTECT);
-    SYSCALL2(0x00B, "munmap", SysMunmap, STRACE_MUNMAP);
-    SYSCALL4(0x00D, "rt_sigaction", SysSigaction, STRACE_SIGACTION);
-    SYSCALL4(0x00E, "rt_sigprocmask", SysSigprocmask, STRACE_SIGPROCMASK);
-    SYSCALL3(0x010, "ioctl", SysIoctl, STRACE_3);
-    SYSCALL3(0x013, "readv", SysReadv, STRACE_3);
-    SYSCALL3(0x014, "writev", SysWritev, STRACE_3);
-    SYSCALL2(0x015, "access", SysAccess, STRACE_2);
-    SYSCALL0(0x018, "sched_yield", SysSchedYield, STRACE_0);
-    SYSCALL3(0x01C, "madvise", SysMadvise, STRACE_3);
-    SYSCALL1(0x020, "dup", SysDup1, STRACE_DUP);
-    SYSCALL2(0x021, "dup2", SysDup2, STRACE_DUP2);
-    SYSCALL0(0x022, "pause", SysPause, STRACE_PAUSE);
-    SYSCALL2(0x023, "nanosleep", SysNanosleep, STRACE_NANOSLEEP);
-    SYSCALL2(0x024, "getitimer", SysGetitimer, STRACE_2);
-    SYSCALL1(0x025, "alarm", SysAlarm, STRACE_ALARM);
-    SYSCALL3(0x026, "setitimer", SysSetitimer, STRACE_3);
-    SYSCALL0(0x027, "getpid", SysGetpid, STRACE_GETPID);
-    SYSCALL0(0x0BA, "gettid", SysGettid, STRACE_GETTID);
-    SYSCALL1(0x03F, "uname", SysUname, STRACE_1);
-    SYSCALL3(0x048, "fcntl", SysFcntl, STRACE_3);
-    SYSCALL2(0x049, "flock", SysFlock, STRACE_2);
-    SYSCALL1(0x04A, "fsync", SysFsync, STRACE_FSYNC);
-    SYSCALL1(0x04B, "fdatasync", SysFdatasync, STRACE_FDATASYNC);
-    SYSCALL2(0x04C, "truncate", SysTruncate, STRACE_TRUNCATE);
-    SYSCALL2(0x04D, "ftruncate", SysFtruncate, STRACE_FTRUNCATE);
-    SYSCALL2(0x04F, "getcwd", SysGetcwd, STRACE_GETCWD);
-    SYSCALL1(0x050, "chdir", SysChdir, STRACE_CHDIR);
-    SYSCALL1(0x051, "fchdir", SysFchdir, STRACE_FCHOWN);
-    SYSCALL2(0x052, "rename", SysRename, STRACE_RENAME);
-    SYSCALL2(0x053, "mkdir", SysMkdir, STRACE_MKDIR);
-    SYSCALL1(0x054, "rmdir", SysRmdir, STRACE_RMDIR);
-    SYSCALL2(0x055, "creat", SysCreat, STRACE_CREAT);
-    SYSCALL2(0x056, "link", SysLink, STRACE_LINK);
-    SYSCALL1(0x057, "unlink", SysUnlink, STRACE_UNLINK);
-    SYSCALL2(0x058, "symlink", SysSymlink, STRACE_SYMLINK);
-    SYSCALL3(0x059, "readlink", SysReadlink, STRACE_READLINK);
-    SYSCALL2(0x05A, "chmod", SysChmod, STRACE_CHMOD);
-    SYSCALL2(0x05B, "fchmod", SysFchmod, STRACE_FCHOWN);
-    SYSCALL3(0x05C, "chown", SysChown, STRACE_CHOWN);
-    SYSCALL3(0x05D, "fchown", SysFchown, STRACE_FCHOWN);
-    SYSCALL3(0x05E, "lchown", SysLchown, STRACE_LCHOWN);
-    SYSCALL5(0x104, "fchownat", SysFchownat, STRACE_CHOWNAT);
-    SYSCALL1(0x05F, "umask", SysUmask, STRACE_UMASK);
-    SYSCALL2(0x060, "gettimeofday", SysGettimeofday, STRACE_2);
-    SYSCALL2(0x061, "getrlimit", SysGetrlimit, STRACE_2);
-    SYSCALL2(0x062, "getrusage", SysGetrusage, STRACE_2);
-    SYSCALL1(0x064, "times", SysTimes, STRACE_1);
-    SYSCALL0(0x06F, "getpgrp", SysGetpgrp, STRACE_GETPGRP);
-    SYSCALL0(0x070, "setsid", SysSetsid, STRACE_SETSID);
-    SYSCALL2(0x073, "getgroups", SysGetgroups, STRACE_2);
-    SYSCALL1(0x079, "getpgid", SysGetpgid, STRACE_1);
-    SYSCALL1(0x07C, "getsid", SysGetsid, STRACE_1);
-    SYSCALL1(0x07F, "rt_sigpending", SysSigpending, STRACE_1);
-    SYSCALL2(0x089, "statfs", SysStatfs, STRACE_2);
-    SYSCALL2(0x08A, "fstatfs", SysFstatfs, STRACE_2);
-    SYSCALL2(0x06D, "setpgid", SysSetpgid, STRACE_2);
-    SYSCALL0(0x066, "getuid", SysGetuid, STRACE_GETUID);
-    SYSCALL0(0x068, "getgid", SysGetgid, STRACE_GETGID);
-    SYSCALL1(0x069, "setuid", SysSetuid, STRACE_SETUID);
-    SYSCALL1(0x06A, "setgid", SysSetgid, STRACE_SETGID);
-    SYSCALL0(0x06B, "geteuid", SysGeteuid, STRACE_GETEUID);
-    SYSCALL0(0x06C, "getegid", SysGetegid, STRACE_GETEGID);
-    SYSCALL0(0x06E, "getppid", SysGetppid, STRACE_GETPPID);
-    SYSCALL2(0x071, "setreuid", SysSetreuid, STRACE_SETREUID);
-    SYSCALL2(0x072, "setregid", SysSetregid, STRACE_SETREGID);
-    SYSCALL2(0x082, "rt_sigsuspend", SysSigsuspend, STRACE_SIGSUSPEND);
-    SYSCALL2(0x083, "sigaltstack", SysSigaltstack, STRACE_2);
-    SYSCALL3(0x085, "mknod", SysMknod, STRACE_3);
-    SYSCALL2(0x09E, "arch_prctl", SysArchPrctl, STRACE_2);
-    SYSCALL2(0x0A0, "setrlimit", SysSetrlimit, STRACE_2);
-    SYSCALL0(0x0A2, "sync", SysSync, STRACE_SYNC);
-    SYSCALL3(0x0D9, "getdents", SysGetdents, STRACE_3);
-    SYSCALL1(0x0DA, "set_tid_address", SysSetTidAddress, STRACE_1);
-    SYSCALL4(0x0DD, "fadvise", SysFadvise, STRACE_4);
-    SYSCALL2(0x0E3, "clock_settime", SysClockSettime, STRACE_2);
-    SYSCALL2(0x0E5, "clock_getres", SysClockGetres, STRACE_2);
-    SYSCALL4(0x0E6, "clock_nanosleep", SysClockNanosleep, STRACE_CLOCK_SLEEP);
-    SYSCALL2(0x084, "utime", SysUtime, STRACE_2);
-    SYSCALL2(0x0EB, "utimes", SysUtimes, STRACE_2);
-    SYSCALL3(0x105, "futimesat", SysFutimesat, STRACE_3);
-    SYSCALL4(0x118, "utimensat", SysUtimensat, STRACE_4);
-    SYSCALL4(0x101, "openat", SysOpenat, STRACE_OPENAT);
-    SYSCALL3(0x102, "mkdirat", SysMkdirat, STRACE_MKDIRAT);
-    SYSCALL4(0x106, "fstatat", SysFstatat, STRACE_4);
-    SYSCALL3(0x107, "unlinkat", SysUnlinkat, STRACE_UNLINKAT);
-    SYSCALL4(0x108, "renameat", SysRenameat, STRACE_RENAMEAT);
-    SYSCALL5(0x109, "linkat", SysLinkat, STRACE_LINKAT);
-    SYSCALL3(0x10A, "symlinkat", SysSymlinkat, STRACE_SYMLINKAT);
-    SYSCALL4(0x10B, "readlinkat", SysReadlinkat, STRACE_READLINKAT);
-    SYSCALL3(0x10C, "fchmodat", SysFchmodat, STRACE_FCHMODAT);
-    SYSCALL3(0x10D, "faccessat", SysFaccessat, STRACE_FACCESSAT);
-    SYSCALL4(0x1b7, "faccessat2", SysFaccessat2, STRACE_FACCESSAT);
+    SYSCALL(3, 0x000, "read", SysRead, STRACE_READ);
+    SYSCALL(3, 0x001, "write", SysWrite, STRACE_WRITE);
+    SYSCALL(3, 0x002, "open", SysOpen, STRACE_OPEN);
+    SYSCALL(1, 0x003, "close", SysClose, STRACE_CLOSE);
+    SYSCALL(2, 0x004, "stat", SysStat, STRACE_STAT);
+    SYSCALL(2, 0x005, "fstat", SysFstat, STRACE_FSTAT);
+    SYSCALL(2, 0x006, "lstat", SysLstat, STRACE_LSTAT);
+    SYSCALL(3, 0x007, "poll", SysPoll, STRACE_3);
+    SYSCALL(3, 0x008, "lseek", SysLseek, STRACE_3);
+    SYSCALL(6, 0x009, "mmap", SysMmap, STRACE_MMAP);
+    SYSCALL(4, 0x011, "pread", SysPread, STRACE_PREAD);
+    SYSCALL(4, 0x012, "pwrite", SysPwrite, STRACE_PWRITE);
+    SYSCALL(5, 0x017, "select", SysSelect, STRACE_SELECT);
+    SYSCALL(5, 0x019, "mremap", SysMremap, STRACE_5);
+    SYSCALL(6, 0x10E, "pselect6", SysPselect, STRACE_6);
+    SYSCALL(3, 0x01A, "msync", SysMsync, STRACE_3);
+    SYSCALL(3, 0x00A, "mprotect", SysMprotect, STRACE_MPROTECT);
+    SYSCALL(2, 0x00B, "munmap", SysMunmap, STRACE_MUNMAP);
+    SYSCALL(4, 0x00D, "rt_sigaction", SysSigaction, STRACE_SIGACTION);
+    SYSCALL(4, 0x00E, "rt_sigprocmask", SysSigprocmask, STRACE_SIGPROCMASK);
+    SYSCALL(3, 0x010, "ioctl", SysIoctl, STRACE_3);
+    SYSCALL(3, 0x013, "readv", SysReadv, STRACE_3);
+    SYSCALL(3, 0x014, "writev", SysWritev, STRACE_3);
+    SYSCALL(2, 0x015, "access", SysAccess, STRACE_2);
+    SYSCALL(0, 0x018, "sched_yield", SysSchedYield, STRACE_0);
+    SYSCALL(3, 0x01C, "madvise", SysMadvise, STRACE_3);
+    SYSCALL(1, 0x020, "dup", SysDup1, STRACE_DUP);
+    SYSCALL(2, 0x021, "dup2", SysDup2, STRACE_DUP2);
+    SYSCALL(0, 0x022, "pause", SysPause, STRACE_PAUSE);
+    SYSCALL(2, 0x023, "nanosleep", SysNanosleep, STRACE_NANOSLEEP);
+    SYSCALL(2, 0x024, "getitimer", SysGetitimer, STRACE_2);
+    SYSCALL(1, 0x025, "alarm", SysAlarm, STRACE_ALARM);
+    SYSCALL(3, 0x026, "setitimer", SysSetitimer, STRACE_3);
+    SYSCALL(0, 0x027, "getpid", SysGetpid, STRACE_GETPID);
+    SYSCALL(0, 0x0BA, "gettid", SysGettid, STRACE_GETTID);
+    SYSCALL(1, 0x03F, "uname", SysUname, STRACE_1);
+    SYSCALL(3, 0x048, "fcntl", SysFcntl, STRACE_3);
+    SYSCALL(2, 0x049, "flock", SysFlock, STRACE_2);
+    SYSCALL(1, 0x04A, "fsync", SysFsync, STRACE_FSYNC);
+    SYSCALL(1, 0x04B, "fdatasync", SysFdatasync, STRACE_FDATASYNC);
+    SYSCALL(2, 0x04C, "truncate", SysTruncate, STRACE_TRUNCATE);
+    SYSCALL(2, 0x04D, "ftruncate", SysFtruncate, STRACE_FTRUNCATE);
+    SYSCALL(2, 0x04F, "getcwd", SysGetcwd, STRACE_GETCWD);
+    SYSCALL(1, 0x050, "chdir", SysChdir, STRACE_CHDIR);
+    SYSCALL(1, 0x051, "fchdir", SysFchdir, STRACE_FCHOWN);
+    SYSCALL(2, 0x052, "rename", SysRename, STRACE_RENAME);
+    SYSCALL(2, 0x053, "mkdir", SysMkdir, STRACE_MKDIR);
+    SYSCALL(1, 0x054, "rmdir", SysRmdir, STRACE_RMDIR);
+    SYSCALL(2, 0x055, "creat", SysCreat, STRACE_CREAT);
+    SYSCALL(2, 0x056, "link", SysLink, STRACE_LINK);
+    SYSCALL(1, 0x057, "unlink", SysUnlink, STRACE_UNLINK);
+    SYSCALL(2, 0x058, "symlink", SysSymlink, STRACE_SYMLINK);
+    SYSCALL(3, 0x059, "readlink", SysReadlink, STRACE_READLINK);
+    SYSCALL(2, 0x05A, "chmod", SysChmod, STRACE_CHMOD);
+    SYSCALL(2, 0x05B, "fchmod", SysFchmod, STRACE_FCHOWN);
+    SYSCALL(3, 0x05C, "chown", SysChown, STRACE_CHOWN);
+    SYSCALL(3, 0x05D, "fchown", SysFchown, STRACE_FCHOWN);
+    SYSCALL(3, 0x05E, "lchown", SysLchown, STRACE_LCHOWN);
+    SYSCALL(5, 0x104, "fchownat", SysFchownat, STRACE_CHOWNAT);
+    SYSCALL(1, 0x05F, "umask", SysUmask, STRACE_UMASK);
+    SYSCALL(2, 0x060, "gettimeofday", SysGettimeofday, STRACE_2);
+    SYSCALL(2, 0x061, "getrlimit", SysGetrlimit, STRACE_2);
+    SYSCALL(2, 0x062, "getrusage", SysGetrusage, STRACE_2);
+    SYSCALL(1, 0x064, "times", SysTimes, STRACE_1);
+    SYSCALL(0, 0x06F, "getpgrp", SysGetpgrp, STRACE_GETPGRP);
+    SYSCALL(0, 0x070, "setsid", SysSetsid, STRACE_SETSID);
+    SYSCALL(2, 0x073, "getgroups", SysGetgroups, STRACE_2);
+    SYSCALL(1, 0x079, "getpgid", SysGetpgid, STRACE_GETPGID);
+    SYSCALL(1, 0x07C, "getsid", SysGetsid, STRACE_1);
+    SYSCALL(1, 0x07F, "rt_sigpending", SysSigpending, STRACE_1);
+    SYSCALL(2, 0x089, "statfs", SysStatfs, STRACE_2);
+    SYSCALL(2, 0x08A, "fstatfs", SysFstatfs, STRACE_2);
+    SYSCALL(2, 0x06D, "setpgid", SysSetpgid, STRACE_2);
+    SYSCALL(0, 0x066, "getuid", SysGetuid, STRACE_GETUID);
+    SYSCALL(0, 0x068, "getgid", SysGetgid, STRACE_GETGID);
+    SYSCALL(1, 0x069, "setuid", SysSetuid, STRACE_SETUID);
+    SYSCALL(1, 0x06A, "setgid", SysSetgid, STRACE_SETGID);
+    SYSCALL(0, 0x06B, "geteuid", SysGeteuid, STRACE_GETEUID);
+    SYSCALL(0, 0x06C, "getegid", SysGetegid, STRACE_GETEGID);
+    SYSCALL(0, 0x06E, "getppid", SysGetppid, STRACE_GETPPID);
+    SYSCALL(2, 0x071, "setreuid", SysSetreuid, STRACE_SETREUID);
+    SYSCALL(2, 0x072, "setregid", SysSetregid, STRACE_SETREGID);
+    SYSCALL(2, 0x082, "rt_sigsuspend", SysSigsuspend, STRACE_SIGSUSPEND);
+    SYSCALL(2, 0x083, "sigaltstack", SysSigaltstack, STRACE_2);
+    SYSCALL(3, 0x085, "mknod", SysMknod, STRACE_3);
+    SYSCALL(2, 0x09E, "arch_prctl", SysArchPrctl, STRACE_2);
+    SYSCALL(2, 0x0A0, "setrlimit", SysSetrlimit, STRACE_2);
+    SYSCALL(0, 0x0A2, "sync", SysSync, STRACE_SYNC);
+    SYSCALL(3, 0x0D9, "getdents", SysGetdents, STRACE_3);
+    SYSCALL(1, 0x0DA, "set_tid_address", SysSetTidAddress, STRACE_1);
+    SYSCALL(4, 0x0DD, "fadvise", SysFadvise, STRACE_4);
+    SYSCALL(2, 0x0E3, "clock_settime", SysClockSettime, STRACE_2);
+    SYSCALL(2, 0x0E5, "clock_getres", SysClockGetres, STRACE_2);
+    SYSCALL(4, 0x0E6, "clock_nanosleep", SysClockNanosleep, STRACE_CLOCK_SLEEP);
+    SYSCALL(2, 0x084, "utime", SysUtime, STRACE_2);
+    SYSCALL(2, 0x0EB, "utimes", SysUtimes, STRACE_2);
+    SYSCALL(3, 0x105, "futimesat", SysFutimesat, STRACE_3);
+    SYSCALL(4, 0x118, "utimensat", SysUtimensat, STRACE_UTIMENSAT);
+    SYSCALL(4, 0x101, "openat", SysOpenat, STRACE_OPENAT);
+    SYSCALL(3, 0x102, "mkdirat", SysMkdirat, STRACE_MKDIRAT);
+    SYSCALL(4, 0x106, "fstatat", SysFstatat, STRACE_FSTATAT);
+    SYSCALL(3, 0x107, "unlinkat", SysUnlinkat, STRACE_UNLINKAT);
+    SYSCALL(4, 0x108, "renameat", SysRenameat, STRACE_RENAMEAT);
+    SYSCALL(5, 0x109, "linkat", SysLinkat, STRACE_LINKAT);
+    SYSCALL(3, 0x10A, "symlinkat", SysSymlinkat, STRACE_SYMLINKAT);
+    SYSCALL(4, 0x10B, "readlinkat", SysReadlinkat, STRACE_READLINKAT);
+    SYSCALL(3, 0x10C, "fchmodat", SysFchmodat, STRACE_FCHMODAT);
+    SYSCALL(3, 0x10D, "faccessat", SysFaccessat, STRACE_FACCESSAT);
+    SYSCALL(4, 0x1b7, "faccessat2", SysFaccessat2, STRACE_FACCESSAT);
 
 #ifndef DISABLE_SOCKETS
-    SYSCALL3(0x029, "socket", SysSocket, STRACE_SOCKET);
-    SYSCALL3(0x02A, "connect", SysConnect, STRACE_CONNECT);
-    SYSCALL3(0x02B, "accept", SysAccept, STRACE_ACCEPT);
-    SYSCALL4(0x120, "accept4", SysAccept4, STRACE_ACCEPT4);
-    SYSCALL6(0x02C, "sendto", SysSendto, STRACE_SENDTO);
-    SYSCALL6(0x02D, "recvfrom", SysRecvfrom, STRACE_RECVFROM);
-    SYSCALL3(0x02E, "sendmsg", SysSendmsg, STRACE_3);
-    SYSCALL3(0x02F, "recvmsg", SysRecvmsg, STRACE_3);
+    SYSCALL(3, 0x029, "socket", SysSocket, STRACE_SOCKET);
+    SYSCALL(3, 0x02A, "connect", SysConnect, STRACE_CONNECT);
+    SYSCALL(3, 0x02B, "accept", SysAccept, STRACE_ACCEPT);
+    SYSCALL(4, 0x120, "accept4", SysAccept4, STRACE_ACCEPT4);
+    SYSCALL(6, 0x02C, "sendto", SysSendto, STRACE_SENDTO);
+    SYSCALL(6, 0x02D, "recvfrom", SysRecvfrom, STRACE_RECVFROM);
+    SYSCALL(3, 0x02E, "sendmsg", SysSendmsg, STRACE_3);
+    SYSCALL(3, 0x02F, "recvmsg", SysRecvmsg, STRACE_3);
 #ifndef DISABLE_NONPOSIX
-    SYSCALL4(0x133, "sendmmsg", SysSendmmsg, STRACE_4);
-    SYSCALL5(0x12B, "recvmmsg", SysRecvmmsg, STRACE_5);
+    SYSCALL(4, 0x133, "sendmmsg", SysSendmmsg, STRACE_4);
+    SYSCALL(5, 0x12B, "recvmmsg", SysRecvmmsg, STRACE_5);
 #endif
-    SYSCALL2(0x030, "shutdown", SysShutdown, STRACE_2);
-    SYSCALL3(0x031, "bind", SysBind, STRACE_BIND);
-    SYSCALL2(0x032, "listen", SysListen, STRACE_LISTEN);
-    SYSCALL3(0x033, "getsockname", SysGetsockname, STRACE_GETSOCKNAME);
-    SYSCALL3(0x034, "getpeername", SysGetpeername, STRACE_GETPEERNAME);
-    SYSCALL5(0x036, "setsockopt", SysSetsockopt, STRACE_5);
-    SYSCALL5(0x037, "getsockopt", SysGetsockopt, STRACE_5);
+    SYSCALL(2, 0x030, "shutdown", SysShutdown, STRACE_2);
+    SYSCALL(3, 0x031, "bind", SysBind, STRACE_BIND);
+    SYSCALL(2, 0x032, "listen", SysListen, STRACE_LISTEN);
+    SYSCALL(3, 0x033, "getsockname", SysGetsockname, STRACE_GETSOCKNAME);
+    SYSCALL(3, 0x034, "getpeername", SysGetpeername, STRACE_GETPEERNAME);
+    SYSCALL(5, 0x036, "setsockopt", SysSetsockopt, STRACE_5);
+    SYSCALL(5, 0x037, "getsockopt", SysGetsockopt, STRACE_5);
 #endif /* DISABLE_SOCKETS */
 
 #ifdef HAVE_FORK
-    SYSCALL0(0x039, "fork", SysFork, STRACE_FORK);
+    SYSCALL(0, 0x039, "fork", SysFork, STRACE_FORK);
 #ifndef DISABLE_NONPOSIX
-    SYSCALL0(0x03A, "vfork", SysVfork, STRACE_VFORK);
+    SYSCALL(0, 0x03A, "vfork", SysVfork, STRACE_VFORK);
 #endif
-    SYSCALL4(0x03D, "wait4", SysWait4, STRACE_WAIT4);
-    SYSCALL2(0x03E, "kill", SysKill, STRACE_KILL);
+    SYSCALL(4, 0x03D, "wait4", SysWait4, STRACE_WAIT4);
+    SYSCALL(2, 0x03E, "kill", SysKill, STRACE_KILL);
 #endif /* HAVE_FORK */
 
 #ifdef HAVE_THREADS
-    SYSCALL6(0x0CA, "futex", SysFutex, STRACE_6);
+    SYSCALL(6, 0x0CA, "futex", SysFutex, STRACE_6);
 #endif
 
 #if defined(HAVE_FORK) || defined(HAVE_THREADS)
-    SYSCALL1(0x016, "pipe", SysPipe, STRACE_PIPE);
+    SYSCALL(1, 0x016, "pipe", SysPipe, STRACE_PIPE);
 #ifndef DISABLE_NONPOSIX
-    SYSCALL2(0x125, "pipe2", SysPipe2, STRACE_PIPE2);
+    SYSCALL(2, 0x125, "pipe2", SysPipe2, STRACE_PIPE2);
 #endif
-    SYSCALL6(0x038, "clone", SysClone, STRACE_CLONE);
-    SYSCALL2(0x0C8, "tkill", SysTkill, STRACE_TKILL);
-    SYSCALL3(0x0EA, "tgkill", SysTgkill, STRACE_3);
-    SYSCALL3(0x03B, "execve", SysExecve, STRACE_3);
-    SYSCALL4(0x035, "socketpair", SysSocketpair, STRACE_SOCKETPAIR);
-    SYSCALL2(0x111, "set_robust_list", SysSetRobustList, STRACE_2);
-    SYSCALL3(0x112, "get_robust_list", SysGetRobustList, STRACE_3);
-    SYSCALL2(0x08C, "getpriority", SysGetpriority, STRACE_2);
-    SYSCALL3(0x08D, "setpriority", SysSetpriority, STRACE_3);
-    SYSCALL2(0x08E, "sched_set_param", SysSchedSetparam, STRACE_2);
-    SYSCALL2(0x08F, "sched_get_param", SysSchedGetparam, STRACE_2);
-    SYSCALL3(0x090, "sched_set_scheduler", SysSchedSetscheduler, STRACE_3);
-    SYSCALL1(0x091, "sched_get_scheduler", SysSchedGetscheduler, STRACE_1);
-    SYSCALL1(0x092, "sched_get_priority_max", SysSchedGetPriorityMax, STRACE_1);
-    SYSCALL1(0x093, "sched_get_priority_min", SysSchedGetPriorityMin, STRACE_1);
+    SYSCALL(6, 0x038, "clone", SysClone, STRACE_CLONE);
+    SYSCALL(2, 0x0C8, "tkill", SysTkill, STRACE_TKILL);
+    SYSCALL(3, 0x0EA, "tgkill", SysTgkill, STRACE_3);
+    SYSCALL(3, 0x03B, "execve", SysExecve, STRACE_3);
+    SYSCALL(4, 0x035, "socketpair", SysSocketpair, STRACE_SOCKETPAIR);
+    SYSCALL(2, 0x111, "set_robust_list", SysSetRobustList, STRACE_2);
+    SYSCALL(3, 0x112, "get_robust_list", SysGetRobustList, STRACE_3);
+    SYSCALL(2, 0x08C, "getpriority", SysGetpriority, STRACE_2);
+    SYSCALL(3, 0x08D, "setpriority", SysSetpriority, STRACE_3);
+    SYSCALL(2, 0x08E, "sched_set_param", SysSchedSetparam, STRACE_2);
+    SYSCALL(2, 0x08F, "sched_get_param", SysSchedGetparam, STRACE_2);
+    SYSCALL(3, 0x090, "sched_set_scheduler", SysSchedSetscheduler, STRACE_3);
+    SYSCALL(1, 0x091, "sched_get_scheduler", SysSchedGetscheduler, STRACE_1);
+    SYSCALL(1, 0x092, "sched_get_priority_max", SysSchedGetPriorityMax,
+            STRACE_1);
+    SYSCALL(1, 0x093, "sched_get_priority_min", SysSchedGetPriorityMin,
+            STRACE_1);
 #ifndef DISABLE_NONPOSIX
-    SYSCALL3(0x0CB, "sched_set_affinity", SysSchedSetaffinity, STRACE_3);
+    SYSCALL(3, 0x0CB, "sched_set_affinity", SysSchedSetaffinity, STRACE_3);
 #endif
 #endif /* defined(HAVE_FORK) || defined(HAVE_THREADS) */
 
 #ifndef DISABLE_NONPOSIX
-    SYSCALL4(0x028, "sendfile", SysSendfile, STRACE_4);
-    SYSCALL3(0x0CC, "sched_get_affinity", SysSchedGetaffinity, STRACE_3);
-    SYSCALL1(0x00C, "brk", SysBrk, STRACE_1);
-    SYSCALL1(0x063, "sysinfo", SysSysinfo, STRACE_1);
-    SYSCALL2(0x074, "setgroups", SysSetgroups, STRACE_2);
-    SYSCALL3(0x075, "setresuid", SysSetresuid, STRACE_SETRESUID);
-    SYSCALL3(0x076, "getresuid", SysGetresuid, STRACE_3);
-    SYSCALL3(0x077, "setresgid", SysSetresgid, STRACE_SETRESGID);
-    SYSCALL3(0x078, "getresgid", SysGetresgid, STRACE_3);
-    SYSCALL5(0x09D, "prctl", SysPrctl, STRACE_5);
+    SYSCALL(4, 0x028, "sendfile", SysSendfile, STRACE_4);
+    SYSCALL(3, 0x0CC, "sched_get_affinity", SysSchedGetaffinity, STRACE_3);
+    SYSCALL(1, 0x00C, "brk", SysBrk, STRACE_1);
+    SYSCALL(1, 0x063, "sysinfo", SysSysinfo, STRACE_1);
+    SYSCALL(2, 0x074, "setgroups", SysSetgroups, STRACE_2);
+    SYSCALL(3, 0x075, "setresuid", SysSetresuid, STRACE_SETRESUID);
+    SYSCALL(3, 0x076, "getresuid", SysGetresuid, STRACE_3);
+    SYSCALL(3, 0x077, "setresgid", SysSetresgid, STRACE_SETRESGID);
+    SYSCALL(3, 0x078, "getresgid", SysGetresgid, STRACE_3);
+    SYSCALL(5, 0x09D, "prctl", SysPrctl, STRACE_5);
 #ifndef DISABLE_OVERLAYS
-    SYSCALL1(0x0A1, "chroot", SysChroot, STRACE_CHROOT);
+    SYSCALL(1, 0x0A1, "chroot", SysChroot, STRACE_CHROOT);
 #endif
-    SYSCALL3(0x124, "dup3", SysDup3, STRACE_DUP3);
-    SYSCALL4(0x103, "mknodat", SysMknodat, STRACE_4);
-    SYSCALL4(0x127, "preadv", SysPreadv, STRACE_4);
-    SYSCALL4(0x128, "pwritev", SysPwritev, STRACE_4);
-    SYSCALL4(0x12E, "prlimit", SysPrlimit, STRACE_4);
-    SYSCALL5(0x10F, "ppoll", SysPpoll, STRACE_5);
-    SYSCALL5(0x13C, "renameat2", SysRenameat2, STRACE_RENAMEAT2);
-    SYSCALL3(0x13E, "getrandom", SysGetrandom, STRACE_3);
-    SYSCALL5(0x147, "preadv2", SysPreadv2, STRACE_5);
-    SYSCALL5(0x148, "pwritev2", SysPwritev2, STRACE_5);
-    SYSCALL3(0x1B4, "close_range", SysCloseRange, STRACE_3);
+    SYSCALL(3, 0x124, "dup3", SysDup3, STRACE_DUP3);
+    SYSCALL(4, 0x103, "mknodat", SysMknodat, STRACE_4);
+    SYSCALL(4, 0x127, "preadv", SysPreadv, STRACE_4);
+    SYSCALL(4, 0x128, "pwritev", SysPwritev, STRACE_4);
+    SYSCALL(4, 0x12E, "prlimit", SysPrlimit, STRACE_4);
+    SYSCALL(5, 0x10F, "ppoll", SysPpoll, STRACE_5);
+    SYSCALL(5, 0x13C, "renameat2", SysRenameat2, STRACE_RENAMEAT2);
+    SYSCALL(3, 0x13E, "getrandom", SysGetrandom, STRACE_3);
+    SYSCALL(5, 0x147, "preadv2", SysPreadv2, STRACE_5);
+    SYSCALL(5, 0x148, "pwritev2", SysPwritev2, STRACE_5);
+    SYSCALL(3, 0x1B4, "close_range", SysCloseRange, STRACE_3);
 #endif /* DISABLE_NONPOSIX */
 
     case 0x3C:

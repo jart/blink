@@ -61,6 +61,9 @@ static void LoadFileMapSymbols(struct System *s, struct FileMap *fm) {
           READ32(map) == READ32("\177ELF") &&
           GetElfMemorySize((Elf64_Ehdr_ *)map, st.st_size, &base) != -1) {
         DisLoadElf(s->dis, (Elf64_Ehdr_ *)map, st.st_size, fm->virt - base);
+        if (s->onsymbols) {
+          s->onsymbols(s);
+        }
       } else {
         ELF_LOGF("%s: not a valid elf image", path);
       }
