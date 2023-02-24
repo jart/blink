@@ -50,6 +50,65 @@ struct MapMaker {
   u64 flags;
 };
 
+static bool IsStackRead(long mop) {
+  switch (mop) {
+    case 0x007:  // OpPopSeg
+    case 0x00F:  // OpPopSeg
+    case 0x017:  // OpPopSeg
+    case 0x01F:  // OpPopSeg
+    case 0x058:  // OpPopZvq
+    case 0x059:  // OpPopZvq
+    case 0x05A:  // OpPopZvq
+    case 0x05B:  // OpPopZvq
+    case 0x05C:  // OpPopZvq
+    case 0x05D:  // OpPopZvq
+    case 0x05E:  // OpPopZvq
+    case 0x05F:  // OpPopZvq
+    case 0x061:  // OpPopa
+    case 0x08F:  // OpPopEvq
+    case 0x09D:  // OpPopf
+    case 0x1A1:  // OpPopSeg
+    case 0x1A9:  // OpPopSeg
+    case 0x0C2:  // OpRetIw
+    case 0x0C3:  // OpRet
+    case 0x0CA:  // OpRetf
+    case 0x0CB:  // OpRetf
+    case 0x0C9:  // OpLeave
+      return true;
+    default:
+      return false;
+  }
+}
+
+static bool IsStackWrite(long mop) {
+  switch (mop) {
+    case 0x006:  // OpPushSeg
+    case 0x00E:  // OpPushSeg
+    case 0x016:  // OpPushSeg
+    case 0x01E:  // OpPushSeg
+    case 0x050:  // OpPushZvq
+    case 0x051:  // OpPushZvq
+    case 0x052:  // OpPushZvq
+    case 0x053:  // OpPushZvq
+    case 0x054:  // OpPushZvq
+    case 0x055:  // OpPushZvq
+    case 0x056:  // OpPushZvq
+    case 0x057:  // OpPushZvq
+    case 0x060:  // OpPusha
+    case 0x068:  // OpPushImm
+    case 0x06A:  // OpPushImm
+    case 0x09C:  // OpPushf
+    case 0x1A0:  // OpPushSeg
+    case 0x1A8:  // OpPushSeg
+    case 0x0C9:  // OpLeave
+    case 0x09A:  // OpCallf
+    case 0x0E8:  // OpCallJvds
+      return true;
+    default:
+      return false;
+  }
+}
+
 static i64 MakeAddress(u16 a[4]) {
   u64 x;
   x = 0;
@@ -80,12 +139,18 @@ static void FormatEndPage(struct Machine *m, struct MapMaker *u, i64 end) {
   if (u->lines++) APPEND("\n");
   isexecuting = m->xedd && MAX(u->start, m->ip) <
                                MIN(m->ip + Oplength(m->xedd->op.rde), end);
-  isreading = MAX(u->start, m->readaddr) < MIN(m->readaddr + m->readsize, end);
+  isreading =
+      MAX(u->start, m->readaddr) < MIN(m->readaddr + m->readsize, end) ||
+      (m->xedd && IsStackRead(Mopcode(m->xedd->op.rde)) &&
+       MAX(u->start, Read64(m->sp)) < MIN(Read64(m->sp) - 8, end));
   iswriting =
-      MAX(u->start, m->writeaddr) < MIN(m->writeaddr + m->writesize, end);
+      MAX(u->start, m->writeaddr) < MIN(m->writeaddr + m->writesize, end) ||
+      (m->xedd && IsStackWrite(Mopcode(m->xedd->op.rde)) &&
+       MAX(u->start, Read64(m->sp)) < MIN(Read64(m->sp) + 8, end));
   if (g_high.enabled) {
     if (isexecuting) APPEND("\033[7m");
-    if (isreading || iswriting) APPEND("\033[1m");
+    if (isreading) APPEND("\033[1m");
+    if (iswriting) APPEND("\033[31m");
   }
   APPEND("%012" PRIx64 "-%012" PRIx64, u->start, end - 1);
   if (g_high.enabled && (isreading || iswriting || isexecuting)) {

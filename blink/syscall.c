@@ -1079,7 +1079,12 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
       if (m->system->rss < GetMaxRss(m->system)) {
         if (size / 4096 + m->system->vss < GetMaxVss(m->system)) {
           if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
-                             PAGE_RW | PAGE_U, -1, 0, 0, 0) != -1) {
+                             PAGE_RW | PAGE_U | PAGE_XD, -1, 0, 0, 0) != -1) {
+            if (!m->system->brkchanged) {
+              unassert(AddFileMap(m->system, m->system->brk,
+                                  addr - m->system->brk, "[heap]", -1));
+              m->system->brkchanged = true;
+            }
             MEM_LOGF("increased break %" PRIx64 " -> %" PRIx64, m->system->brk,
                      addr);
             m->system->brk = addr;

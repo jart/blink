@@ -215,6 +215,7 @@ struct System {
   bool exited;
   bool iscosmo;
   bool trapexit;
+  bool brkchanged;
   u16 gdt_limit;
   u16 idt_limit;
   int pid;

@@ -1140,7 +1140,7 @@ void SetupDraw(void) {
     }
   } else {
     c2y[0] = breakpoints.i || watchpoints.i ? a * .7 : 0;
-    c2y[1] = yn / 2;
+    c2y[1] = yn / 20 * 12;
     c2y[2] = yn;
   }
 
@@ -3517,7 +3517,7 @@ static void Exec(void) {
       LoadInstruction(m, GetPc(m));
       if (verbose) LogInstruction();
       Execute();
-      if (m->signals) {
+      if (m->signals & ~m->sigmask) {
         if ((sig = ConsumeSignal(m, 0, 0))) {
           exit(128 + sig);
         }
@@ -3545,7 +3545,7 @@ static void Exec(void) {
         }
         if (verbose) LogInstruction();
         Execute();
-        if (m->signals) {
+        if (m->signals & ~m->sigmask) {
           if ((sig = ConsumeSignal(m, 0, 0))) {
             exit(128 + sig);
           }
@@ -3699,7 +3699,7 @@ static void Tui(void) {
           UpdateXmmType(m->xedd->op.rde, &xmmtype);
           if (verbose) LogInstruction();
           Execute();
-          if (m->signals) {
+          if (m->signals & ~m->sigmask) {
             if ((sig = ConsumeSignal(m, 0, 0))) {
               exit(128 + sig);
             }
