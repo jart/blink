@@ -140,8 +140,8 @@ static void StringOp(P, int op) {
   stop = false;
   n = 1 << RegLog2(rde);
   sgn = GetFlag(m->flags, FLAGS_DF) ? -1 : 1;
-  FENCE;
   IGNORE_RACES_START();
+  atomic_thread_fence(memory_order_acquire);
   do {
     if (Rep(rde) && !ReadCx(A)) break;
     switch (op) {
@@ -198,36 +198,52 @@ static void StringOp(P, int op) {
       break;
     }
   } while (!stop);
+  atomic_thread_fence(memory_order_release);
   IGNORE_RACES_END();
-  FENCE;
 }
 
 static void RepMovsbEnhanced(P) {
   u8 *direal, *sireal;
   u64 diactual, siactual, cx;
-  unsigned diremain, siremain, i, n;
+  long diremain, siremain, i, n;
   if ((cx = ReadCx(A))) {
     diactual = AddressDi(A);
     siactual = AddressSi(A);
     if (diactual != siactual) {
-      SetWriteAddr(m, diactual, cx);
-      SetReadAddr(m, siactual, cx);
-      FENCE;
+      if (!GetFlag(m->flags, FLAGS_DF)) {
+        SetWriteAddr(m, diactual, cx);
+        SetReadAddr(m, siactual, cx);
+      } else {
+        SetWriteAddr(m, diactual - cx + 1, cx);
+        SetReadAddr(m, siactual - cx + 1, cx);
+      }
       IGNORE_RACES_START();
+      atomic_thread_fence(memory_order_acquire);
       do {
         direal = ResolveAddress(m, diactual);
         sireal = ResolveAddress(m, siactual);
-        diremain = 4096 - (diactual & 4095);
-        siremain = 4096 - (siactual & 4095);
-        n = MIN(cx, MIN(diremain, siremain));
-        for (i = 0; i < n; ++i) {
-          direal[i] = sireal[i];
+        if (!GetFlag(m->flags, FLAGS_DF)) {
+          diremain = 4096 - (diactual & 4095);
+          siremain = 4096 - (siactual & 4095);
+          n = MIN(cx, MIN(diremain, siremain));
+          for (i = 0; i < n; ++i) {
+            direal[i] = sireal[i];
+          }
+          diactual = AddDi(A, n);
+          siactual = AddSi(A, n);
+        } else {
+          diremain = (diactual & 4095) + 1;
+          siremain = (siactual & 4095) + 1;
+          n = MIN(cx, MIN(diremain, siremain));
+          for (i = 0; i < n; ++i) {
+            direal[-i] = sireal[-i];
+          }
+          diactual = AddDi(A, -n);
+          siactual = AddSi(A, -n);
         }
-        diactual = AddDi(A, n);
-        siactual = AddSi(A, n);
       } while ((cx = SubtractCx(A, n)));
+      atomic_thread_fence(memory_order_release);
       IGNORE_RACES_END();
-      FENCE;
     }
   }
 }
@@ -247,8 +263,8 @@ static void RepStosbEnhanced(P) {
       memset(direal, m->al, n);
       diactual = AddDi(A, n);
     } while ((cx = SubtractCx(A, n)));
+    atomic_thread_fence(memory_order_release);
     IGNORE_RACES_END();
-    FENCE;
   }
 }
 
@@ -281,7 +297,7 @@ void OpOuts(P) {
 }
 
 void OpMovsb(P) {
-  if (Rep(rde) && !GetFlag(m->flags, FLAGS_DF)) {
+  if (Rep(rde)) {
     RepMovsbEnhanced(A);
   } else {
     OpMovs(A);

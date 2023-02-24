@@ -31,6 +31,7 @@ void FreeLines(struct Lines *lines) {
   for (i = 0; i < lines->n; ++i) {
     free(lines->p[i]);
   }
+  free(lines->p);
   free(lines);
 }
 

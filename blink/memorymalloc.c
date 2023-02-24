@@ -485,6 +485,8 @@ struct FileMap *AddFileMap(struct System *s, i64 virt, i64 size,
       fm->pages = pages;
       dll_init(&fm->elem);
       dll_make_first(&s->filemaps, &fm->elem);
+      ELF_LOGF("AddFileMap(%#" PRIx64 ", %#" PRIx64 ", %s, %#" PRIx64 ")", virt,
+               size, path, offset);
       return fm;
     }
   }

@@ -14,12 +14,6 @@
 
 #define FUTEX_CONTAINER(e) DLL_CONTAINER(struct Futex, elem, e)
 
-#if !defined(__x86_64__) && !defined(__i386__)
-#define FENCE atomic_thread_fence(memory_order_seq_cst)
-#else
-#define FENCE (void)0
-#endif
-
 struct Futex {
   i64 addr;
   int waiters;

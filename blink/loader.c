@@ -77,6 +77,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
            vaddr, vaddr + memsz, path);
 
   ELF_LOGF("PROGRAM HEADER");
+  ELF_LOGF("  path = %s", path);
   ELF_LOGF("  aslr = %" PRIx64, aslr);
   ELF_LOGF("  flags = %s%s%s",          //
            (flags & PF_R_ ? "R" : ""),  //
@@ -140,6 +141,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
         ERRF("failed to allocate program header skew");
         exit(127);
       }
+      AddFileMap(s, start, pagesize, path, offset);
       start += pagesize;
     }
     ELF_LOGF("copy %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64, vaddr,
@@ -184,6 +186,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
       }
       // copy the tail skew.
       if (filesz) {
+        AddFileMap(s, start, filesz, path, offset);
         ELF_LOGF("copy %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64,
                  start, start + filesz, offset, offset + filesz);
         unassert(!CopyToUser(m, start, (u8 *)image + offset, filesz));

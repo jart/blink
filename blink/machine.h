@@ -285,7 +285,7 @@ struct Machine {                           //
   _Atomic(bool) attention;                 // signals main interpreter loop
   _Atomic(bool) invalidated;               // the tlb must be flushed
   u32 flags;                               // x86 eflags register
-  i64 stashaddr;                           // page overlap buffer
+  i64 stashaddr;                           // it's our page overlap buffer
   union {                                  // GENERAL REGISTER FILE
     u64 align8_;                           //
     u8 beg[128];                           //
