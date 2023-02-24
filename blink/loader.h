@@ -5,7 +5,8 @@
 
 bool CanEmulateExecutable(struct Machine *, char **, char ***);
 void LoadProgram(struct Machine *, char *, char *, char **, char **);
-void LoadDebugSymbols(struct Elf *);
+void LoadDebugSymbols(struct System *);
+void LoadFileSymbols(struct System *, const char *, i64);
 bool IsSupportedExecutable(const char *, void *, size_t);
 
 #endif /* BLINK_LOADER_H_ */

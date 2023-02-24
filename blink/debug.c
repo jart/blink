@@ -192,8 +192,10 @@ const char *GetBacktrace(struct Machine *m) {
   BEGIN_NO_PAGE_FAULTS;
 
 #ifndef DISABLE_BACKTRACE
-  LoadDebugSymbols(&m->system->elf);
-  DisLoadElf(&dis, &m->system->elf);
+  if (!m->system->dis) {
+    m->system->dis = &dis;
+    LoadDebugSymbols(m->system);
+  }
 #endif
 
   APPEND(" PC %" PRIx64 " %s\n\t"
@@ -232,11 +234,11 @@ const char *GetBacktrace(struct Machine *m) {
   sp = Get64(m->sp);
   for (i = 0; i < MAX_BACKTRACE_LINES;) {
     if (i) APPEND("\n\t");
-    sym = DisFindSym(&dis, rp);
+    sym = DisFindSym(m->system->dis, rp);
     APPEND("%012" PRIx64 " %012" PRIx64 " %s", m->ss.base + bp, rp,
-           sym != -1 ? dis.syms.stab + dis.syms.p[sym].name : "UNKNOWN");
-    if (sym != -1 && rp != dis.syms.p[sym].addr) {
-      APPEND("+%#" PRIx64 "", rp - dis.syms.p[sym].addr);
+           sym != -1 ? m->system->dis->syms.p[sym].name : "UNKNOWN");
+    if (sym != -1 && rp != m->system->dis->syms.p[sym].addr) {
+      APPEND("+%#" PRIx64 "", rp - m->system->dis->syms.p[sym].addr);
     }
     if (!bp) break;
     if (bp < sp) {
@@ -257,7 +259,10 @@ const char *GetBacktrace(struct Machine *m) {
     bp = ReadWord(m, r + 0);
     rp = ReadWord(m, r + 8);
   }
-  DisFree(&dis);
+  if (m->system->dis == &dis) {
+    DisFree(&dis);
+    m->system->dis = 0;
+  }
 #endif
 
   END_NO_PAGE_FAULTS;

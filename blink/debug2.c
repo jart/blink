@@ -24,7 +24,10 @@
 
 #include "blink/assert.h"
 #include "blink/builtin.h"
+#include "blink/dis.h"
+#include "blink/dll.h"
 #include "blink/elf.h"
+#include "blink/endian.h"
 #include "blink/fspath.h"
 #include "blink/loader.h"
 #include "blink/machine.h"
@@ -36,29 +39,46 @@
 #define OverlaysOpen openat
 #endif
 
-void LoadDebugSymbols(struct Elf *elf) {
-  int fd, n;
+#define READ32(p) Read32((const u8 *)(p))
+
+static void LoadFileMapSymbols(struct System *s, struct FileMap *fm) {
+  int fd;
+  i64 base;
+  void *map;
   char *path;
-  void *elfmap;
+  int oflags;
   struct stat st;
-  bool ok = false;
-  char buf[PATH_MAX];
-  if (elf->ehdr && GetElfSymbolTable(elf->ehdr, elf->size, &n) && n) return;
-  unassert(elf->prog);
-  snprintf(buf, sizeof(buf), "%s.dbg", elf->prog);
-  path = JoinPath(GetStartDir(), buf);
-  if ((fd = OverlaysOpen(AT_FDCWD, path, O_RDONLY, 0)) != -1) {
+  char pathdbg[PATH_MAX];
+  if (fm->offset) return;
+  oflags = O_RDONLY | O_CLOEXEC | O_NOCTTY;
+  snprintf(pathdbg, sizeof(pathdbg), "%s.dbg", fm->path);
+  if ((fd = OverlaysOpen(AT_FDCWD, (path = pathdbg), oflags, 0)) != -1 ||
+      (fd = OverlaysOpen(AT_FDCWD, (path = fm->path), oflags, 0)) != -1) {
     if (fstat(fd, &st) != -1 &&
-        (elfmap = Mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0,
-                       "debug")) != MAP_FAILED) {
-      elf->ehdr = (Elf64_Ehdr_ *)elfmap;
-      elf->size = st.st_size;
-      ok = true;
+        (map = Mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0, "debug")) !=
+            MAP_FAILED) {
+      if (st.st_size >= sizeof(Elf64_Ehdr_) &&
+          READ32(map) == READ32("\177ELF") &&
+          GetElfMemorySize((Elf64_Ehdr_ *)map, st.st_size, &base) != -1) {
+        DisLoadElf(s->dis, (Elf64_Ehdr_ *)map, st.st_size, fm->virt - base);
+      } else {
+        ELF_LOGF("%s: not a valid elf image", path);
+      }
+      unassert(!munmap(map, st.st_size));
+    } else {
+      ELF_LOGF("%s: mmap failed: %s", path, DescribeHostErrno(errno));
     }
-    close(fd);
+    unassert(!close(fd));
+  } else {
+    ELF_LOGF("%s: open failed: %s", path, DescribeHostErrno(errno));
   }
-  if (!ok) {
-    LOGF("LoadDebugSymbols(%s) failed: %s", path, strerror(errno));
+}
+
+void LoadDebugSymbols(struct System *s) {
+  struct Dll *e;
+  unassert(s->dis);
+  s->onfilemap = LoadFileMapSymbols;
+  for (e = dll_first(s->filemaps); e; e = dll_next(s->filemaps, e)) {
+    LoadFileMapSymbols(s, FILEMAP_CONTAINER(e));
   }
-  free(path);
 }

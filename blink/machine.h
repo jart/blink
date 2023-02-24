@@ -114,6 +114,7 @@ static inline i64 ToGuest(void *r) {
   return v;
 }
 
+struct Dis;
 struct Machine;
 typedef void (*nexgen32e_f)(P);
 
@@ -183,10 +184,7 @@ struct Elf {
   char *prog;
   char *execfn;
   char *interpreter;
-  Elf64_Ehdr_ *ehdr;
   long size;
-  char *map;
-  long mapsize;
   bool debugonce;
   i64 base;
   i64 aslr;
@@ -218,6 +216,7 @@ struct System {
   bool brkchanged;
   u16 gdt_limit;
   u16 idt_limit;
+  u32 efer;
   int pid;
   u8 *real;
   u64 gdt_base;
@@ -232,6 +231,7 @@ struct System {
   i64 automap;
   i64 memchurn;
   i64 codestart;
+  struct Dis *dis;
   struct Dll *filemaps;
   _Atomic(bool) killer;
   unsigned long codesize;
@@ -253,6 +253,7 @@ struct System {
   pthread_mutex_t sig_lock;
   pthread_mutex_t mmap_lock;
 #endif
+  void (*onfilemap)(struct System *, struct FileMap *);
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
   int (*exec)(char *, char *, char **, char **);
@@ -390,7 +391,6 @@ void FreeSystem(struct System *);
 _Noreturn void Actor(struct Machine *);
 void SignalActor(struct Machine *);
 void SetMachineMode(struct Machine *, int);
-void ChangeMachineMode(struct Machine *, int);
 struct Machine *NewMachine(struct System *, struct Machine *);
 bool IsOrphan(struct Machine *);
 void Jitter(P, const char *, ...);
@@ -631,6 +631,8 @@ void OpDecZv(P);
 void OpLes(P);
 void OpLds(P);
 void OpJmpf(P);
+void OpRdmsr(P);
+void OpWrmsr(P);
 void OpInAlImm(P);
 void OpInAxImm(P);
 void OpInAlDx(P);
@@ -700,7 +702,7 @@ int GetInstruction(struct Machine *, i64, struct XedDecodedInst *);
 
 struct FileMap *GetFileMap(struct System *, i64);
 const char *GetDirFildesPath(struct System *, int);
-bool AddFileMap(struct System *, i64, i64, const char *, u64);
+struct FileMap *AddFileMap(struct System *, i64, i64, const char *, u64);
 
 void FlushCod(struct JitBlock *);
 #if LOG_COD

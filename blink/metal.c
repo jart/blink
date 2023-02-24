@@ -20,6 +20,7 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
+#include "blink/msr.h"
 #include "blink/rde.h"
 #include "blink/x86.h"
 
@@ -50,6 +51,17 @@ static relegated bool IsNullSelector(u16 sel) {
   return (sel & -4u) == 0;
 }
 
+static relegated void ChangeMachineMode(struct Machine *m, int mode) {
+  if (mode == m->mode) return;
+  ResetInstructionCache(m);
+  SetMachineMode(m, mode);
+#ifdef HAVE_JIT
+  if (mode == XED_MODE_LONG && FLAG_wantjit) {
+    EnableJit(&m->system->jit);
+  }
+#endif
+}
+
 static relegated void SetSegment(P, unsigned sr, u16 sel, bool jumping) {
   u64 descriptor;
   if (sr == 1 && !jumping) OpUdImpl(m);
@@ -59,7 +71,9 @@ static relegated void SetSegment(P, unsigned sr, u16 sel, bool jumping) {
   } else if (GetDescriptor(m, sel, &descriptor) != -1) {
     m->seg[sr].sel = sel;
     m->seg[sr].base = GetDescriptorBase(descriptor);
-    if (sr == SREG_CS) ChangeMachineMode(m, GetDescriptorMode(descriptor));
+    if (sr == SREG_CS) {
+      ChangeMachineMode(m, GetDescriptorMode(descriptor));
+    }
   } else if (IsNullSelector(sel)) {
     switch (sr) {
       case SREG_CS:
@@ -189,6 +203,42 @@ relegated void OpLes(P) {
 
 relegated void OpLds(P) {
   LoadFarPointer(A, 3);
+}
+
+relegated void OpWrmsr(P) {
+  switch (Get32(m->cx)) {
+    case MSR_IA32_EFER:
+      m->system->efer = Get32(m->ax);
+      break;
+    case MSR_IA32_FS_BASE:
+      m->fs.base = (u64)Read32(m->dx) << 32 | Read32(m->ax);
+      break;
+    case MSR_IA32_GS_BASE:
+      m->gs.base = (u64)Read32(m->dx) << 32 | Read32(m->ax);
+      break;
+    default:
+      LOGF("unsupported msr %#x", Get32(m->cx));
+      break;
+  }
+}
+
+relegated void OpRdmsr(P) {
+  switch (Get32(m->cx)) {
+    case MSR_IA32_EFER:
+      Put32(m->ax, m->system->efer);
+      break;
+    case MSR_IA32_FS_BASE:
+      Put32(m->dx, m->fs.base >> 32);
+      Put32(m->ax, m->fs.base);
+      break;
+    case MSR_IA32_GS_BASE:
+      Put32(m->dx, m->gs.base >> 32);
+      Put32(m->ax, m->gs.base);
+      break;
+    default:
+      LOGF("unsupported msr %#x", Get32(m->cx));
+      break;
+  }
 }
 
 #endif /* DISABLE_METAL */

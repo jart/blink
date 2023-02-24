@@ -381,14 +381,6 @@ int ShutdownJit(void) {
 }
 
 /**
- * Disables Just-In-Time threader.
- */
-int DisableJit(struct Jit *jit) {
-  atomic_store_explicit(&jit->disabled, true, memory_order_relaxed);
-  return 0;
-}
-
-/**
  * Fixes the memory protection for existing Just-In-Time code blocks.
  */
 int FixJitProtection(struct Jit *jit) {

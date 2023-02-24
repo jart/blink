@@ -140,6 +140,7 @@ void OpCpuid(P) {
       dx |= 1 << 8;     // cmpxchg8b
       dx |= 1 << 11;    // syscall
       dx |= 1 << 15;    // cmov
+      dx |= 1 << 20;    // nx
       dx |= 1 << 23;    // mmx
       dx |= 1 << 24;    // fxsave
       dx |= 1 << 27;    // rdtscp

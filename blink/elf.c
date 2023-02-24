@@ -17,14 +17,56 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <inttypes.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "blink/builtin.h"
 #include "blink/elf.h"
 #include "blink/endian.h"
 #include "blink/log.h"
+#include "blink/macros.h"
 #include "blink/util.h"
+
+static dontdiscard bool Add(i64 x, i64 y, i64 *z) {
+  u64 a, b, c;
+  a = x, b = y, c = a + b;
+  if (((c ^ a) & (c ^ b)) >> 63) return true;
+  return *z = c, false;
+}
+
+static dontdiscard bool Sub(i64 x, i64 y, i64 *z) {
+  u64 a, b, c;
+  a = x, b = y, c = a - b;
+  if (((c ^ a) & (a ^ b)) >> 63) return true;
+  return *z = c, false;
+}
+
+i64 GetElfMemorySize(const Elf64_Ehdr_ *ehdr, size_t size, i64 *base) {
+  size_t off;
+  unsigned i;
+  i64 x, y, lo, hi, res;
+  const Elf64_Phdr_ *phdr;
+  lo = INT64_MAX;
+  hi = INT64_MIN;
+  if (Read64(ehdr->phoff) < size) {
+    for (i = 0; i < Read16(ehdr->phnum); ++i) {
+      off = Read64(ehdr->phoff) + Read16(ehdr->phentsize) * i;
+      if (off + Read16(ehdr->phentsize) > size) return -1;
+      phdr = (const Elf64_Phdr_ *)((const u8 *)ehdr + off);
+      if (Read32(phdr->type) == PT_LOAD_) {
+        x = Read64(phdr->vaddr);
+        if (Add(x, Read64(phdr->memsz), &y)) return -1;
+        lo = MIN(x, lo);
+        hi = MAX(y, hi);
+      }
+    }
+  }
+  if (Sub(hi, lo, &res)) return -1;
+  *base = lo;
+  return res;
+}
 
 void CheckElfAddress(const Elf64_Ehdr_ *elf, size_t mapsize, intptr_t addr,
                      size_t addrsize) {

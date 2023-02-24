@@ -25,8 +25,6 @@
 #include "blink/log.h"
 #include "blink/util.h"
 
-bool g_disisprog_disable;
-
 static int DisSymCompare(const void *p1, const void *p2) {
   const struct DisSym *a = (const struct DisSym *)p1;
   const struct DisSym *b = (const struct DisSym *)p2;
@@ -45,47 +43,41 @@ static int DisSymCompare(const void *p1, const void *p2) {
   return 0;
 }
 
-static void DisLoadElfLoads(struct Dis *d, struct Elf *elf) {
-  long i, j, n;
+static void DisLoadElfLoads(struct Dis *d, Elf64_Ehdr_ *ehdr, size_t esize,
+                            i64 eskew) {
+  long i;
   Elf64_Phdr_ *phdr;
-  j = 0;
-  n = Read16(elf->ehdr->phnum);
-  if (d->loads.n < n) {
-    d->loads.n = n;
-    d->loads.p =
-        (struct DisLoad *)realloc(d->loads.p, d->loads.n * sizeof(*d->loads.p));
-  }
-  for (i = 0; i < n; ++i) {
-    phdr = GetElfSegmentHeaderAddress(elf->ehdr, elf->size, i);
+  for (i = 0; i < Read16(ehdr->phnum); ++i) {
+    phdr = GetElfSegmentHeaderAddress(ehdr, esize, i);
     if (Read32(phdr->type) != PT_LOAD_) continue;
-    d->loads.p[j].addr = Read64(phdr->vaddr) + elf->aslr;
-    d->loads.p[j].size = Read64(phdr->memsz);
-    d->loads.p[j].istext = (Read32(phdr->flags) & PF_X_) == PF_X_;
-    ++j;
+    if (d->loads.i == d->loads.n) {
+      d->loads.n += 2;
+      d->loads.n += d->loads.n >> 1;
+      unassert(d->loads.p = (struct DisLoad *)realloc(
+                   d->loads.p, d->loads.n * sizeof(*d->loads.p)));
+    }
+    d->loads.p[d->loads.i].addr = Read64(phdr->vaddr) + eskew;
+    d->loads.p[d->loads.i].size = Read64(phdr->memsz);
+    d->loads.p[d->loads.i].istext = (Read32(phdr->flags) & PF_X_) == PF_X_;
+    ++d->loads.i;
   }
-  d->loads.i = j;
 }
 
-static void DisLoadElfSyms(struct Dis *d, struct Elf *elf) {
+static void DisLoadElfSyms(struct Dis *d, Elf64_Ehdr_ *ehdr, size_t esize,
+                           i64 eskew) {
   int n;
-  long i, j;
+  long i;
+  char *stab;
   i64 stablen;
   const Elf64_Sym_ *st;
   bool isabs, isweak, islocal, isprotected, isfunc, isobject;
-  ELF_LOGF("DisLoadElfSyms %s", elf->prog);
-  j = 0;
-  if ((d->syms.stab = GetElfStringTable(elf->ehdr, elf->size))) {
-    if ((st = GetElfSymbolTable(elf->ehdr, elf->size, &n))) {
-      stablen = (intptr_t)elf->ehdr + elf->size - (intptr_t)d->syms.stab;
-      if (d->syms.n < n) {
-        d->syms.n = n;
-        d->syms.p =
-            (struct DisSym *)realloc(d->syms.p, d->syms.n * sizeof(*d->syms.p));
-      }
+  if ((stab = GetElfStringTable(ehdr, esize))) {
+    if ((st = GetElfSymbolTable(ehdr, esize, &n))) {
+      stablen = (intptr_t)ehdr + esize - (intptr_t)stab;
       for (i = 0; i < n; ++i) {
         if (ELF64_ST_TYPE_(st[i].info) == STT_SECTION_ ||
             ELF64_ST_TYPE_(st[i].info) == STT_FILE_ || !Read32(st[i].name) ||
-            startswith(d->syms.stab + Read32(st[i].name), "v_") ||
+            startswith(stab + Read32(st[i].name), "v_") ||
             !(0 <= Read32(st[i].name) && Read32(st[i].name) < stablen) ||
             !Read64(st[i].value) ||
             !(-0x800000000000 <= (i64)Read64(st[i].value) &&
@@ -98,18 +90,24 @@ static void DisLoadElfSyms(struct Dis *d, struct Elf *elf) {
         isprotected = st[i].other == STV_PROTECTED_;
         isfunc = ELF64_ST_TYPE_(st[i].info) == STT_FUNC_;
         isobject = ELF64_ST_TYPE_(st[i].info) == STT_OBJECT_;
-        d->syms.p[j].unique = i;
-        d->syms.p[j].size = Read64(st[i].size);
-        d->syms.p[j].name = Read32(st[i].name);
-        d->syms.p[j].addr = Read64(st[i].value) + elf->aslr;
-        ELF_LOGF("SYMBOL %" PRIx64 " %" PRIx64 " %s", elf->aslr,
-                 d->syms.p[j].addr, d->syms.stab + d->syms.p[j].name);
-        d->syms.p[j].rank =
+        if (d->syms.i == d->syms.n) {
+          d->syms.n += 2;
+          d->syms.n += d->syms.n >> 1;
+          unassert(d->syms.p = (struct DisSym *)realloc(
+                       d->syms.p, d->syms.n * sizeof(*d->syms.p)));
+        }
+        d->syms.p[d->syms.i].unique = i;
+        d->syms.p[d->syms.i].size = Read64(st[i].size);
+        unassert(d->syms.p[d->syms.i].name = strdup(stab + Read32(st[i].name)));
+        d->syms.p[d->syms.i].addr = Read64(st[i].value) + eskew;
+        ELF_LOGF("SYMBOL %" PRIx64 " %" PRIx64 " %s", eskew,
+                 d->syms.p[d->syms.i].addr, d->syms.p[d->syms.i].name);
+        d->syms.p[d->syms.i].rank =
             -islocal + -isweak + -isabs + isprotected + isobject + isfunc;
-        d->syms.p[j].iscode =
+        d->syms.p[d->syms.i].iscode =
             DisIsText(d, Read64(st[i].value)) ? !isobject : isfunc;
-        d->syms.p[j].isabs = isabs;
-        ++j;
+        d->syms.p[d->syms.i].isabs = isabs;
+        ++d->syms.i;
       }
     } else {
       LOGF("could not load elf symbol table");
@@ -117,23 +115,14 @@ static void DisLoadElfSyms(struct Dis *d, struct Elf *elf) {
   } else {
     LOGF("could not load elf string table");
   }
-  d->syms.i = j;
 }
 
 static void DisSortSyms(struct Dis *d) {
-  long i;
   qsort(d->syms.p, d->syms.i, sizeof(struct DisSym), DisSymCompare);
-  for (i = 0; i < d->syms.i; ++i) {
-    if (!strcmp("_end", d->syms.stab + d->syms.p[i].name)) {
-      d->syms.i = i;
-      break;
-    }
-  }
 }
 
 bool DisIsProg(struct Dis *d, i64 addr) {
   long i;
-  if (g_disisprog_disable) return true;
   for (i = 0; i < d->loads.i; ++i) {
     if (addr >= d->loads.p[i].addr &&
         addr < d->loads.p[i].addr + d->loads.p[i].size) {
@@ -185,17 +174,15 @@ long DisFindSym(struct Dis *d, i64 addr) {
 long DisFindSymByName(struct Dis *d, const char *s) {
   long i;
   for (i = 0; i < d->syms.i; ++i) {
-    if (strcmp(s, d->syms.stab + d->syms.p[i].name) == 0) {
+    if (strcmp(s, d->syms.p[i].name) == 0) {
       return i;
     }
   }
   return -1;
 }
 
-void DisLoadElf(struct Dis *d, struct Elf *elf) {
-  ELF_LOGF("DisLoadElf %s", elf->prog);
-  if (!elf || !elf->ehdr) return;
-  DisLoadElfLoads(d, elf);
-  DisLoadElfSyms(d, elf);
+void DisLoadElf(struct Dis *d, Elf64_Ehdr_ *ehdr, size_t esize, i64 eskew) {
+  DisLoadElfLoads(d, ehdr, esize, eskew);
+  DisLoadElfSyms(d, ehdr, esize, eskew);
   DisSortSyms(d);
 }

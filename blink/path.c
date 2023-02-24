@@ -154,7 +154,8 @@ long GetPrologueSize(void) {
 
 void(SetupCod)(struct Machine *m) {
 #if LOG_COD
-  LoadDebugSymbols(&m->system->elf);
+  m->system->dis = &g_dis;
+  LoadDebugSymbols(m->system);
   DisLoadElf(&g_dis, &m->system->elf);
   g_cod = OverlaysOpen(AT_FDCWD_LINUX, "/tmp/blink.s",
                        O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);

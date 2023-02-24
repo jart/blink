@@ -256,6 +256,7 @@ void KillOtherThreads(struct System *s) {
     FreeMachine(g_machine);
     pthread_exit(0);
   }
+StartOver:
   unassert(s == g_machine->system);
   unassert(!dll_is_empty(s->machines));
   for (t = 0; !IsOrphan(g_machine); ++t) {
@@ -271,6 +272,9 @@ void KillOtherThreads(struct System *s) {
         } else {
           LOGF("kill9'd thread after 10 tries");
           pthread_kill(m->thread, SIGKILL);
+          dll_remove(&s->machines, e);
+          UNLOCK(&s->machines_lock);
+          goto StartOver;
         }
       }
     }
@@ -309,7 +313,6 @@ void FreeSystem(struct System *s) {
   unassert(!pthread_mutex_destroy(&s->exec_lock));
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
   unassert(!pthread_mutex_destroy(&s->sig_lock));
-  munmap(s->elf.map, s->elf.mapsize);
   free(s->elf.interpreter);
   DestroyFds(&s->fds);
   free(s->elf.execfn);
@@ -337,6 +340,7 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
     memset(&m->path, 0, sizeof(m->path));
     memset(&m->freelist, 0, sizeof(m->freelist));
     ResetInstructionCache(m);
+    m->nofault = false;
     m->signals = 0;
   } else {
     memset(m, 0, sizeof(*m));
@@ -463,11 +467,11 @@ void InvalidateSystem(struct System *s, bool tlb, bool icache) {
 #endif
 }
 
-bool AddFileMap(struct System *s, i64 virt, i64 size, const char *path,
-                u64 offset) {
+struct FileMap *AddFileMap(struct System *s, i64 virt, i64 size,
+                           const char *path, u64 offset) {
   struct FileMap *fm;
   size_t pages, words;
-  if (!path) return false;
+  if (!path) return 0;
   if ((fm = (struct FileMap *)calloc(1, sizeof(struct FileMap)))) {
     fm->virt = virt;
     fm->size = size;
@@ -481,21 +485,26 @@ bool AddFileMap(struct System *s, i64 virt, i64 size, const char *path,
       fm->pages = pages;
       dll_init(&fm->elem);
       dll_make_first(&s->filemaps, &fm->elem);
-      return true;
+      return fm;
     }
   }
   FreeFileMap(fm);
-  return false;
+  return 0;
 }
 
-static bool AddFileMapViaMap(struct System *s, i64 virt, i64 size, int fildes,
+static void AddFileMapViaMap(struct System *s, i64 virt, i64 size, int fildes,
                              u64 offset) {
   char *path;
   struct Fd *fd;
+  struct FileMap *fm;
   LOCK(&s->fds.lock);
-  path = (fd = GetFd(&s->fds, fildes)) ? fd->path : 0;
+  path = (fd = GetFd(&s->fds, fildes)) ? strdup(fd->path) : 0;
   UNLOCK(&s->fds.lock);
-  return AddFileMap(s, virt, size, path, offset);
+  fm = AddFileMap(s, virt, size, path, offset);
+  free(path);
+  if (fm && s->dis && s->onfilemap) {
+    s->onfilemap(s, fm);
+  }
 }
 
 struct FileMap *GetFileMap(struct System *s, i64 virt) {

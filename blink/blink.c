@@ -217,6 +217,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   }
   // meta interpreter loop
   for (;;) {
+    m->nofault = false;
     if (!(rc = sigsetjmp(m->onhalt, 1))) {
       m->canhalt = true;
       Actor(m);

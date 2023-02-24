@@ -34,10 +34,19 @@ void DisFreeOps(struct DisOps *ops) {
   memset(ops, 0, sizeof(*ops));
 }
 
+void DisFreeSyms(struct DisSyms *syms) {
+  long i;
+  for (i = 0; i < syms->i; ++i) {
+    free(syms->p[i].name);
+  }
+  free(syms->p);
+  memset(syms, 0, sizeof(*syms));
+}
+
 void DisFree(struct Dis *d) {
   DisFreeOps(&d->ops);
+  DisFreeSyms(&d->syms);
   free(d->edges.p);
   free(d->loads.p);
-  free(d->syms.p);
   memset(d, 0, sizeof(*d));
 }

@@ -5171,7 +5171,7 @@ void OpSyscall(P) {
   size_t mark;
   u64 ax, di, si, dx, r0, r8, r9;
   STATISTIC(++syscalls);
-  if (m->system->redraw) {
+  if (m->system->redraw && m->tid == m->system->pid) {
     m->system->redraw(true);
   }
   ax = Get64(m->ax);

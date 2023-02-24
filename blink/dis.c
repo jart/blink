@@ -219,7 +219,7 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
       op.size = 0;
       op.active = true;
       d->addr = addr;
-      DisLabel(d, d->buf, d->syms.stab + d->syms.p[symbol].name);
+      DisLabel(d, d->buf, d->syms.p[symbol].name);
       if (!(op.s = strdup(d->buf))) return -1;
       if (d->ops.i++ == d->ops.n) {
         d->ops.n = d->ops.i + (d->ops.i >> 1);

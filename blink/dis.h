@@ -34,9 +34,9 @@ struct DisLoads {
 
 struct DisSym {
   i64 addr;
+  char *name;
   int unique;
   int size;
-  int name;
   char rank;
   bool iscode;
   bool isabs;
@@ -45,7 +45,6 @@ struct DisSym {
 struct DisSyms {
   int i, n;
   struct DisSym *p;
-  const char *stab;
 };
 
 struct DisEdge {
@@ -71,14 +70,12 @@ struct Dis {
   char buf[1024];
 };
 
-extern bool g_disisprog_disable;
-
 long Dis(struct Dis *, struct Machine *, i64, i64, int);
 long DisFind(struct Dis *, i64);
 void DisFree(struct Dis *);
 void DisFreeOp(struct DisOp *);
 void DisFreeOps(struct DisOps *);
-void DisLoadElf(struct Dis *, struct Elf *);
+void DisLoadElf(struct Dis *, Elf64_Ehdr_ *, size_t, i64);
 long DisFindSym(struct Dis *, i64);
 long DisFindSymByName(struct Dis *, const char *);
 bool DisIsText(struct Dis *, i64);

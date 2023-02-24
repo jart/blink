@@ -329,7 +329,6 @@ static bool react;
 static bool tuimode;
 static bool alarmed;
 static bool natural;
-static bool wantjit;
 static bool mousemode;
 static bool wantmetal;
 static bool showhighsse;
@@ -618,7 +617,7 @@ static void DrawProfile(struct Panel *p) {
   for (i = 0; i < profsyms.i; ++i) {
     snprintf(line, sizeof(line), "%7.3f%% %s",
              (double)profsyms.p[i].hits / profsyms.toto * 100,
-             dis->syms.stab + dis->syms.p[profsyms.p[i].sym].name);
+             dis->syms.p[profsyms.p[i].sym].name);
     AppendPanel(p, i - framesstart, line);
   }
 }
@@ -888,11 +887,6 @@ static void BreakAtNextInstruction(void) {
   PushBreakpoint(&breakpoints, &b);
 }
 
-static void LoadSyms(void) {
-  LoadDebugSymbols(&m->system->elf);
-  DisLoadElf(dis, &m->system->elf);
-}
-
 static int DrainInput(int fd) {
   char buf[32];
   struct pollfd fds[1];
@@ -937,7 +931,8 @@ void CommonSetup(void) {
   static bool once;
   if (!once) {
     if (tuimode || breakpoints.i || watchpoints.i) {
-      LoadSyms();
+      m->system->dis = dis;
+      LoadDebugSymbols(m->system);
       ResolveBreakpoints();
       ResolveWatchpoints();
     }
@@ -1774,7 +1769,7 @@ static void DrawBreakpoints(struct Panel *p) {
     if (line >= breakpointsstart) {
       addr = watchpoints.p[i].addr;
       sym = DisFindSym(dis, addr);
-      name = sym != -1 ? dis->syms.stab + dis->syms.p[sym].name : "UNKNOWN";
+      name = sym != -1 ? dis->syms.p[sym].name : "UNKNOWN";
       snprintf(buf, sizeof(buf), "%0*" PRIx64 " %s", GetAddrHexWidth(), addr,
                name);
       AppendPanel(p, line - breakpointsstart, buf);
@@ -1792,7 +1787,7 @@ static void DrawBreakpoints(struct Panel *p) {
     if (line >= breakpointsstart) {
       addr = breakpoints.p[i].addr;
       sym = DisFindSym(dis, addr);
-      name = sym != -1 ? dis->syms.stab + dis->syms.p[sym].name : "UNKNOWN";
+      name = sym != -1 ? dis->syms.p[sym].name : "UNKNOWN";
       s = buf;
       s += sprintf(s, "%0*" PRIx64 " ", GetAddrHexWidth(), addr);
       strcpy(s, name);
@@ -1832,7 +1827,7 @@ static void DrawFrames(struct Panel *p) {
   sp = Read64(m->sp);
   for (i = 0; i < p->bottom - p->top;) {
     sym = DisFindSym(dis, rp);
-    name = sym != -1 ? dis->syms.stab + dis->syms.p[sym].name : "UNKNOWN";
+    name = sym != -1 ? dis->syms.p[sym].name : "UNKNOWN";
     s = line;
     s += sprintf(s, "%0*" PRIx64 " %0*" PRIx64 " ", GetAddrHexWidth(),
                  m->ss.base + bp, GetAddrHexWidth(), rp);
@@ -2447,7 +2442,10 @@ static void DrawDisplayOnly(struct Panel *p) {
 static ssize_t OnPtyFdWritev(int fd, const struct iovec *iov, int iovlen) {
   int i;
   size_t size;
-  ptyisenabled = true;
+  if (!ptyisenabled) {
+    ptyisenabled = true;
+    ReactiveDraw();
+  }
   for (size = i = 0; i < iovlen; ++i) {
     PtyWrite(pty, iov[i].iov_base, iov[i].iov_len);
     size += iov[i].iov_len;
@@ -2648,10 +2646,12 @@ static void OnDiskServiceBadCommand(void) {
 }
 
 static void OnDiskServiceGetParams(void) {
+  struct stat st;
   size_t lastsector, lastcylinder, lasthead;
-  lastcylinder = GetLastIndex(m->system->elf.mapsize, 512 * 63 * 255, 0, 1023);
-  lasthead = GetLastIndex(m->system->elf.mapsize, 512 * 63, 0, 255);
-  lastsector = GetLastIndex(m->system->elf.mapsize, 512, 1, 63);
+  unassert(!OverlaysStat(AT_FDCWD, m->system->elf.prog, &st, 0));
+  lastcylinder = GetLastIndex(st.st_size, 512 * 63 * 255, 0, 1023);
+  lasthead = GetLastIndex(st.st_size, 512 * 63, 0, 255);
+  lastsector = GetLastIndex(st.st_size, 512, 1, 63);
   m->dl = 1;
   m->dh = lasthead;
   m->cl = lastcylinder >> 8 << 6 | lastsector;
@@ -2663,6 +2663,7 @@ static void OnDiskServiceGetParams(void) {
 }
 
 static void OnDiskServiceReadSectors(void) {
+  int fd;
   i64 addr, size;
   i64 sectors, drive, head, cylinder, sector, offset;
   sectors = m->al;
@@ -2673,30 +2674,31 @@ static void OnDiskServiceReadSectors(void) {
   size = sectors * 512;
   offset = sector * 512 + head * 512 * 63 + cylinder * 512 * 63 * 255;
   (void)drive;
-  LOGF("bios read sectors %" PRId64 " "
-       "@ sector %" PRId64 " cylinder %" PRId64 " head %" PRId64
-       " drive %" PRId64 " offset %#" PRIx64 "",
-       sectors, sector, cylinder, head, drive, offset);
-  if (0 <= sector && offset + size <= m->system->elf.mapsize) {
-    addr = m->es.base + Get16(m->bx);
-    if (addr + size <= kRealSize) {
-      SetWriteAddr(m, addr, size);
-      memcpy(m->system->real + addr, m->system->elf.map + offset, size);
-      m->ah = 0x00;
-      SetCarry(false);
-    } else {
-      m->al = 0x00;
-      m->ah = 0x02;
-      SetCarry(true);
-    }
-  } else {
-    LOGF("bios read sector failed 0 <= %" PRId64 " && %" PRIx64 " + %" PRIx64
-         " <= %lx",
-         sector, offset, size, m->system->elf.mapsize);
+  ELF_LOGF("bios read sectors %" PRId64 " "
+           "@ sector %" PRId64 " cylinder %" PRId64 " head %" PRId64
+           " drive %" PRId64 " offset %#" PRIx64 " from %s",
+           sectors, sector, cylinder, head, drive, offset, m->system->elf.prog);
+  addr = m->es.base + Get16(m->bx);
+  if (addr >= kRealSize || size > kRealSize || addr + size > kRealSize) {
+    LOGF("bios disk read exceeded real memory");
     m->al = 0x00;
-    m->ah = 0x0d;
+    m->ah = 0x02;  // cannot find address mark
+    SetCarry(true);
+    return;
+  }
+  errno = 0;
+  if ((fd = OverlaysOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
+      pread(fd, m->system->real + addr, size, offset) == size) {
+    SetWriteAddr(m, addr, size);
+    m->ah = 0x00;  // success
+    SetCarry(false);
+  } else {
+    LOGF("bios read sectors failed: %s", DescribeHostErrno(errno));
+    m->al = 0x00;
+    m->ah = 0x0d;  // invalid number of sector
     SetCarry(true);
   }
+  close(fd);
 }
 
 static void OnDiskServiceProbeExtended(void) {
@@ -2714,6 +2716,7 @@ static void OnDiskServiceProbeExtended(void) {
 }
 
 static void OnDiskServiceReadSectorsExtended(void) {
+  int fd;
   u8 drive = m->dl;
   i64 pkt_addr = m->ds.base + Get16(m->si), addr, sectors, size, lba, offset;
   u8 pkt_size, *pkt;
@@ -2736,27 +2739,33 @@ static void OnDiskServiceReadSectorsExtended(void) {
     size = sectors * 512;
     lba = Read32(pkt + 8);
     offset = lba * 512;
-    LOGF("bios read sector ext 0 <= %" PRId64 " && %" PRIx64 " + %" PRIx64
-         " <= %lx",
-         lba, offset, size, m->system->elf.mapsize);
-    if (offset >= m->system->elf.mapsize ||
-        offset + size > m->system->elf.mapsize) {
-      LOGF("bios read sector failed 0 <= %" PRId64 " && %" PRIx64 " <= %lx",
-           lba, offset, m->system->elf.mapsize);
+    ELF_LOGF("bios read sector ext "
+             "lba=%" PRId64 " "
+             "offset=%" PRIx64 " "
+             "size=%" PRIx64,
+             lba, offset, size);
+    if (addr >= kRealSize || size > kRealSize || addr + size > kRealSize) {
+      LOGF("bios disk read exceeded real memory");
       SetWriteAddr(m, pkt_addr + 2, 2);
       Write16(pkt + 2, 0);
-      m->ah = 0x0d;
-    } else if (addr >= kRealSize || addr + size > kRealSize) {
-      SetWriteAddr(m, pkt_addr + 2, 2);
-      Write16(pkt + 2, 0);
-      m->ah = 0x02;
+      m->ah = 0x02;  // cannot find address mark
       SetCarry(true);
-    } else {
-      SetWriteAddr(m, addr, size);
-      memcpy(m->system->real + addr, m->system->elf.map + offset, size);
-      m->ah = 0x00;
-      SetCarry(false);
+      return;
     }
+    errno = 0;
+    if ((fd = OverlaysOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
+        pread(fd, m->system->real + addr, size, offset) == size) {
+      SetWriteAddr(m, addr, size);
+      m->ah = 0x00;  // success
+      SetCarry(false);
+    } else {
+      LOGF("bios read sector failed: %s", DescribeHostErrno(errno));
+      SetWriteAddr(m, pkt_addr + 2, 2);
+      Write16(pkt + 2, 0);
+      m->ah = 0x0d;  // invalid number of sectors
+      SetCarry(true);
+    }
+    close(fd);
   }
 }
 
@@ -2786,6 +2795,8 @@ static void OnDiskService(void) {
 static void OnVidyaServiceSetMode(void) {
   if (LookupAddress(m, 0xB0000)) {
     vidya = m->al;
+    ptyisenabled = true;
+    ReactiveDraw();
   } else {
     LOGF("maybe you forgot -r flag");
   }
@@ -2858,6 +2869,10 @@ static void OnVidyaServiceTeletypeOutput(void) {
   int n;
   u64 w;
   char buf[12];
+  if (!ptyisenabled) {
+    ptyisenabled = true;
+    ReactiveDraw();
+  }
   n = 0 /* FormatCga(m->bl, buf) */;
   w = tpenc(VidyaServiceXlatTeletype(m->al));
   do {
@@ -3507,6 +3522,7 @@ static void Exec(void) {
   int interrupt;
   LOGF("Exec");
   ExecSetup();
+  m->nofault = false;
   if (!(interrupt = sigsetjmp(m->onhalt, 1))) {
     m->canhalt = true;
     if (!(action & CONTINUE) &&
@@ -3595,6 +3611,7 @@ static void Tui(void) {
   LOGF("Tui");
   TuiSetup();
   SetupDraw();
+  m->nofault = false;
   m->system->trapexit = true;
   ScrollOp(&pan.disassembly, GetDisIndex());
   if (!(interrupt = sigsetjmp(m->onhalt, 1))) {
@@ -3757,7 +3774,7 @@ static void GetOpts(int argc, char *argv[]) {
   while ((opt = GetOpt(argc, argv, "hjmvVtrzRNsZb:Hw:L:C:")) != -1) {
     switch (opt) {
       case 'j':
-        wantjit = true;
+        FLAG_wantjit = true;
         break;
       case 't':
         tuimode = false;
@@ -3832,13 +3849,20 @@ static void AddPath_StartOp_Tui(P) {
   Jitter(m, rde, 0, 0, "qc", StartOp_Tui);
 }
 
+static bool FileExists(const char *path) {
+  return !OverlaysAccess(AT_FDCWD, path, F_OK, 0);
+}
+
 int VirtualMachine(int argc, char *argv[]) {
   struct Dll *e;
-  if (!Commandv(argv[optind_], pathbuf, sizeof(pathbuf))) {
+  if (FileExists(argv[optind_])) {
+    codepath = argv[optind_];
+  } else if (Commandv(argv[optind_], pathbuf, sizeof(pathbuf))) {
+    codepath = pathbuf;
+  } else {
     fprintf(stderr, "%s: command not found: %s\n", argv[0], argv[optind_]);
     exit(127);
   }
-  codepath = pathbuf;
   optind_++;
   do {
     action = 0;
@@ -3893,9 +3917,6 @@ int VirtualMachine(int argc, char *argv[]) {
       }
     } while (!(action & (RESTART | EXIT)));
   } while (action & RESTART);
-  if (m->system->elf.ehdr) {
-    unassert(!Munmap(m->system->elf.ehdr, m->system->elf.size));
-  }
   DisFree(dis);
   return exitcode;
 }
@@ -3959,13 +3980,12 @@ int main(int argc, char *argv[]) {
   unassert((s = NewSystem(wantmetal ? XED_MODE_REAL : XED_MODE_LONG)));
   unassert((m = g_machine = NewMachine(s, 0)));
 #ifdef HAVE_JIT
-  if (!wantjit || wantmetal) {
+  if (!FLAG_wantjit || wantmetal) {
     DisableJit(&m->system->jit);
   }
 #endif
   if (wantmetal) {
     m->metal = true;
-    g_disisprog_disable = true;
   }
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;

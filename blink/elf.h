@@ -629,5 +629,6 @@ char *GetElfString(const Elf64_Ehdr_ *, size_t, const char *, u32);
 char *GetElfSectionNameStringTable(const Elf64_Ehdr_ *, size_t);
 void *GetElfSectionAddress(const Elf64_Ehdr_ *, size_t, const Elf64_Shdr_ *);
 Elf64_Sym_ *GetElfSymbolTable(const Elf64_Ehdr_ *, size_t, int *);
+i64 GetElfMemorySize(const Elf64_Ehdr_ *, size_t, i64 *);
 
 #endif /* BLINK_ELF_H_ */

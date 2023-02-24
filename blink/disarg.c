@@ -119,7 +119,7 @@ static char *DisSymImpl(struct Dis *d, char *p, i64 x, long sym) {
   i64 addend;
   const char *name;
   addend = x - d->syms.p[sym].addr;
-  name = d->syms.stab + d->syms.p[sym].name;
+  name = d->syms.p[sym].name;
   p = Demangle(p, name, DIS_MAX_SYMBOL_LENGTH);
   if (addend) {
     *p++ = '+';
@@ -130,7 +130,8 @@ static char *DisSymImpl(struct Dis *d, char *p, i64 x, long sym) {
 
 static char *DisSym(struct Dis *d, char *p, i64 value, i64 addr) {
   long sym;
-  if ((sym = DisFindSym(d, addr)) != -1 && d->syms.p[sym].name) {
+  if ((sym = DisFindSym(d, addr)) != -1 &&
+      (d->syms.p[sym].name && *d->syms.p[sym].name)) {
     return DisSymImpl(d, p, addr, sym);
   } else {
     return DisInt(p, value);

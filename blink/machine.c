@@ -149,12 +149,6 @@ void SetMachineMode(struct Machine *m, int mode) {
   m->system->mode = mode;
 }
 
-void ChangeMachineMode(struct Machine *m, int mode) {
-  if (mode == m->mode) return;
-  ResetInstructionCache(m);
-  SetMachineMode(m, mode);
-}
-
 static relegated void OpXlatAlBbb(P) {
   i64 v;
   v = MaskAddress(Eamode(rde), Get64(m->bx) + Get8(m->ax));
@@ -1398,14 +1392,6 @@ static relegated void OpMovCqRq(P) {
   }
 }
 
-static relegated void OpWrmsr(P) {
-}
-
-static relegated void OpRdmsr(P) {
-  Put32(m->dx, 0);
-  Put32(m->ax, 0);
-}
-
 static void OpEmms(P) {
 #ifndef DISABLE_X87
   m->fpu.tw = -1;
@@ -1485,27 +1471,29 @@ int ClassifyOp(u64 rde) {
 }
 
 #ifdef DISABLE_METAL
-#define OpIncZv     OpUd
+#define OpCallf     OpUd
 #define OpDecZv     OpUd
-#define OpLes       OpUd
-#define OpLds       OpUd
-#define OpJmpf      OpUd
-#define OpInAlImm   OpUd
-#define OpInAxImm   OpUd
 #define OpInAlDx    OpUd
+#define OpInAlImm   OpUd
 #define OpInAxDx    OpUd
-#define OpOutImmAl  OpUd
-#define OpOutImmAx  OpUd
+#define OpInAxImm   OpUd
+#define OpIncZv     OpUd
+#define OpJmpf      OpUd
+#define OpLds       OpUd
+#define OpLes       OpUd
+#define OpMovEvqpSw OpUd
+#define OpMovSwEvqp OpUd
 #define OpOutDxAl   OpUd
 #define OpOutDxAx   OpUd
-#define OpMovSwEvqp OpUd
-#define OpMovEvqpSw OpUd
-#define OpPushSeg   OpUd
+#define OpOutImmAl  OpUd
+#define OpOutImmAx  OpUd
 #define OpPopSeg    OpUd
-#define OpCallf     OpUd
-#define OpRetf      OpUd
 #define OpPopa      OpUd
+#define OpPushSeg   OpUd
 #define OpPusha     OpUd
+#define OpRdmsr     OpUd
+#define OpRetf      OpUd
+#define OpWrmsr     OpUd
 #endif
 
 #ifdef DISABLE_BCD
