@@ -3138,6 +3138,7 @@ static void OnEnd(void) {
 }
 
 static void OnEnter(void) {
+  dialog = NULL;
   action &= ~MODAL;
 }
 
@@ -3411,7 +3412,6 @@ static void HandleKeyboard(const char *k) {
 static void ReadKeyboard(void) {
   char buf[64];
   memset(buf, 0, sizeof(buf));
-  dialog = NULL;
   if (readansi(ttyin, buf, sizeof(buf)) == -1) {
     if (errno == EINTR) {
       LOGF("ReadKeyboard interrupted");
