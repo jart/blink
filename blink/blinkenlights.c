@@ -2111,15 +2111,6 @@ static void Redraw(bool force) {
   start_draw = GetTime();
   execsecs = ToNanoseconds(SubtractTime(start_draw, last_draw)) * 1e-9;
   oldlen = m->xedd->length;
-  if (!IsShadow(m->readaddr) && !IsShadow(m->readaddr + m->readsize)) {
-    readaddr = m->readaddr;
-    readsize = m->readsize;
-  }
-  if (!IsShadow(m->writeaddr) && !IsShadow(m->writeaddr + m->writesize)) {
-    writeaddr = m->writeaddr;
-    writesize = m->writesize;
-  }
-  ScrollOp(&pan.disassembly, GetDisIndex());
   ips = last_cycle ? (cycle - last_cycle) / execsecs : 0;
   SetupDraw();
   for (i = 0; i < ARRAYLEN(pan.p); ++i) {
@@ -3628,11 +3619,13 @@ static void Tui(void) {
           action &= ~(FINISH | NEXT | CONTINUE);
           LOGF("BREAK %0*" PRIx64 "", GetAddrHexWidth(),
                breakpoints.p[bp].addr);
+          ReactiveDraw();
         } else if ((action & (FINISH | NEXT | CONTINUE)) &&
                    (bp = IsAtWatchpoint(&watchpoints, m)) != -1) {
           action &= ~(FINISH | NEXT | CONTINUE);
           LOGF("WATCH %0*" PRIx64 " AT PC %" PRIx64, GetAddrHexWidth(),
                watchpoints.p[bp].addr, GetPc(m));
+          ReactiveDraw();
         }
       } else {
         m->xedd = (struct XedDecodedInst *)m->opcache->icache[0];
@@ -3720,6 +3713,17 @@ static void Tui(void) {
           UpdateXmmType(m->xedd->op.rde, &xmmtype);
           if (verbose) LogInstruction();
           Execute();
+          ScrollOp(&pan.disassembly, GetDisIndex());
+          if (!IsShadow(m->readaddr) && !IsShadow(m->readaddr + m->readsize)) {
+            readaddr = m->readaddr;
+            readsize = m->readsize;
+          }
+          if (!IsShadow(m->writeaddr) &&
+              !IsShadow(m->writeaddr + m->writesize)) {
+            writeaddr = m->writeaddr;
+            writesize = m->writesize;
+          }
+          ScrollMemoryViews();
           if (m->signals & ~m->sigmask) {
             if ((sig = ConsumeSignal(m, 0, 0))) {
               exit(128 + sig);
