@@ -121,7 +121,7 @@ u64 FindPageTableEntry(struct Machine *m, u64 page) {
     entry = ReadPte(GetPageAddress(m->system, table, level == 39) + index * 8);
     if (!(entry & PAGE_V)) return 0;
     if (m->metal) {
-      entry &= ~(u64)(PAGE_RSRV | PAGE_HOST | PAGE_MAP | PAGE_EOF | PAGE_MUG |
+      entry &= ~(u64)(PAGE_RSRV | PAGE_HOST | PAGE_MAP | PAGE_GROW | PAGE_MUG |
                       PAGE_FILE);
     }
     if ((entry & PAGE_PS) && level > 12) {
@@ -188,7 +188,7 @@ u8 *LookupAddress(struct Machine *m, i64 virt) {
 }
 
 u8 *GetAddress(struct Machine *m, i64 v) {
-  if (HasLinearMapping(m)) return ToHost(v);
+  if (HasLinearMapping()) return ToHost(v);
   return LookupAddress(m, v);
 }
 
@@ -281,7 +281,7 @@ void CommitStash(struct Machine *m) {
 }
 
 u8 *ReserveAddress(struct Machine *m, i64 v, size_t n, bool writable) {
-  if (HasLinearMapping(m)) return ToHost(v);
+  if (HasLinearMapping()) return ToHost(v);
   m->reserving = true;
   if ((v & 4095) + n <= 4096) {
     return ResolveAddress(m, v);

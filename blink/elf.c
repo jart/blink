@@ -27,6 +27,7 @@
 #include "blink/endian.h"
 #include "blink/log.h"
 #include "blink/macros.h"
+#include "blink/map.h"
 #include "blink/util.h"
 
 static dontdiscard bool Add(i64 x, i64 y, i64 *z) {
@@ -63,6 +64,7 @@ i64 GetElfMemorySize(const Elf64_Ehdr_ *ehdr, size_t size, i64 *base) {
       }
     }
   }
+  lo &= -GetSystemPageSize();
   if (Sub(hi, lo, &res)) return -1;
   *base = lo;
   return res;

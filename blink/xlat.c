@@ -342,6 +342,172 @@ int UnXlatSignal(int x) {
   return einval();
 }
 
+int UnXlatSiCode(int sig, int code) {
+#ifdef SI_USER
+  if (code == SI_USER) return SI_USER_LINUX;
+#endif
+#ifdef SI_QUEUE
+  if (code == SI_QUEUE) return SI_QUEUE_LINUX;
+#endif
+#ifdef SI_TIMER
+  if (code == SI_TIMER) return SI_TIMER_LINUX;
+#endif
+#ifdef SI_TKILL
+  if (code == SI_TKILL) return SI_TKILL_LINUX;
+#endif
+#ifdef SI_MESGQ
+  if (code == SI_MESGQ) return SI_MESGQ_LINUX;
+#endif
+#ifdef SI_ASYNCIO
+  if (code == SI_ASYNCIO) return SI_ASYNCIO_LINUX;
+#endif
+#ifdef SI_ASYNCNL
+  if (code == SI_ASYNCNL) return SI_ASYNCNL_LINUX;
+#endif
+#ifdef SI_KERNEL
+  if (code == SI_KERNEL) return SI_KERNEL_LINUX;
+#endif
+#ifdef SI_NOINFO
+  if (code == SI_NOINFO) return SI_NOINFO_LINUX;
+#endif
+  switch (sig) {
+    case SIGCHLD_LINUX:
+#ifdef CLD_EXITED
+      if (code == CLD_EXITED) return CLD_EXITED_LINUX;
+#endif
+#ifdef CLD_KILLED
+      if (code == CLD_KILLED) return CLD_KILLED_LINUX;
+#endif
+#ifdef CLD_DUMPED
+      if (code == CLD_DUMPED) return CLD_DUMPED_LINUX;
+#endif
+#ifdef CLD_TRAPPED
+      if (code == CLD_TRAPPED) return CLD_TRAPPED_LINUX;
+#endif
+#ifdef CLD_STOPPED
+      if (code == CLD_STOPPED) return CLD_STOPPED_LINUX;
+#endif
+#ifdef CLD_CONTINUED
+      if (code == CLD_CONTINUED) return CLD_CONTINUED_LINUX;
+#endif
+      break;
+    case SIGTRAP_LINUX:
+#ifdef TRAP_BRKPT
+      if (code == TRAP_BRKPT) return TRAP_BRKPT_LINUX;
+#endif
+#ifdef TRAP_TRACE
+      if (code == TRAP_TRACE) return TRAP_TRACE_LINUX;
+#endif
+      break;
+    case SIGSEGV_LINUX:
+#ifdef SEGV_MAPERR
+      if (code == SEGV_MAPERR) return SEGV_MAPERR_LINUX;
+#endif
+#ifdef SEGV_ACCERR
+      if (code == SEGV_ACCERR) return SEGV_ACCERR_LINUX;
+#endif
+#ifdef SEGV_PKUERR
+      if (code == SEGV_PKUERR) return SEGV_PKUERR_LINUX;
+#endif
+      break;
+    case SIGFPE_LINUX:
+#ifdef FPE_INTDIV
+      if (code == FPE_INTDIV) return FPE_INTDIV_LINUX;
+#endif
+#ifdef FPE_INTOVF
+      if (code == FPE_INTOVF) return FPE_INTOVF_LINUX;
+#endif
+#ifdef FPE_FLTDIV
+      if (code == FPE_FLTDIV) return FPE_FLTDIV_LINUX;
+#endif
+#ifdef FPE_FLTOVF
+      if (code == FPE_FLTOVF) return FPE_FLTOVF_LINUX;
+#endif
+#ifdef FPE_FLTUND
+      if (code == FPE_FLTUND) return FPE_FLTUND_LINUX;
+#endif
+#ifdef FPE_FLTRES
+      if (code == FPE_FLTRES) return FPE_FLTRES_LINUX;
+#endif
+#ifdef FPE_FLTINV
+      if (code == FPE_FLTINV) return FPE_FLTINV_LINUX;
+#endif
+#ifdef FPE_FLTSUB
+      if (code == FPE_FLTSUB) return FPE_FLTSUB_LINUX;
+#endif
+      break;
+    case SIGILL_LINUX:
+#ifdef ILL_ILLOPC
+      if (code == ILL_ILLOPC) return ILL_ILLOPC_LINUX;
+#endif
+#ifdef ILL_ILLOPN
+      if (code == ILL_ILLOPN) return ILL_ILLOPN_LINUX;
+#endif
+#ifdef ILL_ILLADR
+      if (code == ILL_ILLADR) return ILL_ILLADR_LINUX;
+#endif
+#ifdef ILL_ILLTRP
+      if (code == ILL_ILLTRP) return ILL_ILLTRP_LINUX;
+#endif
+#ifdef ILL_PRVOPC
+      if (code == ILL_PRVOPC) return ILL_PRVOPC_LINUX;
+#endif
+#ifdef ILL_PRVREG
+      if (code == ILL_PRVREG) return ILL_PRVREG_LINUX;
+#endif
+#ifdef ILL_COPROC
+      if (code == ILL_COPROC) return ILL_COPROC_LINUX;
+#endif
+#ifdef ILL_BADSTK
+      if (code == ILL_BADSTK) return ILL_BADSTK_LINUX;
+#endif
+      break;
+    case SIGBUS_LINUX:
+#ifdef BUS_ADRALN
+      if (code == BUS_ADRALN) return BUS_ADRALN_LINUX;
+#endif
+#ifdef BUS_ADRERR
+      if (code == BUS_ADRERR) return BUS_ADRERR_LINUX;
+#endif
+#ifdef BUS_OBJERR
+      if (code == BUS_OBJERR) return BUS_OBJERR_LINUX;
+#endif
+#ifdef BUS_OOMERR
+      if (code == BUS_OOMERR) return BUS_OOMERR_LINUX;
+#endif
+#ifdef BUS_MCEERR_AR
+      if (code == BUS_MCEERR_AR) return BUS_MCEERR_AR_LINUX;
+#endif
+#ifdef BUS_MCEERR_AO
+      if (code == BUS_MCEERR_AO) return BUS_MCEERR_AO_LINUX;
+#endif
+      break;
+    case SIGIO_LINUX:
+#ifdef POLL_IN
+      if (code == POLL_IN) return POLL_IN_LINUX;
+#endif
+#ifdef POLL_OUT
+      if (code == POLL_OUT) return POLL_OUT_LINUX;
+#endif
+#ifdef POLL_MSG
+      if (code == POLL_MSG) return POLL_MSG_LINUX;
+#endif
+#ifdef POLL_ERR
+      if (code == POLL_ERR) return POLL_ERR_LINUX;
+#endif
+#ifdef POLL_PRI
+      if (code == POLL_PRI) return POLL_PRI_LINUX;
+#endif
+#ifdef POLL_HUP
+      if (code == POLL_HUP) return POLL_HUP_LINUX;
+#endif
+      break;
+    default:
+      break;
+  }
+  return code;
+}
+
 int XlatRusage(int x) {
   switch (x) {
     XLAT(0, RUSAGE_SELF);

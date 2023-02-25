@@ -64,7 +64,7 @@
 #define PAGE_RSRV 0x0200  // no actual memory associated
 #define PAGE_HOST 0x0400  // PAGE_TA bits point to host (not real) memory
 #define PAGE_MAP  0x0800  // PAGE_TA bits were mmmap()'d
-#define PAGE_EOF  0x0010000000000000
+#define PAGE_GROW 0x0010000000000000
 #define PAGE_MUG  0x0020000000000000  // each 4096 byte page is a system page
 #define PAGE_FILE 0x0040000000000000
 #define PAGE_XD   0x8000000000000000
@@ -97,7 +97,7 @@
 #define IsMakingPath(m) 0
 #endif
 
-#define HasLinearMapping(x) (CanHaveLinearMemory() && !FLAG_nolinear)
+#define HasLinearMapping() (CanHaveLinearMemory() && !FLAG_nolinear)
 
 #if CAN_64BIT
 #define _Atomicish(t) _Atomic(t)
@@ -216,6 +216,7 @@ struct System {
   bool brkchanged;
   u16 gdt_limit;
   u16 idt_limit;
+  int exitcode;
   u32 efer;
   int pid;
   u8 *real;
@@ -357,9 +358,9 @@ struct Machine {                           //
   struct FreeList freelist;                // to make system calls simpler
   struct JitPath path;                     // under construction jit route
   _Atomicish(u64) signals;                 // [attention] pending delivery
+  _Atomicish(u64) sigmask;                 // signals that've been blocked
   i64 bofram[2];                           // helps debug bootloading code
   i64 faultaddr;                           // used for tui error reporting
-  _Atomicish(u64) sigmask;                 // signals that've been blocked
   u32 tlbindex;                            //
   struct System *system;                   //
   int sigdepth;                            //
@@ -373,6 +374,7 @@ struct Machine {                           //
   bool issigsuspend;                       //
   bool traprdtsc;                          //
   bool trapcpuid;                          //
+  i8 trapno;                               //
   sigjmp_buf onhalt;                       //
   struct sigaltstack_linux sigaltstack;    //
   i64 robust_list;                         //
@@ -441,6 +443,7 @@ void *SchlepW(struct Machine *, i64, size_t);
 void *SchlepRW(struct Machine *, i64, size_t);
 bool IsValidMemory(struct Machine *, i64, i64, int);
 int RegisterMemory(struct Machine *, i64, void *, size_t);
+i64 ConvertHostToGuestAddress(struct System *, void *);
 u8 *GetPageAddress(struct System *, u64, bool);
 u8 *GetHostAddress(struct Machine *, u64, long);
 u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *, bool);

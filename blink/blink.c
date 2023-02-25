@@ -134,6 +134,16 @@ static void OnSigSys(int sig) {
   // do nothing
 }
 
+static void PrintDiagnostics(struct Machine *m) {
+  ERRF("additional information\n"
+       "\t%s\n"
+       "%s",
+       GetBacktrace(m), FormatPml4t(m));
+#ifdef DEBUG
+  PrintBacktrace();
+#endif
+}
+
 void TerminateSignal(struct Machine *m, int sig) {
   int syssig;
   struct sigaction sa;
@@ -141,13 +151,7 @@ void TerminateSignal(struct Machine *m, int sig) {
   if (IsSignalSerious(sig)) {
     ERRF("terminating due to %s (rip=%" PRIx64 " faultaddr=%" PRIx64 ")",
          DescribeSignal(sig), m->ip, m->faultaddr);
-    ERRF("additional information\n"
-         "\t%s\n"
-         "%s",
-         GetBacktrace(m), FormatPml4t(m));
-#ifdef DEBUG
-    PrintBacktrace();
-#endif
+    PrintDiagnostics(m);
   }
   if ((syssig = XlatSignal(sig)) == -1) syssig = SIGKILL;
   KillOtherThreads(m->system);
@@ -173,10 +177,9 @@ static void OnFatalSystemSignal(int sig, siginfo_t *si, void *ptr) {
 static void HandleFatalSystemSignal(struct Machine *m) {
   int sig;
   RestoreIp(m);
-  // TODO(jart): Fix address translation in non-linear mode.
+  m->faultaddr = ConvertHostToGuestAddress(m->system, g_siginfo.si_addr);
   sig = UnXlatSignal(g_siginfo.si_signo);
-  m->faultaddr = ToGuest(g_siginfo.si_addr);
-  DeliverSignalToUser(m, sig);
+  DeliverSignalToUser(m, sig, UnXlatSiCode(sig, g_siginfo.si_code));
 }
 
 static int Exec(char *execfn, char *prog, char **argv, char **envp) {

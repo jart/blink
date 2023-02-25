@@ -62,7 +62,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
   i64 memsz = Read64(phdr->memsz);
   i64 offset = Read64(phdr->offset);
   i64 filesz = Read64(phdr->filesz);
-  long pagesize = HasLinearMapping(m) ? GetSystemPageSize() : 4096;
+  long pagesize = HasLinearMapping() ? GetSystemPageSize() : 4096;
   i64 start = ROUNDDOWN(vaddr, pagesize);
   i64 end = ROUNDUP(vaddr + memsz, pagesize);
   long skew = vaddr & (pagesize - 1);
@@ -695,7 +695,7 @@ error: unsupported executable; we need:\n\
   m->system->codestart = 0;
   m->system->brk = FLAG_imagestart;
   m->system->automap = FLAG_automapstart;
-  if (HasLinearMapping(m)) {
+  if (HasLinearMapping()) {
     m->system->brk ^= Read64(elf->rng) & FLAG_aslrmask;
     m->system->automap ^= (Read64(elf->rng) & FLAG_aslrmask);
   }
@@ -723,7 +723,7 @@ error: unsupported executable; we need:\n\
       LoadFlatExecutable(m, elf->base, prog, map, mapsize, fd);
       execstack = true;
     }
-    stack = HasLinearMapping(m) && FLAG_vabits <= 47 && !kSkew
+    stack = HasLinearMapping() && FLAG_vabits <= 47 && !kSkew
                 ? 0
                 : kStackTop - kStackSize;
     if ((stack = ReserveVirtual(m->system, stack, kStackSize,

@@ -2575,7 +2575,8 @@ static void OnExitTrap(void) {
   tuimode = true;
   action |= MODAL;
   action &= ~CONTINUE;
-  strcpy(systemfailure, "program called exit_group()");
+  snprintf(systemfailure, sizeof(systemfailure), "guest called exit_group(%d)",
+           m->system->exitcode);
 }
 
 static void OnSegmentationFault(void) {
@@ -3952,11 +3953,15 @@ static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
   LOGF("OnSigSegv(%p)", si->si_addr);
   RestoreIp(g_machine);
   // TODO(jart): Fix address translation in non-linear mode.
-  g_machine->faultaddr = ToGuest(si->si_addr);
+  g_machine->faultaddr =
+      ConvertHostToGuestAddress(g_machine->system, si->si_addr);
   ERRF("SIGSEGV AT ADDRESS %" PRIx64 " (OR %p) at RIP=%" PRIx64,
        g_machine->faultaddr, si->si_addr, m->ip);
   ERRF("BACKTRACE\n\t%s", GetBacktrace(g_machine));
-  if (!react) DeliverSignalToUser(g_machine, UnXlatSignal(sig));
+  if (!react) {
+    sig = UnXlatSignal(si->si_signo);
+    DeliverSignalToUser(m, sig, UnXlatSiCode(sig, si->si_code));
+  }
   siglongjmp(g_machine->onhalt, kMachineSegmentationFault);
 }
 

@@ -956,11 +956,58 @@ struct rusage_linux {
 };
 
 struct siginfo_linux {
-  u8 si_signo[4];
-  u8 si_errno[4];
-  u8 si_code[4];
-  u8 pad_[4];
-  u8 payload[112];
+  u8 signo[4];
+  u8 errno_[4];
+  u8 code[4];
+  u8 pad1_[4];
+  union {
+    struct {
+      union {
+        struct {
+          // signals sent by kill() and sigqueue() set these
+          u8 pid[4];
+          u8 uid[4];
+        };
+        struct {
+          // SIGALRM sets these
+          u8 timerid[4];
+          u8 overrun[4];
+        };
+      };
+      union {
+        u8 value[8];  // provided by third arg of sigqueue(2)
+        struct {
+          u8 status[4];
+          u8 pad2_[4];
+          u8 utime[8];
+          u8 stime[8];
+        };
+      };
+    };
+    struct {
+      // SIGILL, SIGFPE, SIGSEGV, SIGBUS, SIGTRAP
+      u8 addr[8];
+      u8 addr_lsb[2];
+      u8 pad3_[6];
+      union {
+        struct {
+          u8 lower[8];
+          u8 upper[8];
+        };
+        u8 pkey[4];
+      };
+    };
+    struct {
+      u8 band[8];  // SIGPOLL
+      u8 fd[4];
+    };
+    struct {
+      u8 call_addr[8];
+      u8 syscall[4];
+      u8 arch[4];
+    };
+    u8 payload[112];
+  };
 };
 
 struct fpstate_linux {

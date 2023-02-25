@@ -109,7 +109,7 @@ static bool FreeEmptyPageTables(struct System *s, u64 pt, long level) {
   u8 *mi;
   long i;
   bool isempty = true;
-  mi = GetPageAddress(s, pt, level == 39);
+  mi = GetPageAddress(s, pt, level == 1);
   for (i = 0; i < 512; ++i) {
     if (level == 4) {
       if (ReadPte(mi + i * 8)) {
@@ -209,6 +209,7 @@ struct System *NewSystem(int mode) {
                  1ull << (SIGILL_LINUX - 1) |   //
                  1ull << (SIGFPE_LINUX - 1) |   //
                  1ull << (SIGSEGV_LINUX - 1) |  //
+                 1ull << (SIGBUS_LINUX - 1) |   //
                  1ull << (SIGTRAP_LINUX - 1);
   for (i = 0; i < RLIM_NLIMITS_LINUX; ++i) {
     Write64(s->rlim[i].cur, RLIM_INFINITY_LINUX);
@@ -637,7 +638,7 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
     LastLevel:
       if (pt & PAGE_V) {
         if (FreePage(s, virt, pt, MIN(4096, end - virt), rss_delta) &&
-            HasLinearMapping(m)) {
+            HasLinearMapping()) {
           AddPageToRanges(ranges, virt, end);
         } else {
           *address_space_was_mutated = true;
@@ -714,7 +715,7 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
 
   pagesize = GetSystemPageSize();
 
-  if (HasLinearMapping(s)) {
+  if (HasLinearMapping()) {
     if (virt & (pagesize - 1)) {
       return FailDueToHostAlignment(virt, pagesize, "address");
     }
@@ -728,7 +729,7 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   rss_delta = 0;
   mutated = false;
   pages = ROUNDUP(size, 4096) / 4096;
-  if (HasLinearMapping(s) && FLAG_vabits <= 47) {
+  if (HasLinearMapping() && FLAG_vabits <= 47) {
     if (fixedmap) {
       method = MAP_FIXED;
     } else if (virt) {
@@ -770,7 +771,7 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   prot = ((flags & PAGE_U ? PROT_READ : 0) |
           ((flags & PAGE_RW) || fd == -1 ? PROT_WRITE : 0));
 
-  if (HasLinearMapping(s)) {
+  if (HasLinearMapping()) {
     // create a linear mapping. doing this runs the risk of destroying
     // things the kernel put into our address space that blink doesn't
     // know about. systems like linux and freebsd have a feature which
@@ -881,9 +882,6 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
         } else {
           entry = flags | PAGE_V;
         }
-        if (fd != -1 && virt + 4096 >= end) {
-          entry |= PAGE_EOF;
-        }
         StorePte(mi, entry);
         if ((virt += 4096) >= end) {
           unassert((s->rss += rss_delta) >= 0);
@@ -935,8 +933,6 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
     LOGF("invalid addr size");
     return einval();
   }
-  // TODO(jart): We should probably validate a PAGE_EOF exists at the
-  //             end when size isn't a multiple of platform page size
   vss_delta = 0;
   rss_delta = 0;
   memset(&ranges, 0, sizeof(ranges));
@@ -1050,7 +1046,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
   // its 64kb stack. if the host operating system has a 64 kb
   // page size, then that would be bad. we can't satisfy prot
   // unless the guest takes the page size into consideration.
-  if (HasLinearMapping(s) &&
+  if (HasLinearMapping() &&
       ((virt & (pagesize - 1)) && (size & (pagesize - 1)))) {
     sysprot = PROT_READ | PROT_WRITE;
   }
@@ -1066,8 +1062,8 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
       }
       for (;;) {
         unassert(pt & PAGE_V);
-        if (HasLinearMapping(s) && (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
-                                       (PAGE_HOST | PAGE_MAP)) {
+        if (HasLinearMapping() && (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
+                                      (PAGE_HOST | PAGE_MAP)) {
           AddPageToRanges(&ranges, virt, end);
         } else if ((pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                    (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
@@ -1091,7 +1087,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
     }
   }
 FinishedCrawling:
-  if (HasLinearMapping(s)) {
+  if (HasLinearMapping()) {
     for (i = 0; i < ranges.i; ++i) {
       if (ranges.p[i].a & (pagesize - 1)) {
         LOGF("failed to %s subrange"
@@ -1129,7 +1125,7 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
   orig_virt = virt;
   (void)orig_virt;
   pagesize = GetSystemPageSize();
-  if (HasLinearMapping(s) && (skew = virt & (pagesize - 1))) {
+  if (HasLinearMapping() && (skew = virt & (pagesize - 1))) {
     size += skew;
     virt -= skew;
   }
@@ -1150,8 +1146,8 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
       }
       for (;;) {
         unassert(pt & PAGE_V);
-        if (HasLinearMapping(s) && (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
-                                       (PAGE_HOST | PAGE_MAP)) {
+        if (HasLinearMapping() && (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
+                                      (PAGE_HOST | PAGE_MAP)) {
           AddPageToRanges(&ranges, virt, end);
         } else if ((pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                    (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
@@ -1175,7 +1171,7 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
     }
   }
 FinishedCrawling:
-  if (HasLinearMapping(s)) {
+  if (HasLinearMapping()) {
     for (i = 0; i < ranges.i; ++i) {
       if (Msync(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a, sysflags,
                 "linear")) {
@@ -1190,4 +1186,34 @@ FinishedCrawling:
     free(ranges.p);
   }
   return rc;
+}
+
+static i64 FindGuestAddress(struct System *s, intptr_t hp, u64 pt, long lvl) {
+  u8 *mi;
+  i64 res;
+  u64 pte, i;
+  mi = GetPageAddress(s, pt, lvl == 1);
+  for (i = 0; i < 512; ++i) {
+    if ((pte = ReadPte(mi + i * 8)) & PAGE_V) {
+      if (lvl == 4) {
+        if ((pte & PAGE_HOST) && (pte & PAGE_TA) == hp) {
+          return i << 39;
+        }
+      } else if ((res = FindGuestAddress(s, hp, pte, lvl + 1)) != -1) {
+        return i << 39 | res >> 9;
+      }
+    }
+  }
+  return -1;
+}
+
+i64 ConvertHostToGuestAddress(struct System *s, void *ha) {
+  i64 g48;
+  if ((uintptr_t)ha < kNullSize) return (uintptr_t)ha;
+  if (HasLinearMapping()) return ToGuest(ha);
+  if ((g48 = FindGuestAddress(s, (intptr_t)ha & -4096, s->cr3, 1)) != -1) {
+    return ((i64)((u64)g48 << 16) >> 16) | ((intptr_t)ha & 4095);
+  } else {
+    return (intptr_t)ha;
+  }
 }

@@ -12,6 +12,7 @@
 
 #include "blink/linux.h"
 
+int UnXlatSiCode(int, int);
 int UnXlatOpenFlags(int);
 int UnXlatAccMode(int);
 int UnXlatSignal(int);

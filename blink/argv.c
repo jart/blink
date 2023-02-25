@@ -58,7 +58,7 @@ static i64 PushString(struct Machine *m, char *s) {
 }
 
 static long GetGuestPageSize(struct Machine *m) {
-  if (HasLinearMapping(m->system)) {
+  if (HasLinearMapping()) {
     return GetSystemPageSize();
   } else {
     return 4096;

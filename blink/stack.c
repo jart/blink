@@ -115,7 +115,7 @@ void Push(P, u64 x) {
 void OpPushZvq(P) {
   int osz = kStackOsz[Osz(rde)][Mode(rde)];
   PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Eamode(rde), osz);
-  if (IsMakingPath(m) && HasLinearMapping(m) && !Osz(rde)) {
+  if (IsMakingPath(m) && HasLinearMapping() && !Osz(rde)) {
     Jitter(A,
            "a1i"
            "m",
@@ -168,7 +168,7 @@ void OpPopZvq(P) {
     default:
       __builtin_unreachable();
   }
-  if (IsMakingPath(m) && HasLinearMapping(m) && !Osz(rde)) {
+  if (IsMakingPath(m) && HasLinearMapping() && !Osz(rde)) {
     Jitter(A,
            "a1i"
            "m",
@@ -183,7 +183,7 @@ static void OpCall(P, u64 func) {
 
 void OpCallJvds(P) {
   OpCall(A, m->ip + disp);
-  if (HasLinearMapping(m) && IsMakingPath(m)) {
+  if (HasLinearMapping() && IsMakingPath(m)) {
     Terminate(A, FastCall);
   }
 }
@@ -194,7 +194,7 @@ static u64 LoadAddressFromMemory(P) {
 }
 
 void OpCallEq(P) {
-  if (IsMakingPath(m) && HasLinearMapping(m) && !Osz(rde)) {
+  if (IsMakingPath(m) && HasLinearMapping() && !Osz(rde)) {
     Jitter(A,
            "z3B"    // res0 = GetRegOrMem[force64bit](RexbRm)
            "s0a1="  // arg1 = machine
@@ -206,7 +206,7 @@ void OpCallEq(P) {
 }
 
 void OpJmpEq(P) {
-  if (IsMakingPath(m) && HasLinearMapping(m) && !Osz(rde)) {
+  if (IsMakingPath(m) && HasLinearMapping() && !Osz(rde)) {
     Jitter(A,
            "z3B"    // res0 = GetRegOrMem[force64bit](RexbRm)
            "s0a1="  // arg1 = machine
@@ -222,7 +222,7 @@ void OpLeave(P) {
     case XED_MODE_LONG:
       Put64(m->sp, Get64(m->bp));
       Put64(m->bp, Pop(A, 0));
-      if (HasLinearMapping(m) && IsMakingPath(m)) {
+      if (HasLinearMapping() && IsMakingPath(m)) {
         Jitter(A, "m", FastLeave);
       }
       break;
@@ -241,7 +241,7 @@ void OpLeave(P) {
 
 void OpRet(P) {
   m->ip = Pop(A, 0);
-  if (IsMakingPath(m) && HasLinearMapping(m) && !Osz(rde)) {
+  if (IsMakingPath(m) && HasLinearMapping() && !Osz(rde)) {
     Jitter(A, "m", FastRet);
   }
 }

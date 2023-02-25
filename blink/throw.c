@@ -35,7 +35,7 @@ void RestoreIp(struct Machine *m) {
   m->oplen = 0;
 }
 
-void DeliverSignalToUser(struct Machine *m, int sig) {
+void DeliverSignalToUser(struct Machine *m, int sig, int code) {
   if (m->sigmask & (1ull << (sig - 1))) {
     TerminateSignal(m, sig);
   }
@@ -47,7 +47,7 @@ void DeliverSignalToUser(struct Machine *m, int sig) {
       TerminateSignal(m, sig);
       return;
     default:
-      DeliverSignal(m, sig, SI_KERNEL_LINUX);
+      DeliverSignal(m, sig, code);
       break;
   }
   UNLOCK(&m->system->sig_lock);
@@ -58,28 +58,38 @@ void DeliverSignalToUser(struct Machine *m, int sig) {
 
 void HaltMachine(struct Machine *m, int code) {
   SIG_LOGF("HaltMachine(%d) at %#" PRIx64, code, m->ip);
-  switch (code) {
+  switch ((m->trapno = code)) {
     case kMachineDivideError:
+      RestoreIp(m);
+      m->faultaddr = m->ip;
+      DeliverSignalToUser(m, SIGFPE_LINUX, FPE_INTDIV_LINUX);
+      break;
     case kMachineFpuException:
     case kMachineSimdException:
       RestoreIp(m);
-      DeliverSignalToUser(m, SIGFPE_LINUX);
+      m->faultaddr = m->ip;
+      DeliverSignalToUser(m, SIGFPE_LINUX, FPE_FLTINV_LINUX);
       break;
     case kMachineHalt:
       // TODO(jart): We should do something for real mode.
     case kMachineDecodeError:
     case kMachineUndefinedInstruction:
       RestoreIp(m);
-      DeliverSignalToUser(m, SIGILL_LINUX);
+      m->faultaddr = m->ip;
+      DeliverSignalToUser(m, SIGILL_LINUX, ILL_ILLOPC_LINUX);
       break;
     case kMachineProtectionFault:
+      RestoreIp(m);
+      DeliverSignalToUser(m, SIGSEGV_LINUX, SEGV_ACCERR_LINUX);
+      break;
     case kMachineSegmentationFault:
       RestoreIp(m);
-      DeliverSignalToUser(m, SIGSEGV_LINUX);
+      DeliverSignalToUser(m, SIGSEGV_LINUX, SEGV_MAPERR_LINUX);
       break;
     case 1:
     case 3:
-      DeliverSignalToUser(m, SIGTRAP_LINUX);
+      m->faultaddr = m->ip - m->oplen;
+      DeliverSignalToUser(m, SIGTRAP_LINUX, TRAP_BRKPT_LINUX);
       break;
     case kMachineExitTrap:
       RestoreIp(m);

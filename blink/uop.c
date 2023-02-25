@@ -1517,7 +1517,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
       case 'B':  // res0 = GetRegOrMem(RexbRm)
         if (IsModrmRegister(rde)) {
           GetReg(A, log2sz, RexbRm(rde), RexRexb(rde));
-        } else if (HasLinearMapping(m)) {
+        } else if (HasLinearMapping()) {
           if (!kSkew) {
             Jitter(A,
                    "L"         // load effective address
@@ -1552,7 +1552,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
           ItemsRequired(1);
           if (IsModrmRegister(rde)) {
             PutReg(A, log2sz, RexbRm(rde), RexRexb(rde));
-          } else if (HasLinearMapping(m)) {
+          } else if (HasLinearMapping()) {
             if (!kSkew) {
               Jitter(A,
                      "s3="       // sav3 = <pop>
@@ -1599,7 +1599,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                    "t"      // arg0 = res0
                    "m",     // call micro-op (xmm put register)
                    RexbRm(rde), kPutReg[log2sz]);
-          } else if (HasLinearMapping(m)) {
+          } else if (HasLinearMapping()) {
             if (!kSkew) {
               Jitter(
                   A,
@@ -1732,7 +1732,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                  !log2sz      ? GetBegPtr
                  : log2sz < 4 ? GetWegPtr
                               : GetXmmPtr);
-        } else if (HasLinearMapping(m)) {
+        } else if (HasLinearMapping()) {
           if (!kSkew) {
             Jitter(A, "L");  // load effective address
           } else {

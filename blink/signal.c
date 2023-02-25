@@ -66,8 +66,18 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   if (IsMakingPath(g_machine)) AbandonPath(g_machine);
   memset(&sf, 0, sizeof(sf));
   // capture the current state of the machine
-  Write32(sf.si.si_signo, sig);
-  Write32(sf.si.si_code, code);
+  Write32(sf.si.signo, sig);
+  Write32(sf.si.code, code);
+  if (sig == SIGILL_LINUX ||   //
+      sig == SIGFPE_LINUX ||   //
+      sig == SIGSEGV_LINUX ||  //
+      sig == SIGBUS_LINUX ||   //
+      sig == SIGTRAP_LINUX) {
+    Write64(sf.si.addr, m->faultaddr);
+  }
+  if (sig == SIGTRAP_LINUX) {
+    Write64(sf.uc.trapno, m->trapno);
+  }
   Write64(sf.uc.sigmask, m->sigmask);
   memcpy(sf.uc.r8, m->r8, 8);
   memcpy(sf.uc.r9, m->r9, 8);

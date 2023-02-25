@@ -375,6 +375,7 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
     KillOtherThreads(m->system);
     if (m->system->trapexit && !m->system->exited) {
       m->system->exited = true;
+      m->system->exitcode = rc;
       HaltMachine(m, kMachineExitTrap);
     }
     FreeMachine(m);
@@ -1216,7 +1217,7 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, u64 size, int prot,
       goto Finished;
     }
   }
-  if (HasLinearMapping(m) && FLAG_vabits <= 47 && !kSkew && !virt) {
+  if (HasLinearMapping() && FLAG_vabits <= 47 && !kSkew && !virt) {
     goto CreateTheMap;
   }
   if ((!virt || !IsFullyUnmapped(m->system, virt, size))) {
