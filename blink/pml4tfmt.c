@@ -134,7 +134,7 @@ static void FormatEndPage(struct Machine *m, struct MapMaker *u, i64 end) {
   int i;
   char size[16];
   struct FileMap *fm;
-  bool isreading, iswriting, isexecuting;
+  bool isreading, iswriting, isexecuting, isfault;
   u->t = false;
   if (u->lines++) APPEND("\n");
   isexecuting = m->xedd && MAX(u->start, m->ip) <
@@ -147,6 +147,7 @@ static void FormatEndPage(struct Machine *m, struct MapMaker *u, i64 end) {
       MAX(u->start, m->writeaddr) < MIN(m->writeaddr + m->writesize, end) ||
       (m->xedd && IsStackWrite(Mopcode(m->xedd->op.rde)) &&
        MAX(u->start, Read64(m->sp)) < MIN(Read64(m->sp) + 8, end));
+  isfault = MAX(u->start, m->faultaddr) < MIN(m->faultaddr + 1, end);
   if (g_high.enabled) {
     if (isexecuting) APPEND("\033[7m");
     if (isreading) APPEND("\033[1m");
@@ -157,7 +158,7 @@ static void FormatEndPage(struct Machine *m, struct MapMaker *u, i64 end) {
     APPEND("\033[0m");
   }
   FormatSize(size, end - u->start, 1024);
-  APPEND(" %5s ", size);
+  APPEND("%c%5s ", isfault ? '*' : ' ', size);
   if (FLAG_nolinear) {
     APPEND("%3d%% ", (int)ceil((double)u->committed / u->count * 100));
   }
