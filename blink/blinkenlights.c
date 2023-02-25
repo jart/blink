@@ -550,18 +550,6 @@ static i64 GetSp(void) {
   }
 }
 
-static i64 ReadWord(u8 *p) {
-  switch (GetPointerWidth()) {
-    default:
-    case 8:
-      return Read64(p);
-    case 4:
-      return Read32(p);
-    case 2:
-      return Read16(p);
-  }
-}
-
 static void AppendPanel(struct Panel *p, i64 line, const char *s) {
   if (0 <= line && line < p->bottom - p->top) {
     AppendStr(&p->lines[line], s);
@@ -1858,8 +1846,8 @@ static void DrawFrames(struct Panel *p) {
       break;
     }
     sp = bp;
-    bp = ReadWord(r + 0);
-    rp = ReadWord(r + 8);
+    bp = ReadWordSafely(m->mode, r + 0);
+    rp = ReadWordSafely(m->mode, r + 8);
   }
 }
 

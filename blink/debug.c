@@ -18,6 +18,8 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <fcntl.h>
+#include <setjmp.h>
+#include <signal.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -26,6 +28,7 @@
 
 #include "blink/assert.h"
 #include "blink/builtin.h"
+#include "blink/bus.h"
 #include "blink/debug.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
@@ -40,11 +43,14 @@
 #include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/util.h"
+#include "blink/x86.h"
 
 #ifdef UNWIND
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 #endif
+
+#define FAKE_WORD 0x6660666066660666
 
 #define MAX_BACKTRACE_LINES 64
 
@@ -54,6 +60,7 @@ int asan_backtrace_index;
 int asan_backtrace_buffer[1];
 int ubsan_backtrace_memory[2];
 char *ubsan_backtrace_pointer = ((char *)ubsan_backtrace_memory) + 1;
+_Thread_local static jmp_buf g_busted;
 
 void PrintBacktrace(void) {
 #ifdef UNWIND
@@ -86,16 +93,42 @@ void PrintBacktrace(void) {
 #endif
 }
 
-static i64 ReadWord(struct Machine *m, u8 *p) {
-  switch (2 << m->mode) {
+static void OnBusted(int sig) {
+  longjmp(g_busted, sig);
+}
+
+static i64 ReadWord(int mode, u8 *p) {
+  switch (mode) {
     default:
-    case 8:
-      return Read64(p);
-    case 4:
-      return Read32(p);
-    case 2:
-      return Read16(p);
+    case XED_MODE_LONG:
+      return Load64Unlocked(p);
+    case XED_MODE_LEGACY:
+      return Load32(p);
+    case XED_MODE_REAL:
+      return Load16(p);
   }
+}
+
+i64 ReadWordSafely(int mode, u8 *p) {
+  i64 res;
+  sigset_t oldss, newss;
+  struct sigaction oldsa[2];
+  struct sigaction newsa = {.sa_handler = OnBusted};
+  sigemptyset(&newss);
+  sigaddset(&newss, SIGBUS);
+  sigaddset(&newss, SIGSEGV);
+  sigaction(SIGBUS, &newsa, oldsa + 0);
+  sigaction(SIGSEGV, &newsa, oldsa + 1);
+  pthread_sigmask(SIG_UNBLOCK, &newss, &oldss);
+  if (!setjmp(g_busted)) {
+    res = ReadWord(mode, p);
+  } else {
+    res = FAKE_WORD >> ((8 - (2 << mode)) * 8);
+  }
+  pthread_sigmask(SIG_SETMASK, &oldss, 0);
+  sigaction(SIGSEGV, oldsa + 1, 0);
+  sigaction(SIGBUS, oldsa + 0, 0);
+  return res;
 }
 
 int GetInstruction(struct Machine *m, i64 pc, struct XedDecodedInst *x) {
@@ -218,14 +251,14 @@ const char *GetBacktrace(struct Machine *m) {
          " FS %016" PRIx64 " "
          " GS %016" PRIx64 " "
          "OPS %-16ld "
-         "JIT %-16ld\n\t"
+         "FLG %s\n\t"
          "%s\n\t",
          m->cs.base + MaskAddress(m->mode, m->ip), DescribeOp(m, GetPc(m)),
          Get64(m->ax), Get64(m->cx), Get64(m->dx), Get64(m->bx), Get64(m->sp),
          Get64(m->bp), Get64(m->si), Get64(m->di), Get64(m->r8), Get64(m->r9),
          Get64(m->r10), Get64(m->r11), Get64(m->r12), Get64(m->r13),
          Get64(m->r14), Get64(m->r15), m->fs.base, m->gs.base,
-         GET_COUNTER(instructions_decoded), GET_COUNTER(instructions_jitted),
+         GET_COUNTER(instructions_decoded), DescribeCpuFlags(m->flags),
          g_progname);
 
 #ifndef DISABLE_BACKTRACE
@@ -256,8 +289,8 @@ const char *GetBacktrace(struct Machine *m) {
       break;
     }
     sp = bp;
-    bp = ReadWord(m, r + 0);
-    rp = ReadWord(m, r + 8);
+    bp = ReadWordSafely(m->mode, r + 0);
+    rp = ReadWordSafely(m->mode, r + 8);
   }
   if (m->system->dis == &dis) {
     DisFree(&dis);

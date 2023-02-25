@@ -725,12 +725,12 @@ MICRO_OP_SAFE u8 Cpl(struct Machine *m) {
 
 #define BEGIN_NO_PAGE_FAULTS \
   {                          \
-    bool nofault;            \
-    nofault = m->nofault;    \
+    bool nofault_;           \
+    nofault_ = m->nofault;   \
     m->nofault = true
 
 #define END_NO_PAGE_FAULTS \
-  m->nofault = nofault;    \
+  m->nofault = nofault_;   \
   }
 
 #endif /* BLINK_MACHINE_H_ */

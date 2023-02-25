@@ -8,7 +8,10 @@ TEST_FUNC_OBJS = $(TEST_FUNC_SRCS:%.c=o/$(MODE)/x86_64/%.o)
 TEST_FUNC_BINS = $(TEST_FUNC_SRCS:%.c=o/$(MODE)/%.elf)
 TEST_FUNC_COMS = $(TEST_FUNC_SRCS:%.c=o/$(MODE)/%.com)
 TEST_FUNC_CHECKS = $(TEST_FUNC_SRCS:%.c=o/$(MODE)/%.com.ok)
-TEST_FUNC_EMULATES = $(foreach ARCH,$(ARCHITECTURES),$(foreach SRC,$(TEST_FUNC_SRCS),$(SRC:%.c=o/$(MODE)/$(ARCH)/%.elf.emulates)))
+TEST_FUNC_EMULATES = $(foreach ARCH,$(ARCHITECTURES),$(foreach SRC,$(filter-out $(TEST_FUNC_NOEMU),$(TEST_FUNC_SRCS)),$(SRC:%.c=o/$(MODE)/$(ARCH)/%.elf.emulates)))
+
+# qemu static doesn't appear to emulate this correctly
+TEST_FUNC_NOEMU = test/func/busted_test.c
 
 TEST_FUNC_LINK =							\
 		$(VM)							\
