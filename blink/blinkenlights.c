@@ -3652,7 +3652,6 @@ static void Tui(void) {
       if (!(action & CONTINUE) || interactive) {
         tick = 0;
         Redraw(false);
-        CopyMachineState(&laststate);
       }
       if (dialog) {
         PrintMessageBox(ttyout, dialog, tyn, txn);
@@ -3713,6 +3712,7 @@ static void Tui(void) {
         if (!IsDebugBreak() && IsAtWatchpoint(&watchpoints, m) == -1) {
           UpdateXmmType(m->xedd->op.rde, &xmmtype);
           if (verbose) LogInstruction();
+          CopyMachineState(&laststate);
           Execute();
           ScrollOp(&pan.disassembly, GetDisIndex());
           if (!IsShadow(m->readaddr) && !IsShadow(m->readaddr + m->readsize)) {
