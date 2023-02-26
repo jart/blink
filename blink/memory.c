@@ -75,7 +75,7 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
       --m->system->memstat.reserved;
       ++m->system->memstat.committed;
       x = (page & (PAGE_TA | PAGE_HOST)) | (entry & ~(PAGE_TA | PAGE_RSRV));
-      Store64(GetPageAddress(m->system, table, false) + index * 8, x);
+      StorePte(GetPageAddress(m->system, table, false) + index * 8, x);
       res = x;
     } else {
       res = 0;
@@ -87,7 +87,7 @@ u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
     ++m->system->memstat.committed;
     ++m->system->rss;
     x = entry & ~PAGE_RSRV;
-    Store64(GetPageAddress(m->system, table, false) + index * 8, x);
+    StorePte(GetPageAddress(m->system, table, false) + index * 8, x);
     res = x;
   }
   unassert(CheckMemoryInvariants(m->system));
@@ -362,6 +362,7 @@ void *AddToFreeList(struct Machine *m, void *mem) {
   p = m->freelist.p;
   n = m->freelist.n + 1;
   if ((p = realloc(p, n * sizeof(*m->freelist.p)))) {
+    STATISTIC(++freelisted);
     m->freelist.p = (void **)p;
     m->freelist.n = n;
     m->freelist.p[n - 1] = mem;

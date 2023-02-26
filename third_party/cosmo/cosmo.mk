@@ -152,7 +152,6 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/3/sqlite_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/sched_yield_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/pwrite_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/2/write_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/read_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/pread_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/preadv_test.com.ok					\
@@ -213,10 +212,12 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/mmap_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/7/munmap_test.com.ok
 
-# TODO(jart): Why do these flake on Cygwin?
+# write_test is broken on Cygwin due to RLIMIT_FSIZE
+# TODO(jart): Why do the other ones flake on Cygwin?
 ifneq ($(HOST_OS), Cygwin)
 COSMO_TESTS +=											\
 	o/$(MODE)/third_party/cosmo/4/dtoa_test.com.ok						\
+	o/$(MODE)/third_party/cosmo/2/write_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/once_test.com.ok
 endif
 
