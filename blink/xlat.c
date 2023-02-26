@@ -258,6 +258,10 @@ int XlatResource(int x) {
     XLAT(RLIMIT_DATA_LINUX, RLIMIT_DATA);
     XLAT(RLIMIT_STACK_LINUX, RLIMIT_STACK);
     XLAT(RLIMIT_CORE_LINUX, RLIMIT_CORE);
+#ifdef RLIMIT_AS
+    XLAT(RLIMIT_AS_LINUX, RLIMIT_AS);
+#endif
+#ifndef DISABLE_NONPOSIX
 #ifdef RLIMIT_RSS
     XLAT(RLIMIT_RSS_LINUX, RLIMIT_RSS);
 #endif
@@ -267,9 +271,6 @@ int XlatResource(int x) {
     XLAT(RLIMIT_NOFILE_LINUX, RLIMIT_NOFILE);
 #ifdef RLIMIT_MEMLOCK
     XLAT(RLIMIT_MEMLOCK_LINUX, RLIMIT_MEMLOCK);
-#endif
-#ifdef RLIMIT_AS
-    XLAT(RLIMIT_AS_LINUX, RLIMIT_AS);
 #endif
 #ifdef RLIMIT_LOCKS
     XLAT(RLIMIT_LOCKS_LINUX, RLIMIT_LOCKS);
@@ -289,6 +290,7 @@ int XlatResource(int x) {
 #ifdef RLIMIT_RTTIME
     XLAT(RLIMIT_RTTIME_LINUX, RLIMIT_RTTIME);
 #endif
+#endif /* DISABLE_NONPOSIX */
     default:
       LOGF("rlimit %d not supported yet", x);
       return einval();
@@ -597,21 +599,20 @@ int XlatSocketOptname(int level, int optname) {
         XLAT(SO_RCVBUF_LINUX, SO_RCVBUF);
         XLAT(SO_BROADCAST_LINUX, SO_BROADCAST);
         XLAT(SO_KEEPALIVE_LINUX, SO_KEEPALIVE);
+        XLAT(SO_RCVTIMEO_LINUX, SO_RCVTIMEO);
+        XLAT(SO_SNDTIMEO_LINUX, SO_SNDTIMEO);
+        XLAT(SO_RCVLOWAT_LINUX, SO_RCVLOWAT);
+        XLAT(SO_SNDLOWAT_LINUX, SO_SNDLOWAT);
+#ifndef DISABLE_NONPOSIX
 #ifdef SO_REUSEPORT
         XLAT(SO_REUSEPORT_LINUX, SO_REUSEPORT);
 #endif
-        XLAT(SO_RCVTIMEO_LINUX, SO_RCVTIMEO);
-        XLAT(SO_SNDTIMEO_LINUX, SO_SNDTIMEO);
-#ifdef SO_RCVLOWAT
-        XLAT(SO_RCVLOWAT_LINUX, SO_RCVLOWAT);
-#endif
-#ifdef SO_SNDLOWAT
-        XLAT(SO_SNDLOWAT_LINUX, SO_SNDLOWAT);
 #endif
         default:
           break;
       }
       break;
+#ifndef DISABLE_NONPOSIX
     case SOL_IP_LINUX:
       switch (optname) {
         XLAT(IP_TOS_LINUX, IP_TOS);
@@ -638,9 +639,11 @@ int XlatSocketOptname(int level, int optname) {
           break;
       }
       break;
+#endif /* DISABLE_NONPOSIX */
     case SOL_TCP_LINUX:
       switch (optname) {
         XLAT(TCP_NODELAY_LINUX, TCP_NODELAY);
+#ifndef DISABLE_NONPOSIX
 #ifdef TCP_MAXSEG
         XLAT(TCP_MAXSEG_LINUX, TCP_MAXSEG);
 #endif
@@ -682,6 +685,7 @@ int XlatSocketOptname(int level, int optname) {
 #ifdef TCP_SAVE_SYN
         XLAT(TCP_SAVE_SYN_LINUX, TCP_SAVE_SYN);
 #endif
+#endif /* DISABLE_NONPOSIX */
         default:
           break;
       }
@@ -737,31 +741,33 @@ int XlatClock(int x, clock_t *clock) {
   // Haiku defines CLOCK_REALTIME as -1
   clock_t res;
   switch (x) {
-    CASE(0, res = CLOCK_REALTIME);
-    CASE(1, res = CLOCK_MONOTONIC);
-    CASE(2, res = CLOCK_PROCESS_CPUTIME_ID);
-    CASE(3, res = CLOCK_THREAD_CPUTIME_ID);
+    CASE(CLOCK_REALTIME_LINUX, res = CLOCK_REALTIME);
+    CASE(CLOCK_MONOTONIC_LINUX, res = CLOCK_MONOTONIC);
+    CASE(CLOCK_PROCESS_CPUTIME_ID_LINUX, res = CLOCK_PROCESS_CPUTIME_ID);
+    CASE(CLOCK_THREAD_CPUTIME_ID_LINUX, res = CLOCK_THREAD_CPUTIME_ID);
+#ifndef DISABLE_NONPOSIX
 #ifdef CLOCK_REALTIME_COARSE
-    CASE(5, res = CLOCK_REALTIME_COARSE);
+    CASE(CLOCK_REALTIME_COARSE_LINUX, res = CLOCK_REALTIME_COARSE);
 #elif defined(CLOCK_REALTIME_FAST)
-    CASE(5, res = CLOCK_REALTIME_FAST);
+    CASE(CLOCK_REALTIME_FAST_LINUX, res = CLOCK_REALTIME_FAST);
 #endif
 #ifdef CLOCK_MONOTONIC_COARSE
-    CASE(6, res = CLOCK_MONOTONIC_COARSE);
+    CASE(CLOCK_MONOTONIC_COARSE_LINUX, res = CLOCK_MONOTONIC_COARSE);
 #elif defined(CLOCK_REALTIME_FAST)
-    CASE(6, res = CLOCK_MONOTONIC_FAST);
+    CASE(CLOCK_MONOTONIC_FAST_LINUX, res = CLOCK_MONOTONIC_FAST);
 #endif
 #ifdef CLOCK_MONOTONIC_RAW
-    CASE(4, res = CLOCK_MONOTONIC_RAW);
+    CASE(CLOCK_MONOTONIC_RAW_LINUX, res = CLOCK_MONOTONIC_RAW);
 #else
-    CASE(4, res = CLOCK_MONOTONIC);
+    CASE(CLOCK_MONOTONIC_LINUX, res = CLOCK_MONOTONIC);
 #endif
 #ifdef CLOCK_BOOTTIME
-    CASE(7, res = CLOCK_BOOTTIME);
+    CASE(CLOCK_BOOTTIME_LINUX, res = CLOCK_BOOTTIME);
 #endif
 #ifdef CLOCK_TAI
-    CASE(11, res = CLOCK_TAI);
+    CASE(CLOCK_TAI_LINUX, res = CLOCK_TAI);
 #endif
+#endif /* DISABLE_NONPOSIX */
     default:
       LOGF("%s %d not supported yet", "clock", x);
       return einval();
@@ -835,12 +841,14 @@ int XlatOpenFlags(int x) {
     x &= ~O_DSYNC_LINUX;
   }
 #endif
+#ifndef DISABLE_NONPOSIX
 #ifdef O_TMPFILE
   if ((x & O_TMPFILE_LINUX) == O_TMPFILE_LINUX) {
     res |= O_TMPFILE;
     x &= ~O_TMPFILE_LINUX;
   }
   // order matters: O_DIRECTORY ⊂ O_TMPFILE
+#endif
 #endif
   if (x & O_DIRECTORY_LINUX) {
     res |= O_DIRECTORY;
@@ -851,14 +859,15 @@ int XlatOpenFlags(int x) {
 #endif
   if (x & O_CLOEXEC_LINUX) res |= O_CLOEXEC, x &= ~O_CLOEXEC_LINUX;
   if (x & O_NOCTTY_LINUX) res |= O_NOCTTY, x &= ~O_NOCTTY_LINUX;
+#ifndef DISABLE_NONPOSIX
 #ifdef O_ASYNC
   if (x & O_ASYNC_LINUX) res |= O_ASYNC, x &= ~O_ASYNC_LINUX;
 #endif
+#endif
+#ifndef DISABLE_NONPOSIX
 #ifdef O_NOATIME
   if (x & O_NOATIME_LINUX) res |= O_NOATIME, x &= ~O_NOATIME_LINUX;
 #endif
-#ifdef O_DSYNC
-  if (x & O_DSYNC_LINUX) res |= O_DSYNC, x &= ~O_DSYNC_LINUX;
 #endif
   if (x) {
     LOGF("%s %#x not supported", "open flags", x);
@@ -915,11 +924,13 @@ int UnXlatOpenFlags(int x) {
     x &= ~O_DIRECT;
   }
 #endif
+#ifndef DISABLE_NONPOSIX
 #ifdef O_TMPFILE
   if ((x & O_TMPFILE) == O_TMPFILE) {
     res |= O_TMPFILE_LINUX;
     x &= ~O_TMPFILE;
   }
+#endif
 #endif
   if ((x & O_DIRECTORY) == O_DIRECTORY) {
     res |= O_DIRECTORY_LINUX;
@@ -945,17 +956,21 @@ int UnXlatOpenFlags(int x) {
     res |= O_NOCTTY_LINUX;
     x &= ~O_NOCTTY;
   }
+#ifndef DISABLE_NONPOSIX
 #ifdef O_ASYNC
   if ((x & O_ASYNC) == O_ASYNC) {
     res |= O_ASYNC_LINUX;
     x &= ~O_ASYNC;
   }
 #endif
+#endif
+#ifndef DISABLE_NONPOSIX
 #ifdef O_NOATIME
   if ((x & O_NOATIME) == O_NOATIME) {
     res |= O_NOATIME_LINUX;
     x &= ~O_NOATIME;
   }
+#endif
 #endif
 #ifdef O_DSYNC
   if ((x & O_DSYNC) == O_DSYNC) {

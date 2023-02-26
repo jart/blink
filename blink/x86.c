@@ -722,11 +722,13 @@ static int xed_imm_scanner(struct XedDecodedInst *x, int imm_width) {
 static int xed_decode_instruction_length(struct XedDecodedInst *x) {
   int e;
   int has_sib = 0;
-  int imm_width = 0;
   int vexvalid = 0;
+  int imm_width = 0;
   int disp_width = 0;
   if ((e = xed_prefix_scanner(x))) return e;
+#ifndef DISABLE_BMI2
   if ((e = xed_vex_scanner(x, &imm_width, &vexvalid))) return e;
+#endif
   if (!vexvalid && (e = xed_opcode_scanner(x, &imm_width))) return e;
   if ((e = xed_modrm_scanner(x, &disp_width, &has_sib))) return e;
   if (has_sib && (e = xed_sib_scanner(x, &disp_width))) return e;

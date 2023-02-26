@@ -83,6 +83,8 @@ MICRO_OP static void Convert16(P) {
 }
 const nexgen32e_f kConvert[] = {Convert16, Convert32, Convert64};
 
+#ifndef DISABLE_BMI2
+
 MICRO_OP i64 Adcx32(u64 x, u64 y, struct Machine *m) {
   u32 t = x + !!(m->flags & CF);
   u32 z = t + y;
@@ -112,6 +114,8 @@ MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
   m->flags = (m->flags & ~OF) | c << FLAGS_OF;
   return z;
 }
+
+#endif /* DISABLE_BMI2 */
 
 ////////////////////////////////////////////////////////////////////////////////
 // BRANCHING
@@ -1121,6 +1125,7 @@ MICRO_OP void MulAxDx(u64 x, struct Machine *m) {
   Put64(m->ax, z);
   Put64(m->dx, z >> 64);
 }
+#ifndef DISABLE_BMI2
 MICRO_OP void Mulx64(u64 x,              //
                      struct Machine *m,  //
                      long vreg,          //
@@ -1130,7 +1135,8 @@ MICRO_OP void Mulx64(u64 x,              //
   Put64(m->weg[vreg], z);
   Put64(m->weg[rexrreg], z >> 64);
 }
-#endif
+#endif /* DISABLE_BMI2 */
+#endif /* HAVE_INT128 */
 
 MICRO_OP i64 JustNeg(u64 x) {
   return -x;

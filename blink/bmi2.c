@@ -24,6 +24,8 @@
 #include "blink/modrm.h"
 #include "blink/rde.h"
 
+#ifndef DISABLE_BMI2
+
 // BMI2
 // BZHI clearing starting at bit
 // MULX flagless unsigned multiply
@@ -203,3 +205,5 @@ void OpShx(P) {
 #endif
   }
 }
+
+#endif /* DISABLE_BMI2 */

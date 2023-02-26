@@ -25,6 +25,8 @@
 #include "blink/thread.h"
 #include "blink/uart.h"
 
+#ifndef DISABLE_METAL
+
 static int OpE9Read(struct Machine *m) {
   u8 b;
   struct Fd *fd;
@@ -152,3 +154,5 @@ int OpOut(struct Machine *m, u16 p, u32 x) {
       return -1;
   }
 }
+
+#endif /* DISABLE_METAL */

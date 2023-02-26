@@ -343,6 +343,7 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
     memset(&m->freelist, 0, sizeof(m->freelist));
     ResetInstructionCache(m);
     m->nofault = false;
+    m->sigdepth = 0;
     m->signals = 0;
   } else {
     memset(m, 0, sizeof(*m));

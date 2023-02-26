@@ -477,18 +477,11 @@ static int SysVfork(struct Machine *m) {
 }
 
 static void *OnSpawn(void *arg) {
-  int rc;
   struct Machine *m = (struct Machine *)arg;
   THR_LOGF("pid=%d tid=%d OnSpawn", m->system->pid, m->tid);
   m->thread = pthread_self();
-  g_machine = m;
-  if (!(rc = sigsetjmp(m->onhalt, 1))) {
-    unassert(!pthread_sigmask(SIG_SETMASK, &m->spawn_sigmask, 0));
-    Actor(m);
-  } else {
-    LOGF("halting machine from thread: %d", rc);
-    SysExitGroup(m, rc);
-  }
+  unassert(!pthread_sigmask(SIG_SETMASK, &m->spawn_sigmask, 0));
+  Blink(m);
 }
 
 #ifdef HAVE_THREADS
@@ -911,11 +904,8 @@ static int SysSchedSetaffinity(struct Machine *m,  //
   cpu_set_t sysmask;
   GetCpuCount();  // call for effect
   n = MIN(cpusetsize, CPU_SETSIZE / 8) * 8;
-  if (!(mask = (u8 *)malloc(n / 8))) return -1;
-  if (CopyFromUserRead(m, mask, maskaddr, n / 8) == -1) {
-    free(mask);
-    return -1;
-  }
+  if (!(mask = (u8 *)AddToFreeList(m, malloc(n / 8)))) return -1;
+  if (CopyFromUserRead(m, mask, maskaddr, n / 8) == -1) return -1;
   CPU_ZERO(&sysmask);
   for (i = 0; i < n; ++i) {
     if (mask[i / 8] & (1 << (i % 8))) {
@@ -923,7 +913,6 @@ static int SysSchedSetaffinity(struct Machine *m,  //
     }
   }
   rc = sched_setaffinity(pid, sizeof(sysmask), &sysmask);
-  free(mask);
   return rc;
 #else
   return 0;  // do nothing
@@ -941,7 +930,7 @@ static int SysSchedGetaffinity(struct Machine *m,  //
   size_t i, n;
   cpu_set_t sysmask;
   n = MIN(cpusetsize, CPU_SETSIZE / 8) * 8;
-  if (!(mask = (u8 *)malloc(n / 8))) return -1;
+  if (!(mask = (u8 *)AddToFreeList(m, malloc(n / 8)))) return -1;
   rc = sched_getaffinity(pid, sizeof(sysmask), &sysmask);
   unassert(rc == 0 || rc == -1);
   if (!rc) {
@@ -954,7 +943,6 @@ static int SysSchedGetaffinity(struct Machine *m,  //
     }
     if (CopyToUserWrite(m, maskaddr, mask, n / 8) == -1) rc = -1;
   }
-  free(mask);
   return rc;
 #else
   u8 *mask;
@@ -962,13 +950,12 @@ static int SysSchedGetaffinity(struct Machine *m,  //
   count = GetCpuCount();
   rc = ROUNDUP(count, 64) / 8;
   if (cpusetsize < rc) return einval();
-  if (!(mask = (u8 *)calloc(1, rc))) return -1;
+  if (!(mask = (u8 *)AddToFreeList(m, calloc(1, rc)))) return -1;
   count = MIN(count, rc * 8);
   for (i = 0; i < count; ++i) {
     mask[i / 8] |= 1 << (i % 8);
   }
   if (CopyToUserWrite(m, maskaddr, mask, rc) == -1) rc = -1;
-  free(mask);
   return rc;
 #endif
 }
@@ -2296,13 +2283,12 @@ static int SysGetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   }
   optvalsize = Read32(optvalsize_linux);
   if (optvalsize > 256) return einval();
-  if (!(optval = calloc(1, optvalsize))) return -1;
+  if (!(optval = AddToFreeList(m, calloc(1, optvalsize)))) return -1;
   rc = getsockopt(fildes, syslevel, sysoptname, optval, &optvalsize);
   Write32(optvalsize_linux, optvalsize);
   CopyToUserWrite(m, optvaladdr, optval, optvalsize);
   CopyToUserWrite(m, optvalsizeaddr, optvalsize_linux,
                   sizeof(optvalsize_linux));
-  free(optval);
   return rc;
 }
 
@@ -3267,12 +3253,11 @@ static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
   // ──Quoth the Linux Programmer's Manual § readlink(2). Some libc
   // implementations (e.g. Musl) consider it to be posixly incorrect.
   if (bufsiz <= 0) return einval();
-  if (!(buf = (char *)malloc(bufsiz))) return -1;
+  if (!(buf = (char *)AddToFreeList(m, malloc(bufsiz)))) return -1;
   if ((rc = OverlaysReadlink(GetDirFildes(dirfd), LoadStr(m, path), buf,
                              bufsiz)) != -1) {
     if (CopyToUserWrite(m, bufaddr, buf, rc) == -1) rc = -1;
   }
-  free(buf);
   return rc;
 }
 
@@ -3707,14 +3692,13 @@ static ssize_t SysGetrandom(struct Machine *m, i64 a, size_t n, int f) {
     return einval();
   }
   if (n) {
-    if (!(p = (char *)malloc(n))) return -1;
+    if (!(p = (char *)AddToFreeList(m, malloc(n)))) return -1;
     RESTARTABLE(rc = GetRandom(p, n, f));
     if (rc != -1) {
       if (CopyToUserWrite(m, a, p, rc) == -1) {
         rc = -1;
       }
     }
-    free(p);
   } else {
     rc = 0;
   }
@@ -4571,7 +4555,7 @@ static int Poll(struct Machine *m, i64 fdsaddr, u64 nfds,
   int (*poll_impl)(struct pollfd *, nfds_t, int);
   if (!mulo(nfds, sizeof(struct pollfd_linux), &gfdssize) &&
       gfdssize <= 0x7ffff000) {
-    if ((gfds = (struct pollfd_linux *)malloc(gfdssize))) {
+    if ((gfds = (struct pollfd_linux *)AddToFreeList(m, malloc(gfdssize)))) {
       rc = 0;
       CopyFromUserRead(m, gfds, fdsaddr, gfdssize);
       for (;;) {
@@ -4642,7 +4626,6 @@ static int Poll(struct Machine *m, i64 fdsaddr, u64 nfds,
     } else {
       rc = enomem();
     }
-    free(gfds);
     return rc;
   } else {
     return einval();
@@ -4937,33 +4920,32 @@ static i32 SysGetgroups(struct Machine *m, i32 size, i64 addr) {
 #endif
     size = MIN(size, ngroups_max);
     if (!IsValidMemory(m, addr, (size_t)size * 4, PROT_WRITE)) return efault();
-    if (!(group = (gid_t *)malloc(size * sizeof(gid_t)))) return -1;
+    if (!(group = (gid_t *)AddToFreeList(m, malloc(size * sizeof(gid_t))))) {
+      return -1;
+    }
     if ((ngroups = getgroups(size, group)) != -1) {
       for (i = 0; i < ngroups; ++i) {
         Write32(i32buf, group[i]);
         CopyToUserWrite(m, addr + (size_t)i * 4, i32buf, 4);
       }
     }
-    free(group);
     return ngroups;
   }
 }
 
 static i32 SysSetgroups(struct Machine *m, i32 size, i64 addr) {
 #ifdef HAVE_SETGROUPS
-  int i, rc;
+  int i;
   gid_t *group;
   const u8 *group_linux;
   if (!(group_linux = (const u8 *)SchlepR(m, addr, (size_t)size * 4)) ||
-      !(group = (gid_t *)malloc(size * sizeof(gid_t)))) {
+      !(group = (gid_t *)AddToFreeList(m, malloc(size * sizeof(gid_t))))) {
     return -1;
   }
   for (i = 0; i < size; ++i) {
     group[i] = Read32(group_linux + (size_t)i * 4);
   }
-  rc = setgroups(size, group);
-  free(group);
-  return rc;
+  return setgroups(size, group);
 #else
   return enosys();
 #endif
@@ -5211,7 +5193,7 @@ void OpSyscall(P) {
     SYSCALL(2, 0x005, "fstat", SysFstat, STRACE_FSTAT);
     SYSCALL(2, 0x006, "lstat", SysLstat, STRACE_LSTAT);
     SYSCALL(3, 0x007, "poll", SysPoll, STRACE_3);
-    SYSCALL(3, 0x008, "lseek", SysLseek, STRACE_3);
+    SYSCALL(3, 0x008, "lseek", SysLseek, STRACE_LSEEK);
     SYSCALL(6, 0x009, "mmap", SysMmap, STRACE_MMAP);
     SYSCALL(4, 0x011, "pread", SysPread, STRACE_PREAD);
     SYSCALL(4, 0x012, "pwrite", SysPwrite, STRACE_PWRITE);

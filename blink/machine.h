@@ -237,14 +237,14 @@ struct System {
   _Atomic(bool) killer;
   unsigned long codesize;
   struct MachineMemstat memstat;
-  struct Dll *machines GUARDED_BY(machines_lock);
-  unsigned next_tid GUARDED_BY(machines_lock);
+  struct Dll *machines;
+  unsigned next_tid;
   intptr_t ender;
   struct Jit jit;
   struct Fds fds;
   struct Elf elf;
   sigset_t exec_sigmask;
-  struct sigaction_linux hands[64] GUARDED_BY(sig_lock);
+  struct sigaction_linux hands[64];
   u64 blinksigs;  // signals blink itself handles
   struct rlimit_linux rlim[RLIM_NLIMITS_LINUX];
 #ifdef HAVE_THREADS
@@ -385,13 +385,15 @@ struct Machine {                           //
   struct OpCache opcache[1];               //
 };                                         //
 
+extern _Thread_local siginfo_t g_siginfo;
 extern _Thread_local struct Machine *g_machine;
 extern const nexgen32e_f kConvert[3];
 extern const nexgen32e_f kSax[3];
 
+_Noreturn void Blink(struct Machine *);
+_Noreturn void Actor(struct Machine *);
 struct System *NewSystem(int);
 void FreeSystem(struct System *);
-_Noreturn void Actor(struct Machine *);
 void SignalActor(struct Machine *);
 void SetMachineMode(struct Machine *, int);
 struct Machine *NewMachine(struct System *, struct Machine *);

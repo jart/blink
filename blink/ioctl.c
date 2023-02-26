@@ -381,6 +381,7 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlGetInt32(m, fildes, SIOCGPGRP, addr);
 #endif
 #ifdef HAVE_SIOCGIFCONF
+#ifndef DISABLE_SOCKETS
 #ifndef DISABLE_NONPOSIX
     case SIOCGIFCONF_LINUX:
       return IoctlSiocgifconf(m, fildes, addr);
@@ -392,8 +393,9 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFBRDADDR);
     case SIOCGIFDSTADDR_LINUX:
       return IoctlSiocgifaddr(m, fildes, addr, SIOCGIFDSTADDR);
-#endif
-#endif
+#endif /* DISABLE_NONPOSIX */
+#endif /* DISABLE_SOCKETS */
+#endif /* HAVE_SIOCGIFCONF */
     default:
       LOGF("missing ioctl %#" PRIx64, request);
       return einval();

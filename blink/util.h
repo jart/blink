@@ -67,7 +67,7 @@ u64 Vigna(u64[1]);
 #define realpath realpath_
 #endif
 
-#ifndef HAVE_MEMCCPY
+#if !defined(HAVE_MEMCCPY) || defined(TINY)
 #ifdef memccpy
 #undef memccpy
 #endif

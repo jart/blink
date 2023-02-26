@@ -516,6 +516,8 @@ void OpImulGvqpEvqpImm(P) {
   }
 }
 
+#ifndef DISABLE_BMI2
+
 static void OpAdx(P, i64 op64(u64, u64, struct Machine *),
                   i64 op32(u64, u64, struct Machine *)) {
   if (Rexw(rde)) {
@@ -597,3 +599,5 @@ void Op2f6(P) {
     OpUdImpl(m);
   }
 }
+
+#endif /* DISABLE_BMI2 */

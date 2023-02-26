@@ -14,6 +14,7 @@
 // #define DISABLE_METAL
 // #define DISABLE_MMX
 // #define DISABLE_BCD
+// #define DISABLE_BMI2
 
 // #define HAVE_FORK
 // #define HAVE_SYNC

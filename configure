@@ -92,6 +92,9 @@ if [ "$1" = "--help" ]; then
   echo "    disables linux apis that aren't part of posix (shaves ~6kb off MODE=tiny)"
   echo "    intended for testing compliance of guest programs"
   echo
+  echo "  --disable-bmi2"
+  echo "    disables bmi2 and adx instruction sets (shaves ~3kb off MODE=tiny)"
+  echo
   echo "  --disable-ancillary"
   echo "    disables sendmsg/recvmsg control data support (shaves ~2kb off MODE=tiny)"
   echo
@@ -391,6 +394,11 @@ for x; do
   elif [ "$x" = "--disable-nonposix" ]; then
     uncomment "#define DISABLE_NONPOSIX"
     DISABLE_NONPOSIX=1
+
+  elif [ "$x" = "--enable-bmi2" ]; then
+    comment "#define DISABLE_BMI2"
+  elif [ "$x" = "--disable-bmi2" ]; then
+    uncomment "#define DISABLE_BMI2"
 
   elif [ "$x" = "--enable-bcd" ]; then
     comment "#define DISABLE_BCD"

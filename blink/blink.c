@@ -90,7 +90,7 @@ Config: ./configure MODE=" BUILD_MODE " " CONFIG_ARGUMENTS "\n"
 
 #define OPTS "hvjemZs0L:C:"
 
-static const char USAGE[] =
+_Alignas(1) static const char USAGE[] =
     " [-" OPTS "] PROG [ARGS...]\n"
     "Options:\n"
     "  -h                   help\n"
@@ -128,7 +128,6 @@ extern char **environ;
 static bool FLAG_zero;
 static bool FLAG_nojit;
 static char g_pathbuf[PATH_MAX];
-static siginfo_t g_siginfo;
 
 static void OnSigSys(int sig) {
   // do nothing
@@ -174,16 +173,8 @@ static void OnFatalSystemSignal(int sig, siginfo_t *si, void *ptr) {
   siglongjmp(g_machine->onhalt, kMachineFatalSystemSignal);
 }
 
-static void HandleFatalSystemSignal(struct Machine *m) {
-  int sig;
-  RestoreIp(m);
-  m->faultaddr = ConvertHostToGuestAddress(m->system, g_siginfo.si_addr);
-  sig = UnXlatSignal(g_siginfo.si_signo);
-  DeliverSignalToUser(m, sig, UnXlatSiCode(sig, g_siginfo.si_code));
-}
-
 static int Exec(char *execfn, char *prog, char **argv, char **envp) {
-  int i, rc;
+  int i;
   sigset_t oldmask;
   struct Machine *m, *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
@@ -218,20 +209,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
     // restore the signal mask we had before execve() was called
     unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
   }
-  // meta interpreter loop
-  for (;;) {
-    m->nofault = false;
-    if (!(rc = sigsetjmp(m->onhalt, 1))) {
-      m->canhalt = true;
-      Actor(m);
-    }
-    if (IsMakingPath(m)) {
-      AbandonPath(m);
-    }
-    if (rc == kMachineFatalSystemSignal) {
-      HandleFatalSystemSignal(m);
-    }
-  }
+  Blink(m);
 }
 
 static void Print(int fd, const char *s) {
@@ -345,7 +323,9 @@ void exit(int status) {
 int main(int argc, char *argv[]) {
   SetupWeb();
   GetStartDir();
+#ifndef DISABLE_STRACE
   setlocale(LC_ALL, "");
+#endif
   // Ensure utf-8 is printed correctly on windows, this method
   // has issues(http://stackoverflow.com/a/10884364/4279) but
   // should work for at least windows 7 and newer.
@@ -356,7 +336,9 @@ int main(int argc, char *argv[]) {
   WriteErrorInit();
   GetOpts(argc, argv);
   InitMap();
-  if (optind_ == argc) PrintUsage(argc, argv, 48, 2);
+  if (optind_ == argc) {
+    PrintUsage(argc, argv, 48, 2);
+  }
 #ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");

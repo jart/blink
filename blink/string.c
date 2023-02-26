@@ -178,6 +178,7 @@ static void StringOp(P, int op) {
         stop = (Rep(rde) == 2 && GetFlag(m->flags, FLAGS_ZF)) ||
                (Rep(rde) == 3 && !GetFlag(m->flags, FLAGS_ZF));
         break;
+#ifndef DISABLE_METAL
       case STRING_OUTS:
         OpOut(m, Get16(m->dx),
               ReadInt(Load(m, AddressSi(A), n, s[1]), RegLog2(rde)));
@@ -189,6 +190,7 @@ static void StringOp(P, int op) {
         AddDi(A, sgn * n);
         EndStore(m, v, n, p, s[0]);
         break;
+#endif /* DISABLE_METAL */
       default:
         Abort();
     }

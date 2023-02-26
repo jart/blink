@@ -50,7 +50,9 @@
 #include "blink/time.h"
 #include "blink/util.h"
 #include "blink/x86.h"
+#include "blink/xlat.h"
 
+_Thread_local siginfo_t g_siginfo;
 _Thread_local struct Machine *g_machine;
 
 static void OpHintNopEv(P) {
@@ -1398,78 +1400,6 @@ static void OpEmms(P) {
 #endif
 }
 
-int ClassifyOp(u64 rde) {
-  switch (Mopcode(rde)) {
-    default:
-      return kOpNormal;
-    case 0x070:  // OpJo
-    case 0x071:  // OpJno
-    case 0x072:  // OpJb
-    case 0x073:  // OpJae
-    case 0x074:  // OpJe
-    case 0x075:  // OpJne
-    case 0x076:  // OpJbe
-    case 0x077:  // OpJa
-    case 0x078:  // OpJs
-    case 0x079:  // OpJns
-    case 0x07A:  // OpJp
-    case 0x07B:  // OpJnp
-    case 0x07C:  // OpJl
-    case 0x07D:  // OpJge
-    case 0x07E:  // OpJle
-    case 0x07F:  // OpJg
-    case 0x09A:  // OpCallf
-    case 0x0C2:  // OpRetIw
-    case 0x0C3:  // OpRet
-    case 0x0CA:  // OpRetf
-    case 0x0CB:  // OpRetf
-    case 0x0E0:  // OpLoopne
-    case 0x0E1:  // OpLoope
-    case 0x0E2:  // OpLoop1
-    case 0x0E3:  // OpJcxz
-    case 0x0E8:  // OpCallJvds
-    case 0x0E9:  // OpJmp
-    case 0x0EA:  // OpJmpf
-    case 0x0EB:  // OpJmp
-    case 0x0CF:  // OpIret
-    case 0x180:  // OpJo
-    case 0x181:  // OpJno
-    case 0x182:  // OpJb
-    case 0x183:  // OpJae
-    case 0x184:  // OpJe
-    case 0x185:  // OpJne
-    case 0x186:  // OpJbe
-    case 0x187:  // OpJa
-    case 0x188:  // OpJs
-    case 0x189:  // OpJns
-    case 0x18A:  // OpJp
-    case 0x18B:  // OpJnp
-    case 0x18C:  // OpJl
-    case 0x18D:  // OpJge
-    case 0x18E:  // OpJle
-    case 0x18F:  // OpJg
-      return kOpBranching;
-    case 0x0FF:  // Op0ff
-      switch (ModrmReg(rde)) {
-        case 2:  // call Ev
-        case 4:  // jmp Ev
-          return kOpBranching;
-        default:
-          return kOpNormal;
-      }
-    case 0x0F1:  // OpInterrupt1
-    case 0x0CC:  // OpInterrupt3
-    case 0x0CD:  // OpInterruptImm
-    case 0x105:  // OpSyscall
-      // case 0x1AE:  // Op1ae (mfence, lfence, clflush, etc.)
-      // precious ops are excluded from jit pathmaking entirely. not
-      // doing this would be inviting disaster, since system calls and
-      // longjmp could do anything. for example, we don't want clone()
-      // to fork a jit path under construction.
-      return kOpPrecious;
-  }
-}
-
 #ifdef DISABLE_METAL
 #define OpCallf     OpUd
 #define OpDecZv     OpUd
@@ -1496,6 +1426,17 @@ int ClassifyOp(u64 rde) {
 #define OpWrmsr     OpUd
 #endif
 
+#ifdef DISABLE_X87
+#define OpFwait OpUd
+#endif
+
+#ifdef DISABLE_BMI2
+#define Op2f5  OpUd
+#define Op2f6  OpUd
+#define OpShx  OpUd
+#define OpRorx OpUd
+#endif
+
 #ifdef DISABLE_BCD
 #define OpDas OpUd
 #define OpAaa OpUd
@@ -1503,10 +1444,6 @@ int ClassifyOp(u64 rde) {
 #define OpAam OpUd
 #define OpAad OpUd
 #define OpDaa OpUd
-#endif
-
-#ifdef DISABLE_X87
-#define OpFwait OpUd
 #endif
 
 static const nexgen32e_f kNexgen32e[] = {
@@ -2200,6 +2137,33 @@ void Actor(struct Machine *mm) {
     ExecuteInstruction(m);
     if (atomic_load_explicit(&m->attention, memory_order_acquire)) {
       CheckForSignals(m);
+    }
+  }
+}
+
+static void HandleFatalSystemSignal(struct Machine *m) {
+  int sig;
+  RestoreIp(m);
+  m->faultaddr = ConvertHostToGuestAddress(m->system, g_siginfo.si_addr);
+  sig = UnXlatSignal(g_siginfo.si_signo);
+  DeliverSignalToUser(m, sig, UnXlatSiCode(sig, g_siginfo.si_code));
+}
+
+void Blink(struct Machine *m) {
+  int rc;
+  for (;;) {
+    if (!(rc = sigsetjmp(m->onhalt, 1))) {
+      m->canhalt = true;
+      Actor(m);
+    }
+    m->sigdepth = 0;
+    m->nofault = false;
+    CollectGarbage(m, 0);
+    if (IsMakingPath(m)) {
+      AbandonPath(m);
+    }
+    if (rc == kMachineFatalSystemSignal) {
+      HandleFatalSystemSignal(m);
     }
   }
 }

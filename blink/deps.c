@@ -401,3 +401,75 @@ int GetFlagDeps(u64 rde) {
       }
   }
 }
+
+int ClassifyOp(u64 rde) {
+  switch (Mopcode(rde)) {
+    default:
+      return kOpNormal;
+    case 0x070:  // OpJo
+    case 0x071:  // OpJno
+    case 0x072:  // OpJb
+    case 0x073:  // OpJae
+    case 0x074:  // OpJe
+    case 0x075:  // OpJne
+    case 0x076:  // OpJbe
+    case 0x077:  // OpJa
+    case 0x078:  // OpJs
+    case 0x079:  // OpJns
+    case 0x07A:  // OpJp
+    case 0x07B:  // OpJnp
+    case 0x07C:  // OpJl
+    case 0x07D:  // OpJge
+    case 0x07E:  // OpJle
+    case 0x07F:  // OpJg
+    case 0x09A:  // OpCallf
+    case 0x0C2:  // OpRetIw
+    case 0x0C3:  // OpRet
+    case 0x0CA:  // OpRetf
+    case 0x0CB:  // OpRetf
+    case 0x0E0:  // OpLoopne
+    case 0x0E1:  // OpLoope
+    case 0x0E2:  // OpLoop1
+    case 0x0E3:  // OpJcxz
+    case 0x0E8:  // OpCallJvds
+    case 0x0E9:  // OpJmp
+    case 0x0EA:  // OpJmpf
+    case 0x0EB:  // OpJmp
+    case 0x0CF:  // OpIret
+    case 0x180:  // OpJo
+    case 0x181:  // OpJno
+    case 0x182:  // OpJb
+    case 0x183:  // OpJae
+    case 0x184:  // OpJe
+    case 0x185:  // OpJne
+    case 0x186:  // OpJbe
+    case 0x187:  // OpJa
+    case 0x188:  // OpJs
+    case 0x189:  // OpJns
+    case 0x18A:  // OpJp
+    case 0x18B:  // OpJnp
+    case 0x18C:  // OpJl
+    case 0x18D:  // OpJge
+    case 0x18E:  // OpJle
+    case 0x18F:  // OpJg
+      return kOpBranching;
+    case 0x0FF:  // Op0ff
+      switch (ModrmReg(rde)) {
+        case 2:  // call Ev
+        case 4:  // jmp Ev
+          return kOpBranching;
+        default:
+          return kOpNormal;
+      }
+    case 0x0F1:  // OpInterrupt1
+    case 0x0CC:  // OpInterrupt3
+    case 0x0CD:  // OpInterruptImm
+    case 0x105:  // OpSyscall
+      // case 0x1AE:  // Op1ae (mfence, lfence, clflush, etc.)
+      // precious ops are excluded from jit pathmaking entirely. not
+      // doing this would be inviting disaster, since system calls and
+      // longjmp could do anything. for example, we don't want clone()
+      // to fork a jit path under construction.
+      return kOpPrecious;
+  }
+}
