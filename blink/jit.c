@@ -242,14 +242,14 @@ bool CanJitForImmediateEffect(void) {
 }
 
 static u8 *AllocateJitMemory(long align, long size) {
-  intptr_t p;
+  uintptr_t p;
   long i, brk;
   unassert(size > 0);
   unassert(IS2POW(align));
   unassert(align <= kJitMemoryAlign);
   brk = atomic_load_explicit(&g_jit.brk, memory_order_relaxed);
   do {
-    p = (intptr_t)g_code;
+    p = (uintptr_t)g_code;
     i = ROUNDUP(p + brk, align) - p;
     if (i + size > kJitMemorySize) {
       LOG_ONCE(LOGF("ran out of jit memory"));
@@ -260,7 +260,7 @@ static u8 *AllocateJitMemory(long align, long size) {
   return g_code + i;
 }
 
-static int MakeJitJump(u8 buf[5], intptr_t pc, intptr_t addr) {
+static int MakeJitJump(u8 buf[5], uintptr_t pc, uintptr_t addr) {
   int n;
   intptr_t disp;
 #if defined(__x86_64__)
@@ -270,7 +270,8 @@ static int MakeJitJump(u8 buf[5], intptr_t pc, intptr_t addr) {
   Write32(buf + 1, disp & kAmdDispMask);
   n = 5;
 #elif defined(__aarch64__)
-  disp = (addr - pc) >> 2;
+  disp = addr - pc;
+  disp >>= 2;
   unassert(kArmDispMin <= disp && disp <= kArmDispMax);
   Write32(buf, kArmJmp | (disp & kArmDispMask));
   n = 4;
@@ -336,7 +337,7 @@ int InitJit(struct Jit *jit) {
   jit->blocksize = blocksize = ROUNDUP(kJitMinBlockSize, jit->pagesize);
   unassert(!pthread_mutex_init(&jit->lock, 0));
   jit->hooks.n = RoundupTwoPow(kJitMemorySize / kJitAveragePath * 2);
-  unassert(jit->hooks.virt = (_Atomic(intptr_t) *)calloc(
+  unassert(jit->hooks.virt = (_Atomic(uintptr_t) *)calloc(
                jit->hooks.n, sizeof(*jit->hooks.virt)));
   unassert(jit->hooks.func =
                (_Atomic(int) *)calloc(jit->hooks.n, sizeof(*jit->hooks.func)));
@@ -439,7 +440,7 @@ bool SetJitHook(struct Jit *jit, u64 virt, intptr_t func) {
   return true;
 }
 
-intptr_t GetJitHook(struct Jit *jit, u64 virt, intptr_t dflt) {
+uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
   int offset;
   uintptr_t key;
   unsigned hash, spot, step;
@@ -453,7 +454,7 @@ intptr_t GetJitHook(struct Jit *jit, u64 virt, intptr_t dflt) {
     key = atomic_load_explicit(jit->hooks.virt + spot, memory_order_acquire);
     if (key == virt) {
       if (offset) {
-        return (intptr_t)IMAGE_END + offset;
+        return (uintptr_t)IMAGE_END + offset;
       } else {
         return dflt;
       }
@@ -607,7 +608,7 @@ static struct Dll *GetJitJumps(struct Jit *jit, u64 virt) {
   return res;
 }
 
-static void FixupJitJumps(struct Dll *list, intptr_t addr) {
+static void FixupJitJumps(struct Dll *list, uintptr_t addr) {
   int n;
   union {
     u32 i;
@@ -621,8 +622,8 @@ static void FixupJitJumps(struct Dll *list, intptr_t addr) {
     e2 = dll_next(list, e);
     jj = JITJUMP_CONTAINER(e);
     u.q = 0;
-    n = MakeJitJump(u.b, (intptr_t)jj->code, addr + jj->addend);
-    unassert(!((intptr_t)jj->code & 3));
+    n = MakeJitJump(u.b, (uintptr_t)jj->code, addr + jj->addend);
+    unassert(!((uintptr_t)jj->code & 3));
 #if defined(__aarch64__)
     atomic_store_explicit((_Atomic(u32) *)jj->code, u.i, memory_order_release);
 #elif defined(__x86_64__)
@@ -641,7 +642,7 @@ static void FixupJitJumps(struct Dll *list, intptr_t addr) {
   }
 }
 
-static void UpdateJitHook(struct Jit *jit, u64 virt, intptr_t addr) {
+static void UpdateJitHook(struct Jit *jit, u64 virt, uintptr_t addr) {
   FixupJitJumps(GetJitJumps(jit, virt), addr);
   SetJitHook(jit, virt, addr);
 }
@@ -683,7 +684,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
     while ((e = dll_first(jb->staged))) {
       js = JITSTAGE_CONTAINER(e);
       if (js->index <= blockoff) {
-        UpdateJitHook(jit, js->virt, (intptr_t)jb->addr + js->start);
+        UpdateJitHook(jit, js->virt, (uintptr_t)jb->addr + js->start);
         dll_remove(&jb->staged, e);
         FreeJitStage(js);
         ++count;
@@ -770,7 +771,7 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb, u64 virt) {
       addr = jb->addr + jb->start;
       if (CanJitForImmediateEffect()) {
         sys_icache_invalidate(addr, jb->index - jb->start);
-        UpdateJitHook(jit, virt, (intptr_t)addr);
+        UpdateJitHook(jit, virt, (uintptr_t)addr);
       } else if ((js = NewJitStage())) {
         js->virt = virt;
         js->start = jb->start;
@@ -928,8 +929,9 @@ bool AppendJitMovReg(struct JitBlock *jb, int dst, int src) {
  */
 bool AppendJitCall(struct JitBlock *jb, void *func) {
   int n;
-  intptr_t disp, addr;
-  addr = (intptr_t)func;
+  intptr_t disp;
+  uintptr_t addr;
+  addr = (uintptr_t)func;
 #if defined(__x86_64__)
   u8 buf[5];
   disp = addr - (GetJitPc(jb) + 5);
@@ -973,7 +975,8 @@ bool AppendJitCall(struct JitBlock *jb, void *func) {
   //
   //   FUNC = PC + ((i32)((u32)(INSN & 0x03ffffffu) << 6) >> 4)
   //
-  disp = (addr - GetJitPc(jb)) >> 2;
+  disp = addr - GetJitPc(jb);
+  disp >>= 2;
   unassert(kArmDispMin <= disp && disp <= kArmDispMax);
   buf[0] = kArmCall | (disp & kArmDispMask);
   n = 4;
@@ -990,7 +993,7 @@ bool AppendJitCall(struct JitBlock *jb, void *func) {
  */
 bool AppendJitJump(struct JitBlock *jb, void *code) {
   u8 buf[5];
-  int n = MakeJitJump(buf, GetJitPc(jb), (intptr_t)code);
+  int n = MakeJitJump(buf, GetJitPc(jb), (uintptr_t)code);
   return AppendJit(jb, buf, n);
 }
 

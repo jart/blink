@@ -450,7 +450,8 @@ void Connect(P, u64 pc, bool avoid_obvious_cycles) {
   void *jump;
   nexgen32e_f f;
   if (!(avoid_obvious_cycles && pc == m->path.start)) {
-    f = (nexgen32e_f)GetJitHook(&m->system->jit, pc, (intptr_t)GeneralDispatch);
+    f = (nexgen32e_f)GetJitHook(&m->system->jit, pc,
+                                (uintptr_t)GeneralDispatch);
     if (f != JitlessDispatch && f != GeneralDispatch) {
       jump = (u8 *)f + GetPrologueSize();
     } else {
@@ -2019,7 +2020,7 @@ void JitlessDispatch(P) {
 void GeneralDispatch(P) {
 #ifdef HAVE_JIT
   int opclass;
-  intptr_t jitpc = 0;
+  uintptr_t jitpc = 0;
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
            GetPc(m));
   LoadInstruction(m, GetPc(m));
@@ -2108,7 +2109,7 @@ void ExecuteInstruction(struct Machine *m) {
   nexgen32e_f func;
   if (CanJit(m)) {
     func = (nexgen32e_f)GetJitHook(&m->system->jit, m->ip,
-                                   (intptr_t)GeneralDispatch);
+                                   (uintptr_t)GeneralDispatch);
     if (!IsMakingPath(m)) {
       STATISTIC(++instructions_dispatched);
       func(DISPATCH_NOTHING);
@@ -2141,7 +2142,7 @@ void Actor(struct Machine *mm) {
   }
 }
 
-static void HandleFatalSystemSignal(struct Machine *m) {
+void HandleFatalSystemSignal(struct Machine *m) {
   int sig;
   RestoreIp(m);
   m->faultaddr = ConvertHostToGuestAddress(m->system, g_siginfo.si_addr);
@@ -2156,8 +2157,12 @@ void Blink(struct Machine *m) {
       m->canhalt = true;
       Actor(m);
     }
+    m->sysdepth = 0;
     m->sigdepth = 0;
+    m->canhalt = false;
     m->nofault = false;
+    m->insyscall = false;
+    CollectPageLocks(m);
     CollectGarbage(m, 0);
     if (IsMakingPath(m)) {
       AbandonPath(m);

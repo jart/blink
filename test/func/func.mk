@@ -57,6 +57,10 @@ o/$(MODE)/test/func/%.com:						\
 	@echo "o/$(MODE)/blink/blink -m $< || exit" >>$@
 	@echo "echo [test] o/$(MODE)/blink/blink -j $< >&2" >>$@
 	@echo "o/$(MODE)/blink/blink -j $< || exit" >>$@
+	@echo "echo [test] o/$(MODE)/blink/blink -L/dev/null -sss $< >&2" >>$@
+	@echo "o/$(MODE)/blink/blink -L/dev/null -sss $< || exit" >>$@
+	@echo "echo [test] o/$(MODE)/blink/blink -L/dev/null -msss $< >&2" >>$@
+	@echo "o/$(MODE)/blink/blink -L/dev/null -msss $< || exit" >>$@
 	@chmod +x $@
 
 .PHONY: o/$(MODE)/test/func

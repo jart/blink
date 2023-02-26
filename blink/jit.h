@@ -139,7 +139,7 @@ struct JitHooks {
   unsigned n;
   _Atomic(unsigned) i;
   _Atomic(int) *func;
-  _Atomic(intptr_t) *virt;
+  _Atomic(uintptr_t) *virt;
 };
 
 struct Jit {
@@ -175,7 +175,7 @@ bool AppendJitSetReg(struct JitBlock *, int, u64);
 bool AppendJitMovReg(struct JitBlock *, int, int);
 bool FinishJit(struct Jit *, struct JitBlock *, u64);
 bool RecordJitJump(struct JitBlock *, u64, int);
-intptr_t GetJitHook(struct Jit *, u64, intptr_t);
+uintptr_t GetJitHook(struct Jit *, u64, uintptr_t);
 bool SetJitHook(struct Jit *, u64, intptr_t);
 int ClearJitHooks(struct Jit *);
 
@@ -197,8 +197,8 @@ static inline long GetJitRemaining(const struct JitBlock *jb) {
  *
  * @return absolute instruction pointer memory address in bytes
  */
-static inline intptr_t GetJitPc(const struct JitBlock *jb) {
-  return (intptr_t)jb->addr + jb->index;
+static inline uintptr_t GetJitPc(const struct JitBlock *jb) {
+  return (uintptr_t)jb->addr + jb->index;
 }
 
 /**

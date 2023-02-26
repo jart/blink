@@ -136,11 +136,9 @@ static void OnSigSys(int sig) {
 static void PrintDiagnostics(struct Machine *m) {
   ERRF("additional information\n"
        "\t%s\n"
+       "%s\n"
        "%s",
-       GetBacktrace(m), FormatPml4t(m));
-#ifdef DEBUG
-  PrintBacktrace();
-#endif
+       GetBacktrace(m), FormatPml4t(m), GetBlinkBacktrace());
 }
 
 void TerminateSignal(struct Machine *m, int sig) {
@@ -170,6 +168,8 @@ void TerminateSignal(struct Machine *m, int sig) {
 
 static void OnFatalSystemSignal(int sig, siginfo_t *si, void *ptr) {
   g_siginfo = *si;
+  unassert(g_machine);
+  unassert(g_machine->canhalt);
   siglongjmp(g_machine->onhalt, kMachineFatalSystemSignal);
 }
 
@@ -191,6 +191,8 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
       AddStdFd(&m->system->fds, i);
     }
   } else {
+    unassert(!m->sysdepth);
+    unassert(!m->pagelocks.i);
     unassert(!FreeVirtual(old->system, -0x800000000000, 0x1000000000000));
     for (i = 1; i <= 64; ++i) {
       if (Read64(old->system->hands[i - 1].handler) == SIG_IGN_LINUX) {

@@ -146,9 +146,9 @@ bool FLAG_statistics;
 // old musl toolchains using `int ioctl(int, int, ...)`
 static int SystemIoctl(int fd, unsigned long request, ...) {
   va_list va;
-  intptr_t arg;
+  uintptr_t arg;
   va_start(va, request);
-  arg = va_arg(va, intptr_t);
+  arg = va_arg(va, uintptr_t);
   va_end(va);
   return ioctl(fd, request, (void *)arg);
 }
@@ -245,9 +245,10 @@ void SignalActor(struct Machine *mm) {
   }
 }
 
-bool DeliverSignalRecursively(struct Machine *m) {
+bool DeliverSignalRecursively(struct Machine *m, int sig) {
   bool issigsuspend;
   sigset_t unblock, oldmask;
+  SYS_LOGF("recursing %s", DescribeSignal(sig));
   if (m->sigdepth >= kMaxSigDepth) {
     LOGF("exceeded max signal depth");
     return false;
@@ -263,7 +264,9 @@ bool DeliverSignalRecursively(struct Machine *m) {
     unassert(!pthread_sigmask(SIG_BLOCK, &unblock, &oldmask));
   }
   m->restored = false;
+  m->insyscall = false;
   SignalActor(m);
+  m->insyscall = true;
   m->restored = false;
   if (issigsuspend) {
     unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
@@ -284,7 +287,7 @@ HandleSomeMoreInterrupts:
     TerminateSignal(m, sig);
   }
   if (delivered) {
-    if (DeliverSignalRecursively(m)) {
+    if (DeliverSignalRecursively(m, delivered)) {
       if (restart && restartable) {
         // try to consume some more signals while we're here
         goto HandleSomeMoreInterrupts;
@@ -406,20 +409,16 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
   int pid, newpid = 0;
   _Atomic(int) *ctid_ptr;
   unassert(!m->path.jb);
-  if ((flags & CLONE_CHILD_SETTID_LINUX) &&
-      ((ctid & (sizeof(int) - 1)) ||
-       !(ctid_ptr = (_Atomic(int) *)LookupAddress(m, ctid)))) {
-    LOGF("bad clone() ptid / ctid pointers: %#" PRIx64, flags);
-    return efault();
-  }
-  // NOTES ON LOCKING HIERARCHY
+  // NOTES ON THE LOCKING TOPOLOGY
   // exec_lock must come before sig_lock (see dup3)
   // exec_lock must come before fds.lock (see dup3)
   // exec_lock must come before fds.lock (see execve)
   // mmap_lock must come before fds.lock (see GetOflags)
+  // mmap_lock must come before pagelocks_lock (see FreePage)
   LOCK(&m->system->exec_lock);
   LOCK(&m->system->sig_lock);
   LOCK(&m->system->mmap_lock);
+  LOCK(&m->system->pagelocks_lock);
   LOCK(&m->system->fds.lock);
   LOCK(&m->system->machines_lock);
 #ifndef HAVE_PTHREAD_PROCESS_SHARED
@@ -436,17 +435,12 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
 #endif
   UNLOCK(&m->system->machines_lock);
   UNLOCK(&m->system->fds.lock);
+  UNLOCK(&m->system->pagelocks_lock);
   UNLOCK(&m->system->mmap_lock);
   UNLOCK(&m->system->sig_lock);
   UNLOCK(&m->system->exec_lock);
   if (!pid) {
     newpid = getpid();
-    if (flags & CLONE_CHILD_SETTID_LINUX) {
-      atomic_store_explicit(ctid_ptr, Little32(newpid), memory_order_release);
-    }
-    if (flags & CLONE_CHILD_CLEARTID_LINUX) {
-      m->ctid = ctid;
-    }
     if (stack) {
       Put64(m->sp, stack);
     }
@@ -463,6 +457,16 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
     // protection for JIT blocks after forking.
     FixJitProtection(&m->system->jit);
 #endif
+    if ((flags & (CLONE_CHILD_SETTID_LINUX | CLONE_CHILD_CLEARTID_LINUX)) &&
+        !(ctid & (sizeof(i32) - 1)) &&
+        (ctid_ptr = (_Atomic(i32) *)LookupAddress(m, ctid))) {
+      if (flags & CLONE_CHILD_SETTID_LINUX) {
+        atomic_store_explicit(ctid_ptr, Little32(newpid), memory_order_release);
+      }
+      if (flags & CLONE_CHILD_CLEARTID_LINUX) {
+        m->ctid = ctid;
+      }
+    }
   }
   return pid;
 }
@@ -477,10 +481,16 @@ static int SysVfork(struct Machine *m) {
 }
 
 static void *OnSpawn(void *arg) {
+  int rc;
   struct Machine *m = (struct Machine *)arg;
   THR_LOGF("pid=%d tid=%d OnSpawn", m->system->pid, m->tid);
   m->thread = pthread_self();
-  unassert(!pthread_sigmask(SIG_SETMASK, &m->spawn_sigmask, 0));
+  if (!(rc = sigsetjmp(m->onhalt, 1))) {
+    m->canhalt = true;
+    unassert(!pthread_sigmask(SIG_SETMASK, &m->spawn_sigmask, 0));
+  } else if (rc == kMachineFatalSystemSignal) {
+    HandleFatalSystemSignal(m);
+  }
   Blink(m);
 }
 
@@ -660,7 +670,7 @@ static int SysFutexWait(struct Machine *m,  //
   } else {
     deadline = GetMaxTime();
   }
-  if (!(mem = GetAddress(m, uaddr))) return efault();
+  if (!(mem = LookupAddress(m, uaddr))) return -1;
   LOCK(&g_bus->futexes.lock);
   if (Load32(mem) != expect) {
     UNLOCK(&g_bus->futexes.lock);
@@ -691,8 +701,8 @@ static int SysFutexWait(struct Machine *m,  //
       rc = EINTR;
       break;
     }
-    if (!(mem = GetAddress(m, uaddr))) {
-      rc = EFAULT;
+    if (!(mem = LookupAddress(m, uaddr))) {
+      rc = errno;
       break;
     }
     LOCK(&f->lock);
@@ -876,12 +886,8 @@ static i32 SysGetRobustList(struct Machine *m, int pid, i64 head_ptr_addr,
 }
 
 static i32 SysSetRobustList(struct Machine *m, i64 head_addr, u64 len) {
-  if (len != sizeof(struct robust_list_linux)) {
-    return einval();
-  }
-  if (!IsValidMemory(m, head_addr, len, PROT_READ | PROT_WRITE)) {
-    return efault();
-  }
+  if (len != sizeof(struct robust_list_linux)) return einval();
+  if (!IsValidMemory(m, head_addr, len, PROT_READ | PROT_WRITE)) return -1;
   m->robust_list = head_addr;
   return 0;
 }
@@ -898,7 +904,6 @@ static int SysSchedSetaffinity(struct Machine *m,  //
                                i64 maskaddr) {
   if (ValidateAffinityPid(m, pid) == -1) return -1;
 #ifdef HAVE_SCHED_GETAFFINITY
-  int rc;
   u8 *mask;
   size_t i, n;
   cpu_set_t sysmask;
@@ -912,8 +917,7 @@ static int SysSchedSetaffinity(struct Machine *m,  //
       CPU_SET(i, &sysmask);
     }
   }
-  rc = sched_setaffinity(pid, sizeof(sysmask), &sysmask);
-  return rc;
+  return sched_setaffinity(pid, sizeof(sysmask), &sysmask);
 #else
   return 0;  // do nothing
 #endif
@@ -1088,7 +1092,8 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
       if (m->system->rss < GetMaxRss(m->system)) {
         if (size / 4096 + m->system->vss < GetMaxVss(m->system)) {
           if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
-                             PAGE_RW | PAGE_U | PAGE_XD, -1, 0, 0, 0) != -1) {
+                             PAGE_FILE | PAGE_RW | PAGE_U | PAGE_XD, -1, 0, 0,
+                             0) != -1) {
             if (!m->system->brkchanged) {
               unassert(AddFileMap(m->system, m->system->brk,
                                   addr - m->system->brk, "[heap]", -1));
@@ -1484,9 +1489,7 @@ static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
   if ((type = XlatSocketType(type)) == -1) return -1;
   if ((family = XlatSocketFamily(family)) == -1) return -1;
   if ((protocol = XlatSocketProtocol(protocol)) == -1) return -1;
-  if (!IsValidMemory(m, pipefds_addr, sizeof(fds_linux), PROT_WRITE)) {
-    return efault();
-  }
+  if (!IsValidMemory(m, pipefds_addr, sizeof(fds_linux), PROT_WRITE)) return -1;
   if (flags) LOCK(&m->system->exec_lock);
   if ((rc = socketpair(family, type, protocol, fds)) != -1) {
     FixupSock(fds[0], flags);
@@ -2164,9 +2167,7 @@ static int GetsockoptInt32(struct Machine *m, i32 fd, int level, int optname,
   u32 optvalsize_linux;
   if (!(psize = (u8 *)SchlepRW(m, optvalsizeaddr, 4))) return -1;
   optvalsize_linux = Read32(psize);
-  if (!IsValidMemory(m, optvaladdr, optvalsize_linux, PROT_WRITE)) {
-    return efault();
-  }
+  if (!IsValidMemory(m, optvaladdr, optvalsize_linux, PROT_WRITE)) return -1;
   optvalsize = sizeof(val);
   if ((rc = getsockopt(fd, level, optname, &val, &optvalsize)) != -1) {
     if ((val = xlat(val)) == -1) return -1;
@@ -2201,9 +2202,7 @@ static int GetsockoptLinger(struct Machine *m, i32 fd, i64 optvaladdr,
   struct linger_linux gl;
   if (!(psize = (u8 *)SchlepRW(m, optvalsizeaddr, 4))) return -1;
   optvalsize_linux = Read32(psize);
-  if (!IsValidMemory(m, optvaladdr, optvalsize_linux, PROT_WRITE)) {
-    return efault();
-  }
+  if (!IsValidMemory(m, optvaladdr, optvalsize_linux, PROT_WRITE)) return -1;
   optvalsize = sizeof(hl);
   if ((rc = getsockopt(fd, SOL_SOCKET, SO_LINGER_, &hl, &optvalsize)) != -1) {
     Write32(gl.onoff, hl.l_onoff);
@@ -2603,7 +2602,7 @@ static i64 Getdents(struct Machine *m, i32 fildes, i64 addr, i64 size,
   struct dirent_linux rec;
   if (size < sizeof(rec) - sizeof(rec.name)) return einval();
   if ((fd->oflags & O_DIRECTORY) != O_DIRECTORY) return enotdir();
-  if (!IsValidMemory(m, addr, size, PROT_WRITE)) return efault();
+  if (!IsValidMemory(m, addr, size, PROT_WRITE)) return -1;
   if (fstat(fildes, &st) || !st.st_nlink) return enoent();
   if (!fd->dirstream && !(fd->dirstream = fdopendir(fd->fildes))) {
     return -1;
@@ -3150,7 +3149,7 @@ static int SysFcntlSetownEx(struct Machine *m, i32 fildes, i64 addr) {
 static int SysFcntlGetownEx(struct Machine *m, i32 fildes, i64 addr) {
   int rc;
   struct f_owner_ex_linux gowner;
-  if (!IsValidMemory(m, addr, sizeof(gowner), PROT_WRITE)) return efault();
+  if (!IsValidMemory(m, addr, sizeof(gowner), PROT_WRITE)) return -1;
 #ifdef HAVE_F_GETOWN_EX
   int type;
   struct f_owner_ex howner;
@@ -3481,6 +3480,10 @@ static void ExecveBlink(struct Machine *m, char *prog, char **argv,
     sigfillset(&block);
     unassert(!pthread_sigmask(SIG_BLOCK, &block, &m->system->exec_sigmask));
     if (CanEmulateExecutable(m, &prog, &argv)) {
+      // point of no return
+      // prog/argv/envp are copied onto the freelist
+      m->sysdepth = 0;
+      CollectPageLocks(m);
       // TODO(jart): Prevent possibility of stack overflow.
       SYS_LOGF("m->system->exec(%s)", prog);
       SysCloseExec(m->system);
@@ -3518,7 +3521,7 @@ static int SysWait4(struct Machine *m, int pid, i64 opt_out_wstatus_addr,
                                               sizeof(gwstatusb), PROT_WRITE)) ||
       (opt_out_rusage_addr &&
        !IsValidMemory(m, opt_out_rusage_addr, sizeof(grusage), PROT_WRITE))) {
-    return efault();
+    return -1;
   }
 #ifdef HAVE_WAIT4
   RESTARTABLE(rc = wait4(pid, &wstatus, options, &hrusage));
@@ -3645,7 +3648,7 @@ static int SysPrlimit(struct Machine *m, i32 pid, i32 resource,
       (new_rlimit_addr &&
        !IsValidMemory(m, new_rlimit_addr, sizeof(struct rlimit_linux),
                       PROT_READ))) {
-    return efault();
+    return -1;
   }
 #endif
   if ((old_rlimit_addr && SysGetrlimit(m, resource, old_rlimit_addr) == -1) ||
@@ -3730,8 +3733,8 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
   if (sigsetsize != 8) return einval();
   if (!(1 <= sig && sig <= 64)) return einval();
   if (sig == SIGKILL_LINUX || sig == SIGSTOP_LINUX) return einval();
+  if (old && !IsValidMemory(m, old, sizeof(hand), PROT_WRITE)) return -1;
   memset(&hand, 0, sizeof(hand));
-  if (old && !IsValidMemory(m, old, sizeof(hand), PROT_WRITE)) return efault();
   if (act) {
     if (CopyFromUserRead(m, &hand, act, sizeof(hand)) == -1) return -1;
     flags = Read64(hand.flags);
@@ -3758,7 +3761,7 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
         if (!IsValidMemory(m, Read64(hand.restorer), 1, PROT_EXEC)) {
           LOGF("sigaction() SA_RESTORER at %" PRIx64 " isn't executable",
                Read64(hand.restorer));
-          return efault();
+          return -1;
         }
         break;
     }
@@ -3820,7 +3823,7 @@ static int SysSetitimer(struct Machine *m, int which, i64 neuaddr,
   if ((neuaddr && !(git = (const struct itimerval_linux *)SchlepR(
                         m, neuaddr, sizeof(*git)))) ||
       (oldaddr && !IsValidMemory(m, oldaddr, sizeof(gold), PROT_WRITE))) {
-    return efault();
+    return -1;
   }
   if (git) {
     XlatLinuxToItimerval(&neu, git);
@@ -4028,7 +4031,7 @@ static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
         LOGF("sigaltstack ss_sp=%#" PRIx64 " ss_size=%#" PRIx64
              " didn't exist with read+write permission",
              Read64(ss->sp), Read64(ss->size));
-        return efault();
+        return -1;
       }
     }
   }
@@ -4553,7 +4556,7 @@ static int Poll(struct Machine *m, i64 fdsaddr, u64 nfds,
   struct pollfd_linux *gfds;
   struct timespec now, wait, remain;
   int (*poll_impl)(struct pollfd *, nfds_t, int);
-  if (!mulo(nfds, sizeof(struct pollfd_linux), &gfdssize) &&
+  if (!Mul(nfds, sizeof(struct pollfd_linux), &gfdssize) &&
       gfdssize <= 0x7ffff000) {
     if ((gfds = (struct pollfd_linux *)AddToFreeList(m, malloc(gfdssize)))) {
       rc = 0;
@@ -4748,7 +4751,7 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
     if ((sig = ConsumeSignal(m, &delivered, 0))) {
       TerminateSignal(m, sig);
     }
-  } while (delivered && DeliverSignalRecursively(m));
+  } while (delivered && DeliverSignalRecursively(m, delivered));
   return 0;
 }
 
@@ -4919,7 +4922,7 @@ static i32 SysGetgroups(struct Machine *m, i32 size, i64 addr) {
     ngroups_max = sysconf(_SC_NGROUPS_MAX);
 #endif
     size = MIN(size, ngroups_max);
-    if (!IsValidMemory(m, addr, (size_t)size * 4, PROT_WRITE)) return efault();
+    if (!IsValidMemory(m, addr, (size_t)size * 4, PROT_WRITE)) return -1;
     if (!(group = (gid_t *)AddToFreeList(m, malloc(size * sizeof(gid_t))))) {
       return -1;
     }
@@ -5171,10 +5174,31 @@ static int SysPipe(struct Machine *m, i64 pipefds_addr) {
 void OpSyscall(P) {
   size_t mark;
   u64 ax, di, si, dx, r0, r8, r9;
+  unassert(!m->nofault);
   STATISTIC(++syscalls);
+  // make sure blinkenlights display is up to date before performing any
+  // potentially blocking operations which would otherwise freeze things
   if (m->system->redraw && m->tid == m->system->pid) {
     m->system->redraw(true);
   }
+  // unlike pure opcodes where we'll confidently longjmp out of segfault
+  // handlers, system calls are too complex to do that safely, and it is
+  // therefore of the highest importance that they never crash under any
+  // circumstances. in order to do ensure that we need to lock any pages
+  // the system call accesses, so the user can't munmap() them away from
+  // some other thread. since we don't want to slow down instructions by
+  // adding locking logic to the tranlation lookaside buffer, we need to
+  // ensure any memory references the system call performs will tlb miss
+  m->insyscall = true;
+  if (!m->sysdepth++) {
+    ResetTlb(m);
+  }
+  // to make system calls simpler and safer, any temporary memory that's
+  // allocated will be added to a free list to be collected later. since
+  // OpSyscall() is potentially recursive when SA_RESTART signals happen
+  // we need to save the current mark, so we don't collect parent's data
+  mark = m->freelist.n;
+  m->interrupted = false;
   ax = Get64(m->ax);
   di = Get64(m->di);
   si = Get64(m->si);
@@ -5182,8 +5206,6 @@ void OpSyscall(P) {
   r0 = Get64(m->r10);
   r8 = Get64(m->r8);
   r9 = Get64(m->r9);
-  mark = m->freelist.n;
-  m->interrupted = false;
   switch (ax & 0xfff) {
     SYSCALL(3, 0x000, "read", SysRead, STRACE_READ);
     SYSCALL(3, 0x001, "write", SysWrite, STRACE_WRITE);
@@ -5294,7 +5316,6 @@ void OpSyscall(P) {
     SYSCALL(3, 0x10A, "symlinkat", SysSymlinkat, STRACE_SYMLINKAT);
     SYSCALL(4, 0x10B, "readlinkat", SysReadlinkat, STRACE_READLINKAT);
     SYSCALL(3, 0x10C, "fchmodat", SysFchmodat, STRACE_FCHMODAT);
-
 #ifndef DISABLE_SOCKETS
     SYSCALL(3, 0x029, "socket", SysSocket, STRACE_SOCKET);
     SYSCALL(3, 0x02A, "connect", SysConnect, STRACE_CONNECT);
@@ -5316,7 +5337,6 @@ void OpSyscall(P) {
     SYSCALL(5, 0x036, "setsockopt", SysSetsockopt, STRACE_5);
     SYSCALL(5, 0x037, "getsockopt", SysGetsockopt, STRACE_5);
 #endif /* DISABLE_SOCKETS */
-
 #ifdef HAVE_FORK
     SYSCALL(0, 0x039, "fork", SysFork, STRACE_FORK);
 #ifndef DISABLE_NONPOSIX
@@ -5325,11 +5345,9 @@ void OpSyscall(P) {
     SYSCALL(4, 0x03D, "wait4", SysWait4, STRACE_WAIT4);
     SYSCALL(2, 0x03E, "kill", SysKill, STRACE_KILL);
 #endif /* HAVE_FORK */
-
 #ifdef HAVE_THREADS
     SYSCALL(6, 0x0CA, "futex", SysFutex, STRACE_FUTEX);
 #endif
-
 #if defined(HAVE_FORK) || defined(HAVE_THREADS)
     SYSCALL(1, 0x016, "pipe", SysPipe, STRACE_PIPE);
 #ifndef DISABLE_NONPOSIX
@@ -5356,7 +5374,6 @@ void OpSyscall(P) {
     SYSCALL(3, 0x0CB, "sched_set_affinity", SysSchedSetaffinity, STRACE_3);
 #endif
 #endif /* defined(HAVE_FORK) || defined(HAVE_THREADS) */
-
 #ifndef DISABLE_NONPOSIX
     SYSCALL(4, 0x028, "sendfile", SysSendfile, STRACE_4);
     SYSCALL(3, 0x0CC, "sched_get_affinity", SysSchedGetaffinity, STRACE_3);
@@ -5383,7 +5400,6 @@ void OpSyscall(P) {
     SYSCALL(5, 0x148, "pwritev2", SysPwritev2, STRACE_PWRITEV2);
     SYSCALL(3, 0x1B4, "close_range", SysCloseRange, STRACE_3);
 #endif /* DISABLE_NONPOSIX */
-
     case 0x3C:
       SYS_LOGF("%s(%#" PRIx64 ")", "exit", di);
       SysExit(m, di);
@@ -5391,9 +5407,9 @@ void OpSyscall(P) {
       SYS_LOGF("%s(%#" PRIx64 ")", "exit_group", di);
       SysExitGroup(m, di);
     case 0x00F:
-      SYS_LOGF("rt_sigreturn()");
       SigRestore(m);
-      return;
+      m->interrupted = true;  // preevnt ax clobber
+      break;
     case 0x146:
       // avoid noisy copy_file_range() feature check in cosmo
     case 0x1BC:
@@ -5415,7 +5431,6 @@ void OpSyscall(P) {
       // time() is also noisy in some environments.
       ax = SysTime(m, di);
       break;
-
     default:
     DefaultCase:
       LOGF("missing syscall 0x%03" PRIx64, ax);
@@ -5425,5 +5440,9 @@ void OpSyscall(P) {
   if (!m->interrupted) {
     Put64(m->ax, ax != -1 ? ax : -(XlatErrno(errno) & 0xfff));
   }
+  unassert(--m->sysdepth >= 0);
+  CollectPageLocks(m);
+  unassert(!m->pagelocks.i || m->sysdepth);
   CollectGarbage(m, mark);
+  m->insyscall = false;
 }

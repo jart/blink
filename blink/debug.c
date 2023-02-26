@@ -45,6 +45,10 @@
 #include "blink/util.h"
 #include "blink/x86.h"
 
+#ifdef HAVE_SCHED_H
+#include <sched.h>
+#endif
+
 #ifdef UNWIND
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
@@ -56,16 +60,12 @@
 
 #define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
 
-int asan_backtrace_index;
-int asan_backtrace_buffer[1];
-int ubsan_backtrace_memory[2];
-char *ubsan_backtrace_pointer = ((char *)ubsan_backtrace_memory) + 1;
 _Thread_local static jmp_buf g_busted;
 
-void PrintBacktrace(void) {
+const char *GetBlinkBacktrace(void) {
 #ifdef UNWIND
+  _Thread_local static char b[2048];
   int o = 0;
-  char b[2048];
   char sym[256];
   int n = sizeof(b);
   unw_cursor_t cursor;
@@ -73,6 +73,7 @@ void PrintBacktrace(void) {
   unw_word_t offset, pc;
   unw_getcontext(&context);
   unw_init_local(&cursor, &context);
+  APPEND("blink backtrace");
   while (unw_step(&cursor) > 0) {
     unw_get_reg(&cursor, UNW_REG_IP, &pc);
     if (!pc) break;
@@ -83,13 +84,9 @@ void PrintBacktrace(void) {
       APPEND("<unknown>");
     }
   }
-  ERRF("blink backtrace%s", b);
-#elif defined(__SANITIZE_ADDRESS__)
-  volatile int x;
-  x = asan_backtrace_buffer[asan_backtrace_index + 1];
-  (void)x;
-#elif defined(__SANITIZE_UNDEFINED__)
-  *(int *)ubsan_backtrace_pointer = 0;
+  return b;
+#else
+  return "<blink backtrace unavailable>";
 #endif
 }
 
@@ -225,6 +222,8 @@ const char *GetBacktrace(struct Machine *m) {
   char kAlignmentMask[] = {3, 3, 15};
 #endif
 
+  if (!m) return "<machine state unavailable>";
+
   BEGIN_NO_PAGE_FAULTS;
 
 #ifndef DISABLE_BACKTRACE
@@ -305,18 +304,42 @@ const char *GetBacktrace(struct Machine *m) {
   return b;
 }
 
-bool CheckMemoryInvariants(struct System *s) {
-  if (s->rss == s->memstat.tables + s->memstat.committed &&
-      s->vss == s->memstat.committed + s->memstat.reserved) {
-    return true;
+static void SpinEventuallyConsistent(int i) {
+  if (!i || i % 500) {
+#if defined(__x86_64__) && defined(__GNUC__)
+    asm("pause");
+#endif
   } else {
-    ERRF("%-10s = %ld vs. %ld", "rss", s->rss,
-         s->memstat.tables + s->memstat.committed);
-    ERRF("%-10s = %ld vs. %ld", "vss", s->vss,
-         s->memstat.committed + s->memstat.reserved);
-    ERRF("%-10s = %ld", "tables", s->memstat.tables);
-    ERRF("%-10s = %ld", "reserved", s->memstat.reserved);
-    ERRF("%-10s = %ld", "committed", s->memstat.committed);
-    return false;
+#ifdef HAVE_SCHED_YIELD
+    sched_yield();
+#endif
   }
+}
+
+bool CheckMemoryInvariants(struct System *s) {
+#ifdef DEBUG
+  int i;
+  for (i = 0;; ++i) {
+    if (s->rss == s->memstat.tables + s->memstat.committed &&
+        s->vss == s->memstat.committed + s->memstat.reserved) {
+      return true;
+    } else if (i < 100000) {
+      // we only call this function with mmap_lock held, but the
+      // lockless page fault handler can still mutate some of it
+      SpinEventuallyConsistent(i);
+    } else {
+      ERRF("memstat inconsistent");
+      ERRF("%-10s = %ld vs. %ld", "rss", s->rss,
+           s->memstat.tables + s->memstat.committed);
+      ERRF("%-10s = %ld vs. %ld", "vss", s->vss,
+           s->memstat.committed + s->memstat.reserved);
+      ERRF("%-10s = %ld", "tables", s->memstat.tables);
+      ERRF("%-10s = %ld", "reserved", s->memstat.reserved);
+      ERRF("%-10s = %ld", "committed", s->memstat.committed);
+      return false;
+    }
+  }
+#else
+  return true;
+#endif
 }

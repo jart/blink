@@ -114,7 +114,7 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
 #endif
 #endif
   if ((sysflags = XlatOpenFlags(oflags)) == -1) return -1;
-  if (!(path = LoadStr(m, pathaddr))) return efault();
+  if (!(path = LoadStr(m, pathaddr))) return -1;
   RESTARTABLE(fildes =
                   OverlaysOpen(GetDirFildes(dirfildes), path, sysflags, mode));
   if (fildes != -1) {

@@ -827,10 +827,8 @@ reasons of performance is defined to include pushing and popping.
 
 ### Threads
 
-System calls do not explicitly lock the memory pages they're accessing;
-we haven't determined yet if that makes calling munmap() unsafe. Blink
-also lacks support right now for unlocking robust mutexes when a guest
-program crashes; this too is something we'd like to fix.
+Blink doesn't have a working implementation of `set_robust_list()` yet,
+which means robust mutexes might not get unlocked if a process crashes.
 
 ### Coherency
 

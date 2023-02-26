@@ -1,7 +1,9 @@
 #ifndef BLINK_MOP_H_
 #define BLINK_MOP_H_
 #include <limits.h>
+#include <stdbool.h>
 
+#include "blink/assert.h"
 #include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/dll.h"
@@ -49,11 +51,11 @@ void InitBus(void);
 void LockBus(const u8 *);
 void UnlockBus(const u8 *);
 
-i64 Load8(const u8[1]);
-i64 Load16(const u8[2]);
-i64 Load32(const u8[4]);
-i64 Load64(const u8[8]);
-i64 Load64Unlocked(const u8[8]);
+i64 Load8(const u8[1]) nosideeffect;
+i64 Load16(const u8[2]) nosideeffect;
+i64 Load32(const u8[4]) nosideeffect;
+i64 Load64(const u8[8]) nosideeffect;
+i64 Load64Unlocked(const u8[8]) nosideeffect;
 
 void Store8(u8[1], u64);
 void Store16(u8[2], u64);
@@ -76,13 +78,16 @@ void WriteMemoryBW(u64, u8[8], u64);
 void WriteRegisterBW(u64, u8[8], u64);
 i64 ReadRegisterOrMemoryBW(u64, u8[8]);
 void WriteRegisterOrMemoryBW(u64, u8[8], u64);
+u64 LoadPte32_(const u8 *) nosideeffect;
+bool CasPte32_(u8 *, u64, u64);
+void StorePte32_(u8 *, u64);
 
-static inline u64 ReadPte(const u8 *pte) {
+nosideeffect static inline u64 LoadPte(const u8 *pte) {
 #if CAN_64BIT
   return Little64(
       atomic_load_explicit((_Atomic(u64) *)pte, memory_order_acquire));
 #else
-  return Load64(pte);
+  return LoadPte32_(pte);
 #endif
 }
 
@@ -91,7 +96,18 @@ static inline void StorePte(u8 *pte, u64 val) {
   atomic_store_explicit((_Atomic(u64) *)pte, Little64(val),
                         memory_order_release);
 #else
-  Store64(pte, val);
+  StorePte32_(pte, val);
+#endif
+}
+
+static inline bool CasPte(u8 *pte, u64 oldval, u64 newval) {
+#if CAN_64BIT
+  oldval = Little64(oldval);
+  return atomic_compare_exchange_strong_explicit(
+      (_Atomic(u64) *)pte, &oldval, Little64(newval),  //
+      memory_order_release, memory_order_relaxed);
+#else
+  return CasPte32_(pte, oldval, newval);
 #endif
 }
 

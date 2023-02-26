@@ -72,7 +72,7 @@ static void AluEvqp(P, const aluop_f ops[4]) {
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
 #if CAN_64BIT
-    if (Lock(rde) && !((intptr_t)p & 7)) {
+    if (Lock(rde) && !((uintptr_t)p & 7)) {
       u64 x, z;
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
       do {
@@ -93,7 +93,7 @@ static void AluEvqp(P, const aluop_f ops[4]) {
   } else if (!Osz(rde)) {
     u32 x, z;
     p = GetModrmRegisterWordPointerWrite4(A);
-    if (Lock(rde) && !((intptr_t)p & 3)) {
+    if (Lock(rde) && !((uintptr_t)p & 3)) {
       x = atomic_load_explicit((_Atomic(u32) *)p, memory_order_acquire);
       do {
         z = Little32(f(m, Little32(x), 0));
@@ -110,7 +110,7 @@ static void AluEvqp(P, const aluop_f ops[4]) {
     }
   } else {
     p = GetModrmRegisterWordPointerWrite2(A);
-    if (Lock(rde) && !((intptr_t)p & 1)) {
+    if (Lock(rde) && !((uintptr_t)p & 1)) {
       u16 x, z;
       x = atomic_load_explicit((_Atomic(u16) *)p, memory_order_acquire);
       do {

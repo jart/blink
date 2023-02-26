@@ -31,8 +31,10 @@
 #include "blink/signal.h"
 
 void RestoreIp(struct Machine *m) {
-  m->ip -= m->oplen;
-  m->oplen = 0;
+  if (m) {
+    m->ip -= m->oplen;
+    m->oplen = 0;
+  }
 }
 
 void DeliverSignalToUser(struct Machine *m, int sig, int code) {

@@ -66,10 +66,6 @@ endif
 ifeq ($(MODE), dbg)
 CFLAGS += -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
 CPPFLAGS += -DDEBUG
-ifeq ($(HOST_SYSTEM), Linux)
-CFLAGS += -fno-pie
-LDFLAGS += -static -no-pie $(LDFLAGS_STATIC)
-endif
 ifneq ($(HOST_SYSTEM), Darwin)
 ifneq ($(HOST_SYSTEM), FreeBSD)
 CPPFLAGS += -DUNWIND
@@ -92,7 +88,7 @@ endif
 ifeq ($(MODE), tiny)
 CPPFLAGS += -DNDEBUG -DTINY
 CFLAGS += -Os -fomit-frame-pointer -mtune=generic -fno-align-functions -fno-align-jumps -fno-align-labels -fno-align-loops -fno-exceptions -fno-unwind-tables -fno-asynchronous-unwind-tables
-LDFLAGS += -no-pie #-Wl,--cref,-Map=$@.map
+LDFLAGS += #-Wl,--cref,-Map=$@.map
 endif
 
 ifeq ($(MODE), tiny-llvm)

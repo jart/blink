@@ -2,7 +2,9 @@
 #include <fcntl.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -16,7 +18,10 @@ void *Worker(void *arg) {
   void *b;
   int i, fd;
   ssize_t rc;
-  if ((fd = open("/dev/zero", O_RDONLY)) == -1) _exit(1);
+  if ((fd = open("/dev/zero", O_RDONLY)) == -1) {
+    fprintf(stderr, "open failed: %s", strerror(errno));
+    _exit(10);
+  }
   for (i = 0; i < ITERATIONS; ++i) {
     b = buf;
     rc = read(fd, b, 10000);

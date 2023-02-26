@@ -56,19 +56,44 @@
 #define CR0_CD 0x40000000  // global cache disable
 #define CR0_PG 0x80000000  // paging enabled
 
-#define PAGE_V    0x0001  // valid
-#define PAGE_RW   0x0002  // writeable
-#define PAGE_U    0x0004  // permit user-mode access
-#define PAGE_PS   0x0080  // IsPage (if PDPTE/PDE) or PAT (if PT)
-#define PAGE_G    0x0100  // global
-#define PAGE_RSRV 0x0200  // no actual memory associated
-#define PAGE_HOST 0x0400  // PAGE_TA bits point to host (not real) memory
-#define PAGE_MAP  0x0800  // PAGE_TA bits were mmmap()'d
-#define PAGE_GROW 0x0010000000000000
-#define PAGE_MUG  0x0020000000000000  // each 4096 byte page is a system page
-#define PAGE_FILE 0x0040000000000000
-#define PAGE_XD   0x8000000000000000
-#define PAGE_TA   0x0000fffffffff000  // extended by one bit for raspberry pi
+/* Long Mode Paging
+   @see Intel Manual V.3A §4.1 §4.5
+                                       IsValid (ignored on CR3) V┐
+  ┌XD:No Inst. Fetches (if NXE)   IsWritable (ignored on CR3) RW┐│
+  │                                 Permit User-Mode Access - u┐││
+  │                             Page-level Write-Through - PWT┐│││
+  │                            Page-level Cache Disable - PCD┐││││
+  │                          Set if has been read - Accessed┐│││││
+  │                         Set if has been written - Dirty┐││││││
+  │           IsPage 2MB/1GB (if PDPTE/PDE) or PAT (if PT)┐│││││││
+  │                (If this maps page and CR4.PGE) Global┐││││││││
+  │      (If IsPage 2MB/1GB, see Intel V3A § 11.12) PAT  │││││││││
+  │                                                  │   │││││││││
+  │            ┌─────────────────────────────────────┤   │││││││││
+  │  Must Be 0┐│ Next Page Table Address (!IsPage)   │   │││││││││
+  │           │├─────────────────────────────────────┤   │││││││││
+  │           ││ Physical Address 4KB                │   │││││││││
+  │┌──┐┌─────┐│├────────────────────────────┐        │ign│││││││││
+  ││PK││ ign │││ Physical Address 2MB       │        │┌┴┐│││││││││
+  ││  ││     ││├───────────────────┐        │        ││ ││││││││││
+  ││  ││     │││ Phys. Addr. 1GB   │        │        ││ ││││││││││
+  ││  ││     │││                   │        │        ││ ││││││││││
+  ───────────────────────────────────────────────────────────────*/
+#define PAGE_V     0x0000000000000001ull  // valid
+#define PAGE_RW    0x0000000000000002ull  // writeable
+#define PAGE_U     0x0000000000000004ull  // permit ring3 access or read protect
+#define PAGE_PS    0x0000000000000080ull  // IsPage (PDPTE/PDE) or PAT (PT)
+#define PAGE_G     0x0000000000000100ull  // global
+#define PAGE_RSRV  0x0000000000000200ull  // PAGE_TA bits havent been chosen yet
+#define PAGE_HOST  0x0000000000000400ull  // PAGE_TA bits point to system memory
+#define PAGE_MAP   0x0000000000000800ull  // PAGE_TA bits are a linear host mmap
+#define PAGE_TA    0x0000fffffffff000ull  // bits used for host, or real address
+#define PAGE_GROW  0x0010000000000000ull  // for future support of MAP_GROWSDOWN
+#define PAGE_MUG   0x0020000000000000ull  // host page magic mapped individually
+#define PAGE_FILE  0x0040000000000000ull  // page has tracking bit in s->filemap
+#define PAGE_LOCK  0x0080000000000000ull  // a bit used to increment lock counts
+#define PAGE_LOCKS 0x7f80000000000000ull  // a page can be locked by 255 threads
+#define PAGE_XD    0x8000000000000000ull  // disable executing memory if bit set
 
 #define SREG_ES 0
 #define SREG_CS 1
@@ -106,11 +131,11 @@
 #endif
 
 MICRO_OP_SAFE u8 *ToHost(i64 v) {
-  return (u8 *)(intptr_t)(v + kSkew);
+  return (u8 *)(uintptr_t)(v + kSkew);
 }
 
 static inline i64 ToGuest(void *r) {
-  i64 v = (intptr_t)r - kSkew;
+  i64 v = (uintptr_t)r - kSkew;
   return v;
 }
 
@@ -126,6 +151,17 @@ struct FreeList {
 struct HostPage {
   u8 *page;
   struct HostPage *next;
+};
+
+struct PageLock {
+  i64 page;
+  u8 *pslot;
+  int sysdepth;
+};
+
+struct PageLocks {
+  int i, n;
+  struct PageLock *p;
 };
 
 struct FileMap {
@@ -151,9 +187,9 @@ struct MachineFpu {
 };
 
 struct MachineMemstat {
-  long tables;
-  long reserved;
-  long committed;
+  _Atomic(long) tables;
+  _Atomic(long) reserved;
+  _Atomic(long) committed;
 };
 
 // Segment descriptor cache
@@ -214,11 +250,13 @@ struct System {
   bool iscosmo;
   bool trapexit;
   bool brkchanged;
+  _Atomic(bool) killer;
   u16 gdt_limit;
   u16 idt_limit;
   int exitcode;
   u32 efer;
   int pid;
+  unsigned next_tid;
   u8 *real;
   u64 gdt_base;
   u64 idt_base;
@@ -227,19 +265,17 @@ struct System {
   u64 cr3;
   u64 cr4;
   i64 brk;
-  long rss;
-  long vss;
   i64 automap;
   i64 memchurn;
   i64 codestart;
+  _Atomic(long) rss;
+  _Atomic(long) vss;
   struct Dis *dis;
   struct Dll *filemaps;
-  _Atomic(bool) killer;
   unsigned long codesize;
   struct MachineMemstat memstat;
   struct Dll *machines;
-  unsigned next_tid;
-  intptr_t ender;
+  uintptr_t ender;
   struct Jit jit;
   struct Fds fds;
   struct Elf elf;
@@ -250,6 +286,8 @@ struct System {
 #ifdef HAVE_THREADS
   pthread_cond_t machines_cond;
   pthread_mutex_t machines_lock;
+  pthread_cond_t pagelocks_cond;
+  pthread_mutex_t pagelocks_lock;
   pthread_mutex_t exec_lock;
   pthread_mutex_t sig_lock;
   pthread_mutex_t mmap_lock;
@@ -356,17 +394,19 @@ struct Machine {                           //
   u32 mxcsr;                               // SIMD status control register
   pthread_t thread;                        // POSIX thread of this machine
   struct FreeList freelist;                // to make system calls simpler
+  struct PageLocks pagelocks;              // track page table entry locks
   struct JitPath path;                     // under construction jit route
   _Atomicish(u64) signals;                 // [attention] pending delivery
   _Atomicish(u64) sigmask;                 // signals that've been blocked
   i64 bofram[2];                           // helps debug bootloading code
   i64 faultaddr;                           // used for tui error reporting
-  u32 tlbindex;                            //
   struct System *system;                   //
   int sigdepth;                            //
+  int sysdepth;                            //
   _Atomic(bool) killed;                    // [attention] slay this thread
   bool restored;                           // [attention] rt_sigreturn()'d
   bool reserving;                          //
+  bool insyscall;                          //
   bool nofault;                            //
   bool canhalt;                            //
   bool metal;                              //
@@ -390,14 +430,16 @@ extern _Thread_local struct Machine *g_machine;
 extern const nexgen32e_f kConvert[3];
 extern const nexgen32e_f kSax[3];
 
-_Noreturn void Blink(struct Machine *);
-_Noreturn void Actor(struct Machine *);
 struct System *NewSystem(int);
 void FreeSystem(struct System *);
 void SignalActor(struct Machine *);
 void SetMachineMode(struct Machine *, int);
 struct Machine *NewMachine(struct System *, struct Machine *);
-bool IsOrphan(struct Machine *);
+void HandleFatalSystemSignal(struct Machine *);
+i64 AreAllPagesUnlocked(struct System *) nosideeffect;
+bool IsOrphan(struct Machine *) nosideeffect;
+_Noreturn void Blink(struct Machine *);
+_Noreturn void Actor(struct Machine *);
 void Jitter(P, const char *, ...);
 void FreeMachine(struct Machine *);
 void InvalidateSystem(struct System *, bool, bool);
@@ -412,8 +454,9 @@ nexgen32e_f GetOp(long);
 void LoadInstruction(struct Machine *, u64);
 int LoadInstruction2(struct Machine *, u64);
 void ExecuteInstruction(struct Machine *);
-u64 AllocatePage(struct System *);
 u64 AllocatePageTable(struct System *);
+u64 AllocateAnonymousPage(struct System *);
+void FreeAnonymousPage(struct System *, u8 *);
 u64 FindPageTableEntry(struct Machine *, u64);
 bool CheckMemoryInvariants(struct System *) nosideeffect dontdiscard;
 i64 ReserveVirtual(struct System *, i64, i64, u64, int, i64, bool, bool);
@@ -452,6 +495,8 @@ u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *, bool);
 u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
+bool HasPageLock(const struct Machine *, i64) nosideeffect;
+void CollectPageLocks(struct Machine *);
 u8 *LookupAddress(struct Machine *, i64);
 u8 *LookupAddress2(struct Machine *, i64, u64, u64);
 u8 *Load(struct Machine *, i64, size_t, u8 *);

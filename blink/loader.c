@@ -141,7 +141,6 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
         ERRF("failed to allocate program header skew");
         exit(127);
       }
-      AddFileMap(s, start, pagesize, path, offset);
       start += pagesize;
     }
     ELF_LOGF("copy %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64, vaddr,
@@ -168,7 +167,8 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
       // map the bulk of .text directly into memory without copying.
       ELF_LOGF("load %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64, start,
                start + bulk, offset, offset + bulk);
-      if (ReserveVirtual(s, start, bulk, key, fd, offset, 0, 0) == -1) {
+      if (ReserveVirtual(s, start, bulk, PAGE_FILE | key, fd, offset, 0, 0) ==
+          -1) {
         ERRF("failed to map elf program header file data");
         exit(127);
       }
@@ -186,7 +186,6 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
       }
       // copy the tail skew.
       if (filesz) {
-        AddFileMap(s, start, filesz, path, offset);
         ELF_LOGF("copy %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64,
                  start, start + filesz, offset, offset + filesz);
         unassert(!CopyToUser(m, start, (u8 *)image + offset, filesz));
@@ -310,7 +309,7 @@ bool IsSupportedExecutable(const char *path, void *image, size_t size) {
   return false;
 }
 
-static void LoadFlatExecutable(struct Machine *m, intptr_t base,
+static void LoadFlatExecutable(struct Machine *m, uintptr_t base,
                                const char *prog, void *image, size_t imagesize,
                                int fd) {
   Elf64_Phdr_ phdr;
@@ -415,7 +414,8 @@ static bool LoadElf(struct Machine *m,  //
     m->ip = elf->at_base + Read64(ehdri->entry);
     for (i = 0; i < Read16(ehdri->phnum); ++i) {
       phdr = GetElfSegmentHeaderAddress(ehdri, st.st_size, i);
-      CheckElfAddress(ehdri, st.st_size, (intptr_t)ehdri + Read64(phdr->offset),
+      CheckElfAddress(ehdri, st.st_size,
+                      (uintptr_t)ehdri + Read64(phdr->offset),
                       Read64(phdr->filesz));
       switch (Read32(phdr->type)) {
         case PT_LOAD_:
@@ -726,9 +726,10 @@ error: unsupported executable; we need:\n\
     stack = HasLinearMapping() && FLAG_vabits <= 47 && !kSkew
                 ? 0
                 : kStackTop - kStackSize;
-    if ((stack = ReserveVirtual(m->system, stack, kStackSize,
-                                PAGE_U | PAGE_RW | (execstack ? 0 : PAGE_XD),
-                                -1, 0, 0, 0)) != -1) {
+    if ((stack = ReserveVirtual(
+             m->system, stack, kStackSize,
+             PAGE_FILE | PAGE_U | PAGE_RW | (execstack ? 0 : PAGE_XD), -1, 0, 0,
+             0)) != -1) {
       unassert(AddFileMap(m->system, stack, kStackSize, "[stack]", -1));
       Put64(m->sp, stack + kStackSize);
     } else {

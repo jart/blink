@@ -217,7 +217,7 @@ char *FormatPml4t(struct Machine *m) {
     a[0] = range[i][0];
     do {
       a[1] = a[2] = a[3] = 0;
-      entry = ReadPte(pd[0] + a[0] * 8);
+      entry = LoadPte(pd[0] + a[0] * 8);
       if (!(entry & PAGE_V)) {
         if (u.t) FormatEndPage(m, &u, MakeAddress(a));
       } else if (entry & PAGE_PS) {
@@ -226,7 +226,7 @@ char *FormatPml4t(struct Machine *m) {
         pd[1] = GetPt(m, entry, false);
         do {
           a[2] = a[3] = 0;
-          entry = ReadPte(pd[1] + a[1] * 8);
+          entry = LoadPte(pd[1] + a[1] * 8);
           if (!(entry & PAGE_V)) {
             if (u.t) FormatEndPage(m, &u, MakeAddress(a));
           } else if (entry & PAGE_PS) {
@@ -235,7 +235,7 @@ char *FormatPml4t(struct Machine *m) {
             pd[2] = GetPt(m, entry, false);
             do {
               a[3] = 0;
-              entry = ReadPte(pd[2] + a[2] * 8);
+              entry = LoadPte(pd[2] + a[2] * 8);
               if (!(entry & PAGE_V)) {
                 if (u.t) FormatEndPage(m, &u, MakeAddress(a));
               } else if (entry & PAGE_PS) {
@@ -243,7 +243,7 @@ char *FormatPml4t(struct Machine *m) {
               } else {
                 pd[3] = GetPt(m, entry, false);
                 do {
-                  entry = ReadPte(pd[3] + a[3] * 8);
+                  entry = LoadPte(pd[3] + a[3] * 8);
                   if (~entry & PAGE_V) {
                     if (u.t) FormatEndPage(m, &u, MakeAddress(a));
                   } else {

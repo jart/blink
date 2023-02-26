@@ -45,7 +45,7 @@ static void LockCmpxchgMem32(struct Machine *m, u64 rde, u8 *p) {
   u32 x, z;
   bool didit;
   q = RegRexrReg(m, rde);
-  if (!((intptr_t)p & 3)) {
+  if (!((uintptr_t)p & 3)) {
     x = atomic_load_explicit((_Atomic(u32) *)m->ax, memory_order_relaxed);
     didit = atomic_compare_exchange_strong_explicit(
         (_Atomic(u32) *)p, &x,
@@ -75,7 +75,7 @@ static void Cmpxchg(struct Machine *m, u64 rde, u8 *p) {
   if (Rexw(rde)) {
     u64 x;
 #if CAN_64BIT
-    if (Lock(rde) && !((intptr_t)p & 7)) {
+    if (Lock(rde) && !((uintptr_t)p & 7)) {
       x = atomic_load_explicit((_Atomic(u64) *)m->ax, memory_order_relaxed);
       atomic_compare_exchange_strong_explicit(
           (_Atomic(u64) *)p, &x,
@@ -106,7 +106,7 @@ static void Cmpxchg(struct Machine *m, u64 rde, u8 *p) {
       }
     }
   } else if (!Osz(rde)) {
-    if (Lock(rde) && !((intptr_t)p & 3)) {
+    if (Lock(rde) && !((uintptr_t)p & 3)) {
       u32 ax =
           atomic_load_explicit((_Atomic(u32) *)m->ax, memory_order_relaxed);
       didit = atomic_compare_exchange_strong_explicit(
@@ -130,7 +130,7 @@ static void Cmpxchg(struct Machine *m, u64 rde, u8 *p) {
       Put32(p + 4, 0);
     }
   } else {
-    if (Lock(rde) && !((intptr_t)p & 1)) {
+    if (Lock(rde) && !((uintptr_t)p & 1)) {
       u16 ax =
           atomic_load_explicit((_Atomic(u16) *)m->ax, memory_order_relaxed);
       atomic_compare_exchange_strong_explicit(

@@ -97,7 +97,6 @@ void ResetCpu(struct Machine *m) {
 }
 
 void ResetTlb(struct Machine *m) {
-  m->tlbindex = 0;
   memset(m->tlb, 0, sizeof(m->tlb));
   m->opcache->codevirt = 0;
   m->opcache->codehost = 0;

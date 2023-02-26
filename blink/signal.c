@@ -25,6 +25,7 @@
 #include "blink/atomic.h"
 #include "blink/bitscan.h"
 #include "blink/endian.h"
+#include "blink/ldbl.h"
 #include "blink/linux.h"
 #include "blink/log.h"
 #include "blink/macros.h"
@@ -60,6 +61,7 @@ bool IsSignalSerious(int sig) {
 }
 
 void DeliverSignal(struct Machine *m, int sig, int code) {
+  int i;
   u64 sp;
   struct SignalFrame sf;
   SYS_LOGF("delivering %s", DescribeSignal(sig));
@@ -104,9 +106,11 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   Write16(sf.fp.fop, m->fpu.op);
   Write64(sf.fp.rip, m->fpu.ip);
   Write64(sf.fp.rdp, m->fpu.dp);
-  memcpy(sf.fp.st, m->fpu.st, 128);
+  for (i = 0; i < 8; ++i) {
+    SerializeLdbl(sf.fp.st[i], m->fpu.st[i]);
+  }
 #endif
-  memcpy(sf.fp.xmm, m->xmm, 256);
+  memcpy(sf.fp.xmm, m->xmm, sizeof(sf.fp.xmm));
   // set the thread signal mask to the one specified by the signal
   // handler. by default, the signal being delivered will be added
   // within the mask unless the guest program specifies SA_NODEFER
@@ -157,6 +161,7 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
 }
 
 void SigRestore(struct Machine *m) {
+  int i;
   struct SignalFrame sf;
   // when the guest returns from the signal handler, it'll call a
   // pointer to the sa_restorer trampoline which is assumed to be
@@ -167,8 +172,8 @@ void SigRestore(struct Machine *m) {
   //
   // which doesn't change SP, thus we can restore the SignalFrame
   // and load any change that the guest made to the machine state
-  SIG_LOGF("restoring from signal @ %" PRIx64, Read64(m->sp) - 8);
-  CopyFromUserRead(m, &sf, Read64(m->sp) - 8, sizeof(sf));
+  SYS_LOGF("rt_sigreturn(%#" PRIx64 ")", Read64(m->sp) - 8);
+  unassert(!CopyFromUserRead(m, &sf, Read64(m->sp) - 8, sizeof(sf)));
   m->ip = Read64(sf.uc.rip);
   m->flags = Read64(sf.uc.eflags);
   m->sigmask = Read64(sf.uc.sigmask);
@@ -188,17 +193,19 @@ void SigRestore(struct Machine *m) {
   memcpy(m->dx, sf.uc.rdx, 8);
   memcpy(m->ax, sf.uc.rax, 8);
   memcpy(m->cx, sf.uc.rcx, 8);
-  memcpy(m->sp, sf.uc.rsp, 8);
   m->fpu.cw = Read16(sf.fp.cwd);
+  memcpy(m->sp, sf.uc.rsp, 8);
 #ifndef DISABLE_X87
   m->fpu.sw = Read16(sf.fp.swd);
   m->fpu.tw = Read16(sf.fp.ftw);
   m->fpu.op = Read16(sf.fp.fop);
   m->fpu.ip = Read64(sf.fp.rip);
   m->fpu.dp = Read64(sf.fp.rdp);
-  memcpy(m->fpu.st, sf.fp.st, 128);
+  for (i = 0; i < 8; ++i) {
+    m->fpu.st[i] = DeserializeLdbl(sf.fp.st[i]);
+  }
 #endif
-  memcpy(m->xmm, sf.fp.xmm, 256);
+  memcpy(m->xmm, sf.fp.xmm, sizeof(sf.fp.xmm));
   m->restored = true;
   atomic_store_explicit(&m->attention, true, memory_order_release);
 }
@@ -216,7 +223,7 @@ static int ConsumeSignalImpl(struct Machine *m, int *delivered, bool *restart) {
     handler = Read64(m->system->hands[sig - 1].handler);
     if (handler == SIG_DFL_LINUX) {
       if (IsSignalIgnoredByDefault(sig)) {
-        SIG_LOGF("default action is to ignore signal %s", DescribeSignal(sig));
+        SYS_LOGF("ignoring %s", DescribeSignal(sig));
         return 0;
       } else {
         SIG_LOGF("default action is to terminate upon signal %s",
@@ -224,7 +231,7 @@ static int ConsumeSignalImpl(struct Machine *m, int *delivered, bool *restart) {
         return sig;
       }
     } else if (handler == SIG_IGN_LINUX) {
-      SIG_LOGF("explicitly ignoring signal %s", DescribeSignal(sig));
+      SYS_LOGF("explicitly ignoring %s", DescribeSignal(sig));
       return 0;
     }
     if (delivered) {

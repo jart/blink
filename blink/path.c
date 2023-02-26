@@ -219,7 +219,7 @@ void FlushCod(struct JitBlock *jb) {
   for (; jb->cod < jb->index; jb->cod += g_dis.xedd->length) {
     unassert(!DecodeInstruction(g_dis.xedd, jb->addr + jb->cod,
                                 jb->index - jb->cod, XED_MODE_LONG));
-    g_dis.addr = (intptr_t)jb->addr + jb->cod;
+    g_dis.addr = (uintptr_t)jb->addr + jb->cod;
     DisInst(&g_dis, b, DisSpec(g_dis.xedd, spec));
     WriteCod("\t%s\n", b);
   }
@@ -561,7 +561,7 @@ bool CreatePath(P) {
       JIT_LOGF("starting new path jit_pc:%" PRIxPTR " at pc:%" PRIx64,
                GetJitPc(m->path.jb), pc);
       FlushCod(m->path.jb);
-      jpc = (intptr_t)m->path.jb->addr + m->path.jb->index;
+      jpc = (uintptr_t)m->path.jb->addr + m->path.jb->index;
       (void)jpc;
       AppendJit(m->path.jb, kEnter, sizeof(kEnter));
 #if LOG_JIX
@@ -576,7 +576,7 @@ bool CreatePath(P) {
       FlushCod(m->path.jb);
       m->path.start = pc;
       m->path.elements = 0;
-      SetJitHook(&m->system->jit, pc, (intptr_t)JitlessDispatch);
+      SetJitHook(&m->system->jit, pc, (uintptr_t)JitlessDispatch);
       res = true;
     } else {
       res = false;

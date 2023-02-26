@@ -202,14 +202,14 @@ static void XlatStatvfsToLinux(struct statfs_linux *sf, const void *arg) {
 
 #if defined(__linux) || defined(__APPLE__) || defined(__FreeBSD__) || \
     defined(__OpenBSD__) || defined(__NetBSD__)
-static int Statfs(intptr_t arg, struct statfs *buf) {
+static int Statfs(uintptr_t arg, struct statfs *buf) {
   return statfs((const char *)arg, buf);
 }
-static int Fstatfs(intptr_t arg, struct statfs *buf) {
+static int Fstatfs(uintptr_t arg, struct statfs *buf) {
   return fstatfs((int)arg, buf);
 }
-static int SysStatfsImpl(struct Machine *m, intptr_t arg, i64 addr,
-                         int thunk(intptr_t, struct statfs *)) {
+static int SysStatfsImpl(struct Machine *m, uintptr_t arg, i64 addr,
+                         int thunk(uintptr_t, struct statfs *)) {
   int rc;
   struct statfs vfs;
   struct statfs_linux sf;
@@ -222,14 +222,14 @@ static int SysStatfsImpl(struct Machine *m, intptr_t arg, i64 addr,
   return rc;
 }
 #else
-static int Statfs(intptr_t arg, struct statvfs *buf) {
+static int Statfs(uintptr_t arg, struct statvfs *buf) {
   return statvfs((const char *)arg, buf);
 }
-static int Fstatfs(intptr_t arg, struct statvfs *buf) {
+static int Fstatfs(uintptr_t arg, struct statvfs *buf) {
   return fstatvfs((int)arg, buf);
 }
-static int SysStatfsImpl(struct Machine *m, intptr_t arg, i64 addr,
-                         int thunk(intptr_t, struct statvfs *)) {
+static int SysStatfsImpl(struct Machine *m, uintptr_t arg, i64 addr,
+                         int thunk(uintptr_t, struct statvfs *)) {
   int rc;
   struct statvfs vfs;
   struct statfs_linux sf;
@@ -244,9 +244,9 @@ static int SysStatfsImpl(struct Machine *m, intptr_t arg, i64 addr,
 #endif
 
 int SysStatfs(struct Machine *m, i64 path, i64 addr) {
-  return SysStatfsImpl(m, (intptr_t)LoadStr(m, path), addr, Statfs);
+  return SysStatfsImpl(m, (uintptr_t)LoadStr(m, path), addr, Statfs);
 }
 
 int SysFstatfs(struct Machine *m, i32 fildes, i64 addr) {
-  return SysStatfsImpl(m, (intptr_t)(u32)fildes, addr, Fstatfs);
+  return SysStatfsImpl(m, (uintptr_t)(u32)fildes, addr, Fstatfs);
 }

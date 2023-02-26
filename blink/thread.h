@@ -6,6 +6,7 @@
 #include <pthread.h>
 
 #include "blink/assert.h"
+#include "blink/log.h"
 
 #define LOCK(x)   unassert(!pthread_mutex_lock(x))
 #define UNLOCK(x) unassert(!pthread_mutex_unlock(x))

@@ -1522,7 +1522,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         } else {
           LOG_ONCE(LOGF("jit micro-operation at address %" PRIxPTR
                         " has branches or static memory references",
-                        (intptr_t)fun));
+                        (uintptr_t)fun));
           AppendJitCall(m->path.jb, fun);
         }
         break;

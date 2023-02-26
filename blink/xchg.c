@@ -50,7 +50,7 @@ void OpXchgGvqpEvqp(P) {
   u8 *p = GetModrmRegisterWordPointerWriteOszRexw(A);
   if (Rexw(rde)) {
 #if CAN_64BIT
-    if (!IsModrmRegister(rde) && !((intptr_t)p & 7)) {
+    if (!IsModrmRegister(rde) && !((uintptr_t)p & 7)) {
       atomic_store_explicit(
           (_Atomic(u64) *)q,
           atomic_exchange_explicit(
@@ -76,7 +76,7 @@ void OpXchgGvqpEvqp(P) {
       UnlockBus(p);
     }
   } else if (!Osz(rde)) {
-    if (!IsModrmRegister(rde) && !((intptr_t)p & 3)) {
+    if (!IsModrmRegister(rde) && !((uintptr_t)p & 3)) {
       atomic_store_explicit(
           (_Atomic(u32) *)q,
           atomic_exchange_explicit(
@@ -98,7 +98,7 @@ void OpXchgGvqpEvqp(P) {
       Write32(p + 4, 0);
     }
   } else {
-    if (!IsModrmRegister(rde) && !((intptr_t)p & 1)) {
+    if (!IsModrmRegister(rde) && !((uintptr_t)p & 1)) {
       atomic_store_explicit(
           (_Atomic(u16) *)q,
           atomic_exchange_explicit(

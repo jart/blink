@@ -74,7 +74,7 @@ static void DisLoadElfSyms(struct Dis *d, Elf64_Ehdr_ *ehdr, size_t esize,
   bool isabs, isweak, islocal, isprotected, isfunc, isobject;
   if ((stab = GetElfStringTable(ehdr, esize))) {
     if ((st = GetElfSymbolTable(ehdr, esize, &n))) {
-      stablen = (intptr_t)ehdr + esize - (intptr_t)stab;
+      stablen = (uintptr_t)ehdr + esize - (uintptr_t)stab;
       for (i = 0; i < n; ++i) {
         if (ELF64_ST_TYPE_(st[i].info) == STT_SECTION_ ||
             ELF64_ST_TYPE_(st[i].info) == STT_FILE_ || !Read32(st[i].name) ||

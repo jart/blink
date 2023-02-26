@@ -620,7 +620,7 @@ typedef struct Elf64_Nhdr_ {
   u8 type[4];    // u32
 } Elf64_Nhdr_;
 
-void CheckElfAddress(const Elf64_Ehdr_ *, size_t, intptr_t, size_t);
+void CheckElfAddress(const Elf64_Ehdr_ *, size_t, uintptr_t, size_t);
 Elf64_Phdr_ *GetElfSegmentHeaderAddress(const Elf64_Ehdr_ *, size_t, u64);
 char *GetElfStringTable(const Elf64_Ehdr_ *, size_t);
 Elf64_Shdr_ *GetElfSectionHeaderAddress(const Elf64_Ehdr_ *, size_t, u16);

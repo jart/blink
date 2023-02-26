@@ -1,7 +1,7 @@
 /*-*- mode:c;indent-tabs-mode:nil;c-basic-offset:2;tab-width:8;coding:utf-8 -*-│
 │vi: set net ft=c ts=2 sts=2 sw=2 fenc=utf-8                                :vi│
 ╞══════════════════════════════════════════════════════════════════════════════╡
-│ Copyright 2022 Justine Alexandra Roberts Tunney                              │
+│ Copyright 2023 Justine Alexandra Roberts Tunney                              │
 │                                                                              │
 │ Permission to use, copy, modify, and/or distribute this software for         │
 │ any purpose with or without fee is hereby granted, provided that the         │
@@ -16,9 +16,40 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
+
 #include "blink/util.h"
 
-bool mulo(u64 x, u64 y, u64 *z) {
-  *z = x * y;
-  return (x | y) & ~0xffff && *z / x != y;
+static dontinline bool Overflow(void) {
+  errno = EOVERFLOW;
+  return true;
+}
+
+bool Add(i64 x, i64 y, i64 *z) {
+  u64 a, b, c;
+  a = x, b = y, c = a + b;
+  if (!(((c ^ a) & (c ^ b)) >> 63)) {
+    return *z = c, false;
+  } else {
+    return Overflow();
+  }
+}
+
+bool Sub(i64 x, i64 y, i64 *z) {
+  u64 a, b, c;
+  a = x, b = y, c = a - b;
+  if (!(((c ^ a) & (a ^ b)) >> 63)) {
+    return *z = c, false;
+  } else {
+    return Overflow();
+  }
+}
+
+bool Mul(u64 x, u64 y, u64 *z) {
+  u64 t = x * y;
+  if (!((x | y) & 0xffffffff && t / x != y)) {
+    return *z = t, false;
+  } else {
+    return Overflow();
+  }
 }

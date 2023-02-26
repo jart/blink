@@ -97,7 +97,7 @@ void OpAluw(P) {
   if (Rexw(rde)) {
     p = GetModrmRegisterWordPointerWrite8(A);
 #if CAN_64BIT
-    if (Lock(rde) && !((intptr_t)p & 7)) {
+    if (Lock(rde) && !((uintptr_t)p & 7)) {
       u64 x, y, z;
       x = atomic_load_explicit((_Atomic(u64) *)p, memory_order_acquire);
       y = atomic_load_explicit((_Atomic(u64) *)q, memory_order_relaxed);
@@ -132,7 +132,7 @@ void OpAluw(P) {
     if (IsModrmRegister(rde)) {
       Put32(p + 4, 0);
     }
-    if (Lock(rde) && !((intptr_t)p & 3)) {
+    if (Lock(rde) && !((uintptr_t)p & 3)) {
       x = atomic_load_explicit((_Atomic(u32) *)p, memory_order_acquire);
       y = atomic_load_explicit((_Atomic(u32) *)q, memory_order_relaxed);
       y = Little32(y);
@@ -152,7 +152,7 @@ void OpAluw(P) {
   } else {
     u16 x, y, z;
     p = GetModrmRegisterWordPointerWrite2(A);
-    if (Lock(rde) && !((intptr_t)p & 1)) {
+    if (Lock(rde) && !((uintptr_t)p & 1)) {
       x = atomic_load_explicit((_Atomic(u16) *)p, memory_order_acquire);
       y = atomic_load_explicit((_Atomic(u16) *)q, memory_order_relaxed);
       y = Little16(y);

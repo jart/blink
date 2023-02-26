@@ -16,6 +16,7 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -54,7 +55,7 @@ u8 *GetPageAddress(struct System *s, u64 entry, bool is_cr3) {
   unassert(is_cr3 || (entry & PAGE_V));
   unassert(~entry & PAGE_RSRV);
   if (entry & PAGE_HOST) {
-    return (u8 *)(intptr_t)(entry & PAGE_TA);
+    return (u8 *)(uintptr_t)(entry & PAGE_TA);
   } else if ((entry & PAGE_TA) + 4096 <= kRealSize) {
     unassert(s->real);
     return s->real + (entry & PAGE_TA);
@@ -63,44 +64,121 @@ u8 *GetPageAddress(struct System *s, u64 entry, bool is_cr3) {
   }
 }
 
-u64 HandlePageFault(struct Machine *m, u64 entry, u64 table, unsigned index) {
-  u64 x, res, page;
-  if (m->nofault) return 0;
+u64 HandlePageFault(struct Machine *m, u8 *pslot, u64 entry) {
+  u64 x, page;
   unassert(entry & PAGE_RSRV);
-  LOCK(&m->system->mmap_lock);
-  // page faults should only happen in non-linear mode
-  if (!(entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG))) {
-    // an anonymous page is being accessed for the first time
-    if ((page = AllocatePage(m->system)) != -1) {
-      --m->system->memstat.reserved;
-      ++m->system->memstat.committed;
-      x = (page & (PAGE_TA | PAGE_HOST)) | (entry & ~(PAGE_TA | PAGE_RSRV));
-      StorePte(GetPageAddress(m->system, table, false) + index * 8, x);
-      res = x;
-    } else {
-      res = 0;
-    }
-  } else {
-    // a file-mapped page is being accessed for the first time
-    unassert((entry & (PAGE_HOST | PAGE_MAP)) == (PAGE_HOST | PAGE_MAP));
-    --m->system->memstat.reserved;
-    ++m->system->memstat.committed;
-    ++m->system->rss;
-    x = entry & ~PAGE_RSRV;
-    StorePte(GetPageAddress(m->system, table, false) + index * 8, x);
-    res = x;
+  unassert(!HasLinearMapping());
+  if (m->nofault) {
+    errno = ENOBUFS;
+    return 0;
   }
-  unassert(CheckMemoryInvariants(m->system));
-  UNLOCK(&m->system->mmap_lock);
-  return res;
+  do {
+    if (entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
+      // a file-mapped page is being accessed for the first time
+      unassert((entry & (PAGE_HOST | PAGE_MAP)) == (PAGE_HOST | PAGE_MAP));
+      x = entry & ~PAGE_RSRV;
+      if (CasPte(pslot, entry, x)) {
+        m->system->memstat.committed += 1;
+        m->system->memstat.reserved -= 1;
+        m->system->rss += 1;
+        entry = x;
+      } else {
+        entry = LoadPte(pslot);
+      }
+    } else {
+      // an anonymous page is being accessed for the first time
+      if ((page = AllocateAnonymousPage(m->system)) == -1) {
+        entry = 0;
+        break;
+      }
+      x = (page & (PAGE_TA | PAGE_HOST)) | (entry & ~(PAGE_TA | PAGE_RSRV));
+      if (CasPte(pslot, entry, x)) {
+        m->system->memstat.committed += 1;
+        m->system->memstat.reserved -= 1;
+        entry = x;
+      } else {
+        FreeAnonymousPage(m->system, (u8 *)(uintptr_t)(page & PAGE_TA));
+        entry = LoadPte(pslot);
+        m->system->rss -= 1;
+      }
+    }
+  } while (entry & PAGE_RSRV);
+  return entry;
 }
 
+bool HasPageLock(const struct Machine *m, i64 page) {
+  int i;
+  unassert(!(page & 4095));
+  for (i = m->pagelocks.i; i--;) {
+    if (m->pagelocks.p[i].page == page) {
+      return true;
+    }
+  }
+  return false;
+}
+
+static bool RecordPageLock(struct Machine *m, i64 page, u8 *pslot) {
+  unassert(m->sysdepth > 0);
+  unassert(!m->pagelocks.i ||
+           m->pagelocks.p[m->pagelocks.i - 1].sysdepth <= m->sysdepth);
+  if (m->pagelocks.i == m->pagelocks.n) {
+    int n2;
+    struct PageLock *p2;
+    p2 = m->pagelocks.p;
+    n2 = m->pagelocks.n;
+    n2 += 3;
+    n2 += n2 >> 1;
+    if ((p2 = (struct PageLock *)realloc(p2, n2 * sizeof(*p2)))) {
+      m->pagelocks.p = p2;
+      m->pagelocks.n = n2;
+    } else {
+      return false;
+    }
+  }
+  m->pagelocks.p[m->pagelocks.i].page = page;
+  m->pagelocks.p[m->pagelocks.i].pslot = pslot;
+  m->pagelocks.p[m->pagelocks.i].sysdepth = m->sysdepth;
+  ++m->pagelocks.i;
+  return true;
+}
+
+static void ReleasePageLock(u8 *pslot) {
+  u64 entry;
+  do {
+    entry = LoadPte(pslot);
+    unassert(entry & PAGE_V);
+    unassert(entry & PAGE_LOCKS);
+  } while (!CasPte(pslot, entry, entry - PAGE_LOCK));
+}
+
+static bool HasOutdatedPageLocks(struct Machine *m) {
+  return m->pagelocks.i &&
+         m->pagelocks.p[m->pagelocks.i - 1].sysdepth > m->sysdepth;
+}
+
+void CollectPageLocks(struct Machine *m) {
+  if (HasOutdatedPageLocks(m)) {
+    LOCK(&m->system->pagelocks_lock);
+    do ReleasePageLock(m->pagelocks.p[--m->pagelocks.i].pslot);
+    while (HasOutdatedPageLocks(m));
+    unassert(!pthread_cond_broadcast(&m->system->pagelocks_cond));
+    UNLOCK(&m->system->pagelocks_lock);
+  }
+}
+
+// returns page directory entry associated with virtual address
+// @return raw page directory entry contents, or zero w/ errno
+// @raise EFAULT if a valid 4096 page didn't exist at address
+// @raise ENOMEM if memory couldn't be allocated internally
+// @raise EAGAIN if too many locks are held on a page
 u64 FindPageTableEntry(struct Machine *m, u64 page) {
   long i;
+  u8 *pslot;
   i64 table;
   u64 entry, res;
   unsigned level, index;
   struct MachineTlb bubble;
+  unassert(!(page & 4095));
   for (i = 0; i < ARRAYLEN(m->tlb); ++i) {
     if (m->tlb[i].page == page && ((res = m->tlb[i].entry) & PAGE_V)) {
       if (i) {
@@ -112,14 +190,18 @@ u64 FindPageTableEntry(struct Machine *m, u64 page) {
       return res;
     }
   }
+TryAgain:
   STATISTIC(++tlb_misses);
   unassert((entry = m->system->cr3));
   level = 39;
   do {
     table = entry;
     index = (page >> level) & 511;
-    entry = ReadPte(GetPageAddress(m->system, table, level == 39) + index * 8);
-    if (!(entry & PAGE_V)) return 0;
+    pslot = GetPageAddress(m->system, table, level == 39) + index * 8;
+    entry = LoadPte(pslot);
+    if (!(entry & PAGE_V)) {
+      return (uintptr_t)efault0();
+    }
     if (m->metal) {
       entry &= ~(u64)(PAGE_RSRV | PAGE_HOST | PAGE_MAP | PAGE_GROW | PAGE_MUG |
                       PAGE_FILE);
@@ -136,9 +218,29 @@ u64 FindPageTableEntry(struct Machine *m, u64 page) {
       break;
     }
   } while ((level -= 9) >= 12);
-  if ((entry & PAGE_RSRV) &&
-      !(entry = HandlePageFault(m, entry, table, index))) {
+  if ((entry & PAGE_RSRV) && !(entry = HandlePageFault(m, pslot, entry))) {
     return 0;
+  }
+  // system calls lock the pages they access
+  // this prevents race conditions w/ munmap
+  if (m->insyscall && !m->nofault && !HasPageLock(m, page)) {
+    if ((entry & PAGE_LOCKS) < PAGE_LOCKS) {
+      if (CasPte(pslot, entry, entry + PAGE_LOCK)) {
+        unassert(LoadPte(pslot) & PAGE_LOCKS);
+        if (RecordPageLock(m, page, pslot)) {
+          entry += PAGE_LOCK;
+        } else {
+          ReleasePageLock(pslot);
+          return 0;
+        }
+      } else {
+        goto TryAgain;
+      }
+    } else {
+      LOGF("too many threads locked page %#" PRIx64, page);
+      errno = EAGAIN;
+      return 0;
+    }
   }
   m->tlb[ARRAYLEN(m->tlb) - 1].page = page;
   m->tlb[ARRAYLEN(m->tlb) - 1].entry = entry;
@@ -159,7 +261,7 @@ u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
       STATISTIC(++tlb_hits_1);
     } else if (-0x800000000000 <= virt && virt < 0x800000000000) {
       if (!(entry = FindPageTableEntry(m, page))) {
-        return (u8 *)efault0();
+        return 0;
       }
     } else {
       return (u8 *)efault0();
@@ -201,35 +303,33 @@ u8 *ResolveAddress(struct Machine *m, i64 v) {
 bool IsValidMemory(struct Machine *m, i64 virt, i64 size, int prot) {
   i64 p, pe;
   u64 pte, mask, need;
+  size += virt & 4095;
+  virt &= -4096;
   unassert(m->mode == XED_MODE_LONG);
   unassert(prot && !(prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)));
-  if ((-0x800000000000 <= virt && virt < 0x800000000000) &&
-      size <= 0x800000000000 && virt + size <= 0x800000000000) {
-    need = 0;
-    mask = 0;
-    if (prot & PROT_READ) {
-      mask |= PAGE_U;
-      need |= PAGE_U;
-    }
-    if (prot & PROT_WRITE) {
-      mask |= PAGE_RW;
-      need |= PAGE_RW;
-    }
-    if (prot & PROT_EXEC) {
-      mask |= PAGE_XD;
-    }
-    for (p = virt, pe = virt + size; p < pe; p += 4096) {
-      if (!(pte = FindPageTableEntry(m, p))) {
-        return false;
-      }
-      if ((pte & mask) != need) {
-        return false;
-      }
-    }
-    return true;
-  } else {
-    return false;
+  need = mask = 0;
+  if (prot & PROT_READ) {
+    mask |= PAGE_U;
+    need |= PAGE_U;
   }
+  if (prot & PROT_WRITE) {
+    mask |= PAGE_RW;
+    need |= PAGE_RW;
+  }
+  if (prot & PROT_EXEC) {
+    mask |= PAGE_XD;
+  }
+  if (Add(virt, size, &pe)) return false;
+  for (p = virt; p < pe; p += 4096) {
+    if (!(pte = FindPageTableEntry(m, p))) {
+      return false;
+    }
+    if ((pte & mask) != need) {
+      errno = EFAULT;
+      return false;
+    }
+  }
+  return true;
 }
 
 int VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
