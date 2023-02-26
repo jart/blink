@@ -2055,6 +2055,16 @@ static void RewindHistory(int delta) {
   action &= ~MODAL;
 }
 
+// we need to handle any shutdown via pipeline explicitly
+// because blink always puts SIGPIPE in the SIG_IGN state
+static ssize_t HandleEpipe(ssize_t rc) {
+  if (rc == -1 && errno == EPIPE) {
+    LOGF("got EPIPE, shutting down");
+    exit(128 + EPIPE);
+  }
+  return rc;
+}
+
 static void ShowHistory(void) {
   char *ansi;
   size_t len, size;
@@ -2077,7 +2087,7 @@ static void ShowHistory(void) {
   Inflate(ansi, r->origsize, r->data, r->compsize);
   memcpy(ansi + r->origsize, status, len);
   if (PreventBufferbloat()) {
-    unassert(UninterruptibleWrite(ttyout, ansi, size) != -1);
+    HandleEpipe(UninterruptibleWrite(ttyout, ansi, size));
   }
   free(ansi);
 }
@@ -2143,7 +2153,7 @@ static void Redraw(bool force) {
   STATISTIC(AVERAGE(redraw_latency_us,
                     ToMicroseconds(SubtractTime(end_draw, start_draw))));
   if (force || PreventBufferbloat()) {
-    UninterruptibleWrite(ttyout, ansi, size);
+    HandleEpipe(UninterruptibleWrite(ttyout, ansi, size));
   }
   AddHistory(ansi, size);
   free(ansi);
@@ -4000,6 +4010,7 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 #endif
+  signal(SIGPIPE, SIG_IGN);
   sigfillset(&sa.sa_mask);
   sa.sa_flags = 0;
   sa.sa_handler = OnSigSys;

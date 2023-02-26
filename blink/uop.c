@@ -325,19 +325,16 @@ MICRO_OP void CountOp(long *instructions_jitted_ptr) {
 // PROGRAM COUNTER
 
 MICRO_OP void AddIp(struct Machine *m, long oplen) {
-  // LOGF("AddIp %" PRIx64 " %ld", m->ip, oplen);
   m->oplen = oplen;
   m->ip += oplen;
 }
 
 MICRO_OP void SkewIp(struct Machine *m, long oplen, long delta) {
-  // LOGF("SkewIp %" PRIx64 " %ld", m->ip, delta);
   m->oplen = oplen;
   m->ip += delta;
 }
 
 MICRO_OP void AdvanceIp(struct Machine *m, long oplen) {
-  // LOGF("AdvanceIp %" PRIx64 " %ld", m->ip, oplen);
   m->ip += oplen;
 }
 

@@ -50,6 +50,12 @@ static const char *const kOpenAccmode[] = {
     "O_RDWR",    //
 };
 
+static const struct DescribeFlags kAccessModes[] = {
+    {R_OK_LINUX, "R_OK"},  //
+    {W_OK_LINUX, "W_OK"},  //
+    {X_OK_LINUX, "X_OK"},  //
+};
+
 static const struct DescribeFlags kOpenFlags[] = {
     {O_APPEND_LINUX, "APPEND"},        //
     {O_CREAT_LINUX, "CREAT"},          //
@@ -245,6 +251,42 @@ static const char *DescribeSockaddr(const struct sockaddr_storage_linux *ss) {
   }
 }
 
+static const char *DescribeBuf(struct Machine *m, i64 arg, u64 len, u64 ax,
+                               bool isentry, bool isout) {
+  _Thread_local static char bp[1 + kStraceBufMax * 3 + 1 + 3 + 2 + 21 + 1];
+  u64 have;
+  const u8 *data;
+  int j, bi, bn, preview;
+  bi = 0;
+  have = len;
+  bn = sizeof(bp);
+  preview = MIN(len, kStraceBufMax);
+  if (isout) {
+    if (!isentry) {
+      have = MIN(len, ax);
+      preview = MIN(preview, ax);
+    } else {
+      preview = -1;
+    }
+  }
+  if (preview > 0 && (data = (const u8 *)SchlepR(m, arg, preview))) {
+    APPEND("\"");
+    for (j = 0; j < preview; ++j) {
+      APPEND("%lc", (wint_t)kCp437[data[j]]);
+    }
+    APPEND("\"");
+    if (j < have) {
+      APPEND("...");
+    }
+  } else if (!preview) {
+    APPEND("\"\"");
+  } else {
+    APPEND("%#" PRIx64, arg);
+  }
+  APPEND(", %" PRId64, len);
+  return bp;
+}
+
 static void DescribeSigset(char *bp, int bn, u64 ss) {
   int sig, got = 0, bi = 0;
   if (popcount(ss) > 32) {
@@ -255,7 +297,7 @@ static void DescribeSigset(char *bp, int bn, u64 ss) {
   for (sig = 1; sig <= 64; ++sig) {
     if (ss & (1ull << (sig - 1))) {
       if (got) {
-        APPEND(",");
+        APPEND(", ");
       } else {
         got = true;
       }
@@ -326,36 +368,29 @@ void Strace(struct Machine *m, const char *func, bool isentry, const char *fmt,
         UNLOCK(&m->system->fds.lock);
       }
     } else if (IS_BUF(c)) {
-      u8 *data;
-      u64 len, have;
-      int j, preview;
-      len = have = va_arg(va, i64);
-      preview = MIN(len, kStraceBufMax);
-      if (c == O_BUF[0]) {
-        if (!isentry) {
-          have = MIN(len, ax);
-          preview = MIN(preview, ax);
-        } else {
-          preview = -1;
+      u64 len = va_arg(va, i64);
+      APPEND("%s", DescribeBuf(m, arg, len, ax, isentry, c == O_BUF[0]));
+      ++i;
+    } else if (IS_IOVEC(c)) {
+      u64 rem;
+      const struct iovec_linux *iov;
+      int j, iovlen = va_arg(va, i64);
+      if ((iov = (const struct iovec_linux *)SchlepR(
+               m, arg, iovlen * sizeof(struct iovec_linux)))) {
+        rem = ax;
+        APPEND("{");
+        for (j = 0; j < iovlen; ++j) {
+          if (j) APPEND(", ");
+          APPEND("{%s}", DescribeBuf(m, Read64(iov[j].base), Read64(iov[j].len),
+                                     rem, isentry, c == O_IOVEC[0]));
+          rem -= MIN(rem, Read64(iov[j].len));
         }
-      }
-      // APPEND("%#" PRIx64, arg);
-      if (preview > 0 && (data = (u8 *)SchlepR(m, arg, preview))) {
-        APPEND("\"");
-        for (j = 0; j < preview; ++j) {
-          APPEND("%lc", (wint_t)kCp437[data[j]]);
-        }
-        APPEND("\"");
-        if (j < have) {
-          APPEND("...");
-        }
-      } else if (!preview) {
-        APPEND("\"\"");
+        APPEND("}");
       } else {
         APPEND("%#" PRIx64, arg);
       }
       ++i;
-      snprintf(buf[i], sizeof(buf[i]), ", %" PRId64, len);
+      snprintf(buf[i], sizeof(buf[i]), ", %d", iovlen);
     } else if (c == I_STR[0]) {
       const char *str;
       if ((str = LoadStr(m, arg))) {
@@ -365,11 +400,19 @@ void Strace(struct Machine *m, const char *func, bool isentry, const char *fmt,
       }
     } else if (c == I32_SIG[0]) {
       APPEND("%s", DescribeSignal(arg));
+    } else if (c == I32_ACCMODE[0]) {
+      if (!arg) {
+        APPEND("F_OK");
+      } else {
+        DescribeFlags(tmp, sizeof(tmp), kAccessModes, ARRAYLEN(kAccessModes),
+                      "", arg);
+        APPEND("%s", tmp);
+      }
 #ifdef HAVE_FORK
     } else if (c == I32_WAITFLAGS[0]) {
       DescribeFlags(tmp, sizeof(tmp), kWaitFlags, ARRAYLEN(kWaitFlags), "",
                     arg);
-      APPEND("%s", DescribeSignal(arg));
+      APPEND("%s", tmp);
     } else if (c == O_WSTATUS[0]) {
       const u8 *p;
       if ((p = (const u8 *)SchlepR(m, arg, 4))) {
@@ -381,7 +424,7 @@ void Strace(struct Machine *m, const char *func, bool isentry, const char *fmt,
                  DescribeSignal(WSTOPSIG(s)));
         } else if (WIFSIGNALED(s)) {
           APPEND("{WIFSIGNALED(s) && WTERMSIG(s) == %s}",
-                 DescribeSignal(WSTOPSIG(s)));
+                 DescribeSignal(WTERMSIG(s)));
         } else {
           APPEND("{%#" PRIx32 "}", s);
         }
@@ -400,7 +443,7 @@ void Strace(struct Machine *m, const char *func, bool isentry, const char *fmt,
                     arg);
       APPEND("%s", tmp);
     } else if (c == I32_OFLAGS[0]) {
-      unsigned arg2 = arg;
+      i32 arg2 = arg;
       if ((arg2 & O_ACCMODE_LINUX) < ARRAYLEN(kOpenAccmode)) {
         APPEND("%s", kOpenAccmode[arg2 & O_ACCMODE_LINUX]);
         arg2 &= ~O_ACCMODE_LINUX;
@@ -612,10 +655,11 @@ void Strace(struct Machine *m, const char *func, bool isentry, const char *fmt,
       bp[bi++] = '.';
       bp[bi++] = '.';
       bp[bi++] = '.';
-      bp[bi++] = 0;
+      bp[bi] = 0;
     }
     if (isoutmem) {
-      APPEND("]");
+      bp[bi++] = ']';
+      bp[bi] = 0;
     }
   }
   va_end(va);

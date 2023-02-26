@@ -129,12 +129,13 @@
 
 #define SYSCALL(arity, ordinal, name, func, signature)            \
   case ordinal:                                                   \
-    if (STRACE && signature[0] == TWOWAY[0] && FLAG_strace > 1) { \
-      Strace(m, name, true, &signature[1] SYSARGS##arity);        \
+    if (STRACE && (signature)[0] != NORMAL[0] &&                  \
+        FLAG_strace >= (signature)[0]) {                          \
+      Strace(m, name, true, &(signature)[1] SYSARGS##arity);      \
     }                                                             \
     ax = func(m SYSARGS##arity);                                  \
     if (STRACE && FLAG_strace) {                                  \
-      Strace(m, name, false, &signature[1], ax SYSARGS##arity);   \
+      Strace(m, name, false, &(signature)[1], ax SYSARGS##arity); \
     }                                                             \
     break
 
@@ -1659,9 +1660,7 @@ static int XlatSendFlags(int flags, int socktype) {
   int supported, hostflags;
   supported = MSG_OOB_LINUX |        //
               MSG_DONTROUTE_LINUX |  //
-#ifdef MSG_NOSIGNAL
-              MSG_NOSIGNAL_LINUX |  //
-#endif
+              MSG_NOSIGNAL_LINUX |   //
 #ifdef MSG_EOR
               MSG_EOR_LINUX |
 #endif
@@ -1679,9 +1678,6 @@ static int XlatSendFlags(int flags, int socktype) {
   }
   if (flags & MSG_DONTROUTE_LINUX) hostflags |= MSG_DONTROUTE;
   if (flags & MSG_DONTWAIT_LINUX) hostflags |= MSG_DONTWAIT;
-#ifdef MSG_NOSIGNAL
-  if (flags & MSG_NOSIGNAL_LINUX) hostflags |= MSG_NOSIGNAL;
-#endif
 #ifdef MSG_EOR
   if (flags & MSG_EOR_LINUX) hostflags |= MSG_EOR;
 #endif
@@ -1746,12 +1742,6 @@ static int UnXlatMsgFlags(int flags) {
     flags &= ~MSG_EOR;
   }
 #endif
-#ifdef MSG_NOSIGNAL
-  if (flags & MSG_NOSIGNAL) {
-    guestflags |= MSG_NOSIGNAL_LINUX;
-    flags &= ~MSG_NOSIGNAL;
-  }
-#endif
 #ifdef MSG_CMSG_CLOEXEC
 #ifndef DISABLE_NONPOSIX
   if (flags & MSG_CMSG_CLOEXEC) {
@@ -1766,27 +1756,35 @@ static int UnXlatMsgFlags(int flags) {
   return guestflags;
 }
 
-static i64 ConvertEnotconnToSigpipe(struct Machine *m, i64 rc) {
-#if defined(__linux) || !defined(HAVE_FORK)
-  return rc;
-#else
-  if (!(rc == -1 && errno == ENOTCONN)) return rc;
-  LOCK(&m->system->sig_lock);
-  if ((m->sigmask & (1ull << (SIGPIPE_LINUX - 1))) ||
-      Read64(m->system->hands[SIGPIPE_LINUX - 1].handler) == SIG_IGN_LINUX) {
+// we need to handle any shutdown via pipeline explicitly
+// because blink always puts SIGPIPE in the SIG_IGN state
+static i64 HandleSigpipe(struct Machine *m, i64 rc, int flags) {
+#ifndef __linux
+  // TODO(jart): Should we just intercept shutdown() state instead?
+  if (rc == -1 && errno == ENOTCONN) {
     errno = EPIPE;
-  } else if (Read64(m->system->hands[SIGPIPE_LINUX - 1].handler) ==
-             SIG_DFL_LINUX) {
-    TerminateSignal(m, SIGPIPE_LINUX);
-    errno = EPIPE;
-  } else {
-    m->interrupted = true;
-    Put64(m->ax, -EPIPE_LINUX);
-    DeliverSignal(m, SIGPIPE_LINUX, SI_KERNEL_LINUX);
   }
-  UNLOCK(&m->system->sig_lock);
-  return rc;
 #endif
+  if (rc == -1 && errno == EPIPE &&
+      !((flags & MSG_NOSIGNAL_LINUX) ||
+        (m->sigmask & (1ull << (SIGPIPE_LINUX - 1))))) {
+    LOCK(&m->system->sig_lock);
+    switch (Read64(m->system->hands[SIGPIPE_LINUX - 1].handler)) {
+      case SIG_IGN_LINUX:
+        break;
+      case SIG_DFL_LINUX:
+        TerminateSignal(m, SIGPIPE_LINUX);
+        errno = EPIPE;
+        break;
+      default:
+        m->interrupted = true;
+        Put64(m->ax, -EPIPE_LINUX);
+        DeliverSignal(m, SIGPIPE_LINUX, SI_KERNEL_LINUX);
+        break;
+    }
+    UNLOCK(&m->system->sig_lock);
+  }
+  return rc;
 }
 
 static bool IsSockAddrEmpty(const struct sockaddr *sa) {
@@ -1875,7 +1873,7 @@ static i64 SysSendto(struct Machine *m,  //
     INTERRUPTIBLE(!norestart, rc = sendmsg(fildes, &msg, hostflags));
   }
   FreeIovs(&iv);
-  return ConvertEnotconnToSigpipe(m, rc);
+  return HandleSigpipe(m, rc, flags);
 }
 
 static i64 SysRecvfrom(struct Machine *m,  //
@@ -1971,7 +1969,7 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
     INTERRUPTIBLE(!norestart, rc = sendmsg(fildes, &msg, flags));
   }
   FreeIovs(&iv);
-  return ConvertEnotconnToSigpipe(m, rc);
+  return HandleSigpipe(m, rc, flags);
 }
 
 static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
@@ -2369,7 +2367,7 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
   } else {
     rc = 0;
   }
-  return ConvertEnotconnToSigpipe(m, rc);
+  return HandleSigpipe(m, rc, 0);
 }
 
 // FreeBSD doesn't do access mode check on read/write to pipes.
@@ -2510,7 +2508,7 @@ static i64 SysPwritev2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
       if (iv.i) {
         if (offset == -1) {
           RESTARTABLE(rc = writev_impl(fildes, iv.p, iv.i));
-          rc = ConvertEnotconnToSigpipe(m, rc);
+          rc = HandleSigpipe(m, rc, 0);
         } else if (offset < 0) {
           return einval();
         } else if (offset > NUMERIC_MAX(off_t)) {
@@ -5226,9 +5224,11 @@ void OpSyscall(P) {
     SYSCALL(4, 0x00D, "rt_sigaction", SysSigaction, STRACE_SIGACTION);
     SYSCALL(4, 0x00E, "rt_sigprocmask", SysSigprocmask, STRACE_SIGPROCMASK);
     SYSCALL(3, 0x010, "ioctl", SysIoctl, STRACE_3);
-    SYSCALL(3, 0x013, "readv", SysReadv, STRACE_3);
-    SYSCALL(3, 0x014, "writev", SysWritev, STRACE_3);
-    SYSCALL(2, 0x015, "access", SysAccess, STRACE_2);
+    SYSCALL(3, 0x013, "readv", SysReadv, STRACE_READV);
+    SYSCALL(3, 0x014, "writev", SysWritev, STRACE_WRITEV);
+    SYSCALL(2, 0x015, "access", SysAccess, STRACE_ACCESS);
+    SYSCALL(3, 0x10D, "faccessat", SysFaccessat, STRACE_FACCESSAT);
+    SYSCALL(4, 0x1b7, "faccessat2", SysFaccessat2, STRACE_FACCESSAT2);
     SYSCALL(0, 0x018, "sched_yield", SysSchedYield, STRACE_0);
     SYSCALL(3, 0x01C, "madvise", SysMadvise, STRACE_3);
     SYSCALL(1, 0x020, "dup", SysDup1, STRACE_DUP);
@@ -5312,8 +5312,6 @@ void OpSyscall(P) {
     SYSCALL(3, 0x10A, "symlinkat", SysSymlinkat, STRACE_SYMLINKAT);
     SYSCALL(4, 0x10B, "readlinkat", SysReadlinkat, STRACE_READLINKAT);
     SYSCALL(3, 0x10C, "fchmodat", SysFchmodat, STRACE_FCHMODAT);
-    SYSCALL(3, 0x10D, "faccessat", SysFaccessat, STRACE_FACCESSAT);
-    SYSCALL(4, 0x1b7, "faccessat2", SysFaccessat2, STRACE_FACCESSAT);
 
 #ifndef DISABLE_SOCKETS
     SYSCALL(3, 0x029, "socket", SysSocket, STRACE_SOCKET);
@@ -5347,7 +5345,7 @@ void OpSyscall(P) {
 #endif /* HAVE_FORK */
 
 #ifdef HAVE_THREADS
-    SYSCALL(6, 0x0CA, "futex", SysFutex, STRACE_6);
+    SYSCALL(6, 0x0CA, "futex", SysFutex, STRACE_FUTEX);
 #endif
 
 #if defined(HAVE_FORK) || defined(HAVE_THREADS)
@@ -5393,14 +5391,14 @@ void OpSyscall(P) {
 #endif
     SYSCALL(3, 0x124, "dup3", SysDup3, STRACE_DUP3);
     SYSCALL(4, 0x103, "mknodat", SysMknodat, STRACE_4);
-    SYSCALL(4, 0x127, "preadv", SysPreadv, STRACE_4);
-    SYSCALL(4, 0x128, "pwritev", SysPwritev, STRACE_4);
+    SYSCALL(4, 0x127, "preadv", SysPreadv, STRACE_PREADV);
+    SYSCALL(4, 0x128, "pwritev", SysPwritev, STRACE_PWRITEV);
     SYSCALL(4, 0x12E, "prlimit", SysPrlimit, STRACE_4);
     SYSCALL(5, 0x10F, "ppoll", SysPpoll, STRACE_5);
     SYSCALL(5, 0x13C, "renameat2", SysRenameat2, STRACE_RENAMEAT2);
-    SYSCALL(3, 0x13E, "getrandom", SysGetrandom, STRACE_3);
-    SYSCALL(5, 0x147, "preadv2", SysPreadv2, STRACE_5);
-    SYSCALL(5, 0x148, "pwritev2", SysPwritev2, STRACE_5);
+    SYSCALL(3, 0x13E, "getrandom", SysGetrandom, STRACE_GETRANDOM);
+    SYSCALL(5, 0x147, "preadv2", SysPreadv2, STRACE_PREADV2);
+    SYSCALL(5, 0x148, "pwritev2", SysPwritev2, STRACE_PWRITEV2);
     SYSCALL(3, 0x1B4, "close_range", SysCloseRange, STRACE_3);
 #endif /* DISABLE_NONPOSIX */
 

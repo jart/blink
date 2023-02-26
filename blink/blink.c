@@ -311,6 +311,7 @@ static void GetOpts(int argc, char *argv[]) {
 
 static void HandleSigs(void) {
   struct sigaction sa;
+  signal(SIGPIPE, SIG_IGN);
   sigfillset(&sa.sa_mask);
   sa.sa_flags = 0;
 #ifdef HAVE_THREADS
@@ -321,7 +322,6 @@ static void HandleSigs(void) {
   unassert(!sigaction(SIGINT, &sa, 0));
   unassert(!sigaction(SIGQUIT, &sa, 0));
   unassert(!sigaction(SIGHUP, &sa, 0));
-  unassert(!sigaction(SIGPIPE, &sa, 0));
   unassert(!sigaction(SIGTERM, &sa, 0));
   unassert(!sigaction(SIGXCPU, &sa, 0));
   unassert(!sigaction(SIGXFSZ, &sa, 0));

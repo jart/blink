@@ -210,6 +210,7 @@ struct System *NewSystem(int mode) {
                  1ull << (SIGFPE_LINUX - 1) |   //
                  1ull << (SIGSEGV_LINUX - 1) |  //
                  1ull << (SIGBUS_LINUX - 1) |   //
+                 1ull << (SIGPIPE_LINUX - 1) |  //
                  1ull << (SIGTRAP_LINUX - 1);
   for (i = 0; i < RLIM_NLIMITS_LINUX; ++i) {
     Write64(s->rlim[i].cur, RLIM_INFINITY_LINUX);

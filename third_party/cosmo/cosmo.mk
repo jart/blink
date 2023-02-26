@@ -152,6 +152,8 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/3/sqlite_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/sched_yield_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/pwrite_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/write_test.com.ok						\
+	o/$(MODE)/third_party/cosmo/2/read_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/pread_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/preadv_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/nsync_test.com.ok						\

@@ -112,8 +112,10 @@ static i64 ReadWord(int mode, u8 *p) {
 i64 ReadWordSafely(int mode, u8 *p) {
   i64 res;
   sigset_t oldss, newss;
-  struct sigaction oldsa[2];
-  struct sigaction newsa = {.sa_handler = OnBusted};
+  struct sigaction newsa, oldsa[2];
+  newsa.sa_flags = 0;
+  newsa.sa_handler = OnBusted;
+  sigemptyset(&newsa.sa_mask);
   sigemptyset(&newss);
   sigaddset(&newss, SIGBUS);
   sigaddset(&newss, SIGSEGV);
@@ -131,6 +133,7 @@ i64 ReadWordSafely(int mode, u8 *p) {
   return res;
 }
 
+// TODO(jart): This function should be immune to SIGSEGV and SIGBUS.
 int GetInstruction(struct Machine *m, i64 pc, struct XedDecodedInst *x) {
   int i, rc, err;
   u8 copy[15], *toil, *addr;
