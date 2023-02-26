@@ -93,10 +93,28 @@ static void OpVssEdqpCvtsi2ss(P) {
     i64 n = Read64(GetModrmRegisterWordPointerRead8(A));
     f.f = n;
     Put32(XmmRexrReg(m, rde), f.i);
+    if (IsMakingPath(m)) {
+      Jitter(A,
+             "z3B"    // res0 = GetRegOrMem[force64bit](RexbRm)
+             "a2i"    // arg2 = RexrReg(rde)
+             "s0a1="  // arg1 = machine
+             "t"      // arg0 = res0
+             "m",     // call function (d1)
+             RexrReg(rde), Int64ToFloat);
+    }
   } else {
     i32 n = Read32(GetModrmRegisterWordPointerRead4(A));
     f.f = n;
     Put32(XmmRexrReg(m, rde), f.i);
+    if (IsMakingPath(m)) {
+      Jitter(A,
+             "z2B"    // res0 = GetRegOrMem[force32bit](RexbRm)
+             "a2i"    // arg2 = RexrReg(rde)
+             "s0a1="  // arg1 = machine
+             "t"      // arg0 = res0
+             "m",     // call function (d1)
+             RexrReg(rde), Int32ToFloat);
+    }
   }
 }
 

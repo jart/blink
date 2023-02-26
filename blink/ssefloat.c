@@ -27,6 +27,7 @@
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/pun.h"
+#include "blink/stats.h"
 #include "blink/tsan.h"
 
 static void pshufw(i16 b[4], const i16 a[4], int m) {
@@ -355,14 +356,43 @@ void OpRcpps(P) {
   IGNORE_RACES_END();
 }
 
+static void ComissKernel(const u8 rxr[8], const u8 reg[8], struct Machine *m) {
+  bool zf, cf;
+  union DoublePun xd, yd;
+  m->mxcsr &= ~kMxcsrIe;
+  xd.i = Read64(rxr);
+  yd.i = Read64(reg);
+  if (!isunordered(xd.f, yd.f)) {
+    zf = xd.f == yd.f;
+    cf = xd.f < yd.f;
+    m->flags = SetFlag(m->flags, FLAGS_ZF, zf);
+    m->flags = SetFlag(m->flags, FLAGS_CF, cf);
+    m->flags = SetFlag(m->flags, FLAGS_PF, false);
+    m->flags = SetFlag(m->flags, FLAGS_SF, false);
+    m->flags = SetFlag(m->flags, FLAGS_OF, false);
+  } else {
+    m->flags = SetFlag(m->flags, FLAGS_ZF, true);
+    m->flags = SetFlag(m->flags, FLAGS_CF, true);
+    m->flags = SetFlag(m->flags, FLAGS_PF, true);
+    m->flags = SetFlag(m->flags, FLAGS_SF, false);
+    m->flags = SetFlag(m->flags, FLAGS_OF, false);
+    m->mxcsr |= kMxcsrIe;
+    if (!(m->mxcsr & kMxcsrIm)) {
+      HaltMachine(m, kMachineSimdException);
+    }
+  }
+}
+
 void OpComissVsWs(P) {
-  IGNORE_RACES_START();
+  bool isucomiss;
   u8 zf, cf, pf, ie;
+  isucomiss = ~Opcode(rde) & 1;
+  IGNORE_RACES_START();
   if (!Osz(rde)) {
     union FloatPun xf, yf;
     xf.i = Read32(XmmRexrReg(m, rde));
     yf.i = Read32(GetModrmRegisterXmmPointerRead4(A));
-    if (!isnan(xf.f) && !isnan(yf.f)) {
+    if (!isunordered(xf.f, yf.f)) {
       zf = xf.f == yf.f;
       cf = xf.f < yf.f;
       pf = false;
@@ -374,7 +404,7 @@ void OpComissVsWs(P) {
     union DoublePun xd, yd;
     xd.i = Read64(XmmRexrReg(m, rde));
     yd.i = Read64(GetModrmRegisterXmmPointerRead8(A));
-    if (!isnan(xd.f) && !isnan(yd.f)) {
+    if (!isunordered(xd.f, yd.f)) {
       zf = xd.f == yd.f;
       cf = xd.f < yd.f;
       pf = false;
@@ -382,13 +412,24 @@ void OpComissVsWs(P) {
     } else {
       zf = cf = pf = ie = true;
     }
+    if (IsMakingPath(m) && !isucomiss) {
+      Jitter(A,
+             "z4P"    // res0 = GetXmmOrMemPointer(RexbRm)
+             "r0s1="  // sav1 = res0
+             "z4Q"    // res0 = GetXmmPointer(RexrReg)
+             "s0a2="  // arg2 = sav0 (machine)
+             "s1a1="  // arg1 = sav1
+             "t"      // arg0 = res0
+             "c",     // call function
+             ComissKernel);
+    }
   }
   m->flags = SetFlag(m->flags, FLAGS_ZF, zf);
   m->flags = SetFlag(m->flags, FLAGS_PF, pf);
   m->flags = SetFlag(m->flags, FLAGS_CF, cf);
   m->flags = SetFlag(m->flags, FLAGS_SF, false);
   m->flags = SetFlag(m->flags, FLAGS_OF, false);
-  if (Opcode(rde) & 1) {
+  if (!isucomiss) {
     m->mxcsr &= ~kMxcsrIe;
     if (ie) {
       m->mxcsr |= kMxcsrIe;
@@ -401,6 +442,7 @@ void OpComissVsWs(P) {
 }
 
 static void OpPsd(P, float fs(float x, float y), double fd(double x, double y),
+                  void s1(u8 *, struct Machine *, long),
                   void d1(u8 *, struct Machine *, long)) {
   IGNORE_RACES_START();
   if (Rep(rde) == 2) {
@@ -420,6 +462,15 @@ static void OpPsd(P, float fs(float x, float y), double fd(double x, double y),
     x.i = Read32(XmmRexrReg(m, rde));
     x.f = fs(x.f, y.f);
     Write32(XmmRexrReg(m, rde), x.i);
+    if (IsMakingPath(m)) {
+      Jitter(A,
+             "z4P"    // res0 = GetXmmOrMemPointer(RexbRm)
+             "a2i"    // arg2 = RexrReg(rde)
+             "s0a1="  // arg1 = machine
+             "t"      // arg0 = res0
+             "m",     // call function (d1)
+             RexrReg(rde), s1);
+    }
   } else if (Osz(rde)) {
     u8 *p;
     union DoublePun x[2], y[2];
@@ -467,7 +518,7 @@ static inline double Addd(double x, double y) {
 }
 
 void OpAddpsd(P) {
-  OpPsd(A, Adds, Addd, OpPsdAddd1);
+  OpPsd(A, Adds, Addd, OpPsdAdds1, OpPsdAddd1);
 }
 
 static inline float Subs(float x, float y) {
@@ -479,7 +530,7 @@ static inline double Subd(double x, double y) {
 }
 
 void OpSubpsd(P) {
-  OpPsd(A, Subs, Subd, OpPsdSubd1);
+  OpPsd(A, Subs, Subd, OpPsdSubs1, OpPsdSubd1);
 }
 
 static inline float Muls(float x, float y) {
@@ -491,7 +542,7 @@ static inline double Muld(double x, double y) {
 }
 
 void OpMulpsd(P) {
-  OpPsd(A, Muls, Muld, OpPsdMuld1);
+  OpPsd(A, Muls, Muld, OpPsdMuls1, OpPsdMuld1);
 }
 
 static inline float Divs(float x, float y) {
@@ -503,7 +554,7 @@ static inline double Divd(double x, double y) {
 }
 
 void OpDivpsd(P) {
-  OpPsd(A, Divs, Divd, OpPsdDivd1);
+  OpPsd(A, Divs, Divd, OpPsdDivs1, OpPsdDivd1);
 }
 
 static inline float Mins(float x, float y) {
@@ -515,7 +566,7 @@ static inline double Mind(double x, double y) {
 }
 
 void OpMinpsd(P) {
-  OpPsd(A, Mins, Mind, OpPsdMind1);
+  OpPsd(A, Mins, Mind, OpPsdMins1, OpPsdMind1);
 }
 
 static inline float Maxs(float x, float y) {
@@ -527,7 +578,7 @@ static inline double Maxd(double x, double y) {
 }
 
 void OpMaxpsd(P) {
-  OpPsd(A, Maxs, Maxd, OpPsdMaxd1);
+  OpPsd(A, Maxs, Maxd, OpPsdMaxs1, OpPsdMaxd1);
 }
 
 static int Cmps(int imm, float x, float y) {

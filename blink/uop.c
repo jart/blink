@@ -192,12 +192,28 @@ MICRO_OP u64 Pick(u32 p, u64 x, u64 y) {
 ////////////////////////////////////////////////////////////////////////////////
 // FLOATING POINT
 
+MICRO_OP void OpPsdMuls1(u8 *p, struct Machine *m, long reg) {
+  union FloatPun x, y;
+  y.i = Read32(p);
+  x.i = Read32(m->xmm[reg]);
+  x.f = x.f * y.f;
+  Write32(m->xmm[reg], x.i);
+}
+
 MICRO_OP void OpPsdMuld1(u8 *p, struct Machine *m, long reg) {
   union DoublePun x, y;
   y.i = Read64(p);
   x.i = Read64(m->xmm[reg]);
   x.f = x.f * y.f;
   Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdAdds1(u8 *p, struct Machine *m, long reg) {
+  union FloatPun x, y;
+  y.i = Read32(p);
+  x.i = Read32(m->xmm[reg]);
+  x.f = x.f + y.f;
+  Write32(m->xmm[reg], x.i);
 }
 
 MICRO_OP void OpPsdAddd1(u8 *p, struct Machine *m, long reg) {
@@ -208,12 +224,28 @@ MICRO_OP void OpPsdAddd1(u8 *p, struct Machine *m, long reg) {
   Write64(m->xmm[reg], x.i);
 }
 
+MICRO_OP void OpPsdSubs1(u8 *p, struct Machine *m, long reg) {
+  union FloatPun x, y;
+  y.i = Read32(p);
+  x.i = Read32(m->xmm[reg]);
+  x.f = x.f - y.f;
+  Write32(m->xmm[reg], x.i);
+}
+
 MICRO_OP void OpPsdSubd1(u8 *p, struct Machine *m, long reg) {
   union DoublePun x, y;
   y.i = Read64(p);
   x.i = Read64(m->xmm[reg]);
   x.f = x.f - y.f;
   Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdDivs1(u8 *p, struct Machine *m, long reg) {
+  union FloatPun x, y;
+  y.i = Read32(p);
+  x.i = Read32(m->xmm[reg]);
+  x.f = x.f / y.f;
+  Write32(m->xmm[reg], x.i);
 }
 
 MICRO_OP void OpPsdDivd1(u8 *p, struct Machine *m, long reg) {
@@ -224,12 +256,28 @@ MICRO_OP void OpPsdDivd1(u8 *p, struct Machine *m, long reg) {
   Write64(m->xmm[reg], x.i);
 }
 
+MICRO_OP void OpPsdMins1(u8 *p, struct Machine *m, long reg) {
+  union FloatPun x, y;
+  y.i = Read32(p);
+  x.i = Read32(m->xmm[reg]);
+  x.f = MIN(x.f, y.f);
+  Write32(m->xmm[reg], x.i);
+}
+
 MICRO_OP void OpPsdMind1(u8 *p, struct Machine *m, long reg) {
   union DoublePun x, y;
   y.i = Read64(p);
   x.i = Read64(m->xmm[reg]);
   x.f = MIN(x.f, y.f);
   Write64(m->xmm[reg], x.i);
+}
+
+MICRO_OP void OpPsdMaxs1(u8 *p, struct Machine *m, long reg) {
+  union FloatPun x, y;
+  y.i = Read32(p);
+  x.i = Read32(m->xmm[reg]);
+  x.f = MAX(x.f, y.f);
+  Write32(m->xmm[reg], x.i);
 }
 
 MICRO_OP void OpPsdMaxd1(u8 *p, struct Machine *m, long reg) {
@@ -250,6 +298,18 @@ MICRO_OP void Int32ToDouble(i32 x, struct Machine *m, long reg) {
   union DoublePun d;
   d.f = x;
   Put64(m->xmm[reg], d.i);
+}
+
+MICRO_OP void Int64ToFloat(i64 x, struct Machine *m, long reg) {
+  union FloatPun d;
+  d.f = x;
+  Put32(m->xmm[reg], d.i);
+}
+
+MICRO_OP void Int32ToFloat(i32 x, struct Machine *m, long reg) {
+  union FloatPun d;
+  d.f = x;
+  Put32(m->xmm[reg], d.i);
 }
 
 #ifdef HAVE_JIT

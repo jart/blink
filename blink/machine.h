@@ -688,6 +688,13 @@ u64 JustMul64(u64, u64, struct Machine *);
 void MulAxDx(u64, struct Machine *);
 void JustMulAxDx(u64, struct Machine *);
 
+void OpPsdMuls1(u8 *, struct Machine *, long);
+void OpPsdAdds1(u8 *, struct Machine *, long);
+void OpPsdSubs1(u8 *, struct Machine *, long);
+void OpPsdDivs1(u8 *, struct Machine *, long);
+void OpPsdMins1(u8 *, struct Machine *, long);
+void OpPsdMaxs1(u8 *, struct Machine *, long);
+
 void OpPsdMuld1(u8 *, struct Machine *, long);
 void OpPsdAddd1(u8 *, struct Machine *, long);
 void OpPsdSubd1(u8 *, struct Machine *, long);
@@ -695,6 +702,8 @@ void OpPsdDivd1(u8 *, struct Machine *, long);
 void OpPsdMind1(u8 *, struct Machine *, long);
 void OpPsdMaxd1(u8 *, struct Machine *, long);
 
+void Int64ToFloat(i64, struct Machine *, long);
+void Int32ToFloat(i32, struct Machine *, long);
 void Int64ToDouble(i64, struct Machine *, long);
 void Int32ToDouble(i32, struct Machine *, long);
 void MovsdWpsVpsOp(u8 *, struct Machine *, long);
