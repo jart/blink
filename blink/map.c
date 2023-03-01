@@ -134,6 +134,17 @@ void *Mmap(void *addr,     //
     res = MAP_FAILED;
   }
 #endif
+#ifdef MAP_FIXED_NOREPLACE
+  if ((flags & MAP_FIXED_NOREPLACE) && res == MAP_FAILED &&
+      errno == EOPNOTSUPP) {
+    res = mmap(addr, length, prot, flags & ~MAP_FIXED_NOREPLACE, fd, offset);
+    if (res != addr) {
+      munmap(res, length);
+      res = MAP_FAILED;
+      errno = EEXIST;
+    }
+  }
+#endif
 #if LOG_MEM
   FormatSize(szbuf, length, 1024);
   if (res != MAP_FAILED) {
