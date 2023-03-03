@@ -430,6 +430,25 @@ bad evex ll\0\
 unimplemented\0\
 ";
 
+static struct CHS {
+  ssize_t imagesize;
+  int c, h, s;
+} chs[] = {
+  { 163840,  40, 1, 8 },
+  { 184320,  40, 1, 9 },
+  { 327680,  40, 2, 8 },
+  { 368640,  40, 2, 9 },
+  { 737280,  80, 2, 9 },
+  { 1228800, 80, 2, 15 },
+  { 1474560, 80, 2, 18 },
+  { 2949120, 80, 2, 36 }
+};
+
+static off_t diskimagesize = 0;
+static int diskcyls = 1023;
+static int diskheads = 16;  // default to 16 heads/cylinder, following QEMU
+static int disksects = 63;
+
 static char *xasprintf(const char *fmt, ...) {
   char *s;
   va_list va;
@@ -2639,17 +2658,35 @@ static void OnDiskServiceBadCommand(void) {
   SetCarry(true);
 }
 
-static void OnDiskServiceGetParams(void) {
+static void DetermineCHS(void) {
   struct stat st;
-  size_t lastsector, lastcylinder, lasthead;
+  int i;
+  off_t size = diskimagesize;
+  if (size) return;  // do nothing if disk geometry already detected
   unassert(!OverlaysStat(AT_FDCWD, m->system->elf.prog, &st, 0));
-  lastcylinder = GetLastIndex(st.st_size, 512 * 63 * 255, 0, 1023);
-  lasthead = GetLastIndex(st.st_size, 512 * 63, 0, 255);
-  lastsector = GetLastIndex(st.st_size, 512, 1, 63);
+  diskimagesize = size = st.st_size;
+  for (i = 0; i < ARRAYLEN(chs); ++i) {
+    if (size == chs[i].imagesize) {
+      diskcyls = chs[i].c;
+      diskheads = chs[i].h;
+      disksects = chs[i].s;
+      return;
+    }
+  }
+}
+
+static void OnDiskServiceGetParams(void) {
+  size_t lastsector, lastcylinder, lasthead;
+  DetermineCHS();
+  lastcylinder = GetLastIndex(diskimagesize,
+                              512 * disksects * diskheads, 0, 1023);
+  lasthead = GetLastIndex(diskimagesize, 512 * disksects, 0, diskheads - 1);
+  lastsector = GetLastIndex(diskimagesize, 512, 1, disksects);
   m->dl = 1;
   m->dh = lasthead;
   m->cl = lastcylinder >> 8 << 6 | lastsector;
   m->ch = lastcylinder;
+  m->bl = 4;        // CMOS drive type: 1.4M floppy
   m->ah = 0;
   m->es.sel = m->es.base = 0;
   Put16(m->di, 0);
@@ -2660,13 +2697,15 @@ static void OnDiskServiceReadSectors(void) {
   int fd;
   i64 addr, size;
   i64 sectors, drive, head, cylinder, sector, offset;
+  DetermineCHS();
   sectors = m->al;
   drive = m->dl;
   head = m->dh;
   cylinder = (m->cl & 192) << 2 | m->ch;
   sector = (m->cl & 63) - 1;
   size = sectors * 512;
-  offset = sector * 512 + head * 512 * 63 + cylinder * 512 * 63 * 255;
+  offset = sector * 512 + head * 512 * disksects
+                        + cylinder * 512 * disksects * diskheads;
   (void)drive;
   ELF_LOGF("bios read sectors %" PRId64 " "
            "@ sector %" PRId64 " cylinder %" PRId64 " head %" PRId64
