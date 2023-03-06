@@ -3888,6 +3888,7 @@ static void GetOpts(int argc, char *argv[]) {
     }
   }
   LogInit(FLAG_logpath);
+  if (wantmetal) wantunsafe = false;
   FLAG_nolinear = !wantunsafe;
 }
 
