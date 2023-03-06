@@ -193,7 +193,9 @@ Where `PROGRAM` is an x86_64-linux binary that may be specified as:
 
 The following `FLAG` arguments are provided:
 
-- `-h` shows this help
+- `-h` shows help on command usage
+
+- `-v` shows version and build configuration details
 
 - `-e` means log to standard error (fd 2) in addition to the log file.
   If logging to *only* standard error is desired, then `-eL/dev/null`
@@ -204,9 +206,7 @@ The following `FLAG` arguments are provided:
 
 - `-m` disables the linear memory optimization. This makes Blink memory
   safe, but comes at the cost of going ~4x slower. On some platforms
-  this can help avoid the possibility of an mmap() crisis. This option
-  is required, if Blink is running inside Blink, in which case only one
-  level of simulation may use the linear memory optimization.
+  this can help avoid the possibility of an mmap() crisis.
 
 - `-0` allows `argv[0]` to be specified on the command line. Under
   normal circumstances, `blink cmd arg1` is equivalent to `execve("cmd",
@@ -221,17 +221,19 @@ The following `FLAG` arguments are provided:
   desired, then `-L /dev/null` may be used. See also the `-e` flag for
   logging to standard error.
 
-- `-S` enables system call logging. This will emit to the log file the
-  names of system calls each time a `SYSCALL` operation in invoked,
-  along with their arguments and results in hexadecimal. Blink currently
-  only displays symbol names for error codes. The x86_64-linux headers
-  and System V ABI may be consulted to determine the meaning of other
-  hex codes. System call logging isn't available in `MODE=rel` and
-  `MODE=tiny` builds, in which case this flag is ignored.
+- `-s` enables system call logging. This will emit to the log file the
+  names of system calls each time a SYSCALL instruction in executed,
+  along with its arguments and result. System call logging isn't
+  available in `MODE=rel` and `MODE=tiny` builds, in which case this
+  flag is ignored.
 
-- `-s` will cause internal statistics to be printed to standard error on
+- `-Z` will cause internal statistics to be printed to standard error on
   exit. Stats aren't available in `MODE=rel` and `MODE=tiny` builds, and
   this flag is ignored.
+
+- `-C path` will cause blink to launch the program in a chroot'd
+  environment. This flag is both equivalent to and overrides the
+  `BLINK_OVERLAYS` environment variable.
 
 ### `blinkenlights` Flags
 
@@ -251,7 +253,9 @@ Where `PROGRAM` is an x86_64-linux binary that may be specified as:
 
 The following `FLAG` arguments are provided:
 
-- `-h` shows this help
+- `-h` shows help on command usage
+
+- `-v` shows version and build configuration details
 
 - `-r` puts your virtual machine real mode. This may be used to run
   16-bit i8086 programs, such as SectorLISP. It's also used for booting
@@ -307,15 +311,17 @@ The following `FLAG` arguments are provided:
 - `-L PATH` specifies the log path. The default log path is
   `$TMPDIR/blink.log` or `/tmp/blink.log` if `$TMPDIR` isn't defined.
 
-- `-S` enables system call logging. This will emit to the log file the
-  names of system calls each time a `SYSCALL` operation in invoked,
-  along with their arguments and results in hexadecimal. Blink currently
-  only displays symbol names for error codes. The x86_64-linux headers
-  and System V ABI may be consulted to determine the meaning of other
-  hex codes. System call logging isn't available in `MODE=rel` and
-  `MODE=tiny` builds, in which case this flag is ignored.
+- `-C path` will cause blink to launch the program in a chroot'd
+  environment. This flag is both equivalent to and overrides the
+  `BLINK_OVERLAYS` environment variable.
 
-- `-s` will cause internal statistics to be printed to standard error on
+- `-s` enables system call logging. This will emit to the log file the
+  names of system calls each time a SYSCALL instruction in executed,
+  along with its arguments and result. System call logging isn't
+  available in `MODE=rel` and `MODE=tiny` builds, in which case this
+  flag is ignored.
+
+- `-Z` will cause internal statistics to be printed to standard error on
   exit. Stats aren't available in `MODE=rel` and `MODE=tiny` builds, and
   this flag is ignored.
 
@@ -329,7 +335,7 @@ The following `FLAG` arguments are provided:
   terminal emulators (especially on Windows), do not support this xterm
   feature and as such, this flag is provided as an alternative.
 
-- `-v` [repeatable] increases verbosity
+- `-V` [repeatable] increases verbosity
 
 - `-R` disables reactive error mode
 
@@ -391,8 +397,8 @@ and `blinkenlights` commands:
   be an absolute path. If logging to standard error is desired, use the
   `blink -e` flag.
 
-- `BLINK_OVERLAYS` specifies root one or more directories to use as the
-  root filesystem. Similar to `$PATH` this is a colon delimited list of
+- `BLINK_OVERLAYS` specifies one or more directories to use as the root
+  filesystem. Similar to `$PATH` this is a colon delimited list of
   pathnames. If relative paths are specified, they'll be resolved to an
   absolute path at startup time. Overlays only apply to IO system calls
   that specify an absolute path. The empty string overlay means use the
@@ -847,38 +853,18 @@ Blink uses `SIGSYS` to deliver signals internally. This signal is
 precious to Blink. It's currently not possible for guest applications to
 capture it from external processes.
 
-Blink's JIT currently doesn't have true asynchronous signal delivery.
-Right now Blink only checks for signals from its main interpreter loop.
-Under normal circumstances, Blink will drop back into the main
-interpreter loop occasionally, when returning from functions or
-executing system calls. However JIT'd code like the following:
-
-```c
-for (;;) {
-}
-```
-
-Can form a cycle in the JIT graph that prevents signal delivery and can
-even deadlock shutdown. This is something we plan to fix soon.
-
 ### Self Modifying Code
 
 Blink supports self-modifying code, with some caveats.
 
-Blink currently only JITs the memory intervals declared by your ELF
-program headers as `PF_X`. If the code stored at these addresses is
-modified, then it must be invalidated by calling `mprotect(PROT_EXEC)`,
-which will atomically reset all JIT hooks if it overlaps an executable
-section. While this takes away some of the flexibility that's normally
-offered by the x86 architecture, the fact is that operating systems like
-OpenBSD already took that capability away. So in many respects, Blink is
-helping your code to be more portable. It's recommended that executables
-only morph themselves a few times during their lifecycle, because doing
-so leaks JIT memory. Blink sets aside only 31mb of .bss memory for JIT.
-Running out of JIT memory is harmless and causes Blink to safely fall
-back into interpreter mode.
+If Blink's JIT is disabled, then Blink offers perfect support for
+self-modifying code, and no instruction flush is required.
 
-Memory that isn't declared by an ELF program header will be interpreted
-when executed. Blink's interpreter mode automatically invalidates any
-instruction caches when memory changes, so that code may modify itself
-freely. This upholds the same guarantees as the x86 architecture.
+If Blink's JIT is enabled, then it's recommended that memory not be
+executed until it's been generated. This is sufficient to support the
+JIT use case of well-behaved virtual machines such as Blink and Qemu.
+However in other cases it's desirable for binaries to rewrite themselves
+in memory (code morphing). In that case, the guest binary must use
+`mprotect(PROT_EXEC)` to invalidate JIT hooks that were previously
+generated. Please note that doing this will leak JIT memory, so it
+should ideally only be called once in a program's lifecycle.

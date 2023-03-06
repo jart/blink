@@ -8,7 +8,7 @@ ARCHITECTURES = x86_64 x86_64-gcc49 i486 aarch64 arm mips s390x mipsel mips64 mi
 .SUFFIXES:
 .DELETE_ON_ERROR:
 .FEATURES: output-sync
-.PHONY: o all clean check check2 test tags
+.PHONY: o all clean check check2 test tags install
 
 ifeq ($(MAKE_VERSION), 3.81)
 $(error please "brew install make" and use the "gmake" command)
@@ -227,6 +227,8 @@ install:
 	mkdir -p $(PREFIX)/bin
 	install -m 0755 o//blink/blink $(PREFIX)/bin/blink
 	install -m 0755 o//blink/blinkenlights $(PREFIX)/bin/blinkenlights
+	mkdir -p $(PREFIX)/share/man/man1
+	install -m 0644 blink/blink.1 $(PREFIX)/share/man/man1/blink.1
 
 clean:
 	rm -f $(OBJS) o/$(MODE)/blink/blink o/$(MODE)/blink/blinkenlights o/$(MODE)/blink/blink.a o/$(MODE)/third_party/libz/zlib.a

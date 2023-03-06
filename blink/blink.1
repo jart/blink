@@ -1,0 +1,281 @@
+.\" Copyright 2023 Justine Alexandra Roberts Tunney
+.\"
+.\" Permission to use, copy, modify, and/or distribute this software for
+.\" any purpose with or without fee is hereby granted, provided that the
+.\" above copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
+.\" WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+.\" WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
+.\" AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+.\" DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
+.\" PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+.\" TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+.\" PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd March 6, 2023
+.Dt BLINK 1
+.Os
+.Sh NAME
+.Nm blink
+.Nd headless blinkenlights x86-64-linux virtual machine
+.Sh SYNOPSIS
+.Nm
+.Op Fl hvjemZs
+.Op Fl L Ar logfile
+.Op Fl C Ar chroot
+.Ar program
+.Op Ar argv1...
+.Nm
+.Op Fl hvjemZs
+.Op Fl L Ar logfile
+.Op Fl C Ar chroot
+.Fl 0
+.Ar program
+.Op Ar argv0...
+.Sh DESCRIPTION
+.Nm
+is a JITing virtual machine that uses x86_64 as its byte code language
+and implements the Linux Kernel ABI.
+.Nm
+may be used to run prebuilt binaries intended for x86_64 Linux on other
+POSIX platforms.
+.Sh ARGUMENTS
+.Pp
+The
+.Ar program
+argument is a
+.Ev PATH
+searched command, which may be:
+.Pp
+.Bl -dash -compact
+.It
+An x86_64-linux ELF executable (either static or dynamic)
+.It
+An Actually Portable Executable (either MZqFpD or jartsr magic)
+.It
+A flat executable (if
+.Ar program
+ends with .bin, .img, or .raw)
+.It
+A shell script whose #!interpreter meets the above criteria
+.El
+.Pp
+The
+.Fl 0
+flag allows
+.Li argv[0]
+to be specified on the command line. Under normal circumstances,
+.Bd -literal -offset indent
+blink cmd arg1
+.Ed
+.Pp
+is equivalent to
+.Bd -literal -offset indent
+execve("cmd", {"cmd", "arg1"})
+.Ed
+.Pp
+since that's how most programs are launched. However if you
+need the full power of execve() process spawning, you can say
+.Bd -literal -offset indent
+blink -0 cmd arg0 arg1
+.Ed
+.Pp
+which is equivalent to
+.Bd -literal -offset indent
+execve("cmd", {"arg0", "arg1"})
+.Ed
+.Pp
+.Sh OPTIONS
+The following options are available:
+.Bl -tag -width indent
+.It Fl h
+Prints condensed help.
+.It Fl v
+Shows
+.Nm
+version and build configuration details.
+.It Fl e
+Log to standard error (fd 2) in addition to the log file. If logging to
+.Em only
+standard error is desired, then
+.Li -eL/dev/null
+may be passed as flags.
+.It Fl s
+Enables system call logging. This will emit to the log file the names of
+system calls each time a SYSCALL instruction in executed, along with its
+arguments and result. System call logging isn't available in `MODE=rel`
+and `MODE=tiny` builds, in which case this flag is ignored.
+.It Fl m
+Enables full memory virtualization. Under normal circumstances,
+.Nm
+aims to share the same address space as the guest program. Depending on
+the program's memory requirements (i.e. if it uses MAP_FIXED) and the
+constraints imposed by the host platform, this so-called linear memory
+optimization may lead to an mmap() crisis that causes Blink to not work
+properly. Using this option will cause
+.Nm
+to virtualize the x86_64 address space precicely and reliably, however
+the use of this flag carries the tradeoff of causing
+.Nm
+to go at least 2x slower.
+.It Fl j
+Disables Just-In-Time (JIT) compilation. Using this option will cause
+.Nm
+to go ~10x or possibly even ~100x slower.
+.It Fl L Ar path
+Specifies the log path. The default log path is
+.Ar blink.log
+in the current directory at startup. This log file won't be created
+until something is actually logged. If logging to a file isn't desired,
+then -L /dev/null may be used. See also the
+.Fl e
+flag for logging to standard error.
+.It Fl C Ar path
+Launch
+.Ar program
+in a chroot'd environment. This flag is both equivalent to and overrides
+the
+.Ev BLINK_OVERLAYS
+environment variable.
+.It Fl Z
+Print internal statistics to standard error on exit. Statistics aren't
+available in MODE=rel and MODE=tiny builds, in which case this flag is
+ignored.
+.El
+.Sh ENVIRONMENT
+The following environment variables are recognized:
+.Bl -tag -width indent
+.It Ev BLINK_LOG_FILENAME
+may be specified to supply a log path to be used in cases where the
+.Fl L Ar path
+flag isn't specified. This value should be an absolute path. If logging
+to standard error is desired, use the
+.Fl e
+flag.
+.It Ev BLINK_OVERLAYS
+specifies one or more directories to use as the root filesystem.
+Similar to
+.Ev PATH
+this is a colon delimited list of pathnames. If relative paths are
+specified, they'll be resolved to an absolute path at startup time.
+Overlays only apply to IO system calls that specify an absolute path.
+The empty string overlay means use the normal / root filesystem. The
+default value is
+.Li :o
+which means if the absolute path
+.Li /$f
+is opened, then first check if
+.Li /$f
+exists, and if it doesn't, then check if
+.Li o/$f
+exists, in which case open that instead. Blink uses this convention to
+open shared object tests. It favors the system version if it exists, but
+also downloads
+.Li ld-musl-x86_64.so.1
+to
+.Li o/lib/ld-musl-x86_64.so.1
+so the dynamic linker can transparently find it on platforms like Apple,
+that don't let users put files in the root folder. On the other hand,
+it's possible to say
+.Li BLINK_OVERLAYS=o:
+so that
+.Li o/...
+takes precedence over
+.Li /...
+(noting again that empty string means root). If a single overlay is
+specified that isn't empty string, then it'll effectively act as a
+restricted chroot environment.
+.El
+.Sh QUIRKS
+Here's the current list of Blink's known quirks and tradeoffs.
+.Ss "Flags"
+Flag dependencies may not carry across function call boundaries under
+long mode. This is because when Blink's JIT is speculating whether or
+not it's necessary for an arithmetic instruction to compute flags, it
+considers
+.Li RET
+and
+.Li CALL
+terminal ops that break the chain. As such
+64-bit code shouldn't do things we did in the DOS days, such as using
+carry flag as a return value to indicate error. This should work fine
+when
+.Li STC
+is used to set the carry flag, but if the code computes it
+cleverly using instructions like
+.Li SUB
+then EFLAGS might not change.
+.Ss "Faults"
+Blink may not report the precise program counter where a fault occurred
+in
+.Li ucontext_t::uc_mcontext::rip
+when signalling a segmentation fault.
+This is currently only possible when
+.Li PUSH
+or
+.Li POP
+access bad memory.
+That's because Blink's JIT tries to avoid updating
+.Li Machine::ip
+on ops
+it considers "pure" such as those that only access registers, which for
+reasons of performance is defined to include pushing and popping.
+.Ss "Threads"
+Blink doesn't have a working implementation of
+.Li set_robust_list()
+yet,
+which means robust mutexes might not get unlocked if a process crashes.
+.Ss "Coherency"
+POSIX.1 provides almost no guarantees of coherency, synchronization, and
+durability when it comes to
+.Li MAP_SHARED
+mappings and recommends that
+msync() be explicitly used to synchronize memory with file contents. The
+Linux Kernel implements shared memory so well, that this is rarely
+necessary. However some platforms like OpenBSD lack write coherency.
+This means if you change a shared writable memory map and then call
+pread() on the associated file region, you might get stale data. Blink
+isn't able to polyfill incoherent platforms to be as coherent as Linux,
+therefore apps that run in Blink should assume the POSIX rules apply.
+.Ss "Signal Handling"
+Blink uses
+.Li SIGSYS
+to deliver signals internally. This signal is
+precious to Blink. It's currently not possible for guest applications to
+capture it from external processes.
+.Ss "Self Modifying Code"
+Blink supports self-modifying code, with some caveats.
+.Pp
+If Blink's JIT is disabled, then Blink offers perfect support for
+self-modifying code, and no instruction flush is required.
+.Pp
+If Blink's JIT is enabled, then it's recommended that memory not be
+executed until it's been generated. This is sufficient to support the
+JIT use case of well-behaved virtual machines such as Blink and Qemu.
+However in other cases it's desirable for binaries to rewrite themselves
+in memory (code morphing). In that case, the guest binary must use
+.Li mprotect(PROT_EXEC)
+to invalidate JIT hooks that were previously
+generated. Please note that doing this will leak JIT memory, so it
+should ideally only be called once in a program's lifecycle.
+.Sh EXIT STATUS
+The
+.Nm
+command passes along the exit code of the
+.Ar program
+which by convention is 0 on success or >0 on failure. In the event that
+.Nm
+fails to launch
+.Ar program
+the exit status 127 shall be returned.
+.Sh SEE ALSO
+.Xr blinkenlights 1
+.Sh STANDARDS
+The
+.Nm
+command implements a superset of the
+.St -p1003.1-2008
+specification, intended to emulate the behaviors of the Linux Kernel.
+.Sh AUTHORS
+.An "Justine Alexandra Roberts Tunney" Aq jtunney@gmail.com
