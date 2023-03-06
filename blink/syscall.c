@@ -1088,26 +1088,25 @@ static int SysMadvise(struct Machine *m, i64 addr, u64 len, int advice) {
 }
 
 static i64 SysBrk(struct Machine *m, i64 addr) {
+  i64 rc, size;
   long pagesize;
-  i64 rc, brk, size, eaddr;
   BEGIN_NO_PAGE_FAULTS;
   LOCK(&m->system->mmap_lock);
   MEM_LOGF("brk(%#" PRIx64 ") currently %#" PRIx64, addr, m->system->brk);
   pagesize = GetSystemPageSize();
-  if (addr > ROUNDDOWN(INT64_MAX, pagesize)) return eoverflow();
-  eaddr = ROUNDUP(addr, pagesize);
-  if (eaddr >= kNullSize) {
-    brk = ROUNDUP(m->system->brk, pagesize);
-    if (Sub(eaddr, brk, &size)) return eoverflow();
-    if (size > 0) {
+  addr = ROUNDUP(addr, pagesize);
+  if (addr >= kNullSize) {
+    if (addr > m->system->brk) {
+      size = addr - m->system->brk;
       CleanseMemory(m->system, size);
       if (m->system->rss < GetMaxRss(m->system)) {
         if (size / 4096 + m->system->vss < GetMaxVss(m->system)) {
-          if (ReserveVirtual(m->system, brk, size,
+          if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
                              PAGE_FILE | PAGE_RW | PAGE_U | PAGE_XD, -1, 0, 0,
                              0) != -1) {
             if (!m->system->brkchanged) {
-              unassert(AddFileMap(m->system, brk, size, "[heap]", -1));
+              unassert(AddFileMap(m->system, m->system->brk,
+                                  addr - m->system->brk, "[heap]", -1));
               m->system->brkchanged = true;
             }
             MEM_LOGF("increased break %" PRIx64 " -> %" PRIx64, m->system->brk,
@@ -1123,12 +1122,10 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
         LOGF("ran out of resident memory (%#lx / %#lx pages)", m->system->rss,
              GetMaxRss(m->system));
       }
-    } else if (size < 0) {
-      if (FreeVirtual(m->system, eaddr, -size) != -1) {
+    } else if (addr < m->system->brk) {
+      if (FreeVirtual(m->system, addr, m->system->brk - addr) != -1) {
         m->system->brk = addr;
       }
-    } else {
-      m->system->brk = addr;
     }
   }
   rc = m->system->brk;

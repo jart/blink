@@ -64,8 +64,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
   i64 filesz = Read64(phdr->filesz);
   long pagesize = HasLinearMapping() ? GetSystemPageSize() : 4096;
   i64 start = ROUNDDOWN(vaddr, pagesize);
-  i64 newbrk = vaddr + memsz;
-  i64 end = ROUNDUP(newbrk, pagesize);
+  i64 end = ROUNDUP(vaddr + memsz, pagesize);
   long skew = vaddr & (pagesize - 1);
   u64 key = (flags & PF_R_ ? PAGE_U : 0) |   //
             (flags & PF_W_ ? PAGE_RW : 0) |  //
@@ -196,7 +195,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
     }
   }
 
-  s->brk = MAX(s->brk, newbrk);
+  s->brk = MAX(s->brk, end);
 
   if (flags & PF_X_) {
     if (!s->codesize) {

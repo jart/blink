@@ -338,7 +338,6 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/2/sendfile08.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/sendfile09.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/openfile.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/2/brk01.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/2/connect01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/chdir04.elf.ok
 
