@@ -36,14 +36,6 @@
 #include "blink/util.h"
 #include "blink/vfs.h"
 
-#if !defined(DISABLE_OVERLAYS)
-#define BlinkOpen OverlaysOpen
-#elif !defined(DISABLE_VFS)
-#define BlinkOpen VfsOpen
-#else
-#define BlinkOpen openat
-#endif
-
 #define READ32(p) Read32((const u8 *)(p))
 
 static void LoadFileMapSymbols(struct System *s, struct FileMap *fm) {
@@ -57,8 +49,8 @@ static void LoadFileMapSymbols(struct System *s, struct FileMap *fm) {
   if (fm->offset) return;
   oflags = O_RDONLY | O_CLOEXEC | O_NOCTTY;
   snprintf(pathdbg, sizeof(pathdbg), "%s.dbg", fm->path);
-  if ((fd = BlinkOpen(AT_FDCWD, (path = pathdbg), oflags, 0)) != -1 ||
-      (fd = BlinkOpen(AT_FDCWD, (path = fm->path), oflags, 0)) != -1) {
+  if ((fd = VfsOpen(AT_FDCWD, (path = pathdbg), oflags, 0)) != -1 ||
+      (fd = VfsOpen(AT_FDCWD, (path = fm->path), oflags, 0)) != -1) {
     if (fstat(fd, &st) != -1 &&
         (map = Mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0, "debug")) !=
             MAP_FAILED) {
@@ -72,11 +64,11 @@ static void LoadFileMapSymbols(struct System *s, struct FileMap *fm) {
       } else {
         ELF_LOGF("%s: not a valid elf image", path);
       }
-      unassert(!munmap(map, st.st_size));
+      unassert(!Munmap(map, st.st_size));
     } else {
       ELF_LOGF("%s: mmap failed: %s", path, DescribeHostErrno(errno));
     }
-    unassert(!close(fd));
+    unassert(!VfsClose(fd));
   } else {
     ELF_LOGF("%s: open failed: %s", path, DescribeHostErrno(errno));
   }

@@ -33,6 +33,7 @@
 #include "blink/tunables.h"
 #include "blink/types.h"
 #include "blink/util.h"
+#include "blink/vfs.h"
 
 static long GetSystemPageSize(void) {
 #ifdef __EMSCRIPTEN__
@@ -55,7 +56,7 @@ static void *PortableMmap(void *addr,     //
                           off_t offset) {
   void *res;
 #ifdef HAVE_MAP_ANONYMOUS
-  res = mmap(addr, length, prot, flags, fd, offset);
+  res = VfsMmap(addr, length, prot, flags, fd, offset);
 #else
   // MAP_ANONYMOUS isn't defined by POSIX.1
   // they do however define the unlink hack
@@ -65,7 +66,7 @@ static void *PortableMmap(void *addr,     //
   int tfd;
   char path[] = "/tmp/blink.dat.XXXXXX";
   if (~flags & MAP_ANONYMOUS_) {
-    res = mmap(addr, length, prot, flags, fd, offset);
+    res = VfsMmap(addr, length, prot, flags, fd, offset);
   } else if ((tfd = mkstemp(path)) != -1) {
     unlink(path);
     if (!ftruncate(tfd, length)) {
@@ -175,7 +176,7 @@ void *Mmap(void *addr,     //
 
 int Munmap(void *addr, size_t length) {
   int rc;
-  rc = munmap(addr, length);
+  rc = VfsMunmap(addr, length);
 #if LOG_MEM
   char szbuf[16];
   FormatSize(szbuf, length, 1024);
@@ -193,7 +194,7 @@ int Mprotect(void *addr,     //
              size_t length,  //
              int prot,       //
              const char *owner) {
-  int res = mprotect(addr, length, prot);
+  int res = VfsMprotect(addr, length, prot);
 #if LOG_MEM
   char szbuf[16];
   FormatSize(szbuf, length, 1024);
@@ -213,7 +214,7 @@ int Msync(void *addr,     //
           size_t length,  //
           int flags,      //
           const char *owner) {
-  int res = msync(addr, length, flags);
+  int res = VfsMsync(addr, length, flags);
 #if LOG_MEM
   char szbuf[16];
   FormatSize(szbuf, length, 1024);

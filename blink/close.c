@@ -31,12 +31,13 @@
 #include "blink/machine.h"
 #include "blink/syscall.h"
 #include "blink/thread.h"
+#include "blink/vfs.h"
 
 static int CloseFd(struct Fd *fd) {
   int rc;
   unassert(fd->cb);
   if (fd->dirstream) {
-    rc = closedir(fd->dirstream);
+    rc = VfsClosedir(fd->dirstream);
   } else {
     rc = fd->cb->close(fd->fildes);
   }
@@ -99,7 +100,7 @@ static int SysCloseRangeCloexec(struct Machine *m, u32 first, u32 last) {
     if (first <= (u32)fd->fildes && (u32)fd->fildes <= last) {
       if (~fd->oflags & O_CLOEXEC) {
         fd->oflags |= O_CLOEXEC;
-        fcntl(fd->fildes, F_SETFD, FD_CLOEXEC);
+        VfsFcntl(fd->fildes, F_SETFD, FD_CLOEXEC);
       }
     }
   }
