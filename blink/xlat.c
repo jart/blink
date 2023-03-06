@@ -1065,7 +1065,7 @@ int XlatSockaddrToHost(struct sockaddr_storage *dst,
     }
     default:
       LOGF("%s %d not supported yet", "socket family", Read16(src->family));
-      errno = ENOPROTOOPT;
+      errno = EAFNOSUPPORT;
       return -1;
   }
 }
@@ -1128,7 +1128,7 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
     return sizeof(struct sockaddr_in6_linux);
   } else {
     LOGF("%s %d not supported yet", "socket family", src->sa_family);
-    errno = ENOPROTOOPT;
+    errno = EAFNOSUPPORT;
     return -1;
   }
 }

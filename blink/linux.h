@@ -827,6 +827,8 @@
 
 #define PR_GET_SECCOMP_LINUX      21
 #define PR_SET_SECCOMP_LINUX      22
+#define PR_CAPBSET_READ_LINUX     23
+#define PR_CAPBSET_DROP_LINUX     24
 #define PR_GET_TSC_LINUX          25
 #define PR_SET_TSC_LINUX          26
 #define PR_TSC_ENABLE_LINUX       1

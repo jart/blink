@@ -35,6 +35,7 @@
 
 int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
   int rc;
+  u64 lim;
   int fds[2];
   int oflags;
   int supported;
@@ -47,6 +48,7 @@ int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
   if (!IsValidMemory(m, pipefds_addr, sizeof(fds_linux), PROT_WRITE)) {
     return efault();
   }
+  if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
 #ifdef HAVE_PIPE2
   if ((rc = pipe2(fds, (oflags = XlatOpenFlags(flags)))) != -1) {
 #else
@@ -64,14 +66,20 @@ int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
       unassert(!fcntl(fds[1], F_SETFL, O_NDELAY));
     }
 #endif
-    LOCK(&m->system->fds.lock);
-    unassert(AddFd(&m->system->fds, fds[0], O_RDONLY | oflags));
-    unassert(AddFd(&m->system->fds, fds[1], O_WRONLY | oflags));
-    UNLOCK(&m->system->fds.lock);
-    Write32(fds_linux[0], fds[0]);
-    Write32(fds_linux[1], fds[1]);
-    unassert(!CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux)));
-    rc = 0;
+    if (fds[0] >= lim || fds[1] >= lim) {
+      close(fds[0]);
+      close(fds[1]);
+      rc = emfile();
+    } else {
+      LOCK(&m->system->fds.lock);
+      unassert(AddFd(&m->system->fds, fds[0], O_RDONLY | oflags));
+      unassert(AddFd(&m->system->fds, fds[1], O_WRONLY | oflags));
+      UNLOCK(&m->system->fds.lock);
+      Write32(fds_linux[0], fds[0]);
+      Write32(fds_linux[1], fds[1]);
+      unassert(!CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux)));
+      rc = 0;
+    }
   } else {
     rc = -1;
   }

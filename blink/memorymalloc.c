@@ -23,9 +23,11 @@
 
 #include "blink/assert.h"
 #include "blink/atomic.h"
+#include "blink/bitscan.h"
 #include "blink/bus.h"
 #include "blink/debug.h"
 #include "blink/errno.h"
+#include "blink/fds.h"
 #include "blink/linux.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -169,6 +171,14 @@ void CleanseMemory(struct System *s, size_t size) {
     MEM_LOGF("freed %" PRId64 " page tables", oldrss - s->rss);
     s->memchurn = 0;
   }
+}
+
+u64 GetFileDescriptorLimit(struct System *s) {
+  u64 lim;
+  LOCK(&s->mmap_lock);
+  lim = Read64(s->rlim[RLIMIT_NOFILE_LINUX].cur);
+  UNLOCK(&s->mmap_lock);
+  return lim;
 }
 
 long GetMaxVss(struct System *s) {

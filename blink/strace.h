@@ -50,6 +50,7 @@
 #define I32_SOCKFLAGS  "\022"
 #define I32_SIGHOW     "\023"
 #define I32_ACCMODE    "\024"
+#define I32_RESOURCE   "\025"
 #define I64            "\100"
 #define I64_HEX        "\101"
 #define I_BUF          "\200"
@@ -59,6 +60,7 @@
 #define I_SIGSET       "\204"
 #define I_ADDR         "\210"
 #define I_IOVEC        "\212"
+#define I_RLIMIT       "\213"
 #define O_BUF          "\300"
 #define O_STAT         "\301"
 #define O_TIME         "\302"
@@ -69,6 +71,7 @@
 #define O_ADDR         "\310"
 #define O_TIME2        "\311"
 #define O_IOVEC        "\312"
+#define O_RLIMIT       "\313"
 #define IO_POLL        "\340"
 #define IO_TIME        "\342"
 #define IO_TIMEV       "\343"
@@ -99,6 +102,7 @@
 #define WAITFLAGS  I32_WAITFLAGS
 #define SOCKFLAGS  I32_SOCKFLAGS
 #define CLONEFLAGS I32_CLONEFLAGS
+#define RESOURCE   I32_RESOURCE
 #define ACCMODE    I32_ACCMODE
 #define SIGHOW     I32_SIGHOW
 #define SIZE       I64_HEX
@@ -232,6 +236,9 @@
 #define STRACE_GETPEERNAME  NORMAL  RC0    FD         O_ADDR     I64       UN        UN       UN
 #define STRACE_SENDTO       NORMAL  SSIZE_ FD         I_BUF      SIZE      I32       I_ADDR   ADDRLEN
 #define STRACE_RECVFROM     TWOWAY  SSIZE_ FD         O_BUF      SIZE      I32       O_ADDR   I64
+#define STRACE_GETRLIMIT    NORMAL  RC0    RESOURCE   O_RLIMIT   UN        UN        UN       UN
+#define STRACE_SETRLIMIT    NORMAL  RC0    RESOURCE   I_RLIMIT   UN        UN        UN       UN
+#define STRACE_PRLIMIT      NORMAL  RC0    PID        RESOURCE   I_RLIMIT  O_RLIMIT  UN       UN
 // clang-format on
 
 void EnterStrace(struct Machine *, const char *, const char *, ...);

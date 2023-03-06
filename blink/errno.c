@@ -46,6 +46,10 @@ long enosys(void) {
   return ReturnErrno(ENOSYS);
 }
 
+long emfile(void) {
+  return ReturnErrno(EMFILE);
+}
+
 long efault(void) {
   return ReturnErrno(EFAULT);
 }

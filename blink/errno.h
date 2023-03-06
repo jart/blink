@@ -11,6 +11,7 @@ long enfile(void);
 long enoent(void);
 long enomem(void);
 long enosys(void);
+long emfile(void);
 long enotdir(void);
 long enotsup(void);
 long eoverflow(void);

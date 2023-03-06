@@ -496,6 +496,7 @@ u8 *AccessRam(struct Machine *, i64, size_t, void *[2], u8 *, bool);
 u8 *BeginLoadStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStore(struct Machine *, i64, size_t, void *[2], u8 *);
 u8 *BeginStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
+u64 GetFileDescriptorLimit(struct System *);
 bool HasPageLock(const struct Machine *, i64) nosideeffect;
 void CollectPageLocks(struct Machine *);
 u8 *LookupAddress(struct Machine *, i64);

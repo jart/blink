@@ -21,6 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 #include "blink/assert.h"
@@ -173,6 +174,13 @@ static void OnFatalSystemSignal(int sig, siginfo_t *si, void *ptr) {
   siglongjmp(g_machine->onhalt, kMachineFatalSystemSignal);
 }
 
+static void ProgramLimit(struct System *s, int hresource, int gresource) {
+  struct rlimit rlim;
+  if (!getrlimit(hresource, &rlim)) {
+    XlatRlimitToLinux(s->rlim + gresource, &rlim);
+  }
+}
+
 static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   int i;
   sigset_t oldmask;
@@ -190,6 +198,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
     for (i = 0; i < 10; ++i) {
       AddStdFd(&m->system->fds, i);
     }
+    ProgramLimit(m->system, RLIMIT_NOFILE, RLIMIT_NOFILE_LINUX);
   } else {
     unassert(!m->sysdepth);
     unassert(!m->pagelocks.i);

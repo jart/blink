@@ -102,6 +102,7 @@ static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
 
 int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
               i32 mode) {
+  u64 lim;
   int fildes;
   int sysflags;
   struct Fd *fd;
@@ -114,14 +115,20 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
 #endif
 #endif
   if ((sysflags = XlatOpenFlags(oflags)) == -1) return -1;
+  if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   if (!(path = LoadStr(m, pathaddr))) return -1;
   RESTARTABLE(fildes =
                   OverlaysOpen(GetDirFildes(dirfildes), path, sysflags, mode));
   if (fildes != -1) {
-    LOCK(&m->system->fds.lock);
-    unassert(fd = AddFd(&m->system->fds, fildes, sysflags));
-    fd->path = JoinPath(GetDirFildesPath(m->system, dirfildes), path);
-    UNLOCK(&m->system->fds.lock);
+    if (fildes >= lim) {
+      close(fildes);
+      fildes = emfile();
+    } else {
+      LOCK(&m->system->fds.lock);
+      unassert(fd = AddFd(&m->system->fds, fildes, sysflags));
+      fd->path = JoinPath(GetDirFildesPath(m->system, dirfildes), path);
+      UNLOCK(&m->system->fds.lock);
+    }
   } else {
 #ifdef __FreeBSD__
     // Address FreeBSD divergence from IEEE Std 1003.1-2008 (POSIX.1)

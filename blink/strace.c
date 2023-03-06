@@ -210,6 +210,25 @@ const struct MagicNumber kClock[] = {
     {CLOCK_TAI_LINUX, "CLOCK_TAI"},                                //
 };
 
+const struct MagicNumber kResource[] = {
+    {RLIMIT_CPU_LINUX, "RLIMIT_CPU"},                //
+    {RLIMIT_FSIZE_LINUX, "RLIMIT_FSIZE"},            //
+    {RLIMIT_DATA_LINUX, "RLIMIT_DATA"},              //
+    {RLIMIT_STACK_LINUX, "RLIMIT_STACK"},            //
+    {RLIMIT_CORE_LINUX, "RLIMIT_CORE"},              //
+    {RLIMIT_RSS_LINUX, "RLIMIT_RSS"},                //
+    {RLIMIT_NPROC_LINUX, "RLIMIT_NPROC"},            //
+    {RLIMIT_NOFILE_LINUX, "RLIMIT_NOFILE"},          //
+    {RLIMIT_MEMLOCK_LINUX, "RLIMIT_MEMLOCK"},        //
+    {RLIMIT_AS_LINUX, "RLIMIT_AS"},                  //
+    {RLIMIT_LOCKS_LINUX, "RLIMIT_LOCKS"},            //
+    {RLIMIT_SIGPENDING_LINUX, "RLIMIT_SIGPENDING"},  //
+    {RLIMIT_MSGQUEUE_LINUX, "RLIMIT_MSGQUEUE"},      //
+    {RLIMIT_NICE_LINUX, "RLIMIT_NICE"},              //
+    {RLIMIT_RTPRIO_LINUX, "RLIMIT_RTPRIO"},          //
+    {RLIMIT_RTTIME_LINUX, "RLIMIT_RTTIME"},          //
+};
+
 static const char *GetMagicNumber(const struct MagicNumber *p, int n, int x) {
   int i;
   _Thread_local static char ibuf[21];
@@ -344,6 +363,8 @@ void Strace(struct Machine *m, const char *func, bool isentry, const char *fmt,
     }
     if (arg == -1) {
       APPEND("-1");
+    } else if (IS_MEM(c) && !arg) {
+      APPEND("NULL");
     } else if (c == I64_HEX[0] || (ax == -1 && (IS_MEM_O(c) || IS_MEM_IO(c)))) {
     JustPrintHex:
       APPEND("%#" PRIx64, arg);
@@ -604,6 +625,16 @@ void Strace(struct Machine *m, const char *func, bool isentry, const char *fmt,
         arg &= ~SOCK_CLOEXEC_LINUX;
       }
       APPEND("%s", GetMagicNumber(kSocketType, ARRAYLEN(kSocketType), arg));
+    } else if (c == I32_RESOURCE[0]) {
+      APPEND("%s", GetMagicNumber(kResource, ARRAYLEN(kResource), arg));
+    } else if (c == I_RLIMIT[0] || c == O_RLIMIT[0]) {
+      const struct rlimit_linux *ts;
+      if ((ts = (const struct rlimit_linux *)SchlepR(
+               m, arg, sizeof(struct rlimit_linux)))) {
+        APPEND("{%" PRId64 ", %" PRId64 "}", Read64(ts->cur), Read64(ts->max));
+      } else {
+        goto JustPrintHex;
+      }
     } else if (c == I32_CLOCK[0]) {
       APPEND("%s", GetMagicNumber(kClock, ARRAYLEN(kClock), arg));
 #ifndef DISABLE_SOCKETS

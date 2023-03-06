@@ -990,9 +990,19 @@ static int SysPrctl(struct Machine *m, int op, i64 arg2, i64 arg3, i64 arg4,
       return SysPrctlGetTsc(m, arg2);
     case PR_SET_TSC_LINUX:
       return SysPrctlSetTsc(m, arg2);
+#ifdef PR_CAPBSET_DROP
+    case PR_CAPBSET_DROP_LINUX:
+      return prctl(PR_CAPBSET_DROP, arg2, arg3, arg4, arg5);
+#else
+    case PR_CAPBSET_DROP_LINUX:
+      return einval();
+#endif
 #ifdef PR_SET_NO_NEW_PRIVS
     case PR_SET_NO_NEW_PRIVS_LINUX:
       return prctl(PR_SET_NO_NEW_PRIVS, arg2, arg3, arg4, arg5);
+#else
+    case PR_SET_NO_NEW_PRIVS_LINUX:
+      return einval();
 #endif
     case PR_GET_SECCOMP_LINUX:
     case PR_SET_SECCOMP_LINUX:
@@ -1078,25 +1088,26 @@ static int SysMadvise(struct Machine *m, i64 addr, u64 len, int advice) {
 }
 
 static i64 SysBrk(struct Machine *m, i64 addr) {
-  i64 rc, size;
   long pagesize;
+  i64 rc, brk, size, eaddr;
   BEGIN_NO_PAGE_FAULTS;
   LOCK(&m->system->mmap_lock);
   MEM_LOGF("brk(%#" PRIx64 ") currently %#" PRIx64, addr, m->system->brk);
   pagesize = GetSystemPageSize();
-  addr = ROUNDUP(addr, pagesize);
-  if (addr >= kNullSize) {
-    if (addr > m->system->brk) {
-      size = addr - m->system->brk;
+  if (addr > ROUNDDOWN(INT64_MAX, pagesize)) return eoverflow();
+  eaddr = ROUNDUP(addr, pagesize);
+  if (eaddr >= kNullSize) {
+    brk = ROUNDUP(m->system->brk, pagesize);
+    if (Sub(eaddr, brk, &size)) return eoverflow();
+    if (size > 0) {
       CleanseMemory(m->system, size);
       if (m->system->rss < GetMaxRss(m->system)) {
         if (size / 4096 + m->system->vss < GetMaxVss(m->system)) {
-          if (ReserveVirtual(m->system, m->system->brk, addr - m->system->brk,
+          if (ReserveVirtual(m->system, brk, size,
                              PAGE_FILE | PAGE_RW | PAGE_U | PAGE_XD, -1, 0, 0,
                              0) != -1) {
             if (!m->system->brkchanged) {
-              unassert(AddFileMap(m->system, m->system->brk,
-                                  addr - m->system->brk, "[heap]", -1));
+              unassert(AddFileMap(m->system, brk, size, "[heap]", -1));
               m->system->brkchanged = true;
             }
             MEM_LOGF("increased break %" PRIx64 " -> %" PRIx64, m->system->brk,
@@ -1112,10 +1123,12 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
         LOGF("ran out of resident memory (%#lx / %#lx pages)", m->system->rss,
              GetMaxRss(m->system));
       }
-    } else if (addr < m->system->brk) {
-      if (FreeVirtual(m->system, addr, m->system->brk - addr) != -1) {
+    } else if (size < 0) {
+      if (FreeVirtual(m->system, eaddr, -size) != -1) {
         m->system->brk = addr;
       }
+    } else {
+      m->system->brk = addr;
     }
   }
   rc = m->system->brk;
@@ -1293,11 +1306,17 @@ static int SysMsync(struct Machine *m, i64 virt, u64 size, int flags) {
 }
 
 static int SysDup1(struct Machine *m, i32 fildes) {
+  u64 lim;
   int oflags;
   int newfildes;
   struct Fd *fd;
   if (fildes < 0) return ebadf();
+  if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   if ((newfildes = dup(fildes)) != -1) {
+    if (newfildes >= lim) {
+      close(newfildes);
+      return emfile();
+    }
     LOCK(&m->system->fds.lock);
     unassert(fd = GetFd(&m->system->fds, fildes));
     oflags = fd->oflags & ~O_CLOEXEC;
@@ -1326,8 +1345,7 @@ static int Dup3(struct Machine *m, int fildes, int newfildes, int flags) {
 #endif
 
 static int SysDup2(struct Machine *m, i32 fildes, i32 newfildes) {
-  int rc;
-  int oflags;
+  int rc, oflags;
   struct Fd *fd;
   if (newfildes < 0) {
     LOGF("dup2() ebadf");
@@ -1342,6 +1360,8 @@ static int SysDup2(struct Machine *m, i32 fildes, i32 newfildes) {
       rc = -1;
     }
     UNLOCK(&m->system->fds.lock);
+  } else if (newfildes >= GetFileDescriptorLimit(m->system)) {
+    return ebadf();
   } else if ((rc = Dup2(m, fildes, newfildes)) != -1) {
     LOCK(&m->system->fds.lock);
     if ((fd = GetFd(&m->system->fds, newfildes))) {
@@ -1363,6 +1383,7 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
   if (newfildes < 0) return ebadf();
   if (fildes == newfildes) return einval();
   if (flags & ~O_CLOEXEC_LINUX) return einval();
+  if (newfildes >= GetFileDescriptorLimit(m->system)) return ebadf();
 #ifdef HAVE_DUP3
   if ((rc = Dup3(m, fildes, newfildes, XlatOpenFlags(flags))) != -1) {
 #else
@@ -1388,10 +1409,15 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
 }
 
 static int SysDupf(struct Machine *m, i32 fildes, i32 minfildes, int cmd) {
-  int oflags;
-  int newfildes;
+  u64 lim;
   struct Fd *fd;
+  int oflags, newfildes;
+  if (minfildes >= (lim = GetFileDescriptorLimit(m->system))) return emfile();
   if ((newfildes = fcntl(fildes, cmd, minfildes)) != -1) {
+    if (newfildes >= lim) {
+      close(newfildes);
+      return emfile();
+    }
     LOCK(&m->system->fds.lock);
     unassert(fd = GetFd(&m->system->fds, fildes));
     oflags = fd->oflags & ~O_CLOEXEC;
@@ -1458,6 +1484,7 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
 }
 
 static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
+  u64 lim;
   struct Fd *fd;
   int flags, fildes;
   flags = type & (SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
@@ -1465,15 +1492,21 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
   if ((type = XlatSocketType(type)) == -1) return -1;
   if ((family = XlatSocketFamily(family)) == -1) return -1;
   if ((protocol = XlatSocketProtocol(protocol)) == -1) return -1;
+  if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   if (flags) LOCK(&m->system->exec_lock);
   if ((fildes = socket(family, type, protocol)) != -1) {
-    FixupSock(fildes, flags);
-    LOCK(&m->system->fds.lock);
-    fd = AddFd(&m->system->fds, fildes,
-               O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
-                   (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0));
-    fd->socktype = type;
-    UNLOCK(&m->system->fds.lock);
+    if (fildes >= lim) {
+      close(fildes);
+      fildes = emfile();
+    } else {
+      FixupSock(fildes, flags);
+      LOCK(&m->system->fds.lock);
+      fd = AddFd(&m->system->fds, fildes,
+                 O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
+                     (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0));
+      fd->socktype = type;
+      UNLOCK(&m->system->fds.lock);
+    }
   }
   if (flags) UNLOCK(&m->system->exec_lock);
   return fildes;
@@ -1481,6 +1514,7 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
 
 static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
                          i64 pipefds_addr) {
+  u64 lim;
   struct Fd *fd;
   u8 fds_linux[2][4];
   int rc, flags, sysflags, fds[2];
@@ -1490,22 +1524,29 @@ static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
   if ((family = XlatSocketFamily(family)) == -1) return -1;
   if ((protocol = XlatSocketProtocol(protocol)) == -1) return -1;
   if (!IsValidMemory(m, pipefds_addr, sizeof(fds_linux), PROT_WRITE)) return -1;
+  if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   if (flags) LOCK(&m->system->exec_lock);
   if ((rc = socketpair(family, type, protocol, fds)) != -1) {
-    FixupSock(fds[0], flags);
-    FixupSock(fds[1], flags);
-    LOCK(&m->system->fds.lock);
-    sysflags = O_RDWR;
-    if (flags & SOCK_CLOEXEC_LINUX) sysflags |= O_CLOEXEC;
-    if (flags & SOCK_NONBLOCK_LINUX) sysflags |= O_NDELAY;
-    unassert(fd = AddFd(&m->system->fds, fds[0], sysflags));
-    fd->socktype = type;
-    unassert(fd = AddFd(&m->system->fds, fds[1], sysflags));
-    fd->socktype = type;
-    UNLOCK(&m->system->fds.lock);
-    Write32(fds_linux[0], fds[0]);
-    Write32(fds_linux[1], fds[1]);
-    unassert(!CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux)));
+    if (fds[0] >= lim || fds[1] >= lim) {
+      close(fds[0]);
+      close(fds[1]);
+      rc = emfile();
+    } else {
+      FixupSock(fds[0], flags);
+      FixupSock(fds[1], flags);
+      LOCK(&m->system->fds.lock);
+      sysflags = O_RDWR;
+      if (flags & SOCK_CLOEXEC_LINUX) sysflags |= O_CLOEXEC;
+      if (flags & SOCK_NONBLOCK_LINUX) sysflags |= O_NDELAY;
+      unassert(fd = AddFd(&m->system->fds, fds[0], sysflags));
+      fd->socktype = type;
+      unassert(fd = AddFd(&m->system->fds, fds[1], sysflags));
+      fd->socktype = type;
+      UNLOCK(&m->system->fds.lock);
+      Write32(fds_linux[0], fds[0]);
+      Write32(fds_linux[1], fds[1]);
+      unassert(!CopyToUserWrite(m, pipefds_addr, fds_linux, sizeof(fds_linux)));
+    }
   }
   if (flags) UNLOCK(&m->system->exec_lock);
   return rc;
@@ -1599,6 +1640,7 @@ static int GetNoRestart(struct Machine *m, int fildes, bool *norestart) {
 
 static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
                       i64 sockaddr_size_addr, i32 flags) {
+  u64 lim;
   struct Fd *fd;
   socklen_t addrlen;
   int newfd, socktype;
@@ -1624,23 +1666,29 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
     // but FreeBSD incorrectly returns EINVAL.
     return eopnotsupp();
   }
+  if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   addrlen = sizeof(addr);
   INTERRUPTIBLE(restartable,
                 newfd = accept(fildes, (struct sockaddr *)&addr, &addrlen));
   if (newfd != -1) {
-    FixupSock(newfd, flags);
-    LOCK(&m->system->fds.lock);
-    if (!(fd = GetFd(&m->system->fds, fildes)) ||
-        !ForkFd(&m->system->fds, fd, newfd,
-                O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
-                    (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0))) {
+    if (newfd >= lim) {
       close(newfd);
-      newfd = -1;
-    }
-    UNLOCK(&m->system->fds.lock);
-    if (newfd != -1) {
-      StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
-                    (struct sockaddr *)&addr, addrlen);
+      newfd = emfile();
+    } else {
+      FixupSock(newfd, flags);
+      LOCK(&m->system->fds.lock);
+      if (!(fd = GetFd(&m->system->fds, fildes)) ||
+          !ForkFd(&m->system->fds, fd, newfd,
+                  O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
+                      (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0))) {
+        close(newfd);
+        newfd = -1;
+      }
+      UNLOCK(&m->system->fds.lock);
+      if (newfd != -1) {
+        StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
+                      (struct sockaddr *)&addr, addrlen);
+      }
     }
   }
   return newfd;
@@ -3583,15 +3631,21 @@ static int SysGetrusage(struct Machine *m, i32 resource, i64 rusageaddr) {
   return rc;
 }
 
-static void GetMemLimit(struct Machine *m, int resource,
-                        struct rlimit_linux *lux) {
+static bool IsSupportedResourceLimit(int resource) {
+  return resource == RLIMIT_AS_LINUX ||    //
+         resource == RLIMIT_DATA_LINUX ||  //
+         resource == RLIMIT_NOFILE_LINUX;
+}
+
+static void GetResourceLimit(struct Machine *m, int resource,
+                             struct rlimit_linux *lux) {
   LOCK(&m->system->mmap_lock);
   memcpy(lux, m->system->rlim + resource, sizeof(*lux));
   UNLOCK(&m->system->mmap_lock);
 }
 
-static int SetMemLimit(struct Machine *m, int resource,
-                       const struct rlimit_linux *lux) {
+static int SetResourceLimit(struct Machine *m, int resource,
+                            const struct rlimit_linux *lux) {
   int rc;
   LOCK(&m->system->mmap_lock);
   if (Read64(lux->cur) <= Read64(m->system->rlim[resource].max) &&
@@ -3609,8 +3663,8 @@ static int SysGetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
   int rc;
   struct rlimit rlim;
   struct rlimit_linux lux;
-  if (resource == RLIMIT_AS_LINUX || resource == RLIMIT_DATA_LINUX) {
-    GetMemLimit(m, resource, &lux);
+  if (IsSupportedResourceLimit(resource)) {
+    GetResourceLimit(m, resource, &lux);
     return CopyToUserWrite(m, rlimitaddr, &lux, sizeof(lux));
   }
   if ((rc = getrlimit(XlatResource(resource), &rlim)) != -1) {
@@ -3628,8 +3682,8 @@ static int SysSetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
                                                    sizeof(*lux)))) {
     return -1;
   }
-  if (resource == RLIMIT_DATA_LINUX || resource == RLIMIT_AS_LINUX) {
-    return SetMemLimit(m, resource, lux);
+  if (IsSupportedResourceLimit(resource)) {
+    return SetResourceLimit(m, resource, lux);
   }
   if ((sysresource = XlatResource(resource)) == -1) return -1;
   XlatLinuxToRlimit(sysresource, &rlim, lux);
@@ -5270,7 +5324,7 @@ void OpSyscall(P) {
     SYSCALL(5, 0x104, "fchownat", SysFchownat, STRACE_CHOWNAT);
     SYSCALL(1, 0x05F, "umask", SysUmask, STRACE_UMASK);
     SYSCALL(2, 0x060, "gettimeofday", SysGettimeofday, STRACE_2);
-    SYSCALL(2, 0x061, "getrlimit", SysGetrlimit, STRACE_2);
+    SYSCALL(2, 0x061, "getrlimit", SysGetrlimit, STRACE_GETRLIMIT);
     SYSCALL(2, 0x062, "getrusage", SysGetrusage, STRACE_2);
     SYSCALL(1, 0x064, "times", SysTimes, STRACE_1);
     SYSCALL(0, 0x06F, "getpgrp", SysGetpgrp, STRACE_GETPGRP);
@@ -5295,7 +5349,7 @@ void OpSyscall(P) {
     SYSCALL(2, 0x083, "sigaltstack", SysSigaltstack, STRACE_2);
     SYSCALL(3, 0x085, "mknod", SysMknod, STRACE_3);
     SYSCALL(2, 0x09E, "arch_prctl", SysArchPrctl, STRACE_2);
-    SYSCALL(2, 0x0A0, "setrlimit", SysSetrlimit, STRACE_2);
+    SYSCALL(2, 0x0A0, "setrlimit", SysSetrlimit, STRACE_SETRLIMIT);
     SYSCALL(0, 0x0A2, "sync", SysSync, STRACE_SYNC);
     SYSCALL(3, 0x0D9, "getdents", SysGetdents, STRACE_3);
     SYSCALL(1, 0x0DA, "set_tid_address", SysSetTidAddress, STRACE_1);
@@ -5392,7 +5446,7 @@ void OpSyscall(P) {
     SYSCALL(4, 0x103, "mknodat", SysMknodat, STRACE_4);
     SYSCALL(4, 0x127, "preadv", SysPreadv, STRACE_PREADV);
     SYSCALL(4, 0x128, "pwritev", SysPwritev, STRACE_PWRITEV);
-    SYSCALL(4, 0x12E, "prlimit", SysPrlimit, STRACE_4);
+    SYSCALL(4, 0x12E, "prlimit", SysPrlimit, STRACE_PRLIMIT);
     SYSCALL(5, 0x10F, "ppoll", SysPpoll, STRACE_5);
     SYSCALL(5, 0x13C, "renameat2", SysRenameat2, STRACE_RENAMEAT2);
     SYSCALL(3, 0x13E, "getrandom", SysGetrandom, STRACE_GETRANDOM);
