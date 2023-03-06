@@ -110,7 +110,8 @@
 #define FILEMAP_CONTAINER(e)  DLL_CONTAINER(struct FileMap, elem, e)
 #define HOSTPAGE_CONTAINER(e) DLL_CONTAINER(struct HostPage, elem, e)
 
-#if defined(NOLINEAR) || defined(__SANITIZE_THREAD__) || defined(__CYGWIN__)
+#if defined(NOLINEAR) || defined(__SANITIZE_THREAD__) || \
+    defined(__CYGWIN__) || defined(__NetBSD__)
 #define CanHaveLinearMemory() false
 #else
 #define CanHaveLinearMemory() CAN_64BIT

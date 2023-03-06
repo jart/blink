@@ -165,8 +165,12 @@ int XlatErrno(int x) {
   if (x == ESTALE) return ESTALE_LINUX;
   if (x == EDQUOT) return EDQUOT_LINUX;
   if (x == ECANCELED) return ECANCELED_LINUX;
+#ifdef EOWNERDEAD
   if (x == EOWNERDEAD) return EOWNERDEAD_LINUX;
+#endif
+#ifdef ENOTRECOVERABLE
   if (x == ENOTRECOVERABLE) return ENOTRECOVERABLE_LINUX;
+#endif
 #ifdef ETIME
   if (x == ETIME) return ETIME_LINUX;
 #endif
@@ -758,8 +762,6 @@ int XlatClock(int x, clock_t *clock) {
 #endif
 #ifdef CLOCK_MONOTONIC_RAW
     CASE(CLOCK_MONOTONIC_RAW_LINUX, res = CLOCK_MONOTONIC_RAW);
-#else
-    CASE(CLOCK_MONOTONIC_LINUX, res = CLOCK_MONOTONIC);
 #endif
 #ifdef CLOCK_BOOTTIME
     CASE(CLOCK_BOOTTIME_LINUX, res = CLOCK_BOOTTIME);

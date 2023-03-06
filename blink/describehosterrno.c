@@ -123,8 +123,12 @@ const char *DescribeHostErrno(int x) {
   if (x == ESTALE) return "ESTALE";
   if (x == EDQUOT) return "EDQUOT";
   if (x == ECANCELED) return "ECANCELED";
+#ifdef EOWNERDEAD
   if (x == EOWNERDEAD) return "EOWNERDEAD";
+#endif
+#ifdef ENOTRECOVERABLE
   if (x == ENOTRECOVERABLE) return "ENOTRECOVERABLE";
+#endif
 #ifdef ETIME
   if (x == ETIME) return "ETIME";
 #endif

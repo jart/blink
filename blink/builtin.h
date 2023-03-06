@@ -255,7 +255,7 @@
 
 #if !defined(DISABLE_JIT) && (defined(__x86_64__) || defined(__aarch64__)) && \
     !defined(__SANITIZE_MEMORY__) && !defined(__SANITIZE_UNDEFINED__) &&      \
-    !defined(__SANITIZE_THREAD__) && !defined(NOJIT)
+    !defined(__SANITIZE_THREAD__) && !defined(__NetBSD__) && !defined(NOJIT)
 #define HAVE_JIT
 #endif
 

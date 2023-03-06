@@ -161,8 +161,7 @@ static void XlatStatvfsToLinux(struct statfs_linux *sf, const void *arg) {
   Write32(sf->fsid[1], fsid.val[1]);
   Write64(sf->flags, XlatStatvfsFlags(vfs->f_flags));
   Write64(sf->namelen, vfs->f_namelen);
-#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || \
-    defined(__NetBSD__)
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
   struct FsId fsid;
   const struct statfs *vfs = (const struct statfs *)arg;
   memset(sf, 0, sizeof(*sf));
@@ -201,7 +200,7 @@ static void XlatStatvfsToLinux(struct statfs_linux *sf, const void *arg) {
 }
 
 #if defined(__linux) || defined(__APPLE__) || defined(__FreeBSD__) || \
-    defined(__OpenBSD__) || defined(__NetBSD__)
+    defined(__OpenBSD__)
 static int Statfs(uintptr_t arg, struct statfs *buf) {
   return statfs((const char *)arg, buf);
 }
