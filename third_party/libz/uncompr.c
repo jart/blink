@@ -7,7 +7,7 @@
 /* @(#) $Id$ */
 
 #define ZLIB_INTERNAL
-#include "third_party/zlib/zlib.h"
+#include "third_party/libz/zlib.h"
 
 /* ===========================================================================
      Decompresses the source buffer into the destination buffer.  *sourceLen is

@@ -6,7 +6,7 @@
 
 /* @(#) $Id$ */
 
-#include "third_party/zlib/zutil.h"
+#include "third_party/libz/zutil.h"
 
 local uLong adler32_combine_ OF((uLong adler1, uLong adler2, z_off64_t len2));
 

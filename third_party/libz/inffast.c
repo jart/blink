@@ -4,10 +4,10 @@
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
-#include "third_party/zlib/zutil.h"
-#include "third_party/zlib/inftrees.h"
-#include "third_party/zlib/inflate.h"
-#include "third_party/zlib/inffast.h"
+#include "third_party/libz/zutil.h"
+#include "third_party/libz/inftrees.h"
+#include "third_party/libz/inflate.h"
+#include "third_party/libz/inffast.h"
 
 #ifdef ASMINF
 #  pragma message("Assembler code may have bugs -- use at your own risk")

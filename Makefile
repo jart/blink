@@ -90,7 +90,7 @@ tags: TAGS HTAGS
 
 include build/config.mk
 include build/rules.mk
-include third_party/zlib/zlib.mk
+include third_party/libz/zlib.mk
 include blink/blink.mk
 include test/test.mk
 include test/asm/asm.mk
@@ -153,7 +153,7 @@ MAKEFILES =				\
 	build/config.mk			\
 	build/rules.mk			\
 	blink/blink.mk			\
-	third_party/zlib/zlib.mk
+	third_party/libz/zlib.mk
 
 $(OBJS): $(MAKEFILES)
 
@@ -229,7 +229,7 @@ install:
 	install -m 0755 o//blink/blinkenlights $(PREFIX)/bin/blinkenlights
 
 clean:
-	rm -f $(OBJS) o/$(MODE)/blink/blink o/$(MODE)/blink/blinkenlights o/$(MODE)/blink/blink.a o/$(MODE)/third_party/zlib/zlib.a
+	rm -f $(OBJS) o/$(MODE)/blink/blink o/$(MODE)/blink/blinkenlights o/$(MODE)/blink/blink.a o/$(MODE)/third_party/libz/zlib.a
 
 distclean:
 	rm -rf o

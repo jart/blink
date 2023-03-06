@@ -32,7 +32,7 @@
 #ifndef ZLIB_H
 #define ZLIB_H
 
-#include "third_party/zlib/zconf.h"
+#include "third_party/libz/zconf.h"
 
 #ifdef __cplusplus
 extern "C" {

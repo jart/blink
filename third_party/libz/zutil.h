@@ -20,7 +20,7 @@
 #  define ZLIB_INTERNAL
 #endif
 
-#include "third_party/zlib/zlib.h"
+#include "third_party/libz/zlib.h"
 
 #if defined(STDC) && !defined(Z_SOLO)
 #  if !(defined(_WIN32_WCE) && defined(_MSC_VER))

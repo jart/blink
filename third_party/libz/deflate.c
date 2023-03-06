@@ -50,7 +50,7 @@
 
 /* @(#) $Id$ */
 
-#include "third_party/zlib/deflate.h"
+#include "third_party/libz/deflate.h"
 
 const char deflate_copyright[] =
    " deflate 1.2.13 Copyright 1995-2022 Jean-loup Gailly and Mark Adler ";

@@ -6,7 +6,7 @@
 
 #include <unistd.h>
 
-#include "third_party/zlib/gzguts.h"
+#include "third_party/libz/gzguts.h"
 
 /* Local functions */
 local int gz_load OF((gz_statep, unsigned char *, unsigned, unsigned *));

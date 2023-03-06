@@ -20,7 +20,7 @@
 #endif
 
 #include <stdio.h>
-#include "third_party/zlib/zlib.h"
+#include "third_party/libz/zlib.h"
 #ifdef STDC
 #  include <string.h>
 #  include <stdlib.h>

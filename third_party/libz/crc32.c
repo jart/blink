@@ -28,7 +28,7 @@
 #  endif /* !DYNAMIC_CRC_TABLE */
 #endif /* MAKECRCH */
 
-#include "third_party/zlib/zutil.h"      /* for Z_U4, Z_U8, z_crc_t, and FAR definitions */
+#include "third_party/libz/zutil.h"      /* for Z_U4, Z_U8, z_crc_t, and FAR definitions */
 
  /*
   A CRC of a message is computed on N braids of words in the message, where
@@ -537,7 +537,7 @@ local void braid(ltl, big, n, w)
  * Tables for byte-wise and braided CRC-32 calculations, and a table of powers
  * of x for combining CRC-32s, all made by make_crc_table().
  */
-#include "third_party/zlib/crc32.h"
+#include "third_party/libz/crc32.h"
 #endif /* DYNAMIC_CRC_TABLE */
 
 /* ========================================================================

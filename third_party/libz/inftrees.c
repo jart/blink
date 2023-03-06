@@ -4,8 +4,8 @@
  * For conditions of distribution and use, see copyright notice in zlib.h
  */
 
-#include "third_party/zlib/zutil.h"
-#include "third_party/zlib/inftrees.h"
+#include "third_party/libz/zutil.h"
+#include "third_party/libz/inftrees.h"
 
 #define MAXBITS 15
 
