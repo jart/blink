@@ -264,8 +264,17 @@ static void ExplainWhyItCantBeEmulated(const char *path, const char *reason) {
   LOGF("%s: can't emulate: %s", path, reason);
 }
 
+static bool IsBinFile(const char *prog) {
+  return endswith(prog, ".bin") ||  //
+         endswith(prog, ".img") ||  //
+         endswith(prog, ".raw");
+}
+
 bool IsSupportedExecutable(const char *path, void *image, size_t size) {
   Elf64_Ehdr_ *ehdr;
+  if (IsBinFile(path)) {
+    return true;
+  }
   if (size >= sizeof(Elf64_Ehdr_) && READ32(image) == READ32("\177ELF")) {
     ehdr = (Elf64_Ehdr_ *)image;
     if (Read16(ehdr->type) != ET_EXEC_ &&  //
@@ -298,9 +307,8 @@ bool IsSupportedExecutable(const char *path, void *image, size_t size) {
 #endif
     return true;
   }
-  if ((size >= 4096 && (READ64(image) == READ64("MZqFpD='") ||    //
-                        READ64(image) == READ64("jartsr='"))) ||  //
-      endswith(path, ".bin")) {
+  if (size >= 4096 && (READ64(image) == READ64("MZqFpD='") ||
+                       READ64(image) == READ64("jartsr='"))) {
     return true;
   }
   if (!IsShebangExecutable(image, size)) {
@@ -500,10 +508,7 @@ static int CheckExecutableFile(const char *prog, const struct stat *st) {
     errno = EACCES;
     return -1;
   }
-  if (!(st->st_mode & 0111) &&    //
-      !endswith(prog, ".bin") &&  //
-      !endswith(prog, ".img") &&  //
-      !endswith(prog, ".raw")) {
+  if (!(st->st_mode & 0111) && !IsBinFile(prog)) {
     LOGF("execve needs chmod +x");
     errno = EACCES;
     return -1;
@@ -710,7 +715,11 @@ error: unsupported executable; we need:\n\
     }
   } else {
     m->system->cr3 = AllocatePageTable(m->system);
-    if (READ32(map) == READ32("\177ELF")) {
+    if (IsBinFile(prog)) {
+      elf->base = 0x400000;
+      LoadFlatExecutable(m, elf->base, prog, map, mapsize, fd);
+      execstack = true;
+    } else if (READ32(map) == READ32("\177ELF")) {
       execstack = LoadElf(m, elf, (Elf64_Ehdr_ *)map, mapsize, fd);
     } else if (READ64(map) == READ64("MZqFpD='") ||
                READ64(map) == READ64("jartsr='")) {
@@ -719,9 +728,7 @@ error: unsupported executable; we need:\n\
       memcpy(map, tmp, 64);
       execstack = LoadElf(m, elf, (Elf64_Ehdr_ *)map, mapsize, fd);
     } else {
-      elf->base = 0x400000;
-      LoadFlatExecutable(m, elf->base, prog, map, mapsize, fd);
-      execstack = true;
+      unassert(!"impossible condition");
     }
     stack = HasLinearMapping() && FLAG_vabits <= 47 && !kSkew
                 ? 0
