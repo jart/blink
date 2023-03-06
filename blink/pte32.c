@@ -25,7 +25,7 @@
  * @fileoverview page table ops for 32-bit hosts
  */
 
-static pthread_mutex_t_ g_ptelock = PTHREAD_MUTEX_INITIALIZER_;
+pthread_mutex_t_ g_ptelock = PTHREAD_MUTEX_INITIALIZER_;
 
 u64 LoadPte32_(const u8 *pte) {
   u64 res;

@@ -61,7 +61,6 @@ bool IsSignalSerious(int sig) {
 }
 
 void DeliverSignal(struct Machine *m, int sig, int code) {
-  int i;
   u64 sp;
   struct SignalFrame sf;
   SYS_LOGF("delivering %s", DescribeSignal(sig));
@@ -106,8 +105,11 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   Write16(sf.fp.fop, m->fpu.op);
   Write64(sf.fp.rip, m->fpu.ip);
   Write64(sf.fp.rdp, m->fpu.dp);
-  for (i = 0; i < 8; ++i) {
-    SerializeLdbl(sf.fp.st[i], m->fpu.st[i]);
+  {
+    int i;
+    for (i = 0; i < 8; ++i) {
+      SerializeLdbl(sf.fp.st[i], m->fpu.st[i]);
+    }
   }
 #endif
   memcpy(sf.fp.xmm, m->xmm, sizeof(sf.fp.xmm));
@@ -161,7 +163,6 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
 }
 
 void SigRestore(struct Machine *m) {
-  int i;
   struct SignalFrame sf;
   // when the guest returns from the signal handler, it'll call a
   // pointer to the sa_restorer trampoline which is assumed to be
@@ -201,8 +202,11 @@ void SigRestore(struct Machine *m) {
   m->fpu.op = Read16(sf.fp.fop);
   m->fpu.ip = Read64(sf.fp.rip);
   m->fpu.dp = Read64(sf.fp.rdp);
-  for (i = 0; i < 8; ++i) {
-    m->fpu.st[i] = DeserializeLdbl(sf.fp.st[i]);
+  {
+    int i;
+    for (i = 0; i < 8; ++i) {
+      m->fpu.st[i] = DeserializeLdbl(sf.fp.st[i]);
+    }
   }
 #endif
   memcpy(m->xmm, sf.fp.xmm, sizeof(sf.fp.xmm));
