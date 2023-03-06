@@ -95,6 +95,10 @@
 #include <sched.h>
 #endif
 
+#ifdef HAVE_EPOLL_PWAIT1
+#include <sys/epoll.h>
+#endif
+
 #ifdef DISABLE_OVERLAYS
 #define OverlaysChown    fchownat
 #define OverlaysAccess   faccessat
@@ -4069,7 +4073,7 @@ static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
       return -1;
     }
     if ((unsupported = Read32(ss->flags) & ~supported)) {
-      LOGF("unsupported sigaltstack flags: %#x", unsupported);
+      LOGF("unsupported %s flags: %#x", "sigaltstack", unsupported);
       return einval();
     }
     if (~Read32(ss->flags) & SS_DISABLE_LINUX) {
@@ -5225,6 +5229,174 @@ static int SysPipe(struct Machine *m, i64 pipefds_addr) {
   return SysPipe2(m, pipefds_addr, 0);
 }
 
+#ifdef HAVE_EPOLL_PWAIT1
+
+static i32 SysEpollCreate1(struct Machine *m, i32 flags) {
+  u64 lim;
+  int fildes, oflags, sysflags;
+  oflags = 0;
+  sysflags = 0;
+  if (flags & EPOLL_CLOEXEC_LINUX) {
+    oflags |= O_CLOEXEC;
+    sysflags |= EPOLL_CLOEXEC;
+    flags &= ~EPOLL_CLOEXEC_LINUX;
+  }
+  if (flags) {
+    LOGF("unsupported %s flags: %#x", "epoll_create1", flags);
+    return einval();
+  }
+  if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
+  if ((fildes = epoll_create1(sysflags)) != -1) {
+    if (fildes >= lim) {
+      close(fildes);
+      fildes = emfile();
+    } else {
+      LOCK(&m->system->fds.lock);
+      unassert(AddFd(&m->system->fds, fildes, oflags));
+      UNLOCK(&m->system->fds.lock);
+    }
+  }
+  return fildes;
+}
+
+static i32 SysEpollCreate(struct Machine *m, i32 size) {
+  if (size <= 0) return einval();
+  return SysEpollCreate1(m, 0);
+}
+
+static i32 SysEpollCtl(struct Machine *m, i32 epfd, i32 op, i32 fd,
+                       i64 eventaddr) {
+  struct epoll_event epe, *pepe;
+  const struct epoll_event_linux *gepe;
+  switch (op) {
+    case EPOLL_CTL_DEL_LINUX:
+      pepe = 0;
+      break;
+    case EPOLL_CTL_ADD_LINUX:
+    case EPOLL_CTL_MOD_LINUX:
+      if (!(gepe = (const struct epoll_event_linux *)SchlepR(m, eventaddr,
+                                                             sizeof(*gepe)))) {
+        return -1;
+      }
+      epe.events = Read32(gepe->events);
+      epe.data.u64 = Read64(gepe->data);
+      pepe = &epe;
+      break;
+    default:
+      return einval();
+  }
+  return epoll_ctl(epfd, op, fd, pepe);
+}
+
+static i32 EpollPwait(struct Machine *m, i32 epfd, i64 eventsaddr,
+                      i32 maxevents, struct timespec deadline, i64 sigmaskaddr,
+                      u64 sigsetsize) {
+  i32 i, rc;
+  u64 oldmask_guest = 0;
+  sigset_t block, oldmask;
+  struct epoll_event *events;
+  struct timespec now, waitfor;
+  struct epoll_event_linux *gevents;
+  const struct sigset_linux *sigmaskp_guest = 0;
+  if (maxevents <= 0) return einval();
+  if (sigmaskaddr) {
+    if (sigsetsize != 8) return einval();
+    if (!(sigmaskp_guest = (const struct sigset_linux *)SchlepR(
+              m, sigmaskaddr, sizeof(*sigmaskp_guest)))) {
+      return -1;
+    }
+  }
+  if (!IsValidMemory(m, eventsaddr,
+                     maxevents * sizeof(struct epoll_event_linux),
+                     PROT_WRITE) ||
+      !(events = (struct epoll_event *)AddToFreeList(
+            m, calloc(maxevents, sizeof(struct epoll_event)))) ||
+      !(gevents = (struct epoll_event_linux *)AddToFreeList(
+            m, calloc(maxevents, sizeof(struct epoll_event_linux))))) {
+    return -1;
+  }
+  unassert(!sigfillset(&block));
+  unassert(!pthread_sigmask(SIG_BLOCK, &block, &oldmask));
+  if (sigmaskp_guest) {
+    oldmask_guest = m->sigmask;
+    m->sigmask = Read64(sigmaskp_guest->sigmask);
+    SIG_LOGF("sigmask push %" PRIx64, m->sigmask);
+  }
+  if (!CheckInterrupt(m, false)) {
+    do {
+      now = GetTime();
+      if (CompareTime(now, deadline) < 0) {
+        waitfor = SubtractTime(deadline, now);
+      } else {
+        waitfor = GetZeroTime();
+      }
+#ifdef HAVE_EPOLL_PWAIT2
+      rc = epoll_pwait2(epfd, events, maxevents, &waitfor, &oldmask);
+#else
+      rc = epoll_pwait(epfd, events, maxevents,
+                       ConvertTimeToInt(ToMilliseconds(waitfor)), &oldmask);
+#endif
+      if (rc == -1 && errno == EINTR) {
+        if (CheckInterrupt(m, false)) {
+          break;
+        }
+      } else {
+        break;
+      }
+    } while (1);
+  } else {
+    rc = -1;
+  }
+  if (sigmaskp_guest) {
+    m->sigmask = oldmask_guest;
+    SIG_LOGF("sigmask pop %" PRIx64, m->sigmask);
+  }
+  unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
+  if (rc != -1) {
+    for (i = 0; i < rc; ++i) {
+      Write32(gevents[i].events, events[i].events);
+      Write64(gevents[i].data, events[i].data.u64);
+    }
+    unassert(!CopyToUserWrite(m, eventsaddr, gevents,
+                              rc * sizeof(struct epoll_event_linux)));
+  }
+  return rc;
+}
+
+static i32 SysEpollPwait(struct Machine *m, i32 epfd, i64 eventsaddr,
+                         i32 maxevents, i32 timeout, i64 sigmaskaddr,
+                         u64 sigsetsize) {
+  struct timespec deadline;
+  if (timeout >= 0) {
+    deadline = AddTime(GetTime(), FromMilliseconds(timeout));
+  } else {
+    deadline = GetMaxTime();
+  }
+  return EpollPwait(m, epfd, eventsaddr, maxevents, deadline, sigmaskaddr,
+                    sigsetsize);
+}
+
+static i32 SysEpollPwait2(struct Machine *m, i32 epfd, i64 eventsaddr,
+                          i32 maxevents, i64 timeoutaddr, i64 sigmaskaddr,
+                          u64 sigsetsize) {
+  struct timespec ts, deadline;
+  if (timeoutaddr) {
+    if (LoadTimespecR(m, timeoutaddr, &ts) == -1) return -1;
+    deadline = AddTime(GetTime(), ts);
+  } else {
+    deadline = GetMaxTime();
+  }
+  return EpollPwait(m, epfd, eventsaddr, maxevents, deadline, sigmaskaddr,
+                    sigsetsize);
+}
+
+static int SysEpollWait(struct Machine *m, i32 epfd, i64 eventsaddr,
+                        i32 maxevents, i32 timeout) {
+  return SysEpollPwait(m, epfd, eventsaddr, maxevents, timeout, 0, 8);
+}
+
+#endif /* HAVE_EPOLL_PWAIT1 */
+
 void OpSyscall(P) {
   size_t mark;
   u64 ax, di, si, dx, r0, r8, r9;
@@ -5455,6 +5627,14 @@ void OpSyscall(P) {
     SYSCALL(5, 0x147, "preadv2", SysPreadv2, STRACE_PREADV2);
     SYSCALL(5, 0x148, "pwritev2", SysPwritev2, STRACE_PWRITEV2);
     SYSCALL(3, 0x1B4, "close_range", SysCloseRange, STRACE_3);
+#ifdef HAVE_EPOLL_PWAIT1
+    SYSCALL(1, 0x0D5, "epoll_create", SysEpollCreate, STRACE_1);
+    SYSCALL(1, 0x123, "epoll_create1", SysEpollCreate1, STRACE_1);
+    SYSCALL(4, 0x0E9, "epoll_ctl", SysEpollCtl, STRACE_4);
+    SYSCALL(4, 0x0E8, "epoll_wait", SysEpollWait, STRACE_4);
+    SYSCALL(6, 0x119, "epoll_pwait", SysEpollPwait, STRACE_6);
+    SYSCALL(6, 0x1B9, "epoll_pwait2", SysEpollPwait2, STRACE_6);
+#endif /* HAVE_EPOLL_PWAIT1 */
 #endif /* DISABLE_NONPOSIX */
     case 0x3C:
       SYS_LOGF("%s(%#" PRIx64 ")", "exit", di);

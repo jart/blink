@@ -71,6 +71,11 @@ static inline struct timespec SleepTime(struct timespec dur) {
   return unslept;
 }
 
+static inline int ConvertTimeToInt(time_t x) {
+  if (x > INT_MAX) return INT_MAX;
+  return x;
+}
+
 static inline time_t ToSeconds(struct timespec ts) {
   unassert(ts.tv_nsec < 1000000000);
   if (ts.tv_sec < NUMERIC_MAX(time_t)) {

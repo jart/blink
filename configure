@@ -579,7 +579,9 @@ if [ -z "${POSIX}" ]; then
   ( config getdomainname "checking for getdomainname()... " uncomment "#define HAVE_GETDOMAINNAME" ) &
   ( config kern_arnd "checking for sysctl(KERN_ARND)... " uncomment "#define HAVE_KERN_ARND" ) &
   ( config siocgifconf "checking for SIOCGIFCONF... " uncomment "#define HAVE_SIOCGIFCONF" ) &
+  ( config epoll_pwait1 "checking for epoll_pwait()... " uncomment "#define HAVE_EPOLL_PWAIT1" ) &
   wait
+  ( config epoll_pwait2 "checking for epoll_pwait2()... " uncomment "#define HAVE_EPOLL_PWAIT2" ) &
   ( config map_anonymous "checking for mmap(MAP_ANONYMOUS)... " uncomment "#define HAVE_MAP_ANONYMOUS" ) &
   ( config sched_getaffinity "checking for sched_getaffinity()... " uncomment "#define HAVE_SCHED_GETAFFINITY" ) &
   ( config scm_credentials "checking for SCM_CREDENTIALS... " uncomment "#define HAVE_SCM_CREDENTIALS" ) &

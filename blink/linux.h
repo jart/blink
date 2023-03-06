@@ -836,6 +836,29 @@
 #define PR_SET_NO_NEW_PRIVS_LINUX 38
 #define PR_GET_TID_ADDRESS_LINUX  40
 
+#define EPOLL_CLOEXEC_LINUX O_CLOEXEC_LINUX
+
+#define EPOLL_CTL_ADD_LINUX 1
+#define EPOLL_CTL_DEL_LINUX 2
+#define EPOLL_CTL_MOD_LINUX 3
+
+#define EPOLLIN_LINUX        0x00000001u
+#define EPOLLPRI_LINUX       0x00000002u
+#define EPOLLOUT_LINUX       0x00000004u
+#define EPOLLERR_LINUX       0x00000008u
+#define EPOLLHUP_LINUX       0x00000010u
+#define EPOLLNVAL_LINUX      0x00000020u
+#define EPOLLRDNORM_LINUX    0x00000040u
+#define EPOLLRDBAND_LINUX    0x00000080u
+#define EPOLLWRNORM_LINUX    0x00000100u
+#define EPOLLWRBAND_LINUX    0x00000200u
+#define EPOLLMSG_LINUX       0x00000400u
+#define EPOLLRDHUP_LINUX     0x00002000u
+#define EPOLLEXCLUSIVE_LINUX 0x10000000u
+#define EPOLLWAKEUP_LINUX    0x20000000u
+#define EPOLLONESHOT_LINUX   0x40000000u
+#define EPOLLET_LINUX        0x80000000u
+
 struct iovec_linux {
   u8 base[8];
   u8 len[8];
@@ -1217,6 +1240,11 @@ struct ucred_linux {  // 8-byte aligned
   u8 pid[4];          // process id of sending process
   u8 uid[4];          // user id of sending process
   u8 gid[4];          // group id of sending process
+};
+
+struct epoll_event_linux {
+  u8 events[4];
+  u8 data[8];
 };
 
 int sysinfo_linux(struct sysinfo_linux *);

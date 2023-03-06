@@ -44,6 +44,7 @@
 static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
                       i32 oflags, i32 mode) {
   long i;
+  u64 lim;
   u64 rng;
   int tmpdir;
   int fildes;
@@ -70,28 +71,34 @@ static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
     LOGF("O_TMPFILE unsupported flags %#x", unsupported);
     return einval();
   }
+  if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   unassert(!sigfillset(&ss));
   unassert(!pthread_sigmask(SIG_BLOCK, &ss, &oldss));
   if ((tmpdir = OverlaysOpen(GetDirFildes(dirfildes), LoadStr(m, pathaddr),
                              O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0)) != -1) {
-    unassert(GetRandom(&rng, 8, 0) == 8);
-    for (i = 0; i < 12; ++i) {
-      name[i] = "0123456789abcdefghijklmnopqrstuvwxyz"[rng % 36];
-      rng /= 36;
-    }
-    name[i] = 0;
-    if ((fildes = openat(tmpdir, name, sysflags, mode)) != -1) {
-      unassert(!unlinkat(tmpdir, name, 0));
-      unassert(dup2(fildes, tmpdir) == tmpdir);
-      fildes = tmpdir;
-      if (oflags & O_CLOEXEC_LINUX) {
-        unassert(!fcntl(fildes, F_SETFD, FD_CLOEXEC));
-      }
-      LOCK(&m->system->fds.lock);
-      unassert(AddFd(&m->system->fds, fildes, oflags));
-      UNLOCK(&m->system->fds.lock);
+    if (tmpdir >= lim) {
+      close(tmpdir);
+      fildes = emfile();
     } else {
-      unassert(!close(tmpdir));
+      unassert(GetRandom(&rng, 8, 0) == 8);
+      for (i = 0; i < 12; ++i) {
+        name[i] = "0123456789abcdefghijklmnopqrstuvwxyz"[rng % 36];
+        rng /= 36;
+      }
+      name[i] = 0;
+      if ((fildes = openat(tmpdir, name, sysflags, mode)) != -1) {
+        unassert(!unlinkat(tmpdir, name, 0));
+        unassert(dup2(fildes, tmpdir) == tmpdir);
+        fildes = tmpdir;
+        if (oflags & O_CLOEXEC_LINUX) {
+          unassert(!fcntl(fildes, F_SETFD, FD_CLOEXEC));
+        }
+        LOCK(&m->system->fds.lock);
+        unassert(AddFd(&m->system->fds, fildes, oflags));
+        UNLOCK(&m->system->fds.lock);
+      } else {
+        unassert(!close(tmpdir));
+      }
     }
   } else {
     fildes = -1;

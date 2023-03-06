@@ -47,6 +47,8 @@
 // #define HAVE_DEV_URANDOM
 // #define HAVE_SCHED_YIELD
 // #define HAVE_RTLGENRANDOM
+// #define HAVE_EPOLL_PWAIT1
+// #define HAVE_EPOLL_PWAIT2
 // #define HAVE_GETDOMAINNAME
 // #define HAVE_MAP_ANONYMOUS
 // #define HAVE_CLOCK_SETTIME

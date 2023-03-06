@@ -339,7 +339,24 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/2/sendfile09.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/openfile.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/2/connect01.elf.ok		\
-	o/$(MODE)/third_party/ltp/bin/2/chdir04.elf.ok
+	o/$(MODE)/third_party/ltp/bin/2/chdir04.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/3/epoll-ltp.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_create01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_create02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_create1_01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_create1_02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_ctl01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_ctl02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_ctl03.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_ctl04.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_ctl05.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_pwait01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_pwait02.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_pwait04.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_pwait05.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_wait01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_wait03.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_wait04.elf.ok
 
 ifneq ($(HOST_SYSTEM), FreeBSD)
 # These tests make the system get wrekt.
@@ -440,7 +457,9 @@ LTP_TESTS +=								\
 	o/$(MODE)/third_party/ltp/bin/1/futex_wait05.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/1/poll02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/1/unlink08.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/2/bind02.elf.ok
+	o/$(MODE)/third_party/ltp/bin/2/bind02.elf.ok			\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_pwait03.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/epoll_wait02.elf.ok
 endif
 
 # TODO: Cygwin doesn't properly raise an EACCES errno.
