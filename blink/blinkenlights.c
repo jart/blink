@@ -3800,6 +3800,9 @@ static void GetOpts(int argc, char *argv[]) {
   FLAG_overlays = getenv("BLINK_OVERLAYS");
   if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
 #endif
+#ifndef DISABLE_VFS
+  FLAG_prefix = getenv("BLINK_PREFIX");
+#endif
   while ((opt = GetOpt(argc, argv, "0hjmvVtrzRNsZb:Hw:L:C:")) != -1) {
     switch (opt) {
       case '0':
@@ -3855,8 +3858,10 @@ static void GetOpts(int argc, char *argv[]) {
         FLAG_logpath = optarg_;
         break;
       case 'C':
-#ifndef DISABLE_OVERLAYS
+#if !defined(DISABLE_OVERLAYS)
         FLAG_overlays = optarg_;
+#elif !defined(DISABLE_VFS)
+        FLAG_prefix = optarg_;
 #else
         WriteErrorString("error: overlays support was disabled\n");
 #endif
@@ -4043,7 +4048,7 @@ int main(int argc, char *argv[]) {
   }
 #endif
 #ifndef DISABLE_VFS
-  if (VfsInit()) {
+  if (VfsInit(FLAG_prefix)) {
     WriteErrorString("error: vfs initialization failed\n");
     exit(1);
   }

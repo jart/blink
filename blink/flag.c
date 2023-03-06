@@ -45,3 +45,6 @@ const char *FLAG_logpath;
 #ifndef DISABLE_OVERLAYS
 const char *FLAG_overlays;
 #endif
+#ifndef DISABLE_VFS
+const char *FLAG_prefix;
+#endif

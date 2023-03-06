@@ -92,7 +92,7 @@ static struct Vfs g_vfs = {
     .mapslock = PTHREAD_MUTEX_INITIALIZER_,
 };
 
-int VfsInit(void) {
+int VfsInit(const char *prefix) {
   struct stat st;
   char *cwd, hostcwd[PATH_MAX], *bprefix = NULL;
   struct VfsInfo *info;
@@ -108,13 +108,17 @@ int VfsInit(void) {
 
   // Initialize the root directory
   unassert(!VfsAcquireInfo(&g_initialrootinfo, &g_rootinfo));
-  bprefix = realpath(getenv("BLINK_PREFIX"), NULL);
+  if (prefix) {
+    bprefix = realpath(prefix, NULL);
+  }
   if (bprefix) {
     if (stat(bprefix, &st) == -1) {
       ERRF("Failed to stat BLINK_PREFIX %s, %s", bprefix, strerror(errno));
+      free(bprefix);
       bprefix = NULL;
     } else if (!S_ISDIR(st.st_mode)) {
       ERRF("BLINK_PREFIX %s is not a directory", bprefix);
+      free(bprefix);
       bprefix = NULL;
     }
   }

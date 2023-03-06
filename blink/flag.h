@@ -27,5 +27,6 @@ extern u64 FLAG_dyninterpaddr;
 
 extern const char *FLAG_logpath;
 extern const char *FLAG_overlays;
+extern const char *FLAG_prefix;
 
 #endif /* BLINK_FLAG_H_ */
