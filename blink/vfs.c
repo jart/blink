@@ -207,14 +207,12 @@ int VfsMount(const char *source, const char *target, const char *fstype,
              u64 flags, const void *data) {
   struct VfsInfo *targetinfo;
   struct VfsSystem *newsystem, *s;
-  struct VfsDevice *targetdevice, *newdevice, *d;
+  struct VfsDevice *targetdevice = 0, *newdevice, *d;
   struct VfsMount *newmount;
   struct Dll *e;
-  char *newname;
-  bool silent = false;
+  char *newname = 0;
   i64 nextdev;
   if (flags & MS_SILENT_LINUX) {
-    silent = true;
     flags &= ~MS_SILENT_LINUX;
   }
   if (flags) {
@@ -736,7 +734,7 @@ int VfsSetFd(int fd, struct VfsInfo *data) {
   dll_init(&vfsfd->elem);
   if (e == NULL) {
     dll_make_last(&g_vfs.fds, &vfsfd->elem);
-  } else if (e = dll_prev(g_vfs.fds, e)) {
+  } else if ((e = dll_prev(g_vfs.fds, e))) {
     dll_splice_after(e, &vfsfd->elem);
   } else {
     dll_make_first(&g_vfs.fds, &vfsfd->elem);
@@ -1035,7 +1033,7 @@ int VfsOpen(int dirfd, const char *name, int flags, int mode) {
 }
 
 int VfsChmod(int dirfd, const char *name, mode_t mode, int flags) {
-  struct VfsInfo *dir, *tmp;
+  struct VfsInfo *dir;
   char *newname;
   int ret = 0;
   VFS_LOGF("VfsChmod(%d, \"%s\", %d, %d)", dirfd, name, mode, flags);
@@ -1270,7 +1268,7 @@ ssize_t VfsReadlink(int dirfd, const char *name, char *buf, size_t bufsiz) {
 
 int VfsLink(int olddirfd, const char *oldname, int newdirfd,
             const char *newname, int flags) {
-  struct VfsInfo *olddir, *newdir, *file;
+  struct VfsInfo *olddir, *newdir;
   char *newoldname, *newnewname;
   int ret;
   VFS_LOGF("VfsLink(%d, \"%s\", %d, \"%s\", %d)", olddirfd, oldname, newdirfd,
@@ -1313,7 +1311,7 @@ int VfsUtime(int dirfd, const char *name, const struct timespec times[2],
              int flags) {
   struct VfsInfo *dir;
   char *newname;
-  int ret;
+  int ret = -1;
   VFS_LOGF("VfsUtime(%d, \"%s\", %p, %d)", dirfd, name, times, flags);
   if (name == NULL) {
     return efault();
@@ -1607,8 +1605,7 @@ int VfsFlock(int fd, int operation) {
 
 int VfsFcntl(int fd, int cmd, ...) {
   struct VfsInfo *info;
-  int ret, tmp;
-  ;
+  int ret, tmp = -1;
   va_list ap;
   VFS_LOGF("VfsFcntl(%d, %d, ...)", fd, cmd);
   if (VfsGetFd(fd, &info) == -1) {
@@ -1685,8 +1682,6 @@ int VfsDup(int fd) {
 
 int VfsDup2(int fd, int newfd) {
   struct VfsInfo *info, *newinfo;
-  struct Dll *e;
-  struct VfsFd *newfdinfo;
   int ret;
   VFS_LOGF("VfsDup2(%d, %d)", fd, newfd);
   if (VfsGetFd(fd, &info) == -1) {
@@ -1714,8 +1709,6 @@ int VfsDup2(int fd, int newfd) {
 #ifdef HAVE_DUP3
 int VfsDup3(int fd, int newfd, int flags) {
   struct VfsInfo *info, *newinfo;
-  struct Dll *e;
-  struct VfsFd *newfdinfo;
   int ret;
   VFS_LOGF("VfsDup3(%d, %d, %d)", fd, newfd, flags);
   if (VfsGetFd(fd, &info) == -1) {
@@ -1759,8 +1752,6 @@ int VfsPoll(struct pollfd *fds, nfds_t nfds, int timeout) {
 
 int VfsSelect(int nfds, fd_set *readfds, fd_set *writefds, fd_set *exceptfds,
               struct timespec *timeout, sigset_t *sigmask) {
-  struct VfsInfo *info;
-  int ret;
   VFS_LOGF("VfsSelect(%d, %p, %p, %p, %p, %p)", nfds, readfds, writefds,
            exceptfds, timeout, sigmask);
   return enosys();
@@ -1872,7 +1863,6 @@ int VfsClosedir(DIR *dir) {
 
 int VfsBind(int fd, const struct sockaddr *addr, socklen_t addrlen) {
   struct VfsInfo *info, *dir;
-  const struct sockaddr_un *un;
   char *newname;
   int ret;
   VFS_LOGF("VfsBind(%d, %p, %d)", fd, addr, addrlen);
@@ -1882,7 +1872,6 @@ int VfsBind(int fd, const struct sockaddr *addr, socklen_t addrlen) {
   if (addr->sa_family != AF_UNIX) {
     ret = HostfsBind(info, addr, addrlen);
   } else {
-    un = (const struct sockaddr_un *)addr;
     if (VfsHandleDirfdName(AT_FDCWD, addr->sa_data, &dir, &newname) == -1) {
       ret = -1;
     } else {
@@ -2190,7 +2179,7 @@ static int VfsMapListExtractAffectedRange(struct Dll **maps, void *addr,
                                           struct Dll **modified,
                                           struct Dll **before) {
   struct Dll *e, *f;
-  struct VfsMap *map, *newmap, *newmapleft, *newmapright;
+  struct VfsMap *map, *newmap, *newmapleft = 0, *newmapright = 0;
   e = dll_first(*maps);
   while (e && !VfsMemoryRangeOverlap(VFS_MAP_CONTAINER(e)->addr,
                                      VFS_MAP_CONTAINER(e)->len, addr, len)) {
@@ -2412,7 +2401,7 @@ cleananddie:
 }
 
 int VfsMprotect(void *addr, size_t len, int prot) {
-  struct Dll *e, *f;
+  struct Dll *e;
   struct VfsMap *map;
   struct Dll *original, *modified, *before;
   VFS_LOGF("VfsMprotect(%p, %zu, %d)", addr, len, prot);
@@ -2680,7 +2669,7 @@ int VfsExecve(const char *pathname, char *const *argv, char *const *envp) {
   int ret;
   VFS_LOGF("VfsExecve(\"%s\", %p, %p)", pathname, argv, envp);
   info = NULL;
-  if (ret = VfsOpen(AT_FDCWD, pathname, O_RDONLY | O_CLOEXEC, 0) == -1) {
+  if ((ret = VfsOpen(AT_FDCWD, pathname, O_RDONLY | O_CLOEXEC, 0)) == -1) {
     return -1;
   }
   if (VfsFreeFd(ret, &info) == -1) {

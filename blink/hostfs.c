@@ -16,10 +16,11 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <stdlib.h>
-#include <sys/errno.h>
+#include <string.h>
 #include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
@@ -176,7 +177,6 @@ int HostfsCreateInfo(struct HostfsInfo **output) {
 }
 
 int HostfsGetHostPath(struct VfsInfo *info, char **output) {
-  struct HostfsInfo *hostfsinfo;
   struct HostfsDevice *hostfsdevice;
   char *path, *hostpath;
   size_t pathlen, sourcelen;
@@ -184,7 +184,6 @@ int HostfsGetHostPath(struct VfsInfo *info, char **output) {
     efault();
     return -1;
   }
-  hostfsinfo = (struct HostfsInfo *)info->data;
   hostfsdevice = (struct HostfsDevice *)info->device->data;
   if (VfsPathBuild(info, info->device->root, &path) == -1) {
     return -1;
@@ -210,9 +209,7 @@ int HostfsGetHostPath(struct VfsInfo *info, char **output) {
 
 int HostfsGetDirFd(struct VfsInfo *dir) {
   struct HostfsInfo *dirinfo;
-  struct HostfsDevice *hostfsdevice;
-  char *path, *hostpath;
-  size_t pathlen, sourcelen;
+  char *hostpath;
   int ret = -1;
   if (dir == NULL) {
     efault();
@@ -223,7 +220,6 @@ int HostfsGetDirFd(struct VfsInfo *dir) {
     return -1;
   }
   dirinfo = (struct HostfsInfo *)dir->data;
-  hostfsdevice = (struct HostfsDevice *)dir->device->data;
   if (dirinfo->filefd != -1) {
     return dup(dirinfo->filefd);
   } else {
@@ -556,7 +552,6 @@ int HostfsUnlink(struct VfsInfo *parent, const char *name, int flags) {
 
 ssize_t HostfsRead(struct VfsInfo *info, void *buf, size_t size) {
   struct HostfsInfo *hostinfo;
-  ssize_t rc;
   VFS_LOGF("HostfsRead(%p, %p, %ld)", info, buf, size);
   if (info == NULL || buf == NULL) {
     return efault();
@@ -567,7 +562,6 @@ ssize_t HostfsRead(struct VfsInfo *info, void *buf, size_t size) {
 
 ssize_t HostfsWrite(struct VfsInfo *info, const void *buf, size_t size) {
   struct HostfsInfo *hostinfo;
-  ssize_t rc;
   VFS_LOGF("HostfsWrite(%p, %p, %ld)", info, buf, size);
   if (info == NULL || buf == NULL) {
     return efault();
@@ -579,7 +573,6 @@ ssize_t HostfsWrite(struct VfsInfo *info, const void *buf, size_t size) {
 ssize_t HostfsPread(struct VfsInfo *info, void *buf, size_t size,
                     off_t offset) {
   struct HostfsInfo *hostinfo;
-  ssize_t rc;
   VFS_LOGF("HostfsPread(%p, %p, %ld, %ld)", info, buf, size, offset);
   if (info == NULL || buf == NULL) {
     return efault();
@@ -591,7 +584,6 @@ ssize_t HostfsPread(struct VfsInfo *info, void *buf, size_t size,
 ssize_t HostfsPwrite(struct VfsInfo *info, const void *buf, size_t size,
                      off_t offset) {
   struct HostfsInfo *hostinfo;
-  ssize_t rc;
   VFS_LOGF("HostfsPwrite(%p, %p, %ld, %ld)", info, buf, size, offset);
   if (info == NULL || buf == NULL) {
     return efault();
@@ -602,7 +594,6 @@ ssize_t HostfsPwrite(struct VfsInfo *info, const void *buf, size_t size,
 
 ssize_t HostfsReadv(struct VfsInfo *info, const struct iovec *iov, int iovcnt) {
   struct HostfsInfo *hostinfo;
-  ssize_t rc;
   VFS_LOGF("HostfsReadv(%p, %p, %d)", info, iov, iovcnt);
   if (info == NULL || iov == NULL) {
     return efault();
@@ -614,7 +605,6 @@ ssize_t HostfsReadv(struct VfsInfo *info, const struct iovec *iov, int iovcnt) {
 ssize_t HostfsWritev(struct VfsInfo *info, const struct iovec *iov,
                      int iovcnt) {
   struct HostfsInfo *hostinfo;
-  ssize_t rc;
   VFS_LOGF("HostfsWritev(%p, %p, %d)", info, iov, iovcnt);
   if (info == NULL || iov == NULL) {
     return efault();
@@ -626,7 +616,6 @@ ssize_t HostfsWritev(struct VfsInfo *info, const struct iovec *iov,
 ssize_t HostfsPreadv(struct VfsInfo *info, const struct iovec *iov, int iovcnt,
                      off_t offset) {
   struct HostfsInfo *hostinfo;
-  ssize_t rc;
   VFS_LOGF("HostfsPreadv(%p, %p, %d, %ld)", info, iov, iovcnt, offset);
   if (info == NULL || iov == NULL) {
     return efault();
@@ -638,7 +627,6 @@ ssize_t HostfsPreadv(struct VfsInfo *info, const struct iovec *iov, int iovcnt,
 ssize_t HostfsPwritev(struct VfsInfo *info, const struct iovec *iov, int iovcnt,
                       off_t offset) {
   struct HostfsInfo *hostinfo;
-  ssize_t rc;
   VFS_LOGF("HostfsPwritev(%p, %p, %d, %ld)", info, iov, iovcnt, offset);
   if (info == NULL || iov == NULL) {
     return efault();
@@ -779,7 +767,6 @@ int HostfsIoctl(struct VfsInfo *info, unsigned long request, const void *arg) {
 
 int HostfsDup(struct VfsInfo *info, struct VfsInfo **newinfo) {
   struct HostfsInfo *hostinfo, *newhostinfo;
-  int rc;
   VFS_LOGF("HostfsDup(%p, %p)", info, newinfo);
   if (info == NULL || newinfo == NULL) {
     return efault();
@@ -837,7 +824,6 @@ cleananddie:
 #ifdef HAVE_DUP3
 int HostfsDup3(struct VfsInfo *info, struct VfsInfo **newinfo, int flags) {
   struct HostfsInfo *hostinfo, *newhostinfo;
-  int rc;
   VFS_LOGF("HostfsDup3(%p, %p, %i)", info, newinfo, flags);
   if (info == NULL || newinfo == NULL) {
     return efault();
@@ -1046,7 +1032,7 @@ int HostfsConnect(struct VfsInfo *info, const struct sockaddr *addr,
 
 int HostfsConnectUnix(struct VfsInfo *sock, struct VfsInfo *info,
                       const struct sockaddr_un *addr, socklen_t addrlen) {
-  struct HostfsInfo *hostinfo, *sockinfo;
+  struct HostfsInfo *hostinfo;
   struct sockaddr_un *hostun;
   socklen_t hostlen;
   char *hostpath;
@@ -1163,7 +1149,7 @@ ssize_t HostfsSendmsg(struct VfsInfo *info, const struct msghdr *msg,
 
 ssize_t HostfsRecvmsgUnix(struct VfsInfo *sock, struct VfsInfo *info,
                           struct msghdr *msg, int flags) {
-  struct HostfsInfo *hostinfo, *sockinfo;
+  struct HostfsInfo *hostinfo;
   struct sockaddr_un *hostun, *oldun;
   socklen_t hostlen, oldlen;
   char *hostpath;
@@ -1200,7 +1186,7 @@ ssize_t HostfsRecvmsgUnix(struct VfsInfo *sock, struct VfsInfo *info,
 
 ssize_t HostfsSendmsgUnix(struct VfsInfo *sock, struct VfsInfo *info,
                           const struct msghdr *msg, int flags) {
-  struct HostfsInfo *hostinfo, *sockinfo;
+  struct HostfsInfo *hostinfo;
   struct msghdr newmsg;
   struct sockaddr_un *hostun;
   socklen_t hostlen;
@@ -1262,7 +1248,6 @@ int HostfsGetsockname(struct VfsInfo *info, struct sockaddr *addr,
   struct HostfsInfo *hostinfo;
   struct sockaddr_un *un;
   char *path;
-  socklen_t len;
   VFS_LOGF("HostfsGetsockname(%p, %p, %p)", info, addr, addrlen);
   if (info == NULL || addr == NULL || addrlen == NULL) {
     return efault();
@@ -1296,7 +1281,7 @@ int HostfsGetpeername(struct VfsInfo *info, struct sockaddr *addr,
                       socklen_t *addrlen) {
   struct HostfsInfo *hostinfo;
   struct sockaddr_un *hostun;
-  socklen_t hostlen = sizeof(hostun);
+  socklen_t hostlen = sizeof(*hostun);
   char *s;
   VFS_LOGF("HostfsGetpeername(%p, %p, %p)", info, addr, addrlen);
   if (info == NULL || addr == NULL || addrlen == NULL) {
