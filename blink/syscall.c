@@ -2575,7 +2575,7 @@ static i64 SysSendfile(struct Machine *m, i32 out_fd, i32 in_fd, i64 offsetaddr,
       return eoverflow();
     }
   }
-  for (toto = 0; toto < count; ) {
+  for (toto = 0; toto < count;) {
     chunk = MIN(count - toto, maxchunk);
     if (offsetp) {
       got = VfsPread(in_fd, buf, chunk, offset + toto);
@@ -2777,7 +2777,7 @@ static int XlatFaccessatFlags(int x) {
 static int SysFaccessat2(struct Machine *m, i32 dirfd, i64 path, i32 mode,
                          i32 flags) {
   return VfsAccess(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode),
-                     XlatFaccessatFlags(flags));
+                   XlatFaccessatFlags(flags));
 }
 
 static int SysFaccessat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
@@ -2840,8 +2840,8 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
   }
 #endif
 #endif
-  if ((rc = VfsStat(GetDirFildes(dirfd), path, &st,
-                      XlatFstatatFlags(flags))) != -1) {
+  if ((rc = VfsStat(GetDirFildes(dirfd), path, &st, XlatFstatatFlags(flags))) !=
+      -1) {
     XlatStatToLinux(&gst, &st);
     if (CopyToUserWrite(m, staddr, &gst, sizeof(gst)) == -1) rc = -1;
   }
@@ -2895,7 +2895,7 @@ static int SysFchownat(struct Machine *m, i32 dirfd, i64 pathaddr, u32 uid,
 #endif
 #endif
   return VfsChown(GetDirFildes(dirfd), path, uid, gid,
-                    XlatFchownatFlags(flags));
+                  XlatFchownatFlags(flags));
 }
 
 static int SysChown(struct Machine *m, i64 pathaddr, u32 uid, u32 gid) {
@@ -2963,9 +2963,9 @@ static int CheckSyncable(int fildes) {
   // question though is if FreeBSD actually does something here.
   struct stat st;
   if (!VfsFstat(fildes, &st) &&  //
-      (S_ISCHR(st.st_mode) ||      //
-       S_ISFIFO(st.st_mode) ||     //
-       S_ISLNK(st.st_mode) ||      //
+      (S_ISCHR(st.st_mode) ||    //
+       S_ISFIFO(st.st_mode) ||   //
+       S_ISLNK(st.st_mode) ||    //
        S_ISSOCK(st.st_mode))) {
     return einval();
   }
@@ -3296,8 +3296,8 @@ static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
   // implementations (e.g. Musl) consider it to be posixly incorrect.
   if (bufsiz <= 0) return einval();
   if (!(buf = (char *)AddToFreeList(m, malloc(bufsiz)))) return -1;
-  if ((rc = VfsReadlink(GetDirFildes(dirfd), LoadStr(m, path), buf,
-                          bufsiz)) != -1) {
+  if ((rc = VfsReadlink(GetDirFildes(dirfd), LoadStr(m, path), buf, bufsiz)) !=
+      -1) {
     if (CopyToUserWrite(m, bufaddr, buf, rc) == -1) rc = -1;
   }
   return rc;
@@ -3323,7 +3323,7 @@ static int SysTruncate(struct Machine *m, i64 pathaddr, i64 length) {
 static int SysSymlinkat(struct Machine *m, i64 targetpath, i32 newdirfd,
                         i64 linkpath) {
   return VfsSymlink(LoadStr(m, targetpath), GetDirFildes(newdirfd),
-                      LoadStr(m, linkpath));
+                    LoadStr(m, linkpath));
 }
 
 static int SysSymlink(struct Machine *m, i64 targetpath, i64 linkpath) {
@@ -3439,7 +3439,7 @@ static int SysRenameat2(struct Machine *m, int srcdirfd, i64 srcpath,
     return -1;
   }
   return VfsRename(GetDirFildes(srcdirfd), LoadStr(m, srcpath),
-                     GetDirFildes(dstdirfd), dstpath);
+                   GetDirFildes(dstdirfd), dstpath);
 }
 
 static int SysRenameat(struct Machine *m, int srcdirfd, i64 srcpath,
@@ -3474,8 +3474,8 @@ static i32 SysLinkat(struct Machine *m,  //
                      i64 newpath,        //
                      i32 flags) {
   return VfsLink(GetDirFildes(olddirfd), LoadStr(m, oldpath),
-                   GetDirFildes(newdirfd), LoadStr(m, newpath),
-                   XlatLinkatFlags(flags));
+                 GetDirFildes(newdirfd), LoadStr(m, newpath),
+                 XlatLinkatFlags(flags));
 }
 
 static int SysLink(struct Machine *m, i64 existingpath, i64 newpath) {
@@ -4394,11 +4394,10 @@ static i32 Select(struct Machine *m,          //
   int fildes, rc;
   i32 setsize;
   u64 oldmask_guest = 0;
-  sigset_t block, oldmask;
   fd_set readfds, writefds, exceptfds, readyreadfds, readywritefds,
       readyexceptfds;
   struct pollfd hfds[1];
-  struct timespec *tp, now, wait, remain, deadline = {0};
+  struct timespec now, wait, remain, deadline = {0};
   struct Fd *fd;
   int (*poll_impl)(struct pollfd *, nfds_t, int);
   if (timeoutp) {
@@ -4465,8 +4464,8 @@ static i32 Select(struct Machine *m,          //
       if (fd) {
         hfds[0].fd = fildes;
         hfds[0].events = ((FD_ISSET(fildes, &readfds) ? POLLIN : 0) |
-                  (FD_ISSET(fildes, &writefds) ? POLLOUT : 0) |
-                  (FD_ISSET(fildes, &exceptfds) ? POLLPRI : 0));
+                          (FD_ISSET(fildes, &writefds) ? POLLOUT : 0) |
+                          (FD_ISSET(fildes, &exceptfds) ? POLLPRI : 0));
         switch (poll_impl(hfds, 1, 0)) {
           case 0:
             break;
@@ -4517,8 +4516,10 @@ static i32 Select(struct Machine *m,          //
     SIG_LOGF("sigmask pop %" PRIx64, m->sigmask);
   }
   if (rc != -1) {
-    if ((readfds_addr && SaveFdSet(m, nfds, &readyreadfds, readfds_addr) == -1) ||
-        (writefds_addr && SaveFdSet(m, nfds, &readywritefds, writefds_addr) == -1) ||
+    if ((readfds_addr &&
+         SaveFdSet(m, nfds, &readyreadfds, readfds_addr) == -1) ||
+        (writefds_addr &&
+         SaveFdSet(m, nfds, &readywritefds, writefds_addr) == -1) ||
         (exceptfds_addr &&
          SaveFdSet(m, nfds, &readyexceptfds, exceptfds_addr) == -1)) {
       return -1;
