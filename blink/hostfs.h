@@ -27,6 +27,7 @@ int HostfsFreeDevice(void *);
 int HostfsFinddir(struct VfsInfo *, const char *, struct VfsInfo **);
 ssize_t HostfsReadlink(struct VfsInfo *, char **);
 int HostfsMkdir(struct VfsInfo *, const char *, mode_t);
+int HostfsMkfifo(struct VfsInfo *, const char *, mode_t);
 int HostfsOpen(struct VfsInfo *, const char *, int, int, struct VfsInfo **);
 int HostfsAccess(struct VfsInfo *, const char *, mode_t, int);
 int HostfsStat(struct VfsInfo *, const char *, struct stat *, int);

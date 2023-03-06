@@ -362,6 +362,17 @@ int HostfsMkdir(struct VfsInfo *parent, const char *name, mode_t mode) {
   return ret;
 }
 
+int HostfsMkfifo(struct VfsInfo *parent, const char *name, mode_t mode) {
+  int parentfd, ret;
+  VFS_LOGF("HostfsMkfifo(%p, \"%s\", %d)", parent, name, mode);
+  if ((parentfd = HostfsGetDirFd(parent)) == -1) {
+    return -1;
+  }
+  ret = mkfifoat(parentfd, name, mode);
+  unassert(!close(parentfd));
+  return ret;
+}
+
 int HostfsOpen(struct VfsInfo *parent, const char *name, int flags, int mode,
                struct VfsInfo **output) {
   struct HostfsInfo *outputinfo;
@@ -1718,6 +1729,7 @@ struct VfsSystem g_hostfs = {.name = "hostfs",
                                  .finddir = HostfsFinddir,
                                  .readlink = HostfsReadlink,
                                  .mkdir = HostfsMkdir,
+                                 .mkfifo = HostfsMkfifo,
                                  .open = HostfsOpen,
                                  .access = HostfsAccess,
                                  .stat = HostfsStat,

@@ -41,7 +41,8 @@ struct VfsOps {
   int (*freedevice)(void *);
   int (*finddir)(struct VfsInfo *, const char *, struct VfsInfo **);
   ssize_t (*readlink)(struct VfsInfo *, char **);
-  int (*mkdir)(struct VfsInfo *, const char *, u32);
+  int (*mkdir)(struct VfsInfo *, const char *, mode_t);
+  int (*mkfifo)(struct VfsInfo *, const char *, mode_t);
   int (*open)(struct VfsInfo *, const char *, int, int, struct VfsInfo **);
   int (*access)(struct VfsInfo *, const char *, mode_t, int);
   int (*stat)(struct VfsInfo *, const char *, struct stat *, int);

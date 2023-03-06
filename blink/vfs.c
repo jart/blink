@@ -998,7 +998,25 @@ int VfsMkdir(int dirfd, const char *name, mode_t mode) {
 }
 
 int VfsMkfifo(int dirfd, const char *name, mode_t mode) {
-  return enosys();
+  struct VfsInfo *dir;
+  char *newname;
+  int ret;
+  VFS_LOGF("VfsMkfifo(%d, \"%s\", %d)", dirfd, name, mode);
+  if (name == NULL) {
+    return efault();
+  }
+  if (VfsHandleDirfdName(dirfd, name, &dir, &newname) == -1) {
+    return -1;
+  }
+  unassert(!VfsTraverseMount(&dir, &newname));
+  if (dir->device->ops->mkfifo) {
+    ret = dir->device->ops->mkfifo(dir, newname, mode);
+  } else {
+    ret = eopnotsupp();
+  }
+  unassert(!VfsFreeInfo(dir));
+  free(newname);
+  return ret;
 }
 
 int VfsOpen(int dirfd, const char *name, int flags, int mode) {
