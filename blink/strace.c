@@ -175,9 +175,9 @@ static const struct DescribeFlags kSockFlags[] = {
 #endif
 
 const struct MagicNumber kSigHow[] = {
-    {SIG_BLOCK, "SIG_BLOCK"},      //
-    {SIG_UNBLOCK, "SIG_UNBLOCK"},  //
-    {SIG_SETMASK, "SIG_SETMASK"},  //
+    {SIG_BLOCK_LINUX, "SIG_BLOCK"},      //
+    {SIG_UNBLOCK_LINUX, "SIG_UNBLOCK"},  //
+    {SIG_SETMASK_LINUX, "SIG_SETMASK"},  //
 };
 
 const struct MagicNumber kSocketFamily[] = {

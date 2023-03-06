@@ -57,12 +57,6 @@ ifeq ($(USER), jart)
 CFLAGS += -Wall -Werror -Wno-unused-function
 endif
 
-ifeq ($(MODE), cosmo)
-CC = cosmocc
-CFLAGS += -fno-pie
-LDFLAGS += -no-pie
-endif
-
 ifeq ($(MODE), dbg)
 CFLAGS += -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
 CPPFLAGS += -DDEBUG

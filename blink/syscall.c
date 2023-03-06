@@ -1479,6 +1479,7 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
 #ifdef HAVE_GETDOMAINNAME
   getdomainname(u.domain, sizeof(u.domain) - 1);
 #endif
+  if (!*u.domain) strcpy(u.domain, "(none)");
   strcpy(uts.domainname, u.domain);
   return CopyToUser(m, utsaddr, &uts, sizeof(uts));
 }
@@ -3637,8 +3638,8 @@ static bool IsSupportedResourceLimit(int resource) {
          resource == RLIMIT_NOFILE_LINUX;
 }
 
-static void GetResourceLimit(struct Machine *m, int resource,
-                             struct rlimit_linux *lux) {
+static void GetResourceLimit_(struct Machine *m, int resource,
+                              struct rlimit_linux *lux) {
   LOCK(&m->system->mmap_lock);
   memcpy(lux, m->system->rlim + resource, sizeof(*lux));
   UNLOCK(&m->system->mmap_lock);
@@ -3664,7 +3665,7 @@ static int SysGetrlimit(struct Machine *m, i32 resource, i64 rlimitaddr) {
   struct rlimit rlim;
   struct rlimit_linux lux;
   if (IsSupportedResourceLimit(resource)) {
-    GetResourceLimit(m, resource, &lux);
+    GetResourceLimit_(m, resource, &lux);
     return CopyToUserWrite(m, rlimitaddr, &lux, sizeof(lux));
   }
   if ((rc = getrlimit(XlatResource(resource), &rlim)) != -1) {
@@ -4120,6 +4121,7 @@ static int SysClockGettime(struct Machine *m, int clock, i64 ts) {
   return rc;
 }
 
+#ifdef HAVE_CLOCK_SETTIME
 static int SysClockSettime(struct Machine *m, int clock, i64 ts) {
   clock_t sysclock;
   struct timespec ht;
@@ -4131,6 +4133,7 @@ static int SysClockSettime(struct Machine *m, int clock, i64 ts) {
   }
   return clock_settime(sysclock, &ht);
 }
+#endif
 
 static int SysClockGetres(struct Machine *m, int clock, i64 ts) {
   int rc;
@@ -5354,7 +5357,9 @@ void OpSyscall(P) {
     SYSCALL(3, 0x0D9, "getdents", SysGetdents, STRACE_3);
     SYSCALL(1, 0x0DA, "set_tid_address", SysSetTidAddress, STRACE_1);
     SYSCALL(4, 0x0DD, "fadvise", SysFadvise, STRACE_4);
+#ifdef HAVE_CLOCK_SETTIME
     SYSCALL(2, 0x0E3, "clock_settime", SysClockSettime, STRACE_2);
+#endif
     SYSCALL(2, 0x0E5, "clock_getres", SysClockGetres, STRACE_2);
     SYSCALL(4, 0x0E6, "clock_nanosleep", SysClockNanosleep, STRACE_CLOCK_SLEEP);
     SYSCALL(2, 0x084, "utime", SysUtime, STRACE_2);
