@@ -172,13 +172,13 @@ C       continue harder           -w ADDR  push watchpoint\n\
 q       quit                      -L PATH  log file location\n\
 f       finish                    -R       deliver crash sigs\n\
 R       restart                   -H       disable highlighting\n\
-x       hex                       -v       blinkenlights version\n\
-?       help                      -j       enables jit\n\
+?       help                      -v       blinkenlights version\n\
+x       sse radix                 -j       enables jit\n\
 t       sse type                  -m       disables memory safety\n\
-w       sse width                 -N       natural scroll wheel\n\
+T       sse size                  -N       natural scroll wheel\n\
 B       pop breakpoint            -s       system call logging\n\
 p       profiling mode            -C PATH  chroot directory\n\
-ctrl-t  turbo                     -?       help\n\
+ctrl-t  turbo                     -h       help\n\
 alt-t   slowmo"
 
 #define FPS        60     // frames per second written to tty
@@ -348,7 +348,6 @@ static int tick;
 static int speed;
 static int vidya;
 static int ttyin;
-static int focus;
 static int ttyout;
 static int opline;
 static int action;
@@ -3175,10 +3174,6 @@ static void OnEnter(void) {
   action &= ~MODAL;
 }
 
-static void OnTab(void) {
-  focus = (focus + 1) % ARRAYLEN(pan.p);
-}
-
 static void OnUp(void) {
 }
 
@@ -3394,7 +3389,6 @@ static void HandleKeyboard(const char *k) {
     CASE('p', showprofile = !showprofile);
     CASE('B', PopBreakpoint(&breakpoints));
     CASE('M', ToggleMouseTracking());
-    CASE('\t', OnTab());
     CASE('\r', OnEnter());
     CASE('\n', OnEnter());
     CASE(Ctrl('C'), OnInt());
@@ -3817,8 +3811,11 @@ static void GetOpts(int argc, char *argv[]) {
   FLAG_overlays = getenv("BLINK_OVERLAYS");
   if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
 #endif
-  while ((opt = GetOpt(argc, argv, "hjmvVtrzRNsZb:Hw:L:C:")) != -1) {
+  while ((opt = GetOpt(argc, argv, "0hjmvVtrzRNsZb:Hw:L:C:")) != -1) {
     switch (opt) {
+      case '0':
+        FLAG_zero = true;
+        break;
       case 'j':
         FLAG_wantjit = true;
         break;
@@ -3913,7 +3910,7 @@ int VirtualMachine(int argc, char *argv[]) {
   optind_++;
   do {
     action = 0;
-    LoadProgram(m, codepath, codepath, argv + optind_ - 1, environ);
+    LoadProgram(m, codepath, codepath, argv + optind_ - 1 + FLAG_zero, environ);
     if (m->system->codesize) {
       ophits = (unsigned long *)AllocateBig(
           m->system->codesize * sizeof(unsigned long), PROT_READ | PROT_WRITE,

@@ -104,8 +104,15 @@ may be passed as flags.
 .It Fl s
 Enables system call logging. This will emit to the log file the names of
 system calls each time a SYSCALL instruction in executed, along with its
-arguments and result. System call logging isn't available in `MODE=rel`
-and `MODE=tiny` builds, in which case this flag is ignored.
+arguments and result. System calls are logged once they've completed. If
+this option is specified twice, then system calls which are likely to
+block (e.g. poll) will be logged at entry too. If this option is
+specified thrice, then all cancellation points will be logged upon
+entry. System call logging isn't available in
+.Li MODE=rel
+and
+.Li MODE=tiny
+builds, in which case this flag is ignored.
 .It Fl m
 Enables full memory virtualization. Under normal circumstances,
 .Nm
@@ -268,7 +275,7 @@ which by convention is 0 on success or >0 on failure. In the event that
 .Nm
 fails to launch
 .Ar program
-the exit status 127 shall be returned.
+the status 127 shall be returned.
 .Sh SEE ALSO
 .Xr blinkenlights 1
 .Sh STANDARDS

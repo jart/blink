@@ -20,14 +20,15 @@ do the same thing as the `qemu-x86_64` command, except that
    integer / floating point math. Blink is also much faster at running
    ephemeral programs such as compilers.
 
-[`blinkenlights`](https://justine.lol/blinkenlights) is a TUI interface
-that may be used for debugging x86_64-linux programs across platforms.
-Unlike GDB, Blinkenlights focuses on visualizing program execution. It
-uses UNICODE IBM Code Page 437 characters to display binary memory
-panels, which change as you step through your program's assembly code.
-These memory panels may be scrolled and zoomed using your mouse wheel.
-Blinkenlights also permits reverse debugging, where scroll wheeling over
-the assembly display allows the rewinding of execution history.
+[`blinkenlights`](https://justine.lol/blinkenlights) is a terminal user
+interface that may be used for debugging x86_64-linux or i8086 programs
+across platforms. Unlike GDB, Blinkenlights focuses on visualizing
+program execution. It uses UNICODE IBM Code Page 437 characters to
+display binary memory panels, which change as you step through your
+program's assembly code. These memory panels may be scrolled and zoomed
+using your mouse wheel. Blinkenlights also permits reverse debugging,
+where scroll wheeling over the assembly display allows the rewinding of
+execution history.
 
 ## Getting Started
 
@@ -54,14 +55,15 @@ The instructions for compiling Blink are as follows:
 ```sh
 ./configure
 make -j4
-o//blink/blink -h
-Usage: o//blink/blink [-hjms] PROG [ARGS...]
+doas make install  # note: doas is modern sudo
+blink -v
+man blink
 ```
 
 Here's how you can run a simple hello world program with Blink:
 
 ```sh
-o//blink/blink third_party/cosmo/tinyhello.elf
+blink third_party/cosmo/tinyhello.elf
 ```
 
 Blink has a debugger TUI, which works with UTF-8 ANSI terminals. The
@@ -69,7 +71,7 @@ most important keystrokes in this interface are `?` for help, `s` for
 step, `c` for continue, and scroll wheel for reverse debugging.
 
 ```sh
-o//blink/blinkenlights third_party/cosmo/tinyhello.elf
+blinkenlights third_party/cosmo/tinyhello.elf
 ```
 
 ### Alternative Builds
@@ -223,9 +225,12 @@ The following `FLAG` arguments are provided:
 
 - `-s` enables system call logging. This will emit to the log file the
   names of system calls each time a SYSCALL instruction in executed,
-  along with its arguments and result. System call logging isn't
-  available in `MODE=rel` and `MODE=tiny` builds, in which case this
-  flag is ignored.
+  along with its arguments and result. System calls are logged once
+  they've completed. If this option is specified twice, then system
+  calls which are likely to block (e.g. poll) will be logged at entry
+  too. If this option is specified thrice, then all cancellation points
+  will be logged upon entry. System call logging isn't available in
+  `MODE=rel` and `MODE=tiny` builds, in which case this flag is ignored.
 
 - `-Z` will cause internal statistics to be printed to standard error on
   exit. Stats aren't available in `MODE=rel` and `MODE=tiny` builds, and
@@ -257,7 +262,7 @@ The following `FLAG` arguments are provided:
 
 - `-v` shows version and build configuration details
 
-- `-r` puts your virtual machine real mode. This may be used to run
+- `-r` puts your virtual machine in real mode. This may be used to run
   16-bit i8086 programs, such as SectorLISP. It's also used for booting
   programs from Blinkenlights's simulated BIOS.
 
@@ -295,13 +300,6 @@ The following `FLAG` arguments are provided:
   right of the display. Please note this flag has the opposite meaning
   as it does in the `blink` command.
 
-- `-0` allows `argv[0]` to be specified on the command line. Under
-  normal circumstances, `blinkenlights cmd arg1` is equivalent to
-  `execve("cmd", {"cmd", "arg1"})` since that's how most programs are
-  launched. However if you need the full power of execve() process
-  spawning, you can say `blinkenlights -0 cmd arg0 arg1` which is
-  equivalent to `execve("cmd", {"arg0", "arg1"})`.
-
 - `-t` may be used to disable Blinkenlights TUI mode. This makes the
   program behave similarly to the `blink` command, however not as good.
   We're currently using this flag for unit testing real mode programs,
@@ -317,9 +315,12 @@ The following `FLAG` arguments are provided:
 
 - `-s` enables system call logging. This will emit to the log file the
   names of system calls each time a SYSCALL instruction in executed,
-  along with its arguments and result. System call logging isn't
-  available in `MODE=rel` and `MODE=tiny` builds, in which case this
-  flag is ignored.
+  along with its arguments and result. System calls are logged once
+  they've completed. If this option is specified twice, then system
+  calls which are likely to block (e.g. poll) will be logged at entry
+  too. If this option is specified thrice, then all cancellation points
+  will be logged upon entry. System call logging isn't available in
+  `MODE=rel` and `MODE=tiny` builds, in which case this flag is ignored.
 
 - `-Z` will cause internal statistics to be printed to standard error on
   exit. Stats aren't available in `MODE=rel` and `MODE=tiny` builds, and
@@ -499,7 +500,7 @@ doas mount -t proc none ~/blinkroot/proc
 cd ~/blink
 make -j8
 export BLINK_OVERLAYS=$HOME/blinkroot
-o//blink/blink sh
+blink sh
 uname -a
 Linux hostname 4.5 blink-1.0 x86_64 GNU/Linux
 ```
@@ -718,14 +719,14 @@ JIT currently doesn't understand; so we need to use compiler flags to
 disable that type of magic. In the event other such magic slips through,
 Blink has a runtime check which will catch obvious problems, and then
 gracefully fall back to using a CALL instruction. Since no JIT can be
-fully perfect on all platforms, the `o//blink/blink -j` flag may be
-passed to disable Blink's JIT. Please note that disabling JIT makes
-Blink go 10x slower. With the `o//blink/blinkenlights` command, the `-j`
-flag takes on the opposite meaning, where it instead *enables* JIT. This
-can be useful for troubleshooting the JIT, because the TUI display has a
-feature that lets JIT path formation be visualized. Blink currently only
-enables the JIT for programs running in long mode (64-bit) but we may
-support JITing 16-bit programs in the future.
+fully perfect on all platforms, the `blink -j` flag may be passed to
+disable Blink's JIT. Please note that disabling JIT makes Blink go 10x
+slower. With the `blinkenlights` command, the `-j` flag takes on the
+opposite meaning, where it instead *enables* JIT. This can be useful for
+troubleshooting the JIT, because the TUI display has a feature that lets
+JIT path formation be visualized. Blink currently only enables the JIT
+for programs running in long mode (64-bit) but we may support JITing
+16-bit programs in the future.
 
 ### Virtualization
 
@@ -772,11 +773,11 @@ thereby making retro video gaming in the terminal possible.
 ## Real Mode
 
 Blink supports 16-bit BIOS programs, such as SectorLISP. To boot real
-mode programs in Blink, the `o//blink/blinkenlights -r` flag may be
-passed, which puts the virtual machine in i8086 mode. Currently only a
-limited set of BIOS APIs are available. For example, Blink supports IBM
-PC Serial UART, CGA, and MDA. We hope to expand our real mode support in
-the near future, in order to run operating systems like ELKS.
+mode programs in Blink, the `blinkenlights -r` flag may be passed, which
+puts the virtual machine in i8086 mode. Currently only a limited set of
+BIOS APIs are available. For example, Blink supports IBM PC Serial UART,
+CGA, and MDA. We hope to expand our real mode support in the near
+future, in order to run operating systems like ELKS.
 
 Blink supports troubleshooting operating system bootloaders. Blink was
 designed for Cosmopolitan Libc, which embeds an operating system in each

@@ -1,0 +1,403 @@
+.\" Copyright 2023 Justine Alexandra Roberts Tunney
+.\"
+.\" Permission to use, copy, modify, and/or distribute this software for
+.\" any purpose with or without fee is hereby granted, provided that the
+.\" above copyright notice and this permission notice appear in all copies.
+.\"
+.\" THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL
+.\" WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED
+.\" WARRANTIES OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE
+.\" AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL
+.\" DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR
+.\" PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+.\" TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
+.\" PERFORMANCE OF THIS SOFTWARE.
+.\"
+.Dd March 6, 2023
+.Dt BLINKENLIGHTS 1
+.Os
+.Sh NAME
+.Nm blinkenlights
+.Nd x86-64-linux visualizer
+.Sh SYNOPSIS
+.Nm
+.Op Ar options
+.Ar program
+.Op Ar argv1...
+.Nm
+.Op Ar options
+.Fl 0
+.Ar program
+.Op Ar argv0...
+.Sh DESCRIPTION
+.Nm
+is a terminal user interface for debugging x86_64-linux (or i8086)
+programs on POSIX platforms. It focuses on visualizing how program
+execution impacts memory. It uses UNICODE IBM Code Page 437 characters
+to display binary memory panels, which change as you step through your
+program's assembly code. These memory panels may be scrolled and zoomed
+using your mouse wheel.
+.Nm
+also permits reverse debugging, where scroll wheeling over the assembly
+display allows the rewinding of execution history.
+.Sh ARGUMENTS
+.Pp
+The
+.Ar program
+argument is a
+.Ev PATH
+searched command, which may be:
+.Pp
+.Bl -dash -compact
+.It
+An x86_64-linux ELF executable (either static or dynamic)
+.It
+An Actually Portable Executable (either MZqFpD or jartsr magic)
+.It
+A flat executable (if
+.Ar program
+ends with .bin, .img, or .raw)
+.It
+A shell script whose #!interpreter meets the above criteria
+.El
+.Pp
+The
+.Fl 0
+flag allows
+.Li argv[0]
+to be specified on the command line. Under normal circumstances,
+.Bd -literal -offset indent
+blinkenlights cmd arg1
+.Ed
+.Pp
+is equivalent to
+.Bd -literal -offset indent
+execve("cmd", {"cmd", "arg1"})
+.Ed
+.Pp
+since that's how most programs are launched. However if you
+need the full power of execve() process spawning, you can say
+.Bd -literal -offset indent
+blinkenlights -0 cmd arg0 arg1
+.Ed
+.Pp
+which is equivalent to
+.Bd -literal -offset indent
+execve("cmd", {"arg0", "arg1"})
+.Ed
+.Pp
+.Sh OPTIONS
+The following options are available:
+.Bl -tag -width indent
+.It Fl h
+Prints condensed help.
+.It Fl v
+Shows
+.Nm
+version and build configuration details.
+.It Fl N
+Enables natural scrolling.
+.It Fl H
+Disables syntax highlighting.
+.It Fl r
+Puts your virtual machine in real mode. This may be used to run 16-bit
+i8086 programs, such as SectorLISP. It's also used for booting programs
+from Blinkenlights's simulated BIOS.
+.It Fl b Ar addr
+Pushes a breakpoint, which may be specified as a raw hexadecimal
+address, or a symbolic name that's defined by your ELF binary (or its
+associated
+.Li .dbg
+file). When pressing
+.Li c
+(continue) or
+.Li C
+(continue harder) in the TUI, Blink will immediately stop upon reaching
+an instruction that's listed as a breakpoint, after which a modal dialog
+is displayed. The modal dialog may be cleared by
+.Li ENTER
+after which the TUI resumes its normal state.
+.It Fl w Ar addr
+Pushes a watchpoint, which may be specified as a raw hexadecimal
+address, or a symbolic name that's defined by your ELF binary (or its
+associated
+.Li .dbg
+file). When pressing
+.Li c
+(continue) or
+.Li C
+(continue
+harder) in the TUI, Blink will immediately stop upon reaching an
+instruction that either (a) has a ModR/M encoding that references an
+address that's listed as a watchpoint, or (b) manages to mutate the
+memory stored at a watchpoint address by some other means. When
+Blinkenlights is stopped at a watchpoint, a modal dialog will be
+displayed which may be cleared by pressing
+.Li ENTER
+after which the TUI
+resumes its normal state.
+.It Fl t
+May be used to disable Blinkenlights TUI mode. This makes the program
+behave similarly to the
+.Xr blink 1
+command, however not as good. We're currently using this flag for unit
+testing real mode programs, which are encouraged to use the
+.Li SYSCALL
+instruction to report their exit status.
+.It Fl s
+[repeatable] Enables system call logging. This will emit to the log file
+the names of system calls each time a SYSCALL instruction in executed,
+along with its arguments and result. System calls are logged once
+they've completed. If this option is specified twice, then system calls
+which are likely to block (e.g. poll) will be logged at entry too. If
+this option is specified thrice, then all cancellation points will be
+logged upon entry. System call logging isn't available
+in
+.Li MODE=rel
+and
+.Li MODE=tiny
+builds, in which case this flag is ignored.
+.It Fl j
+Enables Just-In-Time (JIT) compilation. This will make Blinkenlights go
+significantly faster, at the cost of taking away the ability to step
+through each instruction. The TUI will visualize JIT path formation in
+the assembly display; see the JIT Path Glyphs section below to learn
+more. Please note this flag has the opposite meaning as it does in the
+.Xr blink 1
+command.
+.It Fl m
+Enables the linear memory optimization. This makes
+.Nm
+capable of faster emulation, at the cost of losing some statistics. It
+no longer becomes possible to display which percentage of a memory map
+has been activated. Blinkenlights will also remove the commit / reserve
+/ free page statistics from the status panel on the bottom right of the
+display. Please note this flag has the opposite meaning as it does in
+the
+.Xr blink 1
+command.
+.It Fl L Ar path
+Specifies the log path. The default log path is
+.Ar blink.log
+in the current directory at startup. This log file won't be created
+until something is actually logged. If logging to a file isn't desired,
+then -L /dev/null may be used. See also the
+.Fl e
+flag for logging to standard error.
+.It Fl C Ar path
+Launch
+.Ar program
+in a chroot'd environment. This flag is both equivalent to and overrides
+the
+.Ev BLINK_OVERLAYS
+environment variable.
+.It Fl z
+[repeatable] May be specified to zoom the memory panels, so they display
+a larger amount of memory in a smaller space. By default, one terminal
+cell corresponds to a single byte of memory. When memory has been zoomed
+the magic kernel is used (similar to Lanczos) to decimate the number of
+bytes by half, for each
+.Fl z
+that's specified. Normally this would be
+accomplished by using
+.Li CTRL+MOUSEWHEEL
+where the mouse cursor is hovered over the panel that should be zoomed.
+However, many terminal emulators (especially on Windows), do not support
+this xterm feature and as such, this flag is provided as an alternative.
+.It Fl Z
+Print internal statistics to standard error on exit. Statistics aren't
+available in MODE=rel and MODE=tiny builds, in which case this flag is
+ignored.
+.It Fl V
+[repeatable] Increases verbosity.
+.It Fl R
+Disables reactive error mode.
+.El
+.Sh KEYBOARD SHORTCUTS
+The following keystrokes are recognized by the user interface:
+.Bl -tag -width indent
+.It Li ?
+Shows help dialog.
+.It Nm q
+Quit.
+.It Nm s
+Step. This executes a single instruction, stepping forward by one.
+.It Nm n
+Next. This is the same as
+.Nm s
+(Step) except it won't recurse into
+.Li CALL
+instructions.
+.It Nm c
+Continue. This will step automatically and display an animation of the
+program execution as it progresses. In continue mode, Blinkenlights will
+execute as many instructions as possible, and only render a limited
+number of 60 frames per second to the terminal. Snapshots are captured
+in the background of the in-between steps that aren't displayed. They
+may still be viewed by pausing execution using
+.Nm CTRL-C
+(Interrupt) and then pressing UP arrow to scroll backwards through
+execution history. For large programs, this animation can be sped up (at
+the cost of losing frames) by using the
+.Nm CTRL-T
+(Turbo) shortcut.
+.It Nm C
+Continue Harder. This will execute the program in the background as
+quickly as possible until some kind of halting event occurs, such as
+exit_group() being called, or a segmentation fault. No animation is
+displayed during this time.
+.It Nm CTRL-C
+Interrupt. Pressing this key will interrupt the TUI animation when in
+.Nm c
+(Continue) mode. Control will then return to the main interface, and
+keyboard shortcuts such as
+.Nm s
+(Step) may once again be used. Pressing
+.Nm CTRL-C
+also has the same effect if the embedded teletypewriter is blocked on a
+read() call, awaiting keyboard input.
+.It Nm CTRL-T
+Turbo. The turbo key may be pressed multiple times to specify how many
+steps should happen per frame in
+.Nm c
+(Continue) mode. Each time this key is pressed, the status bar on the
+bottom left-hand side of the display will be updated with the current
+speed, which defaults to 1.
+.It Nm ALT-T
+Slowmo. The slowmo keyboard shortcut has the opposite effect of
+.Nm CTRL-T
+(Turbo) in the sense that it slows down the speed of the
+.Nm c
+(Continue) mode animation. Each time this key is pressed, the status bar
+on the bottom left-hand side of the display will be updated with the
+current speed, which defaults to 1, and descends into negative numbers.
+Positive values are defined as the number of steps per frame. Negative
+numbers will result in sleep delays being inserted between steps.
+.It Nm p
+Profiling Mode. Pressing the
+.Nm p
+key will cause the TUI to cycle between the profiling and backtrace
+panels. When
+.Nm blinkenlights
+is running, it maintains a naive count of the number of assembly opcodes
+executed at each memory address. When the profiling panel is displayed,
+those counters will be grouped by function, ranked, and displayed as a
+percentage of the total. This is intended to help identify, in real time
+as execution progresses, which functions are execution hotspots.
+.It Nm t
+SSE Type. When the SSE panel is being displayed, the TUI will determine
+the type of each XMM register based on the instructions used. The three
+different types defined for this purpose are (1) integral, (2) single,
+and (3) double.
+.It Nm T
+SSE Size. When the SSE panel is being displayed, pressing this key will
+cycle the vector element size of XMM registers in integral mode. The
+following sizes are defined: 1 (byte), 2 (word), 4 (dword), 8 (qword).
+.It Nm x
+SSE Radix. When the SSE panel is being displayed, pressing this key will
+cycle the display of XMM registers currently in integral mode, so that
+they're displayed as either (1) hexadecimal, (2) characters (CP437), or
+(3) decimal. Floating point XMM registers aren't impacted, unless the
+.Nm t
+(Sse Type) key is pressed beforehand to cycle them into integral mode.
+.It Nm M
+The
+.Nm M
+key may be pressed to toggle xterm mouse tracking. This may be useful
+for terminals that do not allow copying and pasting terminal content
+when mouse tracking is enabled (try shift+drag too).
+.It Nm MOUSEWHEEL
+Scroll. Using the mouse wheel has a different effect depending on which
+panel the mouse cursor is currently hovering over. When the mouse is
+above the disassembly panel, scrolling the mouse wheel will rewind and
+replay the history of program execution. When above memory panels, mouse
+wheel will display different memory addresses.
+.It Nm CTRL-MOUSEWHEEL
+Zoom. On platforms such as Linux that support the necessary xterm escape
+code for doing this, using mousewheel while holding down the control key
+when the mouse cursor is hovering above one of the memory panels, will
+cause that memory panel to become zoomed. Under normal circumstances,
+each TTY cell corresponds to a single byte of memory. Zooming by one
+notch will cause each cell to display two bytes of memory. Then four.
+Then eight. This is accomplished by successively applying an image
+scaling algorithm to the adjacent memory.
+.It Nm CTRL-Z
+Stop. Pressing this shortcut will place
+.Nm
+in the background and return control to the shell. You may resume your
+debugging session later by running the
+.Nm fg
+command.
+.It Nm CTRL-L
+Refresh. Pressing this keyboard shortcut will cause the display to be
+redrawn. This may be useful on the oft chance the terminal state becomes
+corrupted.
+.It Nm CTRL-D
+EOF (End Of File). This keystroke has two different meanings depending
+on context. When control is held by the debugger TUI, this will ask
+.Nm
+to exit. When control is held by the guest program invoking read() in
+the teletypewriter, this will close the standard input handle.
+.El
+.Sh ENVIRONMENT
+The following environment variables are recognized:
+.Bl -tag -width indent
+.It Ev BLINK_LOG_FILENAME
+may be specified to supply a log path to be used in cases where the
+.Fl L Ar path
+flag isn't specified. This value should be an absolute path. If logging
+to standard error is desired, use the
+.Fl e
+flag.
+.It Ev BLINK_OVERLAYS
+specifies one or more directories to use as the root filesystem.
+Similar to
+.Ev PATH
+this is a colon delimited list of pathnames. If relative paths are
+specified, they'll be resolved to an absolute path at startup time.
+Overlays only apply to IO system calls that specify an absolute path.
+The empty string overlay means use the normal / root filesystem. The
+default value is
+.Li :o
+which means if the absolute path
+.Li /$f
+is opened, then first check if
+.Li /$f
+exists, and if it doesn't, then check if
+.Li o/$f
+exists, in which case open that instead. Blink uses this convention to
+open shared object tests. It favors the system version if it exists, but
+also downloads
+.Li ld-musl-x86_64.so.1
+to
+.Li o/lib/ld-musl-x86_64.so.1
+so the dynamic linker can transparently find it on platforms like Apple,
+that don't let users put files in the root folder. On the other hand,
+it's possible to say
+.Li BLINK_OVERLAYS=o:
+so that
+.Li o/...
+takes precedence over
+.Li /...
+(noting again that empty string means root). If a single overlay is
+specified that isn't empty string, then it'll effectively act as a
+restricted chroot environment.
+.El
+.Sh EXIT STATUS
+The
+.Nm
+command passes along the exit code of the
+.Ar program
+which by convention is 0 on success or >0 on failure. In the event that
+.Nm
+fails to launch
+.Ar program
+the status 127 shall be returned.
+.Sh SEE ALSO
+.Xr blink 1
+.Sh AUTHORS
+.An "Justine Alexandra Roberts Tunney" Aq jtunney@gmail.com
+.Sh QUIRKS
+Blinkenlights TUI currently isn't suitable for debugging programs that
+spawn threads / processes. While such programs may be debugged, separate
+threads and processes can not be controlled reliably by the keyboard.

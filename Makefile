@@ -229,6 +229,7 @@ install:
 	install -m 0755 o//blink/blinkenlights $(PREFIX)/bin/blinkenlights
 	mkdir -p $(PREFIX)/share/man/man1
 	install -m 0644 blink/blink.1 $(PREFIX)/share/man/man1/blink.1
+	install -m 0644 blink/blinkenlights.1 $(PREFIX)/share/man/man1/blinkenlights.1
 
 clean:
 	rm -f $(OBJS) o/$(MODE)/blink/blink o/$(MODE)/blink/blinkenlights o/$(MODE)/blink/blink.a o/$(MODE)/third_party/libz/zlib.a

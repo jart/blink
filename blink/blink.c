@@ -126,7 +126,6 @@ _Alignas(1) static const char USAGE[] =
     ;
 
 extern char **environ;
-static bool FLAG_zero;
 static bool FLAG_nojit;
 static char g_pathbuf[PATH_MAX];
 
