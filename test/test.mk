@@ -18,7 +18,7 @@ o/$(MODE)/test/alu:								\
 # fast and fairly comprehensive tests for our simd instructions
 # https://github.com/jart/cosmopolitan/blob/master/test/libc/intrin/intrin_test.c
 o/$(MODE)/test/sse:								\
-		$(call emulates,third_party/cosmo/2/intrin_test.com)		\
+		$(call emulates,third_party/cosmo/7/intrin_test.com)		\
 		$(call emulates,third_party/cosmo/2/popcnt_test.com)		\
 		$(call emulates,third_party/cosmo/2/pshuf_test.com)		\
 		$(call emulates,third_party/cosmo/2/pmulhrsw_test.com)		\

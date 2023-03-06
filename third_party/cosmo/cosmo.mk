@@ -22,7 +22,7 @@ o/$(MODE)/third_party/cosmo/%.com.ok: third_party/cosmo/%.com o/$(MODE)/blink/bl
 	@touch $@
 
 COSMO_TESTS =											\
-	o/$(MODE)/third_party/cosmo/2/intrin_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/7/intrin_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/lockscale_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/palignr_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/pmulhrsw_test.com.ok					\
@@ -234,7 +234,7 @@ DARWIN_PROBLEMATIC_TESTS =									\
 	o/$(MODE)/third_party/cosmo/2/backtrace_test.com.ok
 
 o/$(MODE)/third_party/cosmo/emulates:								\
-		o/$(MODE)/aarch64/third_party/cosmo/2/intrin_test.com.emulates			\
+		o/$(MODE)/aarch64/third_party/cosmo/7/intrin_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/2/palandprintf_test.com.emulates		\
 		o/$(MODE)/aarch64/third_party/cosmo/2/divmul_test.com.emulates			\
 		o/$(MODE)/aarch64/third_party/cosmo/2/test_suite_ecp.com.emulates		\
@@ -288,7 +288,7 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/aarch64/third_party/cosmo/2/test_suite_entropy.com.emulates		\
 		o/$(MODE)/aarch64/third_party/cosmo/2/test_suite_md.com.emulates		\
 		o/$(MODE)/aarch64/third_party/cosmo/2/execve_test.com.emulates			\
-		o/$(MODE)/mips64el/third_party/cosmo/2/intrin_test.com.emulates			\
+		o/$(MODE)/mips64el/third_party/cosmo/7/intrin_test.com.emulates			\
 		o/$(MODE)/mips64el/third_party/cosmo/2/palandprintf_test.com.emulates		\
 		o/$(MODE)/mips64el/third_party/cosmo/2/divmul_test.com.emulates			\
 		o/$(MODE)/mips64el/third_party/cosmo/2/lockscale_test.com.emulates		\
@@ -298,7 +298,7 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/mips64el/third_party/cosmo/2/pthread_mutex_lock2_test.com.emulates	\
 		o/$(MODE)/mips64el/third_party/cosmo/2/pthread_mutex_lock_test.com.emulates	\
 		o/$(MODE)/mips64el/third_party/cosmo/2/pthread_spin_lock_test.com.emulates	\
-		o/$(MODE)/s390x/third_party/cosmo/2/intrin_test.com.emulates			\
+		o/$(MODE)/s390x/third_party/cosmo/7/intrin_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/2/palandprintf_test.com.emulates		\
 		o/$(MODE)/s390x/third_party/cosmo/2/divmul_test.com.emulates			\
 		o/$(MODE)/s390x/third_party/cosmo/2/lockscale_test.com.emulates			\
@@ -347,7 +347,7 @@ o/$(MODE)/third_party/cosmo/emulates:								\
 		o/$(MODE)/s390x/third_party/cosmo/2/test_suite_ctr_drbg.com.emulates		\
 		o/$(MODE)/s390x/third_party/cosmo/2/test_suite_entropy.com.emulates		\
 		o/$(MODE)/s390x/third_party/cosmo/2/test_suite_md.com.emulates			\
-		o/$(MODE)/powerpc64le/third_party/cosmo/2/intrin_test.com.emulates		\
+		o/$(MODE)/powerpc64le/third_party/cosmo/7/intrin_test.com.emulates		\
 		o/$(MODE)/powerpc64le/third_party/cosmo/2/palandprintf_test.com.emulates	\
 		o/$(MODE)/powerpc64le/third_party/cosmo/2/divmul_test.com.emulates		\
 		o/$(MODE)/powerpc64le/third_party/cosmo/2/lockscale_test.com.emulates		\

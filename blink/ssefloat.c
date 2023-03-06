@@ -192,10 +192,10 @@ static void Shufps(P) {
   x[1].i = Read32(p + 1 * 4);
   x[2].i = Read32(p + 2 * 4);
   x[3].i = Read32(p + 3 * 4);
-  z[0].f = y[(uimm0 & 0003) >> 0].f;
-  z[1].f = y[(uimm0 & 0014) >> 2].f;
-  z[2].f = x[(uimm0 & 0060) >> 4].f;
-  z[3].f = x[(uimm0 & 0300) >> 6].f;
+  z[0].f = x[(uimm0 & 0003) >> 0].f;
+  z[1].f = x[(uimm0 & 0014) >> 2].f;
+  z[2].f = y[(uimm0 & 0060) >> 4].f;
+  z[3].f = y[(uimm0 & 0300) >> 6].f;
   Write32(p + 0 * 4, z[0].i);
   Write32(p + 1 * 4, z[1].i);
   Write32(p + 2 * 4, z[2].i);
@@ -213,8 +213,8 @@ static void Shufpd(P) {
   p = XmmRexrReg(m, rde);
   x[0].i = Read64(p + 0 * 8);
   x[1].i = Read64(p + 1 * 8);
-  z[0].f = y[(uimm0 & 0001) >> 0].f;
-  z[1].f = x[(uimm0 & 0002) >> 1].f;
+  z[0].f = x[(uimm0 & 0001) >> 0].f;
+  z[1].f = y[(uimm0 & 0002) >> 1].f;
   Write64(p + 0 * 8, z[0].i);
   Write64(p + 1 * 8, z[1].i);
   IGNORE_RACES_END();
