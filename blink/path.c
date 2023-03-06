@@ -37,14 +37,6 @@
 #include "blink/stats.h"
 #include "blink/vfs.h"
 
-#if !defined(DISABLE_OVERLAYS)
-#define BlinkOpen OverlaysOpen
-#elif !defined(DISABLE_VFS)
-#define BlinkOpen VfsOpen
-#else
-#define BlinkOpen openat
-#endif
-
 #define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
 
 #ifdef HAVE_JIT
@@ -162,9 +154,9 @@ void(SetupCod)(struct Machine *m) {
   m->system->dis = &g_dis;
   LoadDebugSymbols(m->system);
   DisLoadElf(&g_dis, &m->system->elf);
-  g_cod = BlinkOpen(AT_FDCWD_LINUX, "/tmp/blink.s",
+  g_cod = VfsOpen(AT_FDCWD_LINUX, "/tmp/blink.s",
                     O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-  g_cod = fcntl(g_cod, F_DUPFD_CLOEXEC, kMinBlinkFd);
+  g_cod = VfsFcntl(g_cod, F_DUPFD_CLOEXEC, kMinBlinkFd);
 #endif
 }
 

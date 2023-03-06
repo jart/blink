@@ -43,17 +43,6 @@
 #include "blink/vfs.h"
 #include "blink/x86.h"
 
-#if !defined(DISABLE_OVERLAYS)
-#define BlinkOpen OverlaysOpen
-#define BlinkAccess OverlaysAccess
-#elif !defined(DISABLE_VFS)
-#define BlinkOpen VfsOpen
-#define BlinkAccess VfsAccess
-#else
-#define BlinkOpen openat
-#define BlinkAccess faccessat
-#endif
-
 #define READ64(p) Read64((const u8 *)(p))
 #define READ32(p) Read32((const u8 *)(p))
 
@@ -401,8 +390,8 @@ static bool LoadElf(struct Machine *m,  //
     ELF_LOGF("loading elf interpreter %s", elf->interpreter);
     errno = 0;
     SYS_LOGF("LoadInterpreter %s", elf->interpreter);
-    if ((fd = BlinkOpen(AT_FDCWD, elf->interpreter, O_RDONLY, 0)) == -1 ||
-        (fstat(fd, &st) == -1 || !st.st_size) ||
+    if ((fd = VfsOpen(AT_FDCWD, elf->interpreter, O_RDONLY, 0)) == -1 ||
+        (VfsFstat(fd, &st) == -1 || !st.st_size) ||
         (ehdri = (Elf64_Ehdr_ *)Mmap(0, st.st_size, PROT_READ | PROT_WRITE,
                                      MAP_PRIVATE, fd, 0, "loader")) ==
             MAP_FAILED ||
@@ -434,7 +423,7 @@ static bool LoadElf(struct Machine *m,  //
       }
     }
     unassert(!Munmap(ehdri, st.st_size));
-    unassert(!close(fd));
+    unassert(!VfsClose(fd));
   }
   return execstack;
 }
@@ -660,8 +649,8 @@ void LoadProgram(struct Machine *m, char *execfn, char *prog, char **args,
     free(g_progname);
     g_progname = strdup(prog);
     SYS_LOGF("LoadProgram %s", prog);
-    if ((fd = BlinkOpen(AT_FDCWD, prog, O_RDONLY, 0)) == -1 ||
-        fstat(fd, &st) == -1 || CheckExecutableFile(prog, &st) == -1 ||
+    if ((fd = VfsOpen(AT_FDCWD, prog, O_RDONLY, 0)) == -1 ||
+        VfsFstat(fd, &st) == -1 || CheckExecutableFile(prog, &st) == -1 ||
         (map = Mmap(0, (mapsize = st.st_size), PROT_READ | PROT_WRITE,
                     MAP_PRIVATE, fd, 0, "loader")) == MAP_FAILED) {
       WriteErrorString(prog);
@@ -686,8 +675,8 @@ error: unsupported executable; we need:\n\
       // turns out it's a shell script
       if (isfirst) {
         // start over using the shebang interpreter instead
-        unassert(!munmap(map, mapsize));
-        unassert(!close(fd));
+        unassert(!VfsMunmap(map, mapsize));
+        unassert(!VfsClose(fd));
         isfirst = false;
       } else {
         LOGF("shell scripts can't interpret shell scripts");
@@ -753,8 +742,8 @@ error: unsupported executable; we need:\n\
   unassert(CheckMemoryInvariants(m->system));
   elf->execfn = strdup(elf->execfn);
   elf->prog = strdup(elf->prog);
-  unassert(!munmap(map, mapsize));
-  unassert(!close(fd));
+  unassert(!VfsMunmap(map, mapsize));
+  unassert(!VfsClose(fd));
 }
 
 static bool CanEmulateImpl(struct Machine *m, char **prog, char ***argv,
@@ -763,21 +752,21 @@ static bool CanEmulateImpl(struct Machine *m, char **prog, char ***argv,
   bool res;
   void *img;
   struct stat st;
-  if ((fd = BlinkOpen(AT_FDCWD, *prog, O_RDONLY | O_CLOEXEC, 0)) == -1) {
+  if ((fd = VfsOpen(AT_FDCWD, *prog, O_RDONLY | O_CLOEXEC, 0)) == -1) {
   CantEmulate:
     LOGF("%s: can't emulate: %s", *prog, strerror(errno));
     return false;
   }
-  unassert(!fstat(fd, &st));
+  unassert(!VfsFstat(fd, &st));
   if (CheckExecutableFile(*prog, &st) == -1) {
-    close(fd);
+    VfsClose(fd);
     return false;
   }
-  img = mmap(0, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
-  close(fd);
+  img = VfsMmap(0, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+  VfsClose(fd);
   if (img == MAP_FAILED) goto CantEmulate;
   res = !!CanEmulateData(m, prog, argv, isfirst, (char *)img, st.st_size);
-  unassert(!munmap(img, st.st_size));
+  unassert(!VfsMunmap(img, st.st_size));
   return res;
 }
 

@@ -836,6 +836,37 @@
 #define PR_SET_NO_NEW_PRIVS_LINUX 38
 #define PR_GET_TID_ADDRESS_LINUX  40
 
+#define MS_RDONLY_LINUX       1
+#define MS_NOSUID_LINUX       2
+#define MS_NODEV_LINUX        4
+#define MS_NOEXEC_LINUX       8
+#define MS_SYNCHRONOUS_LINUX  16
+#define MS_REMOUNT_LINUX      32
+#define MS_MANDLOCK_LINUX     64
+#define MS_DIRSYNC_LINUX      128
+#define MS_NOSYMFOLLOW_LINUX  256
+#define MS_NOATIME_LINUX      1024
+#define MS_NODIRATIME_LINUX   2048
+#define MS_BIND_LINUX         4096
+#define MS_MOVE_LINUX         8192
+#define MS_REC_LINUX          16384
+#define MS_SILENT_LINUX       32768
+#define MS_POSIXACL_LINUX     (1 << 16)
+#define MS_UNBINDABLE_LINUX   (1 << 17)
+#define MS_PRIVATE_LINUX      (1 << 18)
+#define MS_SLAVE_LINUX        (1 << 19)
+#define MS_SHARED_LINUX       (1 << 20)
+#define MS_RELATIME_LINUX     (1 << 21)
+#define MS_KERNMOUNT_LINUX    (1 << 22)
+#define MS_I_VERSION_LINUX    (1 << 23)
+#define MS_STRICTATIME_LINUX  (1 << 24)
+#define MS_LAZYTIME_LINUX     (1 << 25)
+#define MS_NOREMOTELOCK_LINUX (1 << 27)
+#define MS_NOSEC_LINUX        (1 << 28)
+#define MS_BORN_LINUX         (1 << 29)
+#define MS_ACTIVE_LINUX       (1 << 30)
+#define MS_NOUSER_LINUX       (1U << 31)
+
 struct iovec_linux {
   u8 base[8];
   u8 len[8];

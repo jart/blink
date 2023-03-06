@@ -96,56 +96,6 @@
 #include <sched.h>
 #endif
 
-#if !defined(DISABLE_OVERLAYS)
-#define BlinkChown    OverlaysChown
-#define BlinkAccess   OverlaysAccess
-#define BlinkStat     OverlaysStat
-#define BlinkChdir    OverlaysChdir
-#define BlinkGetcwd   OverlaysGetcwd
-#define BlinkMkdir    OverlaysMkdir
-#define BlinkChmod    OverlaysChmod
-#define BlinkReadlink OverlaysReadlink
-#define BlinkOpen     OverlaysOpen
-#define BlinkSymlink  OverlaysSymlink
-#define BlinkMkfifo   OverlaysMkfifo
-#define BlinkUnlink   OverlaysUnlink
-#define BlinkRename   OverlaysRename
-#define BlinkLink     OverlaysLink
-#define BlinkUtime    OverlaysUtime
-#elif !defined(DISABLE_VFS)
-#define BlinkChown    VfsChown
-#define BlinkAccess   VfsAccess
-#define BlinkStat     VfsStat
-#define BlinkChdir    VfsChdir
-#define BlinkGetcwd   VfsGetcwd
-#define BlinkMkdir    VfsMkdir
-#define BlinkChmod    VfsChmod
-#define BlinkReadlink VfsReadlink
-#define BlinkOpen     VfsOpen
-#define BlinkSymlink  VfsSymlink
-#define BlinkMkfifo   VfsMkfifo
-#define BlinkUnlink   VfsUnlink
-#define BlinkRename   VfsRename
-#define BlinkLink     VfsLink
-#define BlinkUtime    VfsUtime
-#else
-#define BlinkChown    fchownat
-#define BlinkAccess   faccessat
-#define BlinkStat     fstatat
-#define BlinkChdir    chdir
-#define BlinkGetcwd   getcwd
-#define BlinkMkdir    mkdirat
-#define BlinkChmod    fchmodat
-#define BlinkReadlink readlinkat
-#define BlinkOpen     openat
-#define BlinkSymlink  symlinkat
-#define BlinkMkfifo   mkfifoat
-#define BlinkUnlink   unlinkat
-#define BlinkRename   renameat
-#define BlinkLink     linkat
-#define BlinkUtime    utimensat
-#endif
-
 #ifdef SO_LINGER_SEC
 #define SO_LINGER_ SO_LINGER_SEC
 #else
@@ -183,7 +133,7 @@ static int SystemIoctl(int fd, unsigned long request, ...) {
   va_start(va, request);
   arg = va_arg(va, uintptr_t);
   va_end(va);
-  return ioctl(fd, request, (void *)arg);
+  return VfsIoctl(fd, request, (void *)arg);
 }
 
 #ifdef __EMSCRIPTEN__
@@ -192,49 +142,49 @@ static int SystemIoctl(int fd, unsigned long request, ...) {
 // user input.
 
 int em_poll(struct pollfd *fds, nfds_t nfds, int timeout) {
-  int ret = poll(fds, nfds, timeout);
+  int ret = VfsPoll(fds, nfds, timeout);
   if (ret == 0) emscripten_sleep(50);
   return ret;
 }
 
 ssize_t em_readv(int fd, const struct iovec *iov, int iovcnt) {
   // Handle blocking reads by waiting for POLLIN
-  if ((fcntl(fd, F_GETFL, 0) & O_NONBLOCK) == 0) {
+  if ((VfsFcntl(fd, F_GETFL, 0) & O_NONBLOCK) == 0) {
     struct pollfd pfd;
     pfd.fd = fd;
     pfd.events = POLLIN;
     while (em_poll(&pfd, 1, 50) == 0) {
     }
   }
-  size_t ret = readv(fd, iov, iovcnt);
+  size_t ret = VfsReadv(fd, iov, iovcnt);
   if (ret == -1 && errno == EAGAIN) emscripten_sleep(50);
   return ret;
 }
 #endif
 
 static int my_tcgetwinsize(int fd, struct winsize *ws) {
-  return ioctl(fd, TIOCGWINSZ, (void *)ws);
+  return VfsIoctl(fd, TIOCGWINSZ, (void *)ws);
 }
 
 static int my_tcsetwinsize(int fd, const struct winsize *ws) {
-  return ioctl(fd, TIOCSWINSZ, (void *)ws);
+  return VfsIoctl(fd, TIOCSWINSZ, (void *)ws);
 }
 
 const struct FdCb kFdCbHost = {
-    .close = close,
+    .close = VfsClose,
 #ifdef __EMSCRIPTEN__
     .readv = em_readv,
 #else
-    .readv = readv,
+    .readv = VfsReadv,
 #endif
-    .writev = writev,
+    .writev = VfsWritev,
 #ifdef __EMSCRIPTEN__
     .poll = em_poll,
 #else
-    .poll = poll,
+    .poll = VfsPoll,
 #endif
-    .tcgetattr = tcgetattr,
-    .tcsetattr = tcsetattr,
+    .tcgetattr = VfsTcgetattr,
+    .tcsetattr = VfsTcsetattr,
     .tcgetwinsize = my_tcgetwinsize,
     .tcsetwinsize = my_tcsetwinsize,
 };
@@ -1342,9 +1292,9 @@ static int SysDup1(struct Machine *m, i32 fildes) {
   struct Fd *fd;
   if (fildes < 0) return ebadf();
   if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
-  if ((newfildes = dup(fildes)) != -1) {
+  if ((newfildes = VfsDup(fildes)) != -1) {
     if (newfildes >= lim) {
-      close(newfildes);
+      VfsClose(newfildes);
       return emfile();
     }
     LOCK(&m->system->fds.lock);
@@ -1361,7 +1311,7 @@ static int Dup2(struct Machine *m, int fildes, int newfildes) {
   // POSIX.1-2007 lists dup2() as raising EINTR which seems impossible
   // so it'd be wonderful to learn what kernel(s) actually return this
   // noting Linux reproduces that in both its dup(2) and dup(3) manual
-  RESTARTABLE(rc = dup2(fildes, newfildes));
+  RESTARTABLE(rc = VfsDup2(fildes, newfildes));
   return rc;
 }
 
@@ -1369,7 +1319,7 @@ static int Dup2(struct Machine *m, int fildes, int newfildes) {
 static int Dup3(struct Machine *m, int fildes, int newfildes, int flags) {
   int rc;
   // The Linux Programmer's Manual also lists this as interruptible.
-  RESTARTABLE(rc = dup3(fildes, newfildes, flags));
+  RESTARTABLE(rc = VfsDup3(fildes, newfildes, flags));
   return rc;
 }
 #endif
@@ -1419,7 +1369,7 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
 #else
   if ((rc = Dup2(m, fildes, newfildes)) != -1) {
     if (flags & O_CLOEXEC_LINUX) {
-      unassert(!fcntl(newfildes, F_SETFD, FD_CLOEXEC));
+      unassert(!VfsFcntl(newfildes, F_SETFD, FD_CLOEXEC));
     }
 #endif
     LOCK(&m->system->fds.lock);
@@ -1443,9 +1393,9 @@ static int SysDupf(struct Machine *m, i32 fildes, i32 minfildes, int cmd) {
   struct Fd *fd;
   int oflags, newfildes;
   if (minfildes >= (lim = GetFileDescriptorLimit(m->system))) return emfile();
-  if ((newfildes = fcntl(fildes, cmd, minfildes)) != -1) {
+  if ((newfildes = VfsFcntl(fildes, cmd, minfildes)) != -1) {
     if (newfildes >= lim) {
-      close(newfildes);
+      VfsClose(newfildes);
       return emfile();
     }
     LOCK(&m->system->fds.lock);
@@ -1462,10 +1412,10 @@ static int SysDupf(struct Machine *m, i32 fildes, i32 minfildes, int cmd) {
 
 static void FixupSock(int fd, int flags) {
   if (flags & SOCK_CLOEXEC_LINUX) {
-    unassert(!fcntl(fd, F_SETFD, FD_CLOEXEC));
+    unassert(!VfsFcntl(fd, F_SETFD, FD_CLOEXEC));
   }
   if (flags & SOCK_NONBLOCK_LINUX) {
-    unassert(!fcntl(fd, F_SETFL, O_NDELAY));
+    unassert(!VfsFcntl(fd, F_SETFL, O_NDELAY));
   }
 }
 
@@ -1525,9 +1475,9 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
   if ((protocol = XlatSocketProtocol(protocol)) == -1) return -1;
   if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   if (flags) LOCK(&m->system->exec_lock);
-  if ((fildes = socket(family, type, protocol)) != -1) {
+  if ((fildes = VfsSocket(family, type, protocol)) != -1) {
     if (fildes >= lim) {
-      close(fildes);
+      VfsClose(fildes);
       fildes = emfile();
     } else {
       FixupSock(fildes, flags);
@@ -1557,10 +1507,10 @@ static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
   if (!IsValidMemory(m, pipefds_addr, sizeof(fds_linux), PROT_WRITE)) return -1;
   if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   if (flags) LOCK(&m->system->exec_lock);
-  if ((rc = socketpair(family, type, protocol, fds)) != -1) {
+  if ((rc = VfsSocketpair(family, type, protocol, fds)) != -1) {
     if (fds[0] >= lim || fds[1] >= lim) {
-      close(fds[0]);
-      close(fds[1]);
+      VfsClose(fds[0]);
+      VfsClose(fds[1]);
       rc = emfile();
     } else {
       FixupSock(fds[0], flags);
@@ -1651,11 +1601,11 @@ static int SysSocketName(struct Machine *m, i32 fildes, i64 sockaddr_addr,
 }
 
 static int SysGetsockname(struct Machine *m, int fd, i64 aa, i64 asa) {
-  return SysSocketName(m, fd, aa, asa, getsockname);
+  return SysSocketName(m, fd, aa, asa, VfsGetsockname);
 }
 
 static int SysGetpeername(struct Machine *m, int fd, i64 aa, i64 asa) {
-  return SysSocketName(m, fd, aa, asa, getpeername);
+  return SysSocketName(m, fd, aa, asa, VfsGetpeername);
 }
 
 static int GetNoRestart(struct Machine *m, int fildes, bool *norestart) {
@@ -1700,10 +1650,10 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
   if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   addrlen = sizeof(addr);
   INTERRUPTIBLE(restartable,
-                newfd = accept(fildes, (struct sockaddr *)&addr, &addrlen));
+                newfd = VfsAccept(fildes, (struct sockaddr *)&addr, &addrlen));
   if (newfd != -1) {
     if (newfd >= lim) {
-      close(newfd);
+      VfsClose(newfd);
       newfd = emfile();
     } else {
       FixupSock(newfd, flags);
@@ -1712,7 +1662,7 @@ static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
           !ForkFd(&m->system->fds, fd, newfd,
                   O_RDWR | (flags & SOCK_CLOEXEC_LINUX ? O_CLOEXEC : 0) |
                       (flags & SOCK_NONBLOCK_LINUX ? O_NDELAY : 0))) {
-        close(newfd);
+        VfsClose(newfd);
         newfd = -1;
       }
       UNLOCK(&m->system->fds.lock);
@@ -1939,7 +1889,7 @@ static i64 SysSendto(struct Machine *m,  //
   if ((rc = AppendIovsReal(m, &iv, bufaddr, buflen, PROT_READ)) != -1) {
     msg.msg_iov = iv.p;
     msg.msg_iovlen = iv.i;
-    INTERRUPTIBLE(!norestart, rc = sendmsg(fildes, &msg, hostflags));
+    INTERRUPTIBLE(!norestart, rc = VfsSendmsg(fildes, &msg, hostflags));
   }
   FreeIovs(&iv);
   return HandleSigpipe(m, rc, flags);
@@ -1970,7 +1920,7 @@ static i64 SysRecvfrom(struct Machine *m,  //
   if ((rc = AppendIovsReal(m, &iv, bufaddr, buflen, PROT_WRITE)) != -1) {
     msg.msg_iov = iv.p;
     msg.msg_iovlen = iv.i;
-    INTERRUPTIBLE(!norestart, rc = recvmsg(fildes, &msg, hostflags));
+    INTERRUPTIBLE(!norestart, rc = VfsRecvmsg(fildes, &msg, hostflags));
     if (rc != -1) {
       StoreSockaddr(m, sockaddr_addr, sockaddr_size_addr,
                     (struct sockaddr *)msg.msg_name, msg.msg_namelen);
@@ -2035,7 +1985,7 @@ static i64 SysSendmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
   if ((rc = AppendIovsGuest(m, &iv, iovaddr, iovlen, PROT_READ)) != -1) {
     msg.msg_iov = iv.p;
     msg.msg_iovlen = iv.i;
-    INTERRUPTIBLE(!norestart, rc = sendmsg(fildes, &msg, flags));
+    INTERRUPTIBLE(!norestart, rc = VfsSendmsg(fildes, &msg, flags));
   }
   FreeIovs(&iv);
   return HandleSigpipe(m, rc, flags);
@@ -2078,7 +2028,7 @@ static i64 SysRecvmsg(struct Machine *m, i32 fildes, i64 msgaddr, i32 flags) {
       msg.msg_name = &addr;
       msg.msg_namelen = sizeof(addr);
     }
-    INTERRUPTIBLE(!norestart, rc = recvmsg(fildes, &msg, flags));
+    INTERRUPTIBLE(!norestart, rc = VfsRecvmsg(fildes, &msg, flags));
     if (rc != -1) {
       Write32(gm.flags, UnXlatMsgFlags(msg.msg_flags));
       unassert(CopyToUserWrite(m, msgaddr, &gm, sizeof(gm)) != -1);
@@ -2204,7 +2154,7 @@ static int SysConnectBind(struct Machine *m, i32 fildes, i64 sockaddr_addr,
   if (GetNoRestart(m, fildes, &norestart) == -1) return -1;
   if ((len = LoadSockaddr(m, sockaddr_addr, sockaddr_size, &addr)) != -1) {
     addrlen = len;
-    if (impl == connect) {
+    if (impl == VfsConnect) {
       EnsureSockAddrHasDestination(m, fildes, &addr);
     }
   } else {
@@ -2212,7 +2162,7 @@ static int SysConnectBind(struct Machine *m, i32 fildes, i64 sockaddr_addr,
   }
   INTERRUPTIBLE(!norestart,
                 (rc = impl(fildes, (const struct sockaddr *)&addr, addrlen)));
-  if (rc != -1 && impl == bind) {
+  if (rc != -1 && impl == VfsBind) {
     LOCK(&m->system->fds.lock);
     if ((fd = GetFd(&m->system->fds, fildes))) {
       memcpy(&fd->saddr, &addr, sizeof(fd->saddr));
@@ -2223,11 +2173,11 @@ static int SysConnectBind(struct Machine *m, i32 fildes, i64 sockaddr_addr,
 }
 
 static int SysBind(struct Machine *m, int fd, i64 aa, u32 as) {
-  return SysConnectBind(m, fd, aa, as, bind);
+  return SysConnectBind(m, fd, aa, as, VfsBind);
 }
 
 static int SysConnect(struct Machine *m, int fd, i64 aa, u32 as) {
-  return SysConnectBind(m, fd, aa, as, connect);
+  return SysConnectBind(m, fd, aa, as, VfsConnect);
 }
 
 static int UnXlatSocketType(int x) {
@@ -2248,7 +2198,7 @@ static int GetsockoptInt32(struct Machine *m, i32 fd, int level, int optname,
   optvalsize_linux = Read32(psize);
   if (!IsValidMemory(m, optvaladdr, optvalsize_linux, PROT_WRITE)) return -1;
   optvalsize = sizeof(val);
-  if ((rc = getsockopt(fd, level, optname, &val, &optvalsize)) != -1) {
+  if ((rc = VfsGetsockopt(fd, level, optname, &val, &optvalsize)) != -1) {
     if ((val = xlat(val)) == -1) return -1;
     Write32(gval, val);
     CopyToUserWrite(m, optvaladdr, &gval, MIN(sizeof(gval), optvalsize_linux));
@@ -2268,7 +2218,7 @@ static int SetsockoptLinger(struct Machine *m, i32 fildes, i64 optvaladdr,
   }
   hl.l_onoff = (i32)Read32(gl->onoff);
   hl.l_linger = (i32)Read32(gl->linger);
-  return setsockopt(fildes, SOL_SOCKET, SO_LINGER_, &hl, sizeof(hl));
+  return VfsSetsockopt(fildes, SOL_SOCKET, SO_LINGER_, &hl, sizeof(hl));
 }
 
 static int GetsockoptLinger(struct Machine *m, i32 fd, i64 optvaladdr,
@@ -2283,7 +2233,8 @@ static int GetsockoptLinger(struct Machine *m, i32 fd, i64 optvaladdr,
   optvalsize_linux = Read32(psize);
   if (!IsValidMemory(m, optvaladdr, optvalsize_linux, PROT_WRITE)) return -1;
   optvalsize = sizeof(hl);
-  if ((rc = getsockopt(fd, SOL_SOCKET, SO_LINGER_, &hl, &optvalsize)) != -1) {
+  if ((rc = VfsGetsockopt(fd, SOL_SOCKET, SO_LINGER_, &hl, &optvalsize)) !=
+      -1) {
     Write32(gl.onoff, hl.l_onoff);
     Write32(gl.linger, hl.l_linger);
     CopyToUserWrite(m, optvaladdr, &gl, MIN(sizeof(gl), optvalsize_linux));
@@ -2314,7 +2265,7 @@ static int SysSetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   if (XlatSocketLevel(level, &syslevel) == -1) return -1;
   if ((sysoptname = XlatSocketOptname(level, optname)) == -1) return -1;
   if (!(optval = SchlepR(m, optvaladdr, optvalsize))) return -1;
-  rc = setsockopt(fildes, syslevel, sysoptname, optval, optvalsize);
+  rc = VfsSetsockopt(fildes, syslevel, sysoptname, optval, optvalsize);
   if (rc != -1 &&                      //
       level == SOL_SOCKET_LINUX &&     //
       optname == SO_RCVTIMEO_LINUX &&  //
@@ -2362,7 +2313,7 @@ static int SysGetsockopt(struct Machine *m, i32 fildes, i32 level, i32 optname,
   optvalsize = Read32(optvalsize_linux);
   if (optvalsize > 256) return einval();
   if (!(optval = AddToFreeList(m, calloc(1, optvalsize)))) return -1;
-  rc = getsockopt(fildes, syslevel, sysoptname, optval, &optvalsize);
+  rc = VfsGetsockopt(fildes, syslevel, sysoptname, optval, &optvalsize);
   Write32(optvalsize_linux, optvalsize);
   CopyToUserWrite(m, optvaladdr, optval, optvalsize);
   CopyToUserWrite(m, optvalsizeaddr, optvalsize_linux,
@@ -2465,7 +2416,7 @@ static i64 SysPread(struct Machine *m, i32 fildes, i64 addr, u64 size,
   if (size) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size, PROT_WRITE)) != -1) {
-      RESTARTABLE(rc = preadv(fildes, iv.p, iv.i, offset));
+      RESTARTABLE(rc = VfsPreadv(fildes, iv.p, iv.i, offset));
       if (rc != -1) SetWriteAddr(m, addr, rc);
     }
     FreeIovs(&iv);
@@ -2484,7 +2435,7 @@ static i64 SysPwrite(struct Machine *m, i32 fildes, i64 addr, u64 size,
   if (size) {
     InitIovs(&iv);
     if ((rc = AppendIovsReal(m, &iv, addr, size, PROT_READ)) != -1) {
-      RESTARTABLE(rc = pwritev(fildes, iv.p, iv.i, offset));
+      RESTARTABLE(rc = VfsPwritev(fildes, iv.p, iv.i, offset));
       if (rc != -1) SetReadAddr(m, addr, rc);
     }
     FreeIovs(&iv);
@@ -2529,7 +2480,7 @@ static i64 SysPreadv2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
         } else if (offset > NUMERIC_MAX(off_t)) {
           return eoverflow();
         } else {
-          RESTARTABLE(rc = preadv(fildes, iv.p, iv.i, offset));
+          RESTARTABLE(rc = VfsPreadv(fildes, iv.p, iv.i, offset));
         }
       } else {
         rc = 0;
@@ -2578,7 +2529,7 @@ static i64 SysPwritev2(struct Machine *m, i32 fildes, i64 iovaddr, u32 iovlen,
         } else if (offset > NUMERIC_MAX(off_t)) {
           return eoverflow();
         } else {
-          RESTARTABLE(rc = pwritev(fildes, iv.p, iv.i, offset));
+          RESTARTABLE(rc = VfsPwritev(fildes, iv.p, iv.i, offset));
         }
       } else {
         rc = 0;
@@ -2629,18 +2580,23 @@ static i64 SysSendfile(struct Machine *m, i32 out_fd, i32 in_fd, i64 offsetaddr,
       return eoverflow();
     }
   }
-  for (toto = 0; toto < count; toto += wrote) {
+  for (toto = 0; toto < count; ) {
     chunk = MIN(count - toto, maxchunk);
     if (offsetp) {
-      got = pread(in_fd, buf, chunk, offset + toto);
+      got = VfsPread(in_fd, buf, chunk, offset + toto);
     } else {
-      got = read(in_fd, buf, chunk);
+      got = VfsRead(in_fd, buf, chunk);
     }
     if (got == -1) goto OnFailure;
     if (offsetp) Write64(offsetp, offset + toto + got);
-    if ((wrote = write(out_fd, buf, got)) == -1) goto OnFailure;
+    if (got == 0) break;
+    while (got > 0) {
+      if ((wrote = VfsWrite(out_fd, buf, got)) == -1) goto OnFailure;
+      toto += wrote;
+      got -= wrote;
+    }
   }
-  return count;
+  return toto;
 OnFailure:
   if (toto) {
     LOGF("sendfile() partial failure: %s", DescribeHostErrno(errno));
@@ -2682,8 +2638,8 @@ static i64 Getdents(struct Machine *m, i32 fildes, i64 addr, i64 size,
   if (size < sizeof(rec) - sizeof(rec.name)) return einval();
   if ((fd->oflags & O_DIRECTORY) != O_DIRECTORY) return enotdir();
   if (!IsValidMemory(m, addr, size, PROT_WRITE)) return -1;
-  if (fstat(fildes, &st) || !st.st_nlink) return enoent();
-  if (!fd->dirstream && !(fd->dirstream = fdopendir(fd->fildes))) {
+  if (VfsFstat(fildes, &st) || !st.st_nlink) return enoent();
+  if (!fd->dirstream && !(fd->dirstream = VfsOpendir(fd->fildes))) {
     return -1;
   }
   for (i = 0; i + sizeof(rec) <= size; i += reclen) {
@@ -2691,13 +2647,13 @@ static i64 Getdents(struct Machine *m, i32 fildes, i64 addr, i64 size,
 #ifdef HAVE_SEEKDIR
     long tell;
     errno = 0;
-    tell = telldir(fd->dirstream);
+    tell = VfsTelldir(fd->dirstream);
     unassert(tell != -1 || errno == 0);
     off = tell;
 #else
     off = -1;
 #endif
-    if (!(ent = readdir(fd->dirstream))) break;
+    if (!(ent = VfsReaddir(fd->dirstream))) break;
     len = strlen(ent->d_name);
     if (len + 1 > sizeof(rec.name)) {
       LOGF("ignoring %zu byte d_name: %s", len, ent->d_name);
@@ -2771,14 +2727,14 @@ static i64 SysLseek(struct Machine *m, i32 fildes, i64 offset, int whence) {
   if (offset < -NUMERIC_MAX(off_t) - 1) return eoverflow();
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
   if (!fd->dirstream) {
-    rc = lseek(fd->fildes, offset, XlatWhence(whence));
+    rc = VfsSeek(fd->fildes, offset, XlatWhence(whence));
   } else if (whence == SEEK_SET_LINUX) {
     if (!offset) {
-      rewinddir(fd->dirstream);
+      VfsRewinddir(fd->dirstream);
       rc = 0;
     } else {
 #ifdef HAVE_SEEKDIR
-      seekdir(fd->dirstream, offset);
+      VfsSeekdir(fd->dirstream, offset);
       rc = 0;
 #else
       LOGF("host platform doesn't support seekdir()");
@@ -2797,7 +2753,7 @@ static i64 SysFtruncate(struct Machine *m, i32 fildes, i64 length) {
   if (length < 0) return einval();
   if (length > NUMERIC_MAX(off_t)) return eoverflow();
   if (CheckFdAccess(m, fildes, true, EINVAL) == -1) return -1;
-  RESTARTABLE(rc = ftruncate(fildes, length));
+  RESTARTABLE(rc = VfsFtruncate(fildes, length));
   return rc;
 }
 
@@ -2825,7 +2781,7 @@ static int XlatFaccessatFlags(int x) {
 
 static int SysFaccessat2(struct Machine *m, i32 dirfd, i64 path, i32 mode,
                          i32 flags) {
-  return BlinkAccess(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode),
+  return VfsAccess(GetDirFildes(dirfd), LoadStr(m, path), XlatAccess(mode),
                      XlatFaccessatFlags(flags));
 }
 
@@ -2837,7 +2793,7 @@ static int SysFstat(struct Machine *m, i32 fd, i64 staddr) {
   int rc;
   struct stat st;
   struct stat_linux gst;
-  if ((rc = fstat(fd, &st)) != -1) {
+  if ((rc = VfsFstat(fd, &st)) != -1) {
     XlatStatToLinux(&gst, &st);
     if (CopyToUserWrite(m, staddr, &gst, sizeof(gst)) == -1) rc = -1;
   }
@@ -2889,7 +2845,7 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
   }
 #endif
 #endif
-  if ((rc = BlinkStat(GetDirFildes(dirfd), path, &st,
+  if ((rc = VfsStat(GetDirFildes(dirfd), path, &st,
                       XlatFstatatFlags(flags))) != -1) {
     XlatStatToLinux(&gst, &st);
     if (CopyToUserWrite(m, staddr, &gst, sizeof(gst)) == -1) rc = -1;
@@ -2922,7 +2878,7 @@ static int XlatFchownatFlags(int x) {
 }
 
 static int SysFchown(struct Machine *m, i32 fildes, u32 uid, u32 gid) {
-  return fchown(fildes, uid, gid);
+  return VfsFchown(fildes, uid, gid);
 }
 
 static int SysFchownat(struct Machine *m, i32 dirfd, i64 pathaddr, u32 uid,
@@ -2943,7 +2899,7 @@ static int SysFchownat(struct Machine *m, i32 dirfd, i64 pathaddr, u32 uid,
   }
 #endif
 #endif
-  return BlinkChown(GetDirFildes(dirfd), path, uid, gid,
+  return VfsChown(GetDirFildes(dirfd), path, uid, gid,
                     XlatFchownatFlags(flags));
 }
 
@@ -2956,9 +2912,22 @@ static int SysLchown(struct Machine *m, i64 pathaddr, u32 uid, u32 gid) {
                      AT_SYMLINK_NOFOLLOW_LINUX);
 }
 
-#ifndef DISABLE_OVERLAYS
+#if !defined(DISABLE_OVERLAYS)
 static int SysChroot(struct Machine *m, i64 path) {
   return SetOverlays(LoadStr(m, path), false);
+}
+#elif !defined(DISABLE_VFS)
+static int SysChroot(struct Machine *m, i64 path) {
+  return VfsChroot(LoadStr(m, path));
+}
+#endif
+
+#ifndef DISABLE_VFS
+static int SysMount(struct Machine *m, i64 source, i64 target, i64 fstype,
+                    i64 mountflags, i64 data) {
+  // No xlat, the VFS system will handle raw Linux options.
+  return VfsMount(LoadStr(m, source), LoadStr(m, target), LoadStr(m, fstype),
+                  mountflags, (void *)data);
 }
 #endif
 
@@ -2985,7 +2954,7 @@ static int SysSync(struct Machine *m) {
   }
   UNLOCK(&m->system->fds.lock);
   for (i = 0; i < n; ++i) {
-    fsync(p[i]);
+    VfsFsync(p[i]);
   }
   free(p);
   return enosys();
@@ -2998,10 +2967,10 @@ static int CheckSyncable(int fildes) {
   // synchronize character devices, e.g. /dev/null. An unresolved
   // question though is if FreeBSD actually does something here.
   struct stat st;
-  if (!fstat(fildes, &st) &&    //
-      (S_ISCHR(st.st_mode) ||   //
-       S_ISFIFO(st.st_mode) ||  //
-       S_ISLNK(st.st_mode) ||   //
+  if (!VfsFstat(fildes, &st) &&  //
+      (S_ISCHR(st.st_mode) ||      //
+       S_ISFIFO(st.st_mode) ||     //
+       S_ISLNK(st.st_mode) ||      //
        S_ISSOCK(st.st_mode))) {
     return einval();
   }
@@ -3015,7 +2984,7 @@ static int SysFsync(struct Machine *m, i32 fildes) {
   int rc;
   // MacOS fsync() provides weaker guarantees than Linux fsync()
   // https://mjtsai.com/blog/2022/02/17/apple-ssd-benchmarks-and-f_fullsync/
-  if ((rc = fcntl(fildes, F_FULLFSYNC, 0))) {
+  if ((rc = VfsFcntl(fildes, F_FULLFSYNC, 0))) {
     // If the FULLFSYNC failed, fall back to attempting an fsync(). It
     // shouldn't be possible for fullfsync to fail on the local file
     // system (on OSX), so failure indicates that FULLFSYNC isn't
@@ -3025,11 +2994,11 @@ static int SysFsync(struct Machine *m, i32 fildes) {
     // every time sync is called. ──Quoth SQLite (os_unix.c) It's also
     // possible for F_FULLFSYNC to fail on Cosmopolitan Libc when our
     // binary isn't running on MacOS.
-    rc = fsync(fildes);
+    rc = VfsFsync(fildes);
   }
   return rc;
 #else
-  return fsync(fildes);
+  return VfsFsync(fildes);
 #endif
 }
 
@@ -3037,29 +3006,29 @@ static int SysFdatasync(struct Machine *m, i32 fildes) {
   if (CheckSyncable(fildes) == -1) return -1;
 #ifdef F_FULLSYNC
   int rc;
-  if ((rc = fcntl(fildes, F_FULLFSYNC, 0))) {
-    rc = fsync(fildes);
+  if ((rc = VfsFcntl(fildes, F_FULLFSYNC, 0))) {
+    rc = VfsFsync(fildes);
   }
   return rc;
 #elif defined(__APPLE__)
   // fdatasync() on HFS+ doesn't yet flush the file size if it changed
   // correctly so currently we default to the macro that redefines
   // fdatasync() to fsync(). ──Quoth SQLite (os_unix.c)
-  return fsync(fildes);
+  return VfsFsync(fildes);
 #elif defined(__HAIKU__)
   // Haiku doesn't have fdatasync() yet
-  return fsync(fildes);
+  return VfsFsync(fildes);
 #else
-  return fdatasync(fildes);
+  return VfsFdatasync(fildes);
 #endif
 }
 
 static int SysChdir(struct Machine *m, i64 path) {
-  return BlinkChdir(LoadStr(m, path));
+  return VfsChdir(LoadStr(m, path));
 }
 
 static int SysFchdir(struct Machine *m, i32 fildes) {
-  return fchdir(fildes);
+  return VfsFchdir(fildes);
 }
 
 static int XlatLock(int x) {
@@ -3082,19 +3051,19 @@ static int XlatLock(int x) {
 
 static int SysFlock(struct Machine *m, i32 fd, i32 lock) {
   if ((lock = XlatLock(lock)) == -1) return -1;
-  return flock(fd, lock);
+  return VfsFlock(fd, lock);
 }
 
 static int SysShutdown(struct Machine *m, i32 fd, i32 how) {
-  return shutdown(fd, XlatShutdown(how));
+  return VfsShutdown(fd, XlatShutdown(how));
 }
 
 static int SysListen(struct Machine *m, i32 fd, i32 backlog) {
-  return listen(fd, backlog);
+  return VfsListen(fd, backlog);
 }
 
 static int SysMkdirat(struct Machine *m, i32 dirfd, i64 path, i32 mode) {
-  return BlinkMkdir(GetDirFildes(dirfd), LoadStr(m, path), mode);
+  return VfsMkdir(GetDirFildes(dirfd), LoadStr(m, path), mode);
 }
 
 static int SysMkdir(struct Machine *m, i64 path, i32 mode) {
@@ -3102,11 +3071,11 @@ static int SysMkdir(struct Machine *m, i64 path, i32 mode) {
 }
 
 static int SysFchmod(struct Machine *m, i32 fd, u32 mode) {
-  return fchmod(fd, mode);
+  return VfsFchmod(fd, mode);
 }
 
 static int SysFchmodat(struct Machine *m, i32 dirfd, i64 path, u32 mode) {
-  return BlinkChmod(GetDirFildes(dirfd), LoadStr(m, path), mode, 0);
+  return VfsChmod(GetDirFildes(dirfd), LoadStr(m, path), mode, 0);
 }
 
 static int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
@@ -3139,7 +3108,7 @@ static int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
   flock.l_whence = whence;
   flock.l_start = Read64(flock_linux.start);
   flock.l_len = Read64(flock_linux.len);
-  RESTARTABLE(rc = fcntl(systemfd, syscmd, &flock));
+  RESTARTABLE(rc = VfsFcntl(systemfd, syscmd, &flock));
   if (rc != -1 && syscmd == F_GETLK) {
     if (flock.l_type == F_RDLCK) {
       Write16(flock_linux.type, F_RDLCK_LINUX);
@@ -3199,7 +3168,7 @@ static int SysFcntlSetownEx(struct Machine *m, i32 fildes, i64 addr) {
       LOGF("unknown f_owner_ex::type %" PRId32, Read32(gowner->type));
       return einval();
   }
-  return fcntl(fildes, F_SETOWN_EX, &howner);
+  return VfsFcntl(fildes, F_SETOWN_EX, &howner);
 #else
   pid_t pid;
   switch (Read32(gowner->type)) {
@@ -3219,7 +3188,7 @@ static int SysFcntlSetownEx(struct Machine *m, i32 fildes, i64 addr) {
       LOGF("unknown f_owner_ex::type %" PRId32, Read32(gowner->type));
       return einval();
   }
-  return fcntl(fildes, F_SETOWN, pid);
+  return VfsFcntl(fildes, F_SETOWN, pid);
 #endif
 }
 #endif
@@ -3232,7 +3201,7 @@ static int SysFcntlGetownEx(struct Machine *m, i32 fildes, i64 addr) {
 #ifdef HAVE_F_GETOWN_EX
   int type;
   struct f_owner_ex howner;
-  if ((rc = fcntl(fildes, F_GETOWN_EX, &howner)) != -1) {
+  if ((rc = VfsFcntl(fildes, F_GETOWN_EX, &howner)) != -1) {
     if ((type = UnxlatFownerType(howner.type)) != -1) {
       Write32(gowner.type, type);
       Write32(gowner.pid, howner.pid);
@@ -3242,7 +3211,7 @@ static int SysFcntlGetownEx(struct Machine *m, i32 fildes, i64 addr) {
     }
   }
 #else
-  if ((rc = fcntl(fildes, F_GETOWN)) != -1) {
+  if ((rc = VfsFcntl(fildes, F_GETOWN)) != -1) {
     if (rc >= 0) {
       Write32(gowner.type, F_OWNER_PID_LINUX);
       Write32(gowner.pid, rc);
@@ -3272,7 +3241,7 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
     rc = UnXlatOpenFlags(fd->oflags);
   } else if (cmd == F_SETFD_LINUX) {
     if (!(arg & ~FD_CLOEXEC_LINUX)) {
-      if (fcntl(fd->fildes, F_SETFD, arg ? FD_CLOEXEC : 0) != -1) {
+      if (VfsFcntl(fd->fildes, F_SETFD, arg ? FD_CLOEXEC : 0) != -1) {
         fd->oflags &= ~O_CLOEXEC;
         if (arg) fd->oflags |= O_CLOEXEC;
         rc = 0;
@@ -3285,7 +3254,7 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
   } else if (cmd == F_SETFL_LINUX) {
     fl = XlatOpenFlags(arg & (O_APPEND_LINUX | O_ASYNC_LINUX | O_DIRECT_LINUX |
                               O_NOATIME_LINUX | O_NDELAY_LINUX));
-    if (fcntl(fd->fildes, F_SETFL, fl) != -1) {
+    if (VfsFcntl(fd->fildes, F_SETFL, fl) != -1) {
       fd->oflags &= ~SETFL_FLAGS;
       fd->oflags |= fl;
       rc = 0;
@@ -3299,11 +3268,11 @@ static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
     return SysFcntlLock(m, fildes, cmd, arg);
 #ifdef F_SETOWN
   } else if (cmd == F_SETOWN_LINUX) {
-    rc = fcntl(fd->fildes, F_SETOWN, arg);
+    rc = VfsFcntl(fd->fildes, F_SETOWN, arg);
 #endif
 #ifdef F_GETOWN
   } else if (cmd == F_GETOWN_LINUX) {
-    rc = fcntl(fd->fildes, F_GETOWN);
+    rc = VfsFcntl(fd->fildes, F_GETOWN);
 #endif
 #ifndef DISABLE_NONPOSIX
 #ifdef HAVE_F_GETOWN_EX
@@ -3332,8 +3301,8 @@ static ssize_t SysReadlinkat(struct Machine *m, int dirfd, i64 path,
   // implementations (e.g. Musl) consider it to be posixly incorrect.
   if (bufsiz <= 0) return einval();
   if (!(buf = (char *)AddToFreeList(m, malloc(bufsiz)))) return -1;
-  if ((rc = BlinkReadlink(GetDirFildes(dirfd), LoadStr(m, path), buf,
-                             bufsiz)) != -1) {
+  if ((rc = VfsReadlink(GetDirFildes(dirfd), LoadStr(m, path), buf,
+                          bufsiz)) != -1) {
     if (CopyToUserWrite(m, bufaddr, buf, rc) == -1) rc = -1;
   }
   return rc;
@@ -3349,16 +3318,16 @@ static int SysTruncate(struct Machine *m, i64 pathaddr, i64 length) {
   if (length < 0) return einval();
   if (length > NUMERIC_MAX(off_t)) return eoverflow();
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  RESTARTABLE(fd = BlinkOpen(AT_FDCWD, path, O_RDWR | O_CLOEXEC, 0));
+  RESTARTABLE(fd = VfsOpen(AT_FDCWD, path, O_RDWR | O_CLOEXEC, 0));
   if (fd == -1) return -1;
-  rc = ftruncate(fd, length);
-  close(fd);
+  rc = VfsFtruncate(fd, length);
+  VfsClose(fd);
   return rc;
 }
 
 static int SysSymlinkat(struct Machine *m, i64 targetpath, i32 newdirfd,
                         i64 linkpath) {
-  return BlinkSymlink(LoadStr(m, targetpath), GetDirFildes(newdirfd),
+  return VfsSymlink(LoadStr(m, targetpath), GetDirFildes(newdirfd),
                       LoadStr(m, linkpath));
 }
 
@@ -3381,7 +3350,7 @@ static int SysMknodat(struct Machine *m, i32 dirfd, i64 path, i32 mode,
   _Static_assert(S_IFSOCK == 0140000, "");  // socket
   _Static_assert(S_IFMT == 0170000, "");    // mask of file types above
   if ((mode & S_IFMT) == S_IFIFO) {
-    return BlinkMkfifo(GetDirFildes(dirfd), LoadStr(m, path), mode & ~S_IFMT);
+    return VfsMkfifo(GetDirFildes(dirfd), LoadStr(m, path), mode & ~S_IFMT);
   } else {
     LOGF("mknod mode %#o not supported yet", mode);
     return enosys();
@@ -3433,7 +3402,7 @@ static int SysUnlinkat(struct Machine *m, i32 dirfd, i64 pathaddr, i32 flags) {
   dirfd = GetDirFildes(dirfd);
   if ((flags = XlatUnlinkatFlags(flags)) == -1) return -1;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  rc = BlinkUnlink(dirfd, path, flags);
+  rc = VfsUnlink(dirfd, path, flags);
 #ifndef __linux
   // POSIX.1 says unlink(directory) raises EPERM but on Linux
   // it always raises EISDIR, which is so much less ambiguous
@@ -3470,11 +3439,11 @@ static int SysRenameat2(struct Machine *m, int srcdirfd, i64 srcpath,
   if (!(dstpath = LoadStr(m, dstpathaddr))) return -1;
   // TODO: check for renameat2 in configure script
   if ((flags & RENAME_NOREPLACE_LINUX) &&
-      !BlinkStat(GetDirFildes(dstdirfd), dstpath, &st, AT_SYMLINK_NOFOLLOW)) {
+      !VfsStat(GetDirFildes(dstdirfd), dstpath, &st, AT_SYMLINK_NOFOLLOW)) {
     errno = EEXIST;
     return -1;
   }
-  return BlinkRename(GetDirFildes(srcdirfd), LoadStr(m, srcpath),
+  return VfsRename(GetDirFildes(srcdirfd), LoadStr(m, srcpath),
                      GetDirFildes(dstdirfd), dstpath);
 }
 
@@ -3509,7 +3478,7 @@ static i32 SysLinkat(struct Machine *m,  //
                      i32 newdirfd,       //
                      i64 newpath,        //
                      i32 flags) {
-  return BlinkLink(GetDirFildes(olddirfd), LoadStr(m, oldpath),
+  return VfsLink(GetDirFildes(olddirfd), LoadStr(m, oldpath),
                    GetDirFildes(newdirfd), LoadStr(m, newpath),
                    XlatLinkatFlags(flags));
 }
@@ -3580,7 +3549,7 @@ static int SysExecve(struct Machine *m, i64 pa, i64 aa, i64 ea) {
   LOCK(&m->system->exec_lock);
   ExecveBlink(m, prog, argv, envp);
   SYS_LOGF("execve(%s)", prog);
-  execve(prog, argv, envp);
+  VfsExecve(prog, argv, envp);
   UNLOCK(&m->system->exec_lock);
   return -1;
 }
@@ -3753,7 +3722,7 @@ static i64 SysGetcwd(struct Machine *m, i64 bufaddr, i64 size) {
   size_t n;
   char buf[PATH_MAX + 1];
   if (size < 0) return enomem();
-  if (BlinkGetcwd(buf, sizeof(buf))) {
+  if (VfsGetcwd(buf, sizeof(buf))) {
     n = strlen(buf) + 1;
     if (size < n) {
       res = erange();
@@ -4316,13 +4285,13 @@ static int SysUtime(struct Machine *m, i64 pathaddr, i64 timesaddr) {
   struct timespec ts[2];
   const struct utimbuf_linux *t;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  if (!timesaddr) return BlinkUtime(AT_FDCWD, path, 0, 0);
+  if (!timesaddr) return VfsUtime(AT_FDCWD, path, 0, 0);
   if ((t = (const struct utimbuf_linux *)SchlepR(m, timesaddr, sizeof(*t)))) {
     ts[0].tv_sec = Read64(t->actime);
     ts[0].tv_nsec = 0;
     ts[1].tv_sec = Read64(t->modtime);
     ts[1].tv_nsec = 0;
-    return BlinkUtime(AT_FDCWD, path, ts, 0);
+    return VfsUtime(AT_FDCWD, path, ts, 0);
   } else {
     return -1;
   }
@@ -4333,11 +4302,11 @@ static int SysUtimes(struct Machine *m, i64 pathaddr, i64 tvsaddr) {
   struct timespec ts[2];
   const struct timeval_linux *tv;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  if (!tvsaddr) return BlinkUtime(AT_FDCWD, path, 0, 0);
+  if (!tvsaddr) return VfsUtime(AT_FDCWD, path, 0, 0);
   if ((tv = (const struct timeval_linux *)SchlepR(
            m, tvsaddr, sizeof(struct timeval_linux) * 2))) {
     ConvertUtimeTimevals(ts, tv);
-    return BlinkUtime(AT_FDCWD, path, ts, 0);
+    return VfsUtime(AT_FDCWD, path, ts, 0);
   } else {
     return -1;
   }
@@ -4349,11 +4318,11 @@ static int SysFutimesat(struct Machine *m, i32 dirfd, i64 pathaddr,
   struct timespec ts[2];
   const struct timeval_linux *tv;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-  if (!tvsaddr) return BlinkUtime(GetDirFildes(dirfd), path, 0, 0);
+  if (!tvsaddr) return VfsUtime(GetDirFildes(dirfd), path, 0, 0);
   if ((tv = (const struct timeval_linux *)SchlepR(
            m, tvsaddr, sizeof(struct timeval_linux) * 2))) {
     ConvertUtimeTimevals(ts, tv);
-    return BlinkUtime(GetDirFildes(dirfd), path, ts, 0);
+    return VfsUtime(GetDirFildes(dirfd), path, ts, 0);
   } else {
     return -1;
   }
@@ -4382,13 +4351,13 @@ static int SysUtimensat(struct Machine *m, i32 fd, i64 pathaddr, i64 tvsaddr,
   }
   if ((flags = XlatUtimensatFlags(flags)) == -1) return -1;
   if (path) {
-    return BlinkUtime(GetDirFildes(fd), path, tsp, flags);
+    return VfsUtime(GetDirFildes(fd), path, tsp, flags);
   } else {
     if (flags) {
       LOGF("%s() flags %d not supported", "utimensat(path=null)", flags);
       return einval();
     }
-    return futimens(fd, tsp);
+    return VfsFutime(fd, tsp);
   }
 }
 
@@ -4426,13 +4395,16 @@ static i32 Select(struct Machine *m,          //
                   i64 exceptfds_addr,         //
                   struct timespec *timeoutp,  //
                   const u64 *sigmaskp_guest) {
-  int rc;
+  int fildes, rc;
   i32 setsize;
   u64 oldmask_guest = 0;
   sigset_t block, oldmask;
-  fd_set readfds, writefds, exceptfds;
-  fd_set *readfdsp, *writefdsp, *exceptfdsp;
-  struct timespec *tp, now, waitfor, deadline = {0};
+  fd_set readfds, writefds, exceptfds, readyreadfds, readywritefds,
+      readyexceptfds;
+  struct pollfd hfds[1];
+  struct timespec *tp, now, wait, remain, deadline = {0};
+  struct Fd *fd;
+  int (*poll_impl)(struct pollfd *, nfds_t, int);
   if (timeoutp) {
     deadline = AddTime(GetTime(), *timeoutp);
   }
@@ -4442,74 +4414,117 @@ static i32 Select(struct Machine *m,          //
     return einval();
   }
   if (readfds_addr) {
-    if (LoadFdSet(m, nfds, &readfds, readfds_addr) != -1) {
-      readfdsp = &readfds;
-    } else {
+    if (LoadFdSet(m, nfds, &readfds, readfds_addr) == -1) {
       return -1;
     }
   } else {
-    readfdsp = 0;
+    FD_ZERO(&readfds);
   }
   if (writefds_addr) {
-    if (LoadFdSet(m, nfds, &writefds, writefds_addr) != -1) {
-      writefdsp = &writefds;
-    } else {
+    if (LoadFdSet(m, nfds, &writefds, writefds_addr) == -1) {
       return -1;
     }
   } else {
-    writefdsp = 0;
+    FD_ZERO(&writefds);
   }
   if (exceptfds_addr) {
-    if (LoadFdSet(m, nfds, &exceptfds, exceptfds_addr) != -1) {
-      exceptfdsp = &exceptfds;
-    } else {
+    if (LoadFdSet(m, nfds, &exceptfds, exceptfds_addr) == -1) {
       return -1;
     }
   } else {
-    exceptfdsp = 0;
+    FD_ZERO(&exceptfds);
   }
-  unassert(!sigfillset(&block));
-  unassert(!pthread_sigmask(SIG_BLOCK, &block, &oldmask));
+  FD_ZERO(&readyreadfds);
+  FD_ZERO(&readywritefds);
+  FD_ZERO(&readyexceptfds);
   if (sigmaskp_guest) {
     oldmask_guest = m->sigmask;
     m->sigmask = *sigmaskp_guest;
     SIG_LOGF("sigmask push %" PRIx64, m->sigmask);
   }
-  if (!CheckInterrupt(m, false)) {
-    do {
-      if (timeoutp) {
-        now = GetTime();
-        if (CompareTime(now, deadline) < 0) {
-          waitfor = SubtractTime(deadline, now);
-        } else {
-          waitfor = GetZeroTime();
-        }
-        tp = &waitfor;
-      } else {
-        tp = 0;
+  for (;;) {
+    if (CheckInterrupt(m, false)) {
+      rc = eintr();
+      break;
+    }
+    rc = 0;
+    for (fildes = 0; fildes < nfds; ++fildes) {
+      if (!FD_ISSET(fildes, &readfds) && !FD_ISSET(fildes, &writefds) &&
+          !FD_ISSET(fildes, &exceptfds)) {
+        continue;
       }
-      rc = pselect(nfds, readfdsp, writefdsp, exceptfdsp, tp, &oldmask);
-      if (rc == -1 && errno == EINTR) {
-        if (CheckInterrupt(m, false)) {
-          break;
-        }
-      } else {
+    TryAgain:
+      if (CheckInterrupt(m, false)) {
+        rc = eintr();
         break;
       }
-    } while (1);
-  } else {
-    rc = -1;
+      LOCK(&m->system->fds.lock);
+      if ((fd = GetFd(&m->system->fds, fildes))) {
+        unassert(fd->cb);
+        unassert(poll_impl = fd->cb->poll);
+      } else {
+        poll_impl = 0;
+      }
+      UNLOCK(&m->system->fds.lock);
+      if (fd) {
+        hfds[0].fd = fildes;
+        hfds[0].events = ((FD_ISSET(fildes, &readfds) ? POLLIN : 0) |
+                  (FD_ISSET(fildes, &writefds) ? POLLOUT : 0) |
+                  (FD_ISSET(fildes, &exceptfds) ? POLLPRI : 0));
+        switch (poll_impl(hfds, 1, 0)) {
+          case 0:
+            break;
+          case 1:
+            ++rc;
+            if (FD_ISSET(fildes, &readfds) && (hfds[0].revents & POLLIN)) {
+              FD_SET(fildes, &readyreadfds);
+              FD_CLR(fildes, &readfds);
+            }
+            if (FD_ISSET(fildes, &writefds) && (hfds[0].revents & POLLOUT)) {
+              FD_SET(fildes, &readywritefds);
+              FD_CLR(fildes, &writefds);
+            }
+            if (FD_ISSET(fildes, &exceptfds) && (hfds[0].revents & POLLPRI)) {
+              FD_SET(fildes, &readyexceptfds);
+              FD_CLR(fildes, &exceptfds);
+            }
+            break;
+          case -1:
+            if (errno == EINTR) {
+              goto TryAgain;
+            }
+            rc = -1;
+            goto BreakLoop;
+        }
+      } else {
+        rc = ebadf();
+        break;
+      }
+    }
+  BreakLoop:
+    if (rc || (timeoutp && CompareTime(now = GetTime(), deadline) >= 0)) {
+      break;
+    }
+    if (timeoutp) {
+      wait = FromMilliseconds(kPollingMs);
+      remain = SubtractTime(deadline, now);
+      if (CompareTime(remain, wait) < 0) {
+        wait = remain;
+      }
+    } else {
+      wait = FromMilliseconds(kPollingMs);
+    }
+    nanosleep(&wait, 0);
   }
   if (sigmaskp_guest) {
     m->sigmask = oldmask_guest;
     SIG_LOGF("sigmask pop %" PRIx64, m->sigmask);
   }
-  unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
   if (rc != -1) {
-    if ((readfds_addr && SaveFdSet(m, nfds, &readfds, readfds_addr) == -1) ||
-        (writefds_addr && SaveFdSet(m, nfds, &writefds, writefds_addr) == -1) ||
+    if ((readfds_addr && SaveFdSet(m, nfds, &readyreadfds, readfds_addr) == -1) ||
+        (writefds_addr && SaveFdSet(m, nfds, &readywritefds, writefds_addr) == -1) ||
         (exceptfds_addr &&
-         SaveFdSet(m, nfds, &exceptfds, exceptfds_addr) == -1)) {
+         SaveFdSet(m, nfds, &readyexceptfds, exceptfds_addr) == -1)) {
       return -1;
     }
   }
@@ -5472,8 +5487,11 @@ void OpSyscall(P) {
     SYSCALL(3, 0x077, "setresgid", SysSetresgid, STRACE_SETRESGID);
     SYSCALL(3, 0x078, "getresgid", SysGetresgid, STRACE_3);
     SYSCALL(5, 0x09D, "prctl", SysPrctl, STRACE_5);
-#ifndef DISABLE_OVERLAYS
+#if !defined(DISABLE_OVERLAYS) || !defined(DISABLE_VFS)
     SYSCALL(1, 0x0A1, "chroot", SysChroot, STRACE_CHROOT);
+#endif
+#ifndef DISABLE_VFS
+    SYSCALL(5, 0x0A5, "mount", SysMount, STRACE_MOUNT);
 #endif
     SYSCALL(3, 0x124, "dup3", SysDup3, STRACE_DUP3);
     SYSCALL(4, 0x103, "mknodat", SysMknodat, STRACE_4);

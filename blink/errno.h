@@ -19,5 +19,11 @@ long eopnotsupp(void);
 long erange(void);
 long eperm(void);
 long esrch(void);
+long enodev(void);
+long eacces(void);
+long eisdir(void);
+long eexist(void);
+long eloop(void);
+long exdev(void);
 
 #endif /* BLINK_ERRNO_H_ */

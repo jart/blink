@@ -75,16 +75,11 @@
 #include "blink/tsan.h"
 #include "blink/types.h"
 #include "blink/util.h"
+#include "blink/vfs.h"
 #include "blink/watch.h"
 #include "blink/web.h"
 #include "blink/xlat.h"
 #include "blink/xmmtype.h"
-
-#ifdef DISABLE_OVERLAYS
-#define OverlaysOpen   openat
-#define OverlaysStat   fstatat
-#define OverlaysAccess faccessat
-#endif
 
 #ifndef BUILD_TIMESTAMP
 #define BUILD_TIMESTAMP __TIMESTAMP__
@@ -433,16 +428,9 @@ unimplemented\0\
 static struct CHS {
   ssize_t imagesize;
   int c, h, s;
-} chs[] = {
-  { 163840,  40, 1, 8 },
-  { 184320,  40, 1, 9 },
-  { 327680,  40, 2, 8 },
-  { 368640,  40, 2, 9 },
-  { 737280,  80, 2, 9 },
-  { 1228800, 80, 2, 15 },
-  { 1474560, 80, 2, 18 },
-  { 2949120, 80, 2, 36 }
-};
+} chs[] = {{163840, 40, 1, 8},   {184320, 40, 1, 9},  {327680, 40, 2, 8},
+           {368640, 40, 2, 9},   {737280, 80, 2, 9},  {1228800, 80, 2, 15},
+           {1474560, 80, 2, 18}, {2949120, 80, 2, 36}};
 
 static off_t diskimagesize = 0;
 static int diskcyls = 1023;
@@ -799,7 +787,7 @@ static void TuiRejuvinate(void) {
 #ifdef IUTF8
   term.c_iflag |= IUTF8;
 #endif
-  tcsetattr(ttyout, TCSANOW, &term);
+  VfsTcsetattr(ttyout, TCSANOW, &term);
   memset(&sa, 0, sizeof(sa));
   sa.sa_handler = OnSigBusted;
   sa.sa_flags = SA_NODEFER;
@@ -837,7 +825,7 @@ static void TtyRestore(void) {
   TtyWriteString("\033[0m");
   DisableMouseTracking();
   ShowCursor();
-  tcsetattr(ttyout, TCSANOW, &oldterm);
+  VfsTcsetattr(ttyout, TCSANOW, &oldterm);
 }
 
 static void TuiCleanup(void) {
@@ -958,7 +946,7 @@ void TuiSetup(void) {
   if (!once) {
     LOGF("loaded program %s\n%s", codepath, FormatPml4t(m));
     CommonSetup();
-    tcgetattr(ttyout, &oldterm);
+    VfsTcgetattr(ttyout, &oldterm);
     atexit(TtyRestore);
     once = true;
     report = true;
@@ -2663,7 +2651,7 @@ static void DetermineCHS(void) {
   int i;
   off_t size = diskimagesize;
   if (size) return;  // do nothing if disk geometry already detected
-  unassert(!OverlaysStat(AT_FDCWD, m->system->elf.prog, &st, 0));
+  unassert(!VfsStat(AT_FDCWD, m->system->elf.prog, &st, 0));
   diskimagesize = size = st.st_size;
   for (i = 0; i < ARRAYLEN(chs); ++i) {
     if (size == chs[i].imagesize) {
@@ -2678,15 +2666,15 @@ static void DetermineCHS(void) {
 static void OnDiskServiceGetParams(void) {
   size_t lastsector, lastcylinder, lasthead;
   DetermineCHS();
-  lastcylinder = GetLastIndex(diskimagesize,
-                              512 * disksects * diskheads, 0, 1023);
+  lastcylinder =
+      GetLastIndex(diskimagesize, 512 * disksects * diskheads, 0, 1023);
   lasthead = GetLastIndex(diskimagesize, 512 * disksects, 0, diskheads - 1);
   lastsector = GetLastIndex(diskimagesize, 512, 1, disksects);
   m->dl = 1;
   m->dh = lasthead;
   m->cl = lastcylinder >> 8 << 6 | lastsector;
   m->ch = lastcylinder;
-  m->bl = 4;        // CMOS drive type: 1.4M floppy
+  m->bl = 4;  // CMOS drive type: 1.4M floppy
   m->ah = 0;
   m->es.sel = m->es.base = 0;
   Put16(m->di, 0);
@@ -2704,8 +2692,8 @@ static void OnDiskServiceReadSectors(void) {
   cylinder = (m->cl & 192) << 2 | m->ch;
   sector = (m->cl & 63) - 1;
   size = sectors * 512;
-  offset = sector * 512 + head * 512 * disksects
-                        + cylinder * 512 * disksects * diskheads;
+  offset = sector * 512 + head * 512 * disksects +
+           cylinder * 512 * disksects * diskheads;
   (void)drive;
   ELF_LOGF("bios read sectors %" PRId64 " "
            "@ sector %" PRId64 " cylinder %" PRId64 " head %" PRId64
@@ -2720,8 +2708,8 @@ static void OnDiskServiceReadSectors(void) {
     return;
   }
   errno = 0;
-  if ((fd = OverlaysOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
-      pread(fd, m->system->real + addr, size, offset) == size) {
+  if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
+      VfsPread(fd, m->system->real + addr, size, offset) == size) {
     SetWriteAddr(m, addr, size);
     m->ah = 0x00;  // success
     SetCarry(false);
@@ -2786,8 +2774,8 @@ static void OnDiskServiceReadSectorsExtended(void) {
       return;
     }
     errno = 0;
-    if ((fd = OverlaysOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
-        pread(fd, m->system->real + addr, size, offset) == size) {
+    if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
+        VfsPread(fd, m->system->real + addr, size, offset) == size) {
       SetWriteAddr(m, addr, size);
       m->ah = 0x00;  // success
       SetCarry(false);
@@ -3896,7 +3884,7 @@ static void AddPath_StartOp_Tui(P) {
 }
 
 static bool FileExists(const char *path) {
-  return !OverlaysAccess(AT_FDCWD, path, F_OK, 0);
+  return !VfsAccess(AT_FDCWD, path, F_OK, 0);
 }
 
 int VirtualMachine(int argc, char *argv[]) {
@@ -3929,10 +3917,10 @@ int VirtualMachine(int argc, char *argv[]) {
       } else if (isatty(1)) {
         tty = 1;
       } else {
-        tty = open("/dev/tty", O_RDWR | O_NOCTTY);
+        tty = VfsOpen(AT_FDCWD, "/dev/tty", O_RDWR | O_NOCTTY, 0);
       }
       if (tty != -1) {
-        tty = fcntl(tty, F_DUPFD_CLOEXEC, kMinBlinkFd);
+        tty = VfsFcntl(tty, F_DUPFD_CLOEXEC, kMinBlinkFd);
       }
       if (tty == -1) {
         WriteErrorString("failed to open /dev/tty\n");
@@ -4046,6 +4034,12 @@ int main(int argc, char *argv[]) {
 #ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");
+    exit(1);
+  }
+#endif
+#ifndef DISABLE_VFS
+  if (VfsInit()) {
+    WriteErrorString("error: vfs initialization failed\n");
     exit(1);
   }
 #endif

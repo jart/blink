@@ -30,6 +30,7 @@
 #include "blink/macros.h"
 #include "blink/thompike.h"
 #include "blink/util.h"
+#include "blink/vfs.h"
 
 ssize_t readansi(int fd, char *buf, size_t size) {
   u8 c;
@@ -41,7 +42,7 @@ ssize_t readansi(int fd, char *buf, size_t size) {
       errno = ENOMEM;
       return -1;
     }
-    if ((rc = read(fd, &c, 1)) != 1) {
+    if ((rc = VfsRead(fd, &c, 1)) != 1) {
       if (rc == -1 && errno == EINTR && i) {
         continue;
       }
@@ -52,7 +53,7 @@ ssize_t readansi(int fd, char *buf, size_t size) {
         struct pollfd pfd;
         pfd.fd = fd;
         pfd.events = POLLIN;
-        poll(&pfd, 1, 0);
+        VfsPoll(&pfd, 1, 0);
 #endif
         continue;
       }

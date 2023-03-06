@@ -39,6 +39,7 @@
 #include "blink/syscall.h"
 #include "blink/thread.h"
 #include "blink/types.h"
+#include "blink/vfs.h"
 #include "blink/xlat.h"
 
 #ifdef __HAIKU__
@@ -97,7 +98,7 @@ static int IoctlTiocgpgrp(struct Machine *m, int fd, i64 addr) {
   return -1;
 #endif
   if (!(pgrp = (u8 *)SchlepW(m, addr, 4))) return -1;
-  if ((rc = tcgetpgrp(fd)) == -1) return -1;
+  if ((rc = VfsTcgetpgrp(fd)) == -1) return -1;
   Write32(pgrp, rc);
   return 0;
 }
@@ -105,7 +106,7 @@ static int IoctlTiocgpgrp(struct Machine *m, int fd, i64 addr) {
 static int IoctlTiocspgrp(struct Machine *m, int fd, i64 addr) {
   u8 *pgrp;
   if (!(pgrp = (u8 *)SchlepR(m, addr, 4))) return -1;
-  return tcsetpgrp(fd, Read32(pgrp));
+  return VfsTcsetpgrp(fd, Read32(pgrp));
 }
 
 #ifdef HAVE_SIOCGIFCONF
@@ -134,7 +135,7 @@ static int IoctlSiocgifconf(struct Machine *m, int systemfd, i64 ifconf_addr) {
   if (!(buf_linux = (char *)AddToFreeList(m, malloc(bufsize)))) return -1;
   ifconf.ifc_len = bufsize;
   ifconf.ifc_buf = buf;
-  if (ioctl(systemfd, SIOCGIFCONF, &ifconf)) return -1;
+  if (VfsIoctl(systemfd, SIOCGIFCONF, &ifconf)) return -1;
   len_linux = 0;
   ifreq = ifconf.ifc_req;
   for (i = 0; i < ifconf.ifc_len;) {
@@ -184,7 +185,7 @@ static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
                               (const struct sockaddr_linux *)&ifreq_linux.addr,
                               sizeof(struct sockaddr_in_linux)) ==
            sizeof(struct sockaddr_in));
-  if (ioctl(systemfd, kind, &ifreq)) return -1;
+  if (VfsIoctl(systemfd, kind, &ifreq)) return -1;
   memset(ifreq_linux.name, 0, sizeof(ifreq_linux.name));
   memcpy(ifreq_linux.name, ifreq.ifr_name,
          MIN(sizeof(ifreq_linux.name) - 1, sizeof(ifreq.ifr_name)));
@@ -201,36 +202,36 @@ static int IoctlSiocgifaddr(struct Machine *m, int systemfd, i64 ifreq_addr,
 static int IoctlFionbio(struct Machine *m, int fildes) {
   int oflags;
   if ((oflags = GetOflags(m, fildes)) == -1) return -1;
-  return fcntl(fildes, F_SETFL, (oflags & SETFL_FLAGS) | O_NDELAY);
+  return VfsFcntl(fildes, F_SETFL, (oflags & SETFL_FLAGS) | O_NDELAY);
 }
 
 static int IoctlFioclex(struct Machine *m, int fildes) {
-  return fcntl(fildes, F_SETFD, FD_CLOEXEC);
+  return VfsFcntl(fildes, F_SETFD, FD_CLOEXEC);
 }
 
 static int IoctlFionclex(struct Machine *m, int fildes) {
-  return fcntl(fildes, F_SETFD, 0);
+  return VfsFcntl(fildes, F_SETFD, 0);
 }
 
 static int IoctlTcsbrk(struct Machine *m, int fildes, int drain) {
   int rc;
   if (drain) {
-    RESTARTABLE(rc = tcdrain(fildes));
+    RESTARTABLE(rc = VfsTcdrain(fildes));
   } else {
-    rc = tcsendbreak(fildes, 0);
+    rc = VfsTcsendbreak(fildes, 0);
   }
   return rc;
 }
 
 static int IoctlTcxonc(struct Machine *m, int fildes, int arg) {
-  return tcflow(fildes, arg);
+  return VfsTcflow(fildes, arg);
 }
 
 static int IoctlTiocgsid(struct Machine *m, int fildes, i64 addr) {
   int rc;
   u8 *sid;
   if (!(sid = (u8 *)SchlepW(m, addr, 4))) return -1;
-  if ((rc = tcgetsid(fildes)) != -1) {
+  if ((rc = VfsTcgetsid(fildes)) != -1) {
     Write32(sid, rc);
     rc = 0;
   }
@@ -252,14 +253,14 @@ static int XlatFlushQueue(int queue) {
 
 static int IoctlTcflsh(struct Machine *m, int fildes, int queue) {
   if ((queue = XlatFlushQueue(queue)) == -1) return -1;
-  return tcflush(fildes, queue);
+  return VfsTcflush(fildes, queue);
 }
 
 static int IoctlSiocatmark(struct Machine *m, int fildes, i64 addr) {
   u8 *p;
   int rc;
   if (!(p = (u8 *)SchlepW(m, addr, 4))) return -1;
-  if ((rc = sockatmark(fildes)) != -1) {
+  if ((rc = VfsSockatmark(fildes)) != -1) {
     Write32(p, rc);
     rc = 0;
   }
@@ -271,7 +272,7 @@ static int IoctlGetInt32(struct Machine *m, int fildes, unsigned long cmd,
   u8 *p;
   int rc, val;
   if (!(p = (u8 *)SchlepW(m, addr, 4))) return -1;
-  if ((rc = ioctl(fildes, cmd, &val)) != -1) {
+  if ((rc = VfsIoctl(fildes, cmd, &val)) != -1) {
     Write32(p, val);
   }
   return rc;
@@ -283,14 +284,14 @@ static int IoctlSetInt32(struct Machine *m, int fildes, unsigned long cmd,
   const u8 *p;
   if (!(p = (const u8 *)SchlepR(m, addr, 4))) return -1;
   val = Read32(p);
-  return ioctl(fildes, cmd, &val);
+  return VfsIoctl(fildes, cmd, &val);
 }
 
 #ifdef TIOCSTI
 static int IoctlTiocsti(struct Machine *m, int fildes, i64 addr) {
   const u8 *bytep;
   if (!(bytep = LookupAddress(m, addr))) return efault();
-  return ioctl(fildes, TIOCSTI, bytep);
+  return VfsIoctl(fildes, TIOCSTI, bytep);
 }
 #endif
 

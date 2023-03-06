@@ -35,16 +35,8 @@
 #include "blink/random.h"
 #include "blink/syscall.h"
 #include "blink/thread.h"
-#include "blink/xlat.h"
 #include "blink/vfs.h"
-
-#if !defined(DISABLE_OVERLAYS)
-#define BlinkOpen OverlaysOpen
-#elif !defined(DISABLE_VFS)
-#define BlinkOpen VfsOpen
-#else
-#define BlinkOpen openat
-#endif
+#include "blink/xlat.h"
 
 static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
                       i32 oflags, i32 mode) {
@@ -77,26 +69,26 @@ static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
   }
   unassert(!sigfillset(&ss));
   unassert(!pthread_sigmask(SIG_BLOCK, &ss, &oldss));
-  if ((tmpdir = BlinkOpen(GetDirFildes(dirfildes), LoadStr(m, pathaddr),
-                             O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0)) != -1) {
+  if ((tmpdir = VfsOpen(GetDirFildes(dirfildes), LoadStr(m, pathaddr),
+                          O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0)) != -1) {
     unassert(GetRandom(&rng, 8, 0) == 8);
     for (i = 0; i < 12; ++i) {
       name[i] = "0123456789abcdefghijklmnopqrstuvwxyz"[rng % 36];
       rng /= 36;
     }
     name[i] = 0;
-    if ((fildes = openat(tmpdir, name, sysflags, mode)) != -1) {
-      unassert(!unlinkat(tmpdir, name, 0));
-      unassert(dup2(fildes, tmpdir) == tmpdir);
+    if ((fildes = VfsOpen(tmpdir, name, sysflags, mode)) != -1) {
+      unassert(!VfsUnlink(tmpdir, name, 0));
+      unassert(VfsDup2(fildes, tmpdir) == tmpdir);
       fildes = tmpdir;
       if (oflags & O_CLOEXEC_LINUX) {
-        unassert(!fcntl(fildes, F_SETFD, FD_CLOEXEC));
+        unassert(!VfsFcntl(fildes, F_SETFD, FD_CLOEXEC));
       }
       LOCK(&m->system->fds.lock);
       unassert(AddFd(&m->system->fds, fildes, oflags));
       UNLOCK(&m->system->fds.lock);
     } else {
-      unassert(!close(tmpdir));
+      unassert(!VfsClose(tmpdir));
     }
   } else {
     fildes = -1;
@@ -123,7 +115,7 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
   if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   if (!(path = LoadStr(m, pathaddr))) return -1;
   RESTARTABLE(fildes =
-                  BlinkOpen(GetDirFildes(dirfildes), path, sysflags, mode));
+                  VfsOpen(GetDirFildes(dirfildes), path, sysflags, mode));
   if (fildes != -1) {
     if (fildes >= lim) {
       close(fildes);
