@@ -24,6 +24,7 @@
 #include "blink/flag.h"
 #include "blink/log.h"
 #include "blink/machine.h"
+#include "blink/thread.h"
 #include "blink/util.h"
 
 void AssertFailed(const char *file, int line, const char *msg) {

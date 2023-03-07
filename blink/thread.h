@@ -34,6 +34,11 @@
 #else /* HAVE_THREADS */
 #include <signal.h>
 
+#ifdef _Thread_local
+#undef _Thread_local
+#endif
+#define _Thread_local
+
 #define LOCK(x)   (void)0
 #define UNLOCK(x) (void)0
 

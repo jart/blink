@@ -20,6 +20,7 @@
 #include <sys/mman.h>
 
 #include "blink/debug.h"
+#include "blink/thread.h"
 #include "blink/util.h"
 
 const char *DescribeProt(int prot) {

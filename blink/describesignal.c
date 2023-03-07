@@ -19,6 +19,7 @@
 #include <string.h>
 
 #include "blink/linux.h"
+#include "blink/thread.h"
 #include "blink/util.h"
 
 const char *DescribeSignal(int sig) {

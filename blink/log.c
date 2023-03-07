@@ -31,6 +31,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/types.h"
 #include "blink/util.h"
@@ -55,9 +56,9 @@ static struct Log {
 static char *GetTimestamp(void) {
   int x;
   struct timespec ts;
-  static _Thread_local i64 last;
-  static _Thread_local char s[27];
-  static _Thread_local struct tm tm;
+  _Thread_local static i64 last;
+  _Thread_local static char s[27];
+  _Thread_local static struct tm tm;
   IGNORE_RACES_START();
   clock_gettime(CLOCK_REALTIME, &ts);
   if (ts.tv_sec != last) {

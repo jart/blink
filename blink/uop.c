@@ -35,6 +35,7 @@
 #include "blink/rde.h"
 #include "blink/stats.h"
 #include "blink/swap.h"
+#include "blink/thread.h"
 #include "blink/types.h"
 #include "blink/x86.h"
 #include "blink/xmm.h"
@@ -1381,8 +1382,8 @@ long GetMicroOpLength(void *uop) {
 
 #define ItemsRequired(n) unassert(i >= n)
 
-static _Thread_local long i;
-static _Thread_local u8 stack[8];
+_Thread_local static long i;
+_Thread_local static u8 stack[8];
 
 static inline unsigned CheckBelow(unsigned x, unsigned n) {
   unassert(x < n);

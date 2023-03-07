@@ -35,6 +35,7 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/strace.h"
+#include "blink/thread.h"
 #include "blink/util.h"
 
 #define APPEND(...) bi += snprintf(bp + bi, bn - bi, __VA_ARGS__)

@@ -31,6 +31,7 @@
 #include "blink/macros.h"
 #include "blink/pml4t.h"
 #include "blink/rde.h"
+#include "blink/thread.h"
 #include "blink/util.h"
 #include "blink/x86.h"
 

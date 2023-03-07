@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 
+#include "blink/thread.h"
 #include "blink/util.h"
 
 const char *DescribeHostErrno(int x) {
