@@ -128,6 +128,13 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
     return last_end;
   }
 
+  // associate the file name with the memory mapping
+  // this makes it possible for debug symbols to be loaded
+  if (filesz) {
+    key |= PAGE_FILE;
+    unassert(AddFileMap(m->system, start, filesz, path, offset));
+  }
+
   // mmap() always returns an address that page-size aligned, but elf
   // program headers can start at any address. therefore the first page
   // needs to be loaded with special care, if the phdr is skewed. the
@@ -136,7 +143,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
   if (skew) {
     if (vaddr > start && start + pagesize <= end) {
       unassert(vaddr < start + pagesize);
-      ELF_LOGF("alloc %" PRIx64 "-%" PRIx64, start, start + pagesize);
+      ELF_LOGF("alloc1 %" PRIx64 "-%" PRIx64, start, start + pagesize);
       if (ReserveVirtual(s, start, pagesize, key, -1, 0, 0, 0) == -1) {
         ERRF("failed to allocate program header skew");
         exit(127);
@@ -167,19 +174,17 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
       // map the bulk of .text directly into memory without copying.
       ELF_LOGF("load %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64, start,
                start + bulk, offset, offset + bulk);
-      if (ReserveVirtual(s, start, bulk, PAGE_FILE | key, fd, offset, 0, 0) ==
-          -1) {
+      if (ReserveVirtual(s, start, bulk, key, fd, offset, 0, 0) == -1) {
         ERRF("failed to map elf program header file data");
         exit(127);
       }
-      unassert(AddFileMap(m->system, start, bulk, path, offset));
     }
     start += bulk;
     offset += bulk;
     filesz -= bulk;
     if (start < end) {
       // allocate .bss zero-initialized memory.
-      ELF_LOGF("alloc %" PRIx64 "-%" PRIx64, start, end);
+      ELF_LOGF("alloc2 %" PRIx64 "-%" PRIx64, start, end);
       if (ReserveVirtual(s, start, end - start, key, -1, 0, 0, 0) == -1) {
         ERRF("failed to allocate program header bss");
         exit(127);
