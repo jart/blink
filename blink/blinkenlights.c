@@ -3061,25 +3061,25 @@ static bool OnHalt(int interrupt) {
       return true;
     case kMachineSegmentationFault:
       OnSegmentationFault();
-      return false;
+      return true;
     case kMachineProtectionFault:
       OnProtectionFault();
-      return false;
+      return true;
     case kMachineSimdException:
       OnSimdException();
-      return false;
+      return true;
     case kMachineUndefinedInstruction:
       OnUndefinedInstruction();
-      return false;
+      return true;
     case kMachineDecodeError:
       OnDecodeError();
-      return false;
+      return true;
     case kMachineDivideError:
       OnDivideError();
-      return false;
+      return true;
     case kMachineFpuException:
       OnFpuException();
-      return false;
+      return true;
     case kMachineExitTrap:
       OnExitTrap();
       return true;
