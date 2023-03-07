@@ -49,7 +49,7 @@
 #include <sched.h>
 #endif
 
-#ifdef UNWIND
+#if defined(HAVE_LIBUNWIND) && !defined(MUSL_CROSS_MAKE)
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
 #endif
@@ -63,7 +63,7 @@
 _Thread_local static jmp_buf g_busted;
 
 const char *GetBlinkBacktrace(void) {
-#ifdef UNWIND
+#if defined(HAVE_LIBUNWIND) && !defined(MUSL_CROSS_MAKE)
   _Thread_local static char b[2048];
   int o = 0;
   char sym[256];

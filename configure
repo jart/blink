@@ -230,8 +230,8 @@ compile() {
       ${TARGET_ARCH} \
       "$@" \
       ${LOADLIBES} \
-      ${LDLIBS} \
-      ${EXTRA_LDLIBS}
+      ${EXTRA_LDLIBS} \
+      ${LDLIBS}
 }
 
 config() {
@@ -476,13 +476,7 @@ fi
 # check for the math library
 EXTRA_LDLIBS=-lm
 if config lm "checking for -lm... "; then
-  LDLIBS="${LDLIBS} -lm"
-fi
-
-# check for the posix.1b realtime extensions library
-EXTRA_LDLIBS=-lrt
-if config lrt "checking for -lrt... "; then
-  LDLIBS="${LDLIBS} -lrt"
+  LDLIBS="-lm ${LDLIBS}"
 fi
 
 # check for the posix threads library
@@ -495,15 +489,22 @@ if [ -z "${DISABLE_THREADS}" ]; then
   else
     EXTRA_LDLIBS=-lpthread
     if config pthread "checking for -lpthread... "; then
-      LDLIBS="${LDLIBS} -lpthread"
+      LDLIBS="-lpthread ${LDLIBS}"
     else
       if config pthread "checking for pthreads... "; then
-        LDLIBS="${LDLIBS} -lpthread"
+        LDLIBS="-lpthread ${LDLIBS}"
       else
         uncomment "#define DISABLE_THREADS"
       fi
     fi
   fi
+fi
+
+# check for the posix.1b realtime extensions library
+# note: librt depends on pthreads, on rhel5 at least
+EXTRA_LDLIBS=-lrt
+if config lrt "checking for -lrt... "; then
+  LDLIBS="-lrt ${LDLIBS}"
 fi
 
 # should be the default and macos build fails without it
@@ -563,6 +564,21 @@ if [ -z "${MODE}" ] && [ -n "${JIT_POSSIBLE}" ] && [ -z "${DISABLE_JIT}" ]; then
   EXTRA_CFLAGS=-fno-optimize-sibling-calls
   if config noop "checking for -fno-optimize-sibling-calls... "; then
     CFLAGS="${CFLAGS} -fno-optimize-sibling-calls"
+  fi
+fi
+
+# try to get blink backtraces if possible
+if [ "${MODE}" != "tiny" ] && [ "${MODE}" != "rel" ]; then
+  UNWIND_CFLAGS="$(pkg-config --cflags libunwind 2>/dev/null)"
+  if ! UNWIND_LDLIBS="$(pkg-config --libs libunwind 2>/dev/null)"; then
+    UNWIND_LDLIBS="-lunwind -llzma"
+  fi
+  EXTRA_CFLAGS="${UNWIND_CFLAGS}"
+  EXTRA_LDLIBS="${UNWIND_LDLIBS}"
+  if config lrt "checking for libunwind... "; then
+    CFLAGS="${UNWIND_CFLAGS} ${CFLAGS}"
+    LDLIBS="${UNWIND_LDLIBS} ${LDLIBS}"
+    uncomment "#define HAVE_LIBUNWIND"
   fi
 fi
 

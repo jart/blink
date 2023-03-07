@@ -25,6 +25,9 @@ ifeq ($(HOST_SYSTEM), FreeBSD)
 LDFLAGS += -Wl,--image-base=$(IMAGE_BASE_VIRTUAL)
 endif
 
+# Tune the build when using our prebuilt musl-cross-make toolchains.
+CPPFLAGS_STATIC =			\
+	-DMUSL_CROSS_MAKE
 LDFLAGS_STATIC =			\
 	-static				\
 	-fno-exceptions			\
@@ -60,12 +63,6 @@ endif
 ifeq ($(MODE), dbg)
 CFLAGS += -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
 CPPFLAGS += -DDEBUG
-ifneq ($(HOST_SYSTEM), Darwin)
-ifneq ($(HOST_SYSTEM), FreeBSD)
-CPPFLAGS += -DUNWIND
-LDLIBS += -lunwind -llzma
-endif
-endif
 endif
 
 ifeq ($(MODE), rel)

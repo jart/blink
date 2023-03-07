@@ -39,6 +39,7 @@
 // #define HAVE_KERN_ARND
 // #define HAVE_GETRANDOM
 // #define HAVE_SETGROUPS
+// #define HAVE_LIBUNWIND
 // #define HAVE_GETENTROPY
 // #define HAVE_MAP_SHARED
 // #define HAVE_SENDTO_ZERO

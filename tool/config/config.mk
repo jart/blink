@@ -2,4 +2,7 @@
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
 o/$(MODE)/tool/config/%.com: tool/config/%.c
-	$(CC) -o $@ $<
+	@mkdir -p $(@D)
+	$(CC) -o $@ $< $(LDLIBS)
+
+o/$(MODE)/tool/config/libunwind.com: private LDLIBS += -lunwind -lucontext -llzma
