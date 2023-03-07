@@ -1086,11 +1086,13 @@ bool IsFullyUnmapped(struct System *s, i64 virt, i64 size) {
 int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
   int rc;
   int sysprot;
-  u64 pt, key;
   u8 *mi, *real;
+  u64 pt, pt2, key;
   long i, pagesize;
-  i64 ti, end, level, orig_virt;
+  i64 a, b, ti, end, level, orig_virt;
   struct ContiguousMemoryRanges ranges;
+  MEM_LOGF("protecting virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %s", virt,
+           virt + size, DescribeProt(prot));
   orig_virt = virt;
   (void)orig_virt;
   pagesize = GetSystemPageSize();
@@ -1112,7 +1114,8 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
   // page size, then that would be bad. we can't satisfy prot
   // unless the guest takes the page size into consideration.
   if (HasLinearMapping() &&
-      ((virt & (pagesize - 1)) && (size & (pagesize - 1)))) {
+      (virt - ROUNDDOWN(virt, pagesize) >= 4096 ||
+       ROUNDUP(virt + size, pagesize) - (virt + size) >= 4096)) {
     sysprot = PROT_READ | PROT_WRITE;
   }
   memset(&ranges, 0, sizeof(ranges));
@@ -1122,11 +1125,15 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
       mi = GetPageAddress(s, pt, level == 39) + ti * 8;
       pt = LoadPte(mi);
       if (level > 12) {
-        unassert(pt & PAGE_V);
+        if (!(pt & PAGE_V)) {
+          goto MemoryDisappeared;
+        }
         continue;
       }
       for (;;) {
-        unassert(pt & PAGE_V);
+        if (!(pt & PAGE_V)) {
+          goto MemoryDisappeared;
+        }
         if (HasLinearMapping() && (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                                       (PAGE_HOST | PAGE_MAP)) {
           AddPageToRanges(&ranges, virt, end);
@@ -1140,9 +1147,14 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
             rc = -1;
           }
         }
-        pt &= ~(PAGE_U | PAGE_RW | PAGE_XD);
-        pt |= key;
-        StorePte(mi, pt);
+        for (;;) {
+          pt2 = (pt & ~(PAGE_U | PAGE_RW | PAGE_XD)) | key;
+          if (CasPte(mi, pt, pt2)) break;
+          pt = LoadPte(mi);
+          if (!(pt & PAGE_V)) {
+            goto MemoryDisappeared;
+          }
+        }
         if ((virt += 4096) >= end) {
           goto FinishedCrawling;
         }
@@ -1154,19 +1166,14 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot) {
 FinishedCrawling:
   if (HasLinearMapping()) {
     for (i = 0; i < ranges.i; ++i) {
-      if (ranges.p[i].a & (pagesize - 1)) {
+      a = ROUNDDOWN(ranges.p[i].a, pagesize);
+      b = ranges.p[i].b;
+      if (Mprotect(ToHost(a), b - a, sysprot, "linear")) {
         LOGF("failed to %s subrange"
              " [%" PRIx64 ",%" PRIx64 ") within requested range"
              " [%" PRIx64 ",%" PRIx64 "): %s",
-             "mprotect", ranges.p[i].a, ranges.p[i].b, orig_virt,
-             orig_virt + size, "HOST_PAGE_MISALIGN");
-      } else if (Mprotect(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a,
-                          sysprot, "linear")) {
-        LOGF("failed to %s subrange"
-             " [%" PRIx64 ",%" PRIx64 ") within requested range"
-             " [%" PRIx64 ",%" PRIx64 "): %s",
-             "mprotect", ranges.p[i].a, ranges.p[i].b, orig_virt,
-             orig_virt + size, DescribeHostErrno(errno));
+             "mprotect", a, b, orig_virt, orig_virt + size,
+             DescribeHostErrno(errno));
         rc = -1;
       }
     }
@@ -1174,6 +1181,17 @@ FinishedCrawling:
   }
   InvalidateSystem(s, true, false);
   return rc;
+MemoryDisappeared:
+  // mprotect() doesn't lock pages, so a race condition can
+  // occur if the guest fiendishly munmaps this memory from
+  // a different thread. in that case, the main thing we do
+  // care about is not crashing. therefore it should not be
+  // too concerning that this failure could occur after the
+  // address space has been mutated.
+  if (HasLinearMapping()) {
+    free(ranges.p);
+  }
+  return enomem();
 }
 
 int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
@@ -1206,11 +1224,15 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
       mi = GetPageAddress(s, pt, level == 39) + ti * 8;
       pt = LoadPte(mi);
       if (level > 12) {
-        unassert(pt & PAGE_V);
+        if (!(pt & PAGE_V)) {
+          goto MemoryDisappeared;
+        }
         continue;
       }
       for (;;) {
-        unassert(pt & PAGE_V);
+        if (!(pt & PAGE_V)) {
+          goto MemoryDisappeared;
+        }
         if (HasLinearMapping() && (pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                                       (PAGE_HOST | PAGE_MAP)) {
           AddPageToRanges(&ranges, virt, end);
@@ -1251,6 +1273,11 @@ FinishedCrawling:
     free(ranges.p);
   }
   return rc;
+MemoryDisappeared:
+  if (HasLinearMapping()) {
+    free(ranges.p);
+  }
+  return enomem();
 }
 
 static i64 FindGuestAddress(struct System *s, uintptr_t hp, u64 pt, long lvl) {
