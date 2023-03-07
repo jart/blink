@@ -21,6 +21,7 @@
 #include "blink/assert.h"
 #include "blink/bitscan.h"
 #include "blink/endian.h"
+#include "blink/linux.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/stats.h"
@@ -110,10 +111,9 @@ void LoadInstruction(struct Machine *m, u64 pc) {
       break;
     case kMachineSegmentationFault:
       m->faultaddr = pc;
-      ERRF("CODE CRISIS\n\t%s\n%s", GetBacktrace(m), FormatPml4t(m));
+      m->segvcode = SEGV_ACCERR_LINUX;
       HaltMachine(m, rc);
     case kMachineDecodeError:
-      ERRF("INSTRUCTION CRISIS\n\t%s", GetBacktrace(m));
       HaltMachine(m, rc);
     default:
       HaltMachine(m, rc);

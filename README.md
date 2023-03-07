@@ -854,6 +854,23 @@ Blink uses `SIGSYS` to deliver signals internally. This signal is
 precious to Blink. It's currently not possible for guest applications to
 capture it from external processes.
 
+### Memory Protection
+
+Blink offers guest programs a 48-bit virtual address space with a
+4096-byte page size. When programs are run on (1) host systems that have
+a larger page (e.g. Apple M1, Cygwin), and (2) the linear memory
+optimization is enabled (i.e. you're *not* using `blink -m`) then Blink
+may need to relax memory protections in cases where the memory intervals
+defined by the guest aren't aligned to the host system page size. Is is
+recommended, when calling functions like mmap() and mprotect(), that
+both `addr` and `addr + size` be aliged to the true page size, which
+Blink reports to the guest in `getauxval(AT_PAGESZ)`. This value should
+be obtainable via the portable API `sysconf(_SC_PAGESIZE)` assuming the
+C library implements it correctly. Please note that when Blink is
+running in its fully virtualized mode (i.e. `blink -m`) this concern
+does not apply. That's because Blink will allocate a full system page
+for every 4096 byte page that gets mapped from a file.
+
 ### Self Modifying Code
 
 Blink supports self-modifying code, with some caveats.

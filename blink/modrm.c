@@ -105,10 +105,7 @@ i64 ComputeAddress(P) {
 }
 
 u8 *ComputeReserveAddressRead(P, size_t n) {
-  i64 v;
-  v = ComputeAddress(A);
-  SetReadAddr(m, v, n);
-  return ReserveAddress(m, v, n, false);
+  return ReserveAddress(m, ComputeAddress(A), n, false);
 }
 
 u8 *ComputeReserveAddressRead1(P) {
@@ -124,10 +121,7 @@ u8 *ComputeReserveAddressRead8(P) {
 }
 
 u8 *ComputeReserveAddressWrite(P, size_t n) {
-  i64 v;
-  v = ComputeAddress(A);
-  SetWriteAddr(m, v, n);
-  return ReserveAddress(m, v, n, true);
+  return ReserveAddress(m, ComputeAddress(A), n, true);
 }
 
 u8 *ComputeReserveAddressWrite1(P) {

@@ -28,6 +28,7 @@
 #include "blink/endian.h"
 #include "blink/errno.h"
 #include "blink/likely.h"
+#include "blink/linux.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -69,6 +70,7 @@ u64 HandlePageFault(struct Machine *m, u8 *pslot, u64 entry) {
   unassert(entry & PAGE_RSRV);
   unassert(!HasLinearMapping());
   if (m->nofault) {
+    m->segvcode = SEGV_MAPERR_LINUX;
     errno = ENOBUFS;
     return 0;
   }
@@ -88,6 +90,7 @@ u64 HandlePageFault(struct Machine *m, u8 *pslot, u64 entry) {
     } else {
       // an anonymous page is being accessed for the first time
       if ((page = AllocateAnonymousPage(m->system)) == -1) {
+        m->segvcode = SEGV_MAPERR_LINUX;
         entry = 0;
         break;
       }
@@ -198,10 +201,9 @@ TryAgain:
     table = entry;
     index = (page >> level) & 511;
     pslot = GetPageAddress(m->system, table, level == 39) + index * 8;
+    if (!pslot) goto MapError;
     entry = LoadPte(pslot);
-    if (!(entry & PAGE_V)) {
-      return (uintptr_t)efault0();
-    }
+    if (!(entry & PAGE_V)) goto MapError;
     if (m->metal) {
       entry &= ~(u64)(PAGE_RSRV | PAGE_HOST | PAGE_MAP | PAGE_GROW | PAGE_MUG |
                       PAGE_FILE);
@@ -231,6 +233,7 @@ TryAgain:
           entry += PAGE_LOCK;
         } else {
           ReleasePageLock(pslot);
+          m->segvcode = SEGV_MAPERR_LINUX;
           return 0;
         }
       } else {
@@ -238,6 +241,7 @@ TryAgain:
       }
     } else {
       LOGF("too many threads locked page %#" PRIx64, page);
+      m->segvcode = SEGV_MAPERR_LINUX;
       errno = EAGAIN;
       return 0;
     }
@@ -245,6 +249,9 @@ TryAgain:
   m->tlb[ARRAYLEN(m->tlb) - 1].page = page;
   m->tlb[ARRAYLEN(m->tlb) - 1].entry = entry;
   return entry;
+MapError:
+  m->segvcode = SEGV_MAPERR_LINUX;
+  return (uintptr_t)efault0();
 }
 
 u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
@@ -264,6 +271,7 @@ u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
         return 0;
       }
     } else {
+      m->segvcode = SEGV_MAPERR_LINUX;
       return (u8 *)efault0();
     }
   } else if (virt >= 0 && virt <= 0xffffffff &&
@@ -271,14 +279,17 @@ u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
     unassert(m->system->real);
     return m->system->real + virt;
   } else {
+    m->segvcode = SEGV_MAPERR_LINUX;
     return (u8 *)efault0();
   }
   if ((entry & mask) != need) {
+    m->segvcode = SEGV_ACCERR_LINUX;
     return (u8 *)efault0();
   }
   if ((host = GetPageAddress(m->system, entry, false))) {
     return host + (virt & 4095);
   } else {
+    m->segvcode = SEGV_MAPERR_LINUX;
     return (u8 *)efault0();
   }
 }
@@ -381,18 +392,57 @@ void CommitStash(struct Machine *m) {
 }
 
 u8 *ReserveAddress(struct Machine *m, i64 v, size_t n, bool writable) {
-  if (HasLinearMapping()) return ToHost(v);
+  long k;
+  u64 mask, need;
+  u8 *res, *p1, *p2;
+  if (writable) {
+    SetWriteAddr(m, v, n);
+  } else {
+    SetReadAddr(m, v, n);
+  }
+  if (HasLinearMapping()) {
+    return ToHost(v);
+  }
   m->reserving = true;
+  if (Cpl(m) == 3) {
+    if (!writable) {
+      mask = PAGE_U;
+      need = PAGE_U;
+    } else {
+      mask = PAGE_U | PAGE_RW;
+      need = PAGE_U | PAGE_RW;
+    }
+  } else {
+    mask = 0;
+    need = 0;
+  }
   if ((v & 4095) + n <= 4096) {
-    return ResolveAddress(m, v);
+    if ((res = LookupAddress2(m, v, mask, need))) {
+      return res;
+    } else {
+      ThrowSegmentationFault(m, v);
+    }
   }
   STATISTIC(++page_overlaps);
+  unassert(n <= 4096);
   m->stashaddr = v;
   m->opcache->stashsize = n;
   m->opcache->writable = writable;
-  u8 *r = m->opcache->stash;
-  CopyFromUser(m, r, v, n);
-  return r;
+  res = m->opcache->stash;
+  k = 4096 - (v & 4095);
+  if ((p1 = LookupAddress2(m, v, mask, need))) {
+    if ((p2 = LookupAddress2(m, v + k, mask, need))) {
+      IGNORE_RACES_START();
+      memcpy(res, p1, k);
+      memcpy(res + k, p2, n - k);
+      IGNORE_RACES_END();
+      return res;
+    } else {
+      ThrowSegmentationFault(m, v + k);
+    }
+  } else {
+    ThrowSegmentationFault(m, v);
+  }
 }
 
 u8 *AccessRam(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,

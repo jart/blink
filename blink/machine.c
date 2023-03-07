@@ -229,12 +229,7 @@ static void OpBit(P) {
     p = RegRexbRm(m, rde);
   } else {
     v = MaskAddress(Eamode(rde), ComputeAddress(A) + bitdisp);
-    p = ReserveAddress(m, v, 1 << w, false);
-    if (op == 4) {
-      SetReadAddr(m, v, 1 << w);
-    } else {
-      SetWriteAddr(m, v, 1 << w);
-    }
+    p = ReserveAddress(m, v, 1 << w, op != 4);
   }
   if (Lock(rde)) LockBus(p);
   y = 1;
@@ -368,7 +363,7 @@ static void OpMovZvqpIvqp(P) {
 }
 
 static void OpMovImm(P) {
-  WriteRegisterOrMemoryBW(rde, GetModrmReadBW(A), uimm0);
+  WriteRegisterOrMemoryBW(rde, GetModrmWriteBW(A), uimm0);
   if (IsMakingPath(m)) {
     Jitter(A,
            "a3"  // push arg3

@@ -825,8 +825,10 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     }
   }
 
-  prot = ((flags & PAGE_U ? PROT_READ : 0) |
-          ((flags & PAGE_RW) || fd == -1 ? PROT_WRITE : 0));
+  // determine host memory protection
+  prot = 0;
+  if (flags & PAGE_U) prot |= PROT_READ;
+  if (flags & PAGE_RW) prot |= PROT_WRITE;
 
   if (HasLinearMapping()) {
     // create a linear mapping. doing this runs the risk of destroying

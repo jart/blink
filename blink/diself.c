@@ -101,8 +101,6 @@ static void DisLoadElfSyms(struct Dis *d, Elf64_Ehdr_ *ehdr, size_t esize,
         d->syms.p[d->syms.i].size = Read64(st[i].size);
         unassert(d->syms.p[d->syms.i].name = strdup(stab + Read32(st[i].name)));
         d->syms.p[d->syms.i].addr = Read64(st[i].value) + eskew;
-        ELF_LOGF("SYMBOL %" PRIx64 " %" PRIx64 " %s", eskew,
-                 d->syms.p[d->syms.i].addr, d->syms.p[d->syms.i].name);
         d->syms.p[d->syms.i].rank =
             -islocal + -isweak + -isabs + isprotected + isobject + isfunc;
         d->syms.p[d->syms.i].iscode =

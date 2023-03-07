@@ -46,6 +46,10 @@ o/$(MODE)/test/asm/%.com:						\
 	@echo "$(VM) $< || exit" >>$@
 	@echo "echo [test] o/$(MODE)/blink/blink $< >&2" >>$@
 	@echo "o/$(MODE)/blink/blink $< || exit" >>$@
+	@echo "echo [test] o/$(MODE)/blink/blink -m $< >&2" >>$@
+	@echo "o/$(MODE)/blink/blink -m $< || exit" >>$@
+	@echo "echo [test] o/$(MODE)/blink/blink -jm $< >&2" >>$@
+	@echo "o/$(MODE)/blink/blink -jm $< || exit" >>$@
 	@echo "echo [test] o/third_party/qemu/qemu-x86_64 -cpu core2duo $< >&2" >>$@
 	@echo "$(VM) o/third_party/qemu/qemu-x86_64 -cpu core2duo $< || exit" >>$@
 	@chmod +x $@

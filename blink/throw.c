@@ -82,11 +82,13 @@ void HaltMachine(struct Machine *m, int code) {
       break;
     case kMachineProtectionFault:
       RestoreIp(m);
-      DeliverSignalToUser(m, SIGSEGV_LINUX, SEGV_ACCERR_LINUX);
+      m->faultaddr = m->ip;
+      DeliverSignalToUser(m, SIGILL_LINUX, ILL_PRVOPC_LINUX);
       break;
     case kMachineSegmentationFault:
       RestoreIp(m);
-      DeliverSignalToUser(m, SIGSEGV_LINUX, SEGV_MAPERR_LINUX);
+      DeliverSignalToUser(m, SIGSEGV_LINUX,
+                          m->segvcode ? m->segvcode : SEGV_MAPERR_LINUX);
       break;
     case 1:
     case 3:

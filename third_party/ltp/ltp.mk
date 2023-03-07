@@ -325,7 +325,7 @@ LTP_TESTS =								\
 	o/$(MODE)/third_party/ltp/bin/2/readv02.elf.ok			\
 	o/$(MODE)/third_party/ltp/bin/2/realpath01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/openat01.elf.ok			\
-	o/$(MODE)/third_party/ltp/bin/2/recvmmsg01.elf.ok		\
+	o/$(MODE)/third_party/ltp/bin/3/recvmmsg01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/sendmmsg01.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/sendmmsg02.elf.ok		\
 	o/$(MODE)/third_party/ltp/bin/2/recvfrom01.elf.ok		\

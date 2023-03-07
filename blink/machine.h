@@ -417,6 +417,7 @@ struct Machine {                           //
   bool traprdtsc;                          //
   bool trapcpuid;                          //
   i8 trapno;                               //
+  i8 segvcode;                             //
   sigjmp_buf onhalt;                       //
   struct sigaltstack_linux sigaltstack;    //
   i64 robust_list;                         //
