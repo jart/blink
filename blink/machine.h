@@ -22,9 +22,10 @@
 #define kArgUimm0 3
 #define kArgArg   4
 
-#define kOpNormal    0
-#define kOpBranching 1
-#define kOpPrecious  2
+#define kOpNormal      0
+#define kOpBranching   1
+#define kOpPrecious    2
+#define kOpSerializing kOpPrecious
 
 #define kMaxThreadIds 32768
 #define kMinThreadId  262144

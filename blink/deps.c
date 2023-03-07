@@ -471,5 +471,16 @@ int ClassifyOp(u64 rde) {
       // longjmp could do anything. for example, we don't want clone()
       // to fork a jit path under construction.
       return kOpPrecious;
+    case 0x130:  // OpWrmsr
+    case 0x1A2:  // OpCpuid
+      return kOpSerializing;
+    case 0x1AE:
+      switch (ModrmReg(rde)) {
+        case 5:  // lfence
+        case 6:  // mfence
+          return kOpSerializing;
+        default:
+          return kOpNormal;
+      }
   }
 }
