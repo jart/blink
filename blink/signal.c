@@ -271,11 +271,16 @@ void CheckForSignals(struct Machine *m) {
   int sig;
   if (atomic_load_explicit(&m->killed, memory_order_acquire)) {
     SysExit(m, 0);
+#ifndef DISABLE_JIT
+  } else if (m->selfmodifying) {
+    FlushSmcQueue(m);
+    m->selfmodifying = false;
+#endif
   } else if (m->signals & ~m->sigmask) {
     if ((sig = ConsumeSignal(m, 0, 0))) {
       TerminateSignal(m, sig);
     }
   } else {
-    atomic_store_explicit(&m->attention, false, memory_order_release);
+    atomic_store_explicit(&m->attention, false, memory_order_relaxed);
   }
 }

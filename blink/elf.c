@@ -23,6 +23,7 @@
 #include <string.h>
 
 #include "blink/builtin.h"
+#include "blink/checked.h"
 #include "blink/elf.h"
 #include "blink/endian.h"
 #include "blink/log.h"
@@ -44,14 +45,14 @@ i64 GetElfMemorySize(const Elf64_Ehdr_ *ehdr, size_t size, i64 *base) {
       phdr = (const Elf64_Phdr_ *)((const u8 *)ehdr + off);
       if (Read32(phdr->type) == PT_LOAD_) {
         x = Read64(phdr->vaddr);
-        if (Add(x, Read64(phdr->memsz), &y)) return -1;
+        if (CheckedAdd(x, Read64(phdr->memsz), &y) == -1) return -1;
         lo = MIN(x, lo);
         hi = MAX(y, hi);
       }
     }
   }
   lo &= -GetSystemPageSize();
-  if (Sub(hi, lo, &res)) return -1;
+  if (CheckedSub(hi, lo, &res) == -1) return -1;
   *base = lo;
   return res;
 }

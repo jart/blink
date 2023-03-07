@@ -18,8 +18,10 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <stdio.h>
 
+#include "blink/builtin.h"
 #include "blink/bus.h"
 #include "blink/endian.h"
+#include "blink/jit.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/time.h"
@@ -110,6 +112,11 @@ static void Vmxoff(P) {
 
 static void InvlpgM(P) {
   ResetTlb(m);
+#ifndef DISABLE_JIT
+  if (!IsJitDisabled(&m->system->jit)) {
+    ResetJitPage(&m->system->jit, LoadEffectiveAddress(A).addr);
+  }
+#endif
 }
 
 static void Smsw(P, bool ismem) {

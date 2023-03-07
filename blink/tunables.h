@@ -39,6 +39,7 @@
 #define kBusRegion    kSemSize  // 16 is sufficient for 8-byte loads/stores
 #define kFutexMax     100
 #define kRedzoneSize  128
+#define kSmcQueueSize 32
 #define kMaxMapSize   (8ULL * 1024 * 1024 * 1024)
 #define kMaxResident  (8ULL * 1024 * 1024 * 1024)
 #define kMaxVirtual   (kMaxResident * 8)

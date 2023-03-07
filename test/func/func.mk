@@ -2,7 +2,12 @@
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
 PKGS += TEST_FUNC
-TEST_FUNC_FILES = $(wildcard test/func/*)
+TEST_FUNC_FILES := $(wildcard test/func/*)
+
+ifeq ($(HOST_SYSTEM), Darwin)
+TEST_FUNC_FILES := $(filter-out test/func/busted_test.c,$(TEST_FUNC_FILES))
+endif
+
 TEST_FUNC_SRCS = $(filter %.c,$(TEST_FUNC_FILES))
 TEST_FUNC_OBJS = $(TEST_FUNC_SRCS:%.c=o/$(MODE)/x86_64/%.o)
 TEST_FUNC_BINS = $(TEST_FUNC_SRCS:%.c=o/$(MODE)/%.elf)

@@ -39,6 +39,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/map.h"
 #include "blink/random.h"
 #include "blink/signal.h"
 #include "blink/sse.h"
@@ -440,22 +441,32 @@ static void OpMovslGdqpEd(P) {
   }
 }
 
-void Connect(P, u64 pc, bool avoid_obvious_cycles) {
+// we want to have independent jit paths jump directly into one another
+// to avoid having control flow drop back to the main interpreter loop.
+void Connect(P, u64 pc, bool avoid_cycles) {
 #ifdef HAVE_JIT
   void *jump;
   nexgen32e_f f;
-  if (!(avoid_obvious_cycles && pc == m->path.start)) {
+  // 1. branchless cyclic paths block sigs and deadlock shutdown
+  // 2. we don't want to stitch together paths on separate pages
+  if (!(avoid_cycles && pc == m->path.start) &&
+      (pc & -4096) == (m->path.start & -4096)) {
+    // is a preexisting jit path installed at destination?
     f = (nexgen32e_f)GetJitHook(&m->system->jit, pc,
                                 (uintptr_t)GeneralDispatch);
     if (f != JitlessDispatch && f != GeneralDispatch) {
+      // tail call into the other generated jit path function
       jump = (u8 *)f + GetPrologueSize();
     } else {
+      // generate assembly to drop back into main interpreter
+      // then apply an smc fixup later on, if dest is created
       if (!FLAG_noconnect) {
         RecordJitJump(m->path.jb, pc, GetPrologueSize());
       }
       jump = (void *)m->system->ender;
     }
   } else {
+    // generate assembly to drop back into main interpreter
     jump = (void *)m->system->ender;
   }
   AppendJitJump(m->path.jb, jump);
@@ -2016,6 +2027,8 @@ void GeneralDispatch(P) {
 #ifdef HAVE_JIT
   int opclass;
   uintptr_t jitpc = 0;
+  bool op_overlaps_page_boundary;
+  bool path_would_overlap_page_boundary;
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
            GetPc(m));
   LoadInstruction(m, GetPc(m));
@@ -2023,44 +2036,58 @@ void GeneralDispatch(P) {
   disp = m->xedd->op.disp;
   uimm0 = m->xedd->op.uimm0;
   opclass = ClassifyOp(rde);
-  if (IsMakingPath(m) ||
-      (opclass != kOpPrecious && CanJit(m) && CreatePath(A))) {
-    if (opclass == kOpPrecious) {
-      // we don't want to be constructing a path upon syscall entry
-      CompletePath(A);
-    } else {
-      // begin creating new element in jit path
-      unassert(opclass == kOpNormal || opclass == kOpBranching);
-      ++m->path.elements;
-      STATISTIC(++path_elements);
-      AddPath_StartOp(A);
-      jitpc = GetJitPc(m->path.jb);
-      JIT_LOGF("adding [%s] from address %" PRIx64
-               " to path starting at %" PRIx64,
-               DescribeOp(m, GetPc(m)), GetPc(m), m->path.start);
-    }
+  // try to fast-track precious ops, since they hit this every time
+  // each jit path should be fully contained within a single page
+  op_overlaps_page_boundary =
+      (m->ip & -4096) != ((m->ip + Oplength(rde) - 1) & -4096);
+  path_would_overlap_page_boundary =
+      IsMakingPath(m) && (m->ip & -4096) != (m->path.start & -4096);
+  if (IsMakingPath(m) &&
+      (opclass == kOpPrecious || opclass == kOpSerializing ||
+       op_overlaps_page_boundary || path_would_overlap_page_boundary)) {
+    // complete path where last instruction in path is previously run op
+    CompletePath(A);
   }
-  // call naive opcode implementation
+  // if we're in a jit path, or we're able to create a new path
+  if (IsMakingPath(m) ||
+      (opclass != kOpPrecious && opclass != kOpSerializing &&
+       !op_overlaps_page_boundary && CanJit(m) && CreatePath(A))) {
+    // begin adding this op to the jit path
+    unassert(opclass == kOpNormal || opclass == kOpBranching);
+    ++m->path.elements;
+    STATISTIC(++path_elements);
+    AddPath_StartOp(A);
+    jitpc = GetJitPc(m->path.jb);
+    JIT_LOGF("adding [%s] from address %" PRIx64
+             " to path starting at %" PRIx64,
+             DescribeOp(m, GetPc(m)), GetPc(m), m->path.start);
+  }
+  // advance the instruction pointer
+  // record the op length so it can be rewound upon fault
   m->oplen = Oplength(rde);
   m->ip += Oplength(rde);
+  // call the c implementation of the opcode
   GetOp(Mopcode(rde))(A);
+  // cleanup after ReserveAddress() if a memory access overlapped a page
   if (m->stashaddr) {
     CommitStash(m);
   }
   if (IsMakingPath(m)) {
-    // finish creating new element in jit path
+    // finish adding new element to jit path
     unassert(opclass == kOpNormal || opclass == kOpBranching);
+    // did the op generate its own assembly code?
     if (GetJitPc(m->path.jb) != jitpc) {
-      // the op generated its jit code
+      // it did; that means we're done
       AddPath_EndOp(A);
     } else {
-      // emit the "one size fits all" jit operation
+      // otherwise generate "one size fits all" assembly code
       AddPath(A);
       AddPath_EndOp(A);
       STATISTIC(++path_elements_auto);
     }
     if (opclass == kOpBranching) {
       // branches, calls, and jumps always force end of path
+      // unlike precious ops the branching op can be in path
       CompletePath(A);
     }
   }
@@ -2137,14 +2164,6 @@ void Actor(struct Machine *mm) {
   }
 }
 
-void HandleFatalSystemSignal(struct Machine *m) {
-  int sig;
-  RestoreIp(m);
-  m->faultaddr = ConvertHostToGuestAddress(m->system, g_siginfo.si_addr);
-  sig = UnXlatSignal(g_siginfo.si_signo);
-  DeliverSignalToUser(m, sig, UnXlatSiCode(sig, g_siginfo.si_code));
-}
-
 void Blink(struct Machine *m) {
   int rc;
   for (;;) {
@@ -2163,7 +2182,15 @@ void Blink(struct Machine *m) {
       AbandonPath(m);
     }
     if (rc == kMachineFatalSystemSignal) {
-      HandleFatalSystemSignal(m);
+      HandleFatalSystemSignal(m, &g_siginfo);
     }
   }
+}
+
+void HandleFatalSystemSignal(struct Machine *m, const siginfo_t *si) {
+  int sig;
+  RestoreIp(m);
+  m->faultaddr = ConvertHostToGuestAddress(m->system, si->si_addr, 0);
+  sig = UnXlatSignal(si->si_signo);
+  DeliverSignalToUser(m, sig, UnXlatSiCode(sig, si->si_code));
 }

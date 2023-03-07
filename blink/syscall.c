@@ -53,6 +53,7 @@
 #include "blink/atomic.h"
 #include "blink/bus.h"
 #include "blink/case.h"
+#include "blink/checked.h"
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
@@ -493,7 +494,7 @@ static void *OnSpawn(void *arg) {
     m->canhalt = true;
     unassert(!pthread_sigmask(SIG_SETMASK, &m->spawn_sigmask, 0));
   } else if (rc == kMachineFatalSystemSignal) {
-    HandleFatalSystemSignal(m);
+    HandleFatalSystemSignal(m, &g_siginfo);
   }
   Blink(m);
 }
@@ -1073,17 +1074,10 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
   }
   BEGIN_NO_PAGE_FAULTS;
   LOCK(&m->system->mmap_lock);
-  rc = ProtectVirtual(m->system, addr, size, prot);
-#ifdef HAVE_JIT
-  if (rc != -1 && (prot & PROT_EXEC)) {
-    LOGF("resetting jit hooks");
-    ClearJitHooks(&m->system->jit);
-  }
-#endif
+  rc = ProtectVirtual(m->system, addr, size, prot, false);
   unassert(CheckMemoryInvariants(m->system));
   UNLOCK(&m->system->mmap_lock);
   END_NO_PAGE_FAULTS;
-  InvalidateSystem(m->system, false, true);
   return rc;
 }
 
@@ -3765,6 +3759,7 @@ static ssize_t SysGetrandom(struct Machine *m, i64 a, size_t n, int f) {
 }
 
 void OnSignal(int sig, siginfo_t *si, void *uc) {
+  SIG_LOGF("OnSignal(%s)", DescribeSignal(UnXlatSignal(sig)));
   EnqueueSignal(g_machine, UnXlatSignal(sig));
 }
 
@@ -4614,7 +4609,7 @@ static int Poll(struct Machine *m, i64 fdsaddr, u64 nfds,
   struct pollfd_linux *gfds;
   struct timespec now, wait, remain;
   int (*poll_impl)(struct pollfd *, nfds_t, int);
-  if (!Mul(nfds, sizeof(struct pollfd_linux), &gfdssize) &&
+  if (!CheckedMul(nfds, sizeof(struct pollfd_linux), &gfdssize) &&
       gfdssize <= 0x7ffff000) {
     if ((gfds = (struct pollfd_linux *)AddToFreeList(m, malloc(gfdssize)))) {
       rc = 0;

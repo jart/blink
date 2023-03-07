@@ -10,7 +10,7 @@ This project contains two programs:
 different operating systems and hardware architectures. It's designed to
 do the same thing as the `qemu-x86_64` command, except that
 
-1. Blink is 206kb in size (112kb with optional features disabled),
+1. Blink is 213kb in size (112kb with optional features disabled),
    whereas qemu-x86_64 is a 4mb binary.
 
 2. Blink will run your Linux binaries on any POSIX system, whereas
@@ -323,8 +323,13 @@ The following `FLAG` arguments are provided:
   `MODE=rel` and `MODE=tiny` builds, in which case this flag is ignored.
 
 - `-Z` will cause internal statistics to be printed to standard error on
-  exit. Stats aren't available in `MODE=rel` and `MODE=tiny` builds, and
-  this flag is ignored.
+  exit. Each line will display a monitoring metric. Most metrics will
+  either be integer counters or floating point running averages. Most
+  but not all integer counters are monotonic. In the interest of not
+  negatively impacting Blink's performance, statistics are computed on a
+  best effort basis which currently isn't guaranteed to be atomic in a
+  multi-threaded environment. Stats aren't available in `MODE=rel` and
+  `MODE=tiny` builds, and this flag is ignored.
 
 - `-z` [repeatable] may be specified to zoom the memory panels, so they
   display a larger amount of memory in a smaller space. By default, one
@@ -384,9 +389,6 @@ glyphs are defined as follows:
   Rather than stepping a single instruction, it will step the entire
   length of the JIT path. The next assembly line that'll be
   highlighted will be the instruction after where the path ends.
-
-- `G` means that a hook has been explicitly set to `GeneralDispatch`.
-  This setting currently isn't used.
 
 ### Environment Variables
 
@@ -757,6 +759,98 @@ flag may be passed to disable the linear translation optimization, and
 instead use only the memory safe full virtualization approach of the
 PML4T and TLB.
 
+### Self-Modifying Code
+
+Many CPU architectures require esoteric rituals for flushing CPU caches
+when code modifies itself. That's not the case with x86 archihtecture,
+which takes care of this chore automatically. Blink is able to offer the
+same promises here as Intel and AMD, by abstracting fast and automatic
+invalidation of caches for programs using self-modifying code (SMC).
+
+When Blink's JIT isn't enabled, self-modifying code always causes
+instruction caches to be invalidated immediately, at least within the
+same thread. That's because Blink compares the raw instruction bytes
+with what's in the instruction cache before fetching its decoded value.
+
+When JITing is enabled, Blink will automatically invalidate JIT memory
+associated with code that's been modified. This happens on a 4096-byte
+page granularity. When a function like mprotect() is called that causes
+memory pages to transition from a non-executable to executable state,
+the impacted pages will be invalidated by the JIT. The JIT maintains a
+hash table where the key is the virtual address at which a generated
+function begins (which we call a "path") and the value is a function
+pointer to the generated code. When Blink is generating paths, it is
+careful to ensure that all the guest instructions which are added to a
+page, only exist within the confines of a single 4096-byte page. Thus
+when a page needs to be invalidated, Blink simply deletes any hook for
+each address within the page.
+
+When RWX memory is used, Blink can't rely on mprotect() to communicate
+the intent of the guest program. What Blink will do instead is protect
+any RWX guest memory, so that it's registered as read-only in the host
+operating system. This way, whenever the guest writes to RWX memory, a
+SIGSEGV signal will be delivered to Blink, which then re-enables write
+permissions on the impacted RWX page, flips a bit to the thread in the
+SMC state and then permits execution to resume for at least one opcode
+before the interpreter loop notices the SMC state, invalidates the JIT
+and re-enables the memory protection. This means that:
+
+1. Memory ops in general aren't slowed down by Blink's SMC support
+2. RWX memory can be written-to with some overhead
+3. RWX memory can be read-from with zero overhead
+4. Changes take effect when a JIT path ends
+
+Intel's sixteen thousand page manual lays out the following guidelines
+for conformant self-modifying code:
+
+> To write self-modifying code and ensure that it is compliant with
+> current and future versions of the IA-32 architectures, use one of
+> the following coding options:
+>
+> (* OPTION 1 *)  
+> Store modified code (as data) into code segment;  
+> Jump to new code or an intermediate location;  
+> Execute new code;
+>
+> (* OPTION 2 *)  
+> Store modified code (as data) into code segment;  
+> Execute a serializing instruction; (* For example, CPUID instruction *)  
+> Execute new code;
+>
+> ──Quoth Intel Manual V.3, §8.1.3
+
+Blink implements this behavior because branching instructions always
+cause JIT paths to end, and serializing instructions are never added to
+JIT paths in the first place.
+
+Intel's rules allow Blink some leeway to make writiting to make this RWX
+memory technique go fast without causing signal storms or incurring much
+system call overhead. As an example, consider the internal statistics
+printed by the [`smc2_test.c`](test/func/smc2_test.c) program:
+
+```
+make -j8 o//blink/blink o//test/func/smc2_test.elf
+o//blink/blink -Z o//test/func/smc2_test.elf
+[...]
+icache_resets                    = 1
+jit_blocks                       = 1
+jit_hooks_installed              = 132
+jit_hooks_deleted                = 19
+jit_page_resets                  = 21
+smc_checks                       = 22
+smc_flushes                      = 22
+smc_enqueued                     = 22
+smc_segfaults                    = 22
+[...]
+```
+
+The above program performs 300+ independent write operations to RWX
+memory. However we can see very few of them resulted in segfaults, since
+most of those ops happened in the SlowMemCpy() function which uses a
+tight conditional branch loop rather than a proper jump. This let the
+program get more accomplished, before dropping out of JIT code back into
+the main interpreter loop, which is where Blink resets the SMC state.
+
 ## Pseudoteletypewriter
 
 Blink has an xterm-compatible ANSI pseudoteletypewriter display
@@ -861,28 +955,17 @@ Blink offers guest programs a 48-bit virtual address space with a
 a larger page (e.g. Apple M1, Cygwin), and (2) the linear memory
 optimization is enabled (i.e. you're *not* using `blink -m`) then Blink
 may need to relax memory protections in cases where the memory intervals
-defined by the guest aren't aligned to the host system page size. Is is
-recommended, when calling functions like mmap() and mprotect(), that
-both `addr` and `addr + size` be aliged to the true page size, which
-Blink reports to the guest in `getauxval(AT_PAGESZ)`. This value should
-be obtainable via the portable API `sysconf(_SC_PAGESIZE)` assuming the
-C library implements it correctly. Please note that when Blink is
-running in its fully virtualized mode (i.e. `blink -m`) this concern
-does not apply. That's because Blink will allocate a full system page
-for every 4096 byte page that gets mapped from a file.
+defined by the guest aren't aligned to the host system page size. This
+means that, on system with a larger than 4096 byte page size:
 
-### Self Modifying Code
+1. Misaligned read-only pages could become writable
+2. JIT hooks might not invalidate automatically on misaligned RWX pages
 
-Blink supports self-modifying code, with some caveats.
-
-If Blink's JIT is disabled, then Blink offers perfect support for
-self-modifying code, and no instruction flush is required.
-
-If Blink's JIT is enabled, then it's recommended that memory not be
-executed until it's been generated. This is sufficient to support the
-JIT use case of well-behaved virtual machines such as Blink and Qemu.
-However in other cases it's desirable for binaries to rewrite themselves
-in memory (code morphing). In that case, the guest binary must use
-`mprotect(PROT_EXEC)` to invalidate JIT hooks that were previously
-generated. Please note that doing this will leak JIT memory, so it
-should ideally only be called once in a program's lifecycle.
+It's recommended, when calling functions like mmap() and mprotect(),
+that both `addr` and `addr + size` be aliged to the host page size.
+Blink reports that value to the guest program in `getauxval(AT_PAGESZ)`,
+which should be obtainable via the POSIX API `sysconf(_SC_PAGESIZE)` if
+the C library is implemented correctly. Please note that when Blink is
+running in full virtualization mode (i.e. `blink -m`) this concern no
+longer applies. That's because Blink will allocate a full system page
+for every 4096 byte page that's mapped from a file.

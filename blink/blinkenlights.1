@@ -205,9 +205,14 @@ where the mouse cursor is hovered over the panel that should be zoomed.
 However, many terminal emulators (especially on Windows), do not support
 this xterm feature and as such, this flag is provided as an alternative.
 .It Fl Z
-Print internal statistics to standard error on exit. Statistics aren't
-available in MODE=rel and MODE=tiny builds, in which case this flag is
-ignored.
+Prints internal statistics to standard error on exit. Each line will
+display a monitoring metric. Most metrics will either be integer
+counters or floating point running averages. Most but not all integer
+counters are monotonic. In the interest of not negatively impacting
+Blink's performance, statistics are computed on a best effort basis
+which currently isn't guaranteed to be atomic in a multi-threaded
+environment. Statistics aren't available in MODE=rel and MODE=tiny
+builds, in which case this flag is ignored.
 .It Fl V
 [repeatable] Increases verbosity.
 .It Fl R

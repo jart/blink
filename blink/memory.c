@@ -24,6 +24,7 @@
 
 #include "blink/assert.h"
 #include "blink/bus.h"
+#include "blink/checked.h"
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
@@ -286,6 +287,13 @@ u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
     m->segvcode = SEGV_ACCERR_LINUX;
     return (u8 *)efault0();
   }
+#ifndef DISABLE_JIT
+  if ((need & PAGE_RW) &&
+      (entry & (PAGE_U | PAGE_RW | PAGE_XD)) == (PAGE_U | PAGE_RW) &&
+      !IsJitDisabled(&m->system->jit) && !IsPageInSmcQueue(m, virt)) {
+    AddPageToSmcQueue(m, virt);
+  }
+#endif
   if ((host = GetPageAddress(m->system, entry, false))) {
     return host + (virt & 4095);
   } else {
@@ -330,7 +338,7 @@ bool IsValidMemory(struct Machine *m, i64 virt, i64 size, int prot) {
   if (prot & PROT_EXEC) {
     mask |= PAGE_XD;
   }
-  if (Add(virt, size, &pe)) return false;
+  if (CheckedAdd(virt, size, &pe) == -1) return false;
   for (p = virt; p < pe; p += 4096) {
     if (!(pte = FindPageTableEntry(m, p))) {
       return false;

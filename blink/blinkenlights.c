@@ -38,6 +38,7 @@
 #include <wctype.h>
 
 #include "blink/assert.h"
+#include "blink/atomic.h"
 #include "blink/bitscan.h"
 #include "blink/breakpoint.h"
 #include "blink/builtin.h"
@@ -3541,10 +3542,12 @@ static void Execute(void) {
     ++cycle;
     ProfileOp(m, GetPc(m) - m->oplen);
   }
+  if (atomic_load_explicit(&m->attention, memory_order_acquire)) {
+    CheckForSignals(m);
+  }
 }
 
 static void Exec(void) {
-  int sig;
   ssize_t bp;
   int interrupt;
   LOGF("Exec");
@@ -3560,11 +3563,6 @@ static void Exec(void) {
       LoadInstruction(m, GetPc(m));
       if (verbose) LogInstruction();
       Execute();
-      if (m->signals & ~m->sigmask) {
-        if ((sig = ConsumeSignal(m, 0, 0))) {
-          exit(128 + sig);
-        }
-      }
       CheckFramePointer();
     } else if (!(action & CONTINUE) &&
                (bp = IsAtWatchpoint(&watchpoints, m)) != -1) {
@@ -3588,11 +3586,6 @@ static void Exec(void) {
         }
         if (verbose) LogInstruction();
         Execute();
-        if (m->signals & ~m->sigmask) {
-          if ((sig = ConsumeSignal(m, 0, 0))) {
-            exit(128 + sig);
-          }
-        }
       KeepGoing:
         CheckFramePointer();
         if (action & ALARM) {
@@ -3985,19 +3978,22 @@ void TerminateSignal(struct Machine *m, int sig) {
 }
 
 static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
+  struct Machine *m = g_machine;
+#ifndef DISABLE_JIT
+  if (IsSelfModifyingCodeSegfault(m, si)) return;
+#endif
   LOGF("OnSigSegv(%p)", si->si_addr);
-  RestoreIp(g_machine);
+  RestoreIp(m);
   // TODO(jart): Fix address translation in non-linear mode.
-  g_machine->faultaddr =
-      ConvertHostToGuestAddress(g_machine->system, si->si_addr);
-  ERRF("SIGSEGV AT ADDRESS %" PRIx64 " (OR %p) at RIP=%" PRIx64,
-       g_machine->faultaddr, si->si_addr, m->ip);
-  ERRF("BACKTRACE\n\t%s", GetBacktrace(g_machine));
+  m->faultaddr = ConvertHostToGuestAddress(m->system, si->si_addr, 0);
+  ERRF("SIGSEGV AT ADDRESS %" PRIx64 " (OR %p) at RIP=%" PRIx64, m->faultaddr,
+       si->si_addr, m->ip);
+  ERRF("BACKTRACE\n\t%s", GetBacktrace(m));
   if (!react) {
     sig = UnXlatSignal(si->si_signo);
     DeliverSignalToUser(m, sig, UnXlatSiCode(sig, si->si_code));
   }
-  siglongjmp(g_machine->onhalt, kMachineSegmentationFault);
+  siglongjmp(m->onhalt, kMachineSegmentationFault);
 }
 
 int main(int argc, char *argv[]) {

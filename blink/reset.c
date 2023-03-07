@@ -21,6 +21,7 @@
 
 #include "blink/flags.h"
 #include "blink/machine.h"
+#include "blink/stats.h"
 
 #define LDBL 3
 #define RINT 0
@@ -97,12 +98,14 @@ void ResetCpu(struct Machine *m) {
 }
 
 void ResetTlb(struct Machine *m) {
+  STATISTIC(++tlb_resets);
   memset(m->tlb, 0, sizeof(m->tlb));
   m->opcache->codevirt = 0;
   m->opcache->codehost = 0;
 }
 
 void ResetInstructionCache(struct Machine *m) {
+  STATISTIC(++icache_resets);
   memset(m->opcache->icache, 0, sizeof(m->opcache->icache));
   m->opcache->codevirt = 0;
   m->opcache->codehost = 0;

@@ -143,9 +143,11 @@ struct JitHooks {
 };
 
 struct Jit {
+  int staging;
   long pagesize;
   _Atomic(bool) disabled;
   _Atomic(long) blocksize;
+  _Atomic(uintptr_t) lastreset;
   pthread_mutex_t_ lock;
   struct JitHooks hooks;
   struct Dll *blocks;
@@ -157,9 +159,9 @@ extern const u8 kJitSav[5];
 extern const u8 kJitArg[4];
 
 int ShutdownJit(void);
-int InitJit(struct Jit *);
 int DestroyJit(struct Jit *);
 int FixJitProtection(struct Jit *);
+int InitJit(struct Jit *, uintptr_t);
 bool CanJitForImmediateEffect(void) nosideeffect;
 bool AppendJit(struct JitBlock *, const void *, long);
 int AbandonJit(struct Jit *, struct JitBlock *);
@@ -177,7 +179,7 @@ bool FinishJit(struct Jit *, struct JitBlock *, u64);
 bool RecordJitJump(struct JitBlock *, u64, int);
 uintptr_t GetJitHook(struct Jit *, u64, uintptr_t);
 bool SetJitHook(struct Jit *, u64, intptr_t);
-int ClearJitHooks(struct Jit *);
+int ResetJitPage(struct Jit *, i64);
 
 int CommitJit_(struct Jit *, struct JitBlock *);
 void ReinsertJitBlock_(struct Jit *, struct JitBlock *);

@@ -149,9 +149,7 @@ static char *DisLineCode(struct Dis *d, char *p, int err) {
   if (d->m && !IsJitDisabled(&d->m->system->jit)) {
     uintptr_t hook;
     if ((hook = GetJitHook(&d->m->system->jit, d->addr, 0))) {
-      if (hook == (uintptr_t)GeneralDispatch) {
-        *p++ = 'G';  // general explicit
-      } else if (hook == (uintptr_t)JitlessDispatch) {
+      if (hook == (uintptr_t)JitlessDispatch) {
         *p++ = 'S';  // staging hook
       } else {
         *p++ = '*';  // committed jit hook

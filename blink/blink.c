@@ -167,10 +167,28 @@ void TerminateSignal(struct Machine *m, int sig) {
 }
 
 static void OnFatalSystemSignal(int sig, siginfo_t *si, void *ptr) {
+  struct Machine *m = g_machine;
+#ifdef __APPLE__
+  // The fruit platform will raise SIGBUS on writes to anon mappings
+  // which don't have the PROT_WRITE protection, even when aligned!!
+  // We only create this kind of memory for getting notifications if
+  // RWX memory is modified.
+  if (HasLinearMapping() && sig == SIGBUS && si->si_code == BUS_ADRALN &&
+      s->protectedsmc) {
+    sig = SIGSEGV;
+    si->si_signo = SIGSEGV;
+    si->si_code = SEGV_ACCERR;
+  }
+#endif
+  SIG_LOGF("OnFatalSystemSignal(%s, %p)", DescribeSignal(UnXlatSignal(sig)),
+           si->si_addr);
+#ifndef DISABLE_JIT
+  if (IsSelfModifyingCodeSegfault(m, si)) return;
+#endif
   g_siginfo = *si;
-  unassert(g_machine);
-  unassert(g_machine->canhalt);
-  siglongjmp(g_machine->onhalt, kMachineFatalSystemSignal);
+  unassert(m);
+  unassert(m->canhalt);
+  siglongjmp(m->onhalt, kMachineFatalSystemSignal);
 }
 
 static void ProgramLimit(struct System *s, int hresource, int gresource) {

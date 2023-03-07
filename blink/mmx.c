@@ -152,11 +152,11 @@ relegated void MmxPmullw(u8 x[8], const u8 y[8]) {
   }
 }
 
-static relegated int Add(int x, int y) {
+static relegated int Addition(int x, int y) {
   return x + y;
 }
 
-static relegated int Sub(int x, int y) {
+static relegated int Subtraction(int x, int y) {
   return x - y;
 }
 
@@ -179,11 +179,11 @@ static relegated void Phsw(u8 x[8], const u8 y[8], int Op(int, int)) {
 }
 
 relegated void MmxPhaddsw(u8 x[8], const u8 y[8]) {
-  Phsw(x, y, Add);
+  Phsw(x, y, Addition);
 }
 
 relegated void MmxPhsubsw(u8 x[8], const u8 y[8]) {
-  Phsw(x, y, Sub);
+  Phsw(x, y, Subtraction);
 }
 
 #endif /* DISABLE_MMX */

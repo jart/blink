@@ -76,15 +76,19 @@ check2:	o/$(MODE)/test/sse			\
 	o/$(MODE)/test/func			\
 	o/$(MODE)/test/asm			\
 	o/$(MODE)/third_party/ltp		\
-	o/$(MODE)/test/asm/emulates		\
-	o/$(MODE)/test/func/emulates
+
+# TODO(jart): upgrade qemu due to its bugs
+#	o/$(MODE)/test/asm/emulates		\
+#	o/$(MODE)/test/func/emulates
 
 emulates:					\
 	o/$(MODE)/test/asm			\
 	o/$(MODE)/test/flat			\
 	o/$(MODE)/test/metal			\
 	o/$(MODE)/third_party/ltp/medium	\
-	o/$(MODE)/third_party/cosmo/emulates
+
+# TODO(jart): upgrade qemu due to its bugs
+#	o/$(MODE)/third_party/cosmo/emulates
 
 tags: TAGS HTAGS
 

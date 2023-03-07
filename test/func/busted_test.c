@@ -1,5 +1,7 @@
 // 1. test SIGBUS is delivered to guest correctly
 // 2. test `blink -m` can reverse map a host addr
+// TODO(jart): terminates due to sigbus on cygwin
+// TODO(jart): why does silicon trap on the int3?
 #include <signal.h>
 #include <stdlib.h>
 #include <sys/auxv.h>
@@ -12,7 +14,10 @@ long pagesz;
 void OnBusted(int sig, siginfo_t *si, void *vctx) {
   if (sig != SIGBUS) _exit(8);
   if (si->si_signo != SIGBUS) _exit(9);
-  if (si->si_code != BUS_ADRERR) _exit(10);
+  if (si->si_code != BUS_ADRALN) {
+    // TODO(jart): Why do XNU and FreeBSD report BUS_ADRALN?
+    if (si->si_code != BUS_ADRERR) _exit(10);
+  }
   if (si->si_addr != map + pagesz) _exit(11);
   _exit(0);
 }

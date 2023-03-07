@@ -27,6 +27,7 @@
 #include "blink/atomic.h"
 #include "blink/bitscan.h"
 #include "blink/builtin.h"
+#include "blink/checked.h"
 #include "blink/debug.h"
 #include "blink/dll.h"
 #include "blink/end.h"
@@ -75,20 +76,20 @@
  *
  *     // setup a multi-threaded jit manager
  *     struct Jit jit;
- *     InitJit(&jit);
+ *     InitJit(&jit, 0);
  *
  *     // workflow for composing two function calls
- *     long Add(long x, long y) { return x + y; }
+ *     long Adder(long x, long y) { return x + y; }
  *     _Atomic(int) hook;
  *     struct JitBlock *jb;
  *     jb = StartJit(jit);
  *     AppendJit(jb, kPrologue, sizeof(kPrologue));
  *     AppendJitSetReg(jb, kJitArg0, 1);
  *     AppendJitSetReg(jb, kJitArg1, 2);
- *     AppendJitCall(jb, (void *)Add);
+ *     AppendJitCall(jb, (void *)Adder);
  *     AppendJitMovReg(jb, kJitRes0, kJitArg0);
  *     AppendJitSetReg(jb, kJitArg1, 3);
- *     AppendJitCall(jb, (void *)Add);
+ *     AppendJitCall(jb, (void *)Adder);
  *     AppendJit(jb, kEpilogue, sizeof(kEpilogue));
  *     FinishJit(jit, jb, &hook, 0);
  *     FlushJit(jit);
@@ -321,6 +322,25 @@ static void ReleaseJitBlock(struct JitBlock *jb) {
   UNLOCK(&g_jit.lock);
 }
 
+static inline intptr_t DecodeJitFunc(int func) {
+  unassert(func);
+  return (intptr_t)IMAGE_END + func;
+}
+
+static nosideeffect int EncodeJitFunc(intptr_t addr) {
+  int func;
+  intptr_t base, disp;
+  if (addr) {
+    base = (intptr_t)IMAGE_END;
+    disp = addr - base;
+    func = disp;
+    unassert(func && func == disp);
+  } else {
+    func = 0;
+  }
+  return func;
+}
+
 /**
  * Initializes memory object for Just-In-Time (JIT) threader.
  *
@@ -330,10 +350,11 @@ static void ReleaseJitBlock(struct JitBlock *jb) {
  *
  * @return 0 on success
  */
-int InitJit(struct Jit *jit) {
+int InitJit(struct Jit *jit, uintptr_t opt_staging_function) {
   int blocksize;
   memset(jit, 0, sizeof(*jit));
   jit->pagesize = GetSystemPageSize();
+  jit->staging = EncodeJitFunc(opt_staging_function);
   jit->blocksize = blocksize = ROUNDUP(kJitMinBlockSize, jit->pagesize);
   unassert(!pthread_mutex_init(&jit->lock, 0));
   jit->hooks.n = RoundupTwoPow(kJitMemorySize / kJitAveragePath * 2);
@@ -397,23 +418,16 @@ int FixJitProtection(struct Jit *jit) {
   return 0;
 }
 
-bool SetJitHook(struct Jit *jit, u64 virt, intptr_t func) {
-  int offset;
-  unsigned i;
-  intptr_t base, key;
-  unsigned hash, spot, step;
-  unassert(virt);
-  STATISTIC(++hook_set);
-  // reduce function pointer to four bytes
-  if (func) {
-    base = (intptr_t)IMAGE_END;
-    unassert(func - base);
-    unassert(INT_MIN <= func - base && func - base <= INT_MAX);
-    offset = func - base;
+static inline uintptr_t MakeJitResetCode(i64 virt) {
+  if (sizeof(uintptr_t) * CHAR_BIT >= 48) {
+    return virt & -4096;
   } else {
-    offset = 0;
+    return 0;
   }
-  // ensure there's room to add this hook
+}
+
+static bool IncrementJitHookCount(struct Jit *jit) {
+  unsigned i;
   unassert(IS2POW(jit->hooks.n));
   i = atomic_load_explicit(&jit->hooks.i, memory_order_relaxed);
   do {
@@ -424,6 +438,23 @@ bool SetJitHook(struct Jit *jit, u64 virt, intptr_t func) {
     }
   } while (!atomic_compare_exchange_weak_explicit(
       &jit->hooks.i, &i, i + 1, memory_order_release, memory_order_relaxed));
+  return true;
+}
+
+bool SetJitHook(struct Jit *jit, u64 virt, intptr_t funcaddr) {
+  int func, oldfunc;
+  uintptr_t key, resetcode;
+  unsigned hash, spot, step;
+  unassert(virt);
+  // ensure there's room to add this hook
+  if (!IncrementJitHookCount(jit)) return false;
+  if ((func = EncodeJitFunc(funcaddr))) {
+    if (func == jit->staging) {
+      STATISTIC(++jit_hooks_staged);  // tracks placeholder paths present
+    } else {
+      STATISTIC(++jit_hooks_installed);  // tracks dynamic paths present
+    }
+  }
   // probe for spot in hash table. this is guaranteed to halt since we
   // never place more than jit->hooks.n/2 items within this hash table
   spot = 0;
@@ -434,27 +465,55 @@ bool SetJitHook(struct Jit *jit, u64 virt, intptr_t func) {
     key = atomic_load_explicit(jit->hooks.virt + spot, memory_order_acquire);
     ++step;
   } while (key && key != virt);
-  // store hook
-  atomic_store_explicit(jit->hooks.func + spot, offset, memory_order_release);
-  atomic_store_explicit(jit->hooks.virt + spot, virt, memory_order_release);
+  oldfunc = atomic_load_explicit(jit->hooks.func + spot, memory_order_acquire);
+  // store new entry at hash table slot
+  do {
+    atomic_store_explicit(jit->hooks.func + spot, func, memory_order_release);
+  } while (!atomic_compare_exchange_weak_explicit(jit->hooks.virt + spot, &key,
+                                                  virt, memory_order_release,
+                                                  memory_order_relaxed));
+  if (key) {
+    // we ended up replacing a hash table entry instead
+    unassert(
+        atomic_fetch_add_explicit(&jit->hooks.i, -1, memory_order_acq_rel) > 0);
+    if (key != virt) {
+      // race condition occurred with another thread
+      STATISTIC(++jit_hooks_clobbered);
+    }
+  }
+  // do some best effort accounting. oldfunc isn't guaranteed to be
+  // consistent with key in multithreaded environments, but so what
+  // because statistic counters aren't atomic across threads either
+  if (oldfunc) {
+    if (oldfunc == jit->staging) {
+      STATISTIC(--jit_hooks_staged);
+    } else {
+      // TODO(jart): It'd be nice to reclaim this JIT memory.
+      STATISTIC(--jit_hooks_installed);
+      STATISTIC(++jit_hooks_deleted);
+    }
+  }
+  resetcode = MakeJitResetCode(virt);
+  atomic_compare_exchange_strong_explicit(&jit->lastreset, &resetcode, 0,
+                                          memory_order_release,
+                                          memory_order_relaxed);
   return true;
 }
 
 uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
-  int offset;
+  int off;
   uintptr_t key;
   unsigned hash, spot, step;
   unassert(virt);
   unassert(IS2POW(jit->hooks.n));
   hash = HASH(virt);
-  // STATISTIC(++hook_get);
   for (spot = step = 0;; ++step) {
     spot = (hash + step * ((step + 1) >> 1)) & (jit->hooks.n - 1);
-    offset = atomic_load_explicit(jit->hooks.func + spot, memory_order_acquire);
+    off = atomic_load_explicit(jit->hooks.func + spot, memory_order_acquire);
     key = atomic_load_explicit(jit->hooks.virt + spot, memory_order_acquire);
     if (key == virt) {
-      if (offset) {
-        return (uintptr_t)IMAGE_END + offset;
+      if (off) {
+        return DecodeJitFunc(off);
       } else {
         return dflt;
       }
@@ -462,16 +521,54 @@ uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
     if (!key) {
       return dflt;
     }
-    STATISTIC(++hook_collision);
+    STATISTIC(++jit_collisions);
   }
 }
 
-int ClearJitHooks(struct Jit *jit) {
-  unsigned i;
-  for (i = 0; i < jit->hooks.n; ++i) {
-    atomic_store_explicit(jit->hooks.func + i, 0, memory_order_release);
-    atomic_store_explicit(jit->hooks.virt + i, 0, memory_order_release);
+/**
+ * Clears JIT paths installed to memory page.
+ * @param page is virtual address of 4096-byte page (needn't be aligned)
+ * @return 0 on success, or -1 w/ errno
+ */
+int ResetJitPage(struct Jit *jit, i64 page) {
+  i64 virt, end;
+  uintptr_t key;
+  unsigned hash, spot, step;
+  uintptr_t resetcode, lastreset;
+  resetcode = MakeJitResetCode(page);
+  lastreset = atomic_load_explicit(&jit->lastreset, memory_order_acquire);
+  if (lastreset && lastreset == resetcode) return 0;
+  STATISTIC(++jit_page_resets);
+  virt = page & -4096;
+  if (CheckedAdd(virt, 4096, &end) == -1) return -1;
+  for (; virt < end; ++virt) {
+    hash = HASH(virt);
+    for (spot = step = 0;; ++step) {
+      spot = (hash + step * ((step + 1) >> 1)) & (jit->hooks.n - 1);
+      key = atomic_load_explicit(jit->hooks.virt + spot, memory_order_acquire);
+      if (!key) break;
+      if (key == virt) {
+        do {
+          // TODO(jart): It'd be nice to reclaim JIT function memory.
+          atomic_store_explicit(jit->hooks.func + spot, 0,
+                                memory_order_release);
+        } while (!atomic_compare_exchange_weak_explicit(
+                     jit->hooks.virt + spot, &key, 0, memory_order_release,
+                     memory_order_relaxed) &&
+                 key);
+        if (key) {
+          STATISTIC(++jit_hooks_deleted);
+          if (key != virt) {
+            STATISTIC(++jit_hooks_clobbered);
+          }
+          unassert(atomic_fetch_add_explicit(&jit->hooks.i, -1,
+                                             memory_order_acq_rel) > 0);
+        }
+        break;
+      }
+    }
   }
+  atomic_store_explicit(&jit->lastreset, resetcode, memory_order_release);
   return 0;
 }
 
@@ -787,14 +884,14 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb, u64 virt) {
     AbandonJitJumps(jb);
     // we ran out of room for the function, in which case we'll close
     // out this block and hope for better luck on the next pass.
-    if (jb->index - jb->start > jb->blocksize / 2) {
+    if (jb->index - jb->start > (jb->blocksize >> 1)) {
       // if the function we failed to create is potentially bigger than
       // the block size, then we need to increase the block size, since
       // we'd otherwise risk endlessly burning memory.
       blocksize = atomic_load_explicit(&jit->blocksize, memory_order_relaxed);
       atomic_compare_exchange_strong_explicit(
           &jit->blocksize, &blocksize,
-          ROUNDUP(blocksize + blocksize / 2, jit->pagesize),
+          ROUNDUP(blocksize + (blocksize >> 1), jit->pagesize),
           memory_order_relaxed, memory_order_relaxed);
     }
     ok = false;

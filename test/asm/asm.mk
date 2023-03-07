@@ -1,7 +1,7 @@
 #-*-mode:makefile-gmake;indent-tabs-mode:t;tab-width:8;coding:utf-8-*-┐
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
-TEST_ASM_FILES = $(wildcard test/asm/*)
+TEST_ASM_FILES := $(wildcard test/asm/*)
 TEST_ASM_SRCS = $(filter %.S,$(TEST_ASM_FILES))
 TEST_ASM_OBJS = $(TEST_ASM_SRCS:%.S=o/$(MODE)/x86_64/%.o)
 TEST_ASM_BINS = $(TEST_ASM_SRCS:%.S=o/$(MODE)/%.elf)

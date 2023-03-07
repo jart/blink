@@ -55,24 +55,31 @@ static bool CanEmulateImpl(struct Machine *, char **, char ***, bool);
 static void LoaderCopy(struct Machine *m, i64 vaddr, size_t amt, void *image,
                        i64 offset, int prot) {
   i64 base;
+  bool memory_might_be_write_protected;
   if (!amt) return;
   ELF_LOGF("copy %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64, vaddr,
            vaddr + amt, offset, offset + amt);
   base = ROUNDDOWN(vaddr, 4096);
-  if ((prot & (PROT_READ | PROT_WRITE)) != (PROT_READ | PROT_WRITE)) {
+  if ((memory_might_be_write_protected =
+           (prot & (PROT_READ | PROT_WRITE)) != (PROT_READ | PROT_WRITE) ||
+           (!IsJitDisabled(&m->system->jit) &&
+            prot == (PROT_READ | PROT_WRITE | PROT_EXEC)))) {
     unassert(!ProtectVirtual(m->system, base, vaddr + amt - base,
-                             prot | PROT_WRITE));
+                             PROT_READ | PROT_WRITE, false));
   }
   unassert(!CopyToUser(m, vaddr, (u8 *)image + offset, amt));
-  if ((prot & (PROT_READ | PROT_WRITE)) != (PROT_READ | PROT_WRITE)) {
-    unassert(!ProtectVirtual(m->system, base, vaddr + amt - base, prot));
+  if (memory_might_be_write_protected) {
+    unassert(!ProtectVirtual(m->system, base, vaddr + amt - base, prot, false));
   }
 }
 
 static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
                               size_t imagesize, const Elf64_Phdr_ *phdr,
-                              i64 last_end, u64 aslr, int fd) {
+                              i64 last_end, int *last_prot, u64 aslr, int fd) {
   i64 bulk;
+  size_t amt;
+  void *blank;
+  int overprot;
   struct System *s = m->system;
   u32 flags = Read32(phdr->flags);
   i64 vaddr = Read64(phdr->vaddr) + aslr;
@@ -112,6 +119,9 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
   ELF_LOGF("  end = %" PRIx64, end);
   ELF_LOGF("  skew = %lx", skew);
 
+  if (!memsz) {
+    return last_end;
+  }
   if (offset > imagesize) {
     ERRF("bad phdr offset");
     exit(127);
@@ -141,11 +151,33 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
   // on systems with a page size greater than the elf executable (e.g.
   // apple m1) it's possible for the second program header load to end
   // up overlapping the previous one.
-  if (start < last_end) {
-    start += last_end - start;
+  if (HasLinearMapping() && start < last_end) {
+    unassert(pagesize > 4096);
+    unassert(vaddr < last_end);
+    unassert(start == last_end - pagesize);
+    unassert(skew + (last_end - vaddr) == pagesize);
+    overprot = prot | *last_prot;
+    unassert(!ProtectVirtual(m->system, start, pagesize, overprot, false));
+    amt = MIN(filesz, last_end - vaddr);
+    LoaderCopy(m, vaddr, amt, image, offset, overprot);
+    filesz -= amt;
+    offset += last_end - vaddr;
+    vaddr += last_end - vaddr;
+    start = last_end;
+    skew = 0;
   }
-  if (start >= end) {
-    return last_end;
+
+  // if there's still a skew then the elf program header is documenting
+  // the precise byte offset within the file where this program starts.
+  // in that case, it's harmless to just round down the mmap request to
+  // ingest the previous bytes which shouldn't even need to be cleared.
+  if (skew) {
+    unassert(skew < pagesize);
+    vaddr -= skew;
+    offset -= skew;
+    if (filesz) {
+      filesz += skew;
+    }
   }
 
   // associate the file name with the memory mapping
@@ -155,28 +187,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
     unassert(AddFileMap(m->system, start, filesz, path, offset));
   }
 
-  // mmap() always returns an address that page-size aligned, but elf
-  // program headers can start at any address. therefore the first page
-  // needs to be loaded with special care, if the phdr is skewed. the
-  // only real rule in this situation is that the skew of of the virtual
-  // address and the file offset need to be the same.
-  if (skew) {
-    if (vaddr > start && start + pagesize <= end) {
-      unassert(vaddr < start + pagesize);
-      ELF_LOGF("alloc1 %" PRIx64 "-%" PRIx64, start, start + pagesize);
-      if (ReserveVirtual(s, start, pagesize, key, -1, 0, 0, 0) == -1) {
-        ERRF("failed to allocate program header skew");
-        exit(127);
-      }
-      start += pagesize;
-    }
-    LoaderCopy(m, vaddr, MIN(filesz, pagesize - skew), image, offset, prot);
-    vaddr += pagesize - skew;
-    offset += pagesize - skew;
-    filesz -= MIN(filesz, pagesize - skew);
-  }
-
-  // load the aligned program header.
+  // load the aligned program header
   unassert(start <= end);
   unassert(vaddr == start);
   unassert(vaddr + filesz <= end);
@@ -184,9 +195,12 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
   unassert(!(start & (pagesize - 1)));
   unassert(!(offset & (pagesize - 1)));
   if (start < end) {
-    bulk = ROUNDDOWN(filesz, pagesize);
-    unassert(bulk >= 0);
-    if (bulk) {
+    // it's also harmless to extend the size to the next host page
+    // boundary when mapping a file. if some extra bytes go beyond
+    // the end of the file then they'll be zero'd and sigbus won't
+    // be raised if they're used. if extra file content does exist
+    // beyond filesz, then we shall manually bzero() it afterwards
+    if ((bulk = ROUNDUP(filesz, pagesize))) {
       // map the bulk of .text directly into memory without copying.
       ELF_LOGF("load %" PRIx64 "-%" PRIx64 " from %" PRIx64 "-%" PRIx64, start,
                start + bulk, offset, offset + bulk);
@@ -194,24 +208,25 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
         ERRF("failed to map elf program header file data");
         exit(127);
       }
+      if ((amt = bulk - filesz)) {
+        ELF_LOGF("note: next copy is actually bzero() kludge");
+        unassert(blank = calloc(1, amt));
+        LoaderCopy(m, start + filesz, amt, blank, 0, prot);
+        free(blank);
+      }
     }
     start += bulk;
-    offset += bulk;
-    filesz -= bulk;
+    // allocate any remaining zero-initialized memory
     if (start < end) {
-      // allocate .bss zero-initialized memory.
-      ELF_LOGF("alloc2 %" PRIx64 "-%" PRIx64, start, end);
+      ELF_LOGF("alloc %" PRIx64 "-%" PRIx64, start, end);
       if (ReserveVirtual(s, start, end - start, key, -1, 0, 0, 0) == -1) {
         ERRF("failed to allocate program header bss");
         exit(127);
       }
-      // copy the tail skew.
-      LoaderCopy(m, start, filesz, image, offset, prot);
-    } else {
-      unassert(!filesz);
     }
   }
 
+  *last_prot = prot;
   s->brk = MAX(s->brk, end);
 
   if (flags & PF_X_) {
@@ -337,14 +352,16 @@ bool IsSupportedExecutable(const char *path, void *image, size_t size) {
 static void LoadFlatExecutable(struct Machine *m, uintptr_t base,
                                const char *prog, void *image, size_t imagesize,
                                int fd) {
+  int prot = 0;
   Elf64_Phdr_ phdr;
+  i64 end = INT64_MIN;
   Write32(phdr.type, PT_LOAD_);
   Write32(phdr.flags, PF_X_ | PF_R_ | PF_W_);
   Write64(phdr.offset, 0);
   Write64(phdr.vaddr, base);
   Write64(phdr.filesz, imagesize);
   Write64(phdr.memsz, ROUNDUP(imagesize + kRealSize, 4096));
-  LoadElfLoadSegment(m, prog, image, imagesize, &phdr, 0, 0, fd);
+  LoadElfLoadSegment(m, prog, image, imagesize, &phdr, end, &prot, 0, fd);
   m->ip = base;
 }
 
@@ -375,7 +392,7 @@ static bool LoadElf(struct Machine *m,  //
                     Elf64_Ehdr_ *ehdr,  //
                     size_t esize,       //
                     int fd) {
-  int i;
+  int i, prot;
   Elf64_Phdr_ *phdr;
   i64 end = INT64_MIN;
   bool execstack = true;
@@ -386,7 +403,7 @@ static bool LoadElf(struct Machine *m,  //
   elf->at_phdr = elf->base + Read64(ehdr->phoff);
   elf->at_phent = Read16(ehdr->phentsize);
   elf->at_phnum = 0;
-  for (i = 0; i < Read16(ehdr->phnum); ++i) {
+  for (prot = i = 0; i < Read16(ehdr->phnum); ++i) {
     ++elf->at_phnum;
     phdr = (Elf64_Phdr_ *)((u8 *)ehdr + Read64(ehdr->phoff) +
                            Read16(ehdr->phentsize) * i);
@@ -395,7 +412,7 @@ static bool LoadElf(struct Machine *m,  //
         execstack = false;
         break;
       case PT_LOAD_:
-        end = LoadElfLoadSegment(m, elf->execfn, ehdr, esize, phdr, end,
+        end = LoadElfLoadSegment(m, elf->execfn, ehdr, esize, phdr, end, &prot,
                                  elf->aslr, fd);
         break;
       case PT_INTERP_:
@@ -437,7 +454,7 @@ static bool LoadElf(struct Machine *m,  //
         elf->aslr ? elf->aslr - (16 * 1024 * 1024) : FLAG_dyninterpaddr,
         &elf->at_base);
     m->ip = elf->at_base + Read64(ehdri->entry);
-    for (i = 0; i < Read16(ehdri->phnum); ++i) {
+    for (prot = i = 0; i < Read16(ehdri->phnum); ++i) {
       phdr = GetElfSegmentHeaderAddress(ehdri, st.st_size, i);
       CheckElfAddress(ehdri, st.st_size,
                       (uintptr_t)ehdri + Read64(phdr->offset),
@@ -445,7 +462,7 @@ static bool LoadElf(struct Machine *m,  //
       switch (Read32(phdr->type)) {
         case PT_LOAD_:
           end = LoadElfLoadSegment(m, elf->interpreter, ehdri, st.st_size, phdr,
-                                   end, aslr, fd);
+                                   end, &prot, aslr, fd);
           break;
         default:
           break;
@@ -663,6 +680,7 @@ void LoadProgram(struct Machine *m, char *execfn, char *prog, char **args,
     once = true;
   }
   elf = &m->system->elf;
+  m->system->loaded = false;
   unassert(GetRandom(elf->rng, sizeof(elf->rng), 0) == sizeof(elf->rng));
   for (isfirst = true;;) {
     unassert(prog);
@@ -760,6 +778,7 @@ error: unsupported executable; we need:\n\
       LOGF("failed to reserve stack memory");
       exit(127);
     }
+    m->system->loaded = true;  // in case rwx stack is smc write-protected :'(
     LoadArgv(m, execfn, prog, args, vars, elf->rng);
   }
   pagesize = GetSystemPageSize();
@@ -772,6 +791,7 @@ error: unsupported executable; we need:\n\
   elf->prog = strdup(elf->prog);
   unassert(!munmap(map, mapsize));
   unassert(!close(fd));
+  m->system->loaded = true;
 }
 
 static bool CanEmulateImpl(struct Machine *m, char **prog, char ***argv,
