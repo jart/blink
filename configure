@@ -547,6 +547,16 @@ if [ "${MODE}" != "tiny" ]; then
   fi
 fi
 
+# c11 atomics are no-op'd when both fork and threads are disabled
+# this causes code to break modern compiler strict aliasing rules
+# TODO(jart) is it safe to quash warning w/o -fno-strict-aliasing
+if [ -n "${DISABLE_THREADS}" ] && [ -n "${DISABLE_FORK}" ]; then
+  EXTRA_CFLAGS=-Wno-strict-aliasing
+  if config noop "checking for -Wno-strict-aliasing... "; then
+    CFLAGS="${CFLAGS} -Wno-strict-aliasing"
+  fi
+fi
+
 # this optimization harms our ability to backtrace binaries
 # blink doesn't rely on tail call optimization so we don't need it
 if [ -z "${MODE}" ] && [ -n "${JIT_POSSIBLE}" ] && [ -z "${DISABLE_JIT}" ]; then

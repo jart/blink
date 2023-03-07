@@ -681,7 +681,9 @@ TEST(ild, test86) {
   EXPECT_EQ(2, ild("\342\000", 2));
   EXPECT_EQ(5, ild("\350\000\000\000\000", 5));
   EXPECT_EQ(5, ildlegacy("\350\000\000\000\000", 5));
+#ifndef DISABLE_METAL
   EXPECT_EQ(3, ildreal("\350\000\000", 3));
+#endif
   EXPECT_EQ(5, ild("\350\000\203\342\000", 5));
   EXPECT_EQ(5, ild("\351\000\000\000\000", 5));
   EXPECT_EQ(5, ild("\351\000\203\340\000", 5));
@@ -1093,6 +1095,8 @@ TEST(ild, testWideNops) {
   EXPECT_EQ(9, ild("f\017\037\204\000\000\000\000\000", 9));
 }
 
+#ifndef DISABLE_BMI2
+
 TEST(ild, mulx) {
   // mulx %rbx,%rdx,%rcx
   char code[15] = "\xc4\xe2\xeb\xf6\xcb";
@@ -1119,3 +1123,5 @@ TEST(ild, shlx) {
   EXPECT_EQ(0, ModrmRm(xedd.op.rde));   //
   EXPECT_TRUE(Osz(xedd.op.rde));        //
 }
+
+#endif /* DISABLE_BMI2 */

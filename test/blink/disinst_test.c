@@ -89,12 +89,14 @@ TEST(DisInst, testSibIndexOnly) {
   EXPECT_STREQ("lea 0(,%rcx,4),%r8", b1);
 }
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testRealMode) {
   u8 op[] = {0x89, 0xe5};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("mov %sp,%bp", b1);
 }
+#endif
 
 TEST(DisInst, testNop) {
   u8 op[] = {0x66, 0x2e, 0x0f, 0x1f, 0x84, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -124,17 +126,21 @@ TEST(DisInst, testMovb) {
   ILD(op, XED_MODE_LONG);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("mov (%rsi),%bl", b1);
+#ifndef DISABLE_METAL
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("mov 0x320c,%bl", b1);
+#endif
 }
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testLes) {
   u8 op[] = {0xc4, 0x3e, 0x16, 0x32};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("les 0x3216,%di", b1);
 }
+#endif
 
 TEST(DisInst, testStosbLong) {
   u8 op[] = {0xAA};
@@ -143,19 +149,23 @@ TEST(DisInst, testStosbLong) {
   EXPECT_STREQ("stosb %al,(%rdi)", b1);
 }
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testStosbReal) {
   u8 op[] = {0xAA};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("stosb %al,(%di)", b1);
 }
+#endif
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testStosbLegacy) {
   u8 op[] = {0xAA};
   ILD(op, XED_MODE_LEGACY);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("stosb %al,(%edi)", b1);
 }
+#endif
 
 TEST(DisInst, testStosbLongAsz) {
   u8 op[] = {0x67, 0xAA};
@@ -178,12 +188,14 @@ TEST(DisInst, testAddLegacy) {
   EXPECT_STREQ("add %edi,%edi", b1);
 }
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testAddReal) {
   u8 op[] = {0x01, 0xff};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("add %di,%di", b1);
 }
+#endif
 
 TEST(DisInst, testAddLongOsz) {
   u8 op[] = {0x66, 0x01, 0xff};
@@ -199,12 +211,14 @@ TEST(DisInst, testAddLegacyOsz) {
   EXPECT_STREQ("add %di,%di", b1);
 }
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testAddRealOsz) {
   u8 op[] = {0x66, 0x01, 0xff};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("add %edi,%edi", b1);
 }
+#endif
 
 TEST(DisInst, testFxam) {
   u8 op[] = {0xd9, 0xe5};
@@ -214,12 +228,14 @@ TEST(DisInst, testFxam) {
   EXPECT_STREQ("fxam ", b1);
 }
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testOrImmCode16gcc) {
   u8 op[] = {0x67, 0x81, 0x4c, 0x24, 0x0c, 0x00, 0x0c};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("orw $0xc00,12(%esp)", b1);
 }
+#endif
 
 TEST(DisInst, testPause) {
   u8 op[] = {0xf3, 0x90};
@@ -228,26 +244,32 @@ TEST(DisInst, testPause) {
   EXPECT_STREQ("pause ", b1);
 }
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testJmpEw) {
   u8 op[] = {0xff, 0xe0};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("jmp %ax", b1);
 }
+#endif
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testJmpEv16) {
   u8 op[] = {0x66, 0xff, 0xe0};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("jmp %eax", b1);
 }
+#endif
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testJmpEv32) {
   u8 op[] = {0xff, 0xe0};
   ILD(op, XED_MODE_LEGACY);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("jmp %eax", b1);
 }
+#endif
 
 TEST(DisInst, testJmpEq) {
   u8 op[] = {0x66, 0xff, 0xe0};
@@ -256,16 +278,20 @@ TEST(DisInst, testJmpEq) {
   EXPECT_STREQ("jmp %rax", b1);
 }
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testMovswSs) {
   u8 op[] = {0x36, 0xA5};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("movs %ss:(%si),(%di)", b1);
 }
+#endif
 
+#ifndef DISABLE_METAL
 TEST(DisInst, testRealModrm_sibOverlap_showsNoDisplacement) {
   u8 op[] = {0x8b, 0b00100101};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
   EXPECT_STREQ("mov (%di),%sp", b1);
 }
+#endif
