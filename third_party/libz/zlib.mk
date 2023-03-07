@@ -2,13 +2,18 @@
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
 PKGS += ZLIB
-CFLAGS += -isystem third_party/libz
 
-ZLIB = o/$(MODE)/third_party/libz/zlib.a
+ZLIB ?= o/$(MODE)/third_party/libz/zlib.a
 ZLIB_FILES := $(wildcard third_party/libz/*)
 ZLIB_SRCS = $(filter %.c,$(ZLIB_FILES))
 ZLIB_HDRS = $(filter %.h,$(ZLIB_FILES))
 ZLIB_OBJS = $(ZLIB_SRCS:%.c=o/$(MODE)/%.o)
+ZLIB_CPPFLAGS = -isystem third_party/libz
+
+CPPFLAGS_STATIC += $(ZLIB_CPPFLAGS)
+ifneq ($(ZLIB), )
+CPPFLAGS += $(ZLIB_CPPFLAGS)
+endif
 
 $(ZLIB_OBJS): private CFLAGS += -xc -w
 

@@ -5,4 +5,5 @@ o/$(MODE)/tool/config/%.com: tool/config/%.c
 	@mkdir -p $(@D)
 	$(CC) -o $@ $< $(LDLIBS)
 
+o/$(MODE)/tool/config/zlib.com: private LDLIBS += -lz
 o/$(MODE)/tool/config/libunwind.com: private LDLIBS += -lunwind -lucontext -llzma

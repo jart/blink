@@ -567,6 +567,22 @@ if [ -z "${MODE}" ] && [ -n "${JIT_POSSIBLE}" ] && [ -z "${DISABLE_JIT}" ]; then
   fi
 fi
 
+# use the system zlib if available
+# otherwise, use our vendored copy
+ZLIB_CFLAGS="$(pkg-config --cflags zlib 2>/dev/null)"
+if ! ZLIB_LDLIBS="$(pkg-config --libs zlib 2>/dev/null)"; then
+  ZLIB_LDLIBS="-lz"
+fi
+EXTRA_CFLAGS="${ZLIB_CFLAGS}"
+EXTRA_LDLIBS="${ZLIB_LDLIBS}"
+if config lrt "checking for zlib... "; then
+  CFLAGS="${ZLIB_CFLAGS} ${CFLAGS}"
+  LDLIBS="${ZLIB_LDLIBS} ${LDLIBS}"
+  ZLIB=
+else
+  ZLIB='o/$(MODE)/third_party/libz/zlib.a'
+fi
+
 # try to get blink backtraces if possible
 if [ "${MODE}" != "tiny" ] && [ "${MODE}" != "rel" ]; then
   UNWIND_CFLAGS="$(pkg-config --cflags libunwind 2>/dev/null)"
@@ -685,6 +701,7 @@ CONFIG_HOSTNAME = $(hostname)
 CONFIG_COMMAND = ${CONFIG_COMMAND}
 CONFIG_ARGUMENTS = -DCONFIG_ARGUMENTS="\"$*\""
 BLINK_UNAME_V = -DBLINK_UNAME_V="\"$(echo ${BLINK_UNAME_V})\""
+ZLIB = ${ZLIB}
 EOF
 
 echo "creating config.log" >&2
