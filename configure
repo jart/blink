@@ -535,9 +535,11 @@ if config noop "checking for -fno-stack-protector... "; then
 fi
 
 # avoid creating stack frames in micro-op functions
-EXTRA_CFLAGS=-fomit-frame-pointer
-if config noop "checking for -fomit-frame-pointer... "; then
-  UOPFLAGS="${UOPFLAGS} -fomit-frame-pointer"
+if [ "${MODE}" != "prof" ]; then
+  EXTRA_CFLAGS=-fomit-frame-pointer
+  if config noop "checking for -fomit-frame-pointer... "; then
+    UOPFLAGS="${UOPFLAGS} -fomit-frame-pointer"
+  fi
 fi
 
 # for everything else, stack frames are extremely important
