@@ -25,5 +25,6 @@ long eisdir(void);
 long eexist(void);
 long eloop(void);
 long exdev(void);
+long enametoolong(void);
 
 #endif /* BLINK_ERRNO_H_ */

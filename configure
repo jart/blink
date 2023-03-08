@@ -239,6 +239,8 @@ config() {
   # If running on cygwin, msys2 or wsl then enable testing mingw-w64 produced binaries
   if test "${CC#*w64-mingw}" != "${CC}"; then
     RUNPROGRAM="$1.exe"
+  elif [ "${HOST_OS}" = "Cygwin" ]; then
+    RUNPROGRAM="$1.exe"
   else
     RUNPROGRAM="$1"
   fi

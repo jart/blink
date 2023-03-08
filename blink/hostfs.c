@@ -176,9 +176,10 @@ int HostfsCreateInfo(struct HostfsInfo **output) {
   return 0;
 }
 
-int HostfsGetHostPath(struct VfsInfo *info, char **output) {
+int HostfsGetHostPath(struct VfsInfo *info, char output[PATH_MAX]) {
   struct HostfsDevice *hostfsdevice;
-  char *path, *hostpath;
+  char *path;
+  int ret = -1;
   size_t pathlen, sourcelen;
   if (info == NULL) {
     efault();
@@ -191,52 +192,101 @@ int HostfsGetHostPath(struct VfsInfo *info, char **output) {
   sourcelen = strlen(hostfsdevice->source);
   pathlen = strlen(path);
   pathlen += sourcelen;
-  hostpath = malloc(pathlen + 1);
-  if (hostpath == NULL) {
-    free(path);
-    return enomem();
+  if (pathlen >= PATH_MAX) {
+    ret = enametoolong();
+  } else {
+    memcpy(output, hostfsdevice->source, sourcelen);
+    if (output[sourcelen - 1] == '/') {
+      --sourcelen;
+    }
+    memcpy(output + sourcelen, path, pathlen - sourcelen);
+    output[pathlen] = '\0';
+    ret = 0;
   }
-  memcpy(hostpath, hostfsdevice->source, sourcelen);
-  if (hostpath[sourcelen - 1] == '/') {
-    --sourcelen;
-  }
-  memcpy(hostpath + sourcelen, path, pathlen - sourcelen);
-  hostpath[pathlen] = '\0';
-  *output = hostpath;
   free(path);
-  return 0;
+  return ret;
 }
 
-int HostfsGetDirFd(struct VfsInfo *dir) {
-  struct HostfsInfo *dirinfo;
-  char *hostpath;
+static int HostfsGetOptimalDirFdName(struct VfsInfo *dir, const char *name,
+                                     int *hostfd, char hostpath[PATH_MAX]) {
+  struct VfsInfo *currentdir;
+  char *path = NULL;
   int ret = -1;
-  if (dir == NULL) {
-    efault();
-    return -1;
-  }
+  size_t len1, len2;
   if (!S_ISDIR(dir->mode)) {
     enotdir();
     return -1;
   }
-  dirinfo = (struct HostfsInfo *)dir->data;
-  if (dirinfo->filefd != -1) {
-    return dup(dirinfo->filefd);
-  } else {
-    if (HostfsGetHostPath(dir, &hostpath) == -1) {
-      return -1;
+  currentdir = dir;
+  while (currentdir && currentdir->dev == dir->dev) {
+    if (currentdir->data &&
+        ((struct HostfsInfo *)currentdir->data)->filefd != -1) {
+      *hostfd = ((struct HostfsInfo *)currentdir->data)->filefd;
+      if (dir != currentdir) {
+        if (VfsPathBuild(dir, currentdir, &path) == -1) {
+          ret == -1;
+        }
+        len1 = strlen(path);
+        len2 = strlen(name);
+        if (path[len1 - 1] == '/') {
+          --len1;
+        }
+        if (len1 + 1 + len2 + 1 >= PATH_MAX) {
+          ret = enametoolong();
+        } else {
+          if (len1 > 0) {
+            memcpy(hostpath, ((*path) == '/') ? path + 1 : path, len1);
+            hostpath[len1] = '/';
+          }
+          memcpy(hostpath + len1 + 1, name, len2);
+          hostpath[len1 + 1 + len2] = '\0';
+          ret = 0;
+        }
+        break;
+      } else {
+        len1 = strlen(name);
+        if (len1 + 1 >= PATH_MAX) {
+          ret = enametoolong();
+        } else {
+          strcpy(hostpath, name);
+          ret = 0;
+        }
+        ret = 0;
+        break;
+      }
     }
-    ret = open(hostpath, O_RDONLY | O_DIRECTORY);
-    free(hostpath);
-    return ret;
+    currentdir = currentdir->parent;
   }
+  if (ret == -1 && (!currentdir || currentdir->dev != dir->dev)) {
+    *hostfd = AT_FDCWD;
+    if (HostfsGetHostPath(dir, hostpath) == -1) {
+      ret = -1;
+    } else {
+      len1 = strlen(hostpath);
+      len2 = strlen(name);
+      if (hostpath[len1 - 1] == '/') {
+        --len1;
+      }
+      if (len1 + 1 + len2 + 1 >= PATH_MAX) {
+        ret = enametoolong();
+      } else {
+        hostpath[len1] = '/';
+        memcpy(hostpath + len1 + 1, name, len2);
+        hostpath[len1 + 1 + len2] = '\0';
+        ret = 0;
+      }
+    }
+  }
+  free(path);
+  return ret;
 }
 
 int HostfsFinddir(struct VfsInfo *parent, const char *name,
                   struct VfsInfo **output) {
   struct HostfsInfo *outputinfo;
   struct stat st;
-  int parentfd;
+  int hostfd;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsFinddir(%p, \"%s\", %p)", parent, name, output);
   if (parent == NULL || name == NULL || output == NULL) {
     efault();
@@ -248,10 +298,10 @@ int HostfsFinddir(struct VfsInfo *parent, const char *name,
   }
   *output = NULL;
   outputinfo = NULL;
-  if ((parentfd = HostfsGetDirFd(parent)) == -1) {
+  if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  if (fstatat(parentfd, name, &st, AT_SYMLINK_NOFOLLOW) == -1) {
+  if (fstatat(hostfd, hostname, &st, AT_SYMLINK_NOFOLLOW) == -1) {
     VFS_LOGF("HostfsFinddir: fstatat(%d, \"%s\", %p, AT_SYMLINK_NOFOLLOW) "
              "failed (%d)",
              parentfd, name, &st, errno);
@@ -278,10 +328,8 @@ int HostfsFinddir(struct VfsInfo *parent, const char *name,
   (*output)->mode = st.st_mode;
   (*output)->refcount = 1;
   unassert(!VfsAcquireInfo(parent, &(*output)->parent));
-  unassert(!close(parentfd));
   return 0;
 cleananddie:
-  unassert(!close(parentfd));
   if (*output) {
     unassert(!VfsFreeInfo(*output));
   } else {
@@ -292,7 +340,8 @@ cleananddie:
 
 ssize_t HostfsReadlink(struct VfsInfo *info, char **output) {
   struct HostfsInfo *hostinfo;
-  char *buf, *name;
+  char *buf;
+  char name[PATH_MAX];
   ssize_t len, reallen;
   int fd;
   VFS_LOGF("HostfsReadlink(%p, %p)", info, output);
@@ -307,10 +356,10 @@ ssize_t HostfsReadlink(struct VfsInfo *info, char **output) {
   hostinfo = (struct HostfsInfo *)info->data;
   if (hostinfo->filefd != -1) {
     fd = hostinfo->filefd;
-    name = strdup("");
+    name[0] = '\0';
   } else {
     fd = -1;
-    if (HostfsGetHostPath(info, &name) == -1) {
+    if (HostfsGetHostPath(info, name) == -1) {
       return -1;
     }
   }
@@ -340,44 +389,41 @@ ssize_t HostfsReadlink(struct VfsInfo *info, char **output) {
   if (fd != -1) {
     unassert(!close(fd));
   }
-  free(name);
   return reallen;
 cleananddie:
   if (fd != -1) {
     unassert(!close(fd));
   }
-  free(name);
   free(buf);
   return -1;
 }
 
 int HostfsMkdir(struct VfsInfo *parent, const char *name, mode_t mode) {
-  int parentfd, ret;
+  int hostfd;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsMkdir(%p, \"%s\", %d)", parent, name, mode);
-  if ((parentfd = HostfsGetDirFd(parent)) == -1) {
+  if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  ret = mkdirat(parentfd, name, mode);
-  unassert(!close(parentfd));
-  return ret;
+  return mkdirat(hostfd, hostname, mode);
 }
 
 int HostfsMkfifo(struct VfsInfo *parent, const char *name, mode_t mode) {
-  int parentfd, ret;
+  int hostfd;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsMkfifo(%p, \"%s\", %d)", parent, name, mode);
-  if ((parentfd = HostfsGetDirFd(parent)) == -1) {
+  if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  ret = mkfifoat(parentfd, name, mode);
-  unassert(!close(parentfd));
-  return ret;
+  return mkfifoat(hostfd, hostname, mode);
 }
 
 int HostfsOpen(struct VfsInfo *parent, const char *name, int flags, int mode,
                struct VfsInfo **output) {
   struct HostfsInfo *outputinfo;
   struct stat st;
-  int parentfd;
+  int hostfd;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsOpen(%p, \"%s\", %d, %d, %p)", parent, name, flags, mode,
            output);
   if (parent == NULL || name == NULL || output == NULL) {
@@ -388,19 +434,19 @@ int HostfsOpen(struct VfsInfo *parent, const char *name, int flags, int mode,
   }
   *output = NULL;
   outputinfo = NULL;
-  if ((parentfd = HostfsGetDirFd(parent)) == -1) {
-    goto cleananddie;
+  if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
+    return -1;
   }
   if (HostfsCreateInfo(&outputinfo) == -1) {
     goto cleananddie;
   }
-  outputinfo->filefd = openat(parentfd, name, flags, mode);
+  outputinfo->filefd = openat(hostfd, hostname, flags, mode);
   VFS_LOGF("HostfsOpen: openat(%d, \"%s\", %d, %d) -> %d", parentfd, name,
            flags, mode, outputinfo->filefd);
   if (outputinfo->filefd == -1) {
     goto cleananddie;
   }
-  unassert(!fstatat(parentfd, name, &st, 0));
+  unassert(fstat(outputinfo->filefd, &st) != -1);
   outputinfo->mode = st.st_mode;
   if (VfsCreateInfo(output) == -1) {
     goto cleananddie;
@@ -418,12 +464,8 @@ int HostfsOpen(struct VfsInfo *parent, const char *name, int flags, int mode,
   (*output)->mode = outputinfo->mode;
   (*output)->refcount = 1;
   unassert(!VfsAcquireInfo(parent, &(*output)->parent));
-  unassert(!close(parentfd));
   return 0;
 cleananddie:
-  if (parentfd != -1) {
-    unassert(!close(parentfd));
-  }
   if (*output) {
     unassert(!VfsFreeInfo(*output));
   } else {
@@ -434,30 +476,29 @@ cleananddie:
 
 int HostfsAccess(struct VfsInfo *parent, const char *name, mode_t mode,
                  int flags) {
-  int parentfd, ret;
+  int hostfd;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsAccess(%p, \"%s\", %d, %d)", parent, name, mode, flags);
-  if ((parentfd = HostfsGetDirFd(parent)) == -1) {
+  if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  ret = faccessat(parentfd, name, mode, flags);
-  unassert(!close(parentfd));
-  return ret;
+  return faccessat(hostfd, hostname, mode, flags);
 }
 
 int HostfsStat(struct VfsInfo *parent, const char *name, struct stat *st,
                int flags) {
-  int parentfd, ret;
+  int hostfd, ret;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsStat(%p, \"%s\", %p, %d)", parent, name, st, flags);
-  if ((parentfd = HostfsGetDirFd(parent)) == -1) {
+  if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  ret = fstatat(parentfd, name, st, flags);
+  ret = fstatat(hostfd, hostname, st, flags);
   if (ret != -1) {
     st->st_ino =
         HostfsHash(st->st_dev, (const char *)&st->st_ino, sizeof(st->st_ino));
     st->st_dev = parent->dev;
   }
-  unassert(!close(parentfd));
   return ret;
 }
 
@@ -480,14 +521,13 @@ int HostfsFstat(struct VfsInfo *info, struct stat *st) {
 
 int HostfsChmod(struct VfsInfo *parent, const char *name, mode_t mode,
                 int flags) {
-  int parentfd, ret;
+  int hostfd;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsChmod(%p, \"%s\", %d)", parent, name, mode);
-  if ((parentfd = HostfsGetDirFd(parent)) == -1) {
+  if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  ret = fchmodat(parentfd, name, mode, flags);
-  unassert(!close(parentfd));
-  return ret;
+  return fchmodat(hostfd, hostname, mode, flags);
 }
 
 int HostfsFchmod(struct VfsInfo *info, mode_t mode) {
@@ -502,14 +542,13 @@ int HostfsFchmod(struct VfsInfo *info, mode_t mode) {
 
 int HostfsChown(struct VfsInfo *parent, const char *name, uid_t uid, gid_t gid,
                 int flags) {
-  int parentfd, ret;
+  int hostfd;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsChown(%p, \"%s\", %d, %d)", parent, name, uid, gid);
-  if ((parentfd = HostfsGetDirFd(parent)) == -1) {
+  if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  ret = fchownat(parentfd, name, uid, gid, flags);
-  unassert(!close(parentfd));
-  return ret;
+  return fchownat(hostfd, hostname, uid, gid, flags);
 }
 
 int HostfsFchown(struct VfsInfo *info, uid_t uid, gid_t gid) {
@@ -534,31 +573,29 @@ int HostfsFtruncate(struct VfsInfo *info, off_t length) {
 
 int HostfsLink(struct VfsInfo *oldparent, const char *oldname,
                struct VfsInfo *newparent, const char *newname, int flags) {
-  int oldparentfd, newparentfd, ret;
+  int oldhostfd, newhostfd;
+  char oldhostname[PATH_MAX], newhostname[PATH_MAX];
   VFS_LOGF("HostfsLink(%p, \"%s\", %p, \"%s\")", oldparent, oldname, newparent,
            newname);
-  if ((oldparentfd = HostfsGetDirFd(oldparent)) == -1) {
+  if (HostfsGetOptimalDirFdName(oldparent, oldname, &oldhostfd, oldhostname) ==
+      -1) {
     return -1;
   }
-  if ((newparentfd = HostfsGetDirFd(newparent)) == -1) {
-    close(oldparentfd);
+  if (HostfsGetOptimalDirFdName(newparent, newname, &newhostfd, newhostname) ==
+      -1) {
     return -1;
   }
-  ret = linkat(oldparentfd, oldname, newparentfd, newname, flags);
-  close(oldparentfd);
-  close(newparentfd);
-  return ret;
+  return linkat(oldhostfd, oldhostname, newhostfd, newhostname, flags);
 }
 
 int HostfsUnlink(struct VfsInfo *parent, const char *name, int flags) {
-  int parentfd, ret;
+  int hostfd;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsUnlink(%p, \"%s\")", parent, name);
-  if ((parentfd = HostfsGetDirFd(parent)) == -1) {
+  if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  ret = unlinkat(parentfd, name, flags);
-  unassert(!close(parentfd));
-  return ret;
+  return unlinkat(hostfd, hostname, flags);
 }
 
 ssize_t HostfsRead(struct VfsInfo *info, void *buf, size_t size) {
@@ -975,7 +1012,7 @@ int HostfsBind(struct VfsInfo *info, const struct sockaddr *addr,
   struct HostfsInfo *hostinfo;
   struct sockaddr_un *hostun;
   struct stat st;
-  char *hostpath;
+  char hostpath[PATH_MAX];
   size_t len;
   int ret;
   VFS_LOGF("HostfsBind(%p, %p, %i)", info, addr, addrlen);
@@ -989,7 +1026,7 @@ int HostfsBind(struct VfsInfo *info, const struct sockaddr *addr,
       hostinfo->socketfamily = addr->sa_family;
     }
   } else {
-    if (HostfsGetHostPath(info, &hostpath) == -1) {
+    if (HostfsGetHostPath(info, hostpath) == -1) {
       ret = -1;
     } else {
       len = strlen(hostpath) + 1 + offsetof(struct sockaddr_un, sun_path);
@@ -1015,7 +1052,6 @@ int HostfsBind(struct VfsInfo *info, const struct sockaddr *addr,
         }
         free(hostun);
       }
-      free(hostpath);
     }
   }
   return ret;
@@ -1046,7 +1082,7 @@ int HostfsConnectUnix(struct VfsInfo *sock, struct VfsInfo *info,
   struct HostfsInfo *hostinfo;
   struct sockaddr_un *hostun;
   socklen_t hostlen;
-  char *hostpath;
+  char hostpath[PATH_MAX];
   size_t hostpathlen;
   int ret;
   VFS_LOGF("HostfsConnectUnix(%p, %p, %p, %i)", sock, info, addr, addrlen);
@@ -1054,19 +1090,17 @@ int HostfsConnectUnix(struct VfsInfo *sock, struct VfsInfo *info,
     return efault();
   }
   hostinfo = (struct HostfsInfo *)info->data;
-  if (HostfsGetHostPath(sock, &hostpath) == -1) {
+  if (HostfsGetHostPath(sock, hostpath) == -1) {
     return -1;
   }
   hostpathlen = strlen(hostpath);
   hostlen = hostpathlen + 1 + offsetof(struct sockaddr_un, sun_path);
   hostun = malloc(hostlen);
   if (hostun == NULL) {
-    free(hostpath);
     return enomem();
   }
   hostun->sun_family = AF_UNIX;
   memcpy(hostun->sun_path, hostpath, hostpathlen + 1);
-  free(hostpath);
   ret = connect(hostinfo->filefd, (struct sockaddr *)hostun, hostlen);
   free(hostun);
   if (ret != -1) {
@@ -1163,7 +1197,7 @@ ssize_t HostfsRecvmsgUnix(struct VfsInfo *sock, struct VfsInfo *info,
   struct HostfsInfo *hostinfo;
   struct sockaddr_un *hostun, *oldun;
   socklen_t hostlen, oldlen;
-  char *hostpath;
+  char hostpath[PATH_MAX];
   size_t hostpathlen;
   int ret;
   VFS_LOGF("HostfsRecvmsgUnix(%p, %p, %p, %i)", sock, info, msg, flags);
@@ -1171,19 +1205,17 @@ ssize_t HostfsRecvmsgUnix(struct VfsInfo *sock, struct VfsInfo *info,
     return efault();
   }
   hostinfo = (struct HostfsInfo *)info->data;
-  if (HostfsGetHostPath(sock, &hostpath) == -1) {
+  if (HostfsGetHostPath(sock, hostpath) == -1) {
     return -1;
   }
   hostpathlen = strlen(hostpath);
   hostlen = hostpathlen + 1 + offsetof(struct sockaddr_un, sun_path);
   hostun = malloc(hostlen);
   if (hostun == NULL) {
-    free(hostpath);
     return enomem();
   }
   hostun->sun_family = AF_UNIX;
   memcpy(hostun->sun_path, hostpath, hostpathlen + 1);
-  free(hostpath);
   oldun = msg->msg_name;
   oldlen = msg->msg_namelen;
   msg->msg_name = hostun;
@@ -1201,7 +1233,7 @@ ssize_t HostfsSendmsgUnix(struct VfsInfo *sock, struct VfsInfo *info,
   struct msghdr newmsg;
   struct sockaddr_un *hostun;
   socklen_t hostlen;
-  char *hostpath;
+  char hostpath[PATH_MAX];
   size_t hostpathlen;
   int ret;
   VFS_LOGF("HostfsSendmsgUnix(%p, %p, %p, %i)", sock, info, msg, flags);
@@ -1209,19 +1241,17 @@ ssize_t HostfsSendmsgUnix(struct VfsInfo *sock, struct VfsInfo *info,
     return efault();
   }
   hostinfo = (struct HostfsInfo *)info->data;
-  if (HostfsGetHostPath(sock, &hostpath) == -1) {
+  if (HostfsGetHostPath(sock, hostpath) == -1) {
     return -1;
   }
   hostpathlen = strlen(hostpath);
   hostlen = hostpathlen + 1 + offsetof(struct sockaddr_un, sun_path);
   hostun = malloc(hostlen);
   if (hostun == NULL) {
-    free(hostpath);
     return enomem();
   }
   hostun->sun_family = AF_UNIX;
   memcpy(hostun->sun_path, hostpath, hostpathlen + 1);
-  free(hostpath);
   memcpy(&newmsg, msg, sizeof(struct msghdr));
   newmsg.msg_name = hostun;
   newmsg.msg_namelen = hostlen;
@@ -1351,33 +1381,30 @@ int HostfsGetpeername(struct VfsInfo *info, struct sockaddr *addr,
 
 int HostfsRename(struct VfsInfo *oldinfo, const char *oldname,
                  struct VfsInfo *newinfo, const char *newname) {
-  int oldparentfd, newparentfd, ret;
+  int oldhostfd, newhostfd;
+  char oldhostname[PATH_MAX], newhostname[PATH_MAX];
   VFS_LOGF("HostfsRename(%p, %s, %p, %s)", oldinfo, oldname, newinfo, newname);
-  if ((oldparentfd = HostfsGetDirFd(oldinfo)) == -1) {
+  if (HostfsGetOptimalDirFdName(oldinfo, oldname, &oldhostfd, oldhostname) ==
+      -1) {
     return -1;
   }
-  if ((newparentfd = HostfsGetDirFd(newinfo)) == -1) {
+  if (HostfsGetOptimalDirFdName(newinfo, newname, &newhostfd, newhostname) ==
+      -1) {
+    unassert(!close(oldhostfd));
     return -1;
   }
-  ret = renameat(oldparentfd, oldname, newparentfd, newname);
-  unassert(!close(oldparentfd));
-  unassert(!close(newparentfd));
-  return ret;
+  return renameat(oldhostfd, oldhostname, newhostfd, newhostname);
 }
 
 int HostfsUtime(struct VfsInfo *info, const char *name,
                 const struct timespec times[2], int flags) {
-  int parentfd, ret;
+  int hostfd;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsUtime(%p, %s, %p, %d)", info, name, times, flags);
-  if (info == NULL) {
-    return efault();
-  }
-  if ((parentfd = HostfsGetDirFd(info)) == -1) {
+  if (HostfsGetOptimalDirFdName(info, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  ret = utimensat(parentfd, name, times, flags);
-  unassert(!close(parentfd));
-  return ret;
+  return utimensat(hostfd, hostname, times, flags);
 }
 
 int HostfsFutime(struct VfsInfo *info, const struct timespec times[2]) {
@@ -1394,14 +1421,13 @@ int HostfsFutime(struct VfsInfo *info, const struct timespec times[2]) {
 }
 
 int HostfsSymlink(const char *target, struct VfsInfo *info, const char *name) {
-  int parentfd, ret;
+  int hostfd;
+  char hostname[PATH_MAX];
   VFS_LOGF("HostfsSymlink(%s, %p, %s)", target, info, name);
-  if ((parentfd = HostfsGetDirFd(info)) == -1) {
+  if (HostfsGetOptimalDirFdName(info, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  ret = symlinkat(target, parentfd, name);
-  unassert(!close(parentfd));
-  return ret;
+  return symlinkat(target, hostfd, hostname);
 }
 
 void *HostfsMmap(struct VfsInfo *info, void *addr, size_t len, int prot,

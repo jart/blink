@@ -965,6 +965,9 @@ int VfsUnlink(int dirfd, const char *name, int flags) {
   if (name == NULL) {
     return efault();
   }
+  if (!*name) {
+    return enoent();
+  }
   if (VfsHandleDirfdName(dirfd, name, &dir, &newname) == -1) {
     return -1;
   }
@@ -986,6 +989,9 @@ int VfsMkdir(int dirfd, const char *name, mode_t mode) {
   VFS_LOGF("VfsMkdir(%d, \"%s\", %d)", dirfd, name, mode);
   if (name == NULL) {
     return efault();
+  }
+  if (!*name) {
+    return enoent();
   }
   if (VfsHandleDirfdName(dirfd, name, &dir, &newname) == -1) {
     return -1;
@@ -1009,6 +1015,9 @@ int VfsMkfifo(int dirfd, const char *name, mode_t mode) {
   if (name == NULL) {
     return efault();
   }
+  if (!*name) {
+    return enoent();
+  }
   if (VfsHandleDirfdName(dirfd, name, &dir, &newname) == -1) {
     return -1;
   }
@@ -1030,6 +1039,9 @@ int VfsOpen(int dirfd, const char *name, int flags, int mode) {
   VFS_LOGF("VfsOpen(%d, \"%s\", %d, %d)", dirfd, name, flags, mode);
   if (name == NULL) {
     return efault();
+  }
+  if (!*name) {
+    return enoent();
   }
   if (VfsHandleDirfdName(dirfd, name, &dir, &newname) == -1) {
     return -1;
@@ -1061,6 +1073,9 @@ int VfsChmod(int dirfd, const char *name, mode_t mode, int flags) {
   VFS_LOGF("VfsChmod(%d, \"%s\", %d, %d)", dirfd, name, mode, flags);
   if (name == NULL) {
     return efault();
+  }
+  if (!*name) {
+    return enoent();
   }
   if (VfsHandleDirfdName(dirfd, name, &dir, &newname) == -1) {
     return -1;
@@ -1105,6 +1120,9 @@ int VfsAccess(int dirfd, const char *name, mode_t mode, int flags) {
   if (name == NULL) {
     return efault();
   }
+  if (!*name) {
+    return enoent();
+  }
   if (VfsHandleDirfdName(dirfd, name, &dir, &newname) == -1) {
     return -1;
   }
@@ -1131,6 +1149,9 @@ int VfsSymlink(const char *target, int dirfd, const char *name) {
   VFS_LOGF("VfsSymlink(\"%s\", %d, \"%s\")", target, dirfd, name);
   if (target == NULL || name == NULL) {
     return efault();
+  }
+  if (!*name) {
+    return enoent();
   }
   if (VfsHandleDirfdName(dirfd, name, &dir, &newname) == -1) {
     return -1;
@@ -1226,6 +1247,9 @@ int VfsRename(int olddirfd, const char *oldname, int newdirfd,
   if (oldname == NULL || newname == NULL) {
     return efault();
   }
+  if (!*oldname || !*newname) {
+    return enoent();
+  }
   if (VfsHandleDirfdName(olddirfd, oldname, &olddir, &newoldname) == -1) {
     return -1;
   }
@@ -1298,6 +1322,9 @@ int VfsLink(int olddirfd, const char *oldname, int newdirfd,
   if (oldname == NULL || newname == NULL) {
     return efault();
   }
+  if (!*oldname || !*newname) {
+    return enoent();
+  }
   // AT_EMPTY_PATH currently not supported by blink's syscall subsystem.
   if (VfsHandleDirfdName(olddirfd, oldname, &olddir, &newoldname) == -1) {
     return -1;
@@ -1337,6 +1364,9 @@ int VfsUtime(int dirfd, const char *name, const struct timespec times[2],
   VFS_LOGF("VfsUtime(%d, \"%s\", %p, %d)", dirfd, name, times, flags);
   if (name == NULL) {
     return efault();
+  }
+  if (!*name) {
+    return enoent();
   }
   if (VfsHandleDirfdName(dirfd, name, &dir, &newname) == -1) {
     return -1;

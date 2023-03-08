@@ -122,3 +122,7 @@ long eloop(void) {
 long exdev(void) {
   return ReturnErrno(EXDEV);
 }
+
+long enametoolong(void) {
+  return ReturnErrno(ENAMETOOLONG);
+}
