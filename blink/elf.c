@@ -51,7 +51,7 @@ i64 GetElfMemorySize(const Elf64_Ehdr_ *ehdr, size_t size, i64 *base) {
       }
     }
   }
-  lo &= -GetSystemPageSize();
+  lo &= -FLAG_pagesize;
   if (CheckedSub(hi, lo, &res) == -1) return -1;
   *base = lo;
   return res;

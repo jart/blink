@@ -83,7 +83,7 @@ void FreeAnonymousPage(struct System *s, u8 *page) {
 
 static size_t GetBigSize(size_t n) {
   unassert(n);
-  long z = GetSystemPageSize();
+  long z = FLAG_pagesize;
   return ROUNDUP(n, z);
 }
 
@@ -611,7 +611,7 @@ static bool FreePage(struct System *s, i64 virt, u64 entry, u64 size,
     return false;
   } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
              (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
-    pagesize = GetSystemPageSize();
+    pagesize = FLAG_pagesize;
     real = entry & PAGE_TA;
     mug = ROUNDDOWN(real, pagesize);
     unassert(!Munmap((void *)mug, real - mug + size));
@@ -778,7 +778,7 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
     return einval();
   }
 
-  pagesize = GetSystemPageSize();
+  pagesize = FLAG_pagesize;
 
   if (HasLinearMapping()) {
     if (virt & (pagesize - 1)) {
@@ -1105,7 +1105,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot,
   MEM_LOGF("protecting virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %s", virt,
            virt + size, DescribeProt(prot));
   orig_virt = virt;
-  pagesize = GetSystemPageSize();
+  pagesize = FLAG_pagesize;
   if (!IsValidAddrSize(virt, size)) {
     return einval();
   }
@@ -1238,7 +1238,7 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
   }
   orig_virt = virt;
   (void)orig_virt;
-  pagesize = GetSystemPageSize();
+  pagesize = FLAG_pagesize;
   if (HasLinearMapping() && (skew = virt & (pagesize - 1))) {
     size += skew;
     virt -= skew;

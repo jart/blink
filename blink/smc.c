@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/assert.h"
 #include "blink/builtin.h"
+#include "blink/flag.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
@@ -33,7 +34,7 @@ static int ProtectHostPages(struct System *s, i64 vaddr, i64 size, int prot) {
   i64 a, b;
   long pagesize;
   if (HasLinearMapping()) {
-    pagesize = GetSystemPageSize();
+    pagesize = FLAG_pagesize;
   } else {
     pagesize = 4096;
   }

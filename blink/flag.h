@@ -14,6 +14,8 @@ extern bool FLAG_alsologtostderr;
 extern int FLAG_strace;
 extern int FLAG_vabits;
 
+extern long FLAG_pagesize;
+
 extern u64 FLAG_skew;
 extern u64 FLAG_vaspace;
 extern u64 FLAG_stacktop;

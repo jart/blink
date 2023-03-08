@@ -32,6 +32,7 @@
 #include "blink/dll.h"
 #include "blink/end.h"
 #include "blink/endian.h"
+#include "blink/flag.h"
 #include "blink/jit.h"
 #include "blink/log.h"
 #include "blink/macros.h"
@@ -294,7 +295,7 @@ static struct JitBlock *AcquireJitBlock(struct Jit *jit) {
   UNLOCK(&g_jit.lock);
   if (!jb && (jb = NewJitBlock())) {
     blocksize = atomic_load_explicit(&jit->blocksize, memory_order_relaxed);
-    if ((jb->addr = AllocateJitMemory(jit->pagesize, blocksize))) {
+    if ((jb->addr = AllocateJitMemory(FLAG_pagesize, blocksize))) {
       jb->blocksize = blocksize;
     } else {
       FreeJitBlock(jb);
@@ -353,9 +354,8 @@ static nosideeffect int EncodeJitFunc(intptr_t addr) {
 int InitJit(struct Jit *jit, uintptr_t opt_staging_function) {
   int blocksize;
   memset(jit, 0, sizeof(*jit));
-  jit->pagesize = GetSystemPageSize();
   jit->staging = EncodeJitFunc(opt_staging_function);
-  jit->blocksize = blocksize = ROUNDUP(kJitMinBlockSize, jit->pagesize);
+  jit->blocksize = blocksize = ROUNDUP(kJitMinBlockSize, FLAG_pagesize);
   unassert(!pthread_mutex_init(&jit->lock, 0));
   jit->hooks.n = RoundupTwoPow(kJitMemorySize / kJitAveragePath * 2);
   unassert(jit->hooks.virt = (_Atomic(uintptr_t) *)calloc(
@@ -753,9 +753,9 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
   struct JitStage *js;
   struct Dll *e, *e2, *rem;
   unassert(jb->start == jb->index);
-  unassert(!(jb->committed & (jit->pagesize - 1)));
+  unassert(!(jb->committed & (FLAG_pagesize - 1)));
   if (!CanJitForImmediateEffect() &&
-      (blockoff = ROUNDDOWN(jb->start, jit->pagesize)) > jb->committed) {
+      (blockoff = ROUNDDOWN(jb->start, FLAG_pagesize)) > jb->committed) {
     addr = jb->addr + jb->committed;
     size = blockoff - jb->committed;
     JIT_LOGF("jit activating [%p,%p) w/ %zu kb", addr, addr + size,
@@ -891,7 +891,7 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb, u64 virt) {
       blocksize = atomic_load_explicit(&jit->blocksize, memory_order_relaxed);
       atomic_compare_exchange_strong_explicit(
           &jit->blocksize, &blocksize,
-          ROUNDUP(blocksize + (blocksize >> 1), jit->pagesize),
+          ROUNDUP(blocksize + (blocksize >> 1), FLAG_pagesize),
           memory_order_relaxed, memory_order_relaxed);
     }
     ok = false;

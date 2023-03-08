@@ -144,7 +144,6 @@ struct JitHooks {
 
 struct Jit {
   int staging;
-  long pagesize;
   _Atomic(bool) disabled;
   _Atomic(long) blocksize;
   _Atomic(uintptr_t) lastreset;

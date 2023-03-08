@@ -22,6 +22,7 @@
 
 #include "blink/assert.h"
 #include "blink/endian.h"
+#include "blink/flag.h"
 #include "blink/linux.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -59,7 +60,7 @@ static i64 PushString(struct Machine *m, char *s) {
 
 static long GetGuestPageSize(struct Machine *m) {
   if (HasLinearMapping()) {
-    return GetSystemPageSize();
+    return FLAG_pagesize;
   } else {
     return 4096;
   }

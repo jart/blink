@@ -4014,8 +4014,8 @@ int main(int argc, char *argv[]) {
   react = true;
   tuimode = true;
   WriteErrorInit();
-  GetOpts(argc, argv);
   InitMap();
+  GetOpts(argc, argv);
   InitBus();
 #ifdef HAVE_JIT
   AddPath_StartOp_Hook = AddPath_StartOp_Tui;

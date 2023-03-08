@@ -56,6 +56,6 @@ int Munmap(void *, size_t);
 int Msync(void *, size_t, int, const char *);
 void *Mmap(void *, size_t, int, int, int, off_t, const char *);
 int Mprotect(void *, size_t, int, const char *);
-long GetSystemPageSize(void) pureconst;
+void OverridePageSize(long);
 
 #endif /* BLINK_MAP_H_ */

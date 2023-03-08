@@ -86,7 +86,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
   i64 memsz = Read64(phdr->memsz);
   i64 offset = Read64(phdr->offset);
   i64 filesz = Read64(phdr->filesz);
-  long pagesize = HasLinearMapping() ? GetSystemPageSize() : 4096;
+  long pagesize = HasLinearMapping() ? FLAG_pagesize : 4096;
   i64 start = ROUNDDOWN(vaddr, pagesize);
   i64 end = ROUNDUP(vaddr + memsz, pagesize);
   long skew = vaddr & (pagesize - 1);
@@ -380,7 +380,7 @@ static i64 ChooseAslr(const Elf64_Ehdr_ *ehdr, size_t size, i64 dflt,
     ELF_LOGF("won't skew base since not dynamic");
   }
   *base += aslr;
-  if (!(*base & ~(GetSystemPageSize() - 1))) {
+  if (!(*base & ~(FLAG_pagesize - 1))) {
     ERRF("won't load program to null base address");
     exit(127);
   }
@@ -781,7 +781,7 @@ error: unsupported executable; we need:\n\
     m->system->loaded = true;  // in case rwx stack is smc write-protected :'(
     LoadArgv(m, execfn, prog, args, vars, elf->rng);
   }
-  pagesize = GetSystemPageSize();
+  pagesize = FLAG_pagesize;
   pagesize = MAX(4096, pagesize);
   if (elf->interpreter) {
     elf->interpreter = strdup(elf->interpreter);

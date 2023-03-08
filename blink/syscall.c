@@ -57,6 +57,7 @@
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
+#include "blink/flag.h"
 #include "blink/iovs.h"
 #include "blink/limits.h"
 #include "blink/linux.h"
@@ -1091,7 +1092,7 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
   BEGIN_NO_PAGE_FAULTS;
   LOCK(&m->system->mmap_lock);
   MEM_LOGF("brk(%#" PRIx64 ") currently %#" PRIx64, addr, m->system->brk);
-  pagesize = GetSystemPageSize();
+  pagesize = FLAG_pagesize;
   addr = ROUNDUP(addr, pagesize);
   if (addr >= kNullSize) {
     if (addr > m->system->brk) {
@@ -1225,7 +1226,7 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, u64 size, int prot,
     if ((virt = FindVirtual(m->system, m->system->automap, size)) == -1) {
       goto Finished;
     }
-    newautomap = ROUNDUP(virt + size, GetSystemPageSize());
+    newautomap = ROUNDUP(virt + size, FLAG_pagesize);
     if (newautomap >= FLAG_automapend) {
       newautomap = FLAG_automapstart;
     }

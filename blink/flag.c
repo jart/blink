@@ -29,6 +29,8 @@ bool FLAG_alsologtostderr;
 int FLAG_strace;
 int FLAG_vabits;
 
+long FLAG_pagesize;
+
 u64 FLAG_skew;
 u64 FLAG_vaspace;
 u64 FLAG_aslrmask;

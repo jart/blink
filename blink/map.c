@@ -25,6 +25,7 @@
 
 #include "blink/assert.h"
 #include "blink/bitscan.h"
+#include "blink/bus.h"
 #include "blink/debug.h"
 #include "blink/log.h"
 #include "blink/macros.h"
@@ -33,60 +34,7 @@
 #include "blink/types.h"
 #include "blink/util.h"
 
-static int GetBitsInAddressSpace(void) {
-  int i;
-  void *ptr;
-  uint64_t want;
-  for (i = 16; i < 40; ++i) {
-    want = 0x8123000000000000ull >> i;
-    if (want > UINTPTR_MAX) continue;
-    ptr = Mmap((void *)(uintptr_t)want, 1, PROT_READ,
-               MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS_, -1, 0, "test");
-    if (ptr != MAP_FAILED) {
-      munmap(ptr, 1);
-      return 64 - i;
-    }
-  }
-  Abort();
-}
-
-static u64 GetVirtualAddressSpace(int vabits, long pagesize) {
-  u64 vaspace;
-  vaspace = 1ull << (vabits - 1);  // 0000400000000000
-  vaspace |= vaspace - 1;          // 00007fffffffffff
-  vaspace &= ~(pagesize - 1);      // 00007ffffffff000
-  return vaspace;
-}
-
-static u64 ScaleAddress(u64 address) {
-  long pagesize;
-  u64 result, vaspace;
-  vaspace = FLAG_vaspace;
-  pagesize = GetSystemPageSize();
-  result = address;
-  do result &= ~(pagesize - 1);
-  while ((result & ~vaspace) && (result >>= 1));
-  return result;
-}
-
-// if the guest used mmap(0, ...) to let blink decide the address,
-// then the goal is to supply mmap(0, ...) to the host kernel too;
-// but we can't do that on systems like rasberry pi, since they'll
-// assign addresses greater than 2**47 which won't fit with x86_64
-void InitMap(void) {
-  long pagesize;
-  pagesize = GetSystemPageSize();
-  FLAG_vabits = GetBitsInAddressSpace();
-  FLAG_vaspace = GetVirtualAddressSpace(FLAG_vabits, pagesize);
-  FLAG_aslrmask = ScaleAddress(kAslrMask);
-  FLAG_imagestart = ScaleAddress(kImageStart);
-  FLAG_automapstart = ScaleAddress(kAutomapStart);
-  FLAG_automapend = ScaleAddress(kAutomapEnd);
-  FLAG_dyninterpaddr = ScaleAddress(kDynInterpAddr);
-  FLAG_stacktop = ScaleAddress(kStackTop);
-}
-
-long GetSystemPageSize(void) {
+static long GetSystemPageSize(void) {
 #ifdef __EMSCRIPTEN__
   // "pages" in Emscripten only refer to the granularity the memory
   // buffer can be grown at but does not affect functions like mmap
@@ -99,17 +47,13 @@ long GetSystemPageSize(void) {
 #endif
 }
 
-void *Mmap(void *addr,     //
-           size_t length,  //
-           int prot,       //
-           int flags,      //
-           int fd,         //
-           off_t offset,   //
-           const char *owner) {
+static void *PortableMmap(void *addr,     //
+                          size_t length,  //
+                          int prot,       //
+                          int flags,      //
+                          int fd,         //
+                          off_t offset) {
   void *res;
-#if LOG_MEM
-  char szbuf[16];
-#endif
 #ifdef HAVE_MAP_ANONYMOUS
   res = mmap(addr, length, prot, flags, fd, offset);
 #else
@@ -145,6 +89,73 @@ void *Mmap(void *addr,     //
     }
   }
 #endif
+  return res;
+}
+
+static int GetBitsInAddressSpace(void) {
+  int i;
+  void *ptr;
+  uint64_t want;
+  for (i = 16; i < 40; ++i) {
+    want = 0x8123000000000000ull >> i;
+    if (want > UINTPTR_MAX) continue;
+    ptr = PortableMmap((void *)(uintptr_t)want, 1, PROT_READ,
+                       MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS_, -1, 0);
+    if (ptr != MAP_FAILED) {
+      munmap(ptr, 1);
+      return 64 - i;
+    }
+  }
+  Abort();
+}
+
+static u64 GetVirtualAddressSpace(int vabits, long pagesize) {
+  u64 vaspace;
+  vaspace = 1ull << (vabits - 1);  // 0000400000000000
+  vaspace |= vaspace - 1;          // 00007fffffffffff
+  vaspace &= ~(pagesize - 1);      // 00007ffffffff000
+  return vaspace;
+}
+
+static u64 ScaleAddress(u64 address) {
+  long pagesize;
+  u64 result, vaspace;
+  vaspace = FLAG_vaspace;
+  pagesize = FLAG_pagesize;
+  result = address;
+  do result &= ~(pagesize - 1);
+  while ((result & ~vaspace) && (result >>= 1));
+  return result;
+}
+
+// if the guest used mmap(0, ...) to let blink decide the address,
+// then the goal is to supply mmap(0, ...) to the host kernel too;
+// but we can't do that on systems like rasberry pi, since they'll
+// assign addresses greater than 2**47 which won't fit with x86_64
+void InitMap(void) {
+  FLAG_pagesize = GetSystemPageSize();
+  FLAG_vabits = GetBitsInAddressSpace();
+  FLAG_vaspace = GetVirtualAddressSpace(FLAG_vabits, FLAG_pagesize);
+  FLAG_aslrmask = ScaleAddress(kAslrMask);
+  FLAG_imagestart = ScaleAddress(kImageStart);
+  FLAG_automapstart = ScaleAddress(kAutomapStart);
+  FLAG_automapend = ScaleAddress(kAutomapEnd);
+  FLAG_dyninterpaddr = ScaleAddress(kDynInterpAddr);
+  FLAG_stacktop = ScaleAddress(kStackTop);
+}
+
+void *Mmap(void *addr,     //
+           size_t length,  //
+           int prot,       //
+           int flags,      //
+           int fd,         //
+           off_t offset,   //
+           const char *owner) {
+  void *res;
+#if LOG_MEM
+  char szbuf[16];
+#endif
+  res = PortableMmap(addr, length, prot, flags, fd, offset);
 #if LOG_MEM
   FormatSize(szbuf, length, 1024);
   if (res != MAP_FAILED) {
@@ -156,7 +167,7 @@ void *Mmap(void *addr,     //
     MEM_LOGF("%s failed to create %s map [%p,%p) as %s flags %#x: %s "
              "(system page size is %ld)",
              owner, szbuf, (u8 *)addr, (u8 *)addr + length, DescribeProt(prot),
-             flags, DescribeHostErrno(errno), GetSystemPageSize());
+             flags, DescribeHostErrno(errno), FLAG_pagesize);
   }
 #endif
   return res;
