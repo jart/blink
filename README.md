@@ -162,9 +162,9 @@ make emulates
 ### Production Worthiness
 
 Blink passes 194 test suites from the Cosmopolitan Libc project (see
-[third_party/cosmo](third_party/cosmo). Blink passes 350 test suites
+[third_party/cosmo](third_party/cosmo)). Blink passes 350 test suites
 from the [Linux Test Project](https://github.com/linux-test-project/ltp)
-(see [third_party/ltp](third_party/ltp). Blink passes 108 of [Musl
+(see [third_party/ltp](third_party/ltp)). Blink passes 108 of [Musl
 Libc's unit test suite](https://github.com/jart/libc-test) (see
 [third_party/libc-test](third_party/libc-test)). The tests we haven't
 included are usually due to (1) floating ULP rounding errors (Blink aims
