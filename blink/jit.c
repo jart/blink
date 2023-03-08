@@ -531,6 +531,7 @@ uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
  * @return 0 on success, or -1 w/ errno
  */
 int ResetJitPage(struct Jit *jit, i64 page) {
+  int oldfunc;
   i64 virt, end;
   uintptr_t key;
   unsigned hash, spot, step;
@@ -548,21 +549,14 @@ int ResetJitPage(struct Jit *jit, i64 page) {
       key = atomic_load_explicit(jit->hooks.virt + spot, memory_order_acquire);
       if (!key) break;
       if (key == virt) {
-        do {
+        if ((oldfunc = atomic_load_explicit(jit->hooks.func + spot,
+                                            memory_order_acquire)) &&
+            oldfunc != jit->staging) {
+          STATISTIC(--jit_hooks_installed);
+          STATISTIC(++jit_hooks_deleted);
           // TODO(jart): It'd be nice to reclaim JIT function memory.
           atomic_store_explicit(jit->hooks.func + spot, 0,
                                 memory_order_release);
-        } while (!atomic_compare_exchange_weak_explicit(
-                     jit->hooks.virt + spot, &key, 0, memory_order_release,
-                     memory_order_relaxed) &&
-                 key);
-        if (key) {
-          STATISTIC(++jit_hooks_deleted);
-          if (key != virt) {
-            STATISTIC(++jit_hooks_clobbered);
-          }
-          unassert(atomic_fetch_add_explicit(&jit->hooks.i, -1,
-                                             memory_order_acq_rel) > 0);
         }
         break;
       }

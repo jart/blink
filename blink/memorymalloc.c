@@ -45,7 +45,6 @@
 
 struct Allocator {
   pthread_mutex_t_ lock;
-  long count;
   struct HostPage *pages GUARDED_BY(lock);
 } g_allocator = {
     PTHREAD_MUTEX_INITIALIZER_,
@@ -66,7 +65,6 @@ static struct HostPage *NewHostPage(void) {
 }
 
 static void FreeHostPage(struct HostPage *hp) {
-  --g_allocator.count;
   free(hp);
 }
 
@@ -74,7 +72,6 @@ void FreeAnonymousPage(struct System *s, u8 *page) {
   struct HostPage *h;
   unassert((h = NewHostPage()));
   LOCK(&g_allocator.lock);
-  ++g_allocator.count;
   h->page = page;
   h->next = g_allocator.pages;
   g_allocator.pages = h;
@@ -442,7 +439,6 @@ u64 AllocateAnonymousPage(struct System *s) {
                            MAP_ANONYMOUS_ | MAP_PRIVATE, -1, 0);
   if (!page) return -1;
   LOCK(&g_allocator.lock);
-  g_allocator.count += n - 1;
   for (i = n; i-- > 1;) {
     unassert((h = NewHostPage()));
     h->page = page + i * 4096;

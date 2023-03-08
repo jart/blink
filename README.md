@@ -781,7 +781,7 @@ hash table where the key is the virtual address at which a generated
 function begins (which we call a "path") and the value is a function
 pointer to the generated code. When Blink is generating paths, it is
 careful to ensure that all the guest instructions which are added to a
-page, only exist within the confines of a single 4096-byte page. Thus
+path, only exist within the confines of a single 4096-byte page. Thus
 when a page needs to be invalidated, Blink simply deletes any hook for
 each address within the page.
 

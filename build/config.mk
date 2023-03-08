@@ -15,7 +15,7 @@ ifeq ($(HOST_SYSTEM), Haiku)
 LDLIBS += -lroot -lnetwork -lbsd
 endif
 
-ifneq ($(HOST_SYSTEM), OpenBSD)
+ifeq ($(HOST_SYSTEM), OpenBSD)
 CFLAGS += -gdwarf-2
 endif
 
@@ -100,12 +100,13 @@ CFLAGS += -O2
 TARGET_ARCH = -march=native
 endif
 
-# make m=prof o/prof/blink
-# o/prof/blink/blink third_party/cosmo/mu_test.com
+# ./configure MODE=prof
+# make -j8
+# o/prof/blink/blink third_party/cosmo/2/mu_test.com
 # gprof o/prof/blink/blink gmon.out | less
 ifeq ($(MODE), prof)
-CFLAGS += -pg
-LDFLAGS += -pg
+CFLAGS += -pg -O0
+LDFLAGS += -pg -O0
 endif
 
 # make m=cov check
