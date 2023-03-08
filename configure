@@ -575,7 +575,7 @@ if ! ZLIB_LDLIBS="$(pkg-config --libs zlib 2>/dev/null)"; then
 fi
 EXTRA_CFLAGS="${ZLIB_CFLAGS}"
 EXTRA_LDLIBS="${ZLIB_LDLIBS}"
-if config lrt "checking for zlib... "; then
+if config zlib "checking for zlib... "; then
   CFLAGS="${ZLIB_CFLAGS} ${CFLAGS}"
   LDLIBS="${ZLIB_LDLIBS} ${LDLIBS}"
   ZLIB=
@@ -591,7 +591,7 @@ if [ "${MODE}" != "tiny" ] && [ "${MODE}" != "rel" ]; then
   fi
   EXTRA_CFLAGS="${UNWIND_CFLAGS}"
   EXTRA_LDLIBS="${UNWIND_LDLIBS}"
-  if config lrt "checking for libunwind... "; then
+  if config libunwind "checking for libunwind... "; then
     CFLAGS="${UNWIND_CFLAGS} ${CFLAGS}"
     LDLIBS="${UNWIND_LDLIBS} ${LDLIBS}"
     uncomment "#define HAVE_LIBUNWIND"
