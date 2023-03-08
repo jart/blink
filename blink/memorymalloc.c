@@ -1316,7 +1316,6 @@ static i64 FindGuestAddr(struct System *s, uintptr_t hp, u64 pt, long lvl,
   u8 *mi;
   i64 res;
   u64 pte, i;
-  LOGF("ConvertHostToGuestAddress 3");
   if ((mi = GetPageAddress(s, pt, lvl == 1))) {
     for (i = 0; i < 512; ++i) {
       if ((pte = LoadPte(mi + i * 8)) & PAGE_V) {
