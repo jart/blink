@@ -121,6 +121,7 @@ _Alignas(1) static const char USAGE[] =
     "  $BLINK_OVERLAYS      file system roots [default \":o\"]\n"
 #endif
 #ifndef NDEBUG
+
     "  $BLINK_LOG_FILENAME  log filename (same as -L flag)\n"
 #endif
     ;
@@ -169,16 +170,7 @@ void TerminateSignal(struct Machine *m, int sig) {
 static void OnFatalSystemSignal(int sig, siginfo_t *si, void *ptr) {
   struct Machine *m = g_machine;
 #ifdef __APPLE__
-  // The fruit platform will raise SIGBUS on writes to anon mappings
-  // which don't have the PROT_WRITE protection, even when aligned!!
-  // We only create this kind of memory for getting notifications if
-  // RWX memory is modified.
-  if (HasLinearMapping() && sig == SIGBUS && si->si_code == BUS_ADRALN &&
-      s->protectedsmc) {
-    sig = SIGSEGV;
-    si->si_signo = SIGSEGV;
-    si->si_code = SEGV_ACCERR;
-  }
+  sig = FixXnuSignal(m, sig, si);
 #endif
   SIG_LOGF("OnFatalSystemSignal(%s, %p)", DescribeSignal(UnXlatSignal(sig)),
            si->si_addr);

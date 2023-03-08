@@ -45,7 +45,6 @@ static int ProtectHostPages(struct System *s, i64 vaddr, i64 size, int prot) {
 
 static int ProtectSelfModifyingCode(struct System *s, i64 vaddr, i64 size) {
   MEM_LOGF("ProtectSelfModifyingCode(%#" PRIx64 ", %#" PRIx64 ")", vaddr, size);
-  s->protectedsmc = true;
   return ProtectHostPages(s, vaddr, size, PROT_READ);
 }
 
@@ -96,8 +95,10 @@ void FlushSmcQueue(struct Machine *m) {
   for (i = 0; i < kSmcQueueSize; ++i) {
     if ((page = m->smcqueue.p[i])) {
       m->smcqueue.p[i] = 0;
-      unassert(!ProtectSelfModifyingCode(m->system, page, 1));
       if (!IsJitDisabled(&m->system->jit)) {
+        if (HasLinearMapping()) {
+          unassert(!ProtectSelfModifyingCode(m->system, page, 1));
+        }
         ResetJitPage(&m->system->jit, page);
       }
       if (IsMakingPath(m) && (m->path.start & -4096) == (page & -4096)) {
@@ -110,17 +111,16 @@ void FlushSmcQueue(struct Machine *m) {
 i64 ProtectRwxMemory(struct System *s, i64 rc, i64 virt, i64 size,
                      long pagesize, int prot) {
   i64 a, b;
+  unassert(HasLinearMapping());
+  unassert(!IsJitDisabled(&s->jit));
   if (rc == -1) return -1;
-  if (IsJitDisabled(&s->jit)) return rc;
   if (prot == (PROT_READ | PROT_WRITE | PROT_EXEC)) {
     a = ROUNDDOWN(virt, 4096);
     b = ROUNDUP(virt + size, 4096);
     // we can only do proper smc invalidation on the host page aligned
     // subset of the mmap()'d or mprotect()'d executable memory region
-    if (HasLinearMapping()) {
-      a = ROUNDUP(a, pagesize);
-      b = ROUNDDOWN(b, pagesize);
-    }
+    a = ROUNDUP(a, pagesize);
+    b = ROUNDDOWN(b, pagesize);
     if (b > a) {
       unassert(!ProtectSelfModifyingCode(s, a, b - a));
     }

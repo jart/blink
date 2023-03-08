@@ -257,7 +257,6 @@ struct System {
   bool iscosmo;
   bool trapexit;
   bool brkchanged;
-  bool protectedsmc;
   _Atomic(bool) killer;
   u16 gdt_limit;
   u16 idt_limit;
@@ -542,6 +541,7 @@ long GetMaxVss(struct System *);
 void FlushSmcQueue(struct Machine *);
 bool IsPageInSmcQueue(struct Machine *, i64);
 void AddPageToSmcQueue(struct Machine *, i64);
+int FixXnuSignal(struct Machine *, int, siginfo_t *);
 i64 ProtectRwxMemory(struct System *, i64, i64, i64, long, int);
 void HandleFatalSystemSignal(struct Machine *, const siginfo_t *);
 bool IsSelfModifyingCodeSegfault(struct Machine *, const siginfo_t *);

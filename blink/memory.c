@@ -58,11 +58,13 @@ u8 *GetPageAddress(struct System *s, u64 entry, bool is_cr3) {
   unassert(~entry & PAGE_RSRV);
   if (entry & PAGE_HOST) {
     return (u8 *)(uintptr_t)(entry & PAGE_TA);
-  } else if ((entry & PAGE_TA) + 4096 <= kRealSize) {
-    unassert(s->real);
-    return s->real + (entry & PAGE_TA);
   } else {
-    return 0;
+    unassert(s->real);
+    if ((entry & PAGE_TA) + 4096 <= kRealSize) {
+      return s->real + (entry & PAGE_TA);
+    } else {
+      return 0;
+    }
   }
 }
 

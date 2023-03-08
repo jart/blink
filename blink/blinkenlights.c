@@ -3979,6 +3979,9 @@ void TerminateSignal(struct Machine *m, int sig) {
 
 static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
   struct Machine *m = g_machine;
+#ifdef __APPLE__
+  sig = FixXnuSignal(m, sig, si);
+#endif
 #ifndef DISABLE_JIT
   if (IsSelfModifyingCodeSegfault(m, si)) return;
 #endif

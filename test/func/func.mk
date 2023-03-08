@@ -7,6 +7,9 @@ TEST_FUNC_FILES := $(wildcard test/func/*)
 ifeq ($(HOST_SYSTEM), Darwin)
 TEST_FUNC_FILES := $(filter-out test/func/busted_test.c,$(TEST_FUNC_FILES))
 endif
+ifeq ($(HOST_OS), Cygwin)
+TEST_FUNC_FILES := $(filter-out test/func/busted_test.c,$(TEST_FUNC_FILES))
+endif
 
 TEST_FUNC_SRCS = $(filter %.c,$(TEST_FUNC_FILES))
 TEST_FUNC_OBJS = $(TEST_FUNC_SRCS:%.c=o/$(MODE)/x86_64/%.o)

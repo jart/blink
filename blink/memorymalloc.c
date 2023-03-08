@@ -739,6 +739,20 @@ static int FailDueToHostAlignment(i64 virt, long pagesize, const char *kind) {
   return einval();
 }
 
+static int DetermineHostProtection(int prot) {
+  int sysprot;
+  // blink never executes guest memory on metal
+  sysprot = prot & ~PROT_EXEC;
+  // when memory is being fully virtualized,
+  // blink will check permissions on its own
+  // note we can't force write permission in
+  // some cases such as shared file mappings
+  if (!HasLinearMapping()) {
+    sysprot |= PROT_READ;
+  }
+  return sysprot;
+}
+
 i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                    i64 offset, bool shared, bool fixedmap) {
   u8 *mi;
@@ -760,9 +774,9 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   unassert(!(flags & PAGE_RSRV));
   unassert(s->mode == XED_MODE_LONG);
 
-  // determine host memory protection
+  // determine memory protection
   prot = GetProtection(flags);
-  sysprot = prot & ~PROT_EXEC;
+  sysprot = DetermineHostProtection(prot);
 
   MEM_LOGF("ReserveVirtual(%#" PRIx64 ", %#" PRIx64 ", %s)", virt, size,
            DescribeProt(prot));
@@ -958,7 +972,9 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
           s->vss += vss_delta;
           // TODO(jart): We should call InvalidateSystem appropriately.
 #ifndef DISABLE_JIT
-          result = ProtectRwxMemory(s, result, result, size, pagesize, prot);
+          if (HasLinearMapping() && !IsJitDisabled(&s->jit)) {
+            result = ProtectRwxMemory(s, result, result, size, pagesize, prot);
+          }
 #endif
           return result;
         }
@@ -1115,9 +1131,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot,
     return enomem();
   }
   key = SetProtection(prot);
-  // some operating systems e.g. openbsd and apple M1, have a
-  // W^X invariant. we don't need to execute guest memory so:
-  sysprot = prot & ~PROT_EXEC;
+  sysprot = DetermineHostProtection(prot);
   // in linear mode, the guest might try to do something like
   // set a 4096 byte guard page to PROT_NONE at the bottom of
   // its 64kb stack. if the host operating system has a 64 kb
@@ -1207,7 +1221,9 @@ FinishedCrawling:
   }
   if (!hostonly) {
 #ifndef DISABLE_JIT
-    ProtectRwxMemory(s, rc, orig_virt, size, pagesize, prot);
+    if (HasLinearMapping() && !IsJitDisabled(&s->jit)) {
+      ProtectRwxMemory(s, rc, orig_virt, size, pagesize, prot);
+    }
 #endif
     InvalidateSystem(s, true, executable_code_was_made_non_executable);
   }
