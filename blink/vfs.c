@@ -1126,7 +1126,7 @@ int VfsAccess(int dirfd, const char *name, mode_t mode, int flags) {
   if (VfsHandleDirfdName(dirfd, name, &dir, &newname) == -1) {
     return -1;
   }
-  if (flags & AT_SYMLINK_FOLLOW) {
+  if (!(flags & AT_SYMLINK_NOFOLLOW)) {
     ret = VfsHandleDirfdSymlink(&dir, &newname);
   }
   unassert(!VfsTraverseMount(&dir, &newname));
@@ -2519,7 +2519,7 @@ int VfsMsync(void *addr, size_t len, int flags) {
     }
     if (!map->data->device->ops->msync) {
       UNLOCK(&g_vfs.mapslock);
-      return eopnotsupp();
+      return enodev();
     }
     currentaddr = map->addr;
     currentlen = map->len;

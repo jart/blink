@@ -231,10 +231,13 @@ static int HostfsGetOptimalDirFdName(struct VfsInfo *dir, const char *name,
         if (path[len1 - 1] == '/') {
           --len1;
         }
+        if (path[0] == '/') {
+          --len1;
+        }
         if (len1 + 1 + len2 + 1 >= PATH_MAX) {
           ret = enametoolong();
         } else {
-          if (len1 > 0) {
+          if (len1 >= 0) {
             memcpy(hostpath, ((*path) == '/') ? path + 1 : path, len1);
             hostpath[len1] = '/';
           }
@@ -304,7 +307,7 @@ int HostfsFinddir(struct VfsInfo *parent, const char *name,
   if (fstatat(hostfd, hostname, &st, AT_SYMLINK_NOFOLLOW) == -1) {
     VFS_LOGF("HostfsFinddir: fstatat(%d, \"%s\", %p, AT_SYMLINK_NOFOLLOW) "
              "failed (%d)",
-             parentfd, name, &st, errno);
+             hostfd, hostname, &st, errno);
     goto cleananddie;
   }
   if (HostfsCreateInfo(&outputinfo) == -1) {
@@ -441,8 +444,8 @@ int HostfsOpen(struct VfsInfo *parent, const char *name, int flags, int mode,
     goto cleananddie;
   }
   outputinfo->filefd = openat(hostfd, hostname, flags, mode);
-  VFS_LOGF("HostfsOpen: openat(%d, \"%s\", %d, %d) -> %d", parentfd, name,
-           flags, mode, outputinfo->filefd);
+  VFS_LOGF("HostfsOpen: openat(%d, \"%s\", %d, %d) -> %d, %s", hostfd, hostname,
+           flags, mode, outputinfo->filefd, strerror(errno));
   if (outputinfo->filefd == -1) {
     goto cleananddie;
   }
@@ -1432,16 +1435,29 @@ int HostfsSymlink(const char *target, struct VfsInfo *info, const char *name) {
 
 void *HostfsMmap(struct VfsInfo *info, void *addr, size_t len, int prot,
                  int flags, off_t offset) {
-  struct HostfsInfo *hostinfo;
+#ifdef __CYGWIN__
+  struct stat st;
+#endif
   void *ret;
+  int fd;
   VFS_LOGF("HostfsMmap(%p, %p, %zu, %d, %d, %zd)", info, addr, len, prot, flags,
            offset);
   if (info == NULL) {
     efault();
     return MAP_FAILED;
   }
-  hostinfo = (struct HostfsInfo *)info->data;
-  ret = mmap(addr, len, prot, flags, hostinfo->filefd, offset);
+  fd = ((struct HostfsInfo *)info->data)->filefd;
+#ifdef __CYGWIN__
+  if (fstat(fd, &st) != -1) {
+    if (offset >= st.st_size) {
+      // Cygwin doesn't like mapping files with offset past the end.
+      fd = -1;
+      flags |= MAP_ANONYMOUS;
+      offset = 0;
+    }
+  }
+#endif
+  ret = mmap(addr, len, prot, flags, fd, offset);
   VFS_LOGF("mmap(%p, %zu, %d, %d, %d, %zd) -> %p", addr, len, prot, flags,
            hostinfo->filefd, offset, ret);
   return ret;
