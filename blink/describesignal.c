@@ -22,6 +22,7 @@
 #include "blink/thread.h"
 #include "blink/util.h"
 
+// @asyncsignalsafe
 const char *DescribeSignal(int sig) {
   char *p;
   _Thread_local static char buf[30];

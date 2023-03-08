@@ -3,7 +3,7 @@
 _start:
 
 //	make -j8 o//blink o//test/asm/cmov.elf
-//	o//blink/tui o//test/asm/cmov.elf
+//	o//blink/blinkenlights o//test/asm/cmov.elf
 
 	.test	"cmovq taken"
 	mov	$0x1234567812345678,%rax

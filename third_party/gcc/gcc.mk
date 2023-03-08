@@ -2,7 +2,7 @@
 #───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
 
 third_party/gcc/%.xz: third_party/gcc/%.xz.sha256 o/tool/sha256sum
-	curl -so $@ https://justine.storage.googleapis.com/compilers/$(notdir $@)
+	curl -so $@ https://justine.storage.googleapis.com/compilers/$(subst third_party/gcc/,,$@)
 	o/tool/sha256sum -c $<
 
 o/$(MODE)/i486/%.o: %.c o/third_party/gcc/i486/bin/i486-linux-musl-gcc $(VM)
@@ -146,7 +146,7 @@ o/third_party/gcc/mipsel/bin/mipsel-linux-musl-gcc:		\
 	touch $@
 
 o/third_party/gcc/mips64/bin/mips64-linux-musl-gcc:		\
-		third_party/gcc/x86_64-linux-musl__mips64-linux-musl__g++-7.2.0.tar.xz
+		third_party/gcc/2/x86_64-linux-musl__mips64-linux-musl__g++-9.4.0.tar.xz
 	mkdir -p o/third_party/gcc/mips64
 	tar -C o/third_party/gcc/mips64 -xJf $<
 	touch $@
@@ -176,7 +176,7 @@ o/third_party/gcc/powerpc/bin/powerpc-linux-musl-gcc:		\
 	touch $@
 
 o/third_party/gcc/powerpc64le/bin/powerpc64le-linux-musl-gcc:	\
-		third_party/gcc/x86_64-linux-musl__powerpc64le-linux-musl__g++-7.2.0.tar.xz
+		third_party/gcc/2/x86_64-linux-musl__powerpc64le-linux-musl__g++-9.2.0.tar.xz
 	mkdir -p o/third_party/gcc/powerpc64le
 	tar -C o/third_party/gcc/powerpc64le -xJf $<
 	touch $@

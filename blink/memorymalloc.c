@@ -1323,6 +1323,7 @@ MemoryDisappeared:
   return enomem();
 }
 
+// @asyncsignalsafe
 static i64 FindGuestAddr(struct System *s, uintptr_t hp, u64 pt, long lvl,
                          u64 *out_pte) {
   u8 *mi;
@@ -1349,6 +1350,7 @@ static i64 FindGuestAddr(struct System *s, uintptr_t hp, u64 pt, long lvl,
 
 // Reverse maps real host address to virtual guest address if exists.
 // On failure the host address is returned and zero is stored in pte.
+// @asyncsignalsafe
 i64 ConvertHostToGuestAddress(struct System *s, void *ha, u64 *out_pte) {
   i64 g48;
   uintptr_t base;

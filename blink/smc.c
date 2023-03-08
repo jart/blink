@@ -30,17 +30,13 @@
 
 #ifndef DISABLE_JIT
 
+// @asyncsignalsafe
 static int ProtectHostPages(struct System *s, i64 vaddr, i64 size, int prot) {
   i64 a, b;
-  long pagesize;
-  if (HasLinearMapping()) {
-    pagesize = FLAG_pagesize;
-  } else {
-    pagesize = 4096;
-  }
-  a = ROUNDDOWN(vaddr, pagesize);
-  b = ROUNDUP(vaddr + size, pagesize);
-  return ProtectVirtual(s, a, b - a, prot, true);
+  unassert(HasLinearMapping());
+  a = ROUNDDOWN(vaddr, FLAG_pagesize);
+  b = ROUNDUP(vaddr + size, FLAG_pagesize);
+  return mprotect(ToHost(a), b - a, prot);
 }
 
 static int ProtectSelfModifyingCode(struct System *s, i64 vaddr, i64 size) {
@@ -48,12 +44,14 @@ static int ProtectSelfModifyingCode(struct System *s, i64 vaddr, i64 size) {
   return ProtectHostPages(s, vaddr, size, PROT_READ);
 }
 
+// @asyncsignalsafe
 static int UnprotectSelfModifyingCode(struct System *s, i64 vaddr, i64 size) {
   MEM_LOGF("UnprotectSelfModifyingCode(%#" PRIx64 ", %#" PRIx64 ")", vaddr,
            size);
   return ProtectHostPages(s, vaddr, size, PROT_READ | PROT_WRITE);
 }
 
+// @asyncsignalsafe
 bool IsPageInSmcQueue(struct Machine *m, i64 page) {
   int i;
   i64 tmp;
@@ -71,6 +69,7 @@ bool IsPageInSmcQueue(struct Machine *m, i64 page) {
   return false;
 }
 
+// @asyncsignalsafe
 void AddPageToSmcQueue(struct Machine *m, i64 page) {
   int i;
   page &= -4096;
@@ -128,6 +127,7 @@ i64 ProtectRwxMemory(struct System *s, i64 rc, i64 virt, i64 size,
   return rc;
 }
 
+// @asyncsignalsafe
 bool IsSelfModifyingCodeSegfault(struct Machine *m, const siginfo_t *si) {
   u64 pte;
   i64 vaddr;

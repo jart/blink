@@ -541,10 +541,12 @@ long GetMaxVss(struct System *);
 void FlushSmcQueue(struct Machine *);
 bool IsPageInSmcQueue(struct Machine *, i64);
 void AddPageToSmcQueue(struct Machine *, i64);
-int FixXnuSignal(struct Machine *, int, siginfo_t *);
 i64 ProtectRwxMemory(struct System *, i64, i64, i64, long, int);
 void HandleFatalSystemSignal(struct Machine *, const siginfo_t *);
 bool IsSelfModifyingCodeSegfault(struct Machine *, const siginfo_t *);
+
+int FixXnuSignal(struct Machine *, int, siginfo_t *);
+int FixPpcSignal(struct Machine *, int, siginfo_t *);
 
 void CountOp(long *);
 void FastPush(struct Machine *, long);

@@ -171,6 +171,8 @@ static void OnFatalSystemSignal(int sig, siginfo_t *si, void *ptr) {
   struct Machine *m = g_machine;
 #ifdef __APPLE__
   sig = FixXnuSignal(m, sig, si);
+#elif defined(__powerpc__) && CAN_64BIT
+  sig = FixPpcSignal(m, sig, si);
 #endif
   SIG_LOGF("OnFatalSystemSignal(%s, %p)", DescribeSignal(UnXlatSignal(sig)),
            si->si_addr);

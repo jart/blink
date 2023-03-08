@@ -19,25 +19,14 @@
 #include "blink/machine.h"
 
 // @asyncsignalsafe
-int FixXnuSignal(struct Machine *m, int sig, siginfo_t *si) {
+int FixPpcSignal(struct Machine *m, int sig, siginfo_t *si) {
   u64 pte;
-  // The fruit platform will raise SIGBUS on writes to anon mappings
-  // which don't have the PROT_WRITE protection, even when aligned!!
-  // We only create this kind of memory for getting notifications if
-  // RWX memory is modified. The XNU codebase implements a hack that
-  // prevents this from happening for stack memory, but for anything
-  // else we're on our own.
-  if (HasLinearMapping() && sig == SIGBUS && si->si_code == BUS_ADRALN) {
+  // let's help qemu-ppc64le pass readonly_test
+  if (HasLinearMapping() && sig == SIGSEGV && si->si_code == SEGV_MAPERR) {
     ConvertHostToGuestAddress(m->system, si->si_addr, &pte);
-    // check that fault address mapped to an actual guest address, and
-    // that either (1) the page doesn't have read+write permission, or
-    // (2) it's an RWX page and therefore likely to be sneak protected
     if ((pte & PAGE_V) &&
         ((pte & (PAGE_U | PAGE_RW)) != (PAGE_U | PAGE_RW) ||
          (pte & (PAGE_U | PAGE_RW | PAGE_XD)) == (PAGE_U | PAGE_RW))) {
-      // we're now quite certain this is actually a segmentation fault
-      sig = SIGSEGV;
-      si->si_signo = SIGSEGV;
       si->si_code = SEGV_ACCERR;
     }
   }
