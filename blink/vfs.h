@@ -14,9 +14,14 @@
 
 #include "blink/dll.h"
 #include "blink/preadv.h"
+#include "blink/macros.h"
 #include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/types.h"
+
+#define VFS_SYSTEM_ROOT_MOUNT "/SystemRoot"
+#define VFS_PATH_MAX          MAX(PATH_MAX, 4096)
+#define VFS_NAME_MAX          256
 
 struct VfsDevice;
 struct VfsMount;
@@ -35,96 +40,97 @@ struct Vfs {
 };
 
 struct VfsOps {
-  int (*init)(const char *, u64, const void *, struct VfsDevice **,
+  int (*Init)(const char *, u64, const void *, struct VfsDevice **,
               struct VfsMount **);
-  int (*freeinfo)(void *);
-  int (*freedevice)(void *);
-  int (*finddir)(struct VfsInfo *, const char *, struct VfsInfo **);
-  ssize_t (*readlink)(struct VfsInfo *, char **);
-  int (*mkdir)(struct VfsInfo *, const char *, mode_t);
-  int (*mkfifo)(struct VfsInfo *, const char *, mode_t);
-  int (*open)(struct VfsInfo *, const char *, int, int, struct VfsInfo **);
-  int (*access)(struct VfsInfo *, const char *, mode_t, int);
-  int (*stat)(struct VfsInfo *, const char *, struct stat *, int);
-  int (*fstat)(struct VfsInfo *, struct stat *);
-  int (*chmod)(struct VfsInfo *, const char *, mode_t, int);
-  int (*fchmod)(struct VfsInfo *, mode_t);
-  int (*chown)(struct VfsInfo *, const char *, uid_t, gid_t, int);
-  int (*fchown)(struct VfsInfo *, uid_t, gid_t);
-  int (*ftruncate)(struct VfsInfo *, off_t);
-  int (*link)(struct VfsInfo *, const char *, struct VfsInfo *, const char *,
+  int (*Freeinfo)(void *);
+  int (*Freedevice)(void *);
+  int (*Finddir)(struct VfsInfo *, const char *, struct VfsInfo **);
+  int (*Traverse)(struct VfsInfo **, const char **, struct VfsInfo *);
+  ssize_t (*Readlink)(struct VfsInfo *, char **);
+  int (*Mkdir)(struct VfsInfo *, const char *, mode_t);
+  int (*Mkfifo)(struct VfsInfo *, const char *, mode_t);
+  int (*Open)(struct VfsInfo *, const char *, int, int, struct VfsInfo **);
+  int (*Access)(struct VfsInfo *, const char *, mode_t, int);
+  int (*Stat)(struct VfsInfo *, const char *, struct stat *, int);
+  int (*Fstat)(struct VfsInfo *, struct stat *);
+  int (*Chmod)(struct VfsInfo *, const char *, mode_t, int);
+  int (*Fchmod)(struct VfsInfo *, mode_t);
+  int (*Chown)(struct VfsInfo *, const char *, uid_t, gid_t, int);
+  int (*Fchown)(struct VfsInfo *, uid_t, gid_t);
+  int (*Ftruncate)(struct VfsInfo *, off_t);
+  int (*Link)(struct VfsInfo *, const char *, struct VfsInfo *, const char *,
               int);
-  int (*unlink)(struct VfsInfo *, const char *, int);
-  ssize_t (*read)(struct VfsInfo *, void *, size_t);
-  ssize_t (*write)(struct VfsInfo *, const void *, size_t);
-  ssize_t (*pread)(struct VfsInfo *, void *, size_t, off_t);
-  ssize_t (*pwrite)(struct VfsInfo *, const void *, size_t, off_t);
-  ssize_t (*readv)(struct VfsInfo *, const struct iovec *, int);
-  ssize_t (*writev)(struct VfsInfo *, const struct iovec *, int);
-  ssize_t (*preadv)(struct VfsInfo *, const struct iovec *, int, off_t);
-  ssize_t (*pwritev)(struct VfsInfo *, const struct iovec *, int, off_t);
-  off_t (*seek)(struct VfsInfo *, off_t, int);
-  int (*fsync)(struct VfsInfo *);
-  int (*fdatasync)(struct VfsInfo *);
-  int (*flock)(struct VfsInfo *, int);
-  int (*fcntl)(struct VfsInfo *, int, va_list);
-  int (*ioctl)(struct VfsInfo *, unsigned long, const void *);
-  int (*dup)(struct VfsInfo *, struct VfsInfo **);
+  int (*Unlink)(struct VfsInfo *, const char *, int);
+  ssize_t (*Read)(struct VfsInfo *, void *, size_t);
+  ssize_t (*Write)(struct VfsInfo *, const void *, size_t);
+  ssize_t (*Pread)(struct VfsInfo *, void *, size_t, off_t);
+  ssize_t (*Pwrite)(struct VfsInfo *, const void *, size_t, off_t);
+  ssize_t (*Readv)(struct VfsInfo *, const struct iovec *, int);
+  ssize_t (*Writev)(struct VfsInfo *, const struct iovec *, int);
+  ssize_t (*Preadv)(struct VfsInfo *, const struct iovec *, int, off_t);
+  ssize_t (*Pwritev)(struct VfsInfo *, const struct iovec *, int, off_t);
+  off_t (*Seek)(struct VfsInfo *, off_t, int);
+  int (*Fsync)(struct VfsInfo *);
+  int (*Fdatasync)(struct VfsInfo *);
+  int (*Flock)(struct VfsInfo *, int);
+  int (*Fcntl)(struct VfsInfo *, int, va_list);
+  int (*Ioctl)(struct VfsInfo *, unsigned long, const void *);
+  int (*Dup)(struct VfsInfo *, struct VfsInfo **);
 #ifdef HAVE_DUP3
-  int (*dup3)(struct VfsInfo *, struct VfsInfo **, int);
+  int (*Dup3)(struct VfsInfo *, struct VfsInfo **, int);
 #endif
-  int (*poll)(struct VfsInfo **, struct pollfd *, nfds_t, int);
-  int (*opendir)(struct VfsInfo *, struct VfsInfo **);
+  int (*Poll)(struct VfsInfo **, struct pollfd *, nfds_t, int);
+  int (*Opendir)(struct VfsInfo *, struct VfsInfo **);
 #ifdef HAVE_SEEKDIR
-  void (*seekdir)(struct VfsInfo *, long);
-  long (*telldir)(struct VfsInfo *);
+  void (*Seekdir)(struct VfsInfo *, long);
+  long (*Telldir)(struct VfsInfo *);
 #endif
-  struct dirent *(*readdir)(struct VfsInfo *);
-  void (*rewinddir)(struct VfsInfo *);
-  int (*closedir)(struct VfsInfo *);
-  int (*bind)(struct VfsInfo *, const struct sockaddr *, socklen_t);
-  int (*connect)(struct VfsInfo *, const struct sockaddr *, socklen_t);
-  int (*connectunix)(struct VfsInfo *, struct VfsInfo *,
+  struct dirent *(*Readdir)(struct VfsInfo *);
+  void (*Rewinddir)(struct VfsInfo *);
+  int (*Closedir)(struct VfsInfo *);
+  int (*Bind)(struct VfsInfo *, const struct sockaddr *, socklen_t);
+  int (*Connect)(struct VfsInfo *, const struct sockaddr *, socklen_t);
+  int (*Connectunix)(struct VfsInfo *, struct VfsInfo *,
                      const struct sockaddr_un *, socklen_t);
-  int (*accept)(struct VfsInfo *, struct sockaddr *, socklen_t *,
+  int (*Accept)(struct VfsInfo *, struct sockaddr *, socklen_t *,
                 struct VfsInfo **);
-  int (*listen)(struct VfsInfo *, int);
-  int (*shutdown)(struct VfsInfo *, int);
-  ssize_t (*recvmsg)(struct VfsInfo *, struct msghdr *, int);
-  ssize_t (*sendmsg)(struct VfsInfo *, const struct msghdr *, int);
-  ssize_t (*recvmsgunix)(struct VfsInfo *, struct VfsInfo *, struct msghdr *,
+  int (*Listen)(struct VfsInfo *, int);
+  int (*Shutdown)(struct VfsInfo *, int);
+  ssize_t (*Recvmsg)(struct VfsInfo *, struct msghdr *, int);
+  ssize_t (*Sendmsg)(struct VfsInfo *, const struct msghdr *, int);
+  ssize_t (*Recvmsgunix)(struct VfsInfo *, struct VfsInfo *, struct msghdr *,
                          int);
-  ssize_t (*sendmsgunix)(struct VfsInfo *, struct VfsInfo *,
+  ssize_t (*Sendmsgunix)(struct VfsInfo *, struct VfsInfo *,
                          const struct msghdr *, int);
-  int (*getsockopt)(struct VfsInfo *, int, int, void *, socklen_t *);
-  int (*setsockopt)(struct VfsInfo *, int, int, const void *, socklen_t);
-  int (*getsockname)(struct VfsInfo *, struct sockaddr *, socklen_t *);
-  int (*getpeername)(struct VfsInfo *, struct sockaddr *, socklen_t *);
-  int (*rename)(struct VfsInfo *, const char *, struct VfsInfo *, const char *);
-  int (*utime)(struct VfsInfo *, const char *, const struct timespec[2], int);
-  int (*futime)(struct VfsInfo *, const struct timespec[2]);
-  int (*symlink)(const char *, struct VfsInfo *, const char *);
-  void *(*mmap)(struct VfsInfo *, void *, size_t, int, int, off_t);
-  int (*munmap)(struct VfsInfo *, void *, size_t);
-  int (*mprotect)(struct VfsInfo *, void *, size_t, int);
-  int (*msync)(struct VfsInfo *, void *, size_t, int);
-  int (*pipe)(struct VfsInfo *[2]);
+  int (*Getsockopt)(struct VfsInfo *, int, int, void *, socklen_t *);
+  int (*Setsockopt)(struct VfsInfo *, int, int, const void *, socklen_t);
+  int (*Getsockname)(struct VfsInfo *, struct sockaddr *, socklen_t *);
+  int (*Getpeername)(struct VfsInfo *, struct sockaddr *, socklen_t *);
+  int (*Rename)(struct VfsInfo *, const char *, struct VfsInfo *, const char *);
+  int (*Utime)(struct VfsInfo *, const char *, const struct timespec[2], int);
+  int (*Futime)(struct VfsInfo *, const struct timespec[2]);
+  int (*Symlink)(const char *, struct VfsInfo *, const char *);
+  void *(*Mmap)(struct VfsInfo *, void *, size_t, int, int, off_t);
+  int (*Munmap)(struct VfsInfo *, void *, size_t);
+  int (*Mprotect)(struct VfsInfo *, void *, size_t, int);
+  int (*Msync)(struct VfsInfo *, void *, size_t, int);
+  int (*Pipe)(struct VfsInfo *[2]);
 #ifdef HAVE_PIPE2
-  int (*pipe2)(struct VfsInfo *[2], int);
+  int (*Pipe2)(struct VfsInfo *[2], int);
 #endif
-  int (*socket)(int, int, int, struct VfsInfo **);
-  int (*socketpair)(int, int, int, struct VfsInfo *[2]);
-  int (*tcgetattr)(struct VfsInfo *, struct termios *);
-  int (*tcsetattr)(struct VfsInfo *, int, const struct termios *);
-  int (*tcflush)(struct VfsInfo *, int);
-  int (*tcdrain)(struct VfsInfo *);
-  int (*tcsendbreak)(struct VfsInfo *, int);
-  int (*tcflow)(struct VfsInfo *, int);
-  pid_t (*tcgetsid)(struct VfsInfo *);
-  pid_t (*tcgetpgrp)(struct VfsInfo *);
-  int (*tcsetpgrp)(struct VfsInfo *, pid_t);
-  int (*sockatmark)(struct VfsInfo *);
-  int (*fexecve)(struct VfsInfo *, char *const *, char *const *);
+  int (*Socket)(int, int, int, struct VfsInfo **);
+  int (*Socketpair)(int, int, int, struct VfsInfo *[2]);
+  int (*Tcgetattr)(struct VfsInfo *, struct termios *);
+  int (*Tcsetattr)(struct VfsInfo *, int, const struct termios *);
+  int (*Tcflush)(struct VfsInfo *, int);
+  int (*Tcdrain)(struct VfsInfo *);
+  int (*Tcsendbreak)(struct VfsInfo *, int);
+  int (*Tcflow)(struct VfsInfo *, int);
+  pid_t (*Tcgetsid)(struct VfsInfo *);
+  pid_t (*Tcgetpgrp)(struct VfsInfo *);
+  int (*Tcsetpgrp)(struct VfsInfo *, pid_t);
+  int (*Sockatmark)(struct VfsInfo *);
+  int (*Fexecve)(struct VfsInfo *, char *const *, char *const *);
 };
 
 struct VfsSystem {
@@ -155,6 +161,7 @@ struct VfsInfo {
   struct VfsDevice *device;
   struct VfsInfo *parent;
   const char *name;
+  size_t namelen;
   void *data;
   u64 ino;
   u32 dev;
@@ -267,7 +274,8 @@ int VfsFreeInfo(struct VfsInfo *);
 int VfsAddFd(struct VfsInfo *);
 int VfsFreeFd(int, struct VfsInfo **);
 int VfsSetFd(int, struct VfsInfo *);
-int VfsPathBuild(struct VfsInfo *info, struct VfsInfo *root, char **output);
+ssize_t VfsPathBuildFull(struct VfsInfo *, struct VfsInfo *, char **);
+ssize_t VfsPathBuild(struct VfsInfo *, struct VfsInfo *, bool, char[VFS_PATH_MAX]);
 #elif !defined(DISABLE_OVERLAYS)
 #define VfsChown       OverlaysChown
 #define VfsAccess      OverlaysAccess
@@ -423,7 +431,5 @@ int VfsPathBuild(struct VfsInfo *info, struct VfsInfo *root, char **output);
 #define VfsMprotect    mprotect
 #define VfsMsync       msync
 #endif
-
-#define VFS_SYSTEM_ROOT_MOUNT "/SystemRoot"
 
 #endif /* BLINK_VFS_H_ */
