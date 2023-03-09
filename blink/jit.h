@@ -17,7 +17,8 @@
 #define kJitMinBlockSize 262144
 
 #ifdef __x86_64__
-#define kJitMemorySize 130023424
+/* #define kJitMemorySize 130023424 */
+#define kJitMemorySize 32505856
 #else
 #define kJitMemorySize 32505856
 #endif
@@ -131,6 +132,7 @@ struct JitBlock {
   long blocksize;
   long lastaction;
   struct Dll elem;
+  struct Dll aged;
   struct Dll *jumps;
   struct Dll *staged;
 };
@@ -149,6 +151,7 @@ struct Jit {
   pthread_mutex_t_ lock;
   pthread_mutex_t_ hock;
   struct JitHooks hooks;
+  struct Dll *agedblocks;
   struct Dll *blocks;
   struct Dll *jumps;
 };

@@ -128,7 +128,7 @@ static struct JitGlobals {
   pthread_mutex_t_ lock;
   _Atomic(long) prot;
   _Atomic(long) brk;
-  struct Dll *freeblocks GUARDED_BY(lock);
+  struct Dll *freeblocks;
 } g_jit = {
     PTHREAD_MUTEX_INITIALIZER_,
     PROT_READ | PROT_WRITE | PROT_EXEC,
@@ -215,6 +215,7 @@ static struct JitBlock *NewJitBlock(void) {
   if ((jb = (struct JitBlock *)calloc(1, sizeof(struct JitBlock)))) {
     STATISTIC(++jit_blocks);
     dll_init(&jb->elem);
+    dll_init(&jb->aged);
   }
   return jb;
 }
@@ -296,6 +297,7 @@ static struct JitBlock *AcquireJitBlock(struct Jit *jit) {
   if (!jb && (jb = NewJitBlock())) {
     blocksize = atomic_load_explicit(&jit->blocksize, memory_order_relaxed);
     if ((jb->addr = AllocateJitMemory(FLAG_pagesize, blocksize))) {
+      dll_make_first(&jit->agedblocks, &jb->aged);
       jb->blocksize = blocksize;
     } else {
       FreeJitBlock(jb);
@@ -318,6 +320,7 @@ static void ReleaseJitBlock(struct JitBlock *jb) {
   jb->start = 0;
   jb->index = 0;
   jb->committed = 0;
+  dll_init(&jb->aged);
   LOCK(&g_jit.lock);
   dll_make_first(&g_jit.freeblocks, &jb->elem);
   UNLOCK(&g_jit.lock);
@@ -629,6 +632,7 @@ struct JitBlock *StartJit(struct Jit *jit) {
       dll_remove(&jit->blocks, &jb->elem);
     } else if ((jb = AcquireJitBlock(jit)) &&
                !PrepareJitMemory(jb->addr, jb->blocksize)) {
+      dll_remove(&jit->agedblocks, &jb->aged);
       ReleaseJitBlock(jb);
       DisableJit(jit);
       jb = 0;

@@ -3,7 +3,6 @@
 // namely option 1 from the intel manual
 // using indirect branches to other page
 #include <string.h>
-#include <sys/auxv.h>
 #include <sys/mman.h>
 
 // To write self-modifying code and ensure that it is compliant with
@@ -78,9 +77,7 @@ int main(int argc, char *argv[]) {
   int i;
   void *p;
   math_f *f;
-  long pagesz;
-  if ((pagesz = getauxval(AT_PAGESZ)) == -1) return 1;
-  p = mmap(0, pagesz, PROT_READ | PROT_WRITE | PROT_EXEC,
+  p = mmap(0, 65536, PROT_READ | PROT_WRITE | PROT_EXEC,
            MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
   if (p == MAP_FAILED) return 1;
   f = (math_f *)p;
@@ -90,6 +87,6 @@ int main(int argc, char *argv[]) {
     SlowMemCpy(p, kSub, sizeof(kSub));
     if (f(20, 3) != 17) return 3;
   }
-  if (munmap(p, pagesz)) return 4;
+  if (munmap(p, 65536)) return 4;
   return 0;
 }

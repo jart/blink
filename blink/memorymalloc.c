@@ -477,18 +477,20 @@ void InvalidateSystem(struct System *s, bool tlb, bool icache) {
 #ifdef HAVE_THREADS
   struct Dll *e;
   struct Machine *m;
-  LOCK(&s->machines_lock);
-  for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
-    m = MACHINE_CONTAINER(e);
-    if (tlb) {
-      atomic_store_explicit(&m->invalidated, true, memory_order_release);
+  if (tlb || icache) {
+    LOCK(&s->machines_lock);
+    for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
+      m = MACHINE_CONTAINER(e);
+      if (tlb) {
+        atomic_store_explicit(&m->invalidated, true, memory_order_release);
+      }
+      if (icache) {
+        atomic_store_explicit(&m->opcache->invalidated, true,
+                              memory_order_release);
+      }
     }
-    if (icache) {
-      atomic_store_explicit(&m->opcache->invalidated, true,
-                            memory_order_release);
-    }
+    UNLOCK(&s->machines_lock);
   }
-  UNLOCK(&s->machines_lock);
 #endif
 }
 
@@ -593,12 +595,21 @@ static void WaitForPageToNotBeLocked(struct System *s, i64 virt, u8 *pte) {
 }
 
 static bool FreePage(struct System *s, i64 virt, u64 entry, u64 size,
+                     bool *executable_code_was_made_non_executable,
                      long *rss_delta) {
   u8 *page;
   long pagesize;
   uintptr_t real, mug;
   unassert(entry & PAGE_V);
   if (entry & PAGE_FILE) UnmarkFilePage(s, virt);
+  if (!(entry & PAGE_XD)) {
+    *executable_code_was_made_non_executable = true;
+#ifndef DISABLE_JIT
+    if (!IsJitDisabled(&s->jit)) {
+      ResetJitPage(&s->jit, virt);
+    }
+#endif
+  }
   if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) == PAGE_HOST) {
     unassert(~entry & PAGE_RSRV);
     s->memstat.committed -= 1;
@@ -657,6 +668,7 @@ static void AddPageToRanges(struct ContiguousMemoryRanges *ranges, i64 virt,
 // ranges data structure; the caller is responsible for freeing those.
 static void RemoveVirtual(struct System *s, i64 virt, i64 size,
                           struct ContiguousMemoryRanges *ranges,
+                          bool *executable_code_was_made_non_executable,
                           bool *address_space_was_mutated,  //
                           long *vss_delta, long *rss_delta) {
   i64 end;
@@ -684,7 +696,8 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
           pt = LoadPte(pp);
           unassert(pt & PAGE_V);
         }
-        if (FreePage(s, virt, pt, MIN(4096, end - virt), rss_delta) &&
+        if (FreePage(s, virt, pt, MIN(4096, end - virt),
+                     executable_code_was_made_non_executable, rss_delta) &&
             HasLinearMapping()) {
           AddPageToRanges(ranges, virt, end);
         }
@@ -762,6 +775,7 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   int prot, sysprot;
   long vss_delta, rss_delta;
   i64 ti, pt, end, pages, level, entry;
+  bool executable_code_was_made_non_executable;
   struct ContiguousMemoryRanges ranges;
 
   // we determine these
@@ -804,6 +818,7 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   vss_delta = 0;
   rss_delta = 0;
   mutated = false;
+  executable_code_was_made_non_executable = false;
   pages = ROUNDUP(size, 4096) / 4096;
   if (HasLinearMapping() && FLAG_vabits <= 47) {
     if (fixedmap) {
@@ -820,7 +835,9 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
       demand = MAP_FIXED;
     }
     memset(&ranges, 0, sizeof(ranges));
-    RemoveVirtual(s, virt, size, &ranges, &mutated, &vss_delta, &rss_delta);
+    RemoveVirtual(s, virt, size, &ranges,
+                  &executable_code_was_made_non_executable, &mutated,
+                  &vss_delta, &rss_delta);
     if (ranges.i) {
       // linear mappings exist within the requested interval
       if (ranges.i == 1 &&          //
@@ -964,15 +981,20 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
             break;
           }
         }
+        if (pt & PAGE_V) {
+          FreePage(s, virt, pt, 4096, &executable_code_was_made_non_executable,
+                   &rss_delta);
+        }
         if ((virt += 4096) >= end) {
           s->rss += rss_delta;
           s->vss += vss_delta;
-          // TODO(jart): We should call InvalidateSystem appropriately.
 #ifndef DISABLE_JIT
           if (HasLinearMapping() && !IsJitDisabled(&s->jit)) {
             result = ProtectRwxMemory(s, result, result, size, pagesize, prot);
           }
 #endif
+          InvalidateSystem(s, !!rss_delta,
+                           executable_code_was_made_non_executable);
           return result;
         }
         if (++ti == 512) break;
@@ -1013,6 +1035,7 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
   long i;
   bool mutated;
   long vss_delta, rss_delta;
+  bool executable_code_was_made_non_executable;
   struct ContiguousMemoryRanges ranges;
   MEM_LOGF("freeing virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %" PRId64 " kb",
            virt, virt + size, size / 1024);
@@ -1023,7 +1046,10 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
   vss_delta = 0;
   rss_delta = 0;
   memset(&ranges, 0, sizeof(ranges));
-  RemoveVirtual(s, virt, size, &ranges, &mutated, &vss_delta, &rss_delta);
+  executable_code_was_made_non_executable = false;
+  RemoveVirtual(s, virt, size, &ranges,
+                &executable_code_was_made_non_executable, &mutated, &vss_delta,
+                &rss_delta);
   for (rc = i = 0; i < ranges.i; ++i) {
     if (Munmap(ToHost(ranges.p[i].a), ranges.p[i].b - ranges.p[i].a)) {
       LOGF("failed to %s subrange"
@@ -1038,7 +1064,7 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
   s->vss += vss_delta;
   s->rss += rss_delta;
   s->memchurn -= vss_delta;
-  InvalidateSystem(s, true, false);
+  InvalidateSystem(s, !!rss_delta, executable_code_was_made_non_executable);
   return rc;
 }
 
@@ -1179,18 +1205,14 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot,
               goto MemoryDisappeared;
             }
           }
-#ifdef HAVE_JIT
-          if (!(pt & PAGE_XD) && (pt2 & PAGE_XD)) {
-            // exec -> non-exec
-            // avoid clearing instruction cache which is costly
+          if (!(pt & PAGE_XD) && (pt2 & PAGE_XD)) {  // exec -> non-exec
             executable_code_was_made_non_executable = true;
-          } else if ((pt & PAGE_XD) && !(pt2 & PAGE_XD) &&
-                     !IsJitDisabled(&s->jit)) {
-            // non-exec -> exec
-            // delete jit paths associated with this page
-            ResetJitPage(&s->jit, virt);
-          }
+#ifdef HAVE_JIT
+            if (!IsJitDisabled(&s->jit)) {
+              ResetJitPage(&s->jit, virt);
+            }
 #endif
+          }
         }
         if ((virt += 4096) >= end) {
           goto FinishedCrawling;

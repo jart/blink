@@ -5,7 +5,6 @@
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/auxv.h>
 #include <sys/mman.h>
 #include <unistd.h>
 
@@ -25,10 +24,8 @@ void OnSigSegv(int sig, siginfo_t *si, void *vctx) {
 }
 
 int main(int argc, char *argv[]) {
-  long pgsz;
   func_t *f;
-  if ((pgsz = getauxval(AT_PAGESZ)) == -1) return 1;
-  p = mmap(0, pgsz, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+  p = mmap(0, 65536, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, 0, 0);
   if (p == MAP_FAILED) return 2;
   f = (func_t *)p;
   memcpy(f, kCode, sizeof(kCode));

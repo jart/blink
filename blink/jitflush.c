@@ -53,8 +53,8 @@ int FlushJit(struct Jit *jit) {
         jb->start = ROUNDUP(js->index, pagesize);
         jb->index = jb->start;
         count += CommitJit_(jit, jb);
-        LOCK(&jit->lock);
         ReinsertJitBlock_(jit, jb);
+        LOCK(&jit->lock);
         goto StartOver;
       }
     }

@@ -63,7 +63,6 @@ bool IsSignalSerious(int sig) {
 void DeliverSignal(struct Machine *m, int sig, int code) {
   u64 sp;
   struct SignalFrame sf;
-  SYS_LOGF("delivering %s", DescribeSignal(sig));
   if (IsMakingPath(g_machine)) AbandonPath(g_machine);
   memset(&sf, 0, sizeof(sf));
   // capture the current state of the machine
@@ -75,9 +74,13 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
       sig == SIGBUS_LINUX ||   //
       sig == SIGTRAP_LINUX) {
     Write64(sf.si.addr, m->faultaddr);
-  }
-  if (sig == SIGTRAP_LINUX) {
-    Write64(sf.uc.trapno, m->trapno);
+    SYS_LOGF("delivering %s {.si_code = %d, .si_addr = %#" PRIx64 "}",
+             DescribeSignal(sig), code, m->faultaddr);
+  } else {
+    SYS_LOGF("delivering %s, {.si_code = %d}", DescribeSignal(sig), code);
+    if (sig == SIGTRAP_LINUX) {
+      Write64(sf.uc.trapno, m->trapno);
+    }
   }
   Write64(sf.uc.sigmask, m->sigmask);
   memcpy(sf.uc.r8, m->r8, 8);

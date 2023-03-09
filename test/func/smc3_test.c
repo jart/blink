@@ -3,7 +3,6 @@
 // namely option 1 from the intel manual
 // using a near branch to the local page
 #include <string.h>
-#include <sys/auxv.h>
 #include <sys/mman.h>
 
 // To write self-modifying code and ensure that it is compliant with
@@ -83,11 +82,14 @@ __attribute__((__noinline__)) static int f(int x, int y) {
 }
 
 __attribute__((__noinline__)) static int Main(void) {
-  int i, prot;
-  long pagesz;
+  int i, n, prot;
   prot = PROT_READ | PROT_WRITE | PROT_EXEC;
-  if ((pagesz = getauxval(AT_PAGESZ)) == -1) return 1;
-  if (mprotect((void *)((long)f & -pagesz), pagesz, prot)) return 2;
+  for (n = 65536; n; n -= 4096) {
+    if (!mprotect((void *)((long)f & -65536), n, prot)) {
+      break;
+    }
+  }
+  if (!n) return 2;
   if (f(20, 3) != 0) return 3;
   for (i = 0; i < 10; ++i) {
     memcpy(f, kAdd, sizeof(kAdd));

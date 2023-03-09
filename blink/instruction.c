@@ -111,7 +111,6 @@ void LoadInstruction(struct Machine *m, u64 pc) {
       break;
     case kMachineSegmentationFault:
       m->faultaddr = pc;
-      m->segvcode = SEGV_ACCERR_LINUX;
       HaltMachine(m, rc);
     case kMachineDecodeError:
       HaltMachine(m, rc);
