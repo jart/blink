@@ -427,23 +427,20 @@ static inline uintptr_t MakeJitResetCode(i64 virt) {
 }
 
 static bool IncrementJitHookCount(struct Jit *jit) {
-  unsigned i;
   unassert(IS2POW(jit->hooks.n));
-  i = atomic_load_explicit(&jit->hooks.i, memory_order_relaxed);
-  do {
-    if (i == jit->hooks.n / 2) {
-      LOG_ONCE(LOGF("ran out of jit hooks"));
-      DisableJit(jit);
-      return false;
-    }
-  } while (!atomic_compare_exchange_weak_explicit(
-      &jit->hooks.i, &i, i + 1, memory_order_release, memory_order_relaxed));
+  unassert(jit->hooks.i <= jit->hooks.n / 2);
+  if (jit->hooks.i == jit->hooks.n / 2) {
+    LOG_ONCE(LOGF("ran out of jit hooks"));
+    DisableJit(jit);
+    return false;
+  }
+  ++jit->hooks.i;
   return true;
 }
 
-bool SetJitHook(struct Jit *jit, u64 virt, intptr_t funcaddr) {
+static bool SetJitHookImpl(struct Jit *jit, u64 virt, intptr_t funcaddr) {
+  uintptr_t key;
   int func, oldfunc;
-  uintptr_t key, resetcode;
   unsigned hash, spot, step;
   unassert(virt);
   // ensure there's room to add this hook
@@ -466,24 +463,8 @@ bool SetJitHook(struct Jit *jit, u64 virt, intptr_t funcaddr) {
     ++step;
   } while (key && key != virt);
   oldfunc = atomic_load_explicit(jit->hooks.func + spot, memory_order_acquire);
-  // store new entry at hash table slot
-  do {
-    atomic_store_explicit(jit->hooks.func + spot, func, memory_order_release);
-  } while (!atomic_compare_exchange_weak_explicit(jit->hooks.virt + spot, &key,
-                                                  virt, memory_order_release,
-                                                  memory_order_relaxed));
-  if (key) {
-    // we ended up replacing a hash table entry instead
-    unassert(
-        atomic_fetch_add_explicit(&jit->hooks.i, -1, memory_order_acq_rel) > 0);
-    if (key != virt) {
-      // race condition occurred with another thread
-      STATISTIC(++jit_hooks_clobbered);
-    }
-  }
-  // do some best effort accounting. oldfunc isn't guaranteed to be
-  // consistent with key in multithreaded environments, but so what
-  // because statistic counters aren't atomic across threads either
+  atomic_store_explicit(jit->hooks.func + spot, func, memory_order_release);
+  atomic_store_explicit(jit->hooks.virt + spot, virt, memory_order_release);
   if (oldfunc) {
     if (oldfunc == jit->staging) {
       STATISTIC(--jit_hooks_staged);
@@ -493,11 +474,18 @@ bool SetJitHook(struct Jit *jit, u64 virt, intptr_t funcaddr) {
       STATISTIC(++jit_hooks_deleted);
     }
   }
-  resetcode = MakeJitResetCode(virt);
-  atomic_compare_exchange_strong_explicit(&jit->lastreset, &resetcode, 0,
-                                          memory_order_release,
-                                          memory_order_relaxed);
+  if (jit->lastreset == MakeJitResetCode(virt)) {
+    jit->lastreset = 0;
+  }
   return true;
+}
+
+bool SetJitHook(struct Jit *jit, u64 virt, intptr_t funcaddr) {
+  bool res;
+  LOCK(&jit->lock);
+  res = SetJitHookImpl(jit, virt, funcaddr);
+  UNLOCK(&jit->lock);
+  return res;
 }
 
 uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
@@ -525,23 +513,17 @@ uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
   }
 }
 
-/**
- * Clears JIT paths installed to memory page.
- * @param page is virtual address of 4096-byte page (needn't be aligned)
- * @return 0 on success, or -1 w/ errno
- */
-int ResetJitPage(struct Jit *jit, i64 page) {
+static int ResetJitPageImpl(struct Jit *jit, i64 page) {
   int oldfunc;
   i64 virt, end;
   uintptr_t key;
+  uintptr_t resetcode;
   unsigned hash, spot, step;
-  uintptr_t resetcode, lastreset;
   resetcode = MakeJitResetCode(page);
-  lastreset = atomic_load_explicit(&jit->lastreset, memory_order_acquire);
-  if (lastreset && lastreset == resetcode) return 0;
-  STATISTIC(++jit_page_resets);
+  if (resetcode && resetcode == jit->lastreset) return 0;
   virt = page & -4096;
   if (CheckedAdd(virt, 4096, &end) == -1) return -1;
+  STATISTIC(++jit_page_resets);
   for (; virt < end; ++virt) {
     hash = HASH(virt);
     for (spot = step = 0;; ++step) {
@@ -562,8 +544,21 @@ int ResetJitPage(struct Jit *jit, i64 page) {
       }
     }
   }
-  atomic_store_explicit(&jit->lastreset, resetcode, memory_order_release);
+  jit->lastreset = resetcode;
   return 0;
+}
+
+/**
+ * Clears JIT paths installed to memory page.
+ * @param page is virtual address of 4096-byte page (needn't be aligned)
+ * @return 0 on success, or -1 w/ errno
+ */
+int ResetJitPage(struct Jit *jit, i64 page) {
+  int res;
+  LOCK(&jit->lock);
+  res = ResetJitPageImpl(jit, page);
+  UNLOCK(&jit->lock);
+  return res;
 }
 
 static bool CheckMmapResult(void *want, void *got) {

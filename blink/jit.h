@@ -136,8 +136,7 @@ struct JitBlock {
 };
 
 struct JitHooks {
-  unsigned n;
-  _Atomic(unsigned) i;
+  unsigned i, n;
   _Atomic(int) *func;
   _Atomic(uintptr_t) *virt;
 };
@@ -146,8 +145,9 @@ struct Jit {
   int staging;
   _Atomic(bool) disabled;
   _Atomic(long) blocksize;
-  _Atomic(uintptr_t) lastreset;
+  uintptr_t lastreset;
   pthread_mutex_t_ lock;
+  pthread_mutex_t_ hock;
   struct JitHooks hooks;
   struct Dll *blocks;
   struct Dll *jumps;
