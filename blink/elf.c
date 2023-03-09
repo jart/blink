@@ -142,7 +142,7 @@ char *GetElfStringTable(const Elf64_Ehdr_ *elf, size_t mapsize) {
 }
 
 static Elf64_Sym_ *GetElfSymbolTableImpl(const Elf64_Ehdr_ *elf, size_t mapsize,
-                                         int *out_count, int kind) {
+                                         int *out_count, u32 kind) {
   int i;
   Elf64_Shdr_ *shdr;
   for (i = Read16(elf->shnum); i > 0; --i) {

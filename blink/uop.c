@@ -1532,8 +1532,8 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
 
       case 'c': {  // call
         void *fun = va_arg(va, void *);
-        if (fun == (void *)Sub64) LogCodOp(m, "Sub64");
-        if (fun == (void *)Add64) LogCodOp(m, "Add64");
+        if (fun == (void *)(uintptr_t)Sub64) LogCodOp(m, "Sub64");
+        if (fun == (void *)(uintptr_t)Add64) LogCodOp(m, "Add64");
         AppendJitCall(m->path.jb, fun);
         ClobberEverythingExceptResult(m);
         break;

@@ -446,15 +446,14 @@ static void OpMovslGdqpEd(P) {
 void Connect(P, u64 pc, bool avoid_cycles) {
 #ifdef HAVE_JIT
   void *jump;
-  nexgen32e_f f;
+  uintptr_t f;
   // 1. branchless cyclic paths block sigs and deadlock shutdown
   // 2. we don't want to stitch together paths on separate pages
   if (!(avoid_cycles && pc == m->path.start) &&
       (pc & -4096) == (m->path.start & -4096)) {
     // is a preexisting jit path installed at destination?
-    f = (nexgen32e_f)GetJitHook(&m->system->jit, pc,
-                                (uintptr_t)GeneralDispatch);
-    if (f != JitlessDispatch && f != GeneralDispatch) {
+    f = GetJitHook(&m->system->jit, pc, (uintptr_t)GeneralDispatch);
+    if (f != (uintptr_t)JitlessDispatch && f != (uintptr_t)GeneralDispatch) {
       // tail call into the other generated jit path function
       jump = (u8 *)f + GetPrologueSize();
     } else {
@@ -2112,7 +2111,7 @@ static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
     STATISTIC(++path_spliced);
     FlushSkew(DISPATCH_NOTHING);
     AppendJitSetReg(m->path.jb, kJitArg0, kJitSav0);
-    AppendJitJump(m->path.jb, (u8 *)func + GetPrologueSize());
+    AppendJitJump(m->path.jb, (u8 *)(uintptr_t)func + GetPrologueSize());
     FinishPath(m);
     STATISTIC(++instructions_dispatched);
     func(DISPATCH_NOTHING);

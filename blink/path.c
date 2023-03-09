@@ -718,7 +718,7 @@ void AddPath_EndOp(P) {
         0x05,
     };
     AppendJit(m->path.jb, code, sizeof(code));
-    AppendJitCall(m->path.jb, (void *)CommitStash);
+    AppendJitCall(m->path.jb, (void *)(uintptr_t)CommitStash);
   }
 #elif !LOG_JIX && defined(__aarch64__)
   if (m->reserving) {
@@ -729,7 +729,7 @@ void AddPath_EndOp(P) {
         0xb4000001 | 2 << 5,          // cbz x1, +2
     };
     AppendJit(m->path.jb, code, sizeof(code));
-    AppendJitCall(m->path.jb, (void *)CommitStash);
+    AppendJitCall(m->path.jb, (void *)(uintptr_t)CommitStash);
   }
 #else
   Jitter(A,

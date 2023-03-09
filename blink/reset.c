@@ -51,7 +51,8 @@ static void ResetFpu(struct Machine *m) {
   //	  {even, →-∞, →+∞, →0}      │┌┤  ││││││
   //	                           ┌┤││  ││││││
   //	                          d││││rr││││││
-  m->fpu.cw = 0b0000000000000000000001001111111;
+  //          0b0000000000000000000001001111111
+  m->fpu.cw = 0x027f;
 }
 
 static void ResetSse(struct Machine *m) {
@@ -74,7 +75,8 @@ static void ResetSse(struct Machine *m) {
   //                            ┌┤│││││││││││││
   //           ┌───────────────┐│││││││││││││││
   //           │   reserved    ││││││││││││││││
-  m->mxcsr = 0b00000000000000000001111110000000;
+  //         0b00000000000000000001111110000000
+  m->mxcsr = 0x1f80;
   memset(m->xmm, 0, sizeof(m->xmm));
 }
 

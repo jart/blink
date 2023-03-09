@@ -44,7 +44,7 @@
 static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
                       i32 oflags, i32 mode) {
   long i;
-  u64 lim;
+  int lim;
   u64 rng;
   int tmpdir;
   int fildes;
@@ -109,7 +109,7 @@ static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
 
 int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
               i32 mode) {
-  u64 lim;
+  int lim;
   int fildes;
   int sysflags;
   struct Fd *fd;

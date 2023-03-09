@@ -26,7 +26,7 @@ const char *DescribeFlags(char *p, size_t n, const struct DescribeFlags *d,
   char b[21];
   size_t i, j, k;
   for (t = false, i = j = 0; j < m; ++j) {
-    if (d[j].flag && d[j].flag != -1 && (x & d[j].flag) == d[j].flag) {
+    if (d[j].flag && d[j].flag != -1u && (x & d[j].flag) == d[j].flag) {
       x &= ~d[j].flag;
       if (t) {
         if (i + 1 < n) p[i++] = '|';

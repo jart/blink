@@ -35,7 +35,7 @@
 
 int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
   int rc;
-  u64 lim;
+  int lim;
   int fds[2];
   int oflags;
   int supported;

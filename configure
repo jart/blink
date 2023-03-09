@@ -413,6 +413,9 @@ for x; do
     CPPFLAGS="-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -std=c11"
     POSIX=1
 
+  elif [ "$x" = "--pedantic" ]; then
+    CFLAGS="$CFLAGS -std=c11 -pedantic -Wall -Werror"
+
   else
     echo "error: unrecognized flag: $x" >&2
     echo "use $0 --help for help" >&2

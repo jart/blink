@@ -548,7 +548,7 @@ int ResetJitPage(struct Jit *jit, i64 page) {
       spot = (hash + step * ((step + 1) >> 1)) & (jit->hooks.n - 1);
       key = atomic_load_explicit(jit->hooks.virt + spot, memory_order_acquire);
       if (!key) break;
-      if (key == virt) {
+      if ((i64)key == virt) {
         if ((oldfunc = atomic_load_explicit(jit->hooks.func + spot,
                                             memory_order_acquire)) &&
             oldfunc != jit->staging) {

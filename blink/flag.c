@@ -36,8 +36,8 @@ u64 FLAG_vaspace;
 u64 FLAG_aslrmask;
 u64 FLAG_stacktop;
 u64 FLAG_imagestart;
-u64 FLAG_automapend;
-u64 FLAG_automapstart;
+i64 FLAG_automapend;
+i64 FLAG_automapstart;
 u64 FLAG_dyninterpaddr;
 
 const char *FLAG_logpath;

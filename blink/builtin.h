@@ -240,7 +240,7 @@
 #define CAN_64BIT 0
 #endif
 
-#if CAN_64BIT && \
+#if CAN_64BIT && !defined(__STRICT_ANSI__) && \
     ((__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 406 || defined(__llvm__))
 #define HAVE_INT128
 #endif
@@ -273,5 +273,46 @@
 #define MICRO_OP_SAFE static inline
 #define MICRO_OP
 #endif
+
+#if defined(__GNUC__) || defined(__llvm__)
+#pragma GCC diagnostic ignored "-Wtype-limits"
+#pragma GCC diagnostic ignored "-Wsign-compare"
+#pragma GCC diagnostic ignored "-Wunused-function"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#pragma GCC diagnostic error "-Wpointer-arith"
+#pragma GCC diagnostic error "-Wnonnull"
+#pragma GCC diagnostic error "-Wunused-result"
+#ifndef __cplusplus
+#pragma GCC diagnostic error "-Wimplicit-function-declaration"
+#if __GNUC__ >= 6
+#pragma GCC diagnostic error "-Wincompatible-pointer-types"
+#if __GNUC__ >= 8
+#pragma GCC diagnostic error "-Wmultistatement-macros"
+#pragma GCC diagnostic error "-Wpacked-not-aligned"
+#pragma GCC diagnostic error "-Wcast-align=strict"
+#pragma GCC diagnostic error "-Wif-not-aligned"
+#endif /* GCC 8+ */
+#endif /* GCC 6+ */
+#endif /* __cplusplus */
+#endif /* GCC || LLVM */
+
+#if defined(__GNUC__) && !defined(__llvm__)
+#pragma GCC diagnostic error "-Wwrite-strings"
+#pragma GCC diagnostic error "-Wtrampolines"
+#if __GNUC__ >= 6
+#pragma GCC diagnostic error "-Wnonnull-compare"
+#pragma GCC diagnostic error "-Wframe-larger-than=16384"
+#if __GNUC__ >= 9
+#pragma GCC diagnostic error "-Walloca-larger-than=1024"
+#pragma GCC diagnostic error "-Wvla-larger-than=1024"
+#endif /* GCC 9+ */
+#elif __GNUC__ >= 9
+#pragma GCC diagnostic error /* e.g. fabs not abs */ "-Wabsolute-value"
+#endif /* GCC 6+ */
+#endif /* GCC && !LLVM */
+
+#ifdef __llvm__
+#pragma clang diagnostic error "-Wassume"
+#endif /* !GCC && LLVM */
 
 #endif /* BLINK_BUILTIN_H_ */

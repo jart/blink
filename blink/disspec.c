@@ -167,10 +167,6 @@ const char *DisSpecMap0(struct XedDecodedInst *x, char *p) {
     RCASE(0x3C, "ALU %al Ib");
     RCASE(0x3D, "ALU %rAX Ivds");
     RCASE(0x3F, "aas");
-    RCASE(0x40 ... 0x47, "inc %Zv");
-    RCASE(0x48 ... 0x4f, "dec %Zv");
-    RCASE(0x50 ... 0x57, "push %Zvq");
-    RCASE(0x58 ... 0x5f, "pop %Zvq");
     RCASE(0x60, "pusha");
     RCASE(0x61, "popa");
     RCASE(0x62, "bound");
@@ -183,7 +179,6 @@ const char *DisSpecMap0(struct XedDecodedInst *x, char *p) {
     RCASE(0x6D, "insWL Yv DX");
     RCASE(0x6E, "outsb DX Xb");
     RCASE(0x6F, "outsWL DX Xv");
-    RCASE(0x70 ... 0x7f, "jCC Jbs");
     RCASE(0x80, "ALU2 Eb Ib");
     RCASE(0x81, "ALU2 Evqp Ivds");
     RCASE(0x82, "ALU2 Eb Ib");
@@ -200,7 +195,6 @@ const char *DisSpecMap0(struct XedDecodedInst *x, char *p) {
     RCASE(0x8D, "lea %Gvqp M");
     RCASE(0x8E, "mov %Sw Evqp");
     RCASE(0x90, "nop");
-    RCASE(0x91 ... 0x97, "xchg %Zvqp %rAX");
     RCASE(0x98, "cwtl");
     RCASE(0x99, "cltd");
     RCASE(0x9A, "lcall Pvds Kvds");
@@ -225,8 +219,6 @@ const char *DisSpecMap0(struct XedDecodedInst *x, char *p) {
     RCASE(0xAD, "lodsWLQ %rAX Xvqp");
     RCASE(0xAE, "scasb %al Yb");
     RCASE(0xAF, "scasWLQ %rAX Yvqp");
-    RCASE(0xB0 ... 0xb7, "mov %Zb Ib");
-    RCASE(0xB8 ... 0xbf, "movABS %Zvqp Ivqp");
     RCASE(0xC0, "BIT Eb Ib");
     RCASE(0xC1, "BIT Evqp Ib");
     RCASE(0xC2, "ret Iw");
@@ -273,6 +265,85 @@ const char *DisSpecMap0(struct XedDecodedInst *x, char *p) {
     RCASE(0xFB, "sti");
     RCASE(0xFC, "cld");
     RCASE(0xFD, "std");
+    case 0x40:
+    case 0x41:
+    case 0x42:
+    case 0x43:
+    case 0x44:
+    case 0x45:
+    case 0x46:
+    case 0x47:
+      return "inc %Zv";
+    case 0x48:
+    case 0x49:
+    case 0x4a:
+    case 0x4b:
+    case 0x4c:
+    case 0x4d:
+    case 0x4e:
+    case 0x4f:
+      return "dec %Zv";
+    case 0x50:
+    case 0x51:
+    case 0x52:
+    case 0x53:
+    case 0x54:
+    case 0x55:
+    case 0x56:
+    case 0x57:
+      return "push %Zvq";
+    case 0x58:
+    case 0x59:
+    case 0x5a:
+    case 0x5b:
+    case 0x5c:
+    case 0x5d:
+    case 0x5e:
+    case 0x5f:
+      return "pop %Zvq";
+    case 0x70:
+    case 0x71:
+    case 0x72:
+    case 0x73:
+    case 0x74:
+    case 0x75:
+    case 0x76:
+    case 0x77:
+    case 0x78:
+    case 0x79:
+    case 0x7a:
+    case 0x7b:
+    case 0x7c:
+    case 0x7d:
+    case 0x7e:
+    case 0x7f:
+      return "jCC Jbs";
+    case 0x91:
+    case 0x92:
+    case 0x93:
+    case 0x94:
+    case 0x95:
+    case 0x96:
+    case 0x97:
+      return "xchg %Zvqp %rAX";
+    case 0xB0:
+    case 0xb1:
+    case 0xb2:
+    case 0xb3:
+    case 0xb4:
+    case 0xb5:
+    case 0xb6:
+    case 0xb7:
+      return "mov %Zb Ib";
+    case 0xb8:
+    case 0xb9:
+    case 0xba:
+    case 0xbb:
+    case 0xbc:
+    case 0xbd:
+    case 0xbe:
+    case 0xbf:
+      return "movABS %Zvqp Ivqp";
     case 0x8F:
       switch (ModrmReg(x->op.rde)) {
         RCASE(0, "popWQ Evq");
@@ -457,14 +528,6 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0x05, "syscall");
     RCASE(0x09, "wbinvd");
     RCASE(0x0B, "ud2");
-    RCASE(0x0D, "nop Ev");
-    RCASE(0x18, "nop Ev");
-    RCASE(0x19, "nop Ev");
-    RCASE(0x1A, "nop Ev");
-    RCASE(0x1B, "nop Ev");
-    RCASE(0x1C, "nop Ev");
-    RCASE(0x1D, "nop Ev");
-    RCASE(0x1E, "nop Ev");
     RCASE(0x20, "mov %Hd %Cd");
     RCASE(0x22, "mov %Cd %Hd");
     RCASE(0x28, "movapSD %Vps Wps");
@@ -478,7 +541,6 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0x33, "rdpmc");
     RCASE(0x34, "sysenter");
     RCASE(0x35, "sysexit");
-    RCASE(0x40 ... 0x4f, "cmovCC %Gvqp Evqp");
     RCASE(0x50, Osz(x->op.rde) ? "movmskpd %Gdqp %Udq" : "movmskps %Gdqp %Nq");
     RCASE(0x52, DisOpVpsWpsVssWss(x, p, "rsqrt"));
     RCASE(0x53, DisOpVpsWpsVssWss(x, p, "rcp"));
@@ -510,8 +572,6 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0x75, DisOpPqQqVdqWdq(x, p, "pcmpeqw"));
     RCASE(0x76, DisOpPqQqVdqWdq(x, p, "pcmpeqd"));
     RCASE(0x77, "emms");
-    RCASE(0x80 ... 0x8f, "jCC Jvds");
-    RCASE(0x90 ... 0x9f, "setCC Eb");
     RCASE(0xA0, "push %fs");
     RCASE(0xA1, "pop %fs");
     RCASE(0xA2, "cpuid");
@@ -537,7 +597,6 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0xC1, "xadd Evqp %Gvqp");
     RCASE(0xC2, DisOpVpsWpsVssWssVpdWpdVsdWsd(x, p, "cmp"));
     RCASE(0xC3, "movnti Mdqp %Gdqp");
-    RCASE(0xC8 ... 0xCF, "bswap %Zvqp");
     RCASE(0xD1, DisOpPqQqVdqWdq(x, p, "psrlw"));
     RCASE(0xD2, DisOpPqQqVdqWdq(x, p, "psrld"));
     RCASE(0xD3, DisOpPqQqVdqWdq(x, p, "psrlq"));
@@ -582,6 +641,75 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0xFD, DisOpPqQqVdqWdq(x, p, "paddw"));
     RCASE(0xFE, DisOpPqQqVdqWdq(x, p, "paddd"));
     RCASE(0xFF, "ud0 %Gvqp Evqp");
+    case 0x0D:
+    case 0x18:
+    case 0x19:
+    case 0x1A:
+    case 0x1B:
+    case 0x1C:
+    case 0x1D:
+    case 0x1E:
+      return "nop Ev";
+    case 0x40:
+    case 0x41:
+    case 0x42:
+    case 0x43:
+    case 0x44:
+    case 0x45:
+    case 0x46:
+    case 0x47:
+    case 0x48:
+    case 0x49:
+    case 0x4a:
+    case 0x4b:
+    case 0x4c:
+    case 0x4d:
+    case 0x4e:
+    case 0x4f:
+      return "cmovCC %Gvqp Evqp";
+    case 0x80:
+    case 0x81:
+    case 0x82:
+    case 0x83:
+    case 0x84:
+    case 0x85:
+    case 0x86:
+    case 0x87:
+    case 0x88:
+    case 0x89:
+    case 0x8a:
+    case 0x8b:
+    case 0x8c:
+    case 0x8d:
+    case 0x8e:
+    case 0x8f:
+      return "jCC Jvds";
+    case 0x90:
+    case 0x91:
+    case 0x92:
+    case 0x93:
+    case 0x94:
+    case 0x95:
+    case 0x96:
+    case 0x97:
+    case 0x98:
+    case 0x99:
+    case 0x9a:
+    case 0x9b:
+    case 0x9c:
+    case 0x9d:
+    case 0x9e:
+    case 0x9f:
+      return "setCC Eb";
+    case 0xC8:
+    case 0xc9:
+    case 0xca:
+    case 0xcb:
+    case 0xcc:
+    case 0xcd:
+    case 0xce:
+    case 0xcf:
+      return "bswap %Zvqp";
     case 0xBC:
       if (Rep(x->op.rde) == 3) {
         return "tzcnt %Gvqp Evqp";

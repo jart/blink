@@ -392,8 +392,8 @@ void OpMulRdxRaxEvqpUnsigned(P) {
              "s0a1="  // arg1 = machine
              "t"      // arg0 = res0
              "m",     // call micro-op
-             !GetNeededFlags(m, m->ip, CF | OF) ? (void *)JustMulAxDx
-                                                : (void *)MulAxDx);
+             !GetNeededFlags(m, m->ip, CF | OF) ? (u64)(uintptr_t)JustMulAxDx
+                                                : (u64)(uintptr_t)MulAxDx);
 #else
       Jitter(A,
              "B"      // res0 = GetRegOrMem(RexbRm)
@@ -465,8 +465,8 @@ void OpImulGvqpEvqp(P) {
            "t"       // arg0 = res0
            "m"       // res0 = Imul64(arg0, arg1, machine)
            "r0z3C",  // PutReg[force64bit](RexrReg, res0)
-           !GetNeededFlags(m, m->ip, CF | OF) ? (void *)JustMul64
-                                              : (void *)Imul64);
+           !GetNeededFlags(m, m->ip, CF | OF) ? (u64)(uintptr_t)JustMul64
+                                              : (u64)(uintptr_t)Imul64);
   }
 #endif
   if (IsMakingPath(m) && !Rexw(rde) && !Osz(rde)) {
@@ -479,8 +479,8 @@ void OpImulGvqpEvqp(P) {
            "t"       // arg0 = res0
            "m"       // res0 = Imul32(arg0, arg1, machine)
            "r0z2C",  // PutReg[force32bit](RexrReg, res0)
-           !GetNeededFlags(m, m->ip, CF | OF) ? (void *)JustMul32
-                                              : (void *)Imul32);
+           !GetNeededFlags(m, m->ip, CF | OF) ? (u64)(uintptr_t)JustMul32
+                                              : (u64)(uintptr_t)Imul32);
   }
 }
 
@@ -498,8 +498,8 @@ void OpImulGvqpEvqpImm(P) {
            "m"       // res0 = Imul64(arg0, arg1, machine)
            "r0z3C",  // PutReg[force64bit](RexrReg, res0)
            uimm0,
-           !GetNeededFlags(m, m->ip, CF | OF) ? (void *)JustMul64
-                                              : (void *)Imul64);
+           !GetNeededFlags(m, m->ip, CF | OF) ? (u64)(uintptr_t)JustMul64
+                                              : (u64)(uintptr_t)Imul64);
   }
 #endif
   if (IsMakingPath(m) && !Rexw(rde) && !Osz(rde)) {
@@ -511,8 +511,8 @@ void OpImulGvqpEvqpImm(P) {
            "m"       // res0 = Imul32(arg0, arg1, machine)
            "r0z2C",  // PutReg[force32bit](RexrReg, res0)
            uimm0,
-           !GetNeededFlags(m, m->ip, CF | OF) ? (void *)JustMul32
-                                              : (void *)Imul32);
+           !GetNeededFlags(m, m->ip, CF | OF) ? (u64)(uintptr_t)JustMul32
+                                              : (u64)(uintptr_t)Imul32);
   }
 }
 

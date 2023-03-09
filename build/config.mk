@@ -57,7 +57,7 @@ TAGSFLAGS =				\
 CFLAGS += -U_FORTIFY_SOURCE
 
 ifeq ($(USER), jart)
-CFLAGS := -Wall -Werror -Wno-unused-function $(CFLAGS)
+CFLAGS := -Wall -Werror $(CFLAGS)
 endif
 
 ifeq ($(MODE), dbg)

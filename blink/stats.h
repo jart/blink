@@ -23,7 +23,7 @@
 #ifndef NDEBUG
 #ifdef __GNUC__
 #define GET_COUNTER(S)    \
-  ({                      \
+  __extension__({         \
     IGNORE_RACES_START(); \
     long S_ = S;          \
     IGNORE_RACES_END();   \

@@ -506,9 +506,9 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   int tid;
   int err;
   int ignored;
-  int supported;
-  int mandatory;
   pthread_t thread;
+  unsigned supported;
+  unsigned mandatory;
   sigset_t ss, oldss;
   pthread_attr_t attr;
   _Atomic(int) *ptid_ptr;
@@ -1158,7 +1158,7 @@ int GetOflags(struct Machine *m, int fildes) {
   return oflags;
 }
 
-static i64 SysMmapImpl(struct Machine *m, i64 virt, u64 size, int prot,
+static i64 SysMmapImpl(struct Machine *m, i64 virt, i64 size, int prot,
                        int flags, int fildes, i64 offset) {
   u64 key;
   int oflags;
@@ -1166,7 +1166,7 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, u64 size, int prot,
   i64 newautomap;
   if (!IsValidAddrSize(virt, size)) return einval();
   if (flags & MAP_GROWSDOWN_LINUX) return enotsup();
-  if ((key = Prot2Page(prot)) == -1) return einval();
+  if ((key = Prot2Page(prot)) == (u64)-1) return einval();
   CleanseMemory(m->system, size);
   if (m->system->rss >= GetMaxRss(m->system)) {
     LOGF("ran out of resident memory (%lx / %lx pages)", m->system->rss,
@@ -1302,7 +1302,7 @@ static int SysMsync(struct Machine *m, i64 virt, u64 size, int flags) {
 }
 
 static int SysDup1(struct Machine *m, i32 fildes) {
-  u64 lim;
+  int lim;
   int oflags;
   int newfildes;
   struct Fd *fd;
@@ -1405,9 +1405,8 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
 }
 
 static int SysDupf(struct Machine *m, i32 fildes, i32 minfildes, int cmd) {
-  u64 lim;
   struct Fd *fd;
-  int oflags, newfildes;
+  int lim, oflags, newfildes;
   if (minfildes >= (lim = GetFileDescriptorLimit(m->system))) return emfile();
   if ((newfildes = fcntl(fildes, cmd, minfildes)) != -1) {
     if (newfildes >= lim) {
@@ -1481,9 +1480,8 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
 }
 
 static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
-  u64 lim;
   struct Fd *fd;
-  int flags, fildes;
+  int lim, flags, fildes;
   flags = type & (SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
   type &= ~(SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
   if ((type = XlatSocketType(type)) == -1) return -1;
@@ -1511,10 +1509,9 @@ static int SysSocket(struct Machine *m, i32 family, i32 type, i32 protocol) {
 
 static int SysSocketpair(struct Machine *m, i32 family, i32 type, i32 protocol,
                          i64 pipefds_addr) {
-  u64 lim;
   struct Fd *fd;
   u8 fds_linux[2][4];
-  int rc, flags, sysflags, fds[2];
+  int rc, lim, flags, sysflags, fds[2];
   flags = type & (SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
   type &= ~(SOCK_NONBLOCK_LINUX | SOCK_CLOEXEC_LINUX);
   if ((type = XlatSocketType(type)) == -1) return -1;
@@ -1637,11 +1634,10 @@ static int GetNoRestart(struct Machine *m, int fildes, bool *norestart) {
 
 static int SysAccept4(struct Machine *m, i32 fildes, i64 sockaddr_addr,
                       i64 sockaddr_size_addr, i32 flags) {
-  u64 lim;
   struct Fd *fd;
   socklen_t addrlen;
-  int newfd, socktype;
   bool restartable = false;
+  int lim, newfd, socktype;
   struct sockaddr_storage addr;
   if (flags & ~(SOCK_CLOEXEC_LINUX | SOCK_NONBLOCK_LINUX)) return einval();
   LOCK(&m->system->fds.lock);
@@ -5228,8 +5224,7 @@ static int SysPipe(struct Machine *m, i64 pipefds_addr) {
 #ifdef HAVE_EPOLL_PWAIT1
 
 static i32 SysEpollCreate1(struct Machine *m, i32 flags) {
-  u64 lim;
-  int fildes, oflags, sysflags;
+  int lim, fildes, oflags, sysflags;
   oflags = 0;
   sysflags = 0;
   if (flags & EPOLL_CLOEXEC_LINUX) {

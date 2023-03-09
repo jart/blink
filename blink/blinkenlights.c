@@ -2385,8 +2385,9 @@ static ssize_t OnPtyFdReadv(int fd, const struct iovec *iov, int iovlen) {
 }
 
 static int OnPtyFdPoll(struct pollfd *fds, nfds_t nfds, int ms) {
+  nfds_t i;
+  int t, re;
   bool once;
-  int i, t, re;
   struct pollfd p2;
   ms &= INT_MAX;
   ptyisenabled = true;
@@ -3518,7 +3519,7 @@ static void EnterWatchpoint(long bp) {
   tuimode = true;
 }
 
-static void ProfileOp(struct Machine *m, u64 pc) {
+static void ProfileOp(struct Machine *m, i64 pc) {
   if (ophits &&                      //
       pc >= m->system->codestart &&  //
       pc < m->system->codestart + m->system->codesize) {

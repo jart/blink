@@ -172,11 +172,12 @@ void CleanseMemory(struct System *s, size_t size) {
   }
 }
 
-u64 GetFileDescriptorLimit(struct System *s) {
+int GetFileDescriptorLimit(struct System *s) {
   u64 lim;
   LOCK(&s->mmap_lock);
   lim = Read64(s->rlim[RLIMIT_NOFILE_LINUX].cur);
   UNLOCK(&s->mmap_lock);
+  if (lim > INT_MAX) lim = INT_MAX;
   return lim;
 }
 

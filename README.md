@@ -167,11 +167,10 @@ from the [Linux Test Project](https://github.com/linux-test-project/ltp)
 (see [third_party/ltp](third_party/ltp)). Blink passes 108 of [Musl
 Libc's unit test suite](https://github.com/jart/libc-test) (see
 [third_party/libc-test](third_party/libc-test)). The tests we haven't
-included are usually due to (1) floating ULP rounding errors (Blink aims
-to be fast and tiny, so we're on the fence about floating point
-emulation), and (2) APIs that can't or won't be supported, e.g. System V
-message queues. Blink runs the precompiled Linux test binaries above on
-other operating systems too, e.g. Apple M1, FreeBSD, Cygwin.
+included are because either (1) it wanted x87 long double to have 80-bit
+precision, or (2) it used Linux APIs we can't or won't support, e.g.
+System V message queues. Blink runs the precompiled Linux test binaries
+above on other operating systems too, e.g. Apple M1, FreeBSD, Cygwin.
 
 ## Reference
 
