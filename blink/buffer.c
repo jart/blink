@@ -29,6 +29,7 @@
 #include "blink/memcpy.h"
 #include "blink/stats.h"
 #include "blink/util.h"
+#include "blink/vfs.h"
 
 static bool GrowBuffer(struct Buffer *b, int need) {
   char *p;
@@ -102,7 +103,7 @@ ssize_t UninterruptibleWrite(int fd, const void *p, size_t n) {
   ssize_t rc;
   for (i = 0; i < n; i += rc) {
   TryAgain:
-    rc = write(fd, (const char *)p + i, n - i);
+    rc = VfsWrite(fd, (const char *)p + i, n - i);
     if (rc == -1 && errno == EINTR) goto TryAgain;
     if (rc == -1) return -1;
   }

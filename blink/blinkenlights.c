@@ -712,7 +712,7 @@ static void ScrollOp(struct Panel *p, i64 op) {
 }
 
 static int TtyWriteString(const char *s) {
-  return write(ttyout, s, strlen(s));
+  return VfsWrite(ttyout, s, strlen(s));
 }
 
 static void OnFeed(void) {
@@ -761,7 +761,7 @@ static void GetTtySize(int fd) {
   struct winsize wsize;
   wsize.ws_row = tyn;
   wsize.ws_col = txn;
-  ioctl(fd, TIOCGWINSZ, &wsize);
+  VfsIoctl(fd, TIOCGWINSZ, &wsize);
   tyn = wsize.ws_row;
   txn = wsize.ws_col;
 }
@@ -894,9 +894,9 @@ static int DrainInput(int fd) {
 #ifdef __COSMOPOLITAN__
     if (!IsWindows())
 #endif
-      if (poll(fds, ARRAYLEN(fds), 0) == -1) return -1;
+      if (VfsPoll(fds, ARRAYLEN(fds), 0) == -1) return -1;
     if (!(fds[0].revents & POLLIN)) break;
-    if (read(fd, buf, sizeof(buf)) == -1) return -1;
+    if (VfsRead(fd, buf, sizeof(buf)) == -1) return -1;
   }
   return 0;
 }
@@ -2256,7 +2256,7 @@ static void HandleAppReadInterrupt(void) {
 }
 
 static int OnPtyFdClose(int fd) {
-  return close(fd);
+  return VfsClose(fd);
 }
 
 static bool HasPendingInput(int fd) {
@@ -2267,7 +2267,7 @@ static bool HasPendingInput(int fd) {
 #ifdef __COSMOPOLITAN__
   if (!IsWindows())
 #endif
-    poll(fds, ARRAYLEN(fds), 0);
+    VfsPoll(fds, ARRAYLEN(fds), 0);
   return fds[0].revents & (POLLIN | POLLERR);
 }
 
@@ -2399,7 +2399,7 @@ static int OnPtyFdPoll(struct pollfd *fds, nfds_t nfds, int ms) {
         }
         p2.fd = fds[i].fd;
         p2.events = fds[i].events;
-        switch (poll(&p2, 1, ms)) {
+        switch (VfsPoll(&p2, 1, ms)) {
           case -1:
             re = POLLERR;
             ++t;
@@ -2443,7 +2443,7 @@ static void DrawDisplayOnly(struct Panel *p) {
     }
     AppendStr(&b, "\033[0m\033[K");
   }
-  write(ttyout, b.p, b.i);
+  VfsWrite(ttyout, b.p, b.i);
   free(b.p);
 }
 
@@ -2727,7 +2727,7 @@ static void OnDiskServiceReadSectors(void) {
     m->ah = 0x0d;  // invalid number of sector
     SetCarry(true);
   }
-  close(fd);
+  VfsClose(fd);
 }
 
 static void OnDiskServiceProbeExtended(void) {
@@ -2794,7 +2794,7 @@ static void OnDiskServiceReadSectorsExtended(void) {
       m->ah = 0x0d;  // invalid number of sectors
       SetCarry(true);
     }
-    close(fd);
+    VfsClose(fd);
   }
 }
 
@@ -3261,7 +3261,7 @@ static void Sleep(int ms) {
 #ifdef __COSMOPOLITAN__
   if (!IsWindows())
 #endif
-    poll((struct pollfd[]){{ttyin, POLLIN}}, 1, ms);
+    VfsPoll((struct pollfd[]){{ttyin, POLLIN}}, 1, ms);
 }
 
 static void OnMouseWheelUp(struct Panel *p, int y, int x) {

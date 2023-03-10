@@ -51,7 +51,7 @@ static void LoadFileMapSymbols(struct System *s, struct FileMap *fm) {
   snprintf(pathdbg, sizeof(pathdbg), "%s.dbg", fm->path);
   if ((fd = VfsOpen(AT_FDCWD, (path = pathdbg), oflags, 0)) != -1 ||
       (fd = VfsOpen(AT_FDCWD, (path = fm->path), oflags, 0)) != -1) {
-    if (fstat(fd, &st) != -1 &&
+    if (VfsFstat(fd, &st) != -1 &&
         (map = Mmap(0, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0, "debug")) !=
             MAP_FAILED) {
       if (st.st_size >= sizeof(Elf64_Ehdr_) &&
