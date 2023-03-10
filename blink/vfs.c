@@ -1970,7 +1970,9 @@ int VfsConnect(int fd, const struct sockaddr *addr, socklen_t addrlen) {
   if (VfsGetFd(fd, &info) == -1) {
     return -1;
   }
-  if (addr->sa_family != AF_UNIX) {
+  // TODO: Handle abstract sockets (sa_data[0] == '\0') on non-Linux
+  // platforms.
+  if (addr->sa_family != AF_UNIX || addr->sa_data[0] == '\0') {
     ret = HostfsConnect(info, addr, addrlen);
   } else {
     name = ((struct sockaddr_un *)addr)->sun_path;

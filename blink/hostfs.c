@@ -1180,13 +1180,9 @@ int HostfsConnect(struct VfsInfo *info, const struct sockaddr *addr,
     return efault();
   }
   hostinfo = (struct HostfsInfo *)info->data;
-  if (addr->sa_family == AF_UNIX) {
-    ret = eopnotsupp();
-  } else {
-    ret = connect(hostinfo->filefd, addr, addrlen);
-    if (ret == 0) {
-      hostinfo->socketfamily = addr->sa_family;
-    }
+  ret = connect(hostinfo->filefd, addr, addrlen);
+  if (ret == 0) {
+    hostinfo->socketfamily = addr->sa_family;
   }
   return ret;
 }
@@ -1279,10 +1275,7 @@ int HostfsShutdown(struct VfsInfo *info, int how) {
     return efault();
   }
   hostinfo = (struct HostfsInfo *)info->data;
-  if (hostinfo->socketfamily != AF_UNIX) {
-    return shutdown(hostinfo->filefd, how);
-  }
-  return eopnotsupp();
+  return shutdown(hostinfo->filefd, how);
 }
 
 ssize_t HostfsRecvmsg(struct VfsInfo *info, struct msghdr *msg, int flags) {
@@ -1416,9 +1409,7 @@ int HostfsGetsockname(struct VfsInfo *info, struct sockaddr *addr,
     *addrlen = hostinfo->socketaddrlen;
   } else {
     if (info->parent == NULL) {
-      addr->sa_family = AF_UNIX;
-      *addrlen = offsetof(struct sockaddr_un, sun_path);
-      return 0;
+      return getsockname(hostinfo->filefd, addr, addrlen);
     }
     un = (struct sockaddr_un *)addr;
     if (VfsPathBuildFull(info, NULL, &path) == -1) {
@@ -1481,6 +1472,7 @@ int HostfsGetpeername(struct VfsInfo *info, struct sockaddr *addr,
         *addrlen = strlen(s) + offsetof(struct sockaddr_un, sun_path);
         free(s);
       } else {
+        // This also includes abstract names, where sun_path[0] == '\0'.
         addr->sa_family = AF_UNIX;
         strncpy(addr->sa_data, hostun->sun_path,
                 *addrlen - offsetof(struct sockaddr_un, sun_path));
