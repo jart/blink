@@ -33,6 +33,7 @@
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/procfs.h"
+#include "blink/tunables.h"
 #include "blink/vfs.h"
 
 #ifndef DISABLE_VFS
@@ -94,6 +95,7 @@ int VfsInit(const char *prefix) {
   char *cwd, hostcwd[PATH_MAX], *bprefix = NULL;
   struct VfsInfo *info;
   size_t hostcwdlen, prefixlen;
+  int fd;
 
   // Register built-in filesystems
   unassert(!VfsRegister(&g_hostfs));
@@ -154,12 +156,16 @@ int VfsInit(const char *prefix) {
   unassert(getcwd(hostcwd, sizeof(hostcwd)));
   if (bprefix && !strncmp(hostcwd, bprefix, (prefixlen = strlen(bprefix)))) {
     hostcwdlen = strlen(hostcwd);
-    cwd = malloc(hostcwdlen - prefixlen + 1);
-    if (cwd == NULL) {
-      enomem();
-      goto cleananddie;
+    if (hostcwdlen == prefixlen) {
+      cwd = strdup("/");
+    } else {
+      cwd = malloc(hostcwdlen - prefixlen + 1);
+      if (cwd == NULL) {
+        enomem();
+        goto cleananddie;
+      }
+      memcpy(cwd, hostcwd + prefixlen, hostcwdlen - prefixlen + 1);
     }
-    memcpy(cwd, hostcwd + prefixlen, hostcwdlen - prefixlen + 1);
   } else {
     cwd = malloc(PATH_MAX + sizeof(VFS_SYSTEM_ROOT_MOUNT));
     if (cwd == NULL) {
@@ -181,6 +187,15 @@ int VfsInit(const char *prefix) {
   unassert(VfsAddFd(info) == 1);
   unassert(!HostfsWrapFd(2, false, &info));
   unassert(VfsAddFd(info) == 2);
+
+  // Some Linux tests require that when EMFILE occurs,
+  // the fd returned before it must be the maximum possible.
+
+  // Force initialization of the logger fd.
+  LogInfo(__FILE__, __LINE__, "Initializing VFS");
+  for (fd = kMinBlinkFd; HostfsWrapFd(fd, false, &info) != -1; ++fd) {
+    unassert(!VfsSetFd(fd, info));
+  }
 
   VFS_LOGF("Initialized VFS");
 
@@ -686,25 +701,25 @@ ssize_t VfsPathBuild(struct VfsInfo *info, struct VfsInfo *root, bool absolute, 
 
 ////////////////////////////////////////////////////////////////////////////////
 
-int VfsAddFd(struct VfsInfo *data) {
+int VfsAddFdAtOrAfter(struct VfsInfo *data, int minfd) {
   struct VfsFd *vfsfd;
   struct Dll *e;
-  int nextfd = 0;
   vfsfd = malloc(sizeof(*vfsfd));
   if (vfsfd == NULL) {
     return -1;
   }
   vfsfd->data = data;
-  LOCK(&g_vfs.lock);
+  LOCK(&g_vfs.lock); 
   for (e = dll_first(g_vfs.fds); e; e = dll_next(g_vfs.fds, e)) {
-    if (VFS_FD_CONTAINER(e)->fd == nextfd) {
-      ++nextfd;
+    if (VFS_FD_CONTAINER(e)->fd < minfd) {
+      continue;
+    } else if (VFS_FD_CONTAINER(e)->fd == minfd) {
+      ++minfd;
     } else {
       break;
     }
   }
-  vfsfd->fd = nextfd;
-  VFS_LOGF("VfsAddFd -> %d", vfsfd->fd);
+  vfsfd->fd = minfd;
   dll_init(&vfsfd->elem);
   if (e == NULL) {
     dll_make_last(&g_vfs.fds, &vfsfd->elem);
@@ -718,6 +733,10 @@ int VfsAddFd(struct VfsInfo *data) {
   }
   UNLOCK(&g_vfs.lock);
   return vfsfd->fd;
+}
+
+int VfsAddFd(struct VfsInfo *data) {
+  return VfsAddFdAtOrAfter(data, 0);
 }
 
 /**
@@ -872,7 +891,7 @@ char *VfsGetcwd(char *buf, size_t size) {
 
 static int VfsHandleDirfdName(int dirfd, const char *name,
                               struct VfsInfo **parent, char leaf[VFS_NAME_MAX]) {
-  struct VfsInfo *dir;
+  struct VfsInfo *dir = NULL;
   const char *p, *q;
   char *parentname = NULL;
   if (name[0] == '/') {
@@ -1455,12 +1474,18 @@ int VfsFtruncate(int fd, off_t length) {
 
 int VfsClose(int fd) {
   struct VfsInfo *info;
+  int ret = 0;
   VFS_LOGF("VfsClose(%d)", fd);
   if (VfsFreeFd(fd, &info) == -1) {
     return -1;
   }
-  unassert(!VfsFreeInfo(info));
-  return 0;
+  if (info->device->ops->Close) {
+    ret = info->device->ops->Close(info);
+  }
+  if (ret != -1) {
+    unassert(!VfsFreeInfo(info));
+  }
+  return ret;
 }
 
 ssize_t VfsRead(int fd, void *buf, size_t nbyte) {
@@ -1668,34 +1693,45 @@ int VfsFlock(int fd, int operation) {
 }
 
 int VfsFcntl(int fd, int cmd, ...) {
-  struct VfsInfo *info;
-  int ret, tmp = -1;
+  struct VfsInfo *info, *newinfo;
+  int ret;
+  int tmp;
   va_list ap;
   VFS_LOGF("VfsFcntl(%d, %d, ...)", fd, cmd);
   if (VfsGetFd(fd, &info) == -1) {
     return -1;
   }
-  if (cmd == F_DUPFD) {
-    ret = VfsDup(fd);
-  } else if (cmd == F_DUPFD_CLOEXEC) {
-    ret = VfsDup(fd);
-    if (ret != -1) {
+  va_start(ap, cmd);
+  if (cmd == F_DUPFD || cmd == F_DUPFD_CLOEXEC) {
+    if (info->device->ops->Dup) {
+      ret = info->device->ops->Dup(info, &newinfo);
+      if (ret != -1) {
+        ret = VfsAddFdAtOrAfter(newinfo, va_arg(ap, int));
+        if (ret == -1) {
+          unassert(!VfsFreeInfo(newinfo));
+        }
+      }
+    } else {
+      unassert(!VfsFreeInfo(info));
+      ret = eopnotsupp();
+    }
+    if (ret != -1 && cmd == F_DUPFD_CLOEXEC) {
       tmp = ret;
       ret = VfsFcntl(ret, F_SETFD, FD_CLOEXEC);
+      if (ret == -1) {
+        unassert(!VfsClose(tmp));
+      } else {
+        ret = tmp;
+      }
     }
-    if (ret == -1) {
-      unassert(!VfsClose(tmp));
-    }
-    ret = tmp;
   } else {
     if (info->device->ops->Fcntl) {
-      va_start(ap, cmd);
       ret = info->device->ops->Fcntl(info, cmd, ap);
-      va_end(ap);
     } else {
       ret = eopnotsupp();
     }
   }
+  va_end(ap);
   unassert(!VfsFreeInfo(info));
   return ret;
 }
@@ -1923,6 +1959,7 @@ int VfsClosedir(DIR *dir) {
 
 int VfsBind(int fd, const struct sockaddr *addr, socklen_t addrlen) {
   struct VfsInfo *info, *dir;
+  struct VfsDevice *olddevice;
   char newname[PATH_MAX];
   int ret;
   VFS_LOGF("VfsBind(%d, %p, %d)", fd, addr, addrlen);
@@ -1936,6 +1973,7 @@ int VfsBind(int fd, const struct sockaddr *addr, socklen_t addrlen) {
       ret = -1;
     } else {
       unassert(!VfsAcquireInfo(dir, &info->parent));
+      olddevice = info->device;
       unassert(!VfsAcquireDevice(dir->device, &info->device));
       info->name = strdup(newname);
       if (!info->name) {
@@ -1950,10 +1988,12 @@ int VfsBind(int fd, const struct sockaddr *addr, socklen_t addrlen) {
           unassert(!VfsFreeInfo(info->parent));
           info->parent = NULL;
           unassert(!VfsFreeDevice(info->device));
-          info->device = NULL;
+          info->device = olddevice;
           free((void *)info->name);
           info->name = NULL;
           info->namelen = 0;
+        } else {
+          unassert(!VfsFreeDevice(olddevice));
         }
       }
     }

@@ -4470,16 +4470,18 @@ static i32 Select(struct Machine *m,          //
           case 0:
             break;
           case 1:
-            ++rc;
             if (FD_ISSET(fildes, &readfds) && (hfds[0].revents & POLLIN)) {
+              ++rc;
               FD_SET(fildes, &readyreadfds);
               FD_CLR(fildes, &readfds);
             }
             if (FD_ISSET(fildes, &writefds) && (hfds[0].revents & POLLOUT)) {
+              ++rc;
               FD_SET(fildes, &readywritefds);
               FD_CLR(fildes, &writefds);
             }
             if (FD_ISSET(fildes, &exceptfds) && (hfds[0].revents & POLLPRI)) {
+              ++rc;
               FD_SET(fildes, &readyexceptfds);
               FD_CLR(fildes, &exceptfds);
             }

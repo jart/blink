@@ -82,9 +82,9 @@ static void *PortableMmap(void *addr,     //
 #ifdef MAP_FIXED_NOREPLACE
   if ((flags & MAP_FIXED_NOREPLACE) && res == MAP_FAILED &&
       errno == EOPNOTSUPP) {
-    res = mmap(addr, length, prot, flags & ~MAP_FIXED_NOREPLACE, fd, offset);
+    res = VfsMmap(addr, length, prot, flags & ~MAP_FIXED_NOREPLACE, fd, offset);
     if (res != addr) {
-      munmap(res, length);
+      VfsMunmap(res, length);
       res = MAP_FAILED;
       errno = EEXIST;
     }
@@ -103,7 +103,7 @@ static int GetBitsInAddressSpace(void) {
     ptr = PortableMmap((void *)(uintptr_t)want, 1, PROT_READ,
                        MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS_, -1, 0);
     if (ptr != MAP_FAILED) {
-      munmap(ptr, 1);
+      VfsMunmap(ptr, 1);
       return 64 - i;
     }
   }

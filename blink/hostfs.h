@@ -38,6 +38,7 @@ int HostfsFchmod(struct VfsInfo *, mode_t);
 int HostfsChown(struct VfsInfo *, const char *, uid_t, gid_t, int);
 int HostfsFchown(struct VfsInfo *, uid_t, gid_t);
 int HostfsFtruncate(struct VfsInfo *, off_t);
+int HostfsClose(struct VfsInfo *);
 int HostfsLink(struct VfsInfo *, const char *, struct VfsInfo *, const char *,
                int);
 int HostfsUnlink(struct VfsInfo *, const char *, int);

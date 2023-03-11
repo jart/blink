@@ -38,7 +38,6 @@
 struct HostfsDevice {
   const char *source;
   size_t sourcelen;
-  int fd;
 };
 
 static u64 HostfsHash(u64 parent, const char *data, size_t size) {
@@ -76,15 +75,13 @@ int HostfsInit(const char *source, u64 flags, const void *data,
   if (hostdevice == NULL) {
     return enomem();
   }
-  hostdevice->fd = -1;
-  hostdevice->source = strdup(source);
+  hostdevice->source = realpath(source, NULL);
   if (hostdevice->source == NULL) {
     goto cleananddie;
   }
-  hostdevice->sourcelen = strlen(source);
-  hostdevice->fd = open(source, O_RDONLY | O_DIRECTORY);
-  if (hostdevice->fd == -1) {
-    goto cleananddie;
+  hostdevice->sourcelen = strlen(hostdevice->source);
+  if (hostdevice->source[hostdevice->sourcelen - 1] == '/') {
+    hostdevice->sourcelen--;
   }
   if (VfsCreateDevice(device) == -1) {
     goto cleananddie;
@@ -117,9 +114,6 @@ cleananddie:
   } else {
     if (hostdevice) {
       free((void *)hostdevice->source);
-      if (hostdevice->fd != -1) {
-        unassert(!close(hostdevice->fd));
-      }
       free(hostdevice);
     }
   }
@@ -168,7 +162,6 @@ int HostfsFreeDevice(void *device) {
   }
   VFS_LOGF("HostfsFreeDevice(%p)", device);
   free((void *)hostfsdevice->source);
-  close(hostfsdevice->fd);
   free(hostfsdevice);
   return 0;
 }
@@ -222,8 +215,11 @@ static ssize_t HostfsGetOptimalDirFdName(struct VfsInfo *dir, const char *name,
                                          int *hostfd,
                                          char hostpath[VFS_PATH_MAX]) {
   struct VfsInfo *currentdir;
+  struct HostfsDevice *hostdevice;
   int ret = -1;
   ssize_t len1, len2;
+  VFS_LOGF("HostfsGetOptimalDirFdName(%p, \"%s\", %p, %p)", dir, name, hostfd,
+           hostpath);
   if (!S_ISDIR(dir->mode)) {
     enotdir();
     return -1;
@@ -267,22 +263,23 @@ static ssize_t HostfsGetOptimalDirFdName(struct VfsInfo *dir, const char *name,
     currentdir = currentdir->parent;
   }
   if (ret == -1 && (!currentdir || currentdir->dev != dir->dev)) {
-    *hostfd = ((struct HostfsDevice *)dir->device->data)->fd;
-    VFS_LOGF("dir: %p, dir->device->root: %p", dir, dir->device->root);
-    if ((len1 = VfsPathBuild(dir, dir->device->root, false, hostpath)) == -1) {
+    *hostfd = AT_FDCWD;
+    if ((len1 = VfsPathBuild(dir, dir->device->root, true, hostpath)) == -1) {
       ret = -1;
     } else {
       len2 = strlen(name);
-      if (len1 == 0 || (len1 == 1 && hostpath[0] == '/')) {
-        memcpy(hostpath, name, len2 + 1);
-        ret = len2;
-      } else if (len1 + 1 + len2 >= VFS_PATH_MAX) {
+      hostdevice = (struct HostfsDevice *)dir->device->data;
+      ret = hostdevice->sourcelen + len1 + ((len2 == 0) ? 0 : len2 + 1);
+      if (ret + 1 >= VFS_PATH_MAX) {
         ret = enametoolong();
       } else {
-        hostpath[len1] = '/';
-        memcpy(hostpath + len1 + 1, name, len2);
-        hostpath[len1 + 1 + len2] = '\0';
-        ret = len1 + 1 + len2;
+        memmove(hostpath + hostdevice->sourcelen, hostpath, len1);
+        memcpy(hostpath, hostdevice->source, hostdevice->sourcelen);
+        if (len2 != 0) {
+          hostpath[hostdevice->sourcelen + len1] = '/';
+          memcpy(hostpath + hostdevice->sourcelen + len1 + 1, name, len2 + 1);
+        }
+        hostpath[ret] = '\0';
       }
     }
   }
@@ -363,6 +360,13 @@ int HostfsTraverse(struct VfsInfo **dir, const char **path,
       -1) {
     return -1;
   }
+  if (hostpathlen > 0 && hostpath[hostpathlen - 1] != '/') {
+    if (hostpathlen + 1 >= VFS_PATH_MAX) {
+      return enametoolong();
+    }
+    hostpath[hostpathlen] = '/';
+    ++hostpathlen;
+  }
   VFS_LOGF("HostfsTraverse: hostpath=\"%s\", hostfd=%d", hostpath, hostfd);
   original = *dir;
   next = NULL;
@@ -393,6 +397,13 @@ int HostfsTraverse(struct VfsInfo **dir, const char **path,
       if (next->dev != currentdev) {
         *path = currentpath;
         return 0;
+      }
+      if (hostpathlen > 0) {
+        --hostpathlen;
+        while (hostpathlen > 0 && hostpath[hostpathlen - 1] != '/') {
+          --hostpathlen;
+        }
+        hostpath[hostpathlen] = '\0';
       }
       continue;
     }
@@ -456,7 +467,7 @@ int HostfsTraverse(struct VfsInfo **dir, const char **path,
   return 0;
 cleananddie:
   while (original != *dir) {
-    unassert(!VfsAcquireInfo(*dir, &next));
+    unassert(!VfsAcquireInfo((*dir)->parent, &next));
     unassert(!VfsFreeInfo(*dir));
     *dir = next;
   }
@@ -695,6 +706,19 @@ int HostfsFtruncate(struct VfsInfo *info, off_t length) {
   }
   hostinfo = (struct HostfsInfo *)info->data;
   return ftruncate(hostinfo->filefd, length);
+}
+
+int HostfsClose(struct VfsInfo *info) {
+  struct HostfsInfo *hostinfo;
+  int ret;
+  VFS_LOGF("HostfsClose(%p)", info);
+  if (info == NULL) {
+    return efault();
+  }
+  hostinfo = (struct HostfsInfo *)info->data;
+  ret = close(hostinfo->filefd);
+  hostinfo->filefd = -1;
+  return ret;
 }
 
 int HostfsLink(struct VfsInfo *oldparent, const char *oldname,
@@ -952,7 +976,7 @@ int HostfsDup(struct VfsInfo *info, struct VfsInfo **newinfo) {
              hostinfo->socketaddrlen);
       newhostinfo->socketaddrlen = hostinfo->socketaddrlen;
     }
-  } else if (S_ISDIR(hostinfo->mode)) {
+  } else if (S_ISDIR(hostinfo->mode) && hostinfo->dirstream != NULL) {
     newhostinfo->dirstream = fdopendir(newhostinfo->filefd);
     if (newhostinfo->dirstream == NULL) {
       goto cleananddie;
@@ -1001,11 +1025,16 @@ int HostfsDup3(struct VfsInfo *info, struct VfsInfo **newinfo, int flags) {
   if (newhostinfo->filefd == -1) {
     goto cleananddie;
   }
-  (*newinfo)->name = strdup(info->name);
-  if ((*newinfo)->name == NULL) {
+  if (VfsCreateInfo(newinfo) == -1) {
     goto cleananddie;
   }
-  (*newinfo)->namelen = info->namelen;
+  if (info->name != NULL) {
+    (*newinfo)->name = strdup(info->name);
+    if ((*newinfo)->name == NULL) {
+      goto cleananddie;
+    }
+    (*newinfo)->namelen = info->namelen;
+  }
   if (VfsCreateInfo(newinfo) == -1) {
     goto cleananddie;
   }
@@ -1237,15 +1266,14 @@ int HostfsAccept(struct VfsInfo *info, struct sockaddr *addr,
   }
   if (VfsCreateInfo(output) == -1) {
     unassert(!HostfsFreeInfo(newhostinfo));
-    unassert(!VfsFreeInfo(*output));
     return -1;
   }
   (*output)->data = newhostinfo;
+  unassert(!VfsAcquireDevice(info->device, &(*output)->device));
   ret = accept(hostinfo->filefd, addr, addrlen);
   if (ret != -1) {
     newhostinfo->filefd = ret;
     newhostinfo->socketfamily = hostinfo->socketfamily;
-    unassert(!VfsAcquireDevice(info->device, &(*output)->device));
     (*output)->ino = info->ino;
     (*output)->dev = info->dev;
     (*output)->mode = info->mode;
@@ -1885,6 +1913,7 @@ struct VfsSystem g_hostfs = {.name = "hostfs",
                                  .Chown = HostfsChown,
                                  .Fchown = HostfsFchown,
                                  .Ftruncate = HostfsFtruncate,
+                                 .Close = HostfsClose,
                                  .Link = HostfsLink,
                                  .Unlink = HostfsUnlink,
                                  .Read = HostfsRead,

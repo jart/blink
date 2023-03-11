@@ -58,6 +58,7 @@ struct VfsOps {
   int (*Chown)(struct VfsInfo *, const char *, uid_t, gid_t, int);
   int (*Fchown)(struct VfsInfo *, uid_t, gid_t);
   int (*Ftruncate)(struct VfsInfo *, off_t);
+  int (*Close)(struct VfsInfo *);
   int (*Link)(struct VfsInfo *, const char *, struct VfsInfo *, const char *,
               int);
   int (*Unlink)(struct VfsInfo *, const char *, int);
