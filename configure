@@ -654,6 +654,7 @@ fi
 ( config sync "checking for sync()... " uncomment "#define HAVE_SYNC" ) &
 ( config sysctl "checking for sysctl()... " uncomment "#define HAVE_SYSCTL" ) &
 ( config sysinfo "checking for sysinfo()... " uncomment "#define HAVE_SYSINFO" ) &
+( config fexecve "checking for fexecve()... " uncomment "#define HAVE_FEXECVE" ) &
 ( config wcwidth "checking for wcwidth()... " uncomment "#define HAVE_WCWIDTH" ) &
 ( config memccpy "checking for memccpy()... " uncomment "#define HAVE_MEMCCPY" ) &
 ( config seekdir "checking for seekdir()... " uncomment "#define HAVE_SEEKDIR" ) &

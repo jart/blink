@@ -29,6 +29,7 @@
 #include "blink/errno.h"
 #include "blink/fds.h"
 #include "blink/log.h"
+#include "blink/ndelay.h"
 #include "blink/syscall.h"
 #include "blink/thread.h"
 #include "blink/vfs.h"

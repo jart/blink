@@ -71,7 +71,7 @@ int HostfsInit(const char *source, u64 flags, const void *data,
   hostfsrootinfo = NULL;
   *device = NULL;
   *mount = NULL;
-  hostdevice = malloc(sizeof(struct HostfsDevice));
+  hostdevice = (struct HostfsDevice *)malloc(sizeof(struct HostfsDevice));
   if (hostdevice == NULL) {
     return enomem();
   }
@@ -88,7 +88,7 @@ int HostfsInit(const char *source, u64 flags, const void *data,
   }
   (*device)->data = hostdevice;
   (*device)->ops = &g_hostfs.ops;
-  *mount = malloc(sizeof(struct VfsMount));
+  *mount = (struct VfsMount *)malloc(sizeof(struct VfsMount));
   if (*mount == NULL) {
     goto cleananddie;
   }
@@ -167,9 +167,9 @@ int HostfsFreeDevice(void *device) {
 }
 
 int HostfsCreateInfo(struct HostfsInfo **output) {
-  *output = malloc(sizeof(struct HostfsInfo));
-  if (*output == NULL) {
-    return enomem();
+  *output = (struct HostfsInfo *)malloc(sizeof(struct HostfsInfo));
+  if (!*output) {
+    return 0;
   }
   (*output)->mode = 0;
   (*output)->socketfamily = 0;
@@ -500,7 +500,7 @@ ssize_t HostfsReadlink(struct VfsInfo *info, char **output) {
     }
   }
   len = VFS_PATH_MAX;
-  buf = malloc(len);
+  buf = (char *)malloc(len);
   if (buf == NULL) {
     enomem();
     goto cleananddie;
@@ -514,7 +514,7 @@ ssize_t HostfsReadlink(struct VfsInfo *info, char **output) {
       break;
     }
     len *= 2;
-    buf = realloc(buf, len);
+    buf = (char *)realloc(buf, len);
     if (buf == NULL) {
       enomem();
       goto cleananddie;
@@ -970,7 +970,8 @@ int HostfsDup(struct VfsInfo *info, struct VfsInfo **newinfo) {
   }
   newhostinfo->mode = hostinfo->mode;
   if (S_ISSOCK(hostinfo->mode) && hostinfo->socketaddr != NULL) {
-    newhostinfo->socketaddr = malloc(hostinfo->socketaddrlen);
+    newhostinfo->socketaddr =
+        (struct sockaddr *)malloc(hostinfo->socketaddrlen);
     if (newhostinfo->socketaddr != NULL) {
       memcpy(newhostinfo->socketaddr, hostinfo->socketaddr,
              hostinfo->socketaddrlen);
@@ -1173,7 +1174,7 @@ int HostfsBind(struct VfsInfo *info, const struct sockaddr *addr,
       ret = -1;
     } else {
       len = strlen(hostpath) + 1 + offsetof(struct sockaddr_un, sun_path);
-      hostun = malloc(len);
+      hostun = (struct sockaddr_un *)malloc(len);
       if (hostun == NULL) {
         ret = -1;
       } else {
@@ -1187,7 +1188,7 @@ int HostfsBind(struct VfsInfo *info, const struct sockaddr *addr,
           info->ino = HostfsHash(st.st_dev, (const char *)&st.st_ino,
                                  sizeof(st.st_ino));
           info->mode = st.st_mode;
-          hostinfo->socketaddr = malloc(addrlen);
+          hostinfo->socketaddr = (struct sockaddr *)malloc(addrlen);
           if (hostinfo->socketaddr != NULL) {
             memcpy(hostinfo->socketaddr, addr, addrlen);
             hostinfo->socketaddrlen = addrlen;
@@ -1234,7 +1235,7 @@ int HostfsConnectUnix(struct VfsInfo *sock, struct VfsInfo *info,
   }
   hostpathlen = strlen(hostpath);
   hostlen = hostpathlen + 1 + offsetof(struct sockaddr_un, sun_path);
-  hostun = malloc(hostlen);
+  hostun = (struct sockaddr_un *)malloc(hostlen);
   if (hostun == NULL) {
     return enomem();
   }
@@ -1243,7 +1244,7 @@ int HostfsConnectUnix(struct VfsInfo *sock, struct VfsInfo *info,
   ret = connect(hostinfo->filefd, (struct sockaddr *)hostun, hostlen);
   free(hostun);
   if (ret != -1) {
-    hostinfo->socketpeeraddr = malloc(addrlen);
+    hostinfo->socketpeeraddr = (struct sockaddr *)malloc(addrlen);
     if (hostinfo->socketpeeraddr != NULL) {
       memcpy(hostinfo->socketpeeraddr, addr, addrlen);
       hostinfo->socketpeeraddrlen = addrlen;
@@ -1345,13 +1346,13 @@ ssize_t HostfsRecvmsgUnix(struct VfsInfo *sock, struct VfsInfo *info,
   }
   hostpathlen = strlen(hostpath);
   hostlen = hostpathlen + 1 + offsetof(struct sockaddr_un, sun_path);
-  hostun = malloc(hostlen);
+  hostun = (struct sockaddr_un *)malloc(hostlen);
   if (hostun == NULL) {
     return enomem();
   }
   hostun->sun_family = AF_UNIX;
   memcpy(hostun->sun_path, hostpath, hostpathlen + 1);
-  oldun = msg->msg_name;
+  oldun = (struct sockaddr_un *)msg->msg_name;
   oldlen = msg->msg_namelen;
   msg->msg_name = hostun;
   msg->msg_namelen = hostlen;
@@ -1381,7 +1382,7 @@ ssize_t HostfsSendmsgUnix(struct VfsInfo *sock, struct VfsInfo *info,
   }
   hostpathlen = strlen(hostpath);
   hostlen = hostpathlen + 1 + offsetof(struct sockaddr_un, sun_path);
-  hostun = malloc(hostlen);
+  hostun = (struct sockaddr_un *)malloc(hostlen);
   if (hostun == NULL) {
     return enomem();
   }
@@ -1471,7 +1472,7 @@ int HostfsGetpeername(struct VfsInfo *info, struct sockaddr *addr,
       *addrlen = hostinfo->socketpeeraddrlen;
       return 0;
     }
-    hostun = malloc(hostlen + 1);
+    hostun = (struct sockaddr_un *)malloc(hostlen + 1);
     if (hostun == NULL) {
       return enomem();
     }
@@ -1485,8 +1486,8 @@ int HostfsGetpeername(struct VfsInfo *info, struct sockaddr *addr,
       // absolute names we don't know which device it lives on.
       // VFS_SYSTEM_ROOT_MOUNT may have been unmounted by the user.
       if (hostun->sun_path[0] == '/') {
-        s = malloc(sizeof(VFS_SYSTEM_ROOT_MOUNT) + hostlen -
-                   offsetof(struct sockaddr_un, sun_path));
+        s = (char *)malloc(sizeof(VFS_SYSTEM_ROOT_MOUNT) + hostlen -
+                           offsetof(struct sockaddr_un, sun_path));
         if (s == NULL) {
           free(hostun);
           return enomem();
@@ -1742,6 +1743,7 @@ cleananddie:
   return -1;
 }
 
+// TODO(trungnt): pipe2() should be polyfilled not partially disabled
 #ifdef HAVE_PIPE2
 int HostfsPipe2(struct VfsInfo *infos[2], int flags) {
   int i;
@@ -1833,19 +1835,23 @@ cleananddie:
 int HostfsFexecve(struct VfsInfo *info, char *const *argv, char *const *envp) {
   struct HostfsInfo *hostinfo;
   VFS_LOGF("HostfsFexecve(%p, %p, %p)", info, argv, envp);
+#ifdef HAVE_FEXECVE
   if (info == NULL) {
     return efault();
   }
   hostinfo = (struct HostfsInfo *)info->data;
   return fexecve(hostinfo->filefd, argv, envp);
+#else
+  return enosys();
+#endif
 }
 
 struct VfsDevice g_anondevice = {
-    .data = NULL,
-    .dev = -1,
-    .ops = &g_hostfs.ops,
     .mounts = NULL,
-    .refcount = 1,
+    .ops = &g_hostfs.ops,
+    .data = NULL,
+    .dev = -1u,
+    .refcount = 1u,
 };
 
 int HostfsWrapFd(int fd, bool dodup, struct VfsInfo **output) {

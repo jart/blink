@@ -43,6 +43,7 @@
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/map.h"
+#include "blink/ndelay.h"
 #include "blink/sigwinch.h"
 #include "blink/util.h"
 #include "blink/xlat.h"
@@ -619,11 +620,21 @@ int XlatSocketOptname(int level, int optname) {
 #ifndef DISABLE_NONPOSIX
     case SOL_IP_LINUX:
       switch (optname) {
+#ifdef IP_TOS
         XLAT(IP_TOS_LINUX, IP_TOS);
+#endif
+#ifdef IP_TTL
         XLAT(IP_TTL_LINUX, IP_TTL);
+#endif
+#ifdef IP_HDRINCL
         XLAT(IP_HDRINCL_LINUX, IP_HDRINCL);
+#endif
+#ifdef IP_OPTIONS
         XLAT(IP_OPTIONS_LINUX, IP_OPTIONS);
+#endif
+#ifdef IP_RECVTTL
         XLAT(IP_RECVTTL_LINUX, IP_RECVTTL);
+#endif
 #ifdef IP_RECVERR
         XLAT(IP_RECVERR_LINUX, IP_RECVERR);
 #endif

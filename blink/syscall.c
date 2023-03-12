@@ -66,6 +66,7 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
+#include "blink/ndelay.h"
 #include "blink/overlays.h"
 #include "blink/pml4t.h"
 #include "blink/preadv.h"

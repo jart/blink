@@ -36,6 +36,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
+#include "blink/ndelay.h"
 #include "blink/syscall.h"
 #include "blink/thread.h"
 #include "blink/types.h"
@@ -291,7 +292,7 @@ static int IoctlSetInt32(struct Machine *m, int fildes, unsigned long cmd,
 static int IoctlTiocsti(struct Machine *m, int fildes, i64 addr) {
   const u8 *bytep;
   if (!(bytep = LookupAddress(m, addr))) return efault();
-  return VfsIoctl(fildes, TIOCSTI, bytep);
+  return VfsIoctl(fildes, TIOCSTI, (void *)bytep);
 }
 #endif
 

@@ -25,7 +25,8 @@ int HostfsCreateInfo(struct HostfsInfo **);
 int HostfsFreeInfo(void *);
 int HostfsFreeDevice(void *);
 int HostfsFinddir(struct VfsInfo *, const char *, struct VfsInfo **);
-int HostfsTraverse(struct VfsInfo **dir, const char **path, struct VfsInfo *root);
+int HostfsTraverse(struct VfsInfo **dir, const char **path,
+                   struct VfsInfo *root);
 ssize_t HostfsReadlink(struct VfsInfo *, char **);
 int HostfsMkdir(struct VfsInfo *, const char *, mode_t);
 int HostfsMkfifo(struct VfsInfo *, const char *, mode_t);
@@ -99,9 +100,7 @@ int HostfsMprotect(struct VfsInfo *, void *, size_t, int);
 int HostfsMsync(struct VfsInfo *, void *, size_t, int);
 
 int HostfsPipe(struct VfsInfo *[2]);
-#ifdef HAVE_PIPE2
 int HostfsPipe2(struct VfsInfo *[2], int);
-#endif
 int HostfsSocket(int, int, int, struct VfsInfo **);
 int HostfsSocketpair(int, int, int, struct VfsInfo *[2]);
 

@@ -7,6 +7,7 @@
 #include "blink/builtin.h"
 #include "blink/fds.h"
 #include "blink/machine.h"
+#include "blink/ndelay.h"
 #include "blink/types.h"
 
 #ifdef O_ASYNC

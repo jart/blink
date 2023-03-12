@@ -28,6 +28,7 @@
 // #define HAVE_PREADV
 // #define HAVE_WCWIDTH
 // #define HAVE_SYSINFO
+// #define HAVE_FEXECVE
 // #define HAVE_SCHED_H
 // #define HAVE_MEMCCPY
 // #define HAVE_SEEKDIR

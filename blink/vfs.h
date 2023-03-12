@@ -13,8 +13,8 @@
 #include <unistd.h>
 
 #include "blink/dll.h"
-#include "blink/preadv.h"
 #include "blink/macros.h"
+#include "blink/preadv.h"
 #include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/types.h"
@@ -212,7 +212,7 @@ int VfsFsync(int);
 int VfsFdatasync(int);
 int VfsFlock(int, int);
 int VfsFcntl(int, int, ...);
-int VfsIoctl(int, unsigned long, const void *);
+int VfsIoctl(int, unsigned long, void *);
 int VfsDup(int);
 int VfsDup2(int, int);
 #ifdef HAVE_DUP3
@@ -276,7 +276,8 @@ int VfsAddFd(struct VfsInfo *);
 int VfsFreeFd(int, struct VfsInfo **);
 int VfsSetFd(int, struct VfsInfo *);
 ssize_t VfsPathBuildFull(struct VfsInfo *, struct VfsInfo *, char **);
-ssize_t VfsPathBuild(struct VfsInfo *, struct VfsInfo *, bool, char[VFS_PATH_MAX]);
+ssize_t VfsPathBuild(struct VfsInfo *, struct VfsInfo *, bool,
+                     char[VFS_PATH_MAX]);
 #elif !defined(DISABLE_OVERLAYS)
 #define VfsChown       OverlaysChown
 #define VfsAccess      OverlaysAccess
@@ -324,6 +325,7 @@ ssize_t VfsPathBuild(struct VfsInfo *, struct VfsInfo *, bool, char[VFS_PATH_MAX
 #define VfsReaddir     readdir
 #define VfsRewinddir   rewinddir
 #define VfsClosedir    closedir
+#define VfsPipe        pipe
 #define VfsPipe2       pipe2
 #define VfsSocket      socket
 #define VfsSocketpair  socketpair

@@ -61,21 +61,21 @@ struct VfsMap {
 #define VFS_MAP_CONTAINER(e) DLL_CONTAINER(struct VfsMap, elem, (e))
 
 static struct VfsDevice g_rootdevice = {
-    .data = NULL,
     .mounts = NULL,
     .ops = NULL,
+    .data = NULL,
     .dev = 0,
-    .refcount = 1,
+    .refcount = 1u,
 };
 
 static struct VfsInfo g_initialrootinfo = {
     .device = &g_rootdevice,
+    .parent = NULL,
     .data = NULL,
     .ino = 0,
     .dev = 0,
     .mode = S_IFDIR | 0755,
-    .refcount = 1,
-    .parent = NULL,
+    .refcount = 1u,
 };
 
 static struct VfsInfo *g_cwdinfo;
@@ -159,7 +159,7 @@ int VfsInit(const char *prefix) {
     if (hostcwdlen == prefixlen) {
       cwd = strdup("/");
     } else {
-      cwd = malloc(hostcwdlen - prefixlen + 1);
+      cwd = (char *)malloc(hostcwdlen - prefixlen + 1);
       if (cwd == NULL) {
         enomem();
         goto cleananddie;
@@ -167,7 +167,7 @@ int VfsInit(const char *prefix) {
       memcpy(cwd, hostcwd + prefixlen, hostcwdlen - prefixlen + 1);
     }
   } else {
-    cwd = malloc(PATH_MAX + sizeof(VFS_SYSTEM_ROOT_MOUNT));
+    cwd = (char *)malloc(PATH_MAX + sizeof(VFS_SYSTEM_ROOT_MOUNT));
     if (cwd == NULL) {
       enomem();
       goto cleananddie;
@@ -315,7 +315,7 @@ int VfsCreateDevice(struct VfsDevice **output) {
   if (output == NULL) {
     return efault();
   }
-  device = malloc(sizeof(struct VfsDevice));
+  device = (struct VfsDevice *)malloc(sizeof(struct VfsDevice));
   if (device == NULL) {
     return enomem();
   }
@@ -386,7 +386,7 @@ int VfsCreateInfo(struct VfsInfo **output) {
   if (output == NULL) {
     return efault();
   }
-  info = malloc(sizeof(struct VfsInfo));
+  info = (struct VfsInfo *)malloc(sizeof(struct VfsInfo));
   if (info == NULL) {
     return enomem();
   }
@@ -449,7 +449,8 @@ int VfsFreeInfo(struct VfsInfo *info) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int VfsTraverseMount(struct VfsInfo **info, char childname[VFS_NAME_MAX]) {
+static int VfsTraverseMount(struct VfsInfo **info,
+                            char childname[VFS_NAME_MAX]) {
   struct VfsMount *mount;
   struct Dll *e;
   if (info == NULL) {
@@ -518,9 +519,9 @@ static int VfsTraverseStackBuild(struct VfsInfo **stack, const char *path,
     }
     unassert(!VfsTraverseMount(stack, NULL));
     if ((*stack)->device->ops && (*stack)->device->ops->Traverse) {
-       if ((*stack)->device->ops->Traverse(stack, &path, root) == -1) {
-          goto cleananddie;
-       }
+      if ((*stack)->device->ops->Traverse(stack, &path, root) == -1) {
+        goto cleananddie;
+      }
     } else {
       while (*path == '/') {
         ++path;
@@ -609,7 +610,8 @@ int VfsTraverse(const char *path, struct VfsInfo **output, bool follow) {
   return 0;
 }
 
-ssize_t VfsPathBuildFull(struct VfsInfo *info, struct VfsInfo *root, char **output) {
+ssize_t VfsPathBuildFull(struct VfsInfo *info, struct VfsInfo *root,
+                         char **output) {
   struct VfsInfo *current;
   size_t len, currentlen;
   len = 0;
@@ -635,7 +637,7 @@ ssize_t VfsPathBuildFull(struct VfsInfo *info, struct VfsInfo *root, char **outp
     }
     return sizeof(VFS_UNREACHABLE) - 1;
   }
-  *output = malloc(len + 1);
+  *output = (char *)malloc(len + 1);
   if (*output == NULL) {
     return enomem();
   }
@@ -654,7 +656,8 @@ ssize_t VfsPathBuildFull(struct VfsInfo *info, struct VfsInfo *root, char **outp
   return len;
 }
 
-ssize_t VfsPathBuild(struct VfsInfo *info, struct VfsInfo *root, bool absolute, char output[PATH_MAX]) {
+ssize_t VfsPathBuild(struct VfsInfo *info, struct VfsInfo *root, bool absolute,
+                     char output[PATH_MAX]) {
   struct VfsInfo *current;
   size_t len, currentlen;
   len = 0;
@@ -704,12 +707,12 @@ ssize_t VfsPathBuild(struct VfsInfo *info, struct VfsInfo *root, bool absolute, 
 int VfsAddFdAtOrAfter(struct VfsInfo *data, int minfd) {
   struct VfsFd *vfsfd;
   struct Dll *e;
-  vfsfd = malloc(sizeof(*vfsfd));
+  vfsfd = (struct VfsFd *)malloc(sizeof(*vfsfd));
   if (vfsfd == NULL) {
     return -1;
   }
   vfsfd->data = data;
-  LOCK(&g_vfs.lock); 
+  LOCK(&g_vfs.lock);
   for (e = dll_first(g_vfs.fds); e; e = dll_next(g_vfs.fds, e)) {
     if (VFS_FD_CONTAINER(e)->fd < minfd) {
       continue;
@@ -791,7 +794,7 @@ int VfsSetFd(int fd, struct VfsInfo *data) {
       break;
     }
   }
-  vfsfd = malloc(sizeof(*vfsfd));
+  vfsfd = (struct VfsFd *)malloc(sizeof(*vfsfd));
   if (vfsfd == NULL) {
     UNLOCK(&g_vfs.lock);
     return enomem();
@@ -813,7 +816,7 @@ int VfsSetFd(int fd, struct VfsInfo *data) {
 ////////////////////////////////////////////////////////////////////////////////
 
 int VfsChdir(const char *path) {
-  struct VfsInfo *info;
+  struct VfsInfo *info, *tmp;
   int ret = 0;
   VFS_LOGF("VfsChdir(\"%s\")", path);
   if (path == NULL) {
@@ -828,14 +831,16 @@ int VfsChdir(const char *path) {
   if (!S_ISDIR(info->mode)) {
     ret = enotdir();
   } else {
-    info = atomic_exchange(&g_cwdinfo, info);
+    tmp = g_cwdinfo;
+    g_cwdinfo = info;
+    info = tmp;
   }
   unassert(!VfsFreeInfo(info));
   return ret;
 }
 
 int VfsFchdir(int fd) {
-  struct VfsInfo *info;
+  struct VfsInfo *info, *tmp;
   int ret = 0;
   VFS_LOGF("VfsFchdir(%d)", fd);
   if (VfsGetFd(fd, &info) != 0) {
@@ -844,14 +849,16 @@ int VfsFchdir(int fd) {
   if (!S_ISDIR(info->mode)) {
     ret = enotdir();
   } else {
-    info = atomic_exchange(&g_cwdinfo, info);
+    tmp = g_cwdinfo;
+    g_cwdinfo = info;
+    info = tmp;
   }
   unassert(!VfsFreeInfo(info));
   return ret;
 }
 
 int VfsChroot(const char *path) {
-  struct VfsInfo *info;
+  struct VfsInfo *info, *tmp;
   int ret = 0;
   VFS_LOGF("VfsChroot(\"%s\")", path);
   if (path == NULL) {
@@ -866,7 +873,9 @@ int VfsChroot(const char *path) {
   if (!S_ISDIR(info->mode)) {
     ret = enotdir();
   } else {
-    info = atomic_exchange(&g_rootinfo, info);
+    tmp = g_rootinfo;
+    g_rootinfo = info;
+    info = tmp;
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -890,7 +899,8 @@ char *VfsGetcwd(char *buf, size_t size) {
 }
 
 static int VfsHandleDirfdName(int dirfd, const char *name,
-                              struct VfsInfo **parent, char leaf[VFS_NAME_MAX]) {
+                              struct VfsInfo **parent,
+                              char leaf[VFS_NAME_MAX]) {
   struct VfsInfo *dir = NULL;
   const char *p, *q;
   char *parentname = NULL;
@@ -938,7 +948,8 @@ cleananddie:
   return -1;
 }
 
-static int VfsHandleDirfdSymlink(struct VfsInfo **dir, char name[VFS_NAME_MAX]) {
+static int VfsHandleDirfdSymlink(struct VfsInfo **dir,
+                                 char name[VFS_NAME_MAX]) {
   int level = 0;
   char *buf, *s;
   struct VfsInfo *tmp;
@@ -1736,7 +1747,7 @@ int VfsFcntl(int fd, int cmd, ...) {
   return ret;
 }
 
-int VfsIoctl(int fd, unsigned long request, const void *arg) {
+int VfsIoctl(int fd, unsigned long request, void *arg) {
   struct VfsInfo *info;
   int ret;
   VFS_LOGF("VfsIoctl(%d, %lu, %p)", fd, request, arg);
@@ -2229,7 +2240,8 @@ static bool VfsMemoryRangeOverlap(void *a, size_t alen, void *b, size_t blen) {
 }
 
 static bool VfsMemoryRangeContains(void *a, size_t alen, void *b, size_t blen) {
-  return (uintptr_t)a <= (uintptr_t)b && (uintptr_t)b + blen <= (uintptr_t)a + alen;
+  return (uintptr_t)a <= (uintptr_t)b &&
+         (uintptr_t)b + blen <= (uintptr_t)a + alen;
 }
 
 static int VfsMapFree(struct VfsMap *map) {
@@ -2251,7 +2263,7 @@ static int VfsMapSplit(struct VfsMap *map, void *addr, size_t len,
   unassert(VfsMemoryRangeOverlap(map->addr, map->len, addr, len));
   if ((uintptr_t)map->addr + map->len > (uintptr_t)addr &&
       (uintptr_t)map->addr < (uintptr_t)addr) {
-    l = malloc(sizeof(*l));
+    l = (struct VfsMap *)malloc(sizeof(*l));
     if (!l) return enomem();
     l->addr = map->addr;
     l->len = (uintptr_t)addr - (uintptr_t)map->addr;
@@ -2263,7 +2275,7 @@ static int VfsMapSplit(struct VfsMap *map, void *addr, size_t len,
   }
   if ((uintptr_t)addr + len > (uintptr_t)map->addr &&
       (uintptr_t)addr + len < (uintptr_t)map->addr + map->len) {
-    r = malloc(sizeof(*r));
+    r = (struct VfsMap *)malloc(sizeof(*r));
     if (!r) {
       unassert(!VfsMapFree(l));
       return enomem();
@@ -2304,7 +2316,7 @@ static int VfsMapListExtractAffectedRange(struct Dll **maps, void *addr,
   *before = dll_prev(*maps, e);
   while (e && (map = VFS_MAP_CONTAINER(e)) &&
          VfsMemoryRangeOverlap(map->addr, map->len, addr, len)) {
-    newmap = malloc(sizeof(*newmap));
+    newmap = (struct VfsMap *)malloc(sizeof(*newmap));
     if (!newmap) return enomem();
     newmap->addr = map->addr;
     newmap->len = map->len;
@@ -2405,7 +2417,7 @@ void *VfsMmap(void *addr, size_t len, int prot, int flags, int fd,
     if (VfsGetFd(fd, &info) == -1) {
       goto cleananddie;
     }
-    newmap = malloc(sizeof(*newmap));
+    newmap = (struct VfsMap *)malloc(sizeof(*newmap));
     if (!newmap) {
       goto cleananddie;
     }
@@ -2788,7 +2800,7 @@ int VfsExecve(const char *pathname, char *const *argv, char *const *envp) {
   if (info->device->ops->Fexecve) {
     ret = info->device->ops->Fexecve(info, argv, envp);
   } else {
-    ret = eopnotsupp();
+    ret = enosys();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -2819,6 +2831,8 @@ int VfsPipe(int fds[2]) {
   return 0;
 }
 
+// TODO(trungnt): pipe2() should be polyfilled not partially disabled
+#ifdef HAVE_PIPE2
 int VfsPipe2(int fds[2], int flags) {
   struct VfsInfo *infos[2];
   VFS_LOGF("VfsPipe2(%p, %d)", fds, flags);
@@ -2841,6 +2855,7 @@ int VfsPipe2(int fds[2], int flags) {
   }
   return 0;
 }
+#endif
 
 int VfsSocket(int domain, int type, int protocol) {
   struct VfsInfo *info;
