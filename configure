@@ -10,7 +10,7 @@ cleared=
 for x; do
   test "$cleared" || set -- ; cleared=1
   if [ x"${x%%=*}" != x"$x" ] && [ x"${x#--}" = x"$x" ]; then
-    eval "$x"
+    eval "${x%%=*}='${x#*=}'"
   fi
   if [ x"${x%%=*}" != x"MODE" ]; then
     set -- "$@" "$x"
@@ -692,7 +692,7 @@ if test -z "${BLINK_UNAME_V}"; then
 fi
 
 for x; do
-  if [ "${x%=*}" != "$x" ] && [ "${x#--}" = "$x" ]; then
+  if [ x"${x%=*}" != x"$x" ] && [ x"${x#--}" = x"$x" ]; then
     printf '%s\n' "$x" >>"${BUILD}"
   fi
 done
