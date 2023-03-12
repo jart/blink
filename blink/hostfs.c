@@ -1840,6 +1840,9 @@ cleananddie:
 
 int HostfsFexecve(struct VfsInfo *info, char *const *argv, char *const *envp) {
   struct HostfsInfo *hostinfo;
+#ifndef HAVE_FEXECVE
+  char path[VFS_PATH_MAX];
+#endif
   VFS_LOGF("HostfsFexecve(%p, %p, %p)", info, argv, envp);
 #ifdef HAVE_FEXECVE
   if (info == NULL) {
@@ -1848,7 +1851,10 @@ int HostfsFexecve(struct VfsInfo *info, char *const *argv, char *const *envp) {
   hostinfo = (struct HostfsInfo *)info->data;
   return fexecve(hostinfo->filefd, argv, envp);
 #else
-  return enosys();
+  if (HostfsGetHostPath(info, path) == -1) {
+    return -1;
+  }
+  return execve(path, argv, envp);
 #endif
 }
 
