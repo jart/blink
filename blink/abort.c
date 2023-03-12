@@ -18,11 +18,17 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <stdlib.h>
 
+#include "blink/stats.h"
 #include "blink/util.h"
 
 bool g_exitdontabort;
 
 void Abort(void) {
+#ifndef NDEBUG
+  if (FLAG_statistics) {
+    PrintStats();
+  }
+#endif
   if (g_exitdontabort) {
     exit(1);
   } else {

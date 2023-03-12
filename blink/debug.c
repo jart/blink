@@ -317,7 +317,8 @@ static void SpinEventuallyConsistent(int i) {
 }
 
 bool CheckMemoryInvariants(struct System *s) {
-#ifdef DEBUG
+  // TODO(jart): rewrite our memory accounting code
+#if 0
   int i;
   for (i = 0;; ++i) {
     if (s->rss == s->memstat.tables + s->memstat.committed &&

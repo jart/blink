@@ -818,14 +818,14 @@ for conformant self-modifying code:
 >
 > ──Quoth Intel Manual V.3, §8.1.3
 
-Blink implements this behavior because branching instructions always
-cause JIT paths to end, and serializing instructions are never added to
-JIT paths in the first place.
+Blink implements this behavior because branching instructions cause JIT
+paths to end, paths only jump into one another selectively , and lastly
+serializing instructions are never added to paths in the first place.
 
-Intel's rules allow Blink some leeway to make writiting to make this RWX
-memory technique go fast without causing signal storms or incurring much
-system call overhead. As an example, consider the internal statistics
-printed by the [`smc2_test.c`](test/func/smc2_test.c) program:
+Intel's rules allow Blink some leeway to make writing to RWX memory go
+fast, without causing any signal storms, or incurring too much system
+call overhead. As an example, consider the internal statistics printed
+by the [`smc2_test.c`](test/func/smc2_test.c) program:
 
 ```
 make -j8 o//blink/blink o//test/func/smc2_test.elf
@@ -848,7 +848,8 @@ memory. However we can see very few of them resulted in segfaults, since
 most of those ops happened in the SlowMemCpy() function which uses a
 tight conditional branch loop rather than a proper jump. This let the
 program get more accomplished, before dropping out of JIT code back into
-the main interpreter loop, which is where Blink resets the SMC state.
+the main interpreter loop, which is where Blink checks the SMC state in
+order to flush the caches reapply any missing write protection.
 
 ## Pseudoteletypewriter
 

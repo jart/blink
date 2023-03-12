@@ -9,10 +9,10 @@ CONFIG_COMMAND="$0 $*"
 cleared=
 for x; do
   test "$cleared" || set -- ; cleared=1
-  if [ "${x%%=*}" != "$x" ] && [ "${x#--}" = "$x" ]; then
+  if [ x"${x%%=*}" != x"$x" ] && [ x"${x#--}" = x"$x" ]; then
     eval "$x"
   fi
-  if [ "${x%%=*}" != "MODE" ]; then
+  if [ x"${x%%=*}" != x"MODE" ]; then
     set -- "$@" "$x"
   fi
 done
@@ -303,11 +303,11 @@ uncomment() {
 }
 
 for x; do
-  if [ "${x%=*}" != "$x" ] && [ "${x#--}" = "$x" ]; then
+  if [ x"${x%=*}" != x"$x" ] && [ x"${x#--}" = x"$x" ]; then
     continue
   fi
 
-  if [ "$x" = "--disable-all" ]; then
+  if [ x"$x" = x"--disable-all" ]; then
     uncomment "#define DISABLE"
     DISABLE_NONPOSIX=1
     DISABLE_THREADS=1
@@ -316,113 +316,113 @@ for x; do
     DISABLE_X87=1
     DISABLE_JIT=1
 
-  elif [ "${x%%=*}" = "--prefix" ]; then
+  elif [ x"${x%%=*}" = x"--prefix" ]; then
     PREFIX="${x#*=}"
 
-  elif [ "$x" = "--static" ]; then
+  elif [ x"$x" = x"--static" ]; then
     STATIC=1
 
-  elif [ "$x" = "--enable-fork" ]; then
+  elif [ x"$x" = x"--enable-fork" ]; then
     unset DISABLE_FORK
-  elif [ "$x" = "--disable-fork" ]; then
+  elif [ x"$x" = x"--disable-fork" ]; then
     DISABLE_FORK=1
 
-  elif [ "$x" = "--enable-jit" ]; then
+  elif [ x"$x" = x"--enable-jit" ]; then
     comment "#define DISABLE_JIT"
     unset DISABLE_JIT
-  elif [ "$x" = "--disable-jit" ]; then
+  elif [ x"$x" = x"--disable-jit" ]; then
     uncomment "#define DISABLE_JIT"
     DISABLE_JIT=1
 
-  elif [ "$x" = "--enable-x87" ]; then
+  elif [ x"$x" = x"--enable-x87" ]; then
     comment "#define DISABLE_X87"
     unset DISABLE_X87
-  elif [ "$x" = "--disable-x87" ]; then
+  elif [ x"$x" = x"--disable-x87" ]; then
     uncomment "#define DISABLE_X87"
     DISABLE_X87=1
 
-  elif [ "$x" = "--enable-mmx" ]; then
+  elif [ x"$x" = x"--enable-mmx" ]; then
     comment "#define DISABLE_MMX"
-  elif [ "$x" = "--disable-mmx" ]; then
+  elif [ x"$x" = x"--disable-mmx" ]; then
     uncomment "#define DISABLE_MMX"
 
-  elif [ "$x" = "--enable-metal" ]; then
+  elif [ x"$x" = x"--enable-metal" ]; then
     comment "#define DISABLE_METAL"
-  elif [ "$x" = "--disable-metal" ]; then
+  elif [ x"$x" = x"--disable-metal" ]; then
     uncomment "#define DISABLE_METAL"
 
-  elif [ "$x" = "--enable-strace" ]; then
+  elif [ x"$x" = x"--enable-strace" ]; then
     comment "#define DISABLE_STRACE"
-  elif [ "$x" = "--disable-strace" ]; then
+  elif [ x"$x" = x"--disable-strace" ]; then
     uncomment "#define DISABLE_STRACE"
 
-  elif [ "$x" = "--enable-threads" ]; then
+  elif [ x"$x" = x"--enable-threads" ]; then
     comment "#define DISABLE_THREADS"
     unset DISABLE_THREADS
-  elif [ "$x" = "--disable-threads" ]; then
+  elif [ x"$x" = x"--disable-threads" ]; then
     uncomment "#define DISABLE_THREADS"
     DISABLE_THREADS=1
 
-  elif [ "$x" = "--enable-sockets" ]; then
+  elif [ x"$x" = x"--enable-sockets" ]; then
     comment "#define DISABLE_SOCKETS"
     unset DISABLE_SOCKETS
-  elif [ "$x" = "--disable-sockets" ]; then
+  elif [ x"$x" = x"--disable-sockets" ]; then
     uncomment "#define DISABLE_SOCKETS"
     DISABLE_SOCKETS=1
 
-  elif [ "$x" = "--enable-overlays" ]; then
+  elif [ x"$x" = x"--enable-overlays" ]; then
     comment "#define DISABLE_OVERLAYS"
     uncomment "#define DISABLE_VFS"
-  elif [ "$x" = "--disable-overlays" ]; then
+  elif [ x"$x" = x"--disable-overlays" ]; then
     uncomment "#define DISABLE_OVERLAYS"
 
-  elif [ "$x" = "--enable-vfs" ]; then
+  elif [ x"$x" = x"--enable-vfs" ]; then
     comment "#define DISABLE_VFS"
     uncomment "#define DISABLE_OVERLAYS"
-  elif [ "$x" = "--disable-vfs" ]; then
+  elif [ x"$x" = x"--disable-vfs" ]; then
     uncomment "#define DISABLE_VFS"
 
-  elif [ "$x" = "--enable-ancillary" ]; then
+  elif [ x"$x" = x"--enable-ancillary" ]; then
     comment "#define DISABLE_ANCILLARY"
-  elif [ "$x" = "--disable-ancillary" ]; then
+  elif [ x"$x" = x"--disable-ancillary" ]; then
     uncomment "#define DISABLE_ANCILLARY"
 
-  elif [ "$x" = "--enable-disassembler" ]; then
+  elif [ x"$x" = x"--enable-disassembler" ]; then
     comment "#define DISABLE_DISASSEMBLER"
-  elif [ "$x" = "--disable-disassembler" ]; then
+  elif [ x"$x" = x"--disable-disassembler" ]; then
     uncomment "#define DISABLE_DISASSEMBLER"
 
-  elif [ "$x" = "--enable-backtrace" ]; then
+  elif [ x"$x" = x"--enable-backtrace" ]; then
     comment "#define DISABLE_BACKTRACE"
-  elif [ "$x" = "--disable-backtrace" ]; then
+  elif [ x"$x" = x"--disable-backtrace" ]; then
     uncomment "#define DISABLE_BACKTRACE"
 
-  elif [ "$x" = "--enable-nonposix" ]; then
+  elif [ x"$x" = x"--enable-nonposix" ]; then
     comment "#define DISABLE_NONPOSIX"
     unset DISABLE_NONPOSIX
-  elif [ "$x" = "--disable-nonposix" ]; then
+  elif [ x"$x" = x"--disable-nonposix" ]; then
     uncomment "#define DISABLE_NONPOSIX"
     DISABLE_NONPOSIX=1
 
-  elif [ "$x" = "--enable-bmi2" ]; then
+  elif [ x"$x" = x"--enable-bmi2" ]; then
     comment "#define DISABLE_BMI2"
-  elif [ "$x" = "--disable-bmi2" ]; then
+  elif [ x"$x" = x"--disable-bmi2" ]; then
     uncomment "#define DISABLE_BMI2"
 
-  elif [ "$x" = "--enable-bcd" ]; then
+  elif [ x"$x" = x"--enable-bcd" ]; then
     comment "#define DISABLE_BCD"
-  elif [ "$x" = "--disable-bcd" ]; then
+  elif [ x"$x" = x"--disable-bcd" ]; then
     uncomment "#define DISABLE_BCD"
 
-  elif [ "$x" = "--posix" ]; then
+  elif [ x"$x" = x"--posix" ]; then
     CPPFLAGS="-D_POSIX_C_SOURCE=200809L -std=c11"
     POSIX=1
 
-  elif [ "$x" = "--xopen" ]; then
+  elif [ x"$x" = x"--xopen" ]; then
     CPPFLAGS="-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -std=c11"
     POSIX=1
 
-  elif [ "$x" = "--pedantic" ]; then
+  elif [ x"$x" = x"--pedantic" ]; then
     CFLAGS="$CFLAGS -std=c11 -pedantic -Wall -Werror"
 
   else

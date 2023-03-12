@@ -118,8 +118,7 @@
 
 #define SYSCALL(arity, ordinal, name, func, signature)            \
   case ordinal:                                                   \
-    if (STRACE && (signature)[0] != NORMAL[0] &&                  \
-        FLAG_strace >= (signature)[0]) {                          \
+    if (STRACE && FLAG_strace >= (signature)[0]) {                \
       Strace(m, name, true, &(signature)[1] SYSARGS##arity);      \
     }                                                             \
     ax = func(m SYSARGS##arity);                                  \
@@ -273,7 +272,7 @@ HandleSomeMoreInterrupts:
   // determine if there's any signals pending for our guest
   Put64(m->ax, -EINTR_LINUX);
   if ((sig = ConsumeSignal(m, &delivered, &restart))) {
-    TerminateSignal(m, sig);
+    TerminateSignal(m, sig, 0);
   }
   if (delivered) {
     if (DeliverSignalRecursively(m, delivered)) {
@@ -1789,7 +1788,7 @@ static i64 HandleSigpipe(struct Machine *m, i64 rc, int flags) {
       case SIG_IGN_LINUX:
         break;
       case SIG_DFL_LINUX:
-        TerminateSignal(m, SIGPIPE_LINUX);
+        TerminateSignal(m, SIGPIPE_LINUX, 0);
         errno = EPIPE;
         break;
       default:
@@ -4850,7 +4849,7 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
   Put64(m->ax, 0);
   do {
     if ((sig = ConsumeSignal(m, &delivered, 0))) {
-      TerminateSignal(m, sig);
+      TerminateSignal(m, sig, 0);
     }
   } while (delivered && DeliverSignalRecursively(m, delivered));
   return 0;
@@ -4890,7 +4889,7 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
         case SIG_DFL_LINUX:
           if (!IsSignalIgnoredByDefault(sig)) {
             UNLOCK(&m->system->sig_lock);
-            TerminateSignal(m, sig);
+            TerminateSignal(m, sig, 0);
             return 0;
           }
           // fallthrough

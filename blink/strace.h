@@ -25,9 +25,12 @@
 #define ST_HAS(s, f) \
   (f(s[1]) || f(s[2]) || f(s[3]) || f(s[4]) || f(s[5]) || f(s[6]))
 
-#define NORMAL "\000"  // (1) unlikely to block and (2) has no io_* args
-#define TWOWAY "\001"  // (1) likely to block, or (2) has io args
-#define CANCPT "\002"  // cancellation points unlikely to block
+// system call classification, numbered by minimum number of `-s` flags
+// that need to be supplied on the command line to log a syscall entry.
+#define TWOWAY "\001"  // has read+write parameter
+#define BLOCKY "\002"  // cancellation points likely to block
+#define CANCPT "\003"  // cancellation points unlikely to block
+#define NORMAL "\004"  // everything else
 
 #define UN
 #define I32            "\001"
@@ -124,11 +127,11 @@
 #define STRACE_4            NORMAL  HEX    HEX        HEX        HEX       HEX       UN       UN
 #define STRACE_5            NORMAL  HEX    HEX        HEX        HEX       HEX       HEX      UN
 #define STRACE_6            NORMAL  HEX    HEX        HEX        HEX       HEX       HEX      HEX
-#define STRACE_READ         TWOWAY  SSIZE_ FD         O_BUF      BUFSZ     UN        UN       UN
-#define STRACE_READV        TWOWAY  SSIZE_ FD         O_IOVEC    BUFSZ     UN        UN       UN
-#define STRACE_PREAD        TWOWAY  SSIZE_ FD         O_BUF      BUFSZ     OFF       UN       UN
-#define STRACE_PREADV       TWOWAY  SSIZE_ FD         O_IOVEC    BUFSZ     OFF       UN       UN
-#define STRACE_PREADV2      TWOWAY  SSIZE_ FD         O_IOVEC    BUFSZ     OFF       I32      UN
+#define STRACE_READ         BLOCKY  SSIZE_ FD         O_BUF      BUFSZ     UN        UN       UN
+#define STRACE_READV        BLOCKY  SSIZE_ FD         O_IOVEC    BUFSZ     UN        UN       UN
+#define STRACE_PREAD        BLOCKY  SSIZE_ FD         O_BUF      BUFSZ     OFF       UN       UN
+#define STRACE_PREADV       BLOCKY  SSIZE_ FD         O_IOVEC    BUFSZ     OFF       UN       UN
+#define STRACE_PREADV2      BLOCKY  SSIZE_ FD         O_IOVEC    BUFSZ     OFF       I32      UN
 #define STRACE_WRITE        CANCPT  SSIZE_ FD         I_BUF      BUFSZ     UN        UN       UN
 #define STRACE_WRITEV       CANCPT  SSIZE_ FD         I_IOVEC    BUFSZ     UN        UN       UN
 #define STRACE_PWRITE       CANCPT  SSIZE_ FD         I_BUF      BUFSZ     OFF       UN       UN
@@ -147,10 +150,10 @@
 #define STRACE_PPOLL        TWOWAY  RC0    IO_POLL    IO_TIME    I_SIGSET  SSIZE_    UN       UN
 #define STRACE_LSEEK        NORMAL  OFF    FD         OFF        WHENCE    UN        UN       UN
 #define STRACE_MMAP         NORMAL  PTR    PTR        SIZE       PROT      MAPFLAGS  FD       OFF
-#define STRACE_PAUSE        TWOWAY  RC0    UN         UN         UN        UN        UN       UN
-#define STRACE_SYNC         TWOWAY  RC0    UN         UN         UN        UN        UN       UN
-#define STRACE_FSYNC        TWOWAY  RC0    FD         UN         UN        UN        UN       UN
-#define STRACE_FDATASYNC    TWOWAY  RC0    FD         UN         UN        UN        UN       UN
+#define STRACE_PAUSE        BLOCKY  RC0    UN         UN         UN        UN        UN       UN
+#define STRACE_SYNC         BLOCKY  RC0    UN         UN         UN        UN        UN       UN
+#define STRACE_FSYNC        BLOCKY  RC0    FD         UN         UN        UN        UN       UN
+#define STRACE_FDATASYNC    BLOCKY  RC0    FD         UN         UN        UN        UN       UN
 #define STRACE_DUP          NORMAL  I32    FD         UN         UN        UN        UN       UN
 #define STRACE_DUP2         NORMAL  I32    FD         I32        UN        UN        UN       UN
 #define STRACE_DUP3         NORMAL  I32    FD         I32        OFLAGS    UN        UN       UN
@@ -164,9 +167,9 @@
 #define STRACE_MUNMAP       NORMAL  RC0    PTR        SIZE       UN        UN        UN       UN
 #define STRACE_SIGACTION    NORMAL  RC0    SIG        I_HAND     O_HAND    SSIZE_    UN       UN
 #define STRACE_SIGPROCMASK  NORMAL  RC0    SIGHOW     I_SIGSET   O_SIGSET  SSIZE_    UN       UN
-#define STRACE_CLOCK_SLEEP  TWOWAY  RC0    CLOCK      I32        I_TIME    O_TIME    UN       UN
-#define STRACE_SIGSUSPEND   TWOWAY  RC0    I_SIGSET   SSIZE_     UN        UN        UN       UN
-#define STRACE_NANOSLEEP    TWOWAY  RC0    I_TIME     O_TIME     UN        UN        UN       UN
+#define STRACE_CLOCK_SLEEP  BLOCKY  RC0    CLOCK      I32        I_TIME    O_TIME    UN       UN
+#define STRACE_SIGSUSPEND   BLOCKY  RC0    I_SIGSET   SSIZE_     UN        UN        UN       UN
+#define STRACE_NANOSLEEP    BLOCKY  RC0    I_TIME     O_TIME     UN        UN        UN       UN
 #define STRACE_IOCTL        CANCPT  I32    FD         WAT_IOCTL  UN        UN        UN       UN
 #define STRACE_PIPE         NORMAL  SSIZE_ O_PFDS     UN         UN        UN        UN       UN
 #define STRACE_PIPE2        NORMAL  SSIZE_ O_PFDS     OFLAGS     UN        UN        UN       UN
@@ -177,7 +180,7 @@
 #define STRACE_FCNTL        CANCPT  I64    FD         WAT_FCNTL  UN        UN        UN       UN
 #define STRACE_FORK         NORMAL  PID    UN         UN         UN        UN        UN       UN
 #define STRACE_VFORK        NORMAL  PID    UN         UN         UN        UN        UN       UN
-#define STRACE_WAIT4        TWOWAY  PID    PID        O_WSTATUS  WAITFLAGS O_RUSAGE  UN       UN
+#define STRACE_WAIT4        BLOCKY  PID    PID        O_WSTATUS  WAITFLAGS O_RUSAGE  UN       UN
 #define STRACE_KILL         NORMAL  RC0    PID        SIG        UN        UN        UN       UN
 #define STRACE_TKILL        NORMAL  RC0    PID        SIG        UN        UN        UN       UN
 #define STRACE_ACCESS       NORMAL  RC0    PATH       ACCMODE    UN        UN        UN       UN
@@ -229,13 +232,13 @@
 #define STRACE_SOCKET       NORMAL  I32    FAMILY     SOCKTYPE   I32       UN        UN       UN
 #define STRACE_CONNECT      NORMAL  I32    FD         I_ADDR     ADDRLEN   UN        UN       UN
 #define STRACE_LISTEN       NORMAL  RC0    FD         UN         UN        UN        UN       UN
-#define STRACE_ACCEPT       TWOWAY  FD     FD         O_ADDR     I64       UN        UN       UN
-#define STRACE_ACCEPT4      TWOWAY  FD     FD         O_ADDR     I64       SOCKFLAGS UN       UN
+#define STRACE_ACCEPT       BLOCKY  FD     FD         O_ADDR     I64       UN        UN       UN
+#define STRACE_ACCEPT4      BLOCKY  FD     FD         O_ADDR     I64       SOCKFLAGS UN       UN
 #define STRACE_BIND         NORMAL  RC0    FD         I_ADDR     ADDRLEN   UN        UN       UN
 #define STRACE_GETSOCKNAME  NORMAL  RC0    FD         O_ADDR     I64       UN        UN       UN
 #define STRACE_GETPEERNAME  NORMAL  RC0    FD         O_ADDR     I64       UN        UN       UN
 #define STRACE_SENDTO       NORMAL  SSIZE_ FD         I_BUF      SIZE      I32       I_ADDR   ADDRLEN
-#define STRACE_RECVFROM     TWOWAY  SSIZE_ FD         O_BUF      SIZE      I32       O_ADDR   I64
+#define STRACE_RECVFROM     BLOCKY  SSIZE_ FD         O_BUF      SIZE      I32       O_ADDR   I64
 #define STRACE_GETRLIMIT    NORMAL  RC0    RESOURCE   O_RLIMIT   UN        UN        UN       UN
 #define STRACE_SETRLIMIT    NORMAL  RC0    RESOURCE   I_RLIMIT   UN        UN        UN       UN
 #define STRACE_PRLIMIT      NORMAL  RC0    PID        RESOURCE   I_RLIMIT  O_RLIMIT  UN       UN

@@ -1,5 +1,6 @@
 #ifndef BLINK_WEB_H_
 #define BLINK_WEB_H_
+#include "blink/builtin.h"
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 
@@ -8,6 +9,7 @@ static void SetupWeb(void) {
 }
 
 #else
-static void SetupWeb(void) {}
+static void SetupWeb(void) {
+}
 #endif /* __EMSCRIPTEN__ */
 #endif /* BLINK_WEB_H_ */

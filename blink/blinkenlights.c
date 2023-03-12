@@ -3169,6 +3169,7 @@ static void OnEnd(void) {
 static void OnEnter(void) {
   dialog = NULL;
   action &= ~MODAL;
+  m->faultaddr = 0;
 }
 
 static void OnUp(void) {
@@ -3969,9 +3970,9 @@ void FreePanels(void) {
   }
 }
 
-void TerminateSignal(struct Machine *m, int sig) {
+void TerminateSignal(struct Machine *m, int sig, int code) {
   if (!react) {
-    LOGF("terminating due to signal %s", DescribeSignal(sig));
+    LOGF("terminating due to signal %s code=%d", DescribeSignal(sig), code);
     WriteErrorString("\r\033[K\033[J"
                      "terminating due to signal; see log\n");
     exit(128 + sig);

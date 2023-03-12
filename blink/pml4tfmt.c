@@ -35,7 +35,7 @@
 #include "blink/util.h"
 #include "blink/x86.h"
 
-#define INTERESTING_FLAGS (PAGE_U | PAGE_RW | PAGE_XD)
+#define INTERESTING_FLAGS (PAGE_U | PAGE_RW | PAGE_XD | PAGE_FILE)
 
 #define BYTES       16384
 #define APPEND(...) u->o += snprintf(u->b + u->o, BYTES - u->o, __VA_ARGS__)
@@ -49,6 +49,7 @@ struct MapMaker {
   char *b;
   i64 start;
   u64 flags;
+  struct FileMap *fm;
 };
 
 static bool IsStackRead(long mop) {
@@ -124,17 +125,17 @@ static i64 MakeAddress(u16 a[4]) {
   return x;
 }
 
-static void FormatStartPage(struct MapMaker *u, i64 start) {
+static void FormatStartPage(struct Machine *m, struct MapMaker *u, i64 start) {
   u->t = true;
   u->start = start;
   u->count = 0;
   u->committed = 0;
+  u->fm = GetFileMap(m->system, start);
 }
 
 static void FormatEndPage(struct Machine *m, struct MapMaker *u, i64 end) {
   int i;
   char size[16];
-  struct FileMap *fm;
   bool isreading, iswriting, isexecuting, isfault;
   u->t = false;
   if (u->lines++) APPEND("\n");
@@ -179,18 +180,20 @@ static void FormatEndPage(struct Machine *m, struct MapMaker *u, i64 end) {
   while (i++ < 4) {
     APPEND(" ");
   }
-  if ((fm = GetFileMap(m->system, u->start))) {
-    APPEND("%s", fm->path);
+  if (u->fm) {
+    APPEND("%s", u->fm->path);
   }
 }
 
 static void FormatPdeOrPte(struct Machine *m, struct MapMaker *u, u64 entry,
                            u16 a[4], int n) {
-  if (u->t && (u->flags != (entry & INTERESTING_FLAGS))) {
-    FormatEndPage(m, u, MakeAddress(a));
+  i64 addr;
+  addr = MakeAddress(a);
+  if (u->t && u->flags != (entry & INTERESTING_FLAGS)) {
+    FormatEndPage(m, u, addr);
   }
   if (!u->t) {
-    FormatStartPage(u, MakeAddress(a));
+    FormatStartPage(m, u, addr);
     u->flags = entry & INTERESTING_FLAGS;
   }
   u->count += n;

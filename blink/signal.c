@@ -154,7 +154,7 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   SIG_LOGF("delivering signal @ %" PRIx64, sp);
   if (CopyToUserWrite(m, sp, &sf, sizeof(sf)) == -1) {
     LOGF("stack overflow delivering signal");
-    TerminateSignal(m, SIGSEGV_LINUX);
+    TerminateSignal(m, SIGSEGV_LINUX, m->segvcode);
   }
   // finally, call the signal handler using the sigaction arguments
   Put64(m->sp, sp);
@@ -281,7 +281,7 @@ void CheckForSignals(struct Machine *m) {
 #endif
   } else if (m->signals & ~m->sigmask) {
     if ((sig = ConsumeSignal(m, 0, 0))) {
-      TerminateSignal(m, sig);
+      TerminateSignal(m, sig, 0);
     }
   } else {
     atomic_store_explicit(&m->attention, false, memory_order_relaxed);

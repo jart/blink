@@ -145,14 +145,48 @@ testing real mode programs, which are encouraged to use the
 .Li SYSCALL
 instruction to report their exit status.
 .It Fl s
-[repeatable] Enables system call logging. This will emit to the log file
+Enables system call logging (repeatable).
+.Pp
+This will emit to the log file
 the names of system calls each time a SYSCALL instruction in executed,
 along with its arguments and result. System calls are logged once
-they've completed. If this option is specified twice, then system calls
-which are likely to block (e.g. poll) will be logged at entry too. If
-this option is specified thrice, then all cancellation points will be
-logged upon entry. System call logging isn't available
-in
+they've completed, so that the result can be shown.
+.Pp
+System calls are
+also sometimes logged upon entry too, in which case
+.Li syscall(arg) -> ...
+will be logged to show that the system call has not yet completed.
+Whether or not this happens depends on how many times the
+.Fl s
+flag is supplied.
+.Pp
+.Bl -dash -compact
+.It
+Passing
+.Fl s
+(once) will only log the entries of system calls that are defined as
+having read + write parameters (e.g. poll, select)
+.It
+Passing
+.Fl ss
+(twice) will also log the entries of cancellation points that are likely
+to block (e.g. read, accept, wait, pause).
+.It
+Passing
+.Fl sss
+(thrice) will log the entries of system calls that POSIX defines as
+cancellation points but are unlikely to block (e.g. write, close, open)
+which we try to avoid doing in order to reduce log noise.
+.It
+Passing
+.Fl ssss
+(4x) will log the entry of every single system call, even harmless ones
+that have no business being emitted to the log twice (e.g. sigaction).
+This should only be useful for the Blink dev team when the rare need
+arises to troubleshoot a system call that's crashing.
+.El
+.Pp
+System call logging isn't available in
 .Li MODE=rel
 and
 .Li MODE=tiny

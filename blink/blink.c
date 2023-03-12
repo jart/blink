@@ -146,13 +146,16 @@ static void PrintDiagnostics(struct Machine *m) {
        GetBacktrace(m), FormatPml4t(m), GetBlinkBacktrace());
 }
 
-void TerminateSignal(struct Machine *m, int sig) {
+void TerminateSignal(struct Machine *m, int sig, int code) {
   int syssig;
   struct sigaction sa;
   unassert(!IsSignalIgnoredByDefault(sig));
   if (IsSignalSerious(sig)) {
-    ERRF("terminating due to %s (rip=%" PRIx64 " faultaddr=%" PRIx64 ")",
-         DescribeSignal(sig), m->ip, m->faultaddr);
+    ERRF("terminating due to %s ("
+         "rip=%" PRIx64 " "
+         "code=%d "
+         "faultaddr=%" PRIx64 ")",
+         DescribeSignal(sig), m->ip, code, m->faultaddr);
     PrintDiagnostics(m);
   }
   if ((syssig = XlatSignal(sig)) == -1) syssig = SIGKILL;
