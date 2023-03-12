@@ -28,10 +28,15 @@ jobs:
       - name: download ape 3
         run: sudo sh -c "echo ':APE:M::MZqFpD::/usr/bin/ape:' >/proc/sys/fs/binfmt_misc/register"
 
-      - name: configure
+      - name: make matrix
         run: |
           ./configure
           cat config.log
+          make -j$(nproc) check o//test/blink o//test/asm o//test/func o//test/metal
 
-      - name: make matrix
-        run: make -j2 check o//test/blink o//test/asm o//test/func o//test/metal
+      - name: Test with VFS enabled
+        run: |
+          ./configure --enable-vfs
+          cat config.log
+          export BLINK_PREFIX="o"
+          make -j$(nproc) check o//test/blink o//test/asm o//test/func o//test/metal
