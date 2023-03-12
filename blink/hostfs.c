@@ -269,15 +269,20 @@ static ssize_t HostfsGetOptimalDirFdName(struct VfsInfo *dir, const char *name,
     } else {
       len2 = strlen(name);
       hostdevice = (struct HostfsDevice *)dir->device->data;
-      ret = hostdevice->sourcelen + len1 + ((len2 == 0) ? 0 : len2 + 1);
+      ret = hostdevice->sourcelen + len1 +
+            // add a slash if the host path doesn't end with one
+            ((len2 == 0) ? 0 : len2 + (hostpath[len1 - 1] != '/'));
       if (ret + 1 >= VFS_PATH_MAX) {
         ret = enametoolong();
       } else {
         memmove(hostpath + hostdevice->sourcelen, hostpath, len1);
         memcpy(hostpath, hostdevice->source, hostdevice->sourcelen);
         if (len2 != 0) {
-          hostpath[hostdevice->sourcelen + len1] = '/';
-          memcpy(hostpath + hostdevice->sourcelen + len1 + 1, name, len2 + 1);
+          if (hostpath[hostdevice->sourcelen + len1 - 1] != '/') {
+            hostpath[hostdevice->sourcelen + len1] = '/';
+            ++len1;
+          }
+          memcpy(hostpath + hostdevice->sourcelen + len1, name, len2 + 1);
         }
         hostpath[ret] = '\0';
       }
