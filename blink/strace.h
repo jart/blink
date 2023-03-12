@@ -239,6 +239,7 @@
 #define STRACE_GETRLIMIT    NORMAL  RC0    RESOURCE   O_RLIMIT   UN        UN        UN       UN
 #define STRACE_SETRLIMIT    NORMAL  RC0    RESOURCE   I_RLIMIT   UN        UN        UN       UN
 #define STRACE_PRLIMIT      NORMAL  RC0    PID        RESOURCE   I_RLIMIT  O_RLIMIT  UN       UN
+#define STRACE_MOUNT        NORMAL  STR    STR        STR        MSFLAGS   PTR       UN       UN
 // clang-format on
 
 void EnterStrace(struct Machine *, const char *, const char *, ...);

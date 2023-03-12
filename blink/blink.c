@@ -47,6 +47,7 @@
 #include "blink/thread.h"
 #include "blink/tunables.h"
 #include "blink/util.h"
+#include "blink/vfs.h"
 #include "blink/web.h"
 #include "blink/x86.h"
 #include "blink/xlat.h"
@@ -111,7 +112,7 @@ _Alignas(1) static const char USAGE[] =
     "  -Z                   print internal statistics on exit\n"
     "  -L PATH              log filename (default is blink.log)\n"
 #endif
-#ifndef DISABLE_OVERLAYS
+#if !defined(DISABLE_OVERLAYS) || !defined(DISABLE_VFS)
     "  -C PATH              sets chroot dir or overlay spec [default \":o\"]\n"
 #endif
 #if !defined(DISABLE_OVERLAYS) || !defined(NDEBUG)
@@ -119,6 +120,9 @@ _Alignas(1) static const char USAGE[] =
 #endif
 #ifndef DISABLE_OVERLAYS
     "  $BLINK_OVERLAYS      file system roots [default \":o\"]\n"
+#endif
+#ifndef DISABLE_VFS
+    "  $BLINK_PREFIX        file system root [default \"/\"]\n"
 #endif
 #ifndef NDEBUG
 
@@ -257,6 +261,9 @@ static void GetOpts(int argc, char *argv[]) {
   FLAG_overlays = getenv("BLINK_OVERLAYS");
   if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
 #endif
+#ifndef DISABLE_VFS
+  FLAG_prefix = getenv("BLINK_PREFIX");
+#endif
 #if LOG_ENABLED
   FLAG_logpath = getenv("BLINK_LOG_FILENAME");
 #endif
@@ -290,10 +297,12 @@ static void GetOpts(int argc, char *argv[]) {
         FLAG_logpath = optarg_;
         break;
       case 'C':
-#ifndef DISABLE_OVERLAYS
+#if !defined(DISABLE_OVERLAYS)
         FLAG_overlays = optarg_;
+#elif !defined(DISABLE_VFS)
+        FLAG_prefix = optarg_;
 #else
-        WriteErrorString("error: overlays support was disabled\n");
+        WriteErrorString("error: overlays and vfs support were both disabled\n");
 #endif
         break;
       case 'v':
@@ -364,6 +373,12 @@ int main(int argc, char *argv[]) {
 #ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");
+    exit(1);
+  }
+#endif
+#ifndef DISABLE_VFS
+  if (VfsInit(FLAG_prefix)) {
+    WriteErrorString("error: vfs initialization failed\n");
     exit(1);
   }
 #endif

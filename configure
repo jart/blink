@@ -239,6 +239,8 @@ config() {
   # If running on cygwin, msys2 or wsl then enable testing mingw-w64 produced binaries
   if test "${CC#*w64-mingw}" != "${CC}"; then
     RUNPROGRAM="$1.exe"
+  elif [ "${HOST_OS}" = "Cygwin" ]; then
+    RUNPROGRAM="$1.exe"
   else
     RUNPROGRAM="$1"
   fi
@@ -370,8 +372,15 @@ for x; do
 
   elif [ "$x" = "--enable-overlays" ]; then
     comment "#define DISABLE_OVERLAYS"
+    uncomment "#define DISABLE_VFS"
   elif [ "$x" = "--disable-overlays" ]; then
     uncomment "#define DISABLE_OVERLAYS"
+
+  elif [ "$x" = "--enable-vfs" ]; then
+    comment "#define DISABLE_VFS"
+    uncomment "#define DISABLE_OVERLAYS"
+  elif [ "$x" = "--disable-vfs" ]; then
+    uncomment "#define DISABLE_VFS"
 
   elif [ "$x" = "--enable-ancillary" ]; then
     comment "#define DISABLE_ANCILLARY"

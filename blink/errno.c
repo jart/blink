@@ -98,3 +98,31 @@ long erange(void) {
 long eopnotsupp(void) {
   return ReturnErrno(EOPNOTSUPP);
 }
+
+long enodev(void) {
+  return ReturnErrno(ENODEV);
+}
+
+long eacces(void) {
+  return ReturnErrno(EACCES);
+}
+
+long eisdir(void) {
+  return ReturnErrno(EISDIR);
+}
+
+long eexist(void) {
+  return ReturnErrno(EEXIST);
+}
+
+long eloop(void) {
+  return ReturnErrno(ELOOP);
+}
+
+long exdev(void) {
+  return ReturnErrno(EXDEV);
+}
+
+long enametoolong(void) {
+  return ReturnErrno(ENAMETOOLONG);
+}

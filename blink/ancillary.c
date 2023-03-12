@@ -32,6 +32,7 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/util.h"
+#include "blink/vfs.h"
 
 #ifndef DISABLE_SOCKETS
 #ifndef DISABLE_ANCILLARY
@@ -222,13 +223,13 @@ static i64 CopyCmsg(struct Machine *m, struct msghdr_linux *gm, int level,
 static void TrackScmRightsFd(struct Machine *m, int fildes, int flags) {
   int oflags;
   SYS_LOGF("ReceiveScmRights(fd=%d)", fildes);
-  unassert((oflags = fcntl(fildes, F_GETFL, 0)) != -1);
+  unassert((oflags = VfsFcntl(fildes, F_GETFL, 0)) != -1);
   InheritFd(AddFd(
       &m->system->fds, fildes,
       oflags | O_RDWR | (flags & MSG_CMSG_CLOEXEC_LINUX ? O_CLOEXEC : 0)));
 #ifndef MSG_CMSG_CLOEXEC
   if (flags & MSG_CMSG_CLOEXEC_LINUX) {
-    unassert(!fcntl(fildes, F_SETFD, FD_CLOEXEC));
+    unassert(!VfsFcntl(fildes, F_SETFD, FD_CLOEXEC));
   }
 #endif
 }

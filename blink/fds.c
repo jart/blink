@@ -33,6 +33,7 @@
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/thread.h"
+#include "blink/vfs.h"
 
 void InitFds(struct Fds *fds) {
   fds->list = 0;
@@ -128,13 +129,13 @@ void DestroyFds(struct Fds *fds) {
 
 static int GetFdSocketType(int fildes, int *type) {
   socklen_t len = sizeof(*type);
-  return getsockopt(fildes, SOL_SOCKET, SO_TYPE, type, &len);
+  return VfsGetsockopt(fildes, SOL_SOCKET, SO_TYPE, type, &len);
 }
 
 static bool IsNoRestartSocket(int fildes) {
   struct timeval tv = {0};
   socklen_t len = sizeof(tv);
-  getsockopt(fildes, SOL_SOCKET, SO_RCVTIMEO, &tv, &len);
+  VfsGetsockopt(fildes, SOL_SOCKET, SO_RCVTIMEO, &tv, &len);
   return tv.tv_sec || tv.tv_usec;
 }
 
@@ -145,14 +146,14 @@ void InheritFd(struct Fd *fd) {
   if (!GetFdSocketType(fd->fildes, &fd->socktype)) {
     fd->norestart = IsNoRestartSocket(fd->fildes);
     addrlen = sizeof(fd->saddr);
-    getsockname(fd->fildes, (struct sockaddr *)&fd->saddr, &addrlen);
+    VfsGetsockname(fd->fildes, (struct sockaddr *)&fd->saddr, &addrlen);
   }
 #endif
 }
 
 void AddStdFd(struct Fds *fds, int fildes) {
   int flags;
-  if ((flags = fcntl(fildes, F_GETFL, 0)) >= 0) {
+  if ((flags = VfsFcntl(fildes, F_GETFL, 0)) >= 0) {
     InheritFd(AddFd(fds, fildes, flags));
   }
 }

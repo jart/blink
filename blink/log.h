@@ -22,6 +22,7 @@
 #define LOG_SPX 0  // speculative execution logging
 #define LOG_CPU 0  // produce txt file of registers
 #define LOG_COD 0  // produce asm file of jit codes
+#define LOG_VFS 0  // log from emulated filesystems
 
 #if LOG_ENABLED
 #define ERRF(...) LogErr(__FILE__, __LINE__, __VA_ARGS__)
@@ -88,6 +89,12 @@
 #define SPX_LOGF(...) LogInfo(__FILE__, __LINE__, "(spx) " __VA_ARGS__)
 #else
 #define SPX_LOGF(...) (void)0
+#endif
+
+#if LOG_VFS
+#define VFS_LOGF(...) LogInfo(__FILE__, __LINE__, "(vfs) " __VA_ARGS__)
+#else
+#define VFS_LOGF(...) (void)0
 #endif
 
 #if LOG_ENABLED

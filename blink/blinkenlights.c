@@ -76,16 +76,11 @@
 #include "blink/tsan.h"
 #include "blink/types.h"
 #include "blink/util.h"
+#include "blink/vfs.h"
 #include "blink/watch.h"
 #include "blink/web.h"
 #include "blink/xlat.h"
 #include "blink/xmmtype.h"
-
-#ifdef DISABLE_OVERLAYS
-#define OverlaysOpen   openat
-#define OverlaysStat   fstatat
-#define OverlaysAccess faccessat
-#endif
 
 #ifndef BUILD_TIMESTAMP
 #define BUILD_TIMESTAMP __TIMESTAMP__
@@ -717,7 +712,7 @@ static void ScrollOp(struct Panel *p, i64 op) {
 }
 
 static int TtyWriteString(const char *s) {
-  return write(ttyout, s, strlen(s));
+  return VfsWrite(ttyout, s, strlen(s));
 }
 
 static void OnFeed(void) {
@@ -766,7 +761,7 @@ static void GetTtySize(int fd) {
   struct winsize wsize;
   wsize.ws_row = tyn;
   wsize.ws_col = txn;
-  ioctl(fd, TIOCGWINSZ, &wsize);
+  VfsIoctl(fd, TIOCGWINSZ, &wsize);
   tyn = wsize.ws_row;
   txn = wsize.ws_col;
 }
@@ -799,7 +794,7 @@ static void TuiRejuvinate(void) {
 #ifdef IUTF8
   term.c_iflag |= IUTF8;
 #endif
-  tcsetattr(ttyout, TCSANOW, &term);
+  VfsTcsetattr(ttyout, TCSANOW, &term);
   memset(&sa, 0, sizeof(sa));
   sa.sa_handler = OnSigBusted;
   sa.sa_flags = SA_NODEFER;
@@ -837,7 +832,7 @@ static void TtyRestore(void) {
   TtyWriteString("\033[0m");
   DisableMouseTracking();
   ShowCursor();
-  tcsetattr(ttyout, TCSANOW, &oldterm);
+  VfsTcsetattr(ttyout, TCSANOW, &oldterm);
 }
 
 static void TuiCleanup(void) {
@@ -899,9 +894,9 @@ static int DrainInput(int fd) {
 #ifdef __COSMOPOLITAN__
     if (!IsWindows())
 #endif
-      if (poll(fds, ARRAYLEN(fds), 0) == -1) return -1;
+      if (VfsPoll(fds, ARRAYLEN(fds), 0) == -1) return -1;
     if (!(fds[0].revents & POLLIN)) break;
-    if (read(fd, buf, sizeof(buf)) == -1) return -1;
+    if (VfsRead(fd, buf, sizeof(buf)) == -1) return -1;
   }
   return 0;
 }
@@ -958,7 +953,7 @@ void TuiSetup(void) {
   if (!once) {
     LOGF("loaded program %s\n%s", codepath, FormatPml4t(m));
     CommonSetup();
-    tcgetattr(ttyout, &oldterm);
+    VfsTcgetattr(ttyout, &oldterm);
     atexit(TtyRestore);
     once = true;
     report = true;
@@ -2261,7 +2256,7 @@ static void HandleAppReadInterrupt(void) {
 }
 
 static int OnPtyFdClose(int fd) {
-  return close(fd);
+  return VfsClose(fd);
 }
 
 static bool HasPendingInput(int fd) {
@@ -2272,7 +2267,7 @@ static bool HasPendingInput(int fd) {
 #ifdef __COSMOPOLITAN__
   if (!IsWindows())
 #endif
-    poll(fds, ARRAYLEN(fds), 0);
+    VfsPoll(fds, ARRAYLEN(fds), 0);
   return fds[0].revents & (POLLIN | POLLERR);
 }
 
@@ -2404,7 +2399,7 @@ static int OnPtyFdPoll(struct pollfd *fds, nfds_t nfds, int ms) {
         }
         p2.fd = fds[i].fd;
         p2.events = fds[i].events;
-        switch (poll(&p2, 1, ms)) {
+        switch (VfsPoll(&p2, 1, ms)) {
           case -1:
             re = POLLERR;
             ++t;
@@ -2448,7 +2443,7 @@ static void DrawDisplayOnly(struct Panel *p) {
     }
     AppendStr(&b, "\033[0m\033[K");
   }
-  write(ttyout, b.p, b.i);
+  VfsWrite(ttyout, b.p, b.i);
   free(b.p);
 }
 
@@ -2664,7 +2659,7 @@ static void DetermineChs(void) {
   struct stat st;
   off_t size = diskimagesize;
   if (size) return;  // do nothing if disk geometry already detected
-  unassert(!OverlaysStat(AT_FDCWD, m->system->elf.prog, &st, 0));
+  unassert(!VfsStat(AT_FDCWD, m->system->elf.prog, &st, 0));
   diskimagesize = size = st.st_size;
   for (i = 0; i < ARRAYLEN(kChs); ++i) {
     if (size == kChs[i].imagesize) {
@@ -2721,8 +2716,8 @@ static void OnDiskServiceReadSectors(void) {
     return;
   }
   errno = 0;
-  if ((fd = OverlaysOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
-      pread(fd, m->system->real + addr, size, offset) == size) {
+  if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
+      VfsPread(fd, m->system->real + addr, size, offset) == size) {
     SetWriteAddr(m, addr, size);
     m->ah = 0x00;  // success
     SetCarry(false);
@@ -2732,7 +2727,7 @@ static void OnDiskServiceReadSectors(void) {
     m->ah = 0x0d;  // invalid number of sector
     SetCarry(true);
   }
-  close(fd);
+  VfsClose(fd);
 }
 
 static void OnDiskServiceProbeExtended(void) {
@@ -2787,8 +2782,8 @@ static void OnDiskServiceReadSectorsExtended(void) {
       return;
     }
     errno = 0;
-    if ((fd = OverlaysOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
-        pread(fd, m->system->real + addr, size, offset) == size) {
+    if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
+        VfsPread(fd, m->system->real + addr, size, offset) == size) {
       SetWriteAddr(m, addr, size);
       m->ah = 0x00;  // success
       SetCarry(false);
@@ -2799,7 +2794,7 @@ static void OnDiskServiceReadSectorsExtended(void) {
       m->ah = 0x0d;  // invalid number of sectors
       SetCarry(true);
     }
-    close(fd);
+    VfsClose(fd);
   }
 }
 
@@ -3266,7 +3261,7 @@ static void Sleep(int ms) {
 #ifdef __COSMOPOLITAN__
   if (!IsWindows())
 #endif
-    poll((struct pollfd[]){{ttyin, POLLIN}}, 1, ms);
+    VfsPoll((struct pollfd[]){{ttyin, POLLIN}}, 1, ms);
 }
 
 static void OnMouseWheelUp(struct Panel *p, int y, int x) {
@@ -3805,6 +3800,9 @@ static void GetOpts(int argc, char *argv[]) {
   FLAG_overlays = getenv("BLINK_OVERLAYS");
   if (!FLAG_overlays) FLAG_overlays = DEFAULT_OVERLAYS;
 #endif
+#ifndef DISABLE_VFS
+  FLAG_prefix = getenv("BLINK_PREFIX");
+#endif
   while ((opt = GetOpt(argc, argv, "0hjmvVtrzRNsZb:Hw:L:C:")) != -1) {
     switch (opt) {
       case '0':
@@ -3860,8 +3858,10 @@ static void GetOpts(int argc, char *argv[]) {
         FLAG_logpath = optarg_;
         break;
       case 'C':
-#ifndef DISABLE_OVERLAYS
+#if !defined(DISABLE_OVERLAYS)
         FLAG_overlays = optarg_;
+#elif !defined(DISABLE_VFS)
+        FLAG_prefix = optarg_;
 #else
         WriteErrorString("error: overlays support was disabled\n");
 #endif
@@ -3888,7 +3888,7 @@ static void AddPath_StartOp_Tui(P) {
 }
 
 static bool FileExists(const char *path) {
-  return !OverlaysAccess(AT_FDCWD, path, F_OK, 0);
+  return !VfsAccess(AT_FDCWD, path, F_OK, 0);
 }
 
 int VirtualMachine(int argc, char *argv[]) {
@@ -3921,10 +3921,10 @@ int VirtualMachine(int argc, char *argv[]) {
       } else if (isatty(1)) {
         tty = 1;
       } else {
-        tty = open("/dev/tty", O_RDWR | O_NOCTTY);
+        tty = VfsOpen(AT_FDCWD, "/dev/tty", O_RDWR | O_NOCTTY, 0);
       }
       if (tty != -1) {
-        tty = fcntl(tty, F_DUPFD_CLOEXEC, kMinBlinkFd);
+        tty = VfsFcntl(tty, F_DUPFD_CLOEXEC, kMinBlinkFd);
       }
       if (tty == -1) {
         WriteErrorString("failed to open /dev/tty\n");
@@ -4044,6 +4044,12 @@ int main(int argc, char *argv[]) {
 #ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");
+    exit(1);
+  }
+#endif
+#ifndef DISABLE_VFS
+  if (VfsInit(FLAG_prefix)) {
+    WriteErrorString("error: vfs initialization failed\n");
     exit(1);
   }
 #endif

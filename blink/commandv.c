@@ -28,10 +28,7 @@
 #include "blink/builtin.h"
 #include "blink/overlays.h"
 #include "blink/util.h"
-
-#ifdef DISABLE_OVERLAYS
-#define OverlaysAccess faccessat
-#endif
+#include "blink/vfs.h"
 
 struct PathSearcher {
   char *path;
@@ -69,7 +66,7 @@ static char AccessCommand(struct PathSearcher *ps, const char *suffix,
   if (pathlen && ps->path[pathlen - 1] != '/') ps->path[pathlen++] = '/';
   memcpy(ps->path + pathlen, ps->name, ps->namelen);
   memcpy(ps->path + pathlen + ps->namelen, suffix, suffixlen + 1);
-  return !OverlaysAccess(AT_FDCWD, ps->path, X_OK, 0);
+  return !VfsAccess(AT_FDCWD, ps->path, X_OK, 0);
 }
 
 static char SearchPath(struct PathSearcher *ps, const char *suffix) {

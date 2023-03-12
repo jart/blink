@@ -35,10 +35,7 @@
 #include "blink/overlays.h"
 #include "blink/rde.h"
 #include "blink/stats.h"
-
-#ifdef DISABLE_OVERLAYS
-#define OverlaysOpen openat
-#endif
+#include "blink/vfs.h"
 
 #define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
 
@@ -157,9 +154,9 @@ void(SetupCod)(struct Machine *m) {
   m->system->dis = &g_dis;
   LoadDebugSymbols(m->system);
   DisLoadElf(&g_dis, &m->system->elf);
-  g_cod = OverlaysOpen(AT_FDCWD_LINUX, "/tmp/blink.s",
-                       O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-  g_cod = fcntl(g_cod, F_DUPFD_CLOEXEC, kMinBlinkFd);
+  g_cod = VfsOpen(AT_FDCWD_LINUX, "/tmp/blink.s",
+                    O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+  g_cod = VfsFcntl(g_cod, F_DUPFD_CLOEXEC, kMinBlinkFd);
 #endif
 }
 

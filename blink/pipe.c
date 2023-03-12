@@ -31,6 +31,7 @@
 #include "blink/log.h"
 #include "blink/syscall.h"
 #include "blink/thread.h"
+#include "blink/vfs.h"
 #include "blink/xlat.h"
 
 int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
@@ -50,20 +51,20 @@ int SysPipe2(struct Machine *m, i64 pipefds_addr, i32 flags) {
   }
   if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
 #ifdef HAVE_PIPE2
-  if ((rc = pipe2(fds, (oflags = XlatOpenFlags(flags)))) != -1) {
+  if ((rc = VfsPipe2(fds, (oflags = XlatOpenFlags(flags)))) != -1) {
 #else
   if (flags) LOCK(&m->system->exec_lock);
-  if (pipe(fds) != -1) {
+  if (VfsPipe(fds) != -1) {
     oflags = 0;
     if (flags & O_CLOEXEC_LINUX) {
       oflags |= O_CLOEXEC;
-      unassert(!fcntl(fds[0], F_SETFD, FD_CLOEXEC));
-      unassert(!fcntl(fds[1], F_SETFD, FD_CLOEXEC));
+      unassert(!VfsFcntl(fds[0], F_SETFD, FD_CLOEXEC));
+      unassert(!VfsFcntl(fds[1], F_SETFD, FD_CLOEXEC));
     }
     if (flags & O_NDELAY_LINUX) {
       oflags |= O_NDELAY;
-      unassert(!fcntl(fds[0], F_SETFL, O_NDELAY));
-      unassert(!fcntl(fds[1], F_SETFL, O_NDELAY));
+      unassert(!VfsFcntl(fds[0], F_SETFL, O_NDELAY));
+      unassert(!VfsFcntl(fds[1], F_SETFL, O_NDELAY));
     }
 #endif
     if (fds[0] >= lim || fds[1] >= lim) {
