@@ -1470,11 +1470,13 @@ static int SysUname(struct Machine *m, i64 utsaddr) {
   memset(u.host, 0, sizeof(u.host));
   gethostname(u.host, sizeof(u.host) - 1);
   strcpy(uts.nodename, u.host);
-  memset(u.domain, 0, sizeof(u.domain));
 #ifdef HAVE_GETDOMAINNAME
-  getdomainname(u.domain, sizeof(u.domain) - 1);
+  memset(u.domain, 0, sizeof(u.domain));
+  if (getdomainname(u.domain, sizeof(u.domain) - 1) != 0 || !*u.domain)
 #endif
-  if (!*u.domain) strcpy(u.domain, "(none)");
+  {
+    strcpy(u.domain, "(none)");
+  }
   strcpy(uts.domainname, u.domain);
   return CopyToUser(m, utsaddr, &uts, sizeof(uts));
 }

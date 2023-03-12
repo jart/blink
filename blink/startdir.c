@@ -32,8 +32,7 @@ static void FreeStartDir(void) {
 char *GetStartDir(void) {
   if (!g_startdir) {
     char cwd[PATH_MAX];
-    strcpy(cwd, ".");
-    getcwd(cwd, sizeof(cwd));
+    if (!getcwd(cwd, sizeof(cwd))) strcpy(cwd, ".");
     g_startdir = strdup(cwd);
     atexit(FreeStartDir);
   }
