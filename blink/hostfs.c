@@ -1283,7 +1283,8 @@ int HostfsAccept(struct VfsInfo *info, struct sockaddr *addr,
     (*output)->ino = info->ino;
     (*output)->dev = info->dev;
     (*output)->mode = info->mode;
-    (*output)->parent = info->parent;
+    unassert(!VfsFreeInfo((*output)->parent));
+    unassert(!VfsAcquireInfo(info->parent, &(*output)->parent));
     (*output)->refcount = 1;
     ret = 0;
   } else {
