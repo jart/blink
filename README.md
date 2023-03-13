@@ -43,7 +43,7 @@ following platforms:
 
 Blink depends on the following libraries:
 
-- libc (POSIX.1-2017 baseline, XSI not required)
+- libc (POSIX.1-2017 with XSI extensions)
 
 Blink can be compiled on UNIX systems that have:
 
@@ -133,8 +133,7 @@ You can check Blink's compliance with the POSIX standard using the
 following configuration flags:
 
 ```sh
-./configure --posix  # only use c11 with baseline posix standard
-./configure --xopen  # same but also allow use of xsi extensions
+./configure --posix  # only use c11 with posix xopen standard
 ```
 
 ### Testing

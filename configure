@@ -105,13 +105,8 @@ if [ "$1" = "--help" ]; then
   echo "    disable all optional features (shaves ~81kb off MODE=tiny)"
   echo "    you may use --enable-FOO to turn features back on"
   echo
-  echo "  --xopen"
-  echo "    strictly conform to C11 and POSIX.1-2008 with XSI extensions (clobbers \$CPPFLAGS)"
-  echo "    linux-specific apis are still provided by blink when they can be polyfilled"
-  echo "    intended for testing compliance of blink's codebase"
-  echo
   echo "  --posix"
-  echo "    strictly conform to baseline POSIX.1-2008 and C11 standard (clobbers \$CPPFLAGS)"
+  echo "    strictly conform to POSIX.1-2008 XSI and C11 standards (clobbers \$CPPFLAGS)"
   echo "    linux-specific apis are still provided by blink when they can be polyfilled"
   echo "    intended for testing compliance of blink's codebase"
   echo
@@ -415,10 +410,6 @@ for x; do
     uncomment "#define DISABLE_BCD"
 
   elif [ x"$x" = x"--posix" ]; then
-    CPPFLAGS="-D_POSIX_C_SOURCE=200809L -std=c11"
-    POSIX=1
-
-  elif [ x"$x" = x"--xopen" ]; then
     CPPFLAGS="-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -std=c11"
     POSIX=1
 

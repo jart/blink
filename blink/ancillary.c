@@ -38,6 +38,23 @@
 #ifndef DISABLE_SOCKETS
 #ifndef DISABLE_ANCILLARY
 
+#ifndef CMSG_LEN
+static socklen_t CMSG_LEN(size_t len) {
+  return (CMSG_DATA((struct cmsghdr *)0) - (unsigned char *)0) + len;
+}
+#endif
+
+#ifndef CMSG_SPACE
+static socklen_t CMSG_SPACE(size_t len) {
+  struct msghdr msg;
+  struct cmsghdr cmsg;
+  msg.msg_control = &cmsg;
+  msg.msg_controllen = -1;
+  cmsg.cmsg_len = CMSG_LEN(len);
+  return (char *)CMSG_NXTHDR(&msg, &cmsg) - (char *)&cmsg;
+}
+#endif
+
 /**
  * @fileoverview Ancillary Socket Data Marshalling
  *

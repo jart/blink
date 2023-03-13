@@ -572,6 +572,7 @@ void PushVq(P);
 int OpOut(struct Machine *, u16, u32);
 u64 OpIn(struct Machine *, u16);
 
+void OpBit(P);
 void Op0fe(P);
 void Op101(P);
 void Op171(P);
@@ -705,6 +706,8 @@ void OpLds(P);
 void OpJmpf(P);
 void OpRdmsr(P);
 void OpWrmsr(P);
+void OpMovRqCq(P);
+void OpMovCqRq(P);
 void OpInAlImm(P);
 void OpInAxImm(P);
 void OpInAlDx(P);

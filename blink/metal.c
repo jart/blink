@@ -241,4 +241,44 @@ relegated void OpRdmsr(P) {
   }
 }
 
+relegated void OpMovRqCq(P) {
+  switch (ModrmReg(rde)) {
+    case 0:
+      Put64(RegRexbRm(m, rde), m->system->cr0);
+      break;
+    case 2:
+      Put64(RegRexbRm(m, rde), m->system->cr2);
+      break;
+    case 3:
+      Put64(RegRexbRm(m, rde), m->system->cr3);
+      break;
+    case 4:
+      Put64(RegRexbRm(m, rde), m->system->cr4);
+      break;
+    default:
+      OpUdImpl(m);
+  }
+}
+
+relegated void OpMovCqRq(P) {
+  switch (ModrmReg(rde)) {
+    case 0:
+      m->system->cr0 = Get64(RegRexbRm(m, rde));
+      break;
+    case 2:
+      m->system->cr2 = Get64(RegRexbRm(m, rde));
+      break;
+    case 3:
+      m->system->cr3 = Get64(RegRexbRm(m, rde));
+      ResetTlb(m);
+      break;
+    case 4:
+      m->system->cr4 = Get64(RegRexbRm(m, rde));
+      ResetTlb(m);
+      break;
+    default:
+      OpUdImpl(m);
+  }
+}
+
 #endif /* DISABLE_METAL */

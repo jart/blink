@@ -2,6 +2,7 @@
 #define BLINK_VFS_H_
 #include <dirent.h>
 #include <poll.h>
+#include <stdarg.h>
 #include <stdbool.h>
 #include <sys/select.h>
 #include <sys/socket.h>
@@ -403,6 +404,7 @@ ssize_t VfsPathBuild(struct VfsInfo *, struct VfsInfo *, bool,
 #define VfsReaddir     readdir
 #define VfsRewinddir   rewinddir
 #define VfsClosedir    closedir
+#define VfsPipe        pipe
 #define VfsPipe2       pipe2
 #define VfsSocket      socket
 #define VfsSocketpair  socketpair

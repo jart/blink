@@ -21,7 +21,6 @@
 #include <errno.h>
 #include <string.h>
 #include <sys/mman.h>
-#include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/statvfs.h>
 
@@ -37,7 +36,12 @@
 #include <sys/vfs.h>
 #endif
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#ifndef _POSIX_C_SOURCE
+#include <sys/mount.h>
+#endif
+
+#if (defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)) && \
+    !defined(_POSIX_C_SOURCE)
 #include <sys/disklabel.h>
 #endif
 
@@ -144,7 +148,7 @@ static int ConvertBsdFsTypeNameToLinux(const char *fstypename) {
 }
 
 static void XlatStatvfsToLinux(struct statfs_linux *sf, const void *arg) {
-#ifdef __linux
+#if defined(__linux) && !defined(_POSIX_C_SOURCE)
   struct FsId fsid;
   const struct statfs *vfs = (const struct statfs *)arg;
   memset(sf, 0, sizeof(*sf));
@@ -161,7 +165,8 @@ static void XlatStatvfsToLinux(struct statfs_linux *sf, const void *arg) {
   Write32(sf->fsid[1], fsid.val[1]);
   Write64(sf->flags, XlatStatvfsFlags(vfs->f_flags));
   Write64(sf->namelen, vfs->f_namelen);
-#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+#elif (defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)) && \
+    !defined(_POSIX_C_SOURCE)
   struct FsId fsid;
   const struct statfs *vfs = (const struct statfs *)arg;
   memset(sf, 0, sizeof(*sf));
@@ -199,8 +204,9 @@ static void XlatStatvfsToLinux(struct statfs_linux *sf, const void *arg) {
 #endif
 }
 
-#if defined(__linux) || defined(__APPLE__) || defined(__FreeBSD__) || \
-    defined(__OpenBSD__)
+#if (defined(__linux) || defined(__APPLE__) || defined(__FreeBSD__) || \
+     defined(__OpenBSD__)) &&                                          \
+    !defined(_POSIX_C_SOURCE)
 static int Statfs(uintptr_t arg, struct statfs *buf) {
   return statfs((const char *)arg, buf);
 }

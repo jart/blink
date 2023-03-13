@@ -252,8 +252,21 @@ static struct JitStage *NewJitStage(void) {
   return js;
 }
 
+static struct JitFreed *NewJitFreed(void) {
+  struct JitFreed *jf;
+  if ((jf = (struct JitFreed *)calloc(1, sizeof(struct JitFreed)))) {
+    dll_init(&jf->elem);
+  }
+  return jf;
+}
+
 static void FreeJitJump(struct JitJump *jj) {
   free(jj);
+}
+
+static void FreeJitFreed(struct JitFreed *jf) {
+  free(jf->data);
+  free(jf);
 }
 
 static void FreeJitBlock(struct JitBlock *jb) {
@@ -446,9 +459,16 @@ int InitJit(struct Jit *jit, uintptr_t opt_staging_function) {
  * @return 0 on success
  */
 int DestroyJit(struct Jit *jit) {
-  int i;
   struct Dll *e;
   LOCK(&jit->lock);
+  while ((e = dll_first(jit->freeds.p))) {
+    dll_remove(&jit->freeds.p, e);
+    FreeJitFreed(JITFREED_CONTAINER(e));
+  }
+  while ((e = dll_first(jit->freeds.f))) {
+    dll_remove(&jit->freeds.f, e);
+    FreeJitFreed(JITFREED_CONTAINER(e));
+  }
   while ((e = dll_first(jit->blocks))) {
     dll_remove(&jit->blocks, e);
     ReleaseJitBlock(JITBLOCK_CONTAINER(e));
@@ -457,10 +477,6 @@ int DestroyJit(struct Jit *jit) {
     dll_remove(&jit->jumps, e);
     FreeJitJump(JITJUMP_CONTAINER(e));
   }
-  for (i = 0; i < jit->freeds.n; ++i) {
-    free(jit->freeds.p[i].data);
-  }
-  free(jit->freeds.p);
   UNLOCK(&jit->lock);
   unassert(!pthread_mutex_destroy(&jit->lock));
   free(jit->hooks.funcs);
@@ -521,20 +537,46 @@ static inline uintptr_t MakeJitResetCode(i64 virt) {
   }
 }
 
-// intentionally leak memory so it doesn't get munmap'd
-// this is needed for synchronization cooloff
+// adds heap memory to freelist, for synchronization cooloff
 // @assume jit->lock
-static void AddToJitFreed(struct Jit *jit, void *data, size_t size) {
-  int n;
-  struct JitFreed *p;
-  p = jit->freeds.p;
-  n = jit->freeds.n + 1;
-  if ((p = (struct JitFreed *)realloc(p, n * sizeof(*jit->freeds.p)))) {
-    jit->freeds.p = p;
-    jit->freeds.n = n;
-    p[n - 1].data = data;
-    p[n - 1].size = size;
+static void RetireJitHeap(struct Jit *jit, void *data, size_t size) {
+  struct Dll *e;
+  struct JitFreed *jf = 0;
+  if (!data) return;
+  if ((e = dll_first(jit->freeds.f))) {
+    dll_remove(&jit->freeds.f, e);
+    jf = JITFREED_CONTAINER(e);
+  } else if (!(jf = NewJitFreed())) {
+    return;  // we can't free data so just leak it
   }
+  jf->data = data;
+  jf->size = size;
+  dll_make_last(&jit->freeds.p, &jf->elem);
+  ++jit->freeds.n;
+}
+
+// same as calloc, but pilfers old retired heap memory from freelist
+// @assume jit->lock
+static void *GetJitHeap(struct Jit *jit, size_t count, size_t elsize) {
+  u64 size;
+  void *res = 0;
+  struct Dll *e;
+  struct JitFreed *jf;
+  if (CheckedMul(count, elsize, &size)) return 0;
+  if (jit->freeds.n > kJitRetireQueue) {
+    for (e = dll_first(jit->freeds.p); e; e = dll_next(jit->freeds.p, e)) {
+      dll_remove(&jit->freeds.p, e);
+      jf = JITFREED_CONTAINER(e);
+      if (jf->size >= size) {
+        res = jf->data;
+        dll_make_first(&jit->freeds.f, e);
+        break;
+      }
+    }
+  }
+  if (!res) res = malloc(size);
+  if (res) memset(res, 0, size);
+  return res;
 }
 
 // @assume jit->lock
@@ -544,6 +586,7 @@ static unsigned RehashJitHooks(struct Jit *jit) {
   unsigned i, i2, n1, n2, used, hash, spot, step, kgen;
   _Atomic(int) *funcs, *funcs2;
   _Atomic(uintptr_t) *virts, *virts2;
+  STATISTIC(++jit_rehashes);
   virts = atomic_load_explicit(&jit->hooks.virts, memory_order_relaxed);
   funcs = atomic_load_explicit(&jit->hooks.funcs, memory_order_relaxed);
   // grow allocation unless this rehash is due to many deleted values
@@ -555,9 +598,9 @@ static unsigned RehashJitHooks(struct Jit *jit) {
   n2 = n1 << (used > (n1 >> 2));
   JIT_LOGF("rehashing jit hooks %u -> %u", n1, n2);
   // allocate an entirely new hash table
-  if (!(virts2 = (_Atomic(uintptr_t) *)calloc(n2, sizeof(*virts2))) ||
-      !(funcs2 = (_Atomic(int) *)calloc(n2, sizeof(*funcs2)))) {
-    free(virts2);
+  if (!(virts2 = (_Atomic(uintptr_t) *)GetJitHeap(jit, n2, sizeof(*virts2))) ||
+      !(funcs2 = (_Atomic(int) *)GetJitHeap(jit, n2, sizeof(*funcs2)))) {
+    RetireJitHeap(jit, virts2, n2 * sizeof(*virts2));
     return 0;
   }
   // copy entries over to new hash table, removing deleted entries
@@ -586,8 +629,8 @@ static unsigned RehashJitHooks(struct Jit *jit) {
   atomic_store_explicit(&jit->hooks.n, n2, memory_order_release);
   EndUpdate(&jit->keygen, kgen);
   // leak old table so failed reads won't segfault from free munmap
-  AddToJitFreed(jit, virts, n1 * sizeof(*virts));
-  AddToJitFreed(jit, funcs, n1 * sizeof(*funcs));
+  RetireJitHeap(jit, virts, n1 * sizeof(*virts));
+  RetireJitHeap(jit, funcs, n1 * sizeof(*funcs));
   jit->hooks.i = i2;
   return n2;
 }

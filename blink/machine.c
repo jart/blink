@@ -115,6 +115,72 @@ static void OpLeaGvqpM(P) {
   }
 }
 
+static void OpMovEvqpGvqp(P) {
+  WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
+                        ReadRegister(rde, RegRexrReg(m, rde)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "A"      // res0 = GetReg(RexrReg)
+              "r0D");  // PutRegOrMem(RexbRm, res0)
+  }
+}
+
+static void OpMovGvqpEvqp(P) {
+  WriteRegister(rde, RegRexrReg(m, rde),
+                ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "B"      // res0 = GetRegOrMem(RexbRm)
+              "r0C");  // PutReg(RexrReg, res0)
+  }
+}
+
+static void OpMovzbGvqpEb(P) {
+  WriteRegister(rde, RegRexrReg(m, rde),
+                Load8(GetModrmRegisterBytePointerRead1(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "B"       // res0 = GetRegOrMem(RexbRm)
+              "r0wC");  // PutReg[force16/32/64bit](RexrReg, res0)
+  }
+}
+
+static void OpMovzwGvqpEw(P) {
+  WriteRegister(rde, RegRexrReg(m, rde),
+                Load16(GetModrmRegisterWordPointerRead2(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "z1B"    // res0 = GetRegOrMem[force16bit](RexbRm)
+              "r0C");  // PutReg(RexrReg, res0)
+  }
+}
+
+static void OpMovsbGvqpEb(P) {
+  WriteRegister(rde, RegRexrReg(m, rde),
+                (i8)Load8(GetModrmRegisterBytePointerRead1(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "B"       // res0 = GetRegOrMem(RexbRm)
+              "r0x"     // res0 = SignExtend(res0)
+              "r0wC");  // PutReg[force16/32/64bit](RexrReg, res0)
+  }
+}
+
+static void OpMovswGvqpEw(P) {
+  WriteRegister(rde, RegRexrReg(m, rde),
+                (i16)Load16(GetModrmRegisterWordPointerRead2(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "z1B"    // res0 = GetRegOrMem[force16bit](RexbRm)
+              "r0z1x"  // res0 = SignExtend[force16bit](res0)
+              "r0C");  // PutReg(RexrReg, res0)
+  }
+}
+
+static void OpMovslGdqpEd(P) {
+  WriteRegister(rde, RegRexrReg(m, rde),
+                (i32)Load32(GetModrmRegisterWordPointerRead4(A)));
+  if (IsMakingPath(m)) {
+    Jitter(A, "z2B"    // res0 = GetRegOrMem[force32bit](RexbRm)
+              "r0z2x"  // res0 = SignExtend[force32bit](res0)
+              "r0C");  // PutReg(RexrReg, res0)
+  }
+}
+
 static relegated u64 GetDescriptorLimit(u64 d) {
   u64 lim = (d & 0x000f000000000000) >> 32 | (d & 0xffff);
   if ((d & 0x0080000000000000) != 0) lim = (lim << 12) | 0xfff;
@@ -193,71 +259,6 @@ static void Op1c7(P) {
     default:
       OpUdImpl(m);
   }
-}
-
-static u64 Bts(u64 x, u64 y) {
-  return x | y;
-}
-
-static u64 Btr(u64 x, u64 y) {
-  return x & ~y;
-}
-
-static u64 Btc(u64 x, u64 y) {
-  return (x & ~y) | (~x & y);
-}
-
-static void OpBit(P) {
-  u8 *p;
-  int op;
-  i64 bitdisp;
-  unsigned bit;
-  u64 v, x, y, z;
-  u8 w, W[2][2] = {{2, 3}, {1, 3}};
-  w = W[Osz(rde)][Rexw(rde)];
-  if (Opcode(rde) == 0xBA) {
-    op = ModrmReg(rde);
-    bit = uimm0 & ((8 << w) - 1);
-    bitdisp = 0;
-  } else {
-    op = (Opcode(rde) & 070) >> 3;
-    bitdisp = ReadRegisterSigned(rde, RegRexrReg(m, rde));
-    bit = bitdisp & ((8 << w) - 1);
-    bitdisp &= -(8 << w);
-    bitdisp >>= 3;
-  }
-  if (IsModrmRegister(rde)) {
-    p = RegRexbRm(m, rde);
-  } else {
-    v = MaskAddress(Eamode(rde), ComputeAddress(A) + bitdisp);
-    p = ReserveAddress(m, v, 1 << w, op != 4);
-  }
-  if (Lock(rde)) LockBus(p);
-  y = 1;
-  y <<= bit;
-  if (Lock(rde)) {
-    x = ReadMemoryUnlocked(rde, p);
-  } else {
-    x = ReadMemory(rde, p);
-  }
-  m->flags = SetFlag(m->flags, FLAGS_CF, !!(y & x));
-  switch (op) {
-    case 4:
-      return;
-    case 5:
-      z = Bts(x, y);
-      break;
-    case 6:
-      z = Btr(x, y);
-      break;
-    case 7:
-      z = Btc(x, y);
-      break;
-    default:
-      OpUdImpl(m);
-  }
-  WriteRegisterOrMemory(rde, p, z);
-  if (Lock(rde)) UnlockBus(p);
 }
 
 static void TripleOp(P, const nexgen32e_f ops[3]) {
@@ -372,72 +373,6 @@ static void OpMovImm(P) {
            "u"   // unpop
            "D",  // PutRegOrMem(RexbRm, arg3)
            uimm0);
-  }
-}
-
-static void OpMovEvqpGvqp(P) {
-  WriteRegisterOrMemory(rde, GetModrmRegisterWordPointerWriteOszRexw(A),
-                        ReadRegister(rde, RegRexrReg(m, rde)));
-  if (IsMakingPath(m)) {
-    Jitter(A, "A"      // res0 = GetReg(RexrReg)
-              "r0D");  // PutRegOrMem(RexbRm, res0)
-  }
-}
-
-static void OpMovGvqpEvqp(P) {
-  WriteRegister(rde, RegRexrReg(m, rde),
-                ReadMemory(rde, GetModrmRegisterWordPointerReadOszRexw(A)));
-  if (IsMakingPath(m)) {
-    Jitter(A, "B"      // res0 = GetRegOrMem(RexbRm)
-              "r0C");  // PutReg(RexrReg, res0)
-  }
-}
-
-static void OpMovzbGvqpEb(P) {
-  WriteRegister(rde, RegRexrReg(m, rde),
-                Load8(GetModrmRegisterBytePointerRead1(A)));
-  if (IsMakingPath(m)) {
-    Jitter(A, "B"       // res0 = GetRegOrMem(RexbRm)
-              "r0wC");  // PutReg[force16/32/64bit](RexrReg, res0)
-  }
-}
-
-static void OpMovzwGvqpEw(P) {
-  WriteRegister(rde, RegRexrReg(m, rde),
-                Load16(GetModrmRegisterWordPointerRead2(A)));
-  if (IsMakingPath(m)) {
-    Jitter(A, "z1B"    // res0 = GetRegOrMem[force16bit](RexbRm)
-              "r0C");  // PutReg(RexrReg, res0)
-  }
-}
-
-static void OpMovsbGvqpEb(P) {
-  WriteRegister(rde, RegRexrReg(m, rde),
-                (i8)Load8(GetModrmRegisterBytePointerRead1(A)));
-  if (IsMakingPath(m)) {
-    Jitter(A, "B"       // res0 = GetRegOrMem(RexbRm)
-              "r0x"     // res0 = SignExtend(res0)
-              "r0wC");  // PutReg[force16/32/64bit](RexrReg, res0)
-  }
-}
-
-static void OpMovswGvqpEw(P) {
-  WriteRegister(rde, RegRexrReg(m, rde),
-                (i16)Load16(GetModrmRegisterWordPointerRead2(A)));
-  if (IsMakingPath(m)) {
-    Jitter(A, "z1B"    // res0 = GetRegOrMem[force16bit](RexbRm)
-              "r0z1x"  // res0 = SignExtend[force16bit](res0)
-              "r0C");  // PutReg(RexrReg, res0)
-  }
-}
-
-static void OpMovslGdqpEd(P) {
-  WriteRegister(rde, RegRexrReg(m, rde),
-                (i32)Load32(GetModrmRegisterWordPointerRead4(A)));
-  if (IsMakingPath(m)) {
-    Jitter(A, "z2B"    // res0 = GetRegOrMem[force32bit](RexbRm)
-              "r0z2x"  // res0 = SignExtend[force32bit](res0)
-              "r0C");  // PutReg(RexrReg, res0)
   }
 }
 
@@ -1360,46 +1295,6 @@ static void OpNop(P) {
   }
 }
 
-static relegated void OpMovRqCq(P) {
-  switch (ModrmReg(rde)) {
-    case 0:
-      Put64(RegRexbRm(m, rde), m->system->cr0);
-      break;
-    case 2:
-      Put64(RegRexbRm(m, rde), m->system->cr2);
-      break;
-    case 3:
-      Put64(RegRexbRm(m, rde), m->system->cr3);
-      break;
-    case 4:
-      Put64(RegRexbRm(m, rde), m->system->cr4);
-      break;
-    default:
-      OpUdImpl(m);
-  }
-}
-
-static relegated void OpMovCqRq(P) {
-  switch (ModrmReg(rde)) {
-    case 0:
-      m->system->cr0 = Get64(RegRexbRm(m, rde));
-      break;
-    case 2:
-      m->system->cr2 = Get64(RegRexbRm(m, rde));
-      break;
-    case 3:
-      m->system->cr3 = Get64(RegRexbRm(m, rde));
-      ResetTlb(m);
-      break;
-    case 4:
-      m->system->cr4 = Get64(RegRexbRm(m, rde));
-      ResetTlb(m);
-      break;
-    default:
-      OpUdImpl(m);
-  }
-}
-
 static void OpEmms(P) {
 #ifndef DISABLE_X87
   m->fpu.tw = -1;
@@ -1417,7 +1312,9 @@ static void OpEmms(P) {
 #define OpJmpf      OpUd
 #define OpLds       OpUd
 #define OpLes       OpUd
+#define OpMovCqRq   OpUd
 #define OpMovEvqpSw OpUd
+#define OpMovRqCq   OpUd
 #define OpMovSwEvqp OpUd
 #define OpOutDxAl   OpUd
 #define OpOutDxAx   OpUd

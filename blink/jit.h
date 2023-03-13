@@ -107,21 +107,12 @@
 #define JITJUMP_CONTAINER(e)   DLL_CONTAINER(struct JitJump, elem, e)
 #define JITSTAGE_CONTAINER(e)  DLL_CONTAINER(struct JitStage, elem, e)
 #define JITBLOCK_CONTAINER(e)  DLL_CONTAINER(struct JitBlock, elem, e)
+#define JITFREED_CONTAINER(e)  DLL_CONTAINER(struct JitFreed, elem, e)
 #define AGEDBLOCK_CONTAINER(e) DLL_CONTAINER(struct JitBlock, aged, e)
 
 struct JitPages {
   int i, n;
   i64 *p;
-};
-
-struct JitFreed {
-  void *data;
-  size_t size;
-};
-
-struct JitFreeds {
-  int n;
-  struct JitFreed *p;
 };
 
 struct JitJump {
@@ -138,6 +129,18 @@ struct JitStage {
   u64 virt;
   unsigned pagegen;
   struct Dll elem;
+};
+
+struct JitFreed {
+  void *data;
+  size_t size;
+  struct Dll elem;
+};
+
+struct JitFreeds {
+  int n;
+  struct Dll *p;
+  struct Dll *f;
 };
 
 struct JitBlock {

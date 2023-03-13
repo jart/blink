@@ -51,6 +51,7 @@
 #include "blink/ancillary.h"
 #include "blink/assert.h"
 #include "blink/atomic.h"
+#include "blink/bitscan.h"
 #include "blink/bus.h"
 #include "blink/case.h"
 #include "blink/checked.h"
@@ -4105,7 +4106,11 @@ static int SysClockGettime(struct Machine *m, int clock, i64 ts) {
   clock_t sysclock;
   struct timespec htimespec;
   struct timespec_linux gtimespec;
-  if (XlatClock(clock, &sysclock) == -1) return -1;
+  if (clock == CLOCK_REALTIME_LINUX) {
+    sysclock = CLOCK_REALTIME;
+  } else if (XlatClock(clock, &sysclock) == -1) {
+    return -1;
+  }
   if ((rc = clock_gettime(sysclock, &htimespec)) != -1) {
     if (ts) {
       Write64(gtimespec.sec, htimespec.tv_sec);
@@ -4360,13 +4365,20 @@ static int SysUtimensat(struct Machine *m, i32 fd, i64 pathaddr, i64 tvsaddr,
 }
 
 static int LoadFdSet(struct Machine *m, int nfds, fd_set *fds, i64 addr) {
+  u64 w;
   int fd;
-  const u8 *p;
-  if ((p = (const u8 *)SchlepRW(m, addr, FD_SETSIZE_LINUX / 8))) {
+  unsigned o;
+  const u64 *p;
+  if ((p = (const u64 *)SchlepRW(m, addr, FD_SETSIZE_LINUX / 8))) {
     FD_ZERO(fds);
-    for (fd = 0; fd < nfds; ++fd) {
-      if (p[fd >> 3] & (1 << (fd & 7))) {
-        FD_SET(fd, fds);
+    for (fd = 0; fd < nfds; fd += 64) {
+      w = p[fd >> 6];
+      while (w) {
+        o = bsr(w);
+        w &= ~((u64)1 << o);
+        if (fd + o < nfds) {
+          FD_SET(fd + o, fds);
+        }
       }
     }
     return 0;
@@ -4592,21 +4604,9 @@ static i32 SysPselect(struct Machine *m, i32 nfds, i64 readfds_addr,
 #ifndef DISABLE_NONPOSIX
   struct timespec_linux timeout_linux;
 #endif
-  const struct timespec_linux *timeoutp_linux;
   if (timeout_addr) {
-    if ((timeoutp_linux = (const struct timespec_linux *)SchlepRW(
-             m, timeout_addr, sizeof(*timeoutp_linux)))) {
-      timeout.tv_sec = Read64(timeoutp_linux->sec);
-      timeout.tv_nsec = Read64(timeoutp_linux->nsec);
-      if (0 <= timeout.tv_sec &&
-          (0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000000)) {
-        timeoutp = &timeout;
-      } else {
-        return einval();
-      }
-    } else {
-      return -1;
-    }
+    if (LoadTimespecRW(m, timeout_addr, &timeout) == -1) return -1;
+    timeoutp = &timeout;
   } else {
     timeoutp = 0;
     memset(&timeout, 0, sizeof(timeout));
@@ -4751,7 +4751,6 @@ static int SysPpoll(struct Machine *m, i64 fdsaddr, u64 nfds, i64 timeoutaddr,
   int rc;
   u64 oldmask = 0;
   const struct sigset_linux *sm;
-  const struct timespec_linux *gt;
   struct timespec_linux timeout_linux;
   struct timespec now, timeout, remain, deadline;
   if (sigmaskaddr) {
@@ -4767,17 +4766,7 @@ static int SysPpoll(struct Machine *m, i64 fdsaddr, u64 nfds, i64 timeoutaddr,
   }
   if (!CheckInterrupt(m, false)) {
     if (timeoutaddr) {
-      if ((gt = (const struct timespec_linux *)SchlepRW(m, timeoutaddr,
-                                                        sizeof(*gt)))) {
-        timeout.tv_sec = Read64(gt->sec);
-        timeout.tv_nsec = Read64(gt->nsec);
-        if (!(0 <= timeout.tv_sec &&
-              (0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000000))) {
-          return einval();
-        }
-      } else {
-        return -1;
-      }
+      if (LoadTimespecRW(m, timeoutaddr, &timeout) == -1) return -1;
       deadline = AddTime(GetTime(), timeout);
       rc = Poll(m, fdsaddr, nfds, deadline);
       now = GetTime();
@@ -5443,6 +5432,16 @@ void OpSyscall(P) {
   size_t mark;
   u64 ax, di, si, dx, r0, r8, r9;
   unassert(!m->nofault);
+  if (Get64(m->ax) == 0xE4) {
+    // clock_gettime() is
+    //   1) called frequently,
+    //   2) latency sensitive, and
+    //   3) usually implemented as a VDSO.
+    // Therefore we exempt it from system call tracing.
+    ax = SysClockGettime(m, Get64(m->di), Get64(m->si));
+    Put64(m->ax, ax != -1 ? ax : -(XlatErrno(errno) & 0xfff));
+    return;
+  }
   STATISTIC(++syscalls);
   // make sure blinkenlights display is up to date before performing any
   // potentially blocking operations which would otherwise freeze things
@@ -5459,7 +5458,7 @@ void OpSyscall(P) {
   // ensure any memory references the system call performs will tlb miss
   m->insyscall = true;
   if (!m->sysdepth++) {
-    ResetTlb(m);
+    atomic_store_explicit(&m->invalidated, true, memory_order_relaxed);
   }
   // to make system calls simpler and safer, any temporary memory that's
   // allocated will be added to a free list to be collected later. since
@@ -5699,14 +5698,6 @@ void OpSyscall(P) {
       // Cosmopolitan uses this number to trigger ENOSYS for testing.
       if (!m->system->iscosmo) goto DefaultCase;
       ax = enosys();
-      break;
-    case 0x0E4:
-      // clock_gettime() is
-      //   1) called frequently,
-      //   2) latency sensitive, and
-      //   3) usually implemented as a VDSO.
-      // Therefore we exempt it from system call tracing.
-      ax = SysClockGettime(m, di, si);
       break;
     case 0x0C9:
       // time() is also noisy in some environments.

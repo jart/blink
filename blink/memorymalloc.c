@@ -1146,6 +1146,7 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot,
   MEM_LOGF("protecting virtual [%#" PRIx64 ",%#" PRIx64 ") w/ %s", virt,
            virt + size, DescribeProt(prot));
   orig_virt = virt;
+  (void)orig_virt;
   pagesize = FLAG_pagesize;
   if (!IsValidAddrSize(virt, size)) {
     return einval();
