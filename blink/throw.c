@@ -93,7 +93,7 @@ void HaltMachine(struct Machine *m, int code) {
     case 1:
     case 3:
       m->faultaddr = m->ip - m->oplen;
-      DeliverSignalToUser(m, SIGTRAP_LINUX, TRAP_BRKPT_LINUX);
+      DeliverSignalToUser(m, SIGTRAP_LINUX, SI_KERNEL_LINUX);
       break;
     case kMachineExitTrap:
       RestoreIp(m);

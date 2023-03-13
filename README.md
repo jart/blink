@@ -729,6 +729,24 @@ JIT path formation be visualized. Blink currently only enables the JIT
 for programs running in long mode (64-bit) but we may support JITing
 16-bit programs in the future.
 
+Blink stores generated functions by virtual address in a multithreaded
+lockless hash table. The hottest operation in the codebase is reading
+from this hash table, using a function called `GetJitHook`. Since it'd
+slow Blink down by more than 33% if a mutex were used here, Blink does
+synchronizes reads optimistically using only carefully ordered load
+instructions, three of which have acquire semantics. This hash table
+starts off at a reasonable size and grows gradually with the memory
+requirements. This design is the primary reason Blink usually uses 40%
+less peak resident memory than Qemu.
+
+The amount of JIT memory Blink can use is currently limited by the ISA
+displacement. On Aaarch64 that's roughly ~22mb of JIT memory. Blink is
+able to tell when JIT memory is running out (>90% usage) and reacts by
+forcing the oldest blocks of generated code to retire. Retired blocks
+have all their hash entrypoints removed, but they can't be unmapped
+since other threads might still be executing on them. Blink handles this
+using a circular queue that reuses the least-recently retired blocks.
+
 ### Virtualization
 
 Blink virtualizes memory using the same PML4T approach as the hardware

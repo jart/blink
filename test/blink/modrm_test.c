@@ -19,6 +19,7 @@
 #include "blink/assert.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
+#include "blink/map.h"
 #include "blink/modrm.h"
 #include "blink/x86.h"
 #include "test/test.h"
@@ -28,6 +29,7 @@ struct Machine *m;
 struct XedDecodedInst xedd;
 
 void SetUp(void) {
+  InitMap();
   unassert((s = NewSystem(XED_MODE_LONG)));
   unassert((m = NewMachine(s, 0)));
   m->xedd = &xedd;

@@ -14,7 +14,8 @@
 
 #define LOG_SIG 0  // log signal handling behaviors
 #define LOG_ASM 0  // log executed assembly opcodes
-#define LOG_JIT 0  // jit path construction logging
+#define LOG_JIT 0  // just-in-time compilation logs
+#define LOG_JIP 0  // jit path construction logging
 #define LOG_JIX 0  // verbose jit execution logging
 #define LOG_MEM 0  // system memory mapping logging
 #define LOG_THR 0  // multi-threaded operation logs
@@ -59,6 +60,12 @@
 #define JIT_LOGF(...) LogInfo(__FILE__, __LINE__, "(jit) " __VA_ARGS__)
 #else
 #define JIT_LOGF(...) (void)0
+#endif
+
+#if LOG_JIP
+#define JIP_LOGF(...) LogInfo(__FILE__, __LINE__, "(pat) " __VA_ARGS__)
+#else
+#define JIP_LOGF(...) (void)0
 #endif
 
 #if LOG_JIX

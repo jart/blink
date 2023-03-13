@@ -304,43 +304,7 @@ const char *GetBacktrace(struct Machine *m) {
   return b;
 }
 
-static void SpinEventuallyConsistent(int i) {
-  if (!i || i % 500) {
-#if defined(__x86_64__) && defined(__GNUC__)
-    asm("pause");
-#endif
-  } else {
-#ifdef HAVE_SCHED_YIELD
-    sched_yield();
-#endif
-  }
-}
-
 bool CheckMemoryInvariants(struct System *s) {
   // TODO(jart): rewrite our memory accounting code
-#if 0
-  int i;
-  for (i = 0;; ++i) {
-    if (s->rss == s->memstat.tables + s->memstat.committed &&
-        s->vss == s->memstat.committed + s->memstat.reserved) {
-      return true;
-    } else if (i < 100000) {
-      // we only call this function with mmap_lock held, but the
-      // lockless page fault handler can still mutate some of it
-      SpinEventuallyConsistent(i);
-    } else {
-      ERRF("memstat inconsistent");
-      ERRF("%-10s = %ld vs. %ld", "rss", s->rss,
-           s->memstat.tables + s->memstat.committed);
-      ERRF("%-10s = %ld vs. %ld", "vss", s->vss,
-           s->memstat.committed + s->memstat.reserved);
-      ERRF("%-10s = %ld", "tables", s->memstat.tables);
-      ERRF("%-10s = %ld", "reserved", s->memstat.reserved);
-      ERRF("%-10s = %ld", "committed", s->memstat.committed);
-      return false;
-    }
-  }
-#else
   return true;
-#endif
 }

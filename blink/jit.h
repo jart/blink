@@ -7,18 +7,18 @@
 #include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/thread.h"
+#include "blink/tunables.h"
 #include "blink/types.h"
 
 #define kJitFit          1000
 #define kJitAlign        16
 #define kJitJumpTries    16
-#define kJitMemoryAlign  65536
-#define kJitAveragePath  150
-#define kJitMinBlockSize 262144
+#define kJitBlockSize    262144
+#define kJitRetireQueue  (int)(kJitMemorySize / kJitBlockSize * .10)
+#define kJitInitialHooks 16384
 
 #ifdef __x86_64__
-/* #define kJitMemorySize 130023424 */
-#define kJitMemorySize 32505856
+#define kJitMemorySize 130023424
 #else
 #define kJitMemorySize 32505856
 #endif
@@ -104,9 +104,25 @@
 #define kArmIdxMask  0x00600000u  // mask of u16[4] sub-word index
 #endif
 
-#define JITSTAGE_CONTAINER(e) DLL_CONTAINER(struct JitStage, elem, e)
-#define JITBLOCK_CONTAINER(e) DLL_CONTAINER(struct JitBlock, elem, e)
-#define JITJUMP_CONTAINER(e)  DLL_CONTAINER(struct JitJump, elem, e)
+#define JITJUMP_CONTAINER(e)   DLL_CONTAINER(struct JitJump, elem, e)
+#define JITSTAGE_CONTAINER(e)  DLL_CONTAINER(struct JitStage, elem, e)
+#define JITBLOCK_CONTAINER(e)  DLL_CONTAINER(struct JitBlock, elem, e)
+#define AGEDBLOCK_CONTAINER(e) DLL_CONTAINER(struct JitBlock, aged, e)
+
+struct JitPages {
+  int i, n;
+  i64 *p;
+};
+
+struct JitFreed {
+  void *data;
+  size_t size;
+};
+
+struct JitFreeds {
+  int n;
+  struct JitFreed *p;
+};
 
 struct JitJump {
   u8 *code;
@@ -120,40 +136,47 @@ struct JitStage {
   long start;
   long index;
   u64 virt;
+  unsigned pagegen;
   struct Dll elem;
 };
 
 struct JitBlock {
   u8 *addr;
+  i64 virt;
   long cod;
   long start;
   long index;
   long committed;
-  long blocksize;
   long lastaction;
+  bool wasretired;
+  bool isprotected;
+  unsigned pagegen;
   struct Dll elem;
   struct Dll aged;
   struct Dll *jumps;
   struct Dll *staged;
+  struct JitPages pages;
 };
 
 struct JitHooks {
-  unsigned i, n;
-  _Atomic(int) *func;
-  _Atomic(uintptr_t) *virt;
+  unsigned i;
+  _Atomic(unsigned) n;
+  _Atomic(_Atomic(int) *) funcs;
+  _Atomic(_Atomic(uintptr_t) *) virts;
 };
 
 struct Jit {
   int staging;
   _Atomic(bool) disabled;
-  _Atomic(long) blocksize;
   uintptr_t lastreset;
-  pthread_mutex_t_ lock;
-  pthread_mutex_t_ hock;
   struct JitHooks hooks;
+  struct JitFreeds freeds;
   struct Dll *agedblocks;
   struct Dll *blocks;
   struct Dll *jumps;
+  pthread_mutex_t_ lock;
+  _Alignas(kSemSize) _Atomic(unsigned) keygen;
+  _Alignas(kSemSize) _Atomic(unsigned) pagegen;
 };
 
 extern const u8 kJitRes[2];
@@ -161,14 +184,16 @@ extern const u8 kJitSav[5];
 extern const u8 kJitArg[4];
 
 int ShutdownJit(void);
+int EnableJit(struct Jit *);
+int DisableJit(struct Jit *);
 int DestroyJit(struct Jit *);
 int FixJitProtection(struct Jit *);
 int InitJit(struct Jit *, uintptr_t);
 bool CanJitForImmediateEffect(void) nosideeffect;
 bool AppendJit(struct JitBlock *, const void *, long);
-int AbandonJit(struct Jit *, struct JitBlock *);
+bool AbandonJit(struct Jit *, struct JitBlock *);
 int FlushJit(struct Jit *);
-struct JitBlock *StartJit(struct Jit *);
+struct JitBlock *StartJit(struct Jit *, i64);
 bool AlignJit(struct JitBlock *, int, int);
 bool AppendJitRet(struct JitBlock *);
 bool AppendJitNop(struct JitBlock *);
@@ -177,10 +202,9 @@ bool AppendJitJump(struct JitBlock *, void *);
 bool AppendJitCall(struct JitBlock *, void *);
 bool AppendJitSetReg(struct JitBlock *, int, u64);
 bool AppendJitMovReg(struct JitBlock *, int, int);
-bool FinishJit(struct Jit *, struct JitBlock *, u64);
+bool FinishJit(struct Jit *, struct JitBlock *);
 bool RecordJitJump(struct JitBlock *, u64, int);
 uintptr_t GetJitHook(struct Jit *, u64, uintptr_t);
-bool SetJitHook(struct Jit *, u64, intptr_t);
 int ResetJitPage(struct Jit *, i64);
 
 int CommitJit_(struct Jit *, struct JitBlock *);
@@ -193,7 +217,7 @@ void ReinsertJitBlock_(struct Jit *, struct JitBlock *);
  *     if an append operation previously failed due to lack of space
  */
 static inline long GetJitRemaining(const struct JitBlock *jb) {
-  return jb->blocksize - jb->index;
+  return kJitBlockSize - jb->index;
 }
 
 /**
@@ -206,27 +230,11 @@ static inline uintptr_t GetJitPc(const struct JitBlock *jb) {
 }
 
 /**
- * Disables Just-In-Time threader.
- */
-static inline int DisableJit(struct Jit *jit) {
-  atomic_store_explicit(&jit->disabled, true, memory_order_relaxed);
-  return 0;
-}
-
-/**
- * Enables Just-In-Time threader.
- */
-static inline int EnableJit(struct Jit *jit) {
-  atomic_store_explicit(&jit->disabled, false, memory_order_relaxed);
-  return 0;
-}
-
-/**
  * Returns true if DisableJit() was called or AcquireJit() had failed.
  */
 static inline bool IsJitDisabled(const struct Jit *jit) {
 #ifdef HAVE_JIT
-  return atomic_load_explicit(&jit->disabled, memory_order_relaxed);
+  return atomic_load_explicit(&jit->disabled, memory_order_acquire);
 #else
   return true;
 #endif

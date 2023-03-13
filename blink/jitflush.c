@@ -16,9 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <unistd.h>
-
 #include "blink/dll.h"
+#include "blink/flag.h"
 #include "blink/jit.h"
 #include "blink/macros.h"
 #include "blink/thread.h"
@@ -35,22 +34,20 @@
  */
 int FlushJit(struct Jit *jit) {
   int count = 0;
-  long pagesize;
   struct Dll *e;
   struct JitBlock *jb;
   struct JitStage *js;
   if (!CanJitForImmediateEffect()) {
-    pagesize = sysconf(_SC_PAGESIZE);
     LOCK(&jit->lock);
   StartOver:
     for (e = dll_first(jit->blocks); e; e = dll_next(jit->blocks, e)) {
       jb = JITBLOCK_CONTAINER(e);
-      if (jb->start >= jit->blocksize) break;
+      if (jb->start >= kJitBlockSize) break;
       if (!dll_is_empty(jb->staged)) {
         dll_remove(&jit->blocks, e);
         UNLOCK(&jit->lock);
         js = JITSTAGE_CONTAINER(dll_last(jb->staged));
-        jb->start = ROUNDUP(js->index, pagesize);
+        jb->start = ROUNDUP(js->index, FLAG_pagesize);
         jb->index = jb->start;
         count += CommitJit_(jit, jb);
         ReinsertJitBlock_(jit, jb);

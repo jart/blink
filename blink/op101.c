@@ -111,12 +111,23 @@ static void Vmxoff(P) {
 }
 
 static void InvlpgM(P) {
-  ResetTlb(m);
+  i64 virt;
+  struct AddrSeg as;
+  // if (Cpl(m)) OpUdImpl(m);
+  as = LoadEffectiveAddress(A);
+  virt = as.seg + as.addr;
+  if (m->mode == XED_MODE_LONG &&
+      !(-0x800000000000 <= virt && virt < 0x800000000000)) {
+    // In 64-bit mode, if the memory address is in non-canonical form,
+    // then INVLPG is the same as a NOP. -Quoth Intel §invlpg
+    return;
+  }
 #ifndef DISABLE_JIT
   if (!IsJitDisabled(&m->system->jit)) {
-    ResetJitPage(&m->system->jit, LoadEffectiveAddress(A).addr);
+    ResetJitPage(&m->system->jit, virt);
   }
 #endif
+  InvalidateSystem(m->system, true, true);
 }
 
 static void Smsw(P, bool ismem) {
@@ -201,7 +212,11 @@ void Op101(P) {
 #endif
     case 7:
       if (ismem) {
+#ifndef DISABLE_METAL
         InvlpgM(A);
+#else
+        OpUdImpl(m);
+#endif
       } else {
         switch (ModrmRm(rde)) {
           case 0:
