@@ -193,9 +193,9 @@ struct MachineFpu {
 };
 
 struct MachineMemstat {
-  _Atomic(long) tables;
-  _Atomic(long) reserved;
-  _Atomic(long) committed;
+  long tables;
+  long reserved;
+  long committed;
 };
 
 // Segment descriptor cache

@@ -157,6 +157,7 @@ struct JitPageEdges {
 
 struct JitPage {
   i64 page;
+  u64 bitset;
   struct JitPageEdges edges;
   struct Dll elem;
 };

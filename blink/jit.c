@@ -547,6 +547,45 @@ int FixJitProtection(struct Jit *jit) {
   return 0;
 }
 
+// @assume jit->lock
+static struct JitPage *GetJitPage(struct Jit *jit, i64 addr) {
+  i64 page;
+  bool lru;
+  struct Dll *e;
+  struct JitPage *jp;
+  lru = false;
+  page = addr & -4096;
+  for (e = dll_first(jit->pages); e; e = dll_next(jit->pages, e)) {
+    jp = JITPAGE_CONTAINER(e);
+    if (jp->page == page) {
+      if (!lru) {
+        STATISTIC(++jit_pages_hits_1);
+      } else {
+        STATISTIC(++jit_pages_hits_2);
+        dll_remove(&jit->pages, e);
+        dll_make_first(&jit->pages, e);
+      }
+      return jp;
+    }
+    lru = true;
+  }
+  return 0;
+}
+
+// @assume jit->lock
+static struct JitPage *GetOrCreateJitPage(struct Jit *jit, i64 addr) {
+  i64 page;
+  struct JitPage *jp;
+  page = addr & -4096;
+  if (!(jp = GetJitPage(jit, page))) {
+    if ((jp = NewJitPage())) {
+      dll_make_first(&jit->pages, &jp->elem);
+      jp->page = page;
+    }
+  }
+  return jp;
+}
+
 static inline uintptr_t MakeJitResetCode(i64 virt) {
   if (sizeof(uintptr_t) * CHAR_BIT >= 48) {
     return virt & -4096;
@@ -657,8 +696,10 @@ static unsigned RehashJitHooks(struct Jit *jit) {
 // @assume jit->lock
 static bool SetJitHookUnlocked(struct Jit *jit, u64 virt, int cas,
                                intptr_t funcaddr) {
+  u64 bit;
   uintptr_t key;
   int func, oldfunc;
+  struct JitPage *jp;
   _Atomic(int) *funcs;
   _Atomic(uintptr_t) *virts;
   unsigned n, kgen, hash, spot, step;
@@ -712,6 +753,20 @@ static bool SetJitHookUnlocked(struct Jit *jit, u64 virt, int cas,
   if (!key) {
     ++jit->hooks.i;
     STATISTIC(jit_hash_elements = MAX(jit_hash_elements, jit->hooks.i));
+  }
+  if (func) {
+    jp = GetOrCreateJitPage(jit, virt);
+  } else {
+    jp = GetJitPage(jit, virt);
+  }
+  if (jp) {
+    bit = 1;
+    bit <<= (virt & 4095) >> 6;
+    if (func) {
+      jp->bitset |= bit;
+    } else {
+      jp->bitset &= ~bit;
+    }
   }
   kgen = BeginUpdate(&jit->keygen);
   atomic_store_explicit(virts + spot, virt, memory_order_release);
@@ -770,30 +825,6 @@ uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
 }
 
 // @assume jit->lock
-static struct JitPage *GetJitPage(struct Jit *jit, i64 page) {
-  bool lru;
-  struct Dll *e;
-  struct JitPage *jp;
-  unassert(!(page & 4095));
-  lru = false;
-  for (e = dll_first(jit->pages); e; e = dll_next(jit->pages, e)) {
-    jp = JITPAGE_CONTAINER(e);
-    if (jp->page == page) {
-      if (!lru) {
-        STATISTIC(++jit_pages_hits_1);
-      } else {
-        STATISTIC(++jit_pages_hits_2);
-        dll_remove(&jit->pages, e);
-        dll_make_first(&jit->pages, e);
-      }
-      return jp;
-    }
-    lru = true;
-  }
-  return 0;
-}
-
-// @assume jit->lock
 static bool IsJitPageCyclic(struct JitPage *jp, short visits[kJitDepth],
                             int depth, short dst) {
   int i;
@@ -836,17 +867,19 @@ static void ResetJitPageBlockStages(struct JitBlock *jb, i64 page) {
 
 // @assume jit->lock
 static void ResetJitPageBlock(struct Jit *jit, struct JitBlock *jb, i64 page) {
-  int i, j;
+  int i;
   unassert(!(page & 4095));
   unassert(dll_is_empty(jb->jumps));
   ResetJitPageBlockStages(jb, page);
-  if (!jb->isprotected) {
-    for (j = i = 0; i < jb->pages.i; ++i) {
-      if ((jb->pages.p[i] & -4096) != page) {
-        jb->pages.p[j++] = jb->pages.p[i];
+  if (jb->isprotected) return;
+  for (i = 0; i < jb->pages.i; ++i) {
+    if (jb->pages.p[i] == page) {
+      for (++i; i < jb->pages.i; ++i) {
+        jb->pages.p[i - 1] = jb->pages.p[i];
       }
+      --jb->pages.i;
+      break;
     }
-    jb->pages.i = j;
   }
 }
 
@@ -860,33 +893,43 @@ static void ResetJitPageBlocks(struct Jit *jit, i64 page) {
 }
 
 // @assume jit->lock
-static void ResetJitPageHooks(struct Jit *jit, i64 virt, i64 end) {
+static void ResetJitPageHooks(struct Jit *jit, i64 page) {
   int old;
+  u64 bitset;
+  unsigned off;
+  i64 virt, end;
   uintptr_t key;
+  struct JitPage *jp;
   _Atomic(int) *funcs;
   _Atomic(uintptr_t) *virts;
   unsigned n, hash, spot, step, found;
+  if (!(jp = GetJitPage(jit, page))) return;
   n = atomic_load_explicit(&jit->hooks.n, memory_order_relaxed);
   virts = atomic_load_explicit(&jit->hooks.virts, memory_order_relaxed);
   funcs = atomic_load_explicit(&jit->hooks.funcs, memory_order_relaxed);
-  for (found = 0; virt < end; ++virt) {
-    hash = HASH(virt);
-    for (spot = step = 0;; ++step) {
-      spot = (hash + step * ((step + 1) >> 1)) & (n - 1);
-      key = atomic_load_explicit(virts + spot, memory_order_relaxed);
-      if (!key) break;
-      if ((i64)key == virt) {
-        if ((old = atomic_load_explicit(funcs + spot, memory_order_relaxed))) {
-          atomic_store_explicit(funcs + spot, 0, memory_order_release);
-          if (old == jit->staging) {
-            STATISTIC(--jit_hooks_staged);
-          } else {
-            STATISTIC(--jit_hooks_installed);
-            STATISTIC(++jit_hooks_deleted);
+  for (found = 0, bitset = jp->bitset; bitset; bitset &= ~((u64)1 << off)) {
+    off = bsr(bitset);
+    virt = page + off * (4096 / 64);
+    for (end = virt + 64; virt < end; ++virt) {
+      hash = HASH(virt);
+      for (spot = step = 0;; ++step) {
+        spot = (hash + step * ((step + 1) >> 1)) & (n - 1);
+        key = atomic_load_explicit(virts + spot, memory_order_relaxed);
+        if (!key) break;
+        if ((i64)key == virt) {
+          old = atomic_load_explicit(funcs + spot, memory_order_relaxed);
+          if (old) {
+            atomic_store_explicit(funcs + spot, 0, memory_order_release);
+            if (old == jit->staging) {
+              STATISTIC(--jit_hooks_staged);
+            } else {
+              STATISTIC(--jit_hooks_installed);
+              STATISTIC(++jit_hooks_deleted);
+            }
           }
+          ++found;
+          break;
         }
-        ++found;
-        break;
       }
     }
   }
@@ -903,18 +946,17 @@ static void ResetJitPageObject(struct Jit *jit, i64 page) {
 }
 
 // @assume jit->lock
-static int ResetJitPageUnlocked(struct Jit *jit, i64 page) {
+static int ResetJitPageUnlocked(struct Jit *jit, i64 virt) {
+  i64 page;
   unsigned gen;
-  i64 virt, end;
   uintptr_t resetcode;
-  resetcode = MakeJitResetCode(page);
+  resetcode = MakeJitResetCode(virt);
   if (resetcode && resetcode == jit->lastreset) return 0;
-  virt = page & -4096;
-  if (CheckedAdd(virt, 4096, &end) == -1) return -1;
+  page = virt & -4096;
   STATISTIC(++jit_page_resets);
   JIT_LOGF("resetting jit page %#" PRIx64, page);
   gen = BeginUpdate(&jit->pagegen);
-  ResetJitPageHooks(jit, virt, end);
+  ResetJitPageHooks(jit, page);
   ResetJitPageBlocks(jit, page);
   ResetJitPageObject(jit, page);
   EndUpdate(&jit->pagegen, gen);
@@ -929,13 +971,13 @@ static int ResetJitPageUnlocked(struct Jit *jit, i64 page) {
  * and mprotect() cause a memory page to either disappear or lose exec
  * permissions.
  *
- * @param page is virtual address of 4096-byte page (needn't be aligned)
+ * @param virt is virtual address of 4096-byte page (needn't be aligned)
  * @return 0 on success, or -1 w/ errno
  */
-int ResetJitPage(struct Jit *jit, i64 page) {
+int ResetJitPage(struct Jit *jit, i64 virt) {
   int res;
   LOCK(&jit->lock);
-  res = ResetJitPageUnlocked(jit, page);
+  res = ResetJitPageUnlocked(jit, virt);
   UNLOCK(&jit->lock);
   return res;
 }
@@ -958,7 +1000,7 @@ static void ForceJitBlockToRetire(struct Jit *jit) {
       // clear the whole memory page and delete it from other blocks
       while ((i = jb->pages.i) > 0) {
         page = jb->pages.p[i - 1];
-        ResetJitPageHooks(jit, page, page + 4096);
+        ResetJitPageHooks(jit, page);
         ResetJitPageBlocks(jit, page);
         ResetJitPageObject(jit, page);
         unassert(jb->pages.i < i);
@@ -1042,7 +1084,7 @@ static bool AppendJitBlockPage(struct JitBlock *jb, i64 virt) {
     if (n2 >= 2) {
       n2 += n2 >> 1;
     } else {
-      n2 = 8;
+      n2 = 16;
     }
     if ((p2 = (i64 *)realloc(p2, n2 * sizeof(*p2)))) {
       jb->pages.p = p2;
@@ -1052,6 +1094,8 @@ static bool AppendJitBlockPage(struct JitBlock *jb, i64 virt) {
     }
   }
   jb->pages.p[jb->pages.i++] = page;
+  STATISTIC(jit_max_pages_per_block =
+                MAX(jit_max_pages_per_block, jb->pages.i));
   return true;
 }
 
@@ -1340,19 +1384,13 @@ bool RecordJitJump(struct JitBlock *jb, u64 virt, int addend) {
 
 static bool RecordJitEdgeImpl(struct Jit *jit, i64 src, i64 dst) {
   int n2;
-  i64 page;
   struct JitPage *jp;
   struct JitPageEdge *p2;
   struct JitPageEdge edge;
   short visits[kJitDepth];
   unassert((src & -4096) == (dst & -4096));
   // get object associtaed with this memory page
-  page = src & -4096;
-  if (!(jp = GetJitPage(jit, page))) {
-    if (!(jp = NewJitPage())) return false;
-    dll_make_first(&jit->pages, &jp->elem);
-    jp->page = page;
-  }
+  if (!(jp = GetOrCreateJitPage(jit, src))) return false;
   // determine if adding this edge would introduce a cycle
   visits[0] = src & 4095;
   if (IsJitPageCyclic(jp, visits, 1, dst & 4095)) {
