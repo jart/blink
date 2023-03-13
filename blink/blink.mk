@@ -25,6 +25,8 @@ o/$(MODE)/blink/uop.o: private CFLAGS += $(UOPFLAGS)
 # avoid impossible to address errors in ./configure --posix mode
 ifeq ($(HOST_SYSTEM), Darwin)
 o/$(MODE)/blink/jit.o: private CPPFLAGS += -D_DARWIN_C_SOURCE
+o/$(MODE)/blink/syscall.o: private CPPFLAGS += -D_DARWIN_C_SOURCE
+o/$(MODE)/blink/xlat.o: private CPPFLAGS += -D_DARWIN_C_SOURCE
 endif
 
 # Actually Portable Executable
