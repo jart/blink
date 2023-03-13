@@ -191,7 +191,6 @@ struct Jit {
   int staging;
   bool threaded;
   _Atomic(bool) disabled;
-  uintptr_t lastreset;
   struct JitHooks hooks;
   struct JitFreeds freeds;
   struct Dll *agedblocks;

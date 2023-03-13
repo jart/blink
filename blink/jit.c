@@ -586,14 +586,6 @@ static struct JitPage *GetOrCreateJitPage(struct Jit *jit, i64 addr) {
   return jp;
 }
 
-static inline uintptr_t MakeJitResetCode(i64 virt) {
-  if (sizeof(uintptr_t) * CHAR_BIT >= 48) {
-    return virt & -4096;
-  } else {
-    return 0;
-  }
-}
-
 // adds heap memory to freelist, for synchronization cooloff
 // @assume jit->lock
 static void RetireJitHeap(struct Jit *jit, void *data, size_t size) {
@@ -772,9 +764,6 @@ static bool SetJitHookUnlocked(struct Jit *jit, u64 virt, int cas,
   atomic_store_explicit(virts + spot, virt, memory_order_release);
   atomic_store_explicit(funcs + spot, func, memory_order_relaxed);
   EndUpdate(&jit->keygen, kgen);
-  if (func && jit->lastreset == MakeJitResetCode(virt)) {
-    jit->lastreset = 0;
-  }
   return true;
 }
 
@@ -895,8 +884,7 @@ static void ResetJitPageBlocks(struct Jit *jit, i64 page) {
 // @assume jit->lock
 static void ResetJitPageHooks(struct Jit *jit, i64 page) {
   int old;
-  u64 bitset;
-  unsigned off;
+  unsigned boff;
   i64 virt, end;
   uintptr_t key;
   struct JitPage *jp;
@@ -907,9 +895,9 @@ static void ResetJitPageHooks(struct Jit *jit, i64 page) {
   n = atomic_load_explicit(&jit->hooks.n, memory_order_relaxed);
   virts = atomic_load_explicit(&jit->hooks.virts, memory_order_relaxed);
   funcs = atomic_load_explicit(&jit->hooks.funcs, memory_order_relaxed);
-  for (found = 0, bitset = jp->bitset; bitset; bitset &= ~((u64)1 << off)) {
-    off = bsr(bitset);
-    virt = page + off * (4096 / 64);
+  for (found = 0; jp->bitset; jp->bitset &= ~((u64)1 << boff)) {
+    boff = bsr(jp->bitset);
+    virt = page + boff * (4096 / 64);
     for (end = virt + 64; virt < end; ++virt) {
       hash = HASH(virt);
       for (spot = step = 0;; ++step) {
@@ -949,9 +937,6 @@ static void ResetJitPageObject(struct Jit *jit, i64 page) {
 static int ResetJitPageUnlocked(struct Jit *jit, i64 virt) {
   i64 page;
   unsigned gen;
-  uintptr_t resetcode;
-  resetcode = MakeJitResetCode(virt);
-  if (resetcode && resetcode == jit->lastreset) return 0;
   page = virt & -4096;
   STATISTIC(++jit_page_resets);
   JIT_LOGF("resetting jit page %#" PRIx64, page);
@@ -960,7 +945,6 @@ static int ResetJitPageUnlocked(struct Jit *jit, i64 virt) {
   ResetJitPageBlocks(jit, page);
   ResetJitPageObject(jit, page);
   EndUpdate(&jit->pagegen, gen);
-  jit->lastreset = resetcode;
   return 0;
 }
 
@@ -1486,11 +1470,6 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb) {
         js->index = jb->index;
         js->pagegen = jb->pagegen;
         dll_make_last(&jb->staged, &js->elem);
-        LOCK(&jit->lock);
-        if (jit->lastreset == MakeJitResetCode(jb->virt)) {
-          jit->lastreset = 0;
-        }
-        UNLOCK(&jit->lock);
       }
     } else {
       JIT_LOGF("finishing manual mode jit path in block %p", jb);
