@@ -28,7 +28,6 @@
 #include "blink/debug.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
-#include "blink/likely.h"
 #include "blink/linux.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -179,26 +178,28 @@ void CollectPageLocks(struct Machine *m) {
 // @raise ENOMEM if memory couldn't be allocated internally
 // @raise EAGAIN if too many locks are held on a page
 u64 FindPageTableEntry(struct Machine *m, u64 page) {
-  long i;
   u8 *pslot;
   i64 table;
-  u64 entry, res;
+  u64 entry;
+  long tlbkey;
   unsigned level, index;
-  struct MachineTlb bubble;
+  if (atomic_load_explicit(&m->invalidated, memory_order_acquire)) {
+    ResetTlb(m);
+    atomic_store_explicit(&m->invalidated, false, memory_order_relaxed);
+  }
+  tlbkey = (page >> 12) & (ARRAYLEN(m->tlb) - 1);
+  if (m->tlb[tlbkey].page == page &&
+      ((entry = m->tlb[tlbkey].entry) & PAGE_V)) {
+    STATISTIC(++tlb_hits);
+    return entry;
+  }
+  STATISTIC(++tlb_misses);
   unassert(!(page & 4095));
-  for (i = 0; i < ARRAYLEN(m->tlb); ++i) {
-    if (m->tlb[i].page == page && ((res = m->tlb[i].entry) & PAGE_V)) {
-      if (i) {
-        STATISTIC(++tlb_hits_2);
-        bubble = m->tlb[i - 1];
-        m->tlb[i - 1] = m->tlb[i];
-        m->tlb[i] = bubble;
-      }
-      return res;
-    }
+  if (!(-0x800000000000 <= (i64)page && (i64)page < 0x800000000000)) {
+    m->segvcode = SEGV_MAPERR_LINUX;
+    return (u64)(uintptr_t)efault0();
   }
 TryAgain:
-  STATISTIC(++tlb_misses);
   unassert((entry = m->system->cr3));
   level = 39;
   do {
@@ -250,8 +251,8 @@ TryAgain:
       return 0;
     }
   }
-  m->tlb[ARRAYLEN(m->tlb) - 1].page = page;
-  m->tlb[ARRAYLEN(m->tlb) - 1].entry = entry;
+  m->tlb[tlbkey].page = page;
+  m->tlb[tlbkey].entry = entry;
   return entry;
 MapError:
   m->segvcode = SEGV_MAPERR_LINUX;
@@ -260,23 +261,11 @@ MapError:
 
 u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
   u8 *host;
-  u64 entry, page;
+  u64 entry;
   if (m->mode == XED_MODE_LONG ||
       (m->mode != XED_MODE_REAL && (m->system->cr0 & CR0_PG))) {
-    if (atomic_load_explicit(&m->invalidated, memory_order_acquire)) {
-      ResetTlb(m);
-      atomic_store_explicit(&m->invalidated, false, memory_order_relaxed);
-    }
-    if ((page = virt & -4096) == m->tlb[0].page &&
-        ((entry = m->tlb[0].entry) & PAGE_V)) {
-      STATISTIC(++tlb_hits_1);
-    } else if (-0x800000000000 <= virt && virt < 0x800000000000) {
-      if (!(entry = FindPageTableEntry(m, page))) {
-        return 0;
-      }
-    } else {
-      m->segvcode = SEGV_MAPERR_LINUX;
-      return (u8 *)efault0();
+    if (!(entry = FindPageTableEntry(m, virt & -4096))) {
+      return 0;
     }
   } else if (virt >= 0 && virt <= 0xffffffff &&
              (virt & 0xffffffff) + 4095 < kRealSize) {

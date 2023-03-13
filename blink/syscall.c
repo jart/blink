@@ -537,6 +537,8 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
     LOGF("bad clone() ptid / ctid pointers: %#" PRIx64, flags);
     return efault();
   }
+  m->threaded = true;
+  m->system->jit.threaded = true;
   if (!(m2 = NewMachine(m->system, m))) {
     return eagain();
   }

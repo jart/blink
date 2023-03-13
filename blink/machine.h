@@ -324,117 +324,118 @@ struct MachineTlb {
   u64 entry;
 };
 
-struct Machine {                           //
-  u64 ip;                                  // instruction pointer
-  u8 oplen;                                // length of operation
-  u8 mode;                                 // [dup] XED_MODE_{REAL,LEGACY,LONG}
-  _Atomic(bool) attention;                 // signals main interpreter loop
-  _Atomic(bool) invalidated;               // the tlb must be flushed
-  u32 flags;                               // x86 eflags register
-  i64 stashaddr;                           // it's our page overlap buffer
-  union {                                  // GENERAL REGISTER FILE
-    u64 align8_;                           //
-    u8 beg[128];                           //
-    u8 weg[16][8];                         //
-    struct {                               //
-      union {                              //
-        u8 ax[8];                          // [vol] accumulator, result:1/2
-        struct {                           //
-          u8 al;                           // lo byte of ax
-          u8 ah;                           // hi byte of ax
-        };                                 //
-      };                                   //
-      union {                              //
-        u8 cx[8];                          // [vol] param:4/6
-        struct {                           //
-          u8 cl;                           // lo byte of cx
-          u8 ch;                           // hi byte of cx
-        };                                 //
-      };                                   //
-      union {                              //
-        u8 dx[8];                          // [vol] param:3/6, result:2/2
-        struct {                           //
-          u8 dl;                           // lo byte of dx
-          u8 dh;                           // hi byte of dx
-        };                                 //
-      };                                   //
-      union {                              //
-        u8 bx[8];                          // [sav] base index
-        struct {                           //
-          u8 bl;                           // lo byte of bx
-          u8 bh;                           // hi byte of bx
-        };                                 //
-      };                                   //
-      u8 sp[8];                            // [sav] stack pointer
-      u8 bp[8];                            // [sav] backtrace pointer
-      u8 si[8];                            // [vol] param:2/6
-      u8 di[8];                            // [vol] param:1/6
-      u8 r8[8];                            // [vol] param:5/6
-      u8 r9[8];                            // [vol] param:6/6
-      u8 r10[8];                           // [vol]
-      u8 r11[8];                           // [vol]
-      u8 r12[8];                           // [sav]
-      u8 r13[8];                           // [sav]
-      u8 r14[8];                           // [sav]
-      u8 r15[8];                           // [sav]
-    };                                     //
-  };                                       //
-  _Alignas(64) struct MachineTlb tlb[16];  // TRANSLATION LOOKASIDE BUFFER
-  _Alignas(16) u8 xmm[16][16];             // 128-BIT VECTOR REGISTER FILE
-  struct XedDecodedInst *xedd;             // ->opcache->icache if non-jit
-  i64 readaddr;                            // so tui can show memory reads
-  i64 writeaddr;                           // so tui can show memory write
-  i64 readsize;                            // bytes length of last read op
-  i64 writesize;                           // byte length of last write op
-  union {                                  //
-    struct DescriptorCache seg[8];         //
-    struct {                               //
-      struct DescriptorCache es;           // xtra segment (legacy / real)
-      struct DescriptorCache cs;           // code segment (legacy / real)
-      struct DescriptorCache ss;           // stak segment (legacy / real)
-      struct DescriptorCache ds;           // data segment (legacy / real)
-      struct DescriptorCache fs;           // thred-local segment register
-      struct DescriptorCache gs;           // winple thread-local register
-    };                                     //
-  };                                       //
-  struct MachineFpu fpu;                   // FLOATING-POINT REGISTER FILE
-  u32 mxcsr;                               // SIMD status control register
-  pthread_t thread;                        // POSIX thread of this machine
-  struct FreeList freelist;                // to make system calls simpler
-  struct PageLocks pagelocks;              // track page table entry locks
-  struct JitPath path;                     // under construction jit route
-  _Atomicish(u64) signals;                 // [attention] pending delivery
-  _Atomicish(u64) sigmask;                 // signals that've been blocked
-  i64 bofram[2];                           // helps debug bootloading code
-  i64 faultaddr;                           // used for tui error reporting
-  struct System *system;                   //
-  int sigdepth;                            //
-  int sysdepth;                            //
-  _Atomic(bool) killed;                    // [attention] slay this thread
-  bool restored;                           // [attention] rt_sigreturn()'d
-  bool selfmodifying;                      // [attention] need usmc restore
-  bool reserving;                          //
-  bool insyscall;                          //
-  bool nofault;                            //
-  bool canhalt;                            //
-  bool metal;                              //
-  bool interrupted;                        //
-  bool issigsuspend;                       //
-  bool traprdtsc;                          //
-  bool trapcpuid;                          //
-  bool boop;                               //
-  i8 trapno;                               //
-  i8 segvcode;                             //
-  sigjmp_buf onhalt;                       //
-  struct sigaltstack_linux sigaltstack;    //
-  i64 robust_list;                         //
-  i64 ctid;                                //
-  int tid;                                 //
-  sigset_t spawn_sigmask;                  //
-  struct Dll elem;                         //
-  struct SmcQueue smcqueue;                //
-  struct OpCache opcache[1];               //
-};                                         //
+struct Machine {                         //
+  u64 ip;                                // instruction pointer
+  u8 oplen;                              // length of operation
+  u8 mode;                               // [dup] XED_MODE_{REAL,LEGACY,LONG}
+  bool threaded;                         // must use synchronization
+  _Atomic(bool) attention;               // signals main interpreter loop
+  u32 flags;                             // x86 eflags register
+  i64 stashaddr;                         // it's our page overlap buffer
+  union {                                // GENERAL REGISTER FILE
+    u64 align8_;                         //
+    u8 beg[128];                         //
+    u8 weg[16][8];                       //
+    struct {                             //
+      union {                            //
+        u8 ax[8];                        // [vol] accumulator, result:1/2
+        struct {                         //
+          u8 al;                         // lo byte of ax
+          u8 ah;                         // hi byte of ax
+        };                               //
+      };                                 //
+      union {                            //
+        u8 cx[8];                        // [vol] param:4/6
+        struct {                         //
+          u8 cl;                         // lo byte of cx
+          u8 ch;                         // hi byte of cx
+        };                               //
+      };                                 //
+      union {                            //
+        u8 dx[8];                        // [vol] param:3/6, result:2/2
+        struct {                         //
+          u8 dl;                         // lo byte of dx
+          u8 dh;                         // hi byte of dx
+        };                               //
+      };                                 //
+      union {                            //
+        u8 bx[8];                        // [sav] base index
+        struct {                         //
+          u8 bl;                         // lo byte of bx
+          u8 bh;                         // hi byte of bx
+        };                               //
+      };                                 //
+      u8 sp[8];                          // [sav] stack pointer
+      u8 bp[8];                          // [sav] backtrace pointer
+      u8 si[8];                          // [vol] param:2/6
+      u8 di[8];                          // [vol] param:1/6
+      u8 r8[8];                          // [vol] param:5/6
+      u8 r9[8];                          // [vol] param:6/6
+      u8 r10[8];                         // [vol]
+      u8 r11[8];                         // [vol]
+      u8 r12[8];                         // [sav]
+      u8 r13[8];                         // [sav]
+      u8 r14[8];                         // [sav]
+      u8 r15[8];                         // [sav]
+    };                                   //
+  };                                     //
+  _Alignas(16) u8 xmm[16][16];           // 128-BIT VECTOR REGISTER FILE
+  struct XedDecodedInst *xedd;           // ->opcache->icache if non-jit
+  i64 readaddr;                          // so tui can show memory reads
+  i64 writeaddr;                         // so tui can show memory write
+  i64 readsize;                          // bytes length of last read op
+  i64 writesize;                         // byte length of last write op
+  union {                                //
+    struct DescriptorCache seg[8];       //
+    struct {                             //
+      struct DescriptorCache es;         // xtra segment (legacy / real)
+      struct DescriptorCache cs;         // code segment (legacy / real)
+      struct DescriptorCache ss;         // stak segment (legacy / real)
+      struct DescriptorCache ds;         // data segment (legacy / real)
+      struct DescriptorCache fs;         // thred-local segment register
+      struct DescriptorCache gs;         // winple thread-local register
+    };                                   //
+  };                                     //
+  struct MachineFpu fpu;                 // FLOATING-POINT REGISTER FILE
+  u32 mxcsr;                             // SIMD status control register
+  pthread_t thread;                      // POSIX thread of this machine
+  struct FreeList freelist;              // to make system calls simpler
+  struct PageLocks pagelocks;            // track page table entry locks
+  struct JitPath path;                   // under construction jit route
+  _Atomicish(u64) signals;               // [attention] pending delivery
+  _Atomicish(u64) sigmask;               // signals that've been blocked
+  i64 bofram[2];                         // helps debug bootloading code
+  i64 faultaddr;                         // used for tui error reporting
+  struct System *system;                 //
+  int sigdepth;                          //
+  int sysdepth;                          //
+  _Atomic(bool) killed;                  // [attention] slay this thread
+  _Atomic(bool) invalidated;             // the tlb must be flushed
+  bool restored;                         // [attention] rt_sigreturn()'d
+  bool selfmodifying;                    // [attention] need usmc restore
+  bool reserving;                        //
+  bool insyscall;                        //
+  bool nofault;                          //
+  bool canhalt;                          //
+  bool metal;                            //
+  bool interrupted;                      //
+  bool issigsuspend;                     //
+  bool traprdtsc;                        //
+  bool trapcpuid;                        //
+  bool boop;                             //
+  i8 trapno;                             //
+  i8 segvcode;                           //
+  struct MachineTlb tlb[32];             //
+  sigjmp_buf onhalt;                     //
+  struct sigaltstack_linux sigaltstack;  //
+  i64 robust_list;                       //
+  i64 ctid;                              //
+  int tid;                               //
+  sigset_t spawn_sigmask;                //
+  struct Dll elem;                       //
+  struct SmcQueue smcqueue;              //
+  struct OpCache opcache[1];             //
+};                                       //
 
 extern _Thread_local siginfo_t g_siginfo;
 extern _Thread_local struct Machine *g_machine;
