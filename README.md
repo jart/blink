@@ -732,8 +732,8 @@ for programs running in long mode (64-bit) but we may support JITing
 Blink stores generated functions by virtual address in a multithreaded
 lockless hash table. The hottest operation in the codebase is reading
 from this hash table, using a function called `GetJitHook`. Since it'd
-slow Blink down by more than 33% if a mutex were used here, Blink does
-synchronizes reads optimistically using only carefully ordered load
+slow Blink down by more than 33% if a mutex were used here, Blink will
+synchronize reads optimistically using only carefully ordered load
 instructions, three of which have acquire semantics. This hash table
 starts off at a reasonable size and grows gradually with the memory
 requirements. This design is the primary reason Blink usually uses 40%
@@ -746,6 +746,15 @@ forcing the oldest blocks of generated code to retire. Retired blocks
 have all their hash entrypoints removed, but they can't be unmapped
 since other threads might still be executing on them. Blink handles this
 using a circular queue that reuses the least-recently retired blocks.
+
+Blink doesn't use indirect branches in generated JIT code and instead
+favors the use of near branches. Since generated JIT code will usually
+call statically compiled functions, we need to ensure that that JIT
+memory and Blink's executable image both reside at a closeby location in
+the host virtual address space. Blink accomplishes that by defining a
+gigantic static array that's part of the executable's `.bss` section.
+This ensures Blink will always have access to JIT memory, and that it
+won't interfere with any system's dynamic linker.
 
 ### Virtualization
 
