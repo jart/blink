@@ -414,11 +414,17 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
 #ifndef HAVE_PTHREAD_PROCESS_SHARED
   LOCK(&g_bus->futexes.lock);
 #endif
+#ifdef HAVE_JIT
+  LOCK(&m->system->jit.lock);
+#endif
   pid = fork();
 #ifdef __HAIKU__
   // haiku wipes tls after fork() in child
   // https://dev.haiku-os.org/ticket/17896
   if (!pid) g_machine = m;
+#endif
+#ifdef HAVE_JIT
+  UNLOCK(&m->system->jit.lock);
 #endif
 #ifndef HAVE_PTHREAD_PROCESS_SHARED
   UNLOCK(&g_bus->futexes.lock);

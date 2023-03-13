@@ -155,7 +155,7 @@ void(SetupCod)(struct Machine *m) {
   LoadDebugSymbols(m->system);
   DisLoadElf(&g_dis, &m->system->elf);
   g_cod = VfsOpen(AT_FDCWD_LINUX, "/tmp/blink.s",
-                    O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
+                  O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
   g_cod = VfsFcntl(g_cod, F_DUPFD_CLOEXEC, kMinBlinkFd);
 #endif
 }
@@ -614,7 +614,6 @@ void FinishPath(struct Machine *m) {
 void AbandonPath(struct Machine *m) {
   WriteCod("/\tABANDONED\n");
   unassert(IsMakingPath(m));
-  STATISTIC(++path_abandoned);
   JIP_LOGF("abandoning path jit_pc:%" PRIxPTR " which started at pc:%" PRIx64,
            GetJitPc(m->path.jb), m->path.start);
   AbandonJit(&m->system->jit, m->path.jb);

@@ -234,6 +234,14 @@ static struct JitJump *NewJitJump(void) {
   return jj;
 }
 
+static struct JitPage *NewJitPage(void) {
+  struct JitPage *jj;
+  if ((jj = (struct JitPage *)calloc(1, sizeof(struct JitPage)))) {
+    dll_init(&jj->elem);
+  }
+  return jj;
+}
+
 static struct JitBlock *NewJitBlock(void) {
   struct JitBlock *jb;
   if ((jb = (struct JitBlock *)calloc(1, sizeof(struct JitBlock)))) {
@@ -262,6 +270,11 @@ static struct JitFreed *NewJitFreed(void) {
 
 static void FreeJitJump(struct JitJump *jj) {
   free(jj);
+}
+
+static void FreeJitPage(struct JitPage *jp) {
+  free(jp->edges.p);
+  free(jp);
 }
 
 static void FreeJitFreed(struct JitFreed *jf) {
@@ -440,6 +453,7 @@ int InitJit(struct Jit *jit, uintptr_t opt_staging_function) {
   jit->staging = EncodeJitFunc(opt_staging_function);
   unassert(!pthread_mutex_init(&jit->lock, 0));
   jit->hooks.n = n = RoundupTwoPow(kJitInitialHooks);
+  STATISTIC(jit_hash_capacity = MAX(jit_hash_capacity, n));
   unassert(virts = (_Atomic(uintptr_t) *)calloc(n, sizeof(*virts)));
   unassert(funcs = (_Atomic(int) *)calloc(n, sizeof(*funcs)));
   atomic_store_explicit(&jit->hooks.virts, virts, memory_order_relaxed);
@@ -476,6 +490,10 @@ int DestroyJit(struct Jit *jit) {
   while ((e = dll_first(jit->jumps))) {
     dll_remove(&jit->jumps, e);
     FreeJitJump(JITJUMP_CONTAINER(e));
+  }
+  while ((e = dll_first(jit->pages))) {
+    dll_remove(&jit->pages, e);
+    FreeJitPage(JITPAGE_CONTAINER(e));
   }
   UNLOCK(&jit->lock);
   unassert(!pthread_mutex_destroy(&jit->lock));
@@ -627,17 +645,13 @@ static unsigned RehashJitHooks(struct Jit *jit) {
   atomic_store_explicit(&jit->hooks.virts, virts2, memory_order_release);
   atomic_store_explicit(&jit->hooks.funcs, funcs2, memory_order_relaxed);
   atomic_store_explicit(&jit->hooks.n, n2, memory_order_release);
+  STATISTIC(jit_hash_capacity = MAX(jit_hash_capacity, n2));
   EndUpdate(&jit->keygen, kgen);
   // leak old table so failed reads won't segfault from free munmap
   RetireJitHeap(jit, virts, n1 * sizeof(*virts));
   RetireJitHeap(jit, funcs, n1 * sizeof(*funcs));
   jit->hooks.i = i2;
   return n2;
-}
-
-// @assume jit->lock
-static bool IncrementJitHookCount(struct Jit *jit) {
-  return true;
 }
 
 // @assume jit->lock
@@ -695,7 +709,10 @@ static bool SetJitHookUnlocked(struct Jit *jit, u64 virt, int cas,
       STATISTIC(++jit_hooks_installed);
     }
   }
-  if (!key) ++jit->hooks.i;
+  if (!key) {
+    ++jit->hooks.i;
+    STATISTIC(jit_hash_elements = MAX(jit_hash_elements, jit->hooks.i));
+  }
   kgen = BeginUpdate(&jit->keygen);
   atomic_store_explicit(virts + spot, virt, memory_order_release);
   atomic_store_explicit(funcs + spot, func, memory_order_relaxed);
@@ -728,6 +745,7 @@ uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
   _Atomic(int) *funcs;
   _Atomic(uintptr_t) *virts;
   unsigned n, kgen, hash, spot, step;
+  COSTLY_STATISTIC(++jit_hash_lookups);
   hash = HASH(virt);
   do {
     kgen = atomic_load_explicit(&jit->keygen, memory_order_relaxed);
@@ -745,10 +763,56 @@ uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
       if (!key) {
         return dflt;
       }
-      STATISTIC(++jit_collisions);
+      COSTLY_STATISTIC(++jit_hash_collisions);
     }
   } while (ShallNotPass(kgen, &jit->keygen));
   return res;
+}
+
+// @assume jit->lock
+static struct JitPage *GetJitPage(struct Jit *jit, i64 page) {
+  bool lru;
+  struct Dll *e;
+  struct JitPage *jp;
+  unassert(!(page & 4095));
+  lru = false;
+  for (e = dll_first(jit->pages); e; e = dll_next(jit->pages, e)) {
+    jp = JITPAGE_CONTAINER(e);
+    if (jp->page == page) {
+      if (!lru) {
+        STATISTIC(++jit_pages_hits_1);
+      } else {
+        STATISTIC(++jit_pages_hits_2);
+        dll_remove(&jit->pages, e);
+        dll_make_first(&jit->pages, e);
+      }
+      return jp;
+    }
+    lru = true;
+  }
+  return 0;
+}
+
+// @assume jit->lock
+static bool IsJitPageCyclic(struct JitPage *jp, short visits[kJitDepth],
+                            int depth, short dst) {
+  int i;
+  if (depth == kJitDepth) {
+    return true;
+  }
+  for (i = 0; i < depth; ++i) {
+    if (dst == visits[i]) {
+      return true;
+    }
+  }
+  visits[depth++] = dst;
+  for (i = 0; i < jp->edges.i; ++i) {
+    if (jp->edges.p[i].src == dst &&
+        IsJitPageCyclic(jp, visits, depth, jp->edges.p[i].dst)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 // @assume jit->lock
@@ -830,6 +894,15 @@ static void ResetJitPageHooks(struct Jit *jit, i64 virt, i64 end) {
 }
 
 // @assume jit->lock
+static void ResetJitPageObject(struct Jit *jit, i64 page) {
+  struct JitPage *jp;
+  if ((jp = GetJitPage(jit, page))) {
+    dll_remove(&jit->pages, &jp->elem);
+    FreeJitPage(jp);
+  }
+}
+
+// @assume jit->lock
 static int ResetJitPageUnlocked(struct Jit *jit, i64 page) {
   unsigned gen;
   i64 virt, end;
@@ -843,6 +916,7 @@ static int ResetJitPageUnlocked(struct Jit *jit, i64 page) {
   gen = BeginUpdate(&jit->pagegen);
   ResetJitPageHooks(jit, virt, end);
   ResetJitPageBlocks(jit, page);
+  ResetJitPageObject(jit, page);
   EndUpdate(&jit->pagegen, gen);
   jit->lastreset = resetcode;
   return 0;
@@ -886,6 +960,7 @@ static void ForceJitBlockToRetire(struct Jit *jit) {
         page = jb->pages.p[i - 1];
         ResetJitPageHooks(jit, page, page + 4096);
         ResetJitPageBlocks(jit, page);
+        ResetJitPageObject(jit, page);
         unassert(jb->pages.i < i);
       }
       break;
@@ -967,7 +1042,7 @@ static bool AppendJitBlockPage(struct JitBlock *jb, i64 virt) {
     if (n2 >= 2) {
       n2 += n2 >> 1;
     } else {
-      n2 = 16;
+      n2 = 8;
     }
     if ((p2 = (i64 *)realloc(p2, n2 * sizeof(*p2)))) {
       jb->pages.p = p2;
@@ -1102,6 +1177,7 @@ static void FixupJitJumps(struct Dll *list, uintptr_t addr) {
   struct JitJump *jj;
   for (e = dll_first(list); e; e = e2) {
     STATISTIC(++jumps_applied);
+    STATISTIC(++path_connected);
     e2 = dll_next(list, e);
     jj = JITJUMP_CONTAINER(e);
     u.q = 0;
@@ -1262,6 +1338,62 @@ bool RecordJitJump(struct JitBlock *jb, u64 virt, int addend) {
   return true;
 }
 
+static bool RecordJitEdgeImpl(struct Jit *jit, i64 src, i64 dst) {
+  int n2;
+  i64 page;
+  struct JitPage *jp;
+  struct JitPageEdge *p2;
+  struct JitPageEdge edge;
+  short visits[kJitDepth];
+  unassert((src & -4096) == (dst & -4096));
+  // get object associtaed with this memory page
+  page = src & -4096;
+  if (!(jp = GetJitPage(jit, page))) {
+    if (!(jp = NewJitPage())) return false;
+    dll_make_first(&jit->pages, &jp->elem);
+    jp->page = page;
+  }
+  // determine if adding this edge would introduce a cycle
+  visits[0] = src & 4095;
+  if (IsJitPageCyclic(jp, visits, 1, dst & 4095)) {
+    STATISTIC(++jit_cycles_avoided);
+    return false;
+  }
+  // no cycles detected, so record the new edge in our dag
+  if (jp->edges.i == jp->edges.n) {
+    p2 = jp->edges.p;
+    n2 = jp->edges.n;
+    if (n2 > 1) {
+      n2 += n2 >> 1;
+    } else {
+      n2 = 8;
+    }
+    if ((p2 = (struct JitPageEdge *)realloc(p2, n2 * sizeof(*p2)))) {
+      jp->edges.p = p2;
+      jp->edges.n = n2;
+    } else {
+      return false;
+    }
+  }
+  edge.src = src & 4095;
+  edge.dst = dst & 4095;
+  jp->edges.p[jp->edges.i++] = edge;
+  STATISTIC(jit_max_edges_per_page = MAX(jit_max_edges_per_page, jp->edges.i));
+  unassert(src != dst);
+  return true;
+}
+
+/**
+ * Records JIT edge or returns false if it'd create a cycle.
+ */
+bool RecordJitEdge(struct Jit *jit, i64 src, i64 dst) {
+  bool res;
+  LOCK(&jit->lock);
+  res = RecordJitEdgeImpl(jit, src, dst);
+  UNLOCK(&jit->lock);
+  return res;
+}
+
 static void DiscardGeneratedJitCode(struct JitBlock *jb) {
   jb->index = jb->start;
 }
@@ -1371,6 +1503,7 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb) {
  */
 bool AbandonJit(struct Jit *jit, struct JitBlock *jb) {
   JIT_LOGF("abandoning jit path in block %p at %#" PRIx64, jb, jb->virt);
+  STATISTIC(++path_abandoned);
   AbandonJitJumps(jb);
   AbandonJitHook(jit, jb);
   DiscardGeneratedJitCode(jb);

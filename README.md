@@ -10,7 +10,7 @@ This project contains two programs:
 different operating systems and hardware architectures. It's designed to
 do the same thing as the `qemu-x86_64` command, except that
 
-1. Blink is 213kb in size (112kb with optional features disabled),
+1. Blink is 217kb in size (115kb with optional features disabled),
    whereas qemu-x86_64 is a 4mb binary.
 
 2. Blink will run your Linux binaries on any POSIX system, whereas
@@ -728,6 +728,8 @@ JIT path formation be visualized. Blink currently only enables the JIT
 for programs running in long mode (64-bit) but we may support JITing
 16-bit programs in the future.
 
+#### Lockless Hash Table for Generated Functions
+
 Blink stores generated functions by virtual address in a multithreaded
 lockless hash table. The hottest operation in the codebase is reading
 from this hash table, using a function called `GetJitHook`. Since it'd
@@ -738,22 +740,55 @@ starts off at a reasonable size and grows gradually with the memory
 requirements. This design is the primary reason Blink usually uses 40%
 less peak resident memory than Qemu.
 
-The amount of JIT memory Blink can use is currently limited by the ISA
-displacement. On Aaarch64 that's roughly ~22mb of JIT memory. Blink is
-able to tell when JIT memory is running out (>90% usage) and reacts by
-forcing the oldest blocks of generated code to retire. Retired blocks
-have all their hash entrypoints removed, but they can't be unmapped
-since other threads might still be executing on them. Blink handles this
-using a circular queue that reuses the least-recently retired blocks.
+#### Acyclic Generated Code
 
-Blink doesn't use indirect branches in generated JIT code and instead
-favors the use of near branches. Since generated JIT code will usually
-call statically compiled functions, we need to ensure that that JIT
-memory and Blink's executable image both reside at a closeby location in
-the host virtual address space. Blink accomplishes that by defining a
-gigantic static array that's part of the executable's `.bss` section.
-This ensures Blink will always have access to JIT memory, and that it
-won't interfere with any system's dynamic linker.
+While JIT paths always end at branching instructions, Blink will still
+weave paths together. If a function is generated and the destination
+address for its final branch instruction points to a location where
+another JIT path has already been installed, then Blink will generate
+code that lets the generated function tail call the second one, by
+jumping into its function body past the prologue. It enables Blink to
+avoid dropping back into the main interpreter loop as much as possible.
+
+Blink keeps track of the connections between JIT functions, in order to
+ensure that JIT'd code remains acyclic. If Blink detects that adding a
+new connection would introduce a cycle, it will generate code that drops
+back into the main intpreter loop instead. This is important because
+Blink only checks for asynchronous signals and other status changes from
+the main interpreter loop. By checking for cycles during path generation
+Blink is able to avoid elevating that costly status checking code into
+JIT generated code, so that the only branches JIT needs are the ones
+that were specified by the guest executable.
+
+#### Reliable JIT Memory Mapping
+
+Blink uses a small memory model that favors near branch instructions.
+Costly operations such as indirecting function calls through a generated
+Procedure Linkage Table (PLT) are avoided. In order to do that, Blink
+needs to ensure JIT memory is mapped at a virtual address that's nearby
+its executable image; otherwise JIT code wouldn't be able to call into
+normal code. However it's not possible to mmap() memory nearby the
+executable in a portable way. Dynamic linkers oftentimes surround a
+loaded executable with dynamic library images, and there's no portable
+API for probing this region that won't risk destroying system mappings.
+
+The trick Blink uses to solve this problem is creating a gigantic global
+static array that's loaded as part of the `.bss` section. This memory is
+then protected or remapped appropriately to turn it into memory that's
+suitable for JIT.
+
+#### Avoiding JIT OOM
+
+Since Blink doesn't generate a PLT or use indirect branches, branching
+is limited to the maximum displacement of the host instruction set. On
+Aaarch64 that means Blink has about ~22mb of JIT memory per process.
+Since large programs will oftentimes need more than that, Blink will
+begin retiring executable pages once memory reaches a certain threshold
+(>90% of blocks used). When a block is retired, all hooks associated
+with all pages it touches are removed. However we still can't guarantee
+that no thread is still currently executing on them. Blink solves that
+using a freelist queue, where retired blocks are placed at the back so
+it takes as long as possible before they're reused.
 
 ### Virtualization
 

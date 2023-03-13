@@ -11,6 +11,7 @@
 #include "blink/types.h"
 
 #define kJitFit          1000
+#define kJitDepth        16
 #define kJitAlign        16
 #define kJitJumpTries    16
 #define kJitBlockSize    262144
@@ -105,15 +106,11 @@
 #endif
 
 #define JITJUMP_CONTAINER(e)   DLL_CONTAINER(struct JitJump, elem, e)
+#define JITPAGE_CONTAINER(e)   DLL_CONTAINER(struct JitPage, elem, e)
 #define JITSTAGE_CONTAINER(e)  DLL_CONTAINER(struct JitStage, elem, e)
 #define JITBLOCK_CONTAINER(e)  DLL_CONTAINER(struct JitBlock, elem, e)
 #define JITFREED_CONTAINER(e)  DLL_CONTAINER(struct JitFreed, elem, e)
 #define AGEDBLOCK_CONTAINER(e) DLL_CONTAINER(struct JitBlock, aged, e)
-
-struct JitPages {
-  int i, n;
-  i64 *p;
-};
 
 struct JitJump {
   u8 *code;
@@ -143,6 +140,27 @@ struct JitFreeds {
   struct Dll *f;
 };
 
+struct JitBlockPages {
+  int i, n;
+  i64 *p;
+};
+
+struct JitPageEdge {
+  short src;
+  short dst;
+};
+
+struct JitPageEdges {
+  int i, n;
+  struct JitPageEdge *p;
+};
+
+struct JitPage {
+  i64 page;
+  struct JitPageEdges edges;
+  struct Dll elem;
+};
+
 struct JitBlock {
   u8 *addr;
   i64 virt;
@@ -158,7 +176,7 @@ struct JitBlock {
   struct Dll aged;
   struct Dll *jumps;
   struct Dll *staged;
-  struct JitPages pages;
+  struct JitBlockPages pages;
 };
 
 struct JitHooks {
@@ -177,6 +195,7 @@ struct Jit {
   struct Dll *agedblocks;
   struct Dll *blocks;
   struct Dll *jumps;
+  struct Dll *pages;
   pthread_mutex_t_ lock;
   _Alignas(kSemSize) _Atomic(unsigned) keygen;
   _Alignas(kSemSize) _Atomic(unsigned) pagegen;
@@ -207,6 +226,7 @@ bool AppendJitSetReg(struct JitBlock *, int, u64);
 bool AppendJitMovReg(struct JitBlock *, int, int);
 bool FinishJit(struct Jit *, struct JitBlock *);
 bool RecordJitJump(struct JitBlock *, u64, int);
+bool RecordJitEdge(struct Jit *, i64, i64);
 uintptr_t GetJitHook(struct Jit *, u64, uintptr_t);
 int ResetJitPage(struct Jit *, i64);
 

@@ -382,15 +382,17 @@ void Connect(P, u64 pc, bool avoid_cycles) {
 #ifdef HAVE_JIT
   void *jump;
   uintptr_t f;
-  // 1. branchless cyclic paths block sigs and deadlock shutdown
+  STATISTIC(++path_connections);
+  // 1. cyclic paths can block asynchronous sigs & deadlock exit
   // 2. we don't want to stitch together paths on separate pages
-  if (!(avoid_cycles && pc == m->path.start) &&
-      (pc & -4096) == (m->path.start & -4096)) {
+  if ((pc & -4096) == (m->path.start & -4096) &&
+      (!avoid_cycles || RecordJitEdge(&m->system->jit, m->path.start, pc))) {
     // is a preexisting jit path installed at destination?
     f = GetJitHook(&m->system->jit, pc, (uintptr_t)GeneralDispatch);
     if (f != (uintptr_t)JitlessDispatch && f != (uintptr_t)GeneralDispatch) {
       // tail call into the other generated jit path function
       jump = (u8 *)f + GetPrologueSize();
+      STATISTIC(++path_connected);
     } else {
       // generate assembly to drop back into main interpreter
       // then apply an smc fixup later on, if dest is created
@@ -764,7 +766,7 @@ static void OpInterrupt3(P) {
 void Terminate(P, void uop(struct Machine *, u64)) {
   if (IsMakingPath(m)) {
     Jitter(A,
-           "a1i"  //
+           "a1i"  // arg1 = disp
            "m"    // call micro-op
            "q",   // arg0 = sav0 (machine)
            disp, uop);
