@@ -22,6 +22,11 @@ $(BLINK_NEED_BUILDINFO_OBJS): private CPPFLAGS += $(CONFIG_CPPFLAGS)
 # micro-ops need to be compiled with the greatest of care
 o/$(MODE)/blink/uop.o: private CFLAGS += $(UOPFLAGS)
 
+# avoid impossible to address errors in ./configure --posix mode
+ifeq ($(HOST_SYSTEM), Darwin)
+o/$(MODE)/blink/jit.o: private CPPFLAGS += -D_DARWIN_C_SOURCE
+endif
+
 # Actually Portable Executable
 # make m=cosmo o/cosmo/blink/blink.com
 # needs cosmopolitan/tool/scripts/cosmocc
