@@ -152,9 +152,9 @@ void TerminateSignal(struct Machine *m, int sig, int code) {
   unassert(!IsSignalIgnoredByDefault(sig));
   if (IsSignalSerious(sig)) {
     ERRF("terminating due to %s ("
-         "rip=%" PRIx64 " "
+         "rip=%#" PRIx64 " "
          "code=%d "
-         "faultaddr=%" PRIx64 ")",
+         "faultaddr=%#" PRIx64 ")",
          DescribeSignal(sig), m->ip, code, m->faultaddr);
     PrintDiagnostics(m);
   }
@@ -305,7 +305,8 @@ static void GetOpts(int argc, char *argv[]) {
 #elif !defined(DISABLE_VFS)
         FLAG_prefix = optarg_;
 #else
-        WriteErrorString("error: overlays and vfs support were both disabled\n");
+        WriteErrorString(
+            "error: overlays and vfs support were both disabled\n");
 #endif
         break;
       case 'v':

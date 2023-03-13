@@ -1783,7 +1783,7 @@ static i64 HandleSigpipe(struct Machine *m, i64 rc, int flags) {
 #endif
   if (rc == -1 && errno == EPIPE &&
       !((flags & MSG_NOSIGNAL_LINUX) ||
-        (m->sigmask & (1ull << (SIGPIPE_LINUX - 1))))) {
+        (m->sigmask & ((u64)1 << (SIGPIPE_LINUX - 1))))) {
     LOCK(&m->system->sig_lock);
     switch (Read64(m->system->hands[SIGPIPE_LINUX - 1].handler)) {
       case SIG_IGN_LINUX:
@@ -3486,7 +3486,7 @@ static int SysLink(struct Machine *m, i64 existingpath, i64 newpath) {
 
 static bool IsBlinkSig(struct System *s, int sig) {
   unassert(1 <= sig && sig <= 64);
-  return !!(s->blinksigs & (1ull << (sig - 1)));
+  return !!(s->blinksigs & ((u64)1 << (sig - 1)));
 }
 
 static void ResetTimerDispositions(struct System *s) {
@@ -3823,7 +3823,7 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
   if (act) {
     m->system->hands[sig - 1] = hand;
     if (isignored) {
-      m->signals &= ~(1ull << (sig - 1));
+      m->signals &= ~((u64)1 << (sig - 1));
     }
     if ((syssig = XlatSignal(sig)) != -1 && !IsBlinkSig(m->system, sig)) {
       sigfillset(&syshand.sa_mask);
@@ -4842,9 +4842,9 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
     } else {
       __builtin_unreachable();
     }
-    XlatLinuxToSigset(&ss, m->sigmask & (1ull << (SIGTSTP_LINUX - 1) |
-                                         1ull << (SIGTTIN_LINUX - 1) |
-                                         1ull << (SIGTTOU_LINUX - 1)));
+    XlatLinuxToSigset(&ss, m->sigmask & ((u64)1 << (SIGTSTP_LINUX - 1) |
+                                         (u64)1 << (SIGTTIN_LINUX - 1) |
+                                         (u64)1 << (SIGTTOU_LINUX - 1)));
     sigprocmask(SIG_BLOCK, &ss, 0);
   }
   Put64(m->ax, 0);
@@ -4884,7 +4884,7 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
   if (tid == m->tid) {
     if (sig == SIGSTOP_LINUX || sig == SIGKILL_LINUX) {
       return raise(XlatSignal(sig));
-    } else if (~m->sigmask & (1ull << (sig - 1))) {
+    } else if (~m->sigmask & ((u64)1 << (sig - 1))) {
       LOCK(&m->system->sig_lock);
       switch (Read64(m->system->hands[sig - 1].handler)) {
         case SIG_DFL_LINUX:
@@ -4907,7 +4907,7 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
       UNLOCK(&m->system->sig_lock);
       return rc;
     } else {
-      m->signals |= 1ull << (sig - 1);
+      m->signals |= (u64)1 << (sig - 1);
       return 0;
     }
   }

@@ -219,13 +219,13 @@ struct System *NewSystem(int mode) {
   unassert(!pthread_mutex_init(&s->machines_lock, 0));
   unassert(!pthread_cond_init(&s->pagelocks_cond, 0));
   unassert(!pthread_mutex_init(&s->pagelocks_lock, 0));
-  s->blinksigs = 1ull << (SIGSYS_LINUX - 1) |   //
-                 1ull << (SIGILL_LINUX - 1) |   //
-                 1ull << (SIGFPE_LINUX - 1) |   //
-                 1ull << (SIGSEGV_LINUX - 1) |  //
-                 1ull << (SIGBUS_LINUX - 1) |   //
-                 1ull << (SIGPIPE_LINUX - 1) |  //
-                 1ull << (SIGTRAP_LINUX - 1);
+  s->blinksigs = (u64)1 << (SIGSYS_LINUX - 1) |   //
+                 (u64)1 << (SIGILL_LINUX - 1) |   //
+                 (u64)1 << (SIGFPE_LINUX - 1) |   //
+                 (u64)1 << (SIGSEGV_LINUX - 1) |  //
+                 (u64)1 << (SIGBUS_LINUX - 1) |   //
+                 (u64)1 << (SIGPIPE_LINUX - 1) |  //
+                 (u64)1 << (SIGTRAP_LINUX - 1);
   for (i = 0; i < RLIM_NLIMITS_LINUX; ++i) {
     Write64(s->rlim[i].cur, RLIM_INFINITY_LINUX);
     Write64(s->rlim[i].max, RLIM_INFINITY_LINUX);
@@ -508,7 +508,9 @@ struct FileMap *AddFileMap(struct System *s, i64 virt, i64 size,
     words = ROUNDUP(pages, 64) / 64;
     if (fm->path && (fm->present = (u64 *)malloc(words * sizeof(u64)))) {
       memset(fm->present, -1, pages / 64 * sizeof(u64));
-      if (pages % 64) fm->present[pages / 64] = (1ull << (pages % 64)) - 1;
+      if (pages % 64) {
+        fm->present[pages / 64] = ((u64)1 << (pages % 64)) - 1;
+      }
       fm->pages = pages;
       dll_init(&fm->elem);
       dll_make_first(&s->filemaps, &fm->elem);
@@ -545,7 +547,7 @@ struct FileMap *GetFileMap(struct System *s, i64 virt) {
     if (virt >= fm->virt && virt < fm->virt + fm->size) {
       i = virt - fm->virt;
       i /= 4096;
-      if (fm->present[i / 64] & (1ull << (i % 64))) {
+      if (fm->present[i / 64] & ((u64)1 << (i % 64))) {
         return fm;
       }
     }
@@ -565,8 +567,8 @@ static void UnmarkFilePage(struct System *s, i64 virt) {
       unassert(fm->pages);
       i = virt - fm->virt;
       i /= 4096;
-      if (fm->present[i / 64] & (1ull << (i % 64))) {
-        fm->present[i / 64] &= ~(1ull << (i % 64));
+      if (fm->present[i / 64] & ((u64)1 << (i % 64))) {
+        fm->present[i / 64] &= ~((u64)1 << (i % 64));
         if (!--fm->pages) {
           dll_remove(&s->filemaps, e);
           FreeFileMap(fm);
@@ -602,7 +604,7 @@ static bool FreePage(struct System *s, i64 virt, u64 entry, u64 size,
   uintptr_t real, mug;
   unassert(entry & PAGE_V);
   if (entry & PAGE_FILE) UnmarkFilePage(s, virt);
-  if (!(entry & PAGE_XD)) {
+  if (!(entry & PAGE_XD) && !(entry & PAGE_RSRV)) {
     *executable_code_was_made_non_executable = true;
 #ifndef DISABLE_JIT
     if (!IsJitDisabled(&s->jit)) {
@@ -677,7 +679,7 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
   unsigned pi, p1;
   unassert(!(virt & 4095));
   MEM_LOGF("RemoveVirtual(%#" PRIx64 ", %#" PRIx64 ")", virt, size);
-  for (pde = 0, end = virt + size; virt < end; virt += 1ull << i) {
+  for (pde = 0, end = virt + size; virt < end; virt += (u64)1 << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
       pi = p1 = (virt >> i) & 511;
       pp = GetPageAddress(s, pt, i == 39) + pi * 8;
@@ -1021,7 +1023,7 @@ StartOver:
                    (((virt + got) >> i) & 511) * 8);
       if (i == 12 || !(pt & PAGE_V)) break;
     }
-    got += 1ull << i;
+    got += (u64)1 << i;
     if ((pt & PAGE_V)) {
       virt += got;
       goto StartOver;
@@ -1117,7 +1119,7 @@ bool IsFullyUnmapped(struct System *s, i64 virt, i64 size) {
   u8 *mi;
   i64 end;
   u64 i, pt;
-  for (end = virt + size; virt < end; virt += 1ull << i) {
+  for (end = virt + size; virt < end; virt += (u64)1 << i) {
     for (pt = s->cr3, i = 39;; i -= 9) {
       mi = GetPageAddress(s, pt, i == 39) + ((virt >> i) & 511) * 8;
       pt = LoadPte(mi);
@@ -1205,7 +1207,8 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot,
               goto MemoryDisappeared;
             }
           }
-          if (!(pt & PAGE_XD) && (pt2 & PAGE_XD)) {  // exec -> non-exec
+          // check for exec -> non-exec
+          if (!(pt & PAGE_XD) && (pt2 & PAGE_XD) && !(pt & PAGE_RSRV)) {
             executable_code_was_made_non_executable = true;
 #ifdef HAVE_JIT
             if (!IsJitDisabled(&s->jit)) {

@@ -55,7 +55,7 @@ u64 ExportFlags(u64 flags) {
   flags = SetFlag(flags, FLAGS_IOPL, 3);
   flags = SetFlag(flags, FLAGS_F1, true);
   flags = SetFlag(flags, FLAGS_F0, false);
-  flags = flags & ~(1ull << FLAGS_PF);
+  flags = flags & ~((u64)1 << FLAGS_PF);
   flags |= GetLazyParityBool(flags) << FLAGS_PF;
   return flags;
 }

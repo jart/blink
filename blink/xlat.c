@@ -1255,7 +1255,7 @@ void XlatSigsetToLinux(u8 dst[8], const sigset_t *src) {
   for (syssig = 1; syssig <= MIN(64, TOPSIG); ++syssig) {
     if (sigismember(src, syssig) == 1 &&
         (linuxsig = UnXlatSignal(syssig)) != -1) {
-      set |= 1ull << (linuxsig - 1);
+      set |= (u64)1 << (linuxsig - 1);
     }
   }
   Write64(dst, set);
@@ -1265,7 +1265,7 @@ void XlatLinuxToSigset(sigset_t *dst, u64 set) {
   int syssig, linuxsig;
   sigemptyset(dst);
   for (linuxsig = 1; linuxsig <= MIN(64, TOPSIG); ++linuxsig) {
-    if (((1ull << (linuxsig - 1)) & set) &&
+    if ((((u64)1 << (linuxsig - 1)) & set) &&
         (syssig = XlatSignal(linuxsig)) != -1) {
       sigaddset(dst, syssig);
     }

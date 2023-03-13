@@ -78,7 +78,7 @@ static void OpBzhi(P) {
   if (Rexw(rde)) {
     x = Load64(GetModrmRegisterWordPointerRead8(A));
     if (i < 64) {
-      x &= (1ull << i) - 1;
+      x &= ((u64)1 << i) - 1;
     } else {
       cf = 1;
     }

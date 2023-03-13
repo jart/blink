@@ -391,7 +391,7 @@ static void xed_set_vex_prefix(struct XedDecodedInst *x, unsigned prefix) {
       break;
     case 2:  // rep3
     case 3:  // rep2
-      x->op.rde &= ~(3ull << 51);
+      x->op.rde &= ~((u64)3 << 51);
       x->op.rde |= (u64)(prefix ^ 1) << 51;
       break;
     default:

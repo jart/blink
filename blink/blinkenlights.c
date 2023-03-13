@@ -1568,7 +1568,7 @@ static void DrawSse(struct Panel *p) {
 
 static void ScrollMemoryView(struct Panel *p, struct MemoryView *v, i64 a) {
   i64 i, n, w;
-  w = DUMPWIDTH * (1ull << v->zoom);
+  w = DUMPWIDTH * ((u64)1 << v->zoom);
   n = p->bottom - p->top;
   i = a / w;
   if (!(v->start <= i && i < v->start + n)) {
@@ -1614,8 +1614,8 @@ static void DrawMemoryZoomed(struct Panel *p, struct MemoryView *view,
   u8 *canvas, *chunk, *invalid;
   i64 a, b, c, d, n, i, j, k, size;
   struct ContiguousMemoryRanges ranges;
-  a = view->start * DUMPWIDTH * (1ull << view->zoom);
-  b = (view->start + (p->bottom - p->top)) * DUMPWIDTH * (1ull << view->zoom);
+  a = view->start * DUMPWIDTH * ((u64)1 << view->zoom);
+  b = (view->start + (p->bottom - p->top)) * DUMPWIDTH * ((u64)1 << view->zoom);
   size = (p->bottom - p->top) * DUMPWIDTH;
   canvas = (u8 *)calloc(1, size);
   invalid = (u8 *)calloc(1, size);
@@ -1627,7 +1627,7 @@ static void DrawMemoryZoomed(struct Panel *p, struct MemoryView *view,
         (a < ranges.p[i].a && b >= ranges.p[i].b)) {
       c = MAX(a, ranges.p[i].a);
       d = MIN(b, ranges.p[i].b);
-      n = ROUNDUP(d - c, 1ull << view->zoom);
+      n = ROUNDUP(d - c, (u64)1 << view->zoom);
       chunk = (u8 *)malloc(n);
       CopyFromUser(m, chunk, c, d - c);
       memset(chunk + (d - c), 0, n - (d - c));
@@ -1635,7 +1635,7 @@ static void DrawMemoryZoomed(struct Panel *p, struct MemoryView *view,
         Magikarp(chunk, n);
         n >>= 1;
       }
-      j = (c - a) / (1ull << view->zoom);
+      j = (c - a) / ((u64)1 << view->zoom);
       memset(invalid + k, -1, j - k);
       memcpy(canvas + j, chunk, MIN(n, size - j));
       k = j + MIN(n, size - j);
@@ -1650,8 +1650,8 @@ static void DrawMemoryZoomed(struct Panel *p, struct MemoryView *view,
               ((view->start + i) * DUMPWIDTH * ((u64)1 << view->zoom)) &
                   0x0000ffffffffffff);
     for (j = 0; j < DUMPWIDTH; ++j, ++c) {
-      a = ((view->start + i) * DUMPWIDTH + j + 0) * (1ull << view->zoom);
-      b = ((view->start + i) * DUMPWIDTH + j + 1) * (1ull << view->zoom);
+      a = ((view->start + i) * DUMPWIDTH + j + 0) * ((u64)1 << view->zoom);
+      b = ((view->start + i) * DUMPWIDTH + j + 1) * ((u64)1 << view->zoom);
       changed = ((histart >= a && hiend < b) ||
                  (histart && hiend && histart >= a && hiend < b));
       if (changed && !high) {
@@ -2279,7 +2279,7 @@ static struct Panel *LocatePanel(int y, int x) {
       return &pan.p[i];
     }
   }
-  return NULL;
+  return 0;
 }
 
 static struct Mouse ParseMouse(char *p) {
@@ -3654,7 +3654,7 @@ static void Tui(void) {
         m->xedd->length = 1;
         m->xedd->bytes[0] = 0xCC;
         m->xedd->op.rde &= ~00000077760000000000000;
-        m->xedd->op.rde &= 0xCCull << 40;  // sets mopcode to int3
+        m->xedd->op.rde &= (u64)0xCC << 40;  // sets mopcode to int3
       }
       if (action & WINCHED) {
         HandleTerminalResize();
@@ -3692,7 +3692,7 @@ static void Tui(void) {
         if (action & (CONTINUE | NEXT | FINISH)) {
           action &= ~(CONTINUE | NEXT | FINISH | STEP);
           ReactiveDraw();
-        } else if ((~m->sigmask & (1ull << (SIGINT_LINUX - 1))) &&
+        } else if ((~m->sigmask & ((u64)1 << (SIGINT_LINUX - 1))) &&
                    Read64(m->system->hands[SIGINT_LINUX - 1].handler) !=
                        SIG_DFL_LINUX &&
                    Read64(m->system->hands[SIGINT_LINUX - 1].handler) !=
@@ -3991,7 +3991,7 @@ static void OnSigSegv(int sig, siginfo_t *si, void *uc) {
   RestoreIp(m);
   // TODO(jart): Fix address translation in non-linear mode.
   m->faultaddr = ConvertHostToGuestAddress(m->system, si->si_addr, 0);
-  ERRF("SIGSEGV AT ADDRESS %" PRIx64 " (OR %p) at RIP=%" PRIx64, m->faultaddr,
+  ERRF("SIGSEGV AT ADDRESS %#" PRIx64 " (OR %p) at RIP=%#" PRIx64, m->faultaddr,
        si->si_addr, m->ip);
   ERRF("BACKTRACE\n\t%s", GetBacktrace(m));
   if (!react) {
@@ -4071,9 +4071,9 @@ int main(int argc, char *argv[]) {
   unassert(!sigaction(SIGBUS, &sa, 0));
   unassert(!sigaction(SIGSEGV, &sa, 0));
 #endif
-  m->system->blinksigs |= 1ull << (SIGINT_LINUX - 1) |   //
-                          1ull << (SIGALRM_LINUX - 1) |  //
-                          1ull << (SIGWINCH_LINUX - 1);  //
+  m->system->blinksigs |= (u64)1 << (SIGINT_LINUX - 1) |   //
+                          (u64)1 << (SIGALRM_LINUX - 1) |  //
+                          (u64)1 << (SIGWINCH_LINUX - 1);  //
   if (optind_ == argc) PrintUsage(48, stderr);
   rc = VirtualMachine(argc, argv);
   FreeBig(ophits, m->system->codesize * sizeof(unsigned long));

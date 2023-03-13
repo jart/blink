@@ -1,5 +1,7 @@
 #ifndef BLINK_TUNABLES_H_
 #define BLINK_TUNABLES_H_
+#include <stdint.h>
+
 #include "blink/builtin.h"
 
 #define BLINK_MAJOR 0
@@ -40,8 +42,8 @@
 #define kFutexMax     100
 #define kRedzoneSize  128
 #define kSmcQueueSize 32
-#define kMaxMapSize   (8ULL * 1024 * 1024 * 1024)
-#define kMaxResident  (8ULL * 1024 * 1024 * 1024)
+#define kMaxMapSize   (UINT64_C(8) * 1024 * 1024 * 1024)
+#define kMaxResident  (UINT64_C(8) * 1024 * 1024 * 1024)
 #define kMaxVirtual   (kMaxResident * 8)
 #define kMaxAncillary 1000
 #define kMaxShebang   512

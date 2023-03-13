@@ -127,7 +127,8 @@ static u8 g_code[kJitMemorySize];
 static struct JitGlobals {
   pthread_mutex_t_ lock;
   _Atomic(long) prot;
-  _Atomic(long) brk;
+  long brk;
+  int freecount;
   struct Dll *freeblocks;
 } g_jit = {
     PTHREAD_MUTEX_INITIALIZER_,

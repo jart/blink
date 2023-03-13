@@ -315,7 +315,7 @@ static void DescribeSigset(char *bp, int bn, u64 ss) {
   }
   APPEND("{");
   for (sig = 1; sig <= 64; ++sig) {
-    if (ss & (1ull << (sig - 1))) {
+    if (ss & ((u64)1 << (sig - 1))) {
       if (got) {
         APPEND(", ");
       } else {

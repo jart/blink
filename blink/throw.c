@@ -38,7 +38,7 @@ void RestoreIp(struct Machine *m) {
 }
 
 void DeliverSignalToUser(struct Machine *m, int sig, int code) {
-  if (m->sigmask & (1ull << (sig - 1))) {
+  if (m->sigmask & ((u64)1 << (sig - 1))) {
     TerminateSignal(m, sig, code);
   }
   LOCK(&m->system->sig_lock);

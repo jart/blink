@@ -156,7 +156,7 @@ static void OpDivRdxRaxEvqpSigned64(P, u8 *p) {
   x = (unsigned __int128)Get64(m->dx) << 64 | Get64(m->ax);
   y = Load64(p);
   if (!y) RaiseDivideError(m);
-  if (x == (unsigned __int128)0x8000000000000000ull << 64) {
+  if (x == (unsigned __int128)UINT64_C(0x8000000000000000) << 64) {
     RaiseDivideError(m);
   }
   q = x / y;

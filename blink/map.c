@@ -98,7 +98,7 @@ static int GetBitsInAddressSpace(void) {
   void *ptr;
   uint64_t want;
   for (i = 16; i < 40; ++i) {
-    want = 0x8123000000000000ull >> i;
+    want = UINT64_C(0x8123000000000000) >> i;
     if (want > UINTPTR_MAX) continue;
     ptr = PortableMmap((void *)(uintptr_t)want, 1, PROT_READ,
                        MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS_, -1, 0);
@@ -112,9 +112,9 @@ static int GetBitsInAddressSpace(void) {
 
 static u64 GetVirtualAddressSpace(int vabits, long pagesize) {
   u64 vaspace;
-  vaspace = 1ull << (vabits - 1);  // 0000400000000000
-  vaspace |= vaspace - 1;          // 00007fffffffffff
-  vaspace &= ~(pagesize - 1);      // 00007ffffffff000
+  vaspace = (u64)1 << (vabits - 1);  // 0000400000000000
+  vaspace |= vaspace - 1;            // 00007fffffffffff
+  vaspace &= ~(pagesize - 1);        // 00007ffffffff000
   return vaspace;
 }
 

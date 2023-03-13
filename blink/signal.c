@@ -121,7 +121,7 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   // within the mask unless the guest program specifies SA_NODEFER
   m->sigmask |= Read64(m->system->hands[sig - 1].mask);
   if (~Read64(m->system->hands[sig - 1].flags) & SA_NODEFER_LINUX) {
-    m->sigmask |= 1ull << (sig - 1);
+    m->sigmask |= (u64)1 << (sig - 1);
   }
   SIG_LOGF("sigmask deliver %" PRIx64, m->sigmask);
   // if the guest setup a sigaltstack() and the signal handler used
@@ -226,7 +226,7 @@ static int ConsumeSignalImpl(struct Machine *m, int *delivered, bool *restart) {
   // look for a pending signal that isn't currently masked
   while ((signals = m->signals & ~m->sigmask)) {
     sig = bsr(signals) + 1;
-    m->signals &= ~(1ull << (sig - 1));
+    m->signals &= ~((u64)1 << (sig - 1));
     handler = Read64(m->system->hands[sig - 1].handler);
     if (handler == SIG_DFL_LINUX) {
       if (IsSignalIgnoredByDefault(sig)) {
