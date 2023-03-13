@@ -40,3 +40,12 @@ jobs:
           cat config.log
           make -j$(nproc) check o//test/blink
         shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'
+
+      - name: Test with VFS enabled
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          ./configure --enable-vfs
+          cat config.log
+          export BLINK_PREFIX="o"
+          make -j$(nproc) check o//test/blink
+        shell: C:\tools\cygwin\bin\bash.exe --login --norc -eo pipefail -o igncr '{0}'

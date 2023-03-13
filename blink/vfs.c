@@ -1969,7 +1969,7 @@ int VfsClosedir(DIR *dir) {
 }
 
 int VfsBind(int fd, const struct sockaddr *addr, socklen_t addrlen) {
-  struct VfsInfo *info, *dir;
+  struct VfsInfo *info, *dir, *oldparent;
   struct VfsDevice *olddevice;
   char newname[PATH_MAX];
   int ret;
@@ -1983,6 +1983,7 @@ int VfsBind(int fd, const struct sockaddr *addr, socklen_t addrlen) {
     if (VfsHandleDirfdName(AT_FDCWD, addr->sa_data, &dir, newname) == -1) {
       ret = -1;
     } else {
+      oldparent = info->parent;
       unassert(!VfsAcquireInfo(dir, &info->parent));
       olddevice = info->device;
       unassert(!VfsAcquireDevice(dir->device, &info->device));
@@ -1997,16 +1998,18 @@ int VfsBind(int fd, const struct sockaddr *addr, socklen_t addrlen) {
         ret = dir->device->ops->Bind(info, addr, addrlen);
         if (ret == -1) {
           unassert(!VfsFreeInfo(info->parent));
-          info->parent = NULL;
+          info->parent = oldparent;
           unassert(!VfsFreeDevice(info->device));
           info->device = olddevice;
           free((void *)info->name);
           info->name = NULL;
           info->namelen = 0;
         } else {
+          unassert(!VfsFreeInfo(oldparent));
           unassert(!VfsFreeDevice(olddevice));
         }
       }
+      unassert(!VfsFreeInfo(dir));
     }
   }
   unassert(!VfsFreeInfo(info));

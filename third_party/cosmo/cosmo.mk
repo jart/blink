@@ -209,8 +209,13 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/readansi_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/sendrecvmsg_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/lseek_test.com.ok						\
-	o/$(MODE)/third_party/cosmo/2/mmap_test.com.ok						\
-	o/$(MODE)/third_party/cosmo/7/munmap_test.com.ok
+	o/$(MODE)/third_party/cosmo/2/mmap_test.com.ok
+
+# munmap_test triggers SIGSEGV on purpose, making it fail on asan
+# TODO(jart): Make this work on asan
+ifneq ($(MODE), asan)
+COSMO_TESTS += o/$(MODE)/third_party/cosmo/7/munmap_test.com.ok
+endif
 
 # write_test is broken on Cygwin due to RLIMIT_FSIZE
 # TODO(jart): Why do the other ones flake on Cygwin?
