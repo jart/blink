@@ -83,7 +83,7 @@ int LoadInstruction2(struct Machine *m, u64 pc) {
   }
   key = pc & (ARRAYLEN(m->opcache->icache) - 1);
   m->xedd = (struct XedDecodedInst *)m->opcache->icache[key];
-  if ((pc & 4095) < 4096 - 15) {
+  if ((pc & 4095) + 15 <= 4096) {
     if (pc - (pc & 4095) == m->opcache->codevirt && m->opcache->codehost) {
       addr = m->opcache->codehost + (pc & 4095);
     } else if ((page = LookupAddress2(m, pc - (pc & 4095), PAGE_XD, 0))) {

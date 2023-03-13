@@ -145,6 +145,7 @@ static bool RecordPageLock(struct Machine *m, i64 page, u8 *pslot) {
   m->pagelocks.p[m->pagelocks.i].pslot = pslot;
   m->pagelocks.p[m->pagelocks.i].sysdepth = m->sysdepth;
   ++m->pagelocks.i;
+  STATISTIC(++page_locks);
   return true;
 }
 

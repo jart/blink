@@ -2158,8 +2158,9 @@ void Actor(struct Machine *mm) {
 #ifndef __CYGWIN__
     STATISTIC(++interps);
 #endif
-    ExecuteInstruction(m);
-    if (atomic_load_explicit(&m->attention, memory_order_acquire)) {
+    if (!atomic_load_explicit(&m->attention, memory_order_acquire)) {
+      ExecuteInstruction(m);
+    } else {
       CheckForSignals(m);
     }
   }

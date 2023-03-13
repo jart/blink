@@ -538,7 +538,7 @@ static void AddToJitFreed(struct Jit *jit, void *data, size_t size) {
 }
 
 // @assume jit->lock
-static bool RehashJitHooks(struct Jit *jit) {
+static unsigned RehashJitHooks(struct Jit *jit) {
   int func;
   uintptr_t key, virt;
   unsigned i, i2, n1, n2, used, hash, spot, step, kgen;
@@ -558,7 +558,7 @@ static bool RehashJitHooks(struct Jit *jit) {
   if (!(virts2 = (_Atomic(uintptr_t) *)calloc(n2, sizeof(*virts2))) ||
       !(funcs2 = (_Atomic(int) *)calloc(n2, sizeof(*funcs2)))) {
     free(virts2);
-    return false;
+    return 0;
   }
   // copy entries over to new hash table, removing deleted entries
   for (i2 = i = 0; i < n1; ++i) {
@@ -589,7 +589,7 @@ static bool RehashJitHooks(struct Jit *jit) {
   AddToJitFreed(jit, virts, n1 * sizeof(*virts));
   AddToJitFreed(jit, funcs, n1 * sizeof(*funcs));
   jit->hooks.i = i2;
-  return true;
+  return n2;
 }
 
 // @assume jit->lock
@@ -609,7 +609,7 @@ static bool SetJitHookUnlocked(struct Jit *jit, u64 virt, int cas,
   // ensure there's room to add this hook
   unassert(jit->hooks.i <= jit->hooks.n / 2);
   n = atomic_load_explicit(&jit->hooks.n, memory_order_relaxed);
-  if (jit->hooks.i == n / 2 && !RehashJitHooks(jit)) {
+  if (jit->hooks.i == n / 2 && !(n = RehashJitHooks(jit))) {
     DisableJit(jit);
     return false;
   }
