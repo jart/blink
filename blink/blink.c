@@ -218,6 +218,9 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
     }
     ProgramLimit(m->system, RLIMIT_NOFILE, RLIMIT_NOFILE_LINUX);
   } else {
+#ifdef HAVE_JIT
+    DisableJit(&old->system->jit);  // unmapping exec pages is slow
+#endif
     unassert(!m->sysdepth);
     unassert(!m->pagelocks.i);
     unassert(!FreeVirtual(old->system, -0x800000000000, 0x1000000000000));

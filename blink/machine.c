@@ -388,8 +388,8 @@ void Connect(P, u64 pc, bool avoid_cycles) {
   if ((pc & -4096) == (m->path.start & -4096) &&
       (!avoid_cycles || RecordJitEdge(&m->system->jit, m->path.start, pc))) {
     // is a preexisting jit path installed at destination?
-    f = GetJitHook(&m->system->jit, pc, (uintptr_t)GeneralDispatch);
-    if (f != (uintptr_t)JitlessDispatch && f != (uintptr_t)GeneralDispatch) {
+    if ((f = GetJitHook(&m->system->jit, pc)) &&
+        f != (uintptr_t)JitlessDispatch) {
       // tail call into the other generated jit path function
       jump = (u8 *)f + GetPrologueSize();
       STATISTIC(++path_connected);
@@ -1921,7 +1921,7 @@ void JitlessDispatch(P) {
   m->oplen = 0;
 }
 
-void GeneralDispatch(P) {
+static void GeneralDispatch(P) {
 #ifdef HAVE_JIT
   int opclass;
   uintptr_t jitpc = 0;
@@ -1993,35 +1993,6 @@ void GeneralDispatch(P) {
 #endif
 }
 
-static void ExploreInstruction(struct Machine *m, nexgen32e_f func) {
-#ifdef HAVE_JIT
-  if (func == JitlessDispatch) {
-    JIT_LOGF("abandoning path starting at %" PRIx64
-             " due to running into staged path",
-             m->path.start);
-    AbandonPath(m);
-    COSTLY_STATISTIC(++instructions_dispatched);
-    func(DISPATCH_NOTHING);
-    return;
-  } else if (func != GeneralDispatch &&
-             (m->path.start & -4096) == (m->ip & -4096)) {
-    JIT_LOGF("splicing path starting at %#" PRIx64
-             " into previously created function %p at %#" PRIx64,
-             m->path.start, func, m->ip);
-    STATISTIC(++path_spliced);
-    FlushSkew(DISPATCH_NOTHING);
-    AppendJitSetReg(m->path.jb, kJitArg0, kJitSav0);
-    AppendJitJump(m->path.jb, (u8 *)(uintptr_t)func + GetPrologueSize());
-    FinishPath(m);
-    COSTLY_STATISTIC(++instructions_dispatched);
-    func(DISPATCH_NOTHING);
-    return;
-  } else {
-    GeneralDispatch(DISPATCH_NOTHING);
-  }
-#endif
-}
-
 void ExecuteInstruction(struct Machine *m) {
 #if LOG_CPU
   LogCpu(m);
@@ -2029,15 +2000,34 @@ void ExecuteInstruction(struct Machine *m) {
 #ifdef HAVE_JIT
   nexgen32e_f func;
   if (CanJit(m)) {
-    func = (nexgen32e_f)GetJitHook(&m->system->jit, m->ip,
-                                   (uintptr_t)GeneralDispatch);
-    if (!IsMakingPath(m)) {
-      // this increment can cause a >3% overall slowdown
-      COSTLY_STATISTIC(++instructions_dispatched);
-      func(DISPATCH_NOTHING);
-    } else {
-      ExploreInstruction(m, func);
+    if ((func = (nexgen32e_f)GetJitHook(&m->system->jit, m->ip))) {
+      if (!IsMakingPath(m)) {
+        func(DISPATCH_NOTHING);
+        return;
+      } else if (func == JitlessDispatch) {
+        JIT_LOGF("abandoning path starting at %" PRIx64
+                 " due to running into staged path",
+                 m->path.start);
+        AbandonPath(m);
+        func(DISPATCH_NOTHING);
+        return;
+      } else {
+        JIT_LOGF("splicing path starting at %#" PRIx64
+                 " into previously created function %p at %#" PRIx64,
+                 m->path.start, func, m->ip);
+        STATISTIC(++path_spliced);
+        FlushSkew(DISPATCH_NOTHING);
+        AppendJitSetReg(m->path.jb, kJitArg0, kJitSav0);
+        AppendJitJump(m->path.jb,
+                      (m->path.start & -4096) == (m->ip & -4096)
+                          ? (u8 *)(uintptr_t)func + GetPrologueSize()
+                          : (u8 *)m->system->ender);
+        FinishPath(m);
+        func(DISPATCH_NOTHING);
+        return;
+      }
     }
+    GeneralDispatch(DISPATCH_NOTHING);
   } else {
     JitlessDispatch(DISPATCH_NOTHING);
   }

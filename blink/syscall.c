@@ -216,18 +216,10 @@ const char *GetDirFildesPath(struct System *s, int fildes) {
   return 0;
 }
 
-void SignalActor(struct Machine *mm) {
-#ifdef __CYGWIN__
-  // TODO: Why does JIT clobber %rbx on Cygwin?
-  struct Machine *volatile m = mm;
-#else
-  struct Machine *m = mm;
-#endif
+void SignalActor(struct Machine *m) {
   for (;;) {
-#ifndef __CYGWIN__
-    STATISTIC(++interps);
-#endif
-    ExecuteInstruction(m);
+    COSTLY_STATISTIC(++interps);
+    JitlessDispatch(DISPATCH_NOTHING);
     if (atomic_load_explicit(&m->attention, memory_order_acquire)) {
       if (m->restored) break;
       CheckForSignals(m);
@@ -367,6 +359,9 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
   } else {
     THR_LOGF("calling exit(%d)", rc);
     KillOtherThreads(m->system);
+#ifdef HAVE_JIT
+    DisableJit(&m->system->jit);  // unmapping exec pages is slow
+#endif
     if (m->system->trapexit && !m->system->exited) {
       m->system->exited = true;
       m->system->exitcode = rc;
@@ -410,36 +405,40 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
   // exec_lock must come before fds.lock (see execve)
   // mmap_lock must come before fds.lock (see GetOflags)
   // mmap_lock must come before pagelocks_lock (see FreePage)
-  LOCK(&m->system->exec_lock);
-  LOCK(&m->system->sig_lock);
-  LOCK(&m->system->mmap_lock);
-  LOCK(&m->system->pagelocks_lock);
-  LOCK(&m->system->fds.lock);
-  LOCK(&m->system->machines_lock);
+  if (m->threaded) {
+    LOCK(&m->system->exec_lock);
+    LOCK(&m->system->sig_lock);
+    LOCK(&m->system->mmap_lock);
+    LOCK(&m->system->pagelocks_lock);
+    LOCK(&m->system->fds.lock);
+    LOCK(&m->system->machines_lock);
 #ifndef HAVE_PTHREAD_PROCESS_SHARED
-  LOCK(&g_bus->futexes.lock);
+    LOCK(&g_bus->futexes.lock);
 #endif
 #ifdef HAVE_JIT
-  LOCK(&m->system->jit.lock);
+    LOCK(&m->system->jit.lock);
 #endif
+  }
   pid = fork();
 #ifdef __HAIKU__
   // haiku wipes tls after fork() in child
   // https://dev.haiku-os.org/ticket/17896
   if (!pid) g_machine = m;
 #endif
+  if (m->threaded) {
 #ifdef HAVE_JIT
-  UNLOCK(&m->system->jit.lock);
+    UNLOCK(&m->system->jit.lock);
 #endif
 #ifndef HAVE_PTHREAD_PROCESS_SHARED
-  UNLOCK(&g_bus->futexes.lock);
+    UNLOCK(&g_bus->futexes.lock);
 #endif
-  UNLOCK(&m->system->machines_lock);
-  UNLOCK(&m->system->fds.lock);
-  UNLOCK(&m->system->pagelocks_lock);
-  UNLOCK(&m->system->mmap_lock);
-  UNLOCK(&m->system->sig_lock);
-  UNLOCK(&m->system->exec_lock);
+    UNLOCK(&m->system->machines_lock);
+    UNLOCK(&m->system->fds.lock);
+    UNLOCK(&m->system->pagelocks_lock);
+    UNLOCK(&m->system->mmap_lock);
+    UNLOCK(&m->system->sig_lock);
+    UNLOCK(&m->system->exec_lock);
+  }
   if (!pid) {
     newpid = getpid();
     if (stack) {

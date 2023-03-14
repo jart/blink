@@ -520,7 +520,7 @@ static bool MustUpdateIp(P) {
   u64 next;
   if (!IsPure(rde)) return true;
   next = m->ip + Oplength(rde);
-  if (GetJitHook(&m->system->jit, next, 0)) return true;
+  if (GetJitHook(&m->system->jit, next)) return true;
   return false;
 }
 

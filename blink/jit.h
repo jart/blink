@@ -228,7 +228,7 @@ bool AppendJitMovReg(struct JitBlock *, int, int);
 bool FinishJit(struct Jit *, struct JitBlock *);
 bool RecordJitJump(struct JitBlock *, u64, int);
 bool RecordJitEdge(struct Jit *, i64, i64);
-uintptr_t GetJitHook(struct Jit *, u64, uintptr_t);
+uintptr_t GetJitHook(struct Jit *, u64);
 int ResetJitPage(struct Jit *, i64);
 
 int CommitJit_(struct Jit *, struct JitBlock *);

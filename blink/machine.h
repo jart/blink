@@ -458,7 +458,6 @@ void ResetCpu(struct Machine *);
 void ResetTlb(struct Machine *);
 void CollectGarbage(struct Machine *, size_t);
 void ResetInstructionCache(struct Machine *);
-void GeneralDispatch(P);
 nexgen32e_f GetOp(long);
 void LoadInstruction(struct Machine *, u64);
 int LoadInstruction2(struct Machine *, u64);

@@ -94,7 +94,7 @@
  *     AppendJit(jb, kEpilogue, sizeof(kEpilogue));
  *     FinishJit(jit, jb);
  *     FlushJit(jit);
- *     printf("1+2+3=%ld\n", ((long (*)(void))(GetJitHook(jit, key, 0)))());
+ *     printf("1+2+3=%ld\n", ((long (*)(void))(GetJitHook(jit, key)))());
  *
  *     // destroy jit and all its functions
  *     DestroyJit(&jit);
@@ -428,6 +428,18 @@ static struct JitBlock *InitJitBlock(struct Jit *jit, long *state) {
   return jb;
 }
 
+static void LockJit(struct Jit *jit) {
+  if (jit->threaded) {
+    LOCK(&jit->lock);
+  }
+}
+
+static void UnlockJit(struct Jit *jit) {
+  if (jit->threaded) {
+    UNLOCK(&jit->lock);
+  }
+}
+
 /**
  * Initializes memory object for Just-In-Time (JIT) threader.
  *
@@ -474,7 +486,7 @@ int InitJit(struct Jit *jit, uintptr_t opt_staging_function) {
  */
 int DestroyJit(struct Jit *jit) {
   struct Dll *e;
-  LOCK(&jit->lock);
+  LockJit(jit);
   while ((e = dll_first(jit->freeds.p))) {
     dll_remove(&jit->freeds.p, e);
     FreeJitFreed(JITFREED_CONTAINER(e));
@@ -495,7 +507,7 @@ int DestroyJit(struct Jit *jit) {
     dll_remove(&jit->pages, e);
     FreeJitPage(JITPAGE_CONTAINER(e));
   }
-  UNLOCK(&jit->lock);
+  UnlockJit(jit);
   unassert(!pthread_mutex_destroy(&jit->lock));
   free(jit->hooks.funcs);
   free(jit->hooks.virts);
@@ -537,13 +549,13 @@ int EnableJit(struct Jit *jit) {
 int FixJitProtection(struct Jit *jit) {
   int prot;
   struct Dll *e;
-  LOCK(&jit->lock);
+  LockJit(jit);
   prot = atomic_load_explicit(&g_jit.prot, memory_order_relaxed);
   for (e = dll_first(jit->blocks); e; e = dll_next(jit->blocks, e)) {
     unassert(
         !Mprotect(JITBLOCK_CONTAINER(e)->addr, kJitBlockSize, prot, "jit"));
   }
-  UNLOCK(&jit->lock);
+  UnlockJit(jit);
   return 0;
 }
 
@@ -586,12 +598,17 @@ static struct JitPage *GetOrCreateJitPage(struct Jit *jit, i64 addr) {
   return jp;
 }
 
-// adds heap memory to freelist, for synchronization cooloff
+// adds heap memory to freelist
+// this is intended for synchronization cooloff
 // @assume jit->lock
 static void RetireJitHeap(struct Jit *jit, void *data, size_t size) {
   struct Dll *e;
   struct JitFreed *jf = 0;
   if (!data) return;
+  if (!jit->threaded) {
+    free(data);
+    return;
+  }
   if ((e = dll_first(jit->freeds.f))) {
     dll_remove(&jit->freeds.f, e);
     jf = JITFREED_CONTAINER(e);
@@ -769,9 +786,9 @@ static bool SetJitHookUnlocked(struct Jit *jit, u64 virt, int cas,
 
 static bool SetJitHook(struct Jit *jit, u64 virt, int cas, intptr_t funcaddr) {
   bool res;
-  LOCK(&jit->lock);
+  LockJit(jit);
   res = SetJitHookUnlocked(jit, virt, cas, funcaddr);
-  UNLOCK(&jit->lock);
+  UnlockJit(jit);
   return res;
 }
 
@@ -780,10 +797,9 @@ static bool SetJitHook(struct Jit *jit, u64 virt, int cas, intptr_t funcaddr) {
  *
  * @param jit is the System's Jit object
  * @param virt is the hash table key, or virtual address of path start
- * @param dflt is value to return if hash table entry is unset or gone
- * @return native function address, or `dflt` if it doesn't exist
+ * @return native function address, or 0 if it doesn't exist
  */
-uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
+uintptr_t GetJitHook(struct Jit *jit, u64 virt) {
   int off;
   uintptr_t key, res;
   _Atomic(int) *funcs;
@@ -801,11 +817,11 @@ uintptr_t GetJitHook(struct Jit *jit, u64 virt, uintptr_t dflt) {
       if (key == virt) {
         funcs = atomic_load_explicit(&jit->hooks.funcs, memory_order_relaxed);
         off = atomic_load_explicit(funcs + spot, memory_order_relaxed);
-        res = off ? DecodeJitFunc(off) : dflt;
+        res = off ? DecodeJitFunc(off) : 0;
         break;
       }
       if (!key) {
-        return dflt;
+        return 0;
       }
       COSTLY_STATISTIC(++jit_hash_collisions);
     }
@@ -961,9 +977,9 @@ static int ResetJitPageUnlocked(struct Jit *jit, i64 virt) {
  */
 int ResetJitPage(struct Jit *jit, i64 virt) {
   int res;
-  LOCK(&jit->lock);
+  LockJit(jit);
   res = ResetJitPageUnlocked(jit, virt);
-  UNLOCK(&jit->lock);
+  UnlockJit(jit);
   return res;
 }
 
@@ -1100,7 +1116,7 @@ struct JitBlock *StartJit(struct Jit *jit, i64 opt_virt) {
   struct Dll *e;
   struct JitBlock *jb;
   if (!IsJitDisabled(jit)) {
-    LOCK(&jit->lock);
+    LockJit(jit);
     if ((e = dll_first(jit->blocks)) &&  //
         (jb = JITBLOCK_CONTAINER(e)) &&  //
         jb->index + kJitFit <= kJitBlockSize) {
@@ -1120,7 +1136,7 @@ struct JitBlock *StartJit(struct Jit *jit, i64 opt_virt) {
         jb = 0;
       }
     }
-    UNLOCK(&jit->lock);
+    UnlockJit(jit);
   } else {
     jb = 0;
   }
@@ -1178,7 +1194,7 @@ static void FreeJitJumps(struct Dll *jumps) {
 static struct Dll *GetJitJumps(struct Jit *jit, u64 virt) {
   struct JitJump *jj;
   struct Dll *res, *rem, *e, *e2;
-  LOCK(&jit->lock);
+  LockJit(jit);
   for (rem = res = 0, e = dll_first(jit->jumps); e; e = e2) {
     e2 = dll_next(jit->jumps, e);
     jj = JITJUMP_CONTAINER(e);
@@ -1190,7 +1206,7 @@ static struct Dll *GetJitJumps(struct Jit *jit, u64 virt) {
       dll_make_first(&rem, e);
     }
   }
-  UNLOCK(&jit->lock);
+  UnlockJit(jit);
   FreeJitJumps(rem);
   return res;
 }
@@ -1269,7 +1285,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
     JIT_LOGF("jit activating [%p,%p) w/ %zu kb", addr, addr + size,
              size / 1024);
     // abandon fixups pointing into the block being protected
-    LOCK(&jit->lock);
+    LockJit(jit);
     for (rem = 0, e = dll_first(jit->jumps); e; e = e2) {
       e2 = dll_next(jit->jumps, e);
       jj = JITJUMP_CONTAINER(e);
@@ -1278,7 +1294,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
         dll_make_first(&rem, e);
       }
     }
-    UNLOCK(&jit->lock);
+    UnlockJit(jit);
     for (e = dll_first(rem); e; e = e2) {
       e2 = dll_next(rem, e);
       FreeJitJump(JITJUMP_CONTAINER(e));
@@ -1321,10 +1337,10 @@ void ReinsertJitBlock_(struct Jit *jit, struct JitBlock *jb) {
 // append our list of code fixups to jit system which may apply it later
 static void CommitJitJumps(struct Jit *jit, struct JitBlock *jb) {
   if (!dll_is_empty(jb->jumps)) {
-    LOCK(&jit->lock);
+    LockJit(jit);
     dll_make_first(&jit->jumps, jb->jumps);
     jb->jumps = 0;
-    UNLOCK(&jit->lock);
+    UnlockJit(jit);
   }
 }
 
@@ -1411,9 +1427,9 @@ static bool RecordJitEdgeImpl(struct Jit *jit, i64 src, i64 dst) {
  */
 bool RecordJitEdge(struct Jit *jit, i64 src, i64 dst) {
   bool res;
-  LOCK(&jit->lock);
+  LockJit(jit);
   res = RecordJitEdgeImpl(jit, src, dst);
-  UNLOCK(&jit->lock);
+  UnlockJit(jit);
   return res;
 }
 
@@ -1504,9 +1520,9 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb) {
   }
   unassert(jb->start == jb->index);
   CommitJit_(jit, jb);
-  LOCK(&jit->lock);
+  LockJit(jit);
   ReinsertJitBlock_(jit, jb);
-  UNLOCK(&jit->lock);
+  UnlockJit(jit);
   if (pthread_jit_write_protect_supported_np()) {
     pthread_jit_write_protect_np_workaround(true);
   }
@@ -1525,9 +1541,9 @@ bool AbandonJit(struct Jit *jit, struct JitBlock *jb) {
   AbandonJitJumps(jb);
   AbandonJitHook(jit, jb);
   DiscardGeneratedJitCode(jb);
-  LOCK(&jit->lock);
+  LockJit(jit);
   ReinsertJitBlock_(jit, jb);
-  UNLOCK(&jit->lock);
+  UnlockJit(jit);
   if (pthread_jit_write_protect_supported_np()) {
     pthread_jit_write_protect_np_workaround(true);
   }
