@@ -33,6 +33,7 @@
 #define NORMAL "\004"  // everything else
 
 #define UN
+#define PAD            "\000"
 #define I32            "\001"
 #define I32_FD         "\002"
 #define I32_DIRFD      "\003"
@@ -156,7 +157,7 @@
 #define STRACE_FDATASYNC    BLOCKY  RC0    FD         UN         UN        UN        UN       UN
 #define STRACE_DUP          NORMAL  I32    FD         UN         UN        UN        UN       UN
 #define STRACE_DUP2         NORMAL  I32    FD         I32        UN        UN        UN       UN
-#define STRACE_DUP3         NORMAL  I32    FD         I32        OFLAGS    UN        UN       UN
+#define STRACE_DUP3         NORMAL  I32    FD         I32        OFLAGS    PAD       UN       UN
 #define STRACE_MSYNC        NORMAL  RC0    PTR        SIZE       MSFLAGS   UN        UN       UN
 #define STRACE_ALARM        NORMAL  I32    I32        UN         UN        UN        UN       UN
 #define STRACE_GETCWD       NORMAL  SSIZE_ O_BUF      BUFSZ      UN        UN        UN       UN
@@ -172,7 +173,7 @@
 #define STRACE_NANOSLEEP    BLOCKY  RC0    I_TIME     O_TIME     UN        UN        UN       UN
 #define STRACE_IOCTL        CANCPT  I32    FD         WAT_IOCTL  UN        UN        UN       UN
 #define STRACE_PIPE         NORMAL  SSIZE_ O_PFDS     UN         UN        UN        UN       UN
-#define STRACE_PIPE2        NORMAL  SSIZE_ O_PFDS     OFLAGS     UN        UN        UN       UN
+#define STRACE_PIPE2        NORMAL  SSIZE_ O_PFDS     OFLAGS     PAD       UN        UN       UN
 #define STRACE_SOCKETPAIR   NORMAL  RC0    FAMILY     SOCKTYPE   I32       O_PFDS    UN       UN
 #define STRACE_SELECT       TWOWAY  SSIZE_ I32        IO_FDSET   IO_FDSET  IO_FDSET  IO_TIMEV UN
 #define STRACE_PSELECT      TWOWAY  SSIZE_ I32        IO_FDSET   IO_FDSET  IO_FDSET  IO_TIME  WAT_PSELECT

@@ -747,17 +747,14 @@ void Strace(struct Machine *m, const char *func, bool isentry, const char *fmt,
         } else {
           APPEND(", %#" PRIx32, flags);
         }
-        ++i;
       } else if (arg == F_SETFL_LINUX) {
         i32 flags = va_arg(va, i64);
         DescribeFlags(tmp, sizeof(tmp), kOpenFlags, ARRAYLEN(kOpenFlags), "O_",
                       flags);
         APPEND("%s", tmp);
-        ++i;
       } else if (arg == F_SETOWN_LINUX) {
         i32 fd = va_arg(va, i64);
         APPEND(", %#" PRIx32, fd);
-        ++i;
       }
     } else {
       LOGF("missing strace signature specifier %#o", c);
