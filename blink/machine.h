@@ -226,8 +226,6 @@ struct Elf {
   char *prog;
   char *execfn;
   char *interpreter;
-  long size;
-  bool debugonce;
   i64 base;
   i64 aslr;
   u8 rng[16];

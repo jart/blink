@@ -29,7 +29,7 @@
 
 void PrintStats(void) {
 #ifndef NDEBUG
-  char b[2048];
+  char b[4096];
   int n = sizeof(b);
   int o = 0;
   b[0] = 0;

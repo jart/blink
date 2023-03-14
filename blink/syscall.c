@@ -355,13 +355,13 @@ static void ClearChildTid(struct Machine *m) {
 
 _Noreturn void SysExitGroup(struct Machine *m, int rc) {
   THR_LOGF("pid=%d tid=%d SysExitGroup", m->system->pid, m->tid);
-#ifndef NDEBUG
-  if (FLAG_statistics) {
-    PrintStats();
-  }
-#endif
   ClearChildTid(m);
   if (m->system->isfork) {
+#ifndef NDEBUG
+    if (FLAG_statistics) {
+      PrintStats();
+    }
+#endif
     THR_LOGF("calling _Exit(%d)", rc);
     _Exit(rc);
   } else {
@@ -375,6 +375,11 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
     FreeMachine(m);
 #ifdef HAVE_JIT
     ShutdownJit();
+#endif
+#ifndef NDEBUG
+    if (FLAG_statistics) {
+      PrintStats();
+    }
 #endif
     exit(rc);
   }
@@ -5520,7 +5525,7 @@ void OpSyscall(P) {
     SYSCALL(0, 0x027, "getpid", SysGetpid, STRACE_GETPID);
     SYSCALL(0, 0x0BA, "gettid", SysGettid, STRACE_GETTID);
     SYSCALL(1, 0x03F, "uname", SysUname, STRACE_1);
-    SYSCALL(3, 0x048, "fcntl", SysFcntl, STRACE_3);
+    SYSCALL(3, 0x048, "fcntl", SysFcntl, STRACE_FCNTL);
     SYSCALL(2, 0x049, "flock", SysFlock, STRACE_2);
     SYSCALL(1, 0x04A, "fsync", SysFsync, STRACE_FSYNC);
     SYSCALL(1, 0x04B, "fdatasync", SysFdatasync, STRACE_FDATASYNC);

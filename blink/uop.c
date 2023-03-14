@@ -1390,6 +1390,32 @@ static inline unsigned CheckBelow(unsigned x, unsigned n) {
   return x;
 }
 
+static void CallFunction(struct Machine *m, void *fun) {
+  AppendJitCall(m->path.jb, fun);
+  ClobberEverythingExceptResult(m);
+}
+
+static void CallMicroOp(struct Machine *m, void *fun) {
+#ifdef TRIVIALLY_RELOCATABLE
+  long len;
+  if ((len = GetMicroOpLength(fun)) > 0) {
+    AppendJit(m->path.jb, fun, len);
+  } else {
+    LOG_ONCE(LOGF("jit micro-operation at address %" PRIxPTR
+                  " has branches or static memory references",
+                  (uintptr_t)fun));
+    CallFunction(m, fun);
+  }
+#else
+  CallFunction(m, fun);
+#endif
+}
+
+static void GetReg_32_64(struct Machine *m, void *fun) {
+  AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
+  CallMicroOp(m, fun);
+}
+
 static void GetReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
   switch (log2sz) {
     case 0:
@@ -1400,16 +1426,10 @@ static void GetReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
              (u64)kByteReg[breg], kGetReg[0]);
       break;
     case 2:
-      Jitter(A,
-             "q"   // arg0 = machine
-             "m",  // call micro-op
-             kGetReg32[reg]);
+      GetReg_32_64(m, kGetReg32[reg]);
       break;
     case 3:
-      Jitter(A,
-             "q"   // arg0 = machine
-             "m",  // call micro-op
-             kGetReg64[reg]);
+      GetReg_32_64(m, kGetReg64[reg]);
       break;
     default:
       Jitter(A,
@@ -1419,6 +1439,14 @@ static void GetReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
              (u64)reg, kGetReg[log2sz]);
       break;
   }
+}
+
+static void PutReg_32_64(struct Machine *m, void *fun) {
+  ItemsRequired(1);
+  AppendJitMovReg(m->path.jb, kJitArg1, kJitSav0);
+  AppendJitMovReg(m->path.jb, kJitArg0, stack[i - 1]);
+  CallMicroOp(m, fun);
+  --i;
 }
 
 static void PutReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
@@ -1442,20 +1470,10 @@ static void PutReg(P, unsigned log2sz, unsigned reg, unsigned breg) {
              (u64)reg, kPutReg[1]);
       break;
     case 2:
-      ItemsRequired(1);
-      Jitter(A,
-             "s0a1="  // arg1 = machine
-             "a0="    // arg0 = <pop>
-             "m",     // call micro-op
-             kPutReg32[reg]);
+      PutReg_32_64(m, kPutReg32[reg]);
       break;
     case 3:
-      ItemsRequired(1);
-      Jitter(A,
-             "s0a1="  // arg1 = machine
-             "a0="    // arg0 = <pop>
-             "m",     // call micro-op
-             kPutReg64[reg]);
+      PutReg_32_64(m, kPutReg64[reg]);
       break;
     case 4:
       // note: r0 == a0 on aarch64
@@ -1514,30 +1532,12 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         break;
 
       case 'm':  // micro-op
-#ifdef TRIVIALLY_RELOCATABLE
-      {
-        void *fun = va_arg(va, void *);
-        long len = GetMicroOpLength(fun);
-        if (len > 0) {
-          AppendJit(m->path.jb, fun, len);
-        } else {
-          LOG_ONCE(LOGF("jit micro-operation at address %" PRIxPTR
-                        " has branches or static memory references",
-                        (uintptr_t)fun));
-          AppendJitCall(m->path.jb, fun);
-        }
+        CallMicroOp(m, va_arg(va, void *));
         break;
-      }
-#endif
 
-      case 'c': {  // call
-        void *fun = va_arg(va, void *);
-        if (fun == (void *)(uintptr_t)Sub64) LogCodOp(m, "Sub64");
-        if (fun == (void *)(uintptr_t)Add64) LogCodOp(m, "Add64");
-        AppendJitCall(m->path.jb, fun);
-        ClobberEverythingExceptResult(m);
+      case 'c':  // call
+        CallFunction(m, va_arg(va, void *));
         break;
-      }
 
       case 'r':  // push res reg
         stack[i++] = kJitRes[CheckBelow(fmt[k++] - '0', ARRAYLEN(kJitRes))];
@@ -1710,7 +1710,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
 
       case 'L':  // load effective address
         if (!SibExists(rde) && IsRipRelative(rde)) {
-          Jitter(A, "r0i", disp + m->ip);  // res0 = absolute
+          AppendJitSetReg(m->path.jb, kJitRes0, disp + m->ip);
         } else if (!SibExists(rde)) {
           if (disp) {
             Jitter(A,
@@ -1729,12 +1729,10 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
           Jitter(A, "r0i", disp);  // res0 = absolute
         } else if (SibHasBase(rde) && !SibHasIndex(rde)) {
           if (disp) {
-            Jitter(A,
-                   "a2i"  // arg2 = address base register index
-                   "a1i"  // arg1 = displacement
-                   "q"    // arg0 = machine
-                   "m",   // call micro-op
-                   RexbBase(rde), disp, Base);
+            AppendJitSetReg(m->path.jb, kJitArg2, RexbBase(rde));
+            AppendJitSetReg(m->path.jb, kJitArg1, disp);
+            AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
+            CallMicroOp(m, Base);
           } else {
             Jitter(A,
                    "q"   // arg0 = machine

@@ -14,7 +14,7 @@
 #define IS_MEM(c)    (0200 == (0200 & (c)))
 #define IS_MEM_I(c)  (0200 == (0340 & (c)))
 #define IS_MEM_O(c)  (0300 == (0340 & (c)))
-#define IS_MEM_IO(c) (0340 == (0340 & (c)))
+#define IS_MEM_IO(c) (0360 == (0340 & (c)))
 #define IS_BUF(c)    (0200 == (0277 & (c)))
 #define IS_TIME(c)   (0202 == (0237 & (c)))
 #define IS_HAND(c)   (0203 == (0277 & (c)))

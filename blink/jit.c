@@ -892,19 +892,20 @@ static void ResetJitPageHooks(struct Jit *jit, i64 page) {
   _Atomic(uintptr_t) *virts;
   unsigned n, hash, spot, step, found;
   if (!(jp = GetJitPage(jit, page))) return;
-  n = atomic_load_explicit(&jit->hooks.n, memory_order_relaxed);
-  virts = atomic_load_explicit(&jit->hooks.virts, memory_order_relaxed);
-  funcs = atomic_load_explicit(&jit->hooks.funcs, memory_order_relaxed);
+  STATISTIC(AVERAGE(jit_page_average_bits, popcount(jp->bitset)));
   for (found = 0; jp->bitset; jp->bitset &= ~((u64)1 << boff)) {
     boff = bsr(jp->bitset);
     virt = page + boff * (4096 / 64);
     for (end = virt + 64; virt < end; ++virt) {
       hash = HASH(virt);
       for (spot = step = 0;; ++step) {
+        n = atomic_load_explicit(&jit->hooks.n, memory_order_relaxed);
         spot = (hash + step * ((step + 1) >> 1)) & (n - 1);
+        virts = atomic_load_explicit(&jit->hooks.virts, memory_order_relaxed);
         key = atomic_load_explicit(virts + spot, memory_order_relaxed);
         if (!key) break;
         if ((i64)key == virt) {
+          funcs = atomic_load_explicit(&jit->hooks.funcs, memory_order_relaxed);
           old = atomic_load_explicit(funcs + spot, memory_order_relaxed);
           if (old) {
             atomic_store_explicit(funcs + spot, 0, memory_order_release);
@@ -1711,33 +1712,32 @@ bool AppendJitJump(struct JitBlock *jb, void *code) {
  * @return true if room was available, otherwise false
  */
 bool AppendJitSetReg(struct JitBlock *jb, int reg, u64 value) {
-  int n = 0;
   long lastaction;
 #if defined(__x86_64__)
-  u8 buf[10];
   u8 rex = 0;
+  if (GetJitRemaining(jb) < 10) return OomJit(jb);
   if (reg & 8) rex |= kAmdRexb;
   if (!value) {
     if (reg & 8) rex |= kAmdRexr;
-    if (rex) buf[n++] = rex;
-    buf[n++] = kAmdXor;
-    buf[n++] = 0300 | (reg & 7) << 3 | (reg & 7);
+    if (rex) jb->addr[jb->index++] = rex;
+    jb->addr[jb->index++] = kAmdXor;
+    jb->addr[jb->index++] = 0300 | (reg & 7) << 3 | (reg & 7);
   } else if ((i64)value < 0 && (i64)value >= INT32_MIN) {
-    buf[n++] = rex | kAmdRexw;
-    buf[n++] = 0xC7;
-    buf[n++] = 0300 | (reg & 7);
-    Write32(buf + n, value);
-    n += 4;
+    jb->addr[jb->index++] = rex | kAmdRexw;
+    jb->addr[jb->index++] = 0xC7;
+    jb->addr[jb->index++] = 0300 | (reg & 7);
+    Write32(jb->addr + jb->index, value);
+    jb->index += 4;
   } else {
     if (value > 0xffffffff) rex |= kAmdRexw;
-    if (rex) buf[n++] = rex;
-    buf[n++] = kAmdMovImm | (reg & 7);
+    if (rex) jb->addr[jb->index++] = rex;
+    jb->addr[jb->index++] = kAmdMovImm | (reg & 7);
     if ((rex & kAmdRexw) != kAmdRexw) {
-      Write32(buf + n, value);
-      n += 4;
+      Write32(jb->addr + jb->index, value);
+      jb->index += 4;
     } else {
-      Write64(buf + n, value);
-      n += 8;
+      Write64(jb->addr + jb->index, value);
+      jb->index += 8;
     }
   }
 #elif defined(__aarch64__)
@@ -1757,13 +1757,15 @@ bool AppendJitSetReg(struct JitBlock *jb, int reg, u64 value) {
   // tricks for clearing other parts of the register. For example, the
   // sign-extending mode will set the higher order shorts to all ones,
   // and it expects the immediate to be encoded using ones' complement
-  int i;
   u32 op;
-  u32 buf[4];
+  u32 *p;
+  int i, n = 0;
   unassert(!(reg & ~kArmRegMask));
+  if (GetJitRemaining(jb) < 16) return OomJit(jb);
+  p = (u32 *)(jb->addr + jb->index);
   // TODO: This could be improved some more.
   if ((i64)value < 0 && (i64)value >= -0x8000) {
-    buf[n++] = kArmMovSex | ~value << kArmImmOff | reg << kArmRegOff;
+    p[n++] = kArmMovSex | ~value << kArmImmOff | reg << kArmRegOff;
   } else {
     i = 0;
     op = kArmMovZex;
@@ -1775,14 +1777,13 @@ bool AppendJitSetReg(struct JitBlock *jb, int reg, u64 value) {
       op |= (value & 0xffff) << kArmImmOff;
       op |= reg << kArmRegOff;
       op |= i++ << kArmIdxOff;
-      buf[n++] = op;
+      p[n++] = op;
       op = kArmMovNex;
     } while ((value >>= 16));
   }
-  n *= 4;
+  jb->index += n * 4;
 #endif
   lastaction = jb->lastaction;
-  if (!AppendJit(jb, buf, n)) return false;
   if (ACTION(lastaction) == ACTION_MOVE &&  //
       MOVE_DST(lastaction) != reg &&        //
       MOVE_SRC(lastaction) != reg) {

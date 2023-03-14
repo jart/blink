@@ -175,6 +175,12 @@ static const struct DescribeFlags kSockFlags[] = {
 };
 #endif
 
+const struct MagicNumber kWhence[] = {
+    {SEEK_SET_LINUX, "SEEK_SET"},  //
+    {SEEK_CUR_LINUX, "SEEK_CUR"},  //
+    {SEEK_END_LINUX, "SEEK_END"},  //
+};
+
 const struct MagicNumber kSigHow[] = {
     {SIG_BLOCK_LINUX, "SIG_BLOCK"},      //
     {SIG_UNBLOCK_LINUX, "SIG_UNBLOCK"},  //
@@ -228,6 +234,29 @@ const struct MagicNumber kResource[] = {
     {RLIMIT_NICE_LINUX, "RLIMIT_NICE"},              //
     {RLIMIT_RTPRIO_LINUX, "RLIMIT_RTPRIO"},          //
     {RLIMIT_RTTIME_LINUX, "RLIMIT_RTTIME"},          //
+};
+
+const struct MagicNumber kFcntl[] = {
+    {F_DUPFD_LINUX, "F_DUPFD"},                  //
+    {F_DUPFD_CLOEXEC_LINUX, "F_DUPFD_CLOEXEC"},  //
+    {F_GETFL_LINUX, "F_GETFL"},                  //
+    {F_SETFL_LINUX, "F_SETFL"},                  //
+    {F_GETLK_LINUX, "F_GETLK"},                  //
+    {F_SETLK_LINUX, "F_SETLK"},                  //
+    {F_SETLKW_LINUX, "F_SETLKW"},                //
+    {F_SETOWN_LINUX, "F_SETOWN"},                //
+    {F_GETOWN_LINUX, "F_GETOWN"},                //
+    {F_SETSIG_LINUX, "F_SETSIG"},                //
+    {F_GETSIG_LINUX, "F_GETSIG"},                //
+    {F_SETOWN_EX_LINUX, "F_SETOWN_EX"},          //
+    {F_GETOWN_EX_LINUX, "F_GETOWN_EX"},          //
+    {F_GETOWNER_UIDS_LINUX, "F_GETOWNER_UIDS"},  //
+};
+
+const struct MagicNumber kFlockType[] = {
+    {F_RDLCK_LINUX, "F_RDLCK"},  //
+    {F_WRLCK_LINUX, "F_WRLCK"},  //
+    {F_UNLCK_LINUX, "F_UNLCK"},  //
 };
 
 static const char *GetMagicNumber(const struct MagicNumber *p, int n, int x) {
@@ -678,6 +707,58 @@ void Strace(struct Machine *m, const char *func, bool isentry, const char *fmt,
                     "RENAME_", arg);
       APPEND("%s", tmp);
 #endif
+    } else if (c == WAT_FCNTL[0]) {
+      APPEND("%s", GetMagicNumber(kFcntl, ARRAYLEN(kFcntl), arg));
+      if (arg == F_SETLK_LINUX ||   //
+          arg == F_SETLKW_LINUX ||  //
+          arg == F_GETLK_LINUX) {
+        i64 addr = va_arg(va, i64);
+        const struct flock_linux *l;
+        if ((l = (const struct flock_linux *)SchlepR(
+                 m, addr, sizeof(struct flock_linux)))) {
+          APPEND(", ");
+          if (arg == F_GETLK_LINUX) {
+            APPEND("[");
+          }
+          APPEND("{%s", GetMagicNumber(kFlockType, ARRAYLEN(kFlockType),
+                                       Read16(l->type)));
+          APPEND(", %s",
+                 GetMagicNumber(kWhence, ARRAYLEN(kWhence), Read16(l->whence)));
+          if (Read64(l->start)) {
+            APPEND(", .l_start=%#" PRIx64, Read64(l->start));
+          }
+          if (Read64(l->len)) {
+            APPEND(", .l_len=%" PRIu64, Read64(l->len));
+          }
+          if (Read64(l->pid) && arg == F_GETLK_LINUX) {
+            APPEND(", .l_pid=%" PRIu32, Read32(l->pid));
+          }
+          APPEND("}");
+          if (arg == F_GETLK_LINUX) {
+            APPEND("]");
+          }
+        } else {
+          APPEND(", %#" PRIx64, addr);
+        }
+      } else if (arg == F_SETFD_LINUX) {
+        i32 flags = va_arg(va, i64);
+        if (flags == FD_CLOEXEC_LINUX) {
+          APPEND(", FD_CLOEXEC");
+        } else {
+          APPEND(", %#" PRIx32, flags);
+        }
+        ++i;
+      } else if (arg == F_SETFL_LINUX) {
+        i32 flags = va_arg(va, i64);
+        DescribeFlags(tmp, sizeof(tmp), kOpenFlags, ARRAYLEN(kOpenFlags), "O_",
+                      flags);
+        APPEND("%s", tmp);
+        ++i;
+      } else if (arg == F_SETOWN_LINUX) {
+        i32 fd = va_arg(va, i64);
+        APPEND(", %#" PRIx32, fd);
+        ++i;
+      }
     } else {
       LOGF("missing strace signature specifier %#o", c);
       goto JustPrintHex;
