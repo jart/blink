@@ -382,18 +382,19 @@ void Connect(P, u64 pc, bool avoid_cycles) {
 #ifdef HAVE_JIT
   void *jump;
   uintptr_t f;
-  STATISTIC(++path_connections);
+  STATISTIC(++path_connected_total);
   // 1. cyclic paths can block asynchronous sigs & deadlock exit
   // 2. we don't want to stitch together paths on separate pages
-  if ((pc & -4096) == (m->path.start & -4096) &&
-      (!avoid_cycles || RecordJitEdge(&m->system->jit, m->path.start, pc))) {
+  if ((!avoid_cycles && m->path.start == pc) ||
+      RecordJitEdge(&m->system->jit, m->path.start, pc)) {
     // is a preexisting jit path installed at destination?
     if ((f = GetJitHook(&m->system->jit, pc)) &&
         f != (uintptr_t)JitlessDispatch) {
       // tail call into the other generated jit path function
       jump = (u8 *)f + GetPrologueSize();
-      STATISTIC(++path_connected);
+      STATISTIC(++path_connected_directly);
     } else {
+      STATISTIC(++path_connected_lazily);
       // generate assembly to drop back into main interpreter
       // then apply an smc fixup later on, if dest is created
       if (!FLAG_noconnect) {
@@ -403,6 +404,7 @@ void Connect(P, u64 pc, bool avoid_cycles) {
     }
   } else {
     // generate assembly to drop back into main interpreter
+    STATISTIC(++path_connected_interpreter);
     jump = (void *)m->system->ender;
   }
   AppendJitJump(m->path.jb, jump);
@@ -812,7 +814,7 @@ static void OpJcc(P) {
     };
 #endif
     AppendJit(m->path.jb, code, sizeof(code));
-    Connect(A, m->ip, false);
+    Connect(A, m->ip, true);
     Jitter(A,
            "a1i"  // arg1 = disp
            "m"    // call micro-op
@@ -1998,7 +2000,9 @@ void ExecuteInstruction(struct Machine *m) {
   LogCpu(m);
 #endif
 #ifdef HAVE_JIT
+  u8 *dst;
   nexgen32e_f func;
+  unassert(m->canhalt);
   if (CanJit(m)) {
     if ((func = (nexgen32e_f)GetJitHook(&m->system->jit, m->ip))) {
       if (!IsMakingPath(m)) {
@@ -2015,13 +2019,17 @@ void ExecuteInstruction(struct Machine *m) {
         JIT_LOGF("splicing path starting at %#" PRIx64
                  " into previously created function %p at %#" PRIx64,
                  m->path.start, func, m->ip);
-        STATISTIC(++path_spliced);
         FlushSkew(DISPATCH_NOTHING);
         AppendJitSetReg(m->path.jb, kJitArg0, kJitSav0);
-        AppendJitJump(m->path.jb,
-                      (m->path.start & -4096) == (m->ip & -4096)
-                          ? (u8 *)(uintptr_t)func + GetPrologueSize()
-                          : (u8 *)m->system->ender);
+        STATISTIC(++path_spliced);
+        if (RecordJitEdge(&m->system->jit, m->path.start, m->ip)) {
+          dst = (u8 *)(uintptr_t)func + GetPrologueSize();
+          STATISTIC(++path_connected_directly);
+        } else {
+          STATISTIC(++path_connected_interpreter);
+          dst = (u8 *)m->system->ender;
+        }
+        AppendJitJump(m->path.jb, dst);
         FinishPath(m);
         func(DISPATCH_NOTHING);
         return;
@@ -2047,6 +2055,7 @@ void Actor(struct Machine *mm) {
 #ifndef __CYGWIN__
     STATISTIC(++interps);
 #endif
+    JIX_LOGF("INTERPRETER");
     if (!atomic_load_explicit(&m->attention, memory_order_acquire)) {
       ExecuteInstruction(m);
     } else {

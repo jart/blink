@@ -1217,10 +1217,11 @@ MICRO_OP void FastLeave(struct Machine *m) {
   Put64(m->bp, Read64(ToHost(v)));
 }
 
-MICRO_OP void FastRet(struct Machine *m) {
+MICRO_OP i64 PredictRet(struct Machine *m, i64 prediction) {
   u64 v = Get64(m->sp);
   Put64(m->sp, v + 8);
   m->ip = Read64(ToHost(v));
+  return m->ip ^ prediction;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

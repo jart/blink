@@ -15,14 +15,11 @@
 #define kJitAlign        16
 #define kJitJumpTries    16
 #define kJitBlockSize    262144
+#define kJitMemorySize   32505856
 #define kJitRetireQueue  (int)(kJitMemorySize / kJitBlockSize * .10)
+#define kJitSlabInts     (65536 / sizeof(struct JitInts))
 #define kJitInitialHooks 16384
-
-#ifdef __x86_64__
-#define kJitMemorySize 130023424
-#else
-#define kJitMemorySize 32505856
-#endif
+#define kJitInitialEdges 4096
 
 #ifdef __x86_64__
 #define kJitRes0 kAmdAx
@@ -111,12 +108,37 @@
 #define JITBLOCK_CONTAINER(e)  DLL_CONTAINER(struct JitBlock, elem, e)
 #define JITFREED_CONTAINER(e)  DLL_CONTAINER(struct JitFreed, elem, e)
 #define AGEDBLOCK_CONTAINER(e) DLL_CONTAINER(struct JitBlock, aged, e)
+#define JIASLAB_CONTAINER(e)   DLL_CONTAINER(struct JitIntsSlab, elem, e)
+
+struct JitInts {
+  int i, n;
+  i64 *p, m[2];
+};
+
+struct JitIntsSlab {
+  int i;
+  struct Dll elem;
+  struct JitInts p[kJitSlabInts];
+};
+
+struct JitIntsAllocator {
+  int i, n;
+  struct JitInts **p;
+  struct Dll *slabs;
+};
+
+struct JitEdges {
+  int i, n;
+  i64 *src;
+  struct JitInts **dst;
+  struct JitIntsAllocator jia;
+};
 
 struct JitJump {
   u8 *code;
   u64 virt;
-  long tries;
-  long addend;
+  int tries;
+  int addend;
   struct Dll elem;
 };
 
@@ -140,25 +162,9 @@ struct JitFreeds {
   struct Dll *f;
 };
 
-struct JitBlockPages {
-  int i, n;
-  i64 *p;
-};
-
-struct JitPageEdge {
-  short src;
-  short dst;
-};
-
-struct JitPageEdges {
-  int i, n;
-  struct JitPageEdge *p;
-};
-
 struct JitPage {
   i64 page;
   u64 bitset;
-  struct JitPageEdges edges;
   struct Dll elem;
 };
 
@@ -177,7 +183,7 @@ struct JitBlock {
   struct Dll aged;
   struct Dll *jumps;
   struct Dll *staged;
-  struct JitBlockPages pages;
+  struct Dll *freejumps;
 };
 
 struct JitHooks {
@@ -192,10 +198,13 @@ struct Jit {
   bool threaded;
   _Atomic(bool) disabled;
   struct JitHooks hooks;
+  struct JitEdges edges;
+  struct JitEdges redges;
   struct JitFreeds freeds;
   struct Dll *agedblocks;
   struct Dll *blocks;
   struct Dll *jumps;
+  struct Dll *freejumps;
   struct Dll *pages;
   pthread_mutex_t_ lock;
   _Alignas(kSemSize) _Atomic(unsigned) keygen;

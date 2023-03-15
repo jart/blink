@@ -218,7 +218,7 @@ const char *GetDirFildesPath(struct System *s, int fildes) {
 
 void SignalActor(struct Machine *m) {
   for (;;) {
-    COSTLY_STATISTIC(++interps);
+    STATISTIC(++interps);
     JitlessDispatch(DISPATCH_NOTHING);
     if (atomic_load_explicit(&m->attention, memory_order_acquire)) {
       if (m->restored) break;

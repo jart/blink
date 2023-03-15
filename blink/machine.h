@@ -554,7 +554,7 @@ void FastCallAbs(u64, struct Machine *);
 void FastJmp(struct Machine *, u64);
 void FastJmpAbs(u64, struct Machine *);
 void FastLeave(struct Machine *);
-void FastRet(struct Machine *);
+i64 PredictRet(struct Machine *, i64);
 
 typedef void (*putreg64_f)(u64, struct Machine *);
 extern const putreg64_f kPutReg64[16];

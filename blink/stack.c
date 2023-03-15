@@ -242,7 +242,32 @@ void OpLeave(P) {
 void OpRet(P) {
   m->ip = Pop(A, 0);
   if (IsMakingPath(m) && HasLinearMapping() && !Osz(rde)) {
-    Jitter(A, "m", FastRet);
+#ifdef __x86_64__
+    Jitter(A,
+           "a1i"  // arg1 = prediction
+           "m"    // call micro-op (PredictRet)
+           "q",   // arg0 = machine
+           m->ip, PredictRet);
+    AlignJit(m->path.jb, 8, 3);
+    u8 code[] = {
+        0x48, 0x85, 0300 | kJitRes0 << 3 | kJitRes0,  // test %rax,%rax
+        0x75, 0x05,                                   // jnz   +5
+    };
+#else
+    Jitter(A,
+           "a1i"    // arg1 = prediction
+           "m"      // call micro-op (PredictRet)
+           "r0a2="  // arg2 = res0
+           "q",     // arg0 = machine
+           m->ip, PredictRet);
+    u32 code[] = {
+        0xb5000000 | (8 / 4) << 5 | kJitArg2,  // cbnz x2,#8
+    };
+#endif
+    AppendJit(m->path.jb, code, sizeof(code));
+    Connect(A, m->ip, true);
+    AppendJitJump(m->path.jb, (void *)m->system->ender);
+    FinishPath(m);
   }
 }
 

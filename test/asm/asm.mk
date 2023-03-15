@@ -13,6 +13,7 @@ TEST_ASM_LINK =	$(VM)							\
 		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-ld.bfd	\
 		-static							\
 		--omagic						\
+		-z noexecstack						\
 		-z max-page-size=65536					\
 		-z common-page-size=65536				\
 		$<							\

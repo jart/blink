@@ -728,68 +728,6 @@ JIT path formation be visualized. Blink currently only enables the JIT
 for programs running in long mode (64-bit) but we may support JITing
 16-bit programs in the future.
 
-#### Lockless Hash Table for Generated Functions
-
-Blink stores generated functions by virtual address in a multithreaded
-lockless hash table. The hottest operation in the codebase is reading
-from this hash table, using a function called `GetJitHook`. Since it'd
-slow Blink down by more than 33% if a mutex were used here, Blink will
-synchronize reads optimistically using only carefully ordered load
-instructions, three of which have acquire semantics. This hash table
-starts off at a reasonable size and grows gradually with the memory
-requirements. This design is the primary reason Blink usually uses 40%
-less peak resident memory than Qemu.
-
-#### Acyclic Generated Code
-
-While JIT paths always end at branching instructions, Blink will still
-weave paths together. If a function is generated and the destination
-address for its final branch instruction points to a location where
-another JIT path has already been installed, then Blink will generate
-code that lets the generated function tail call the second one, by
-jumping into its function body past the prologue. It enables Blink to
-avoid dropping back into the main interpreter loop as much as possible.
-
-Blink keeps track of the connections between JIT functions, in order to
-ensure that JIT'd code remains acyclic. If Blink detects that adding a
-new connection would introduce a cycle, it will generate code that drops
-back into the main intpreter loop instead. This is important because
-Blink only checks for asynchronous signals and other status changes from
-the main interpreter loop. By checking for cycles during path generation
-Blink is able to avoid elevating that costly status checking code into
-JIT generated code, so that the only branches JIT needs are the ones
-that were specified by the guest executable.
-
-#### Reliable JIT Memory Mapping
-
-Blink uses a small memory model that favors near branch instructions.
-Costly operations such as indirecting function calls through a generated
-Procedure Linkage Table (PLT) are avoided. In order to do that, Blink
-needs to ensure JIT memory is mapped at a virtual address that's nearby
-its executable image; otherwise JIT code wouldn't be able to call into
-normal code. However it's not possible to mmap() memory nearby the
-executable in a portable way. Dynamic linkers oftentimes surround a
-loaded executable with dynamic library images, and there's no portable
-API for probing this region that won't risk destroying system mappings.
-
-The trick Blink uses to solve this problem is creating a gigantic global
-static array that's loaded as part of the `.bss` section. This memory is
-then protected or remapped appropriately to turn it into memory that's
-suitable for JIT.
-
-#### Avoiding JIT OOM
-
-Since Blink doesn't generate a PLT or use indirect branches, branching
-is limited to the maximum displacement of the host instruction set. On
-Aaarch64 that means Blink has about ~22mb of JIT memory per process.
-Since large programs will oftentimes need more than that, Blink will
-begin retiring executable pages once memory reaches a certain threshold
-(>90% of blocks used). When a block is retired, all hooks associated
-with all pages it touches are removed. However we still can't guarantee
-that no thread is still currently executing on them. Blink solves that
-using a freelist queue, where retired blocks are placed at the back so
-it takes as long as possible before they're reused.
-
 ### Virtualization
 
 Blink virtualizes memory using the same PML4T approach as the hardware
@@ -818,6 +756,59 @@ that this translation scheme doesn't work on your system, the `blink -m`
 flag may be passed to disable the linear translation optimization, and
 instead use only the memory safe full virtualization approach of the
 PML4T and TLB.
+
+#### Lockless Hashing
+
+Blink stores generated functions by virtual address in a multithreaded
+lockless hash table. The hottest operation in the codebase is reading
+from this hash table, using a function called `GetJitHook`. Since it'd
+slow Blink down by more than 33% if a mutex were used here, Blink will
+synchronize reads optimistically using only carefully ordered load
+instructions, three of which have acquire semantics. This hash table
+starts off at a reasonable size and grows gradually with the memory
+requirements. This design is the primary reason Blink usually uses 40%
+less peak resident memory than Qemu.
+
+#### Acyclic Codegen
+
+Even though JIT paths will always end at branching instructions, Blink
+will generate code so that paths tail call into each other, in order to
+avoid dropping back into the main interpreter loop. The average length
+of a JIT path is about ~5 opcodes. Connecting paths causes the average
+path length to be ~13 opcodes.
+
+Since Blink only checks for asynchronous signal delivery and shutdown
+events from the main interpreter loop, Blink maintains a bidirectional
+map of edges between generated functions, so that path connections which
+would result in cycles are never introduced.
+
+An exception is made for tight conditional branches, i.e. jumps whose
+taken path jump backwards to the start of the JIT path. Such branches
+are allowed to be self-referencing so that whole loops of non-system
+operations may be run in purely native code.
+
+#### Reliable Memory
+
+Blink has a 22mb global static variable that's set aside for JIT code.
+This limit was chosen because that's roughly the maximum displacement
+permitted on Arm64 architecture. Having that memory near the program
+image helps make Blink simpler, since generated functions call normal
+functions, without needing relocations or procedure linkage tables.
+
+When Blink runs out of JIT memory, it simply clears all JIT hooks and
+lets the whole code generation process start again. Blink is very fast
+at generating code, and it wouldn't make sense during an OOM panic to
+arbitrarily choose a subset of pages to reset, since resetting pages
+requires tracing their dependencies and resetting those too. Starting
+over is much better. It's so much better in fact, that even if Blink
+only reserved less than a megabyte of memory for JIT, then the slowdown
+that'd be incurred running 40mb binaries like GCC CC1 would only be 3x.
+
+Blink triggers the OOM panic when only 10% of its JIT memory remains.
+That's because in multi-threaded programs, there's no way to guarantee
+nothing is still executing on the retired code blocks. Blink solves this
+by letting retired blocks cool off at the back of a freelist queue, so
+the acyclicity invariant has abundant time to ensure threads drop out.
 
 ### Self-Modifying Code
 

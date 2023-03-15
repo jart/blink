@@ -54,7 +54,7 @@ static void StartPath(struct Machine *m, i64 pc) {
 
 static void DebugOp(struct Machine *m, i64 expected_ip) {
   if (m->ip != expected_ip) {
-    LOGF("IP was %" PRIx64 " but it should have been %" PRIx64, m->ip,
+    ERRF("IP was %" PRIx64 " but it should have been %" PRIx64, m->ip,
          expected_ip);
   }
   unassert(m->ip == expected_ip);
