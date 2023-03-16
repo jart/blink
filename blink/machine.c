@@ -1073,13 +1073,18 @@ static void Op0f7(P) {
   kOp0f7[ModrmReg(rde)](A);
 }
 
+#ifdef DISABLE_METAL
+#define OpCallfEq   OpUd
+#define OpJmpfEq    OpUd
+#endif
+
 static const nexgen32e_f kOp0ff[] = {
     OpIncEvqp,  //
     OpDecEvqp,  //
     OpCallEq,   //
-    OpUd,       //
+    OpCallfEq,  //
     OpJmpEq,    //
-    OpUd,       //
+    OpJmpfEq,   //
     OpPushEvq,  //
     OpUd,       //
 };

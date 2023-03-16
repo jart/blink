@@ -220,9 +220,10 @@ int GetFlagClobbers(u64 rde) {
         case 0:  // inc
         case 1:  // dec
           return ZF | SF | OF | AF | PF;
-        case 2:  // call Ev
+        case 2:  // call *Ev
+        case 3:  // callf *Ev
           return -1;
-        default:  // call, callf, jmp, jmpf, push
+        default:  // call, jmp, jmpf, push
           return 0;
       }
     case 0x1A3:  // bit bt
@@ -455,8 +456,10 @@ int ClassifyOp(u64 rde) {
       return kOpBranching;
     case 0x0FF:  // Op0ff
       switch (ModrmReg(rde)) {
-        case 2:  // call Ev
-        case 4:  // jmp Ev
+        case 2:  // call *Ev
+        case 3:  // lcall *Ev
+        case 4:  // jmp *Ev
+        case 5:  // ljmp *Ev
           return kOpBranching;
         default:
           return kOpNormal;
