@@ -813,7 +813,7 @@ the acyclicity invariant has abundant time to ensure threads drop out.
 ### Self-Modifying Code
 
 Many CPU architectures require esoteric rituals for flushing CPU caches
-when code modifies itself. That's not the case with x86 archihtecture,
+when code modifies itself. That's not the case with x86 architecture,
 which takes care of this chore automatically. Blink is able to offer the
 same promises here as Intel and AMD, by abstracting fast and automatic
 invalidation of caches for programs using self-modifying code (SMC).
