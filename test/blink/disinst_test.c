@@ -249,7 +249,7 @@ TEST(DisInst, testJmpEw) {
   u8 op[] = {0xff, 0xe0};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
-  EXPECT_STREQ("jmp %ax", b1);
+  EXPECT_STREQ("jmp *%ax", b1);
 }
 #endif
 
@@ -258,7 +258,7 @@ TEST(DisInst, testJmpEv16) {
   u8 op[] = {0x66, 0xff, 0xe0};
   ILD(op, XED_MODE_REAL);
   DisInst(d, b1, DisSpec(d->xedd, b2));
-  EXPECT_STREQ("jmp %eax", b1);
+  EXPECT_STREQ("jmp *%eax", b1);
 }
 #endif
 
@@ -267,7 +267,7 @@ TEST(DisInst, testJmpEv32) {
   u8 op[] = {0xff, 0xe0};
   ILD(op, XED_MODE_LEGACY);
   DisInst(d, b1, DisSpec(d->xedd, b2));
-  EXPECT_STREQ("jmp %eax", b1);
+  EXPECT_STREQ("jmp *%eax", b1);
 }
 #endif
 
@@ -275,7 +275,7 @@ TEST(DisInst, testJmpEq) {
   u8 op[] = {0x66, 0xff, 0xe0};
   ILD(op, XED_MODE_LONG);
   DisInst(d, b1, DisSpec(d->xedd, b2));
-  EXPECT_STREQ("jmp %rax", b1);
+  EXPECT_STREQ("jmp *%rax", b1);
 }
 
 #ifndef DISABLE_METAL
