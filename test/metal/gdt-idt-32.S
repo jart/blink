@@ -4,8 +4,8 @@
 .globl	_start
 _start:
 
-//	make -j8 o//blink o//test/metal/gdt.bin
-//	o//blink/blinkenlights -r o//test/metal/gdt.bin
+//	make -j8 o//blink o//test/metal/gdt-idt-32.bin
+//	o//blink/blinkenlights -r o//test/metal/gdt-idt-32.bin
 
 	ljmpw	$0,$1f
 1:
