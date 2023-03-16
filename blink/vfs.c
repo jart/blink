@@ -78,10 +78,11 @@ static struct VfsInfo g_initialrootinfo = {
     .refcount = 1u,
 };
 
-static struct VfsInfo *g_cwdinfo;
-static struct VfsInfo *g_rootinfo;
+struct VfsInfo *g_cwdinfo;
+struct VfsInfo *g_rootinfo;
+struct VfsInfo *g_actualrootinfo;
 
-static struct Vfs g_vfs = {
+struct Vfs g_vfs = {
     .devices = NULL,
     .systems = NULL,
     .fds = NULL,
@@ -107,6 +108,7 @@ int VfsInit(const char *prefix) {
 
   // Initialize the root directory
   unassert(!VfsAcquireInfo(&g_initialrootinfo, &g_rootinfo));
+  unassert(!VfsAcquireInfo(&g_initialrootinfo, &g_actualrootinfo));
   if (prefix) {
     bprefix = realpath(prefix, NULL);
   }
@@ -139,6 +141,7 @@ int VfsInit(const char *prefix) {
     goto cleananddie;
   }
   unassert(VfsMount("/", VFS_SYSTEM_ROOT_MOUNT, "hostfs", 0, NULL) != -1);
+  unassert(!VfsTraverse("/", &g_actualrootinfo, false));
 
   // devfs, procfs
   if (VfsMkdir(AT_FDCWD, "/dev", 0755) == -1 && errno != EEXIST) {
@@ -150,7 +153,7 @@ int VfsInit(const char *prefix) {
     ERRF("Failed to create /proc, %s", strerror(errno));
     goto cleananddie;
   }
-  unassert(!VfsMount("", "/proc", "procfs", 0, NULL));
+  unassert(!VfsMount("proc", "/proc", "proc", 0, NULL));
 
   // Initialize the current working directory
   unassert(getcwd(hostcwd, sizeof(hostcwd)));
@@ -241,6 +244,14 @@ int VfsMount(const char *source, const char *target, const char *fstype,
   }
   if (!S_ISDIR(targetinfo->mode)) {
     return enotdir();
+  }
+  // Allow mounting once to "/" during initialization only.
+  if ((targetinfo->dev != g_initialrootinfo.dev ||
+       targetinfo->ino != g_initialrootinfo.ino) &&
+      (targetinfo->dev == g_actualrootinfo->dev &&
+       targetinfo->ino == g_actualrootinfo->ino)) {
+    errno = EBUSY;
+    return -1;
   }
   LOCK(&g_vfs.lock);
   newsystem = NULL;
@@ -901,7 +912,7 @@ char *VfsGetcwd(char *buf, size_t size) {
 static int VfsHandleDirfdName(int dirfd, const char *name,
                               struct VfsInfo **parent,
                               char leaf[VFS_NAME_MAX]) {
-  struct VfsInfo *dir = NULL;
+  struct VfsInfo *dir = NULL, *tmp = NULL;
   const char *p, *q;
   char *parentname = NULL;
   if (name[0] == '/') {
@@ -938,8 +949,15 @@ static int VfsHandleDirfdName(int dirfd, const char *name,
   if (VfsTraverseStackBuild(&dir, parentname, g_rootinfo, true, 0) == -1) {
     goto cleananddie;
   }
+  if (!strcmp(q, "..") && dir->parent) {
+    unassert(!VfsAcquireInfo(dir->parent, &tmp));
+    unassert(!VfsFreeInfo(dir));
+    dir = tmp;
+    memcpy(leaf, ".", 2);
+  } else {
+    memcpy(leaf, q, p - q + 1);
+  }
   *parent = dir;
-  memcpy(leaf, q, p - q + 1);
   free(parentname);
   return 0;
 cleananddie:
@@ -962,7 +980,7 @@ static int VfsHandleDirfdSymlink(struct VfsInfo **dir,
       return eloop();
     }
     if (!(*dir)->device->ops->Finddir || !(*dir)->device->ops->Readlink) {
-      return eopnotsupp();
+      return eperm();
     }
     if ((*dir)->device->ops->Finddir(*dir, name, &tmp) == -1) {
       if (errno != ENOENT) {
@@ -1033,7 +1051,7 @@ int VfsUnlink(int dirfd, const char *name, int flags) {
   if (dir->device->ops->Unlink) {
     ret = dir->device->ops->Unlink(dir, newname, flags);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(dir));
   return ret;
@@ -1057,7 +1075,7 @@ int VfsMkdir(int dirfd, const char *name, mode_t mode) {
   if (dir->device->ops->Mkdir) {
     ret = dir->device->ops->Mkdir(dir, newname, mode);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(dir));
   return ret;
@@ -1081,7 +1099,7 @@ int VfsMkfifo(int dirfd, const char *name, mode_t mode) {
   if (dir->device->ops->Mkfifo) {
     ret = dir->device->ops->Mkfifo(dir, newname, mode);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(dir));
   return ret;
@@ -1113,7 +1131,7 @@ int VfsOpen(int dirfd, const char *name, int flags, int mode) {
         ret = VfsAddFd(out);
       }
     } else {
-      ret = eopnotsupp();
+      ret = eperm();
     }
   }
   unassert(!VfsFreeInfo(dir));
@@ -1142,7 +1160,7 @@ int VfsChmod(int dirfd, const char *name, mode_t mode, int flags) {
     if (dir->device->ops->Chmod) {
       ret = dir->device->ops->Chmod(dir, newname, mode, flags);
     } else {
-      ret = eopnotsupp();
+      ret = eperm();
     }
   }
   unassert(!VfsFreeInfo(dir));
@@ -1159,7 +1177,7 @@ int VfsFchmod(int fd, mode_t mode) {
   if (info->device->ops->Fchmod) {
     ret = info->device->ops->Fchmod(info, mode);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1187,7 +1205,7 @@ int VfsAccess(int dirfd, const char *name, mode_t mode, int flags) {
     if (dir->device->ops->Access) {
       ret = dir->device->ops->Access(dir, newname, mode, flags);
     } else {
-      ret = eopnotsupp();
+      ret = eperm();
     }
   }
   unassert(!VfsFreeInfo(dir));
@@ -1212,7 +1230,7 @@ int VfsSymlink(const char *target, int dirfd, const char *name) {
   if (dir->device->ops->Symlink) {
     ret = dir->device->ops->Symlink(target, dir, newname);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(dir));
   return ret;
@@ -1237,7 +1255,7 @@ int VfsStat(int dirfd, const char *name, struct stat *st, int flags) {
     if (dir->device->ops->Stat) {
       ret = dir->device->ops->Stat(dir, newname, st, flags);
     } else {
-      ret = eopnotsupp();
+      ret = eperm();
     }
   }
   unassert(!VfsFreeInfo(dir));
@@ -1263,7 +1281,7 @@ int VfsChown(int dirfd, const char *name, uid_t uid, gid_t gid, int flags) {
     if (dir->device->ops->Chown) {
       ret = dir->device->ops->Chown(dir, newname, uid, gid, flags);
     } else {
-      ret = eopnotsupp();
+      ret = eperm();
     }
   }
   unassert(!VfsFreeInfo(dir));
@@ -1280,7 +1298,7 @@ int VfsFchown(int fd, uid_t uid, gid_t gid) {
   if (info->device->ops->Fchown) {
     ret = info->device->ops->Fchown(info, uid, gid);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1311,7 +1329,7 @@ int VfsRename(int olddirfd, const char *oldname, int newdirfd,
   if (olddir->device->ops->Rename) {
     ret = olddir->device->ops->Rename(olddir, newoldname, newdir, newnewname);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(olddir));
   unassert(!VfsFreeInfo(newdir));
@@ -1350,7 +1368,7 @@ ssize_t VfsReadlink(int dirfd, const char *name, char *buf, size_t bufsiz) {
       free(tmp);
     }
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(dir));
   unassert(!VfsFreeInfo(file));
@@ -1392,7 +1410,7 @@ int VfsLink(int olddirfd, const char *oldname, int newdirfd,
     ret = olddir->device->ops->Link(olddir, newoldname, newdir, newnewname,
                                     flags);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(olddir));
   unassert(!VfsFreeInfo(newdir));
@@ -1422,7 +1440,7 @@ int VfsUtime(int dirfd, const char *name, const struct timespec times[2],
     if (dir->device->ops->Utime) {
       ret = dir->device->ops->Utime(dir, newname, times, flags);
     } else {
-      ret = eopnotsupp();
+      ret = eperm();
     }
   }
   unassert(!VfsFreeInfo(dir));
@@ -1440,7 +1458,7 @@ int VfsFutime(int fd, const struct timespec times[2]) {
     ret = info->device->ops->Futime(info, times);
   } else {
     unassert(!VfsFreeInfo(info));
-    return eopnotsupp();
+    return eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1460,7 +1478,7 @@ int VfsFstat(int fd, struct stat *st) {
     ret = info->device->ops->Fstat(info, st);
   } else {
     unassert(!VfsFreeInfo(info));
-    return eopnotsupp();
+    return eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1477,7 +1495,7 @@ int VfsFtruncate(int fd, off_t length) {
     ret = info->device->ops->Ftruncate(info, length);
   } else {
     unassert(!VfsFreeInfo(info));
-    return eopnotsupp();
+    return eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1512,7 +1530,7 @@ ssize_t VfsRead(int fd, void *buf, size_t nbyte) {
   if (info->device->ops->Read) {
     ret = info->device->ops->Read(info, buf, nbyte);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1531,7 +1549,7 @@ ssize_t VfsWrite(int fd, const void *buf, size_t nbyte) {
   if (info->device->ops->Write) {
     ret = info->device->ops->Write(info, buf, nbyte);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1550,7 +1568,7 @@ ssize_t VfsPread(int fd, void *buf, size_t nbyte, off_t offset) {
   if (info->device->ops->Pread) {
     ret = info->device->ops->Pread(info, buf, nbyte, offset);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1569,7 +1587,7 @@ ssize_t VfsPwrite(int fd, const void *buf, size_t nbyte, off_t offset) {
   if (info->device->ops->Pwrite) {
     ret = info->device->ops->Pwrite(info, buf, nbyte, offset);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1585,7 +1603,7 @@ ssize_t VfsReadv(int fd, const struct iovec *iov, int iovcnt) {
   if (info->device->ops->Readv) {
     ret = info->device->ops->Readv(info, iov, iovcnt);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1601,7 +1619,7 @@ ssize_t VfsWritev(int fd, const struct iovec *iov, int iovcnt) {
   if (info->device->ops->Writev) {
     ret = info->device->ops->Writev(info, iov, iovcnt);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1617,7 +1635,7 @@ ssize_t VfsPreadv(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
   if (info->device->ops->Preadv) {
     ret = info->device->ops->Preadv(info, iov, iovcnt, offset);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1633,7 +1651,7 @@ ssize_t VfsPwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset) {
   if (info->device->ops->Pwritev) {
     ret = info->device->ops->Pwritev(info, iov, iovcnt, offset);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1649,7 +1667,7 @@ off_t VfsSeek(int fd, off_t offset, int whence) {
   if (info->device->ops->Seek) {
     ret = info->device->ops->Seek(info, offset, whence);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1665,7 +1683,7 @@ int VfsFsync(int fd) {
   if (info->device->ops->Fsync) {
     ret = info->device->ops->Fsync(info);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1681,7 +1699,7 @@ int VfsFdatasync(int fd) {
   if (info->device->ops->Fdatasync) {
     ret = info->device->ops->Fdatasync(info);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1697,7 +1715,7 @@ int VfsFlock(int fd, int operation) {
   if (info->device->ops->Flock) {
     ret = info->device->ops->Flock(info, operation);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1706,13 +1724,13 @@ int VfsFlock(int fd, int operation) {
 int VfsFcntl(int fd, int cmd, ...) {
   struct VfsInfo *info, *newinfo;
   int ret;
-  int tmp;
   va_list ap;
   VFS_LOGF("VfsFcntl(%d, %d, ...)", fd, cmd);
   if (VfsGetFd(fd, &info) == -1) {
     return -1;
   }
   va_start(ap, cmd);
+  // CLOEXEC is already handled by the syscall layer.
   if (cmd == F_DUPFD || cmd == F_DUPFD_CLOEXEC) {
     if (info->device->ops->Dup) {
       ret = info->device->ops->Dup(info, &newinfo);
@@ -1724,22 +1742,13 @@ int VfsFcntl(int fd, int cmd, ...) {
       }
     } else {
       unassert(!VfsFreeInfo(info));
-      ret = eopnotsupp();
-    }
-    if (ret != -1 && cmd == F_DUPFD_CLOEXEC) {
-      tmp = ret;
-      ret = VfsFcntl(ret, F_SETFD, FD_CLOEXEC);
-      if (ret == -1) {
-        unassert(!VfsClose(tmp));
-      } else {
-        ret = tmp;
-      }
+      ret = eperm();
     }
   } else {
     if (info->device->ops->Fcntl) {
       ret = info->device->ops->Fcntl(info, cmd, ap);
     } else {
-      ret = eopnotsupp();
+      ret = eperm();
     }
   }
   va_end(ap);
@@ -1781,7 +1790,7 @@ int VfsDup(int fd) {
     }
   } else {
     unassert(!VfsFreeInfo(info));
-    return eopnotsupp();
+    return eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1807,7 +1816,7 @@ int VfsDup2(int fd, int newfd) {
     }
   } else {
     unassert(!VfsFreeInfo(info));
-    return eopnotsupp();
+    return eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1831,7 +1840,7 @@ int VfsDup3(int fd, int newfd, int flags) {
     }
   } else {
     unassert(!VfsFreeInfo(info));
-    return eopnotsupp();
+    return eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1851,7 +1860,7 @@ int VfsPoll(struct pollfd *fds, nfds_t nfds, int timeout) {
   if (info->device->ops->Poll) {
     ret = info->device->ops->Poll(&info, fds, 1, timeout);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1876,7 +1885,7 @@ DIR *VfsOpendir(int fd) {
       ret = NULL;
     }
   } else {
-    eopnotsupp();
+    eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -1891,7 +1900,7 @@ void VfsSeekdir(DIR *dir, long loc) {
     info->device->ops->Seekdir(info, loc);
   } else {
     VFS_LOGF("seekdir() not supported by device %p.", info->device);
-    eopnotsupp();
+    eperm();
     return;
   }
 }
@@ -1905,7 +1914,7 @@ long VfsTelldir(DIR *dir) {
     ret = info->device->ops->Telldir(info);
   } else {
     VFS_LOGF("telldir() not supported by device %p.", info->device);
-    return eopnotsupp();
+    return eperm();
   }
   return ret;
 }
@@ -1920,7 +1929,7 @@ struct dirent *VfsReaddir(DIR *dir) {
     ret = info->device->ops->Readdir(info);
   } else {
     VFS_LOGF("readdir() not supported by device %p.", info->device);
-    eopnotsupp();
+    eperm();
     ret = NULL;
   }
   return ret;
@@ -1934,7 +1943,7 @@ void VfsRewinddir(DIR *dir) {
     info->device->ops->Rewinddir(info);
   } else {
     VFS_LOGF("rewinddir() not supported by device %p.", info->device);
-    eopnotsupp();
+    eperm();
     return;
   }
 }
@@ -1963,7 +1972,7 @@ int VfsClosedir(DIR *dir) {
       UNLOCK(&g_vfs.lock);
     }
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   return ret;
 }
@@ -2037,7 +2046,7 @@ int VfsConnect(int fd, const struct sockaddr *addr, socklen_t addrlen) {
         ret = info->device->ops->Connectunix(
             sock, info, (const struct sockaddr_un *)addr, addrlen);
       } else {
-        ret = eopnotsupp();
+        ret = eperm();
       }
       unassert(!VfsFreeInfo(sock));
     }
@@ -2059,7 +2068,7 @@ int VfsAccept(int fd, struct sockaddr *addr, socklen_t *addrlen) {
     if (info->device->ops->Accept) {
       ret = info->device->ops->Accept(info, addr, addrlen, &newinfo);
     } else {
-      ret = eopnotsupp();
+      ret = eperm();
     }
   }
   if (ret != -1) {
@@ -2082,7 +2091,7 @@ int VfsListen(int fd, int backlog) {
   if (info->device->ops->Listen) {
     ret = info->device->ops->Listen(info, backlog);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -2098,7 +2107,7 @@ int VfsShutdown(int fd, int how) {
   if (info->device->ops->Shutdown) {
     ret = info->device->ops->Shutdown(info, how);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -2121,7 +2130,7 @@ ssize_t VfsRecvmsg(int fd, struct msghdr *msg, int flags) {
       if (sock->device->ops->Recvmsgunix) {
         ret = sock->device->ops->Recvmsgunix(sock, info, msg, flags);
       } else {
-        ret = eopnotsupp();
+        ret = eperm();
       }
       unassert(!VfsFreeInfo(sock));
     }
@@ -2129,7 +2138,7 @@ ssize_t VfsRecvmsg(int fd, struct msghdr *msg, int flags) {
   if (info->device->ops->Recvmsg) {
     ret = info->device->ops->Recvmsg(info, msg, flags);
   } else {
-    ret = eopnotsupp();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;
@@ -2152,7 +2161,7 @@ ssize_t VfsSendmsg(int fd, const struct msghdr *msg, int flags) {
       if (sock->device->ops->Sendmsgunix) {
         ret = sock->device->ops->Sendmsgunix(sock, info, msg, flags);
       } else {
-        ret = eopnotsupp();
+        ret = eperm();
       }
       unassert(!VfsFreeInfo(sock));
     }
@@ -2160,7 +2169,7 @@ ssize_t VfsSendmsg(int fd, const struct msghdr *msg, int flags) {
     if (info->device->ops->Sendmsg) {
       ret = info->device->ops->Sendmsg(info, msg, flags);
     } else {
-      ret = eopnotsupp();
+      ret = eperm();
     }
   }
   unassert(!VfsFreeInfo(info));
@@ -2803,7 +2812,7 @@ int VfsExecve(const char *pathname, char *const *argv, char *const *envp) {
   if (info->device->ops->Fexecve) {
     ret = info->device->ops->Fexecve(info, argv, envp);
   } else {
-    ret = enosys();
+    ret = eperm();
   }
   unassert(!VfsFreeInfo(info));
   return ret;

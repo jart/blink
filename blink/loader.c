@@ -37,6 +37,7 @@
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/overlays.h"
+#include "blink/procfs.h"
 #include "blink/random.h"
 #include "blink/tunables.h"
 #include "blink/util.h"
@@ -788,6 +789,9 @@ error: unsupported executable; we need:\n\
   unassert(!VfsMunmap(map, mapsize));
   unassert(!VfsClose(fd));
   m->system->loaded = true;
+#ifndef DISABLE_VFS
+  unassert(!ProcfsRegisterExe(getpid(), elf->prog));
+#endif
 }
 
 static bool CanEmulateImpl(struct Machine *m, char **prog, char ***argv,
