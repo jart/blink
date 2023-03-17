@@ -128,6 +128,21 @@ cleananddie:
   return -1;
 }
 
+int HostfsReadmountentry(struct VfsDevice *device, char **spec, char **type, char **mntops) {
+  struct HostfsDevice *hostfsdevice = (struct HostfsDevice *)device->data;
+  *spec = strdup(hostfsdevice->source);
+  if (*spec == NULL) {
+    return enomem();
+  }
+  *type = strdup("hostfs");
+  if (*type == NULL) {
+    free(*spec);
+    return enomem();
+  }
+  *mntops = NULL;
+  return 0;
+}
+
 int HostfsFreeInfo(void *info) {
   struct HostfsInfo *hostfsinfo = (struct HostfsInfo *)info;
   if (info == NULL) {
@@ -196,11 +211,11 @@ static ssize_t HostfsGetHostPath(struct VfsInfo *info,
     return -1;
   }
   sourcelen = hostfsdevice->sourcelen;
-  if (hostfsdevice->source[sourcelen - 1] == '/') {
+  if (sourcelen && hostfsdevice->source[sourcelen - 1] == '/') {
     --sourcelen;
   }
   pathlen += sourcelen;
-  if (pathlen >= VFS_PATH_MAX) {
+  if (pathlen + 1 >= VFS_PATH_MAX) {
     ret = enametoolong();
   } else {
     memmove(output + sourcelen, output, pathlen - sourcelen);
@@ -1913,10 +1928,12 @@ cleananddie:
 }
 
 struct VfsSystem g_hostfs = {.name = "hostfs",
+                             .nodev = true,
                              .ops = {
                                  .Init = HostfsInit,
                                  .Freeinfo = HostfsFreeInfo,
                                  .Freedevice = HostfsFreeDevice,
+                                 .Readmountentry = HostfsReadmountentry,
                                  .Finddir = HostfsFinddir,
                                  .Traverse = HostfsTraverse,
                                  .Readlink = HostfsReadlink,

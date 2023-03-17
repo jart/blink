@@ -5,4 +5,6 @@
 
 extern struct VfsSystem g_procfs;
 
+int ProcfsRegisterExe(i32 pid, const char *path);
+
 #endif  // BLINK_PROCFS_H_

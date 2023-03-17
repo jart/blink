@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <stdlib.h>
+
 #include "blink/devfs.h"
 #include "blink/errno.h"
 #include "blink/hostfs.h"
@@ -25,6 +27,7 @@
 
 static int DevfsInit(const char *source, u64 flags, const void *data,
                      struct VfsDevice **device, struct VfsMount **mount) {
+  int ret;
   if (source == NULL) {
     return efault();
   }
@@ -32,95 +35,115 @@ static int DevfsInit(const char *source, u64 flags, const void *data,
     source = "/dev";
   }
   VFS_LOGF("real devfs not implemented, delegating to hostfs");
-  return HostfsInit(source, flags, data, device, mount);
+  if ((ret = HostfsInit(source, flags, data, device, mount)) != -1) {
+    (*device)->ops = &g_devfs.ops;
+  }
+  return ret;
+}
+
+static int DevfsReadmountentry(struct VfsDevice *device, char **spec, char **type, char **mntops) {
+  *spec = strdup("none");
+  if (*spec == NULL) {
+    return enomem();
+  }
+  *type = strdup("devtmpfs");
+  if (type == NULL) {
+    free(*spec);
+    return enomem();
+  }
+  *mntops = NULL;
+  return 0;
 }
 
 struct VfsSystem g_devfs = {.name = "devfs",
-                            .ops = {
-                                .Init = DevfsInit,
-                                .Freeinfo = HostfsFreeInfo,
-                                .Freedevice = HostfsFreeDevice,
-                                .Finddir = HostfsFinddir,
-                                .Readlink = HostfsReadlink,
-                                .Mkdir = HostfsMkdir,
-                                .Mkfifo = HostfsMkfifo,
-                                .Open = HostfsOpen,
-                                .Access = HostfsAccess,
-                                .Stat = HostfsStat,
-                                .Fstat = HostfsFstat,
-                                .Chmod = HostfsChmod,
-                                .Fchmod = HostfsFchmod,
-                                .Chown = HostfsChown,
-                                .Fchown = HostfsFchown,
-                                .Ftruncate = HostfsFtruncate,
-                                .Link = HostfsLink,
-                                .Unlink = HostfsUnlink,
-                                .Read = HostfsRead,
-                                .Write = HostfsWrite,
-                                .Pread = HostfsPread,
-                                .Pwrite = HostfsPwrite,
-                                .Readv = HostfsReadv,
-                                .Writev = HostfsWritev,
-                                .Preadv = HostfsPreadv,
-                                .Pwritev = HostfsPwritev,
-                                .Seek = HostfsSeek,
-                                .Fsync = HostfsFsync,
-                                .Fdatasync = HostfsFdatasync,
-                                .Flock = HostfsFlock,
-                                .Fcntl = HostfsFcntl,
-                                .Ioctl = HostfsIoctl,
-                                .Dup = HostfsDup,
+                            .nodev = true,
+                            .ops =
+                                {
+                                    .Init = DevfsInit,
+                                    .Freeinfo = HostfsFreeInfo,
+                                    .Freedevice = HostfsFreeDevice,
+                                    .Finddir = HostfsFinddir,
+                                    .Readmountentry = DevfsReadmountentry,
+                                    .Readlink = HostfsReadlink,
+                                    .Mkdir = HostfsMkdir,
+                                    .Mkfifo = HostfsMkfifo,
+                                    .Open = HostfsOpen,
+                                    .Access = HostfsAccess,
+                                    .Stat = HostfsStat,
+                                    .Fstat = HostfsFstat,
+                                    .Chmod = HostfsChmod,
+                                    .Fchmod = HostfsFchmod,
+                                    .Chown = HostfsChown,
+                                    .Fchown = HostfsFchown,
+                                    .Ftruncate = HostfsFtruncate,
+                                    .Link = HostfsLink,
+                                    .Unlink = HostfsUnlink,
+                                    .Read = HostfsRead,
+                                    .Write = HostfsWrite,
+                                    .Pread = HostfsPread,
+                                    .Pwrite = HostfsPwrite,
+                                    .Readv = HostfsReadv,
+                                    .Writev = HostfsWritev,
+                                    .Preadv = HostfsPreadv,
+                                    .Pwritev = HostfsPwritev,
+                                    .Seek = HostfsSeek,
+                                    .Fsync = HostfsFsync,
+                                    .Fdatasync = HostfsFdatasync,
+                                    .Flock = HostfsFlock,
+                                    .Fcntl = HostfsFcntl,
+                                    .Ioctl = HostfsIoctl,
+                                    .Dup = HostfsDup,
 #ifdef HAVE_DUP3
-                                .Dup3 = HostfsDup3,
+                                    .Dup3 = HostfsDup3,
 #endif
-                                .Poll = HostfsPoll,
-                                .Opendir = HostfsOpendir,
+                                    .Poll = HostfsPoll,
+                                    .Opendir = HostfsOpendir,
 #ifdef HAVE_SEEKDIR
-                                .Seekdir = HostfsSeekdir,
-                                .Telldir = HostfsTelldir,
+                                    .Seekdir = HostfsSeekdir,
+                                    .Telldir = HostfsTelldir,
 #endif
-                                .Readdir = HostfsReaddir,
-                                .Rewinddir = HostfsRewinddir,
-                                .Closedir = HostfsClosedir,
-                                .Bind = HostfsBind,
-                                .Connect = HostfsConnect,
-                                .Connectunix = HostfsConnectUnix,
-                                .Accept = HostfsAccept,
-                                .Listen = HostfsListen,
-                                .Shutdown = HostfsShutdown,
-                                .Recvmsg = HostfsRecvmsg,
-                                .Sendmsg = HostfsSendmsg,
-                                .Recvmsgunix = HostfsRecvmsgUnix,
-                                .Sendmsgunix = HostfsSendmsgUnix,
-                                .Getsockopt = HostfsGetsockopt,
-                                .Setsockopt = HostfsSetsockopt,
-                                .Getsockname = HostfsGetsockname,
-                                .Getpeername = HostfsGetpeername,
-                                .Rename = HostfsRename,
-                                .Utime = HostfsUtime,
-                                .Futime = HostfsFutime,
-                                .Symlink = HostfsSymlink,
-                                .Mmap = HostfsMmap,
-                                .Munmap = HostfsMunmap,
-                                .Mprotect = HostfsMprotect,
-                                .Msync = HostfsMsync,
-                                .Pipe = NULL,
+                                    .Readdir = HostfsReaddir,
+                                    .Rewinddir = HostfsRewinddir,
+                                    .Closedir = HostfsClosedir,
+                                    .Bind = HostfsBind,
+                                    .Connect = HostfsConnect,
+                                    .Connectunix = HostfsConnectUnix,
+                                    .Accept = HostfsAccept,
+                                    .Listen = HostfsListen,
+                                    .Shutdown = HostfsShutdown,
+                                    .Recvmsg = HostfsRecvmsg,
+                                    .Sendmsg = HostfsSendmsg,
+                                    .Recvmsgunix = HostfsRecvmsgUnix,
+                                    .Sendmsgunix = HostfsSendmsgUnix,
+                                    .Getsockopt = HostfsGetsockopt,
+                                    .Setsockopt = HostfsSetsockopt,
+                                    .Getsockname = HostfsGetsockname,
+                                    .Getpeername = HostfsGetpeername,
+                                    .Rename = HostfsRename,
+                                    .Utime = HostfsUtime,
+                                    .Futime = HostfsFutime,
+                                    .Symlink = HostfsSymlink,
+                                    .Mmap = HostfsMmap,
+                                    .Munmap = HostfsMunmap,
+                                    .Mprotect = HostfsMprotect,
+                                    .Msync = HostfsMsync,
+                                    .Pipe = NULL,
 #ifdef HAVE_PIPE2
-                                .Pipe2 = NULL,
+                                    .Pipe2 = NULL,
 #endif
-                                .Socket = NULL,
-                                .Socketpair = NULL,
-                                .Tcgetattr = NULL,
-                                .Tcsetattr = NULL,
-                                .Tcflush = NULL,
-                                .Tcdrain = NULL,
-                                .Tcsendbreak = NULL,
-                                .Tcflow = NULL,
-                                .Tcgetsid = NULL,
-                                .Tcgetpgrp = NULL,
-                                .Tcsetpgrp = NULL,
-                                .Sockatmark = NULL,
-                                .Fexecve = NULL,
-                            }};
+                                    .Socket = NULL,
+                                    .Socketpair = NULL,
+                                    .Tcgetattr = NULL,
+                                    .Tcsetattr = NULL,
+                                    .Tcflush = NULL,
+                                    .Tcdrain = NULL,
+                                    .Tcsendbreak = NULL,
+                                    .Tcflow = NULL,
+                                    .Tcgetsid = NULL,
+                                    .Tcgetpgrp = NULL,
+                                    .Tcsetpgrp = NULL,
+                                    .Sockatmark = NULL,
+                                    .Fexecve = NULL,
+                                }};
 
 #endif /* DISABLE_VFS */

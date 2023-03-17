@@ -15,6 +15,10 @@ ifeq ($(HOST_SYSTEM), Haiku)
 LDLIBS += -lroot -lnetwork -lbsd
 endif
 
+ifeq ($(HOST_OS), Cygwin)
+LDLIBS += -lntdll
+endif
+
 ifeq ($(HOST_SYSTEM), OpenBSD)
 CFLAGS += -gdwarf-2
 endif
