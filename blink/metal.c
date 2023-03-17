@@ -64,7 +64,7 @@ static relegated void ChangeMachineMode(struct Machine *m, int mode) {
 
 static relegated void SetSegment(P, unsigned sr, u16 sel, bool jumping) {
   u64 descriptor;
-  if (sr == 1 && !jumping) OpUdImpl(m);
+  if (sr == SREG_CS && !jumping) OpUdImpl(m);
   if (!IsProtectedMode(m)) {
     m->seg[sr].sel = sel;
     m->seg[sr].base = sel << 4;
@@ -169,15 +169,15 @@ relegated void OpOutDxAx(P) {
   OpOut(m, Get16(m->dx), GetEaxAx(A));
 }
 
-static relegated void LoadFarPointer(P, unsigned sr) {
+static relegated void LoadFarPointer(P, unsigned sr, bool jumping) {
   unsigned n;
   u8 *p;
   u64 fp;
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
-    case XED_MODE_LEGACY:
       OpUdImpl(m);
       break;
+    case XED_MODE_LEGACY:
     case XED_MODE_REAL:
       n = 1 << WordLog2(rde);
       p = ComputeReserveAddressRead(A, n + 2);
@@ -185,12 +185,17 @@ static relegated void LoadFarPointer(P, unsigned sr) {
       fp = Load32(p);
       if (n >= 4) {
         fp |= (u64)Load16(p + 4) << 32;
-        SetSegment(A, sr, fp >> 32 & 0x0000ffff, false);
+        SetSegment(A, sr, fp >> 32 & 0x0000ffff, jumping);
+        fp &= 0xffffffff;
       } else {
-        SetSegment(A, sr, fp >> 16 & 0x0000ffff, false);
+        SetSegment(A, sr, fp >> 16 & 0x0000ffff, jumping);
+        fp &= 0x0000ffff;
       }
       UnlockBus(p);
-      WriteRegister(rde, RegRexrReg(m, rde), fp);  // offset portion
+      if (!jumping)
+        WriteRegister(rde, RegRexrReg(m, rde), fp);  // offset portion
+      else
+        m->ip = fp;
       break;
     default:
       __builtin_unreachable();
@@ -198,11 +203,27 @@ static relegated void LoadFarPointer(P, unsigned sr) {
 }
 
 relegated void OpLes(P) {
-  LoadFarPointer(A, 0);
+  LoadFarPointer(A, SREG_ES, false);
 }
 
 relegated void OpLds(P) {
-  LoadFarPointer(A, 3);
+  LoadFarPointer(A, SREG_DS, false);
+}
+
+relegated void OpJmpfEq(P) {
+  LoadFarPointer(A, SREG_CS, true);
+  if (m->system->onlongbranch) {
+    m->system->onlongbranch(m);
+  }
+}
+
+relegated void OpCallfEq(P) {
+  Push(A, m->cs.sel);
+  Push(A, m->ip);
+  LoadFarPointer(A, SREG_CS, true);
+  if (m->system->onlongbranch) {
+    m->system->onlongbranch(m);
+  }
 }
 
 relegated void OpWrmsr(P) {

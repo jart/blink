@@ -367,6 +367,11 @@ static char *DisEq(struct Dis *d, u64 rde, char *p) {
   return DisRegMem(d, rde, p, DisEqReg);
 }
 
+static char *DisIndirEq(struct Dis *d, u64 rde, char *p) {
+  *p++ = '*';
+  return DisEq(d, rde, p);
+}
+
 static char *DisZvqp(struct Dis *d, u64 rde, char *p) {
   return DisRegisterWord(d, rde, p, Rexb(rde), ModrmSrm(rde));
 }
@@ -627,6 +632,7 @@ static const struct DisArg {
     {"%eAX", DisEax},    //
     {"%rAX", DisRax},    //
     {"%rDX", DisRdx},    //
+    {"*Eq", DisIndirEq}, //
     {"BBb", DisBBb},     //
     {"DX", DisPort},     //
     {"EST", DisEst},     //

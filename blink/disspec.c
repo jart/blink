@@ -510,8 +510,10 @@ const char *DisSpecMap0(struct XedDecodedInst *x, char *p) {
       switch (ModrmReg(x->op.rde)) {
         RCASE(0, "inc Evqp");
         RCASE(1, "dec Evqp");
-        RCASE(2, "CALL Eq");
-        RCASE(4, "JMP Eq");
+        RCASE(2, "CALL *Eq");
+        RCASE(3, "lcall *Eq");
+        RCASE(4, "JMP *Eq");
+        RCASE(5, "ljmp *Eq");
         RCASE(6, "pushWQ Evq");
       }
       break;
