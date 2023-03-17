@@ -1,7 +1,5 @@
 ![Screenshot of Blink running GCC 9.4.0](blink/blink-gcc.png)
 
-[![Test Status](https://github.com/jart/blink/actions/workflows/build.yml/badge.svg)](https://github.com/jart/blink/actions/workflows/build.yml)
-[![Cygwin Test Status](https://github.com/jart/blink/actions/workflows/cygwin.yml/badge.svg)](https://github.com/jart/blink/actions/workflows/cygwin.yml)
 # Blinkenlights
 
 This project contains two programs:
