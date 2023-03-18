@@ -14,7 +14,7 @@
 
 #define LOG_SIG 0  // log signal handling behaviors
 #define LOG_ASM 0  // log executed assembly opcodes
-#define LOG_JIT 1  // just-in-time compilation logs
+#define LOG_JIT 0  // just-in-time compilation logs
 #define LOG_JIP 0  // jit path construction logging
 #define LOG_JIX 0  // verbose jit execution logging
 #define LOG_MEM 0  // system memory mapping logging
