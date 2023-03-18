@@ -273,6 +273,7 @@ static struct JitBlock *NewJitBlock(void) {
   if ((jb = (struct JitBlock *)Calloc(1, sizeof(struct JitBlock)))) {
     dll_init(&jb->elem);
     dll_init(&jb->aged);
+    JIT_LOGF("new jit block %p", jb);
   }
   return jb;
 }
@@ -322,6 +323,7 @@ static void DestroyInts(struct JitInts *ji) {
 
 static void FreeJitBlock(struct JitBlock *jb) {
   struct Dll *e;
+  JIT_LOGF("freed jit block %p", jb);
   while ((e = dll_first(jb->freejumps))) {
     dll_remove(&jb->freejumps, e);
     FreeJitJump(JITJUMP_CONTAINER(e));
@@ -670,6 +672,7 @@ static struct JitBlock *AcquireJitBlock(struct Jit *jit) {
 // @assume jit->lock
 static void ReleaseJitBlock(struct JitBlock *jb) {
   struct Dll *e;
+  JIT_LOGF("released jit block %p", jb);
   while ((e = dll_first(jb->staged))) {
     dll_remove(&jb->staged, e);
     FreeJitStage(JITSTAGE_CONTAINER(e));
@@ -769,6 +772,7 @@ int InitJit(struct Jit *jit, uintptr_t opt_staging_function) {
     dll_make_last(&g_jit.freeblocks, &jb->elem);
     ++g_jit.freecount;
   }
+  JIT_LOGF("initialized jit %p", jit);
   return 0;
 }
 
@@ -782,12 +786,13 @@ int InitJit(struct Jit *jit, uintptr_t opt_staging_function) {
 int DestroyJit(struct Jit *jit) {
   struct Dll *e, *e2;
   LockJit(jit);
+  JIT_LOGF("destroying jit %p", jit);
   for (e = dll_first(jit->freeds.p); e; e = e2) {
     e2 = dll_next(jit->freeds.p, e);
     FreeJitFreed(JITFREED_CONTAINER(e));
   }
-  for (e = dll_first(jit->blocks); e; e = e2) {
-    e2 = dll_next(jit->blocks, e);
+  while ((e = dll_first(jit->blocks))) {
+    dll_remove(&jit->blocks, e);
     ReleaseJitBlock(JITBLOCK_CONTAINER(e));
   }
   dll_make_first(&jit->freejumps, jit->jumps);
@@ -813,11 +818,13 @@ int DestroyJit(struct Jit *jit) {
  */
 int ShutdownJit(void) {
   struct Dll *e;
+  JIT_LOGF("shutting down jit");
   while ((e = dll_first(g_jit.freeblocks))) {
     dll_remove(&g_jit.freeblocks, e);
     FreeJitBlock(JITBLOCK_CONTAINER(e));
+    --g_jit.freecount;
   }
-  g_jit.freecount = 0;
+  unassert(!g_jit.freecount);
   return 0;
 }
 
@@ -1220,7 +1227,7 @@ static void ForceJitBlocksToRetire(struct Jit *jit) {
   struct Dll *e, *e2;
   struct JitBlock *jb;
   unsigned n, pgen, kgen;
-  LOGF("retiring jit blocks to avoid oom");
+  JIT_LOGF("retiring jit blocks to avoid oom");
   dll_make_first(&jit->freejumps, jit->jumps);
   jit->jumps = 0;
   pgen = BeginUpdate(&jit->pagegen);
@@ -1639,7 +1646,7 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb) {
     // function code was generated successfully
     if (jb->virt) {
       // since we have a hash table key we must install the hook
-      JIT_LOGF("finishing jit path in block %p at %#" PRIx64, jb, jb->virt);
+      JIP_LOGF("finishing jit path in block %p at %#" PRIx64, jb, jb->virt);
       addr = jb->addr + jb->start;
       if (CanJitForImmediateEffect()) {
         // operating system permits us to use rwx memory

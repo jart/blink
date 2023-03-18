@@ -1074,8 +1074,8 @@ static void Op0f7(P) {
 }
 
 #ifdef DISABLE_METAL
-#define OpCallfEq   OpUd
-#define OpJmpfEq    OpUd
+#define OpCallfEq OpUd
+#define OpJmpfEq  OpUd
 #endif
 
 static const nexgen32e_f kOp0ff[] = {
