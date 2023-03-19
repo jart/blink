@@ -22,6 +22,7 @@
 #include <stdlib.h>
 #include <threads.h>
 
+#include "blink/atomic.h"
 #include "blink/errno.h"
 #include "blink/log.h"
 #include "blink/machine.h"
