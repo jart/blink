@@ -26,6 +26,7 @@
 #include <sys/mman.h>
 #include <sys/types.h>
 
+#include "blink/assert.h"
 #include "blink/errno.h"
 #include "blink/hostfs.h"
 #include "blink/log.h"
