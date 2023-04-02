@@ -21,6 +21,10 @@
 #include <fcntl.h>
 #include <stdlib.h>
 
+#if !defined(__STDC_NO_THREADS__) || __STDC_NO_THREADS__ == 0
+#include <threads.h>
+#endif
+
 #include "blink/atomic.h"
 #include "blink/errno.h"
 #include "blink/log.h"
