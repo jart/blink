@@ -69,7 +69,6 @@ static void WriteInt(u8 p[8], u64 x, unsigned long w) {
 }
 
 static void AddDi(P, u64 x) {
-  u64 res;
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       Put64(m->di, Get64(m->di) + x);
@@ -85,7 +84,7 @@ static void AddDi(P, u64 x) {
   }
 }
 
-static u64 AddSi(P, u64 x) {
+static void AddSi(P, u64 x) {
   switch (Eamode(rde)) {
     case XED_MODE_LONG:
       Put64(m->si, Get64(m->si) + x);
