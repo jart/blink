@@ -20,7 +20,6 @@
 
 #include <fcntl.h>
 #include <stdlib.h>
-#include <threads.h>
 
 #include "blink/atomic.h"
 #include "blink/errno.h"
@@ -942,7 +941,7 @@ static long ProcfsTelldir(struct VfsInfo *info) {
 #endif
 
 static struct dirent *ProcfsReaddir(struct VfsInfo *info) {
-  static thread_local char buf[sizeof(struct dirent) + VFS_NAME_MAX];
+  static _Thread_local char buf[sizeof(struct dirent) + VFS_NAME_MAX];
   struct dirent *de = (struct dirent *)buf;
   struct ProcfsInfo *procinfo = (struct ProcfsInfo *)info->data;
   if (!S_ISDIR(procinfo->mode) && !procinfo->opendir) {
