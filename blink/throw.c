@@ -95,12 +95,20 @@ void HaltMachine(struct Machine *m, int code) {
       m->faultaddr = m->ip - m->oplen;
       DeliverSignalToUser(m, SIGTRAP_LINUX, SI_KERNEL_LINUX);
       break;
+    case 4:
+      m->faultaddr = 0;
+      DeliverSignalToUser(m, SIGSEGV_LINUX, SI_KERNEL_LINUX);
+      break;
     case kMachineExitTrap:
       RestoreIp(m);
       break;
     default:
-      if (code > 0) {
-        break;
+      if (code >= 0) {
+        if (!m->metal) {
+          RestoreIp(m);
+          m->faultaddr = 0;
+          DeliverSignalToUser(m, SIGSEGV_LINUX, SI_KERNEL_LINUX);
+        }
       } else {
         unassert(!"not possible");
       }
