@@ -3078,6 +3078,7 @@ static bool OnHalt(int interrupt) {
     case kMachineDecodeError:
       OnDecodeError();
       return true;
+    case 0:
     case kMachineDivideError:
       OnDivideError();
       return true;
@@ -3618,6 +3619,9 @@ static void Exec(void) {
     if (IsMakingPath(m)) {
       AbandonPath(m);
     }
+    // if sigsetjmp fake-returned 1, the actual trap number might have been
+    // either 1 or 0; this should have been stored in m->trapno
+    if (interrupt == 1) interrupt = m->trapno;
     if (OnHalt(interrupt)) {
       if (!tuimode) {
         goto KeepGoing;
@@ -3783,6 +3787,7 @@ static void Tui(void) {
     if (IsMakingPath(m)) {
       AbandonPath(m);
     }
+    if (interrupt == 1) interrupt = m->trapno;
     if (OnHalt(interrupt)) {
       ReactiveDraw();
       ScrollMemoryViews();
