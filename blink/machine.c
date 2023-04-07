@@ -40,6 +40,7 @@
 #include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
+#include "blink/modrm.h"
 #include "blink/random.h"
 #include "blink/signal.h"
 #include "blink/sse.h"
@@ -234,10 +235,59 @@ static void OpXchgZvqp(P) {
   WriteRegister(rde, RegRexbSrm(m, rde), x);
 }
 
+static void OpCmpxchg8b(P) {
+  uint8_t *p;
+  uint32_t d, a;
+  p = GetModrmRegisterXmmPointerRead8(A);
+  if (Lock(rde)) LockBus(p);
+  a = Read32(p + 0);
+  d = Read32(p + 4);
+  if (a == Read32(m->ax) && d == Read32(m->dx)) {
+    m->flags = SetFlag(m->flags, FLAGS_ZF, true);
+    memcpy(p + 0, m->bx, 4);
+    memcpy(p + 4, m->cx, 4);
+  } else {
+    m->flags = SetFlag(m->flags, FLAGS_ZF, false);
+    Write32(m->ax, a);
+    Write32(m->dx, d);
+  }
+  if (Lock(rde)) UnlockBus(p);
+}
+
+static void OpCmpxchg16b(P) {
+  uint8_t *p;
+  uint64_t d, a;
+  p = GetModrmRegisterXmmPointerRead16(A);
+  if (Lock(rde)) LockBus(p);
+  a = Read64(p + 0);
+  d = Read64(p + 8);
+  if (a == Read64(m->ax) && d == Read64(m->dx)) {
+    m->flags = SetFlag(m->flags, FLAGS_ZF, true);
+    memcpy(p + 0, m->bx, 8);
+    memcpy(p + 8, m->cx, 8);
+  } else {
+    m->flags = SetFlag(m->flags, FLAGS_ZF, false);
+    Write64(m->ax, a);
+    Write64(m->dx, d);
+  }
+  if (Lock(rde)) UnlockBus(p);
+}
+
 static void Op1c7(P) {
   bool ismem;
   ismem = !IsModrmRegister(rde);
   switch (ModrmReg(rde)) {
+    case 1:
+      if (ismem) {
+        if (Rexw(rde)) {
+          OpCmpxchg16b(A);
+        } else {
+          OpCmpxchg8b(A);
+        }
+      } else {
+        OpUdImpl(m);
+      }
+      break;
     case 6:
       if (!ismem) {
         OpRdrand(A);
