@@ -2819,14 +2819,6 @@ static int XlatFstatatFlags(int x) {
     res |= AT_SYMLINK_NOFOLLOW;
     x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
   }
-#ifdef AT_EMPTY_PATH
-#ifndef DISABLE_NONPOSIX
-  if (x & AT_EMPTY_PATH_LINUX) {
-    res |= AT_EMPTY_PATH;
-    x &= ~AT_EMPTY_PATH_LINUX;
-  }
-#endif
-#endif
   if (x) {
     LOGF("%s() flags %d not supported", "fstatat", x);
     return -1;
@@ -2841,10 +2833,9 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
   const char *path;
   struct stat_linux gst;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-#ifndef AT_EMPTY_PATH
 #ifndef DISABLE_NONPOSIX
   if (flags & AT_EMPTY_PATH_LINUX) {
-    flags &= AT_EMPTY_PATH_LINUX;
+    flags &= ~AT_EMPTY_PATH_LINUX;
     if (!*path) {
       if (flags) {
         LOGF("%s() flags %d not supported", "fstatat(AT_EMPTY_PATH)", flags);
@@ -2853,7 +2844,6 @@ static int SysFstatat(struct Machine *m, i32 dirfd, i64 pathaddr, i64 staddr,
       return SysFstat(m, dirfd, staddr);
     }
   }
-#endif
 #endif
   if ((rc = VfsStat(GetDirFildes(dirfd), path, &st, XlatFstatatFlags(flags))) !=
       -1) {
@@ -2895,7 +2885,6 @@ static int SysFchownat(struct Machine *m, i32 dirfd, i64 pathaddr, u32 uid,
                        u32 gid, i32 flags) {
   const char *path;
   if (!(path = LoadStr(m, pathaddr))) return -1;
-#ifndef AT_EMPTY_PATH
 #ifndef DISABLE_NONPOSIX
   if (flags & AT_EMPTY_PATH_LINUX) {
     flags &= AT_EMPTY_PATH_LINUX;
@@ -2907,7 +2896,6 @@ static int SysFchownat(struct Machine *m, i32 dirfd, i64 pathaddr, u32 uid,
       return SysFchown(m, dirfd, uid, gid);
     }
   }
-#endif
 #endif
   return VfsChown(GetDirFildes(dirfd), path, uid, gid,
                   XlatFchownatFlags(flags));
