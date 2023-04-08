@@ -1373,6 +1373,39 @@ static void OpNopEv(P) {
   }
 }
 
+#ifndef DISABLE_METAL
+static void OpHvcall(P) {
+  HaltMachine(m, disp);
+}
+
+static void OpHvjmp(P) {
+  OpIret(A);
+  HaltMachine(m, disp);
+}
+
+static void OpUd0GvqpEvqp(P) {
+  if (Cpl(m) == 3) {
+    OpUd(A);
+  } else {
+    switch (Rep(rde) << 9 |
+            ModrmMod(rde) << 6 | ModrmReg(rde) << 3 | ModrmRm(rde)) {
+      case 00067:
+      case 00167:
+      case 00267:
+        OpHvjmp(A);
+        break;
+      case 00077:
+      case 00177:
+      case 00277:
+        OpHvcall(A);
+        break;
+      default:
+        OpUd(A);
+    }
+  }
+}
+#endif
+
 static void OpNop(P) {
   if (Rexb(rde)) {
     OpXchgZvqp(A);
@@ -1417,6 +1450,7 @@ static void OpEmms(P) {
 #define OpInto      OpUd
 #define OpIret      OpUd
 #define OpWrmsr     OpUd
+#define OpUd0GvqpEvqp OpUd
 #endif
 
 #ifdef DISABLE_X87
@@ -1951,7 +1985,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*1FC*/ OpSsePaddb,              // #233  (0.000005%)
     /*1FD*/ OpSsePaddw,              // #227  (0.000006%)
     /*1FE*/ OpSsePaddd,              // #232  (0.000005%)
-    /*1FF*/ OpUd,                    //
+    /*1FF*/ OpUd0GvqpEvqp,           //
     /*200*/ OpSsePshufb,             // #268  (0.000003%)
     /*201*/ OpSsePhaddw,             // #204  (0.000027%)
     /*202*/ OpSsePhaddd,             // #210  (0.000027%)
