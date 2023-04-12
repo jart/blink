@@ -3796,8 +3796,10 @@ static void Tui(void) {
     ReactiveDraw();
     ScrollOp(&pan.disassembly, GetDisIndex());
   }
-  m->canhalt = false;
-  TuiCleanup();
+  if ((action & EXIT)) {
+    m->canhalt = false;
+    TuiCleanup();
+  }
 }
 
 _Noreturn static void PrintVersion(void) {
