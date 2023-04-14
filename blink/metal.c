@@ -92,6 +92,15 @@ relegated void SetCs(P, u16 sel) {
   SetSegment(A, SREG_CS, sel, true);
 }
 
+relegated void LongBranch(P, u16 sel, u64 ip) {
+  SetCs(A, sel);
+  m->ip = ip;
+  m->oplen = 0;
+  if (m->system->onlongbranch) {
+    m->system->onlongbranch(m);
+  }
+}
+
 relegated void OpPushSeg(P) {
   u8 seg = (Opcode(rde) & 070) >> 3;
   Push(A, GetSegment(A, seg)->sel);
@@ -114,11 +123,7 @@ relegated void OpMovSwEvqp(P) {
 }
 
 relegated void OpJmpf(P) {
-  SetCs(A, uimm0);
-  m->ip = disp;
-  if (m->system->onlongbranch) {
-    m->system->onlongbranch(m);
-  }
+  LongBranch(A, uimm0, disp);
 }
 
 static void PutEaxAx(P, u32 x) {
@@ -192,10 +197,15 @@ static relegated void LoadFarPointer(P, unsigned sr, bool jumping) {
         fp &= 0x0000ffff;
       }
       UnlockBus(p);
-      if (!jumping)
+      if (!jumping) {
         WriteRegister(rde, RegRexrReg(m, rde), fp);  // offset portion
-      else
+      } else {
         m->ip = fp;
+        m->oplen = 0;
+        if (m->system->onlongbranch) {
+          m->system->onlongbranch(m);
+        }
+      }
       break;
     default:
       __builtin_unreachable();
@@ -212,18 +222,12 @@ relegated void OpLds(P) {
 
 relegated void OpJmpfEq(P) {
   LoadFarPointer(A, SREG_CS, true);
-  if (m->system->onlongbranch) {
-    m->system->onlongbranch(m);
-  }
 }
 
 relegated void OpCallfEq(P) {
   Push(A, m->cs.sel);
   Push(A, m->ip);
   LoadFarPointer(A, SREG_CS, true);
-  if (m->system->onlongbranch) {
-    m->system->onlongbranch(m);
-  }
 }
 
 relegated void OpWrmsr(P) {

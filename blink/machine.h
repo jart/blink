@@ -648,6 +648,7 @@ u64 AddressDi(P);
 i64 AddressSi(P);
 u64 GetSegmentBase(P, unsigned);
 void SetCs(P, u16);
+void LongBranch(P, u16, u64);
 i64 DataSegment(P, u64);
 i64 AddSegment(P, u64, u64);
 
