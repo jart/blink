@@ -3033,6 +3033,10 @@ static void OnInt15h(void) {
   }
 }
 
+static void OnEquipmentListService(void) {
+  Put16(m->ax, Get16(m->system->real + 0x410));
+}
+
 static void OnBaseMemSizeService(void) {
   Put16(m->ax, Get16(m->system->real + 0x413));
 }
@@ -3057,6 +3061,9 @@ static bool OnHalt(int interrupt) {
       return true;
     case 0x16:
       OnKeyboardService();
+      return true;
+    case 0x11:
+      OnEquipmentListService();
       return true;
     case 0x12:
       OnBaseMemSizeService();

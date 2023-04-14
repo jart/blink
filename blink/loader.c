@@ -486,6 +486,11 @@ void BootProgram(struct Machine *m,  //
   memset(m->system->real + 0x00100000, 0, kRealSize - 0x00100000);
   Write16(m->system->real + 0x400, 0x3F8);
   Write16(m->system->real + 0x40E, 0xb0000 >> 4);
+  Write16(m->system->real + 0x410, 1 << 0 |  // floppy drive
+                                   1 << 1 |  // math coprocessor
+                                   3 << 4 |  // initial video mode
+                                   0 << 6 |  // no. of floppy drives - 1
+                                   1 << 9);  // no. of serial devices
   Write16(m->system->real + 0x413, 0xb0000 / 1024);
   Write16(m->system->real + 0x44A, 80);
   Write64(m->dx, 0);
