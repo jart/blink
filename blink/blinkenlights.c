@@ -3061,6 +3061,9 @@ static bool OnHalt(int interrupt) {
     case 0x12:
       OnBaseMemSizeService();
       return true;
+    case 0x19:
+      BootProgram(m, &m->system->elf);
+      return true;
     case kMachineEscape:
       return true;
     case kMachineSegmentationFault:

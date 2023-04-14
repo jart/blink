@@ -803,16 +803,44 @@ static void OpPushImm(P) {
   Push(A, uimm0);
 }
 
+static void GenInterrupt(P, u8 trapno) {
+#ifdef DISABLE_METAL
+  HaltMachine(m, trapno);
+#else
+  u16 offset;
+  switch (m->mode) {
+    default:
+      HaltMachine(m, trapno);
+      break;
+    case XED_MODE_REAL:
+      offset = (u16)trapno * 4;
+      if (offset + 3 > m->system->idt_limit) {
+        ThrowProtectionFault(m);
+      } else {
+        u8 *p = ReserveAddress(m, m->system->idt_base + offset, 4, false);
+        u32 fp;
+        LockBus(p);
+        fp = Load32(p);
+        UnlockBus(p);
+        Push(A, ExportFlags(m->flags));
+        Push(A, m->cs.sel);
+        Push(A, m->ip);
+        LongBranch(A, (u16)(fp >> 16), (u16)fp);
+      }
+  }
+#endif
+}
+
 static void OpInterruptImm(P) {
-  HaltMachine(m, uimm0);
+  GenInterrupt(A, uimm0);
 }
 
 static void OpInterrupt1(P) {
-  HaltMachine(m, 1);
+  GenInterrupt(A, 1);
 }
 
 static void OpInterrupt3(P) {
-  HaltMachine(m, 3);
+  GenInterrupt(A, 3);
 }
 
 #ifndef DISABLE_METAL

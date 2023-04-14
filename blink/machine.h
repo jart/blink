@@ -16,6 +16,7 @@
 #include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/tunables.h"
+#include "blink/x86.h"
 
 #define kArgRde   1
 #define kArgDisp  2
@@ -801,7 +802,7 @@ void LogCodOp(struct Machine *, const char *);
 #endif
 
 MICRO_OP_SAFE u8 Cpl(struct Machine *m) {
-  return m->cs.sel & 3u;
+  return m->mode != XED_MODE_REAL ? (m->cs.sel & 3u) : 0u;
 }
 
 #define BEGIN_NO_PAGE_FAULTS \

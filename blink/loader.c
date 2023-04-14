@@ -29,6 +29,7 @@
 
 #include "blink/assert.h"
 #include "blink/builtin.h"
+#include "blink/defbios.h"
 #include "blink/end.h"
 #include "blink/endian.h"
 #include "blink/loader.h"
@@ -471,20 +472,31 @@ static bool LoadElf(struct Machine *m,  //
   return execstack;
 }
 
-static void BootProgram(struct Machine *m,  //
-                        struct Elf *elf,    //
-                        void *map,          //
-                        size_t mapsize) {
-  m->cs.sel = m->cs.base = 0;
+void BootProgram(struct Machine *m,  //
+                 struct Elf *elf) {
+  int fd;
+  SetDefaultBiosIntVectors(m);
+  memset(m->beg, 0, sizeof(m->beg));  // reinitialize registers
+  memset(m->xmm, 0, sizeof(m->xmm));
+  memset(m->seg, 0, sizeof(m->seg));
   m->ip = 0x7c00;
   elf->base = 0x7c00;
-  memset(m->system->real, 0, 0x00f00000);
+  Write64(m->sp, 0x6f00);  // following QEMU
+  memset(m->system->real + 4 * 0x100, 0, kBiosBase - 4 * 0x100);
+  memset(m->system->real + 0x00100000, 0, kRealSize - 0x00100000);
   Write16(m->system->real + 0x400, 0x3F8);
   Write16(m->system->real + 0x40E, 0xb0000 >> 4);
   Write16(m->system->real + 0x413, 0xb0000 / 1024);
   Write16(m->system->real + 0x44A, 80);
   Write64(m->dx, 0);
-  memcpy(m->system->real + 0x7c00, map, 512);
+  if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) == -1 ||
+      VfsRead(fd, m->system->real + 0x7c00, 512) != 512) {
+    // if we failed to load the boot sector for whatever reason, then...
+    // ...arrange to invoke int 0x18 (diskless boot hook)
+    // TODO: maybe error out more quickly?
+    Write16(m->system->real + 0x7c00, 0x18CD);
+  }
+  VfsClose(fd);
 }
 
 static int GetElfHeader(char ehdr[64], const char *prog, const char *image) {
@@ -737,7 +749,7 @@ error: unsupported executable; we need:\n\
     m->system->automap ^= (Read64(elf->rng) & FLAG_aslrmask);
   }
   if (m->mode == XED_MODE_REAL) {
-    BootProgram(m, elf, map, mapsize);
+    LoadDefaultBios(m);
     if (endswith(prog, ".com")) {
       // cosmo convention (see also binbase)
       AddFileMap(m->system, 4 * 1024 * 1024, 512, prog, 0);
