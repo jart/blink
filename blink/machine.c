@@ -828,7 +828,13 @@ static void OpIret(P) {
   if (m->mode == XED_MODE_REAL) {
     OpRetf(A);
     if (!Osz(rde)) {
-      ImportFlags(m, (m->flags & ~0x25ffff) | (Pop(A, 0) & 0x25ffff));
+      // Intel V2A § 3.2 says that iretl should only update some parts of
+      // eflags, not all; more precisely:
+      //   "tempEFLAGS ← Pop();
+      //    EFLAGS ← (tempEFLAGS AND 257FD5H) OR (EFLAGS AND 1A0000H);"
+      // it should be OK though to update all the bits in eflags's lower half
+      u32 mask = ID | AC | RF | 0xffff;
+      ImportFlags(m, (m->flags & ~mask) | (Pop(A, 0) & mask));
     } else {
       ImportFlags(m, (m->flags & ~0xffff) | Pop(A, 0));
     }

@@ -33,6 +33,9 @@
 #define SF (1 << FLAGS_SF)
 #define OF (1 << FLAGS_OF)
 #define DF (1 << FLAGS_DF)
+#define RF (1 << FLAGS_RF)
+#define AC (1 << FLAGS_AC)
+#define ID (1 << FLAGS_ID)
 
 #define GetLazyParityBool(f)    GetParity((0xff000000 & (f)) >> FLAGS_LP)
 #define SetLazyParityByte(f, x) ((0x00ffffff & (f)) | (255 & (x)) << FLAGS_LP)
