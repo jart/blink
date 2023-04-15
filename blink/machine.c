@@ -1415,6 +1415,20 @@ static void OpUd0GvqpEvqp(P) {
   if (Cpl(m) == 3) {
     OpUd(A);
   } else {
+    // define `hvcall` & `hvjmp` instructions which trap to our Blink
+    // hypervisor; these are encoded as x86 "invalid opcodes" in 16-bit mode:
+    // - 0f ff 3f         hvcall 0      ud0 (%bx), %di
+    // - 0f ff 7f disp8   hvcall ±disp  ud0 ±disp(%bx), %di
+    // - 0f ff bf disp16  hvcall ±disp  ud0 ±disp(%bx), %di
+    // - 0f ff 37         hvjmp 0       ud0 (%bx), %si
+    // - 0f ff 77 disp8   hvjmp ±disp   ud0 ±disp(%bx), %si
+    // - 0f ff b7 disp16  hvjmp ±disp   ud0 ±disp(%bx), %si
+    //
+    // `hvcall` invokes a "hypervisor trap" with the trap number given by
+    // the displacement value
+    //
+    // `hvjmp`, when run from within an interrupt service routine, will
+    // return (`iret`) to the ISR's caller & then invoke the numbered trap
     switch (Rep(rde) << 9 |
             ModrmMod(rde) << 6 | ModrmReg(rde) << 3 | ModrmRm(rde)) {
       case 00067:
