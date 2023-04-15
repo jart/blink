@@ -815,6 +815,35 @@ static void OpInterrupt3(P) {
   HaltMachine(m, 3);
 }
 
+#ifndef DISABLE_METAL
+static void OpInto(P) {
+  if (m->mode != XED_MODE_LONG) {
+    if (GetFlag(m->flags, FLAGS_OF)) HaltMachine(m, 4);
+  } else {
+    OpUdImpl(m);
+  }
+}
+
+static void OpIret(P) {
+  if (m->mode == XED_MODE_REAL) {
+    OpRetf(A);
+    if (!Osz(rde)) {
+      // Intel V2A § 3.2 says that iretl should only update some parts of
+      // eflags, not all; more precisely:
+      //   "tempEFLAGS ← Pop();
+      //    EFLAGS ← (tempEFLAGS AND 257FD5H) OR (EFLAGS AND 1A0000H);"
+      // it should be OK though to update all the bits in eflags's lower half
+      u32 mask = ID | AC | RF | 0xffff;
+      ImportFlags(m, (m->flags & ~mask) | (Pop(A, 0) & mask));
+    } else {
+      ImportFlags(m, (m->flags & ~0xffff) | Pop(A, 0));
+    }
+  } else {
+    OpUdImpl(m);
+  }
+}
+#endif
+
 void Terminate(P, void uop(struct Machine *, u64)) {
   if (IsMakingPath(m)) {
     Jitter(A,
@@ -1385,6 +1414,8 @@ static void OpEmms(P) {
 #define OpPusha     OpUd
 #define OpRdmsr     OpUd
 #define OpRetf      OpUd
+#define OpInto      OpUd
+#define OpIret      OpUd
 #define OpWrmsr     OpUd
 #endif
 
@@ -1615,8 +1646,8 @@ static const nexgen32e_f kNexgen32e[] = {
     /*0CB*/ OpRetf,                  //
     /*0CC*/ OpInterrupt3,            //
     /*0CD*/ OpInterruptImm,          //
-    /*0CE*/ OpUd,                    //
-    /*0CF*/ OpUd,                    //
+    /*0CE*/ OpInto,                  //
+    /*0CF*/ OpIret,                  //
     /*0D0*/ OpBsubi1,                // #212  (0.000021%)
     /*0D1*/ OpBsuwi1,                // #61   (0.016958%)
     /*0D2*/ OpBsubiCl,               //

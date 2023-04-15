@@ -141,20 +141,13 @@ relegated void OpPopa(P) {
 relegated void OpCallf(P) {
   Push(A, m->cs.sel);
   Push(A, m->ip);
-  SetCs(A, uimm0);
-  m->ip = disp & (Osz(rde) ? 0xffff : 0xffffffff);
-  if (m->system->onlongbranch) {
-    m->system->onlongbranch(m);
-  }
+  LongBranch(A, uimm0, disp & (Osz(rde) ? 0xffff : 0xffffffff));
 }
 
 relegated void OpRetf(P) {
-  u64 ip = ip = Pop(A, 0);
-  SetCs(A, Pop(A, uimm0));
-  m->ip = ip;
-  if (m->system->onlongbranch) {
-    m->system->onlongbranch(m);
-  }
+  u64 ip = Pop(A, 0);
+  u16 cs = Pop(A, uimm0);
+  LongBranch(A, cs, ip);
 }
 
 #endif /* DISABLE_METAL */
