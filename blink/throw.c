@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <inttypes.h>
+#include <sched.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,6 +26,7 @@
 #include "blink/assert.h"
 #include "blink/debug.h"
 #include "blink/endian.h"
+#include "blink/flags.h"
 #include "blink/linux.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -73,7 +75,6 @@ void HaltMachine(struct Machine *m, int code) {
       DeliverSignalToUser(m, SIGFPE_LINUX, FPE_FLTINV_LINUX);
       break;
     case kMachineHalt:
-      // TODO(jart): We should do something for real mode.
     case kMachineDecodeError:
     case kMachineUndefinedInstruction:
       RestoreIp(m);
@@ -141,5 +142,9 @@ void OpUd(P) {
 }
 
 void OpHlt(P) {
-  HaltMachine(m, kMachineHalt);
+  if (Cpl(m) == 0 && GetFlag(m->flags, FLAGS_IF)) {
+    sched_yield();
+  } else {
+    HaltMachine(m, kMachineHalt);
+  }
 }

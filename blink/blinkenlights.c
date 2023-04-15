@@ -2588,8 +2588,9 @@ static void OnExitTrap(void) {
   tuimode = true;
   action |= MODAL;
   action &= ~CONTINUE;
+  exitcode = m->system->exitcode;
   snprintf(systemfailure, sizeof(systemfailure), "guest called exit_group(%d)",
-           m->system->exitcode);
+           exitcode);
 }
 
 static void OnSegmentationFault(void) {
@@ -2629,8 +2630,19 @@ static void OnFpuException(void) {
 }
 
 static void OnExit(int rc) {
+  if (tuimode) {
+    action |= MODAL;
+    action &= ~CONTINUE;
+  } else {
+    action |= EXIT;
+  }
   exitcode = rc;
-  action |= EXIT;
+  if (rc == kMachineHalt) {
+    strcpy(systemfailure, "SYSTEM HALTED");
+  } else {
+    snprintf(systemfailure, sizeof(systemfailure),
+             "UNHANDLED INTERRUPT %#x", rc);
+  }
 }
 
 static size_t GetLastIndex(size_t size, unsigned unit, int i, unsigned limit) {
@@ -3100,7 +3112,7 @@ static bool OnHalt(int interrupt) {
       return true;
     case kMachineHalt:
     default:
-      OnExit(interrupt & 255);
+      OnExit(interrupt);
       return false;
   }
 }
