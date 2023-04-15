@@ -4,7 +4,7 @@ _start:
 
 //	exit(0) example
 //	make -j8 o//blink o//test/asm/exit.elf
-//	o//blink/tui o//test/asm/exit.elf
+//	o//blink/blinkenlights o//test/asm/exit.elf
 
 #define SYS_write 1
 #define SYS_exit  231

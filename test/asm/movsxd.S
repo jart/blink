@@ -4,7 +4,8 @@ _start:	mov	$5,%r15
 "test jit too":
 
 //	sign extending moves
-//	make -j8 o//blink o//test/asm/movsxd.elf && o//blink/tui o//test/asm/movsxd.elf
+//	make -j8 o//blink o//test/asm/movsxd.elf
+//	o//blink/blinkenlights o//test/asm/movsxd.elf
 
 	.test	"sign extend 32-bit to 32-bit"
 	push	$-2147483648

@@ -3,7 +3,7 @@
 _start:
 
 //	make -j8 o//blink o//test/asm/lock.elf
-//	o//blink/tui o//test/asm/lock.elf
+//	o//blink/blinkenlights o//test/asm/lock.elf
 
 	.test	"lock aligned"
 	movl	$0,(%rsp)

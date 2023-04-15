@@ -5,7 +5,7 @@ _start:	mov	$3,%r15
 
 //	immediate moves
 //	make -j8 o//blink o//test/asm/movi.elf
-//	o//blink/tui o//test/asm/movi.elf
+//	o//blink/blinkenlights o//test/asm/movi.elf
 
 	.test	"mov imm reg 32"
 	mov	$0x3133731337,%rax

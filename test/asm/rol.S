@@ -4,7 +4,7 @@ _start:
 
 //	left rotate (rol) example
 //	make -j8 o//blink o//test/asm/rol.elf
-//	o//blink/tui o//test/asm/rol.elf
+//	o//blink/blinkenlights o//test/asm/rol.elf
 
 	.test	"rol1"
 	stc

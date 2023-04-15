@@ -4,7 +4,8 @@ _start:	mov	$5,%r15
 "test jit too":
 
 //	condition code moves
-//	make -j8 o//blink o//test/asm/setcc.elf && o//blink/tui o//test/asm/setcc.elf
+//	make -j8 o//blink o//test/asm/setcc.elf
+//	o//blink/blinkenlights o//test/asm/setcc.elf
 
 	.test	"set carry reg true"
 	or	$-1,%eax

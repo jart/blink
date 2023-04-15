@@ -3,31 +3,31 @@
 
 TEST_ASM_FILES := $(wildcard test/asm/*)
 TEST_ASM_SRCS = $(filter %.S,$(TEST_ASM_FILES))
-TEST_ASM_OBJS = $(TEST_ASM_SRCS:%.S=o/$(MODE)/x86_64/%.o)
+TEST_ASM_OBJS = $(TEST_ASM_SRCS:%.S=o/$(MODE)/x86_64-gcc49/%.o)
 TEST_ASM_BINS = $(TEST_ASM_SRCS:%.S=o/$(MODE)/%.elf)
 TEST_ASM_COMS = $(TEST_ASM_SRCS:%.S=o/$(MODE)/%.com)
 TEST_ASM_CHECKS = $(TEST_ASM_SRCS:%.S=o/$(MODE)/%.com.ok)
 TEST_ASM_EMULATES = $(foreach ARCH,$(ARCHITECTURES),$(foreach SRC,$(TEST_ASM_SRCS),$(SRC:%.S=o/$(MODE)/$(ARCH)/%.elf.emulates)))
 
-TEST_ASM_LINK =	$(VM)							\
-		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-ld.bfd	\
-		-static							\
-		--omagic						\
-		-z noexecstack						\
-		-z max-page-size=65536					\
-		-z common-page-size=65536				\
-		$<							\
+TEST_ASM_LINK =	$(VM)								\
+		o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-ld.bfd	\
+		-static								\
+		--omagic							\
+		-z noexecstack							\
+		-z max-page-size=65536						\
+		-z common-page-size=65536					\
+		$<								\
 		-o $@
 
-o/$(MODE)/test/asm/%.com.ok:						\
+o/$(MODE)/test/asm/%.com.ok:							\
 		o/$(MODE)/test/asm/%.com
 	$<
 	@touch $@
 
 .PRECIOUS: o/$(MODE)/test/asm/%.elf
-o/$(MODE)/test/asm/%.elf:						\
-		o/$(MODE)/x86_64/test/asm/%.o				\
-		o/third_party/gcc/x86_64/bin/x86_64-linux-musl-gcc	\
+o/$(MODE)/test/asm/%.elf:							\
+		o/$(MODE)/x86_64-gcc49/test/asm/%.o				\
+		o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-gcc	\
 		$(VM)
 	@mkdir -p $(@D)
 	$(TEST_ASM_LINK)

@@ -5,7 +5,7 @@ _start:	mov	$3,%r15
 
 //	zero-extending moves
 //	make -j8 o//blink o//test/asm/cmp.elf
-//	o//blink/tui -j o//test/asm/cmp.elf
+//	o//blink/blinkenlights -j o//test/asm/cmp.elf
 
 	.test	"movzbl reg"
 	mov	$0x0102030405060708,%rax

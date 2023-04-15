@@ -4,7 +4,7 @@ _start:
 
 //	complement carry flag tests
 //	make -j8 o//blink o//test/asm/page.elf
-//	o//blink/tui o//test/asm/page.elf
+//	o//blink/blinkenlights o//test/asm/page.elf
 
 	.test	"carry flag manipulation"
 	stc

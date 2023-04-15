@@ -5,7 +5,7 @@ _start:	mov	$3,%r15
 
 //	extract floating point sign mask
 //	make -j8 o//blink o//test/asm/movmskpd.elf
-//	o//blink/tui o//test/asm/movmskpd.elf
+//	o//blink/blinkenlights o//test/asm/movmskpd.elf
 
 	.test	"movmskpd neg neg"
 	movaps	negneg(%rip),%xmm0

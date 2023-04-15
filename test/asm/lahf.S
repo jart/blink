@@ -3,7 +3,7 @@
 _start:
 
 //	make -j8 o//blink o//test/asm/lahf.elf
-//	o//blink/tui o//test/asm/lahf.elf
+//	o//blink/blinkenlights o//test/asm/lahf.elf
 
 	.test	"LAHF stores flags into AH"
 	mov	$0x7fffffff,%eax

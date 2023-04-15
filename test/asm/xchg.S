@@ -5,7 +5,7 @@ _start:	mov	$3,%r15
 
 //	equivalent exchange
 //	make -j8 o//blink o//test/asm/xchg.elf
-//	o//blink/tui o//test/asm/xchg.elf
+//	o//blink/blinkenlights o//test/asm/xchg.elf
 
 	.test	"xchgl reg/reg zero-extends"
 	mov	$0x1234567812345678,%rax

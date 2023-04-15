@@ -41,6 +41,10 @@ o/$(MODE)/x86_64-gcc49/%.o: %.c o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-
 	@mkdir -p $(@D)
 	$(VM) o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-gcc -static -Werror $(CFLAGS) -Wno-unused-value $(CPPFLAGS) $(CPPFLAGS_STATIC) $(TARGET_ARCH) -c -o $@ $<
 
+o/$(MODE)/x86_64-gcc49/%.o: %.S o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-gcc $(VM)
+	@mkdir -p $(@D)
+	$(VM) o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-gcc $(CPPFLAGS) $(CPPFLAGS_STATIC) -c -o $@ $<
+
 o/$(MODE)/m68k/%.o: %.c o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc $(VM)
 	@mkdir -p $(@D)
 	$(VM) o/third_party/gcc/m68k/bin/m68k-linux-musl-gcc -static -Werror $(filter-out -mtune=generic,$(CFLAGS)) $(CPPFLAGS) $(CPPFLAGS_STATIC) $(TARGET_ARCH) -c -o $@ $<

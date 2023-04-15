@@ -3,13 +3,13 @@
 
 TEST_METAL_FILES := $(wildcard test/metal/*)
 TEST_METAL_SRCS = $(filter %.S,$(TEST_METAL_FILES))
-TEST_METAL_OBJS = $(TEST_METAL_SRCS:%.S=o/$(MODE)/x86_64-gcc48/%.o)
+TEST_METAL_OBJS = $(TEST_METAL_SRCS:%.S=o/$(MODE)/x86_64-gcc49/%.o)
 TEST_METAL_BINS = $(TEST_METAL_SRCS:%.S=o/$(MODE)/%.bin)
 TEST_METAL_CHECKS = $(TEST_METAL_BINS:%=%.ok)
 
 TEST_METAL_LINK =								\
 		$(VM)								\
-		o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-ld.bfd	\
+		o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-ld.bfd	\
 		-T test/metal/metal.lds						\
 		-static								\
 		$<								\
@@ -17,8 +17,8 @@ TEST_METAL_LINK =								\
 
 .PRECIOUS: o/$(MODE)/test/metal/%.bin
 o/$(MODE)/test/metal/%.bin:							\
-		o/$(MODE)/x86_64-gcc48/test/metal/%.o				\
-		o/third_party/gcc/x86_64-gcc48/bin/x86_64-linux-musl-gcc	\
+		o/$(MODE)/x86_64-gcc49/test/metal/%.o				\
+		o/third_party/gcc/x86_64-gcc49/bin/x86_64-linux-musl-gcc	\
 		test/metal/metal.lds						\
 		$(VM)
 	@mkdir -p $(@D)

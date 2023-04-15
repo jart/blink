@@ -4,7 +4,8 @@ _start:	mov	$5,%r15
 "test jit too":
 
 //	sse moves
-//	make -j8 o//blink o//test/asm/ssemov.elf && o//blink/tui o//test/asm/ssemov.elf
+//	make -j8 o//blink o//test/asm/ssemov.elf
+//	o//blink/blinkenlights o//test/asm/ssemov.elf
 
 	.test	"sse mov unaligned"
 	and	$-16,%rsp

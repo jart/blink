@@ -3,7 +3,7 @@
 _start:
 
 //	make -j8 o//blink o//test/asm/push.elf
-//	o//blink/tui o//test/asm/push.elf
+//	o//blink/blinkenlights o//test/asm/push.elf
 
 	sub	$1,%rsp
 
