@@ -530,6 +530,7 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0x02, "lar %Gvqp Ev");
     RCASE(0x03, "lsl %Gvqp Ev");
     RCASE(0x05, "syscall");
+    RCASE(0x06, "clts");
     RCASE(0x09, "wbinvd");
     RCASE(0x0B, "ud2");
     RCASE(0x20, "mov %Hd %Cd");

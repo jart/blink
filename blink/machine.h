@@ -706,6 +706,7 @@ void OpLes(P);
 void OpLds(P);
 void OpJmpf(P);
 void OpJmpfEq(P);
+void OpClts(P);
 void OpRdmsr(P);
 void OpWrmsr(P);
 void OpMovRqCq(P);
