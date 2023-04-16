@@ -68,7 +68,8 @@ test:	o/$(MODE)/blink				\
 
 check:	test					\
 	o/$(MODE)/third_party/cosmo		\
-	o/$(MODE)/third_party/libc-test
+	o/$(MODE)/third_party/libc-test		\
+	o/$(MODE)/test/metal
 
 check2:	o/$(MODE)/test/sse			\
 	o/$(MODE)/test/lib			\
@@ -82,7 +83,6 @@ check2:	o/$(MODE)/test/sse			\
 emulates:					\
 	o/$(MODE)/test/asm			\
 	o/$(MODE)/test/flat			\
-	o/$(MODE)/test/metal			\
 	o/$(MODE)/third_party/ltp/medium	\
 	o/$(MODE)/third_party/cosmo/emulates
 
