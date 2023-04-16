@@ -10,5 +10,6 @@
 
 void LoadDefaultBios(struct Machine *);
 void SetDefaultBiosIntVectors(struct Machine *);
+void SetDefaultBiosDataArea(struct Machine *);
 
-#endif /* BLINK_TUNABLES_H_ */
+#endif /* BLINK_DEFBIOS_H_ */

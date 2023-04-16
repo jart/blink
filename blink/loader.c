@@ -32,6 +32,7 @@
 #include "blink/defbios.h"
 #include "blink/end.h"
 #include "blink/endian.h"
+#include "blink/flags.h"
 #include "blink/loader.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -477,23 +478,14 @@ void BootProgram(struct Machine *m,  //
   int fd;
   SetDefaultBiosIntVectors(m);
   memset(m->beg, 0, sizeof(m->beg));  // reinitialize registers
-  memset(m->xmm, 0, sizeof(m->xmm));
   memset(m->seg, 0, sizeof(m->seg));
+  m->flags = SetFlag(m->flags, FLAGS_IF, 1);
   m->ip = 0x7c00;
   elf->base = 0x7c00;
   Write64(m->sp, 0x6f00);  // following QEMU
-  memset(m->system->real + 4 * 0x100, 0, kBiosBase - 4 * 0x100);
+  SetDefaultBiosDataArea(m);
+  memset(m->system->real + 0x500, 0, kBiosBase - 0x500);
   memset(m->system->real + 0x00100000, 0, kRealSize - 0x00100000);
-  Write16(m->system->real + 0x400, 0x3F8);
-  Write16(m->system->real + 0x40E, 0xb0000 >> 4);
-  Write16(m->system->real + 0x410, 1 << 0 |  // floppy drive
-                                   1 << 1 |  // math coprocessor
-                                   3 << 4 |  // initial video mode
-                                   0 << 6 |  // no. of floppy drives - 1
-                                   1 << 9);  // no. of serial devices
-  Write16(m->system->real + 0x413, 0xb0000 / 1024);
-  Write16(m->system->real + 0x44A, 80);
-  Write64(m->dx, 0);
   if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) == -1 ||
       VfsRead(fd, m->system->real + 0x7c00, 512) != 512) {
     // if we failed to load the boot sector for whatever reason, then...
@@ -763,6 +755,7 @@ error: unsupported executable; we need:\n\
       AddFileMap(m->system, 0, 512, prog, 0);
     }
   } else {
+    m->flags = SetFlag(m->flags, FLAGS_IF, 1);
     m->system->cr3 = AllocatePageTable(m->system);
     if (IsBinFile(prog)) {
       elf->base = 0x400000;

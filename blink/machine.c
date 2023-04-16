@@ -825,6 +825,7 @@ static void GenInterrupt(P, u8 trapno) {
         Push(A, ExportFlags(m->flags));
         Push(A, m->cs.sel);
         Push(A, m->ip);
+        m->flags = SetFlag(m->flags, FLAGS_IF, false);
         LongBranch(A, (u16)(fp >> 16), (u16)fp);
       }
   }
