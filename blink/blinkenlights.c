@@ -3056,6 +3056,7 @@ static void OnBaseMemSizeService(void) {
 static bool OnHalt(int interrupt) {
   SYS_LOGF("%" PRIx64 " %s OnHalt(%#x)", GetPc(m), tuimode ? "TUI" : "EXEC",
            interrupt);
+  if (interrupt >= 0) m->oplen = 0;
   ReactiveDraw();
   switch (interrupt) {
     case 1:

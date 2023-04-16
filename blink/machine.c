@@ -30,6 +30,7 @@
 #include "blink/bus.h"
 #include "blink/case.h"
 #include "blink/debug.h"
+#include "blink/defbios.h"
 #include "blink/endian.h"
 #include "blink/flag.h"
 #include "blink/flags.h"
@@ -808,25 +809,54 @@ static void GenInterrupt(P, u8 trapno) {
   HaltMachine(m, trapno);
 #else
   u16 offset;
+  struct System *s;
   switch (m->mode) {
     default:
       HaltMachine(m, trapno);
       break;
     case XED_MODE_REAL:
       offset = (u16)trapno * 4;
-      if (offset + 3 > m->system->idt_limit) {
+      s = m->system;
+      if (offset + 3 > s->idt_limit) {
         ThrowProtectionFault(m);
+      } else if (!Osz(rde) || Asz(rde)) {
+        OpUdImpl(m);
       } else {
-        u8 *p = ReserveAddress(m, m->system->idt_base + offset, 4, false);
-        u32 fp;
-        LockBus(p);
-        fp = Load32(p);
-        UnlockBus(p);
+        u8 *pfp = ReserveAddress(m, s->idt_base + offset, 4, false), *pisr;
+        u32 fp, isrinsn;
+        u16 isrseg, isroff;
+        bool optim = false;
+        LockBus(pfp);
+        fp = Load32(pfp);
+        UnlockBus(pfp);
+        isrseg = (u16)(fp >> 16);
+        isroff = (u16)fp;
         Push(A, ExportFlags(m->flags));
         Push(A, m->cs.sel);
         Push(A, m->ip);
-        m->flags = SetFlag(m->flags, FLAGS_IF, false);
-        LongBranch(A, (u16)(fp >> 16), (u16)fp);
+        // optimize for cases where ISR is simply a `hvjmp`, &
+        // certain other conditions are met; this bypasses the
+        // usual instruction decoding, so must be done w/ care
+        if (trapno < 0x80 && isrseg == kBiosSeg) {
+          pisr = s->real + kBiosBase + isroff;
+          if (Read8(pisr) == 0x0F) {
+            LockBus(pisr);
+            isrinsn = Read32(pisr);
+            UnlockBus(pisr);
+            if (isrinsn == ((u32)0x0F | (u32)0xFF << 8 | (u32)0167 << 16 |
+                            (u32)trapno << 24)) {
+              optim = true;
+            }
+          }
+        }
+        if (optim) {
+          u64 sp = Get16(m->sp);
+          Put16(m->sp, sp + 6);
+          HaltMachine(m, trapno);
+        } else {
+          m->flags = SetFlag(m->flags, FLAGS_IF, false);
+          LongBranch(A, isrseg, isroff);
+        }
       }
   }
 #endif
