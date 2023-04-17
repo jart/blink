@@ -726,6 +726,23 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
       } else {
         return "bsr %Gvqp Evqp";
       }
+    case 0x00:
+      switch (ModrmReg(x->op.rde)) {
+        case 0:
+          return "sldt Ew";
+        case 1:
+          return "str Ew";
+        case 2:
+          return "lldt Ew";
+        case 3:
+          return "ltr Ew";
+        case 4:
+          return "verr Ew";
+        case 5:
+          return "verw Ew";
+        default:
+          return UNKNOWN;
+      }
     case 0x01:
       switch (ModrmReg(x->op.rde)) {
         case 0:
