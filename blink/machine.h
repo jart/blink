@@ -604,6 +604,7 @@ void OpDivAlAhAxEbSigned(P);
 void OpDivAlAhAxEbUnsigned(P);
 void OpDivRdxRaxEvqpSigned(P);
 void OpDivRdxRaxEvqpUnsigned(P);
+void OpEnter(P);
 void OpImulGvqpEvqp(P);
 void OpImulGvqpEvqpImm(P);
 void OpIncEvqp(P);

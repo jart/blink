@@ -1744,7 +1744,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*0C5*/ OpLds,                   //
     /*0C6*/ OpMovImm,                // #90   (0.004525%)
     /*0C7*/ OpMovImm,                // #45   (0.161349%)
-    /*0C8*/ OpUd,                    //
+    /*0C8*/ OpEnter,                 //
     /*0C9*/ OpLeave,                 // #116  (0.001237%)
     /*0CA*/ OpRetf,                  //
     /*0CB*/ OpRetf,                  //

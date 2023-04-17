@@ -260,7 +260,8 @@ static int xed_set_imm_bytes(struct XedDecodedInst *x, int *imm_width,
             x->op.rde)][Osz(x->op.rde)][Mode(x->op.rde)]];
         return XED_ERROR_NONE;
       case 11:
-        *imm_width = xed_bytes2bits(2);
+        // actually 2 bytes for uimm0 & 1 byte for uimm1
+        *imm_width = xed_bytes2bits(3);
         return XED_ERROR_NONE;
       case 12:
         if (Osz(x->op.rde) || Rep(x->op.rde) == 2) {

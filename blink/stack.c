@@ -217,22 +217,47 @@ void OpJmpEq(P) {
   m->ip = LoadAddressFromMemory(A);
 }
 
+void OpEnter(P) {
+  u16 allocsz = (u16)uimm0;
+  u8 nesting = (u8)(uimm0 >> 16);
+  unsigned osz = kStackOsz[Osz(rde)][Mode(rde)];
+  if (nesting != 0) OpUdImpl(m);
+  Push(A, Get64(m->bp));
+  switch (osz) {
+    case 8:
+      Put64(m->bp, Get64(m->sp));
+      Put64(m->sp, Get64(m->sp) - allocsz);
+      break;
+    case 4:
+      Put64(m->bp, Get32(m->sp));
+      Put64(m->sp, Get32(m->sp) - allocsz);
+      break;
+    case 2:
+      Put16(m->bp, Get16(m->sp));
+      Put16(m->sp, Get16(m->sp) - allocsz);
+      break;
+    default:
+      __builtin_unreachable();
+  }
+}
+
 void OpLeave(P) {
-  switch (Eamode(rde)) {
-    case XED_MODE_LONG:
+  unsigned osz = kStackOsz[Osz(rde)][Mode(rde)];
+  switch (osz) {
+    case 8:
       Put64(m->sp, Get64(m->bp));
       Put64(m->bp, Pop(A, 0));
       if (HasLinearMapping() && IsMakingPath(m)) {
         Jitter(A, "m", FastLeave);
       }
       break;
-    case XED_MODE_LEGACY:
+    case 4:
       Put64(m->sp, Get32(m->bp));
-      Put64(m->bp, Pop(A, 0));
+      Put64(m->bp, PopN(A, osz, 0));
       break;
-    case XED_MODE_REAL:
+    case 2:
       Put16(m->sp, Get16(m->bp));
-      Put16(m->bp, Pop(A, 0));
+      Put16(m->bp, PopN(A, osz, 0));
       break;
     default:
       __builtin_unreachable();

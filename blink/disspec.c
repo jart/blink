@@ -227,6 +227,7 @@ const char *DisSpecMap0(struct XedDecodedInst *x, char *p) {
     RCASE(0xC5, "lds %Gv Mp");
     RCASE(0xC6, "mov Eb Ib");
     RCASE(0xC7, "mov Evqp Ivds");
+    RCASE(0xC8, "enter >Ib Iw");
     RCASE(0xC9, "leave");
     RCASE(0xCA, "lret Iw");
     RCASE(0xCB, "lret");
