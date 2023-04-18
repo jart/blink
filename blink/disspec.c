@@ -644,7 +644,6 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0xFC, DisOpPqQqVdqWdq(x, p, "paddb"));
     RCASE(0xFD, DisOpPqQqVdqWdq(x, p, "paddw"));
     RCASE(0xFE, DisOpPqQqVdqWdq(x, p, "paddd"));
-    RCASE(0xFF, "ud0 %Gvqp Evqp");
     case 0x0D:
     case 0x18:
     case 0x19:
@@ -1155,6 +1154,21 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
         return "cvtdq2pd %Vpd Wdq";
       }
       break;
+    case 0xFF:
+      switch (Rep(x->op.rde) << 9 |
+              ModrmMod(x->op.rde) << 6 | ModrmReg(x->op.rde) << 3 |
+              ModrmRm(x->op.rde)) {
+        case 00067:
+        case 00167:
+        case 00267:
+          return "hvtailcall Ovqp";
+        case 00077:
+        case 00177:
+        case 00277:
+          return "hvcall Ovqp";
+        default:
+          return "ud0 %Gvqp Evqp";
+      }
   }
   return UNKNOWN;
 }

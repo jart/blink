@@ -16,6 +16,7 @@
 #include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/tunables.h"
+#include "blink/x86.h"
 
 #define kArgRde   1
 #define kArgDisp  2
@@ -479,7 +480,7 @@ _Noreturn void ThrowSegmentationFault(struct Machine *, i64);
 _Noreturn void ThrowProtectionFault(struct Machine *);
 _Noreturn void OpUdImpl(struct Machine *);
 _Noreturn void OpUd(P);
-_Noreturn void OpHlt(P);
+void OpHlt(P);
 void JitlessDispatch(P);
 void RestoreIp(struct Machine *);
 void CheckForSignals(struct Machine *);
@@ -801,7 +802,7 @@ void LogCodOp(struct Machine *, const char *);
 #endif
 
 MICRO_OP_SAFE u8 Cpl(struct Machine *m) {
-  return m->cs.sel & 3u;
+  return m->mode != XED_MODE_REAL ? (m->cs.sel & 3u) : 0u;
 }
 
 #define BEGIN_NO_PAGE_FAULTS \

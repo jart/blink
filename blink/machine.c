@@ -30,6 +30,7 @@
 #include "blink/bus.h"
 #include "blink/case.h"
 #include "blink/debug.h"
+#include "blink/defbios.h"
 #include "blink/endian.h"
 #include "blink/flag.h"
 #include "blink/flags.h"
@@ -803,16 +804,70 @@ static void OpPushImm(P) {
   Push(A, uimm0);
 }
 
+static void GenInterrupt(P, u8 trapno) {
+#ifdef DISABLE_METAL
+  HaltMachine(m, trapno);
+#else
+  u16 offset;
+  struct System *s;
+  switch (m->mode) {
+    default:
+      HaltMachine(m, trapno);
+      break;
+    case XED_MODE_REAL:
+      offset = (u16)trapno * 4;
+      s = m->system;
+      if (offset + 3 > s->idt_limit) {
+        ThrowProtectionFault(m);
+      } else if (!Osz(rde) || Asz(rde)) {
+        OpUdImpl(m);
+      } else {
+        u8 *pfp = ReserveAddress(m, s->idt_base + offset, 4, false), *pisr;
+        u32 fp, isrinsn;
+        u16 isrseg, isroff;
+        bool optim = false;
+        fp = Load32(pfp);
+        isrseg = (u16)(fp >> 16);
+        isroff = (u16)fp;
+        Push(A, ExportFlags(m->flags));
+        Push(A, m->cs.sel);
+        Push(A, m->ip);
+        // optimize for cases where ISR is simply a `hvtailcall` & a few
+        // other conditions are met; this bypasses the usual instruction
+        // decoding so it should be done with care to preserve semantics
+        if (trapno < 0x80 && isrseg == kBiosSeg) {
+          pisr = s->real + kBiosBase + isroff;
+          if (Read8(pisr) == 0x0F) {
+            isrinsn = Load32(pisr);
+            if (isrinsn == ((u32)0x0F | (u32)0xFF << 8 | (u32)0167 << 16 |
+                            (u32)trapno << 24)) {
+              optim = true;
+            }
+          }
+        }
+        if (optim) {
+          u64 sp = Get16(m->sp);
+          Put16(m->sp, sp + 6);
+          HaltMachine(m, trapno);
+        } else {
+          m->flags = SetFlag(m->flags, FLAGS_IF, false);
+          LongBranch(A, isrseg, isroff);
+        }
+      }
+  }
+#endif
+}
+
 static void OpInterruptImm(P) {
-  HaltMachine(m, uimm0);
+  GenInterrupt(A, uimm0);
 }
 
 static void OpInterrupt1(P) {
-  HaltMachine(m, 1);
+  GenInterrupt(A, 1);
 }
 
 static void OpInterrupt3(P) {
-  HaltMachine(m, 3);
+  GenInterrupt(A, 3);
 }
 
 #ifndef DISABLE_METAL
@@ -1373,6 +1428,53 @@ static void OpNopEv(P) {
   }
 }
 
+#ifndef DISABLE_METAL
+static void OpHvcall(P) {
+  HaltMachine(m, disp);
+}
+
+static void OpHvtailcall(P) {
+  OpIret(A);
+  HaltMachine(m, disp);
+}
+
+static void OpUd0GvqpEvqp(P) {
+  if (Cpl(m) == 3) {
+    OpUd(A);
+  } else {
+    // define `hvcall` & `hvtailcall` instructions which trap to our Blink
+    // hypervisor; these are encoded as x86 "invalid opcodes" in 16-bit mode:
+    // - 0f ff 3f         hvcall 0          ud0 (%bx), %di
+    // - 0f ff 7f disp8   hvcall ±disp      ud0 ±disp(%bx), %di
+    // - 0f ff bf disp16  hvcall ±disp      ud0 ±disp(%bx), %di
+    // - 0f ff 37         hvtailcall 0      ud0 (%bx), %si
+    // - 0f ff 77 disp8   hvtailcall ±disp  ud0 ±disp(%bx), %si
+    // - 0f ff b7 disp16  hvtailcall ±disp  ud0 ±disp(%bx), %si
+    //
+    // `hvcall` invokes a "hypervisor trap" with the trap number given by
+    // the displacement value
+    //
+    // `hvtailcall`, when run from within an interrupt service routine, will
+    // return (`iret`) to the ISR's caller & then invoke the numbered trap
+    switch (Rep(rde) << 9 |
+            ModrmMod(rde) << 6 | ModrmReg(rde) << 3 | ModrmRm(rde)) {
+      case 00067:
+      case 00167:
+      case 00267:
+        OpHvtailcall(A);
+        break;
+      case 00077:
+      case 00177:
+      case 00277:
+        OpHvcall(A);
+        break;
+      default:
+        OpUd(A);
+    }
+  }
+}
+#endif
+
 static void OpNop(P) {
   if (Rexb(rde)) {
     OpXchgZvqp(A);
@@ -1417,6 +1519,7 @@ static void OpEmms(P) {
 #define OpInto      OpUd
 #define OpIret      OpUd
 #define OpWrmsr     OpUd
+#define OpUd0GvqpEvqp OpUd
 #endif
 
 #ifdef DISABLE_X87
@@ -1951,7 +2054,7 @@ static const nexgen32e_f kNexgen32e[] = {
     /*1FC*/ OpSsePaddb,              // #233  (0.000005%)
     /*1FD*/ OpSsePaddw,              // #227  (0.000006%)
     /*1FE*/ OpSsePaddd,              // #232  (0.000005%)
-    /*1FF*/ OpUd,                    //
+    /*1FF*/ OpUd0GvqpEvqp,           //
     /*200*/ OpSsePshufb,             // #268  (0.000003%)
     /*201*/ OpSsePhaddw,             // #204  (0.000027%)
     /*202*/ OpSsePhaddd,             // #210  (0.000027%)

@@ -2588,8 +2588,9 @@ static void OnExitTrap(void) {
   tuimode = true;
   action |= MODAL;
   action &= ~CONTINUE;
+  exitcode = m->system->exitcode;
   snprintf(systemfailure, sizeof(systemfailure), "guest called exit_group(%d)",
-           m->system->exitcode);
+           exitcode);
 }
 
 static void OnSegmentationFault(void) {
@@ -2629,8 +2630,19 @@ static void OnFpuException(void) {
 }
 
 static void OnExit(int rc) {
+  if (tuimode) {
+    action |= MODAL;
+    action &= ~CONTINUE;
+  } else {
+    action |= EXIT;
+  }
   exitcode = rc;
-  action |= EXIT;
+  if (rc == kMachineHalt) {
+    strcpy(systemfailure, "SYSTEM HALTED");
+  } else {
+    snprintf(systemfailure, sizeof(systemfailure),
+             "UNHANDLED INTERRUPT %#x", rc);
+  }
 }
 
 static size_t GetLastIndex(size_t size, unsigned unit, int i, unsigned limit) {
@@ -3033,6 +3045,10 @@ static void OnInt15h(void) {
   }
 }
 
+static void OnEquipmentListService(void) {
+  Put16(m->ax, Get16(m->system->real + 0x410));
+}
+
 static void OnBaseMemSizeService(void) {
   Put16(m->ax, Get16(m->system->real + 0x413));
 }
@@ -3040,6 +3056,7 @@ static void OnBaseMemSizeService(void) {
 static bool OnHalt(int interrupt) {
   SYS_LOGF("%" PRIx64 " %s OnHalt(%#x)", GetPc(m), tuimode ? "TUI" : "EXEC",
            interrupt);
+  if (interrupt >= 0) m->oplen = 0;
   ReactiveDraw();
   switch (interrupt) {
     case 1:
@@ -3058,8 +3075,14 @@ static bool OnHalt(int interrupt) {
     case 0x16:
       OnKeyboardService();
       return true;
+    case 0x11:
+      OnEquipmentListService();
+      return true;
     case 0x12:
       OnBaseMemSizeService();
+      return true;
+    case 0x19:
+      BootProgram(m, &m->system->elf);
       return true;
     case kMachineEscape:
       return true;
@@ -3090,7 +3113,7 @@ static bool OnHalt(int interrupt) {
       return true;
     case kMachineHalt:
     default:
-      OnExit(interrupt & 255);
+      OnExit(interrupt);
       return false;
   }
 }

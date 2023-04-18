@@ -207,6 +207,8 @@ struct System *NewSystem(int mode) {
       enomem();
       return 0;
     }
+    s->gdt_limit = s->idt_limit = 0xFFFF;
+    s->gdt_base = s->idt_base = 0;
   }
 #ifdef HAVE_JIT
   InitJit(&s->jit, (uintptr_t)JitlessDispatch);
