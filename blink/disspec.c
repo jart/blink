@@ -1161,7 +1161,7 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
         case 00067:
         case 00167:
         case 00267:
-          return "hvjmp Ovqp";
+          return "hvtailcall Ovqp";
         case 00077:
         case 00177:
         case 00277:

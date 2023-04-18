@@ -826,23 +826,19 @@ static void GenInterrupt(P, u8 trapno) {
         u32 fp, isrinsn;
         u16 isrseg, isroff;
         bool optim = false;
-        LockBus(pfp);
         fp = Load32(pfp);
-        UnlockBus(pfp);
         isrseg = (u16)(fp >> 16);
         isroff = (u16)fp;
         Push(A, ExportFlags(m->flags));
         Push(A, m->cs.sel);
         Push(A, m->ip);
-        // optimize for cases where ISR is simply a `hvjmp`, &
-        // certain other conditions are met; this bypasses the
-        // usual instruction decoding, so must be done w/ care
+        // optimize for cases where ISR is simply a `hvtailcall` & a few
+        // other conditions are met; this bypasses the usual instruction
+        // decoding so it should be done with care to preserve semantics
         if (trapno < 0x80 && isrseg == kBiosSeg) {
           pisr = s->real + kBiosBase + isroff;
           if (Read8(pisr) == 0x0F) {
-            LockBus(pisr);
-            isrinsn = Read32(pisr);
-            UnlockBus(pisr);
+            isrinsn = Load32(pisr);
             if (isrinsn == ((u32)0x0F | (u32)0xFF << 8 | (u32)0167 << 16 |
                             (u32)trapno << 24)) {
               optim = true;
@@ -1437,7 +1433,7 @@ static void OpHvcall(P) {
   HaltMachine(m, disp);
 }
 
-static void OpHvjmp(P) {
+static void OpHvtailcall(P) {
   OpIret(A);
   HaltMachine(m, disp);
 }
@@ -1446,26 +1442,26 @@ static void OpUd0GvqpEvqp(P) {
   if (Cpl(m) == 3) {
     OpUd(A);
   } else {
-    // define `hvcall` & `hvjmp` instructions which trap to our Blink
+    // define `hvcall` & `hvtailcall` instructions which trap to our Blink
     // hypervisor; these are encoded as x86 "invalid opcodes" in 16-bit mode:
-    // - 0f ff 3f         hvcall 0      ud0 (%bx), %di
-    // - 0f ff 7f disp8   hvcall ±disp  ud0 ±disp(%bx), %di
-    // - 0f ff bf disp16  hvcall ±disp  ud0 ±disp(%bx), %di
-    // - 0f ff 37         hvjmp 0       ud0 (%bx), %si
-    // - 0f ff 77 disp8   hvjmp ±disp   ud0 ±disp(%bx), %si
-    // - 0f ff b7 disp16  hvjmp ±disp   ud0 ±disp(%bx), %si
+    // - 0f ff 3f         hvcall 0          ud0 (%bx), %di
+    // - 0f ff 7f disp8   hvcall ±disp      ud0 ±disp(%bx), %di
+    // - 0f ff bf disp16  hvcall ±disp      ud0 ±disp(%bx), %di
+    // - 0f ff 37         hvtailcall 0      ud0 (%bx), %si
+    // - 0f ff 77 disp8   hvtailcall ±disp  ud0 ±disp(%bx), %si
+    // - 0f ff b7 disp16  hvtailcall ±disp  ud0 ±disp(%bx), %si
     //
     // `hvcall` invokes a "hypervisor trap" with the trap number given by
     // the displacement value
     //
-    // `hvjmp`, when run from within an interrupt service routine, will
+    // `hvtailcall`, when run from within an interrupt service routine, will
     // return (`iret`) to the ISR's caller & then invoke the numbered trap
     switch (Rep(rde) << 9 |
             ModrmMod(rde) << 6 | ModrmReg(rde) << 3 | ModrmRm(rde)) {
       case 00067:
       case 00167:
       case 00267:
-        OpHvjmp(A);
+        OpHvtailcall(A);
         break;
       case 00077:
       case 00177:

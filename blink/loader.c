@@ -494,6 +494,7 @@ void BootProgram(struct Machine *m,  //
     Write16(m->system->real + 0x7c00, 0x18CD);
   }
   VfsClose(fd);
+  SetWriteAddr(m, 0x7c00, 512);
 }
 
 static int GetElfHeader(char ehdr[64], const char *prog, const char *image) {
