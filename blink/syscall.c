@@ -35,7 +35,6 @@
 #include <sys/file.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include <sys/mount.h>
 #include <sys/param.h>
 #include <sys/resource.h>
 #include <sys/select.h>
@@ -102,6 +101,10 @@
 
 #ifdef HAVE_EPOLL_PWAIT1
 #include <sys/epoll.h>
+#endif
+
+#ifdef HAVE_SYS_MOUNT_H
+#include <sys/mount.h>
 #endif
 
 #ifdef SO_LINGER_SEC

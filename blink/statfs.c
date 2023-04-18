@@ -36,7 +36,7 @@
 #include <sys/vfs.h>
 #endif
 
-#ifndef _POSIX_C_SOURCE
+#if defined(HAVE_SYS_MOUNT_H) && !defined(_POSIX_C_SOURCE)
 #include <sys/mount.h>
 #endif
 

@@ -640,6 +640,7 @@ if [ -z "${POSIX}" ]; then
   ( config preadv "checking for preadv() and pwritev()... " uncomment "#define HAVE_PREADV" ) &
   ( config wait4 "checking for wait4()... " uncomment "#define HAVE_WAIT4" ) &
   ( config setresuid "checking for setresuid()... " uncomment "#define HAVE_SETRESUID" ) &
+  ( config sys_mount_h "checking for sys/mount.h... " uncomment "#define HAVE_SYS_MOUNT_H" ) &
 fi
 
 ( config sync "checking for sync()... " uncomment "#define HAVE_SYNC" ) &
