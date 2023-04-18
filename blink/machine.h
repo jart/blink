@@ -480,7 +480,7 @@ _Noreturn void ThrowSegmentationFault(struct Machine *, i64);
 _Noreturn void ThrowProtectionFault(struct Machine *);
 _Noreturn void OpUdImpl(struct Machine *);
 _Noreturn void OpUd(P);
-_Noreturn void OpHlt(P);
+void OpHlt(P);
 void JitlessDispatch(P);
 void RestoreIp(struct Machine *);
 void CheckForSignals(struct Machine *);
