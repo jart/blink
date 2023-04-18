@@ -61,5 +61,6 @@
 // #define HAVE_STRUCT_TIMEZONE
 // #define HAVE_SCHED_GETAFFINITY
 // #define HAVE_PTHREAD_PROCESS_SHARED
+// #define HAVE_SYS_MOUNT_H
 
 #endif /* BLINK_CONFIG_H_ */
