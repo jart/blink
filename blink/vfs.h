@@ -132,7 +132,9 @@ struct VfsOps {
   pid_t (*Tcgetsid)(struct VfsInfo *);
   pid_t (*Tcgetpgrp)(struct VfsInfo *);
   int (*Tcsetpgrp)(struct VfsInfo *, pid_t);
+#ifdef HAVE_SOCKATMARK
   int (*Sockatmark)(struct VfsInfo *);
+#endif
   int (*Fexecve)(struct VfsInfo *, char *const *, char *const *);
 };
 

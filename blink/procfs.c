@@ -1488,7 +1488,9 @@ struct VfsSystem g_procfs = {.name = "proc",
                                  .Tcgetsid = NULL,
                                  .Tcgetpgrp = NULL,
                                  .Tcsetpgrp = NULL,
+#ifdef HAVE_SOCKATMARK
                                  .Sockatmark = NULL,
+#endif
                                  .Fexecve = NULL,
                              }};
 

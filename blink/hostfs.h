@@ -113,7 +113,9 @@ int HostfsTcflow(struct VfsInfo *, int);
 pid_t HostfsTcgetsid(struct VfsInfo *);
 pid_t HostfsTcgetpgrp(struct VfsInfo *);
 int HostfsTcsetpgrp(struct VfsInfo *, pid_t);
+#ifdef HAVE_SOCKATMARK
 int HostfsSockatmark(struct VfsInfo *);
+#endif
 int HostfsFexecve(struct VfsInfo *, char *const *, char *const *);
 
 int HostfsWrapFd(int fd, bool dodup, struct VfsInfo **output);

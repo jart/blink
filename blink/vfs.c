@@ -2782,6 +2782,7 @@ int VfsTcsetpgrp(int fd, pid_t pgrp_id) {
   return ret;
 }
 
+#ifdef HAVE_SOCKATMARK
 int VfsSockatmark(int fd) {
   struct VfsInfo *info;
   int ret;
@@ -2797,6 +2798,7 @@ int VfsSockatmark(int fd) {
   unassert(!VfsFreeInfo(info));
   return ret;
 }
+#endif
 
 int VfsExecve(const char *pathname, char *const *argv, char *const *envp) {
   struct VfsInfo *info;

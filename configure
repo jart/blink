@@ -651,9 +651,9 @@ fi
 ( config memccpy "checking for memccpy()... " uncomment "#define HAVE_MEMCCPY" ) &
 ( config seekdir "checking for seekdir()... " uncomment "#define HAVE_SEEKDIR" ) &
 ( config realpath "checking for realpath()... " uncomment "#define HAVE_REALPATH" ) &
-wait
 ( config setreuid "checking for setreuid()... " uncomment "#define HAVE_SETREUID" ) &
 ( config sendto_zero "checking for sendto(0.0.0.0)... " uncomment "#define HAVE_SENDTO_ZERO" ) &
+wait
 ( config struct_timezone "checking for struct timezone... " uncomment "#define HAVE_STRUCT_TIMEZONE" ) &
 ( config sa_len "checking for sockaddr::sa_len... " uncomment "#define HAVE_SA_LEN" ) &
 ( config map_shared "checking for mmap(MAP_SHARED)... " uncomment "#define HAVE_MAP_SHARED" ) &
@@ -661,6 +661,8 @@ wait
 ( config clock_settime "checking for clock_settime()... " uncomment "#define HAVE_CLOCK_SETTIME" ) &
 ( config sched_h "checking for sched.h... " uncomment "#define HAVE_SCHED_H" ) &
 ( config pthread_process_shared "checking for PTHREAD_PROCESS_SHARED... " uncomment "#define HAVE_PTHREAD_PROCESS_SHARED" ) &
+( config pthread_setcancelstate "checking for pthread_setcancelstate()... " uncomment "#define HAVE_PTHREAD_SETCANCELSTATE" ) &
+( config sockatmark "checking for sockatmark()... " uncomment "#define HAVE_SOCKATMARK" ) &
 
 wait
 rm -f "${LOCK}"
