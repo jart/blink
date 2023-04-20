@@ -257,6 +257,7 @@ static int IoctlTcflsh(struct Machine *m, int fildes, int queue) {
   return VfsTcflush(fildes, queue);
 }
 
+#ifdef HAVE_SOCKATMARK
 static int IoctlSiocatmark(struct Machine *m, int fildes, i64 addr) {
   u8 *p;
   int rc;
@@ -267,6 +268,7 @@ static int IoctlSiocatmark(struct Machine *m, int fildes, i64 addr) {
   }
   return rc;
 }
+#endif
 
 static int IoctlGetInt32(struct Machine *m, int fildes, unsigned long cmd,
                          i64 addr) {
@@ -350,9 +352,11 @@ int SysIoctl(struct Machine *m, int fildes, u64 request, i64 addr) {
       return IoctlTiocgsid(m, fildes, addr);
     case TCFLSH_LINUX:
       return IoctlTcflsh(m, fildes, addr);
+#ifdef HAVE_SOCKATMARK
 #ifndef DISABLE_SOCKETS
     case SIOCATMARK_LINUX:
       return IoctlSiocatmark(m, fildes, addr);
+#endif
 #endif
 #ifdef FIONREAD
     case FIONREAD_LINUX:

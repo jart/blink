@@ -35,10 +35,14 @@ int WriteErrorString(const char *buf) {
 
 int WriteError(int fd, const char *buf, int len) {
   int rc, cs;
+#ifdef HAVE_PTHREAD_SETCANCELSTATE
   unassert(!pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs));
+#endif
   do rc = write(fd > 0 ? fd : g_errfd, buf, len);
   while (rc == -1 && errno == EINTR);
+#ifdef HAVE_PTHREAD_SETCANCELSTATE
   unassert(!pthread_setcancelstate(cs, 0));
+#endif
   return rc;
 }
 

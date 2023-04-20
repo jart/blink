@@ -1726,6 +1726,7 @@ int HostfsTcsetpgrp(struct VfsInfo *info, pid_t pgrp) {
   return tcsetpgrp(hostinfo->filefd, pgrp);
 }
 
+#ifdef HAVE_SOCKATMARK
 int HostfsSockatmark(struct VfsInfo *info) {
   struct HostfsInfo *hostinfo;
   VFS_LOGF("HostfsSockatmark(%p)", info);
@@ -1735,6 +1736,7 @@ int HostfsSockatmark(struct VfsInfo *info) {
   hostinfo = (struct HostfsInfo *)info->data;
   return sockatmark(hostinfo->filefd);
 }
+#endif
 
 int HostfsPipe(struct VfsInfo *infos[2]) {
   int i;
@@ -2016,7 +2018,9 @@ struct VfsSystem g_hostfs = {.name = "hostfs",
                                  .Tcgetsid = HostfsTcgetsid,
                                  .Tcgetpgrp = HostfsTcgetpgrp,
                                  .Tcsetpgrp = HostfsTcsetpgrp,
+#ifdef HAVE_SOCKATMARK
                                  .Sockatmark = HostfsSockatmark,
+#endif
                                  .Fexecve = HostfsFexecve,
                              }};
 
