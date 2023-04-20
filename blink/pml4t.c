@@ -57,7 +57,7 @@ int FindContiguousMemoryRanges(struct Machine *m,
                                struct ContiguousMemoryRanges *ranges) {
   u64 cr3;
   ranges->i = 0;
-  if (m->mode == XED_MODE_LONG) {
+  if (m->mode.omode == XED_MODE_LONG) {
     cr3 = m->system->cr3;
     FindContiguousMemoryRangesImpl(m, ranges, 0, 39, cr3, 256, 512);
     FindContiguousMemoryRangesImpl(m, ranges, 0, 39, cr3, 0, 256);

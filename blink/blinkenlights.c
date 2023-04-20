@@ -185,7 +185,7 @@ alt-t   slowmo"
 #define DISPWIDTH  80     // size of the embedded tty display
 #define DUMPWIDTH  64     // columns of bytes in memory panel
 #define ASMWIDTH   40     // seed the width of assembly panel
-#define ASMRAWMIN  (m->mode == XED_MODE_REAL ? 50 : 65)
+#define ASMRAWMIN  (m->mode.omode == XED_MODE_REAL ? 50 : 65)
 
 #define RESTART  0x001
 #define REDRAW   0x002
@@ -549,7 +549,7 @@ static u8 CycleXmmSize(u8 w) {
 }
 
 static int GetPointerWidth(void) {
-  return 2 << m->mode;
+  return 2 << m->mode.omode;
 }
 
 static i64 GetSp(void) {
@@ -1037,7 +1037,7 @@ static int PickNumberOfXmmRegistersToShow(void) {
 }
 
 static int GetRegHexWidth(void) {
-  switch (m->mode & 3) {
+  switch (m->mode.omode) {
     case XED_MODE_LONG:
       return 16;
     case XED_MODE_LEGACY:
@@ -1057,7 +1057,7 @@ static int GetRegHexWidth(void) {
 }
 
 static int GetAddrHexWidth(void) {
-  switch (m->mode & 3) {
+  switch (m->mode.omode) {
     case XED_MODE_LONG:
       return 12;
     case XED_MODE_LEGACY:
@@ -1403,7 +1403,7 @@ static void DrawRegister(struct Panel *p, i64 i, i64 r, bool first) {
   value = Read64(m->weg[r]);
   previous = Read64(laststate.weg[r]);
   if (value != previous) AppendPanel(p, i, "\033[7m");
-  snprintf(buf, sizeof(buf), "%-3s", kRegisterNames[m->mode][r]);
+  snprintf(buf, sizeof(buf), "%-3s", kRegisterNames[m->mode.omode][r]);
   AppendPanel(p, i, buf);
   AppendPanel(p, i, " ");
   snprintf(buf, sizeof(buf), "%0*" PRIx64, GetRegHexWidth(), value);
@@ -1457,8 +1457,8 @@ static void DrawCpu(struct Panel *p) {
   DrawRegister(p, 5, 9, 1), DrawRegister(p, 5, 13, 0), DrawSt(p, 5, 5);
   DrawRegister(p, 6, 10, 1), DrawRegister(p, 6, 14, 0), DrawSt(p, 6, 6);
   DrawRegister(p, 7, 11, 1), DrawRegister(p, 7, 15, 0), DrawSt(p, 7, 7);
-  snprintf(buf, sizeof(buf), "%-3s %0*" PRIx64 "  FLG", kRipName[m->mode],
-           GetRegHexWidth(), m->ip);
+  snprintf(buf, sizeof(buf), "%-3s %0*" PRIx64 "  FLG",
+           kRipName[m->mode.omode], GetRegHexWidth(), m->ip);
   AppendPanel(p, 8, buf);
   DrawFlag(p, 8, 'C', GetFlag(m->flags, FLAGS_CF));
   DrawFlag(p, 8, 'P', GetFlag(m->flags, FLAGS_PF));
@@ -1808,7 +1808,7 @@ static void DrawBreakpoints(struct Panel *p) {
 }
 
 static int GetPreferredStackAlignmentMask(void) {
-  switch (m->mode) {
+  switch (m->mode.omode) {
     case XED_MODE_LONG:
       return 15;
     case XED_MODE_LEGACY:
@@ -1860,8 +1860,8 @@ static void DrawFrames(struct Panel *p) {
       break;
     }
     sp = bp;
-    bp = ReadWordSafely(m->mode, r + 0);
-    rp = ReadWordSafely(m->mode, r + 8);
+    bp = ReadWordSafely(m->mode.omode, r + 0);
+    rp = ReadWordSafely(m->mode.omode, r + 8);
   }
 }
 
@@ -4063,7 +4063,8 @@ int main(int argc, char *argv[]) {
   AddPath_StartOp_Hook = AddPath_StartOp_Tui;
 #endif
   unassert((pty = NewPty()));
-  unassert((s = NewSystem(wantmetal ? XED_MODE_REAL : XED_MODE_LONG)));
+  unassert((s = NewSystem(wantmetal ? XED_MACHINE_MODE_REAL :
+                                      XED_MACHINE_MODE_LONG)));
   unassert((m = g_machine = NewMachine(s, 0)));
 #ifdef HAVE_JIT
   if (!FLAG_wantjit || wantmetal) {

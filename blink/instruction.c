@@ -46,7 +46,7 @@ static bool IsOpcodeEqual(struct XedDecodedInst *xedd, u8 *a) {
 static int ReadInstruction(struct Machine *m, u8 *p, unsigned n) {
   struct XedDecodedInst xedd[1];
   STATISTIC(++instructions_decoded);
-  if (!DecodeInstruction(xedd, p, n, m->mode)) {
+  if (!DecodeInstruction(xedd, p, n, m->mode.omode)) {
     memcpy(m->xedd, xedd, kInstructionBytes);
     return 0;
   } else {

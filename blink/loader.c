@@ -746,7 +746,7 @@ error: unsupported executable; we need:\n\
     m->system->brk ^= Read64(elf->rng) & FLAG_aslrmask;
     m->system->automap ^= (Read64(elf->rng) & FLAG_aslrmask);
   }
-  if (m->mode == XED_MODE_REAL) {
+  if (m->mode.genmode == XED_GEN_MODE_REAL) {
     LoadDefaultBios(m);
     if (endswith(prog, ".com")) {
       // cosmo convention (see also binbase)

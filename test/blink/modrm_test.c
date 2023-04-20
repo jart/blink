@@ -30,7 +30,7 @@ struct XedDecodedInst xedd;
 
 void SetUp(void) {
   InitMap();
-  unassert((s = NewSystem(XED_MODE_LONG)));
+  unassert((s = NewSystem(XED_MACHINE_MODE_LONG)));
   unassert((m = NewMachine(s, 0)));
   m->xedd = &xedd;
   memset(&xedd, 0, sizeof(xedd));

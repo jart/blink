@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include <string.h>
+
 #include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
@@ -38,8 +40,11 @@ static relegated u64 GetDescriptorBase(u64 d) {
   return (d & 0xff00000000000000) >> 32 | (d & 0x000000ffffff0000) >> 16;
 }
 
-static relegated int GetDescriptorMode(u64 d) {
-  u8 kMode[] = {XED_MODE_REAL, XED_MODE_LONG, XED_MODE_LEGACY, XED_MODE_LONG};
+static struct XedMachineMode GetDescriptorMode(u64 d) {
+  static const struct XedMachineMode kMode[] = {XED_MACHINE_MODE_LEGACY_16,
+                                                XED_MACHINE_MODE_LONG,
+                                                XED_MACHINE_MODE_LEGACY_32,
+                                                XED_MACHINE_MODE_LONG};
   return kMode[(d & 0x0060000000000000) >> 53];
 }
 
@@ -51,12 +56,13 @@ static relegated bool IsNullSelector(u16 sel) {
   return (sel & -4u) == 0;
 }
 
-static relegated void ChangeMachineMode(struct Machine *m, int mode) {
-  if (mode == m->mode) return;
+static relegated void ChangeMachineMode(struct Machine *m,
+                                        struct XedMachineMode mode) {
+  if (memcmp(&mode, &m->mode, sizeof(mode)) == 0) return;
   ResetInstructionCache(m);
   SetMachineMode(m, mode);
 #ifdef HAVE_JIT
-  if (mode == XED_MODE_LONG && FLAG_wantjit) {
+  if (mode.omode == XED_MODE_LONG && FLAG_wantjit) {
     EnableJit(&m->system->jit);
   }
 #endif
@@ -286,9 +292,18 @@ relegated void OpMovRqCq(P) {
 }
 
 relegated void OpMovCqRq(P) {
+  u64 cr0;
+  struct XedMachineMode mode;
   switch (ModrmReg(rde)) {
     case 0:
-      m->system->cr0 = Get64(RegRexbRm(m, rde));
+      m->system->cr0 = cr0 = Get64(RegRexbRm(m, rde));
+      mode = m->system->mode;
+      if ((cr0 & CR0_PE)) {
+        mode.genmode = XED_GEN_MODE_PROTECTED;
+      } else {
+        mode.genmode = XED_GEN_MODE_REAL;
+      }
+      ChangeMachineMode(m, mode);
       break;
     case 2:
       m->system->cr2 = Get64(RegRexbRm(m, rde));

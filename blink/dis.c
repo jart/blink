@@ -241,7 +241,7 @@ static long DisAppendOpLines(struct Dis *d, struct Machine *m, i64 addr) {
       n = k;
     }
   }
-  DecodeInstruction(d->xedd, p, n, m->mode);
+  DecodeInstruction(d->xedd, p, n, m->mode.omode);
   n = d->xedd->length;
   op.addr = addr;
   op.size = n;
