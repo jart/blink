@@ -248,7 +248,7 @@ struct OpCache {
 };
 
 struct System {
-  u8 mode;
+  struct XedMachineMode mode;
   bool dlab;
   bool isfork;
   bool exited;
@@ -326,7 +326,7 @@ struct MachineTlb {
 struct Machine {                         //
   u64 ip;                                // instruction pointer
   u8 oplen;                              // length of operation
-  u8 mode;                               // [dup] XED_MODE_{REAL,LEGACY,LONG}
+  struct XedMachineMode mode;            // [dup] XED_MACHINE_MODE_REAL etc.
   bool threaded;                         // must use synchronization
   _Atomic(bool) attention;               // signals main interpreter loop
   u32 flags;                             // x86 eflags register
@@ -441,10 +441,10 @@ extern _Thread_local struct Machine *g_machine;
 extern const nexgen32e_f kConvert[3];
 extern const nexgen32e_f kSax[3];
 
-struct System *NewSystem(int);
+struct System *NewSystem(struct XedMachineMode);
 void FreeSystem(struct System *);
 void SignalActor(struct Machine *);
-void SetMachineMode(struct Machine *, int);
+void SetMachineMode(struct Machine *, struct XedMachineMode);
 struct Machine *NewMachine(struct System *, struct Machine *);
 i64 AreAllPagesUnlocked(struct System *) nosideeffect;
 bool IsOrphan(struct Machine *) nosideeffect;
@@ -802,7 +802,7 @@ void LogCodOp(struct Machine *, const char *);
 #endif
 
 MICRO_OP_SAFE u8 Cpl(struct Machine *m) {
-  return m->mode != XED_MODE_REAL ? (m->cs.sel & 3u) : 0u;
+  return m->mode.genmode != XED_GEN_MODE_REAL ? (m->cs.sel & 3u) : 0u;
 }
 
 #define BEGIN_NO_PAGE_FAULTS \

@@ -1030,7 +1030,7 @@ void OpFpu(P) {
   bool ismemory;
   op = Opcode(rde) & 7;
   ismemory = ModrmMod(rde) != 3;
-  m->fpu.ip = MaskAddress(m->mode, m->ip - Oplength(rde));
+  m->fpu.ip = MaskAddress(m->mode.omode, m->ip - Oplength(rde));
   m->fpu.op = op << 8 | ModrmMod(rde) << 6 | ModrmReg(rde) << 3 | ModrmRm(rde);
   m->fpu.dp = ismemory ? ComputeAddress(A) : 0;
   switch (DISP(op, ismemory, ModrmReg(rde))) {

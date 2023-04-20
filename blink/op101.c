@@ -32,7 +32,7 @@ static void StoreDescriptorTable(P, u16 limit, u64 base) {
   l = ComputeAddress(A);
   if (l + 10 <= kRealSize) {
     Write16(m->system->real + l, limit);
-    if (m->mode == XED_MODE_LONG) {
+    if (Mode(rde) == XED_MODE_LONG) {
       Write64(m->system->real + l + 2, base);
       SetWriteAddr(m, l, 10);
     } else {
@@ -56,7 +56,7 @@ static void LoadDescriptorTable(P, u16 *out_limit, u64 *out_base) {
     //   loaded."
     // - "In 64-bit mode, the instruction’s operand size is fixed at 8 + 2
     //   bytes (an 8-byte base and a 2-byte limit)."
-    if (m->mode == XED_MODE_LONG) {
+    if (Mode(rde) == XED_MODE_LONG) {
       base = Read64(m->system->real + l + 2);
       SetReadAddr(m, l, 10);
     } else if (!Osz(rde)) {
@@ -116,7 +116,7 @@ static void InvlpgM(P) {
   // if (Cpl(m)) OpUdImpl(m);
   as = LoadEffectiveAddress(A);
   virt = as.seg + as.addr;
-  if (m->mode == XED_MODE_LONG &&
+  if (Mode(rde) == XED_MODE_LONG &&
       !(-0x800000000000 <= virt && virt < 0x800000000000)) {
     // In 64-bit mode, if the memory address is in non-canonical form,
     // then INVLPG is the same as a NOP. -Quoth Intel §invlpg

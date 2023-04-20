@@ -189,19 +189,21 @@ long GetMaxRss(struct System *s) {
   return MIN(kMaxResident, Read64(s->rlim[RLIMIT_AS_LINUX].cur)) / 4096;
 }
 
-struct System *NewSystem(int mode) {
+struct System *NewSystem(struct XedMachineMode mode) {
   long i;
   struct System *s;
-  unassert(mode == XED_MODE_REAL ||    //
-           mode == XED_MODE_LEGACY ||  //
-           mode == XED_MODE_LONG);
+  unassert(mode.omode == XED_MODE_REAL ||    //
+           mode.omode == XED_MODE_LEGACY ||  //
+           mode.omode == XED_MODE_LONG);
+  unassert(mode.genmode == XED_GEN_MODE_REAL ||    //
+           mode.genmode == XED_GEN_MODE_PROTECTED);
   if (posix_memalign((void **)&s, _Alignof(struct System), sizeof(*s))) {
     enomem();
     return 0;
   }
   memset(s, 0, sizeof(*s));
   s->mode = mode;
-  if (s->mode == XED_MODE_REAL) {
+  if (s->mode.omode == XED_MODE_REAL) {
     if (posix_memalign((void **)&s->real, 4096, kRealSize)) {
       free(s);
       enomem();
@@ -787,7 +789,7 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
   unassert(!(flags & PAGE_MAP));
   unassert(!(flags & PAGE_HOST));
   unassert(!(flags & PAGE_RSRV));
-  unassert(s->mode == XED_MODE_LONG);
+  unassert(s->mode.omode == XED_MODE_LONG);
 
   // determine memory protection
   prot = GetProtection(flags);

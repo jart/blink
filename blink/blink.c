@@ -207,7 +207,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   sigset_t oldmask;
   struct Machine *m, *old;
   if ((old = g_machine)) KillOtherThreads(old->system);
-  unassert((g_machine = m = NewMachine(NewSystem(XED_MODE_LONG), 0)));
+  unassert((g_machine = m = NewMachine(NewSystem(XED_MACHINE_MODE_LONG), 0)));
 #ifdef HAVE_JIT
   if (FLAG_nojit) DisableJit(&m->system->jit);
 #endif

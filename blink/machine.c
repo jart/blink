@@ -215,7 +215,7 @@ static relegated void OpLsl(P) {
   }
 }
 
-void SetMachineMode(struct Machine *m, int mode) {
+void SetMachineMode(struct Machine *m, struct XedMachineMode mode) {
   m->mode = mode;
   m->system->mode = mode;
 }
@@ -810,11 +810,11 @@ static void GenInterrupt(P, u8 trapno) {
 #else
   u16 offset;
   struct System *s;
-  switch (m->mode) {
+  switch (m->mode.genmode) {
     default:
       HaltMachine(m, trapno);
       break;
-    case XED_MODE_REAL:
+    case XED_GEN_MODE_REAL:
       offset = (u16)trapno * 4;
       s = m->system;
       if (offset + 3 > s->idt_limit) {
@@ -872,7 +872,7 @@ static void OpInterrupt3(P) {
 
 #ifndef DISABLE_METAL
 static void OpInto(P) {
-  if (m->mode != XED_MODE_LONG) {
+  if (Mode(rde) != XED_MODE_LONG) {
     if (GetFlag(m->flags, FLAGS_OF)) HaltMachine(m, 4);
   } else {
     OpUdImpl(m);
@@ -880,7 +880,7 @@ static void OpInto(P) {
 }
 
 static void OpIret(P) {
-  if (m->mode == XED_MODE_REAL) {
+  if (m->mode.genmode == XED_GEN_MODE_REAL) {
     OpRetf(A);
     if (!Osz(rde)) {
       // Intel V2A § 3.2 says that iretl should only update some parts of

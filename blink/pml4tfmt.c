@@ -214,7 +214,7 @@ char *FormatPml4t(struct Machine *m) {
   struct MapMaker u = {.b = b};
   u16 range[][2] = {{256, 512}, {0, 256}};
   b[0] = 0;
-  if (m->mode != XED_MODE_LONG) return b;
+  if (m->mode.omode != XED_MODE_LONG) return b;
   unassert(m->system->cr3);
   pd[0] = GetPt(m, m->system->cr3, true);
   for (i = 0; i < ARRAYLEN(range); ++i) {

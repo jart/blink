@@ -262,8 +262,8 @@ MapError:
 u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
   u8 *host;
   u64 entry;
-  if (m->mode == XED_MODE_LONG ||
-      (m->mode != XED_MODE_REAL && (m->system->cr0 & CR0_PG))) {
+  if (m->mode.omode == XED_MODE_LONG ||
+      (m->mode.genmode != XED_GEN_MODE_REAL && (m->system->cr0 & CR0_PG))) {
     if (!(entry = FindPageTableEntry(m, virt & -4096))) {
       return 0;
     }
@@ -316,7 +316,7 @@ bool IsValidMemory(struct Machine *m, i64 virt, i64 size, int prot) {
   u64 pte, mask, need;
   size += virt & 4095;
   virt &= -4096;
-  unassert(m->mode == XED_MODE_LONG);
+  unassert(m->mode.omode == XED_MODE_LONG);
   unassert(prot && !(prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)));
   need = mask = 0;
   if (prot & PROT_READ) {
