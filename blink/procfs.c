@@ -52,8 +52,8 @@ struct ProcfsInfo {
   char name[PROCFS_NAME_MAX];
   struct timespec time;
   union {
-    struct ProcfsOpenFile *openfile;
-    struct ProcfsOpenDir *opendir;
+    _Atomic(struct ProcfsOpenFile *)openfile;
+    _Atomic(struct ProcfsOpenDir *)opendir;
   };
   union {
     int (*readdir)(struct VfsInfo *, struct dirent *);
@@ -921,7 +921,6 @@ static int ProcfsOpendir(struct VfsInfo *info, struct VfsInfo **output) {
   return 0;
 }
 
-#ifdef HAVE_SEEKDIR
 static void ProcfsSeekdir(struct VfsInfo *info, long offset) {
   struct ProcfsInfo *procinfo = (struct ProcfsInfo *)info->data;
   if (!S_ISDIR(procinfo->mode) && !procinfo->opendir) {
@@ -931,6 +930,7 @@ static void ProcfsSeekdir(struct VfsInfo *info, long offset) {
   procinfo->opendir->index = offset;
 }
 
+#ifdef HAVE_SEEKDIR
 static long ProcfsTelldir(struct VfsInfo *info) {
   struct ProcfsInfo *procinfo = (struct ProcfsInfo *)info->data;
   if (!S_ISDIR(procinfo->mode) && !procinfo->opendir) {
@@ -958,7 +958,7 @@ static struct dirent *ProcfsReaddir(struct VfsInfo *info) {
 }
 
 static void ProcfsRewinddir(struct VfsInfo *info) {
-  return ProcfsSeekdir(info, 0);
+  ProcfsSeekdir(info, 0);
 }
 
 static int ProcfsClosedir(struct VfsInfo *info) {
@@ -968,12 +968,12 @@ static int ProcfsClosedir(struct VfsInfo *info) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int ProcfsUtime(struct VfsInfo *, const char *, const struct timespec[2],
-                       int) {
+static int ProcfsUtime(struct VfsInfo *info, const char *name,
+                       const struct timespec times[2], int flags) {
   return einval();
 }
 
-static int ProcfsFutime(struct VfsInfo *, const struct timespec[2]) {
+static int ProcfsFutime(struct VfsInfo *info, const struct timespec times[2]) {
   return einval();
 }
 
