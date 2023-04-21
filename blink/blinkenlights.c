@@ -2703,7 +2703,7 @@ static void OnDiskServiceGetParams(void) {
 
 static void OnDiskServiceReadSectors(void) {
   int fd;
-  i64 addr, size;
+  i64 addr, size, rsize, ursize;
   i64 sectors, drive, head, cylinder, sector, offset;
   DetermineChs();
   sectors = m->al;
@@ -2729,10 +2729,22 @@ static void OnDiskServiceReadSectors(void) {
   }
   errno = 0;
   if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
-      VfsPread(fd, m->system->real + addr, size, offset) == size) {
-    SetWriteAddr(m, addr, size);
-    m->ah = 0x00;  // success
-    SetCarry(false);
+      (rsize = VfsPread(fd, m->system->real + addr, size, offset)) >= 0) {
+    ursize = ROUNDUP(rsize, 512);
+    if (ursize != rsize) {
+      memset(m->system->real + addr + rsize, 0, ursize - rsize);
+    }
+    SetWriteAddr(m, addr, ursize);
+    if (ursize == size) {
+      m->ah = 0x00;  // success
+      SetCarry(false);
+    } else {
+      sectors = ursize / 512;
+      LOGF("bios read sectors: partial read %" PRId64 " sectors", sectors);
+      m->al = sectors;
+      m->ah = 0x04;  // sector not found
+      SetCarry(true);
+    }
   } else {
     LOGF("bios read sectors failed: %s", DescribeHostErrno(errno));
     m->al = 0x00;
@@ -2759,7 +2771,8 @@ static void OnDiskServiceProbeExtended(void) {
 static void OnDiskServiceReadSectorsExtended(void) {
   int fd;
   u8 drive = m->dl;
-  i64 pkt_addr = m->ds.base + Get16(m->si), addr, sectors, size, lba, offset;
+  i64 pkt_addr = m->ds.base + Get16(m->si), addr, sectors, size, lba, offset,
+      rsize, ursize;
   u8 pkt_size, *pkt;
   (void)drive;
   SetReadAddr(m, pkt_addr, 1);
@@ -2795,10 +2808,22 @@ static void OnDiskServiceReadSectorsExtended(void) {
     }
     errno = 0;
     if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) != -1 &&
-        VfsPread(fd, m->system->real + addr, size, offset) == size) {
-      SetWriteAddr(m, addr, size);
-      m->ah = 0x00;  // success
-      SetCarry(false);
+        (rsize = VfsPread(fd, m->system->real + addr, size, offset)) >= 0) {
+      ursize = ROUNDUP(rsize, 512);
+      if (ursize != rsize) {
+        memset(m->system->real + addr + rsize, 0, ursize - rsize);
+      }
+      SetWriteAddr(m, addr, ursize);
+      if (ursize == size) {
+        m->ah = 0x00;  // success
+        SetCarry(false);
+      } else {
+        sectors = ursize / 512;
+        LOGF("bios read sectors: partial read %" PRId64 " sectors", sectors);
+        Write16(pkt + 2, sectors);
+        m->ah = 0x04;  // sector not found
+        SetCarry(true);
+      }
     } else {
       LOGF("bios read sector failed: %s", DescribeHostErrno(errno));
       SetWriteAddr(m, pkt_addr + 2, 2);

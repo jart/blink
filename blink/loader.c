@@ -487,7 +487,7 @@ void BootProgram(struct Machine *m,  //
   memset(m->system->real + 0x500, 0, kBiosBase - 0x500);
   memset(m->system->real + 0x00100000, 0, kRealSize - 0x00100000);
   if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) == -1 ||
-      VfsRead(fd, m->system->real + 0x7c00, 512) != 512) {
+      VfsRead(fd, m->system->real + 0x7c00, 512) <= 0) {
     // if we failed to load the boot sector for whatever reason, then...
     // ...arrange to invoke int 0x18 (diskless boot hook)
     // TODO: maybe error out more quickly?
