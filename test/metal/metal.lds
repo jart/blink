@@ -5,6 +5,7 @@ SECTIONS {
   . = 0x7c00;
 
   .head : {
+    _base = .;
     *(.head)
 
     /*
@@ -30,8 +31,11 @@ SECTIONS {
 
   .text : {
     *(.text .text.*)
+    . = ALIGN(0x10);
     *(.rodata .rodata.*)
+    . = ALIGN(0x10);
     *(.data .data.*)
+    _edata = .;
   }
 
   .bss : {
@@ -42,4 +46,6 @@ SECTIONS {
   /DISCARD/ : {
     *(.*)
   }
+
+  _sectors = ALIGN(_edata - _base, 512) / 512;
 }

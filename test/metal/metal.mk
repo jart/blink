@@ -24,7 +24,7 @@ o/$(MODE)/test/metal/%.bin:							\
 	@mkdir -p $(@D)
 	$(TEST_METAL_LINK)
 
-$(TEST_METAL_OBJS): test/metal/metal.mk
+$(TEST_METAL_OBJS): test/metal/metal.mk test/metal/mac.inc
 
 o/$(MODE)/test/metal/%.bin.ok:						\
 		o/$(MODE)/test/metal/%.bin				\

@@ -227,6 +227,7 @@ const char *DisSpecMap0(struct XedDecodedInst *x, char *p) {
     RCASE(0xC5, "lds %Gv Mp");
     RCASE(0xC6, "mov Eb Ib");
     RCASE(0xC7, "mov Evqp Ivds");
+    RCASE(0xC8, "enter >Ib Iw");
     RCASE(0xC9, "leave");
     RCASE(0xCA, "lret Iw");
     RCASE(0xCB, "lret");
@@ -530,6 +531,7 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0x02, "lar %Gvqp Ev");
     RCASE(0x03, "lsl %Gvqp Ev");
     RCASE(0x05, "syscall");
+    RCASE(0x06, "clts");
     RCASE(0x09, "wbinvd");
     RCASE(0x0B, "ud2");
     RCASE(0x20, "mov %Hd %Cd");
@@ -724,6 +726,23 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
         return "lzcnt %Gvqp Evqp";
       } else {
         return "bsr %Gvqp Evqp";
+      }
+    case 0x00:
+      switch (ModrmReg(x->op.rde)) {
+        case 0:
+          return "sldt Ew";
+        case 1:
+          return "str Ew";
+        case 2:
+          return "lldt Ew";
+        case 3:
+          return "ltr Ew";
+        case 4:
+          return "verr Ew";
+        case 5:
+          return "verw Ew";
+        default:
+          return UNKNOWN;
       }
     case 0x01:
       switch (ModrmReg(x->op.rde)) {

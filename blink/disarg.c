@@ -413,6 +413,16 @@ static char *DisImm(struct Dis *d, u64 rde, char *p) {
                        ZeroExtend(rde, d->xedd->op.uimm0));
 }
 
+static char *DisIw(struct Dis *d, u64 rde, char *p) {
+  return DisSymLiteral(d, rde, p, d->xedd->op.uimm0 & 0xffff,
+                                  d->xedd->op.uimm0 & 0xffff);
+}
+
+static char *DisEnterIb(struct Dis *d, u64 rde, char *p) {
+  return DisSymLiteral(d, rde, p, d->xedd->op.uimm0 >> 16 & 0xff,
+                                  d->xedd->op.uimm0 >> 16 & 0xff);
+}
+
 static char *DisRvds(struct Dis *d, u64 rde, char *p) {
   return DisSymLiteral(d, rde, p, d->xedd->op.disp, d->xedd->op.disp);
 }
@@ -561,7 +571,6 @@ static char *DisWps(struct Dis *d, u64 rde, char *p) {
 #define DisIvds DisImm
 #define DisIvqp DisImm
 #define DisIvs  DisImm
-#define DisIw   DisImm
 #define DisMdi  DisM
 #define DisMdq  DisM
 #define DisMdqp DisM
@@ -633,6 +642,7 @@ static const struct DisArg {
     {"%rAX", DisRax},    //
     {"%rDX", DisRdx},    //
     {"*Eq", DisIndirEq}, //
+    {">Ib", DisEnterIb}, //
     {"BBb", DisBBb},     //
     {"DX", DisPort},     //
     {"EST", DisEst},     //

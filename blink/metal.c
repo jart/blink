@@ -236,6 +236,14 @@ relegated void OpCallfEq(P) {
   LoadFarPointer(A, SREG_CS, true);
 }
 
+relegated void OpClts(P) {
+  if (Cpl(m)) {
+    ThrowProtectionFault(m);
+  } else {
+    m->system->cr0 &= ~(u64)CR0_TS;
+  }
+}
+
 relegated void OpWrmsr(P) {
   switch (Get32(m->cx)) {
     case MSR_IA32_EFER:
