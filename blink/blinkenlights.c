@@ -3103,6 +3103,10 @@ static void OnBaseMemSizeService(void) {
   Put16(m->ax, Get16(m->system->real + 0x413));
 }
 
+static void OnPrinterService(void) {
+  m->ah = 0xb0;  // "no printer": not busy, out of paper, selected
+}
+
 static void OnTimeServiceGetSystemTime(void) {
   u64 DAY_SECS = 24UL * 60 * 60;
   struct timespec now = GetTime();
@@ -3210,6 +3214,9 @@ static bool OnHalt(int interrupt) {
       return true;
     case 0x12:
       OnBaseMemSizeService();
+      return true;
+    case 0x17:
+      OnPrinterService();
       return true;
     case 0x19:
       BootProgram(m, &m->system->elf);
