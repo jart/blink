@@ -444,6 +444,9 @@ static int diskcyls = 1023;
 static int diskheads = 16;  // default to 16 heads/cylinder, following QEMU
 static int disksects = 63;
 
+static u64 prevday = 0;  // day number of last call to int 0x1A, ah = 0, for
+                         // calculating elapsed midnight count
+
 static char *xasprintf(const char *fmt, ...) {
   char *s;
   va_list va;
@@ -2972,6 +2975,28 @@ static void OnVidyaService(void) {
   }
 }
 
+static void OnSerialServiceReset(void) {
+  if (Get16(m->dx) == 0) {
+    m->al = 0xb0;  // following QEMU
+    m->ah = 0x60;
+  } else {
+    m->al = 0x00;  // Ralf Brown's Interrupt List says "AX = 9E00h if
+    m->ah = 0x9e;  // disconnected (ArtiCom)"
+  }
+}
+
+static void OnSerialService(void) {
+  switch (m->ah) {
+    case 0x00:
+      OnSerialServiceReset();
+      break;
+    default:
+      m->al = 0x00;
+      m->ah = 0x9e;
+      break;
+  }
+}
+
 static void OnKeyboardServiceReadKeyPress(void) {
   uint8_t b;
   ssize_t rc;
@@ -3078,6 +3103,87 @@ static void OnBaseMemSizeService(void) {
   Put16(m->ax, Get16(m->system->real + 0x413));
 }
 
+static void OnPrinterService(void) {
+  m->ah = 0xb0;  // "no printer": not busy, out of paper, selected
+}
+
+static void OnTimeServiceGetSystemTime(void) {
+  u64 DAY_SECS = 24UL * 60 * 60;
+  struct timespec now = GetTime();
+  u64 currday, daytime;
+  u8 midnights = 0;
+  unassert(now.tv_sec >= DAY_SECS);
+  currday = (u64)now.tv_sec / DAY_SECS;
+  // calculate the number of midnights elapsed since the last call here
+  // this will also reset the midnight count
+  if (prevday != 0) {
+    if (currday > prevday) midnights = currday - prevday;
+  }
+  prevday = currday;
+  // calculate nanoseconds from day start
+  daytime = (u64)now.tv_sec - currday * DAY_SECS;
+  daytime = daytime * 1000000000L + now.tv_nsec;
+  // calculate BIOS system timer ticks from day start
+  daytime = daytime * (0x1800B0L / 80) / (DAY_SECS * 1000000000L / 80);
+  Put16(m->cx, daytime >> 16);
+  Put16(m->dx, daytime);
+  m->al = midnights;
+}
+
+static u8 ToBcdByte(u8 binary) {
+  static const u8 bcd[] =
+    {0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09,
+     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19,
+     0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x29,
+     0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
+     0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49,
+     0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59,
+     0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69,
+     0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79,
+     0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89,
+     0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97, 0x98, 0x99};
+  unassert(binary <= 99);
+  return bcd[binary];
+}
+
+static void OnTimeServiceGetRtcTime(void) {
+  struct timespec now = GetTime();
+  struct tm tm;
+  unassert(gmtime_r(&now.tv_sec, &tm));
+  m->ch = ToBcdByte(tm.tm_hour);
+  m->cl = ToBcdByte(tm.tm_min);
+  m->dh = ToBcdByte(tm.tm_sec);
+  m->dl = tm.tm_isdst;
+  SetCarry(false);
+}
+
+static void OnTimeServiceGetRtcDate(void) {
+  struct timespec now = GetTime();
+  struct tm tm;
+  unassert(gmtime_r(&now.tv_sec, &tm));
+  m->ch = ToBcdByte((tm.tm_year / 100U + 19) % 100U);
+  m->cl = ToBcdByte(tm.tm_year % 100U);
+  m->dh = ToBcdByte(tm.tm_mon + 1U);
+  m->dl = ToBcdByte(tm.tm_mday);
+  SetCarry(false);
+}
+
+static void OnTimeService(void) {
+  switch (m->ah) {
+    case 0x00:
+      OnTimeServiceGetSystemTime();
+      break;
+    case 0x02:
+      OnTimeServiceGetRtcTime();
+      break;
+    case 0x04:
+      OnTimeServiceGetRtcDate();
+      break;
+    default:
+      SetCarry(true);
+  }
+}
+
 static bool OnHalt(int interrupt) {
   SYS_LOGF("%" PRIx64 " %s OnHalt(%#x)", GetPc(m), tuimode ? "TUI" : "EXEC",
            interrupt);
@@ -3094,6 +3200,9 @@ static bool OnHalt(int interrupt) {
     case 0x10:
       OnVidyaService();
       return true;
+    case 0x14:
+      OnSerialService();
+      return true;
     case 0x15:
       OnInt15h();
       return true;
@@ -3106,8 +3215,14 @@ static bool OnHalt(int interrupt) {
     case 0x12:
       OnBaseMemSizeService();
       return true;
+    case 0x17:
+      OnPrinterService();
+      return true;
     case 0x19:
       BootProgram(m, &m->system->elf);
+      return true;
+    case 0x1A:
+      OnTimeService();
       return true;
     case kMachineEscape:
       return true;
