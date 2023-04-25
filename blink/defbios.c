@@ -115,9 +115,9 @@ static const u8 defbios[] = {
 void LoadDefaultBios(struct Machine *m) {
   size_t kBiosSize = sizeof(defbios);
   memcpy(m->system->real + kBiosEnd - kBiosSize, defbios, kBiosSize);
-  m->cs.sel = kBiosEntry >> 4;
-  m->cs.base = kBiosEntry;
-  m->ip = 0;
+  m->cs.sel = kBiosSeg;
+  m->cs.base = kBiosBase;
+  m->ip = kBiosEntry - kBiosBase;
 }
 
 void SetDefaultBiosIntVectors(struct Machine *m) {

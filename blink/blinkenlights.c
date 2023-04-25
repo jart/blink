@@ -1416,15 +1416,22 @@ static void DrawRegister(struct Panel *p, i64 i, i64 r, bool first) {
 }
 
 static void DrawSegment(struct Panel *p, i64 i, struct DescriptorCache value,
-                        struct DescriptorCache previous, const char *name) {
+                        struct DescriptorCache previous, const char *name,
+                        bool fsgs) {
   bool changed = value.sel != previous.sel || value.base != previous.base;
   char buf[32];
   if (changed) AppendPanel(p, i, "\033[7m");
   snprintf(buf, sizeof(buf), "%-3s", name);
   AppendPanel(p, i, buf);
   AppendPanel(p, i, " ");
-  snprintf(buf, sizeof(buf), "%04" PRIx16 " @ %012" PRIx64, value.sel,
-           value.base);
+  if (fsgs) {
+    // only FS & GS can have segment bases beyond the 4 GiB mark
+    snprintf(buf, sizeof(buf), "%04" PRIx16 " @ %016" PRIx64, value.sel,
+             value.base);
+  } else {
+    snprintf(buf, sizeof(buf), "%04" PRIx16 " @ %08" PRIx64, value.sel,
+             value.base);
+  }
   AppendPanel(p, i, buf);
   if (changed) AppendPanel(p, i, "\033[27m");
   AppendPanel(p, i, "  ");
@@ -1486,12 +1493,12 @@ static void DrawCpu(struct Panel *p) {
   if (m->fpu.sw & kFpuSwC2) AppendPanel(p, 8, " C2");
   if (m->fpu.sw & kFpuSwBf) AppendPanel(p, 8, " BF");
 #endif
-  DrawSegment(p, 9, m->fs, laststate.fs, "FS");
-  DrawSegment(p, 9, m->ds, laststate.ds, "DS");
-  DrawSegment(p, 9, m->cs, laststate.cs, "CS");
-  DrawSegment(p, 10, m->gs, laststate.gs, "GS");
-  DrawSegment(p, 10, m->es, laststate.es, "ES");
-  DrawSegment(p, 10, m->ss, laststate.ss, "SS");
+  DrawSegment(p, 9, m->fs, laststate.fs, "FS", true);
+  DrawSegment(p, 9, m->ds, laststate.ds, "DS", false);
+  DrawSegment(p, 9, m->cs, laststate.cs, "CS", false);
+  DrawSegment(p, 10, m->gs, laststate.gs, "GS", true);
+  DrawSegment(p, 10, m->es, laststate.es, "ES", false);
+  DrawSegment(p, 10, m->ss, laststate.ss, "SS", false);
 }
 
 static void DrawXmm(struct Panel *p, i64 i, i64 r) {
