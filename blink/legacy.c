@@ -58,7 +58,6 @@ static relegated void PushaCommon(struct Machine *m, void *b, size_t n) {
 }
 
 static relegated void Pushaw(P) {
-  u16 v;
   u8 b[8][2];
   memcpy(b[0], m->di, 2);
   memcpy(b[1], m->si, 2);
@@ -72,7 +71,6 @@ static relegated void Pushaw(P) {
 }
 
 static relegated void Pushad(P) {
-  u32 v;
   u8 b[8][4];
   memcpy(b[0], m->di, 4);
   memcpy(b[1], m->si, 4);
