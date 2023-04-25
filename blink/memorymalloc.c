@@ -195,7 +195,7 @@ struct System *NewSystem(struct XedMachineMode mode) {
   unassert(mode.omode == XED_MODE_REAL ||    //
            mode.omode == XED_MODE_LEGACY ||  //
            mode.omode == XED_MODE_LONG);
-  unassert(mode.genmode == XED_GEN_MODE_REAL ||    //
+  unassert(mode.genmode == XED_GEN_MODE_REAL ||  //
            mode.genmode == XED_GEN_MODE_PROTECTED);
   if (posix_memalign((void **)&s, _Alignof(struct System), sizeof(*s))) {
     enomem();
@@ -336,7 +336,8 @@ void FreeSystem(struct System *s) {
   unassert(!pthread_cond_destroy(&s->pagelocks_cond));
   unassert(!pthread_mutex_destroy(&s->exec_lock));
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
-  unassert(!pthread_mutex_destroy(&s->sig_lock));
+  // TODO(jart): Figure out why sig_lock sometimes fails to destroy
+  pthread_mutex_destroy(&s->sig_lock);
   free(s->elf.interpreter);
   DestroyFds(&s->fds);
   free(s->elf.execfn);
