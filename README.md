@@ -134,6 +134,16 @@ following configuration flags:
 ./configure --posix  # only use c11 with posix xopen standard
 ```
 
+If you want to run a full `chroot`'d Linux distro and require correct
+handling of absolute symlinks, displaying of certain values in `/proc`,
+and so on, and you don't mind paying a small price in terms of size
+and performance, you can enable the emulated VFS feature by using
+the following configuration:
+
+```sh
+./configure --enable-vfs
+```
+
 ### Testing
 
 Blink is tested primarily using precompiled binaries downloaded
@@ -952,6 +962,34 @@ Blink supports several different executable formats. You can run:
   programs must be run using the `blinkenlights` command with the `-r`
   flag.
 
+## Filesystems
+
+When Blink is built with the VFS feature enabled (`--enable-vfs`),
+it comes with three default filesystems:
+- `hostfs`: A filesystem that mirrors a certain directory on the
+host's filesystem. Files on `hostfs` mounts have everything
+read from and written directly to the corresponding host directory,
+with the exception of `st_dev` and `st_ino` fields. `st_dev` is
+managed by Blink's VFS subsystem, while `st_ino` is calculated using
+a hash function based on the host's `st_dev` and `st_ino` value.
+- `proc`: A filesystem that emulates Linux's `/proc` using information
+available to Blink.
+- `devfs`: A filesystem that emulates Linux's `/dev`. Currently, this
+is only a wrapper for `hostfs`.
+
+When Blink is launched, these default mount points are added:
+- `/` of type `hostfs` pointing to the corresponding host directory.
+This is determined by querying `$BLINK_PREFIX` and the `-C` parameter
+in order and falls back to `/` if neither are available.
+- `/proc` of type `proc`.
+- `/dev` of type `devfs`.
+- `/SytemRoot` of type `hostfs` pointing to the host's root `/`.
+
+It is possbile for programs to add additional mount points by using
+the `mount` syscall (for `hostfs` mounts, pass the path to the
+directory on the _host_ as the `source` argument), but see the quirks
+below.
+
 ## Quirks
 
 Here's the current list of Blink's known quirks and tradeoffs.
@@ -1020,3 +1058,39 @@ the C library is implemented correctly. Please note that when Blink is
 running in full virtualization mode (i.e. `blink -m`) this concern no
 longer applies. That's because Blink will allocate a full system page
 for every 4096 byte page that's mapped from a file.
+
+### Process Management
+
+For builds with the VFS feature enabled (--enable-vfs), while a `procfs`
+mount is available at `/proc`, it is limited to information available
+in a single process. Only `/proc/self` and the corresponding PID folder
+is available. This means programs can get the expected values at
+`/proc/self/exe` and similar files, but process management tools like
+`ps` will not work.
+
+On Linux, some `procfs` symlinks possess a hardlink-like ability of
+being dereferenceable even after the target has been `unlink`ed.
+Blink's implementation currently does not support this use case.
+
+### Mounts
+
+For builds with the VFS feature enabled (`--enable-vfs`), Blink does not
+share mount information with other emulated processes. As a result,
+commands like this may seem to work (by return a 0 status code):
+
+```sh
+mount -t hostfs /some/path/on/host folder
+```
+
+But subsequent calls to `ls folder` on the same shell still does not
+display the expected contents. This is because the `mount` command
+could only modify the mount table kept by itself (and propagated to
+children through `fork`), but not the one used by its parent shell.
+In other words, Blink behaves as if `CLONE_NEWNS` is added to every
+`clone` call, separating the mount namespace of the child from its
+parent.
+
+Some might view this behavior as a feature, but it diverges from
+classic system behavior; a mechanism for handling shared process
+state is being considered in
+[#92](https://github.com/jart/blink/issues/92).
