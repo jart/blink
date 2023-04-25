@@ -234,7 +234,8 @@ The following `FLAG` arguments are provided:
 
 - `-C path` will cause blink to launch the program in a chroot'd
   environment. This flag is both equivalent to and overrides the
-  `BLINK_OVERLAYS` environment variable.
+  `BLINK_OVERLAYS` environment variable. Note: This flag works
+  especially well if you use `./configure --enable-vfs`.
 
 ### `blinkenlights` Flags
 

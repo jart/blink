@@ -16,15 +16,15 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/procfs.h"
-
 #include <fcntl.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "blink/atomic.h"
 #include "blink/errno.h"
 #include "blink/log.h"
 #include "blink/machine.h"
+#include "blink/procfs.h"
 #include "blink/timespec.h"
 #include "blink/vfs.h"
 
@@ -52,8 +52,8 @@ struct ProcfsInfo {
   char name[PROCFS_NAME_MAX];
   struct timespec time;
   union {
-    _Atomic(struct ProcfsOpenFile *)openfile;
-    _Atomic(struct ProcfsOpenDir *)opendir;
+    _Atomic(struct ProcfsOpenFile *) openfile;
+    _Atomic(struct ProcfsOpenDir *) opendir;
   };
   union {
     int (*readdir)(struct VfsInfo *, struct dirent *);
@@ -126,47 +126,39 @@ static ssize_t ProcfsPiddirRootReadlink(struct VfsInfo *, char **);
 static int ProcfsPiddirMountsRead(struct VfsInfo *, struct ProcfsOpenFile *);
 
 static struct ProcfsInfo g_defaultinfos[] = {
-    [PROCFS_ROOT_INO] = {PROCFS_ROOT_INO, S_IFDIR | 0555, 0, 0,
-                         PROCFS_ROOT_TYPE, "", .readdir = ProcfsRootReaddir},
+    [PROCFS_ROOT_INO] = {PROCFS_ROOT_INO, S_IFDIR | 0555, 0, 0, PROCFS_ROOT_TYPE, "",
+                         .readdir = ProcfsRootReaddir},
     [PROCFS_FILESYSTEMS_INO] = {PROCFS_FILESYSTEMS_INO, S_IFREG | 0444, 0, 0,
                                 PROCFS_FILESYSTEMS_TYPE, "filesystems",
                                 .read = ProcfsFilesystemsRead},
-    [PROCFS_MEMINFO_INO] = {PROCFS_MEMINFO_INO, S_IFREG | 0444, 0, 0,
-                            PROCFS_MEMINFO_TYPE, "meminfo",
-                            .read = ProcfsMeminfoRead},
-    [PROCFS_MOUNTS_INO] = {PROCFS_MOUNTS_INO, S_IFLNK | 0777, 0, 0,
-                           PROCFS_MOUNTS_TYPE, "mounts",
+    [PROCFS_MEMINFO_INO] = {PROCFS_MEMINFO_INO, S_IFREG | 0444, 0, 0, PROCFS_MEMINFO_TYPE,
+                            "meminfo", .read = ProcfsMeminfoRead},
+    [PROCFS_MOUNTS_INO] = {PROCFS_MOUNTS_INO, S_IFLNK | 0777, 0, 0, PROCFS_MOUNTS_TYPE, "mounts",
                            .readlink = ProcfsToSelfReadlink},
-    [PROCFS_SELF_INO] = {PROCFS_SELF_INO, S_IFLNK | 0777, 0, 0,
-                         PROCFS_SELF_TYPE, "self",
+    [PROCFS_SELF_INO] = {PROCFS_SELF_INO, S_IFLNK | 0777, 0, 0, PROCFS_SELF_TYPE, "self",
                          .readlink = ProcfsSelfReadlink},
-    [PROCFS_SYS_INO] = {PROCFS_SYS_INO, S_IFDIR | 0555, 0, 0, PROCFS_SYS_TYPE,
-                        "sys"},
-    [PROCFS_UPTIME_INO] = {PROCFS_UPTIME_INO, S_IFREG | 0444, 0, 0,
-                           PROCFS_UPTIME_TYPE, "uptime",
+    [PROCFS_SYS_INO] = {PROCFS_SYS_INO, S_IFDIR | 0555, 0, 0, PROCFS_SYS_TYPE, "sys"},
+    [PROCFS_UPTIME_INO] = {PROCFS_UPTIME_INO, S_IFREG | 0444, 0, 0, PROCFS_UPTIME_TYPE, "uptime",
                            .read = ProcfsUptimeRead},
 };
 
 static struct ProcfsInfo g_piddirinfos[] = {
-    [PROCFS_PIDDIR_TYPE -
-     PROCFS_PIDDIR_TYPE] = {0, S_IFDIR | 0555, 0, 0, PROCFS_PIDDIR_TYPE, "",
-                            .readdir = ProcfsPiddirReaddir},
-    [PROCFS_PIDDIR_EXE_TYPE -
-        PROCFS_PIDDIR_TYPE] = {0, S_IFLNK | 0777, 0, 0, PROCFS_PIDDIR_EXE_TYPE,
-                               "exe", .readlink = ProcfsPiddirExeReadlink},
-    [PROCFS_PIDDIR_CWD_TYPE -
-        PROCFS_PIDDIR_TYPE] = {0, S_IFLNK | 0777, 0, 0, PROCFS_PIDDIR_CWD_TYPE,
-                               "cwd", .readlink = ProcfsPiddirCwdReadlink},
-    [PROCFS_PIDDIR_ROOT_TYPE -
-        PROCFS_PIDDIR_TYPE] = {0, S_IFLNK | 0777, 0, 0, PROCFS_PIDDIR_ROOT_TYPE,
-                               "root", .readlink = ProcfsPiddirRootReadlink},
-    [PROCFS_PIDDIR_MOUNTS_TYPE -
-        PROCFS_PIDDIR_TYPE] = {0, S_IFREG | 0444, 0, 0,
-                               PROCFS_PIDDIR_MOUNTS_TYPE, "mounts",
-                               .read = ProcfsPiddirMountsRead},
-    [PROCFS_PIDDIR_FDDIR_TYPE - PROCFS_PIDDIR_TYPE] = {0, S_IFDIR | 0555, 0, 0,
-                                                       PROCFS_PIDDIR_FDDIR_TYPE,
-                                                       "fd"},
+    [PROCFS_PIDDIR_TYPE - PROCFS_PIDDIR_TYPE] = {0, S_IFDIR | 0555, 0, 0, PROCFS_PIDDIR_TYPE, "",
+                                                 .readdir = ProcfsPiddirReaddir},
+    [PROCFS_PIDDIR_EXE_TYPE - PROCFS_PIDDIR_TYPE] = {0, S_IFLNK | 0777, 0, 0,
+                                                     PROCFS_PIDDIR_EXE_TYPE, "exe",
+                                                     .readlink = ProcfsPiddirExeReadlink},
+    [PROCFS_PIDDIR_CWD_TYPE - PROCFS_PIDDIR_TYPE] = {0, S_IFLNK | 0777, 0, 0,
+                                                     PROCFS_PIDDIR_CWD_TYPE, "cwd",
+                                                     .readlink = ProcfsPiddirCwdReadlink},
+    [PROCFS_PIDDIR_ROOT_TYPE - PROCFS_PIDDIR_TYPE] = {0, S_IFLNK | 0777, 0, 0,
+                                                      PROCFS_PIDDIR_ROOT_TYPE, "root",
+                                                      .readlink = ProcfsPiddirRootReadlink},
+    [PROCFS_PIDDIR_MOUNTS_TYPE - PROCFS_PIDDIR_TYPE] = {0, S_IFREG | 0444, 0, 0,
+                                                        PROCFS_PIDDIR_MOUNTS_TYPE, "mounts",
+                                                        .read = ProcfsPiddirMountsRead},
+    [PROCFS_PIDDIR_FDDIR_TYPE -
+        PROCFS_PIDDIR_TYPE] = {0, S_IFDIR | 0555, 0, 0, PROCFS_PIDDIR_FDDIR_TYPE, "fd"},
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -184,8 +176,7 @@ static int ProcfsCreateInfo(struct ProcfsInfo **info) {
   return 0;
 }
 
-static int ProcfsCreateDefaultInfo(struct ProcfsInfo **info,
-                                   struct ProcfsDevice *device, u64 ino) {
+static int ProcfsCreateDefaultInfo(struct ProcfsInfo **info, struct ProcfsDevice *device, u64 ino) {
   *info = malloc(sizeof(struct ProcfsInfo));
   if (*info == NULL) {
     return enomem();
@@ -195,8 +186,7 @@ static int ProcfsCreateDefaultInfo(struct ProcfsInfo **info,
   return 0;
 }
 
-static int ProcfsCreatePiddirInfo(struct ProcfsInfo **info,
-                                  struct ProcfsInfo *parent, i32 pid,
+static int ProcfsCreatePiddirInfo(struct ProcfsInfo **info, struct ProcfsInfo *parent, i32 pid,
                                   u32 type) {
   *info = malloc(sizeof(struct ProcfsInfo));
   if (*info == NULL) {
@@ -244,8 +234,8 @@ static int ProcfsFreeDevice(void *device) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int ProcfsInit(const char *source, u64 flags, const void *data,
-                      struct VfsDevice **device, struct VfsMount **mount) {
+static int ProcfsInit(const char *source, u64 flags, const void *data, struct VfsDevice **device,
+                      struct VfsMount **mount) {
   struct ProcfsDevice *procdevice = NULL;
   struct ProcfsInfo *procinfo = NULL;
   procdevice = malloc(sizeof(struct ProcfsDevice));
@@ -296,8 +286,7 @@ cleananddie:
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int ProcfsReadmountentry(struct VfsDevice *device, char **spec,
-                                char **type, char **mntops) {
+static int ProcfsReadmountentry(struct VfsDevice *device, char **spec, char **type, char **mntops) {
   *spec = strdup("proc");
   if (*spec == NULL) {
     return enomem();
@@ -313,13 +302,12 @@ static int ProcfsReadmountentry(struct VfsDevice *device, char **spec,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int ProcfsFinddir(struct VfsInfo *parent, const char *name,
-                         struct VfsInfo **output) {
+static int ProcfsFinddir(struct VfsInfo *parent, const char *name, struct VfsInfo **output) {
   struct ProcfsInfo *procparent = (struct ProcfsInfo *)parent->data;
   struct ProcfsInfo *procoutput = NULL;
   int i, pid;
-  VFS_LOGF("ProcfsFinddir(parent=%p (%s), name=\"%s\", output=%p)", parent,
-           parent->name, name, output);
+  VFS_LOGF("ProcfsFinddir(parent=%p (%s), name=\"%s\", output=%p)", parent, parent->name, name,
+           output);
   if (strcmp(name, ".") == 0) {
     unassert(!VfsAcquireInfo(parent, output));
     return 0;
@@ -329,9 +317,8 @@ static int ProcfsFinddir(struct VfsInfo *parent, const char *name,
     case PROCFS_ROOT_TYPE:
       for (i = PROCFS_ROOT_INO + 1; i < PROCFS_FIRST_PID_INO; ++i) {
         if (!strcmp(name, g_defaultinfos[i].name)) {
-          if (ProcfsCreateDefaultInfo(
-                  &procoutput, (struct ProcfsDevice *)parent->device->data,
-                  i) == -1) {
+          if (ProcfsCreateDefaultInfo(&procoutput, (struct ProcfsDevice *)parent->device->data,
+                                      i) == -1) {
             goto cleananddie;
           }
           break;
@@ -341,8 +328,7 @@ static int ProcfsFinddir(struct VfsInfo *parent, const char *name,
         pid = -1;
         sscanf(name, "%d", &pid);
         if (pid == getpid()) {
-          if (ProcfsCreatePiddirInfo(&procoutput, NULL, pid,
-                                     PROCFS_PIDDIR_ROOT_TYPE) == -1) {
+          if (ProcfsCreatePiddirInfo(&procoutput, NULL, pid, PROCFS_PIDDIR_ROOT_TYPE) == -1) {
             goto cleananddie;
           }
         }
@@ -352,8 +338,7 @@ static int ProcfsFinddir(struct VfsInfo *parent, const char *name,
     case PROCFS_PIDDIR_TYPE:
       for (i = 1; i <= PROCFS_PIDDIR_LAST_TYPE - PROCFS_PIDDIR_TYPE; ++i) {
         if (!strcmp(name, g_piddirinfos[i].name)) {
-          if (ProcfsCreatePiddirInfo(&procoutput, procparent, -1,
-                                     i + PROCFS_PIDDIR_TYPE) == -1) {
+          if (ProcfsCreatePiddirInfo(&procoutput, procparent, -1, i + PROCFS_PIDDIR_TYPE) == -1) {
             goto cleananddie;
           }
           break;
@@ -471,8 +456,7 @@ static int ProcfsAccessImpl(struct ProcfsInfo *procinfo, mode_t mode) {
   return ret;
 }
 
-static int ProcfsAccess(struct VfsInfo *parent, const char *name, mode_t mode,
-                        int flags) {
+static int ProcfsAccess(struct VfsInfo *parent, const char *name, mode_t mode, int flags) {
   struct VfsInfo *info = NULL;
   struct ProcfsInfo *procinfo;
   int ret = 0;
@@ -487,8 +471,8 @@ static int ProcfsAccess(struct VfsInfo *parent, const char *name, mode_t mode,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int ProcfsOpen(struct VfsInfo *parent, const char *name, int flags,
-                      int mode, struct VfsInfo **output) {
+static int ProcfsOpen(struct VfsInfo *parent, const char *name, int flags, int mode,
+                      struct VfsInfo **output) {
   struct ProcfsInfo *procoutput = NULL;
   if (ProcfsFinddir(parent, name, output) == -1) {
     return -1;
@@ -549,6 +533,8 @@ static int ProcfsClose(struct VfsInfo *info) {
     opendata = atomic_exchange(&procinfo->opendir, NULL);
   } else if (S_ISREG(procinfo->mode)) {
     opendata = atomic_exchange(&procinfo->openfile, NULL);
+  } else {
+    return 0;
   }
   LOCK((pthread_mutex_t_ *)opendata);
   UNLOCK((pthread_mutex_t_ *)opendata);
@@ -559,8 +545,7 @@ static int ProcfsClose(struct VfsInfo *info) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int ProcfsStatImpl(struct VfsDevice *device, struct ProcfsInfo *info,
-                          struct stat *st) {
+static int ProcfsStatImpl(struct VfsDevice *device, struct ProcfsInfo *info, struct stat *st) {
   st->st_dev = device->dev;
   st->st_ino = info->ino;
   st->st_mode = info->mode;
@@ -582,8 +567,7 @@ static int ProcfsStatImpl(struct VfsDevice *device, struct ProcfsInfo *info,
   return 0;
 }
 
-static int ProcfsStat(struct VfsInfo *parent, const char *name, struct stat *st,
-                      int flags) {
+static int ProcfsStat(struct VfsInfo *parent, const char *name, struct stat *st, int flags) {
   struct VfsInfo *info;
   int ret;
   if (ProcfsFinddir(parent, name, &info) == -1) {
@@ -617,8 +601,7 @@ static int ProcfsFchmod(struct VfsInfo *info, mode_t mode) {
   }
 }
 
-static int ProcfsChmod(struct VfsInfo *parent, const char *name, mode_t mode,
-                       int flags) {
+static int ProcfsChmod(struct VfsInfo *parent, const char *name, mode_t mode, int flags) {
   struct VfsInfo *info;
   int ret;
   // When we reach here all necessary symlink dereferences have already been
@@ -648,8 +631,7 @@ static int ProcfsFchown(struct VfsInfo *info, uid_t uid, gid_t gid) {
   }
 }
 
-static int ProcfsChown(struct VfsInfo *parent, const char *name, uid_t uid,
-                       gid_t gid, int flags) {
+static int ProcfsChown(struct VfsInfo *parent, const char *name, uid_t uid, gid_t gid, int flags) {
   struct VfsInfo *info;
   int ret;
   if (ProcfsFinddir(parent, name, &info) == -1) {
@@ -662,8 +644,7 @@ static int ProcfsChown(struct VfsInfo *parent, const char *name, uid_t uid,
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static ssize_t ProcfsReadImpl(struct VfsInfo *info, void *buf, size_t len,
-                              off_t off, bool copy) {
+static ssize_t ProcfsReadImpl(struct VfsInfo *info, void *buf, size_t len, off_t off, bool copy) {
   struct ProcfsInfo *procinfo = (struct ProcfsInfo *)info->data;
   struct ProcfsOpenFile tmpopenfile = *(procinfo->openfile);
   ssize_t ret = 0;
@@ -673,8 +654,7 @@ static ssize_t ProcfsReadImpl(struct VfsInfo *info, void *buf, size_t len,
     tmpopenfile.index = 0;
     tmpopenfile.offset = 0;
   }
-  while ((off > 0 || len > 0) &&
-         tmpopenfile.readbufend <= sizeof(tmpopenfile.readbuf)) {
+  while ((off > 0 || len > 0) && tmpopenfile.readbufend <= sizeof(tmpopenfile.readbuf)) {
     // All bytes from the buffer has been consumed.
     if (tmpopenfile.readbufstart == tmpopenfile.readbufend) {
       if (!procinfo->read) {
@@ -707,8 +687,7 @@ static ssize_t ProcfsReadImpl(struct VfsInfo *info, void *buf, size_t len,
   return ret;
 }
 
-static ssize_t ProcfsPreadv(struct VfsInfo *info, const struct iovec *iov,
-                            int iovcnt, off_t off) {
+static ssize_t ProcfsPreadv(struct VfsInfo *info, const struct iovec *iov, int iovcnt, off_t off) {
   struct ProcfsInfo *procinfo = (struct ProcfsInfo *)info->data;
   size_t len = 0;
   ssize_t ret;
@@ -739,8 +718,7 @@ static ssize_t ProcfsPreadv(struct VfsInfo *info, const struct iovec *iov,
   return len;
 }
 
-static ssize_t ProcfsReadv(struct VfsInfo *info, const struct iovec *iov,
-                           int iovcnt) {
+static ssize_t ProcfsReadv(struct VfsInfo *info, const struct iovec *iov, int iovcnt) {
   struct ProcfsInfo *procinfo = (struct ProcfsInfo *)info->data;
   size_t len = 0;
   ssize_t ret;
@@ -768,8 +746,7 @@ static ssize_t ProcfsReadv(struct VfsInfo *info, const struct iovec *iov,
   return len;
 }
 
-static ssize_t ProcfsPread(struct VfsInfo *info, void *buf, size_t len,
-                           off_t off) {
+static ssize_t ProcfsPread(struct VfsInfo *info, void *buf, size_t len, off_t off) {
   struct ProcfsInfo *procinfo = (struct ProcfsInfo *)info->data;
   ssize_t ret;
   if (!S_ISREG(procinfo->mode) || procinfo->openfile == NULL) {
@@ -797,14 +774,13 @@ static ssize_t ProcfsRead(struct VfsInfo *info, void *buf, size_t len) {
 static ssize_t ProcfsWrite(struct VfsInfo *, const void *, size_t);
 static ssize_t ProcfsPwrite(struct VfsInfo *, const void *, size_t, off_t);
 static ssize_t ProcfsWritev(struct VfsInfo *, const struct iovec *, int);
-static ssize_t ProcfsPwritev(struct VfsInfo *, const struct iovec *, int,
-                             off_t);
+static ssize_t ProcfsPwritev(struct VfsInfo *, const struct iovec *, int, off_t);
 
 ////////////////////////////////////////////////////////////////////////////////
 
 static off_t ProcfsSeekImpl(struct VfsInfo *info, off_t off, int whence) {
   struct ProcfsInfo *procinfo = (struct ProcfsInfo *)info->data;
-  off_t newoff;
+  off_t newoff = 0;
   if (S_ISDIR(procinfo->mode)) {
     if (procinfo->opendir == NULL) {
       return einval();
@@ -840,16 +816,13 @@ static off_t ProcfsSeekImpl(struct VfsInfo *info, off_t off, int whence) {
       return einval();
     }
     if (procinfo->openfile->readbufend <= sizeof(procinfo->openfile->readbuf) &&
-        procinfo->openfile->offset / PROCFS_READ_LEN ==
-            newoff / PROCFS_READ_LEN) {
+        procinfo->openfile->offset / PROCFS_READ_LEN == newoff / PROCFS_READ_LEN) {
       // We're still in the cached region.
       procinfo->openfile->readbufstart += newoff - procinfo->openfile->offset;
       procinfo->openfile->offset = newoff;
     } else {
-      if ((procinfo->openfile->offset / PROCFS_READ_LEN >
-           newoff / PROCFS_READ_LEN) ||
-          (procinfo->openfile->readbufend >
-           sizeof(procinfo->openfile->readbuf))) {
+      if ((procinfo->openfile->offset / PROCFS_READ_LEN > newoff / PROCFS_READ_LEN) ||
+          (procinfo->openfile->readbufend > sizeof(procinfo->openfile->readbuf))) {
         // Reset the file if it has already ended or we're going back before the
         // buffer.
         procinfo->openfile->index = 0;
@@ -893,18 +866,16 @@ static int ProcfsDup(struct VfsInfo *info, struct VfsInfo **newinfo) {
   }
   newprocinfo = (struct ProcfsInfo *)(*newinfo)->data;
   if (S_ISDIR(info->mode)) {
-    memcpy(newprocinfo->opendir, procinfo->opendir,
-           sizeof(*newprocinfo->opendir));
+    memcpy(newprocinfo->opendir, procinfo->opendir, sizeof(*newprocinfo->opendir));
   } else if (S_ISREG(info->mode)) {
-    memcpy(newprocinfo->openfile, procinfo->openfile,
-           sizeof(*newprocinfo->openfile));
+    memcpy(newprocinfo->openfile, procinfo->openfile, sizeof(*newprocinfo->openfile));
   }
   unassert(!pthread_mutex_init((pthread_mutex_t *)newprocinfo->openfile, NULL));
   return 0;
 }
 
 #ifdef HAVE_DUP3
-static int ProcfsDup3(struct VfsInfo *info, struct VfsInfo **newinfo, int) {
+static int ProcfsDup3(struct VfsInfo *info, struct VfsInfo **newinfo, int wut) {
   // O_CLOEXEC is already handled by the syscall layer.
   return ProcfsDup(info, newinfo);
 }
@@ -968,8 +939,8 @@ static int ProcfsClosedir(struct VfsInfo *info) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int ProcfsUtime(struct VfsInfo *info, const char *name,
-                       const struct timespec times[2], int flags) {
+static int ProcfsUtime(struct VfsInfo *info, const char *name, const struct timespec times[2],
+                       int flags) {
   return einval();
 }
 
@@ -1075,8 +1046,7 @@ static int ProcfsPiddirReaddir(struct VfsInfo *info, struct dirent *de) {
 #endif
     strcpy(de->d_name, ".");
     ret = 0;
-  } else if ((dir->index - 1) >
-             (PROCFS_PIDDIR_LAST_TYPE - PROCFS_PIDDIR_TYPE)) {
+  } else if ((dir->index - 1) > (PROCFS_PIDDIR_LAST_TYPE - PROCFS_PIDDIR_TYPE)) {
     ret = enoent();
   } else {
     if (ProcfsInfoToDirent(&g_piddirinfos[dir->index - 1], de) == -1) {
@@ -1142,8 +1112,7 @@ static ssize_t ProcfsPiddirRootReadlink(struct VfsInfo *info, char **buf) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-static int ProcfsMeminfoRead(struct VfsInfo *info,
-                             struct ProcfsOpenFile *openfile) {
+static int ProcfsMeminfoRead(struct VfsInfo *info, struct ProcfsOpenFile *openfile) {
 #ifdef __linux__
   int fd = open("/proc/meminfo", O_RDONLY);
   ssize_t bytesread;
@@ -1151,8 +1120,8 @@ static int ProcfsMeminfoRead(struct VfsInfo *info,
   if (fd == -1) {
     return -1;
   }
-  if ((bytesread = pread(fd, openfile->readbuf, sizeof(openfile->readbuf),
-                         openfile->index)) == -1) {
+  if ((bytesread = pread(fd, openfile->readbuf, sizeof(openfile->readbuf), openfile->index)) ==
+      -1) {
     ret = -1;
   }
   close(fd);
@@ -1189,17 +1158,15 @@ static int ProcfsMeminfoRead(struct VfsInfo *info,
   memfree = memtotal - EM_ASM_INT(return HEAP8.length);
 #endif
   openfile->readbufstart = 0;
-  openfile->readbufend = snprintf(openfile->readbuf, sizeof(openfile->readbuf),
-                                  "MemTotal: %llu kB\nMemFree: %llu kB\n",
-                                  (unsigned long long)(memtotal / 1024),
-                                  (unsigned long long)(memfree / 1024));
+  openfile->readbufend = snprintf(
+      openfile->readbuf, sizeof(openfile->readbuf), "MemTotal: %llu kB\nMemFree: %llu kB\n",
+      (unsigned long long)(memtotal / 1024), (unsigned long long)(memfree / 1024));
   openfile->index = 1;
   return 0;
 #endif
 }
 
-static int ProcfsUptimeRead(struct VfsInfo *info,
-                            struct ProcfsOpenFile *openfile) {
+static int ProcfsUptimeRead(struct VfsInfo *info, struct ProcfsOpenFile *openfile) {
   double uptime = 0, idletime = 0;
   int ret = 0;
   if (openfile->index > 0) {
@@ -1222,11 +1189,11 @@ static int ProcfsUptimeRead(struct VfsInfo *info,
 #elif defined(__CYGWIN__)
   SYSTEM_PERFORMANCE_INFORMATION spi;
   SYSTEM_TIMEOFDAY_INFORMATION sti;
-  if (!NT_SUCCESS(NtQuerySystemInformation(SystemPerformanceInformation, &spi,
-                                           sizeof(spi), NULL))) {
+  if (!NT_SUCCESS(
+          NtQuerySystemInformation(SystemPerformanceInformation, &spi, sizeof(spi), NULL))) {
     ret = -1;
-  } else if (!NT_SUCCESS(NtQuerySystemInformation(SystemTimeOfDayInformation,
-                                                  &sti, sizeof(sti), NULL))) {
+  } else if (!NT_SUCCESS(
+                 NtQuerySystemInformation(SystemTimeOfDayInformation, &sti, sizeof(sti), NULL))) {
     ret = -1;
   } else {
     uptime = (sti.CurrentTime.QuadPart - sti.BootTime.QuadPart) / 10000000.0;
@@ -1238,15 +1205,13 @@ static int ProcfsUptimeRead(struct VfsInfo *info,
   if (ret != -1) {
     openfile->readbufstart = 0;
     openfile->readbufend =
-        snprintf(openfile->readbuf, sizeof(openfile->readbuf), "%lf %lf\n",
-                 uptime, idletime);
+        snprintf(openfile->readbuf, sizeof(openfile->readbuf), "%lf %lf\n", uptime, idletime);
     openfile->index = 1;
   }
   return ret;
 }
 
-static int ProcfsFilesystemsRead(struct VfsInfo *info,
-                                 struct ProcfsOpenFile *openfile) {
+static int ProcfsFilesystemsRead(struct VfsInfo *info, struct ProcfsOpenFile *openfile) {
   size_t byteswritten = 0;
   size_t bytesleft = sizeof(openfile->readbuf);
   size_t ret;
@@ -1256,8 +1221,7 @@ static int ProcfsFilesystemsRead(struct VfsInfo *info,
     return 0;
   }
   LOCK(&g_vfs.lock);
-  for (i = 0, e = dll_first(g_vfs.systems); e;
-       e = dll_next(g_vfs.systems, e), ++i) {
+  for (i = 0, e = dll_first(g_vfs.systems); e; e = dll_next(g_vfs.systems, e), ++i) {
     struct VfsSystem *system = VFS_SYSTEM_CONTAINER(e);
     if (i < openfile->index) continue;
     ret = snprintf(openfile->readbuf + byteswritten, bytesleft, "%-8s%s\n",
@@ -1317,8 +1281,7 @@ static int ProcfsMountsStringEscape(char **str) {
   return 0;
 }
 
-static int ProcfsPiddirMountsRead(struct VfsInfo *info,
-                                  struct ProcfsOpenFile *openfile) {
+static int ProcfsPiddirMountsRead(struct VfsInfo *info, struct ProcfsOpenFile *openfile) {
   size_t byteswritten = 0;
   size_t bytesleft = sizeof(openfile->readbuf);
   size_t ret, len, len1;
@@ -1330,8 +1293,7 @@ static int ProcfsPiddirMountsRead(struct VfsInfo *info,
     return 0;
   }
   LOCK(&g_vfs.lock);
-  for (i = 0, e = dll_first(g_vfs.devices); e;
-       e = dll_next(g_vfs.devices, e), ++i) {
+  for (i = 0, e = dll_first(g_vfs.devices); e; e = dll_next(g_vfs.devices, e), ++i) {
     struct VfsDevice *device = VFS_DEVICE_CONTAINER(e);
     if (i < openfile->index) continue;
     spec = file = vfstype = mntops = mntops1 = tmp = NULL;
@@ -1373,9 +1335,8 @@ static int ProcfsPiddirMountsRead(struct VfsInfo *info,
         goto cleanandcontinue;
       }
     }
-    ret = snprintf(openfile->readbuf + byteswritten, bytesleft,
-                   "%s %s %s %s %d %d\n", spec, file, vfstype, mntops, freq,
-                   passno);
+    ret = snprintf(openfile->readbuf + byteswritten, bytesleft, "%s %s %s %s %d %d\n", spec, file,
+                   vfstype, mntops, freq, passno);
   cleanandcontinue:
     free(spec);
     free(file);

@@ -53,6 +53,9 @@ if [ "$1" = "--help" ]; then
   echo "  --prefix=PATH"
   echo "    configures system install path (defaults to /usr/local)"
   echo
+  echo "  --enable-vfs"
+  echo "    enables true filesystem emulation support (overlays alternative)"
+  echo
   echo "  --disable-jit"
   echo "    forces jit compilation to be disabled (shaves ~26kb off MODE=tiny)"
   echo
