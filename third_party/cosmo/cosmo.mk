@@ -12,11 +12,14 @@ third_party/cosmo/%.com.dbg: third_party/cosmo/%.com.dbg.gz
 	chmod +x $@
 
 .PRECIOUS: third_party/cosmo/%.com
-third_party/cosmo/%.com: third_party/cosmo/%.com.gz third_party/cosmo/%.com.dbg
+third_party/cosmo/%.com: third_party/cosmo/%.com.gz
 	gzip -dc <$< >$@
 	chmod +x $@
 
-o/$(MODE)/third_party/cosmo/%.com.ok: third_party/cosmo/%.com o/$(MODE)/blink/blink $(VM)
+o/$(MODE)/third_party/cosmo/%.com.ok:								\
+		third_party/cosmo/%.com								\
+		third_party/cosmo/%.com.dbg							\
+		o/$(MODE)/blink/blink $(VM)
 	@mkdir -p $(@D)
 	o/$(MODE)/blink/blink $<
 	@touch $@

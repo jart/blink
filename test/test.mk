@@ -68,11 +68,6 @@ o/$(MODE)/%.runs: o/$(MODE)/%
 	$<
 	@touch $@
 
-o/$(MODE)/%.ok: % o/$(MODE)/blink/blink
-	@mkdir -p $(@D)
-	o/$(MODE)/blink/blink $<
-	@touch $@
-
 o/$(MODE)/i486/%.runs: o/$(MODE)/i486/% o/third_party/qemu/4/qemu-i386 $(VM)
 	$(VM) o/third_party/qemu/4/qemu-i386 $<
 	@touch $@
