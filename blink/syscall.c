@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/syscall.h"
+
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -75,7 +77,6 @@
 #include "blink/stats.h"
 #include "blink/strace.h"
 #include "blink/swap.h"
-#include "blink/syscall.h"
 #include "blink/thread.h"
 #include "blink/timespec.h"
 #include "blink/util.h"

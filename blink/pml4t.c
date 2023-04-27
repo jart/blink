@@ -16,12 +16,13 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/pml4t.h"
+
 #include <stdlib.h>
 
 #include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/machine.h"
-#include "blink/pml4t.h"
 #include "blink/x86.h"
 
 static void AppendContiguousMemoryRange(struct ContiguousMemoryRanges *ranges,

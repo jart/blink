@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/buffer.h"
+
 #include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
@@ -24,7 +26,6 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "blink/buffer.h"
 #include "blink/macros.h"
 #include "blink/memcpy.h"
 #include "blink/stats.h"

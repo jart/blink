@@ -16,8 +16,9 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/rde.h"
 #include "blink/xmmtype.h"
+
+#include "blink/rde.h"
 
 static void UpdateXmmTypes(u64 rde, struct XmmType *xt, int regtype,
                            int rmtype) {

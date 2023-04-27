@@ -16,10 +16,11 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/breakpoint.h"
+
 #include <stdlib.h>
 #include <string.h>
 
-#include "blink/breakpoint.h"
 #include "blink/builtin.h"
 
 void PopBreakpoint(struct Breakpoints *bps) {

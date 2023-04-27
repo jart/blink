@@ -24,9 +24,10 @@
 │ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR        │
 │ OTHER DEALINGS IN THE SOFTWARE.                                              │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/defbios.h"
+
 #include <string.h>
 
-#include "blink/defbios.h"
 #include "blink/endian.h"
 #include "blink/macros.h"
 
@@ -69,48 +70,160 @@
 #define kBiosDefInt0x76 (kBiosDefInt0x75 + 4)
 #define kBiosDefInt0x77 (kBiosDefInt0x76 + 4)
 
-static const u8 defbios[] = {
-    [kBiosDefInt0x00 - kBiosArrayBase] = 0x0F,0xFF,0067,      // hvtailcall 0x00
-    [kBiosDefInt0x01 - kBiosArrayBase] = 0x0F,0xFF,0167,0x01, // hvtailcall 0x01
-    [kBiosDefInt0x02 - kBiosArrayBase] = 0x0F,0xFF,0167,0x02, // hvtailcall 0x02
-    [kBiosDefInt0x03 - kBiosArrayBase] = 0x0F,0xFF,0167,0x03, // hvtailcall 0x03
-    [kBiosDefInt0x04 - kBiosArrayBase] = 0x0F,0xFF,0167,0x04, // hvtailcall 0x04
-    [kBiosDefInt0x05 - kBiosArrayBase] = 0x0F,0xFF,0167,0x05, // hvtailcall 0x05
-    [kBiosDefInt0x06 - kBiosArrayBase] = 0x0F,0xFF,0167,0x06, // hvtailcall 0x06
-    [kBiosDefInt0x07 - kBiosArrayBase] = 0x0F,0xFF,0167,0x07, // hvtailcall 0x07
-    [kBiosDefInt0x08 - kBiosArrayBase] = 0x0F,0xFF,0167,0x08, // hvtailcall 0x08
-    [kBiosDefInt0x09 - kBiosArrayBase] = 0x0F,0xFF,0167,0x09, // hvtailcall 0x09
-    [kBiosDefInt0x0A - kBiosArrayBase] = 0x0F,0xFF,0167,0x0A, // hvtailcall 0x0A
-    [kBiosDefInt0x0B - kBiosArrayBase] = 0x0F,0xFF,0167,0x0B, // hvtailcall 0x0B
-    [kBiosDefInt0x0C - kBiosArrayBase] = 0x0F,0xFF,0167,0x0C, // hvtailcall 0x0C
-    [kBiosDefInt0x0D - kBiosArrayBase] = 0x0F,0xFF,0167,0x0D, // hvtailcall 0x0D
-    [kBiosDefInt0x0E - kBiosArrayBase] = 0x0F,0xFF,0167,0x0E, // hvtailcall 0x0E
-    [kBiosDefInt0x0F - kBiosArrayBase] = 0x0F,0xFF,0167,0x0F, // hvtailcall 0x0F
-    [kBiosDefInt0x10 - kBiosArrayBase] = 0x0F,0xFF,0167,0x10, // hvtailcall 0x10
-    [kBiosDefInt0x11 - kBiosArrayBase] = 0x0F,0xFF,0167,0x11, // hvtailcall 0x11
-    [kBiosDefInt0x12 - kBiosArrayBase] = 0x0F,0xFF,0167,0x12, // hvtailcall 0x12
-    [kBiosDefInt0x13 - kBiosArrayBase] = 0x0F,0xFF,0167,0x13, // hvtailcall 0x13
-    [kBiosDefInt0x14 - kBiosArrayBase] = 0x0F,0xFF,0167,0x14, // hvtailcall 0x14
-    [kBiosDefInt0x15 - kBiosArrayBase] = 0x0F,0xFF,0167,0x15, // hvtailcall 0x15
-    [kBiosDefInt0x16 - kBiosArrayBase] = 0x0F,0xFF,0167,0x16, // hvtailcall 0x16
-    [kBiosDefInt0x17 - kBiosArrayBase] = 0x0F,0xFF,0167,0x17, // hvtailcall 0x17
-    [kBiosDefInt0x18 - kBiosArrayBase] = 0x0F,0xFF,0167,0x18, // hvtailcall 0x18
-    [kBiosDefInt0x19 - kBiosArrayBase] = 0x0F,0xFF,0167,0x19, // hvtailcall 0x19
-    [kBiosDefInt0x1A - kBiosArrayBase] = 0x0F,0xFF,0167,0x1A, // hvtailcall 0x1A
-    [kBiosDefInt0x1B - kBiosArrayBase] = 0x0F,0xFF,0167,0x1B, // hvtailcall 0x1B
-    [kBiosDefInt0x1C - kBiosArrayBase] = 0x0F,0xFF,0167,0x1C, // hvtailcall 0x1C
-    [kBiosDefInt0x70 - kBiosArrayBase] = 0x0F,0xFF,0167,0x70, // hvtailcall 0x70
-    [kBiosDefInt0x71 - kBiosArrayBase] = 0x0F,0xFF,0167,0x71, // hvtailcall 0x71
-    [kBiosDefInt0x72 - kBiosArrayBase] = 0x0F,0xFF,0167,0x72, // hvtailcall 0x72
-    [kBiosDefInt0x73 - kBiosArrayBase] = 0x0F,0xFF,0167,0x73, // hvtailcall 0x73
-    [kBiosDefInt0x74 - kBiosArrayBase] = 0x0F,0xFF,0167,0x74, // hvtailcall 0x74
-    [kBiosDefInt0x75 - kBiosArrayBase] = 0x0F,0xFF,0167,0x75, // hvtailcall 0x75
-    [kBiosDefInt0x76 - kBiosArrayBase] = 0x0F,0xFF,0167,0x76, // hvtailcall 0x76
-    [kBiosDefInt0x77 - kBiosArrayBase] = 0x0F,0xFF,0167,0x77, // hvtailcall 0x77
-    [kBiosEntry - kBiosArrayBase]      = 0x0F,0xFF,0177,0x19, // hvcall 0x19
-                                         0xEB,0xFA,           // jmp .-4
-    [kBiosEnd - 1 - kBiosArrayBase]    = 0x00
-};
+static const u8 defbios[] = {[kBiosDefInt0x00 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0067,  // hvtailcall 0x00
+                             [kBiosDefInt0x01 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x01,  // hvtailcall 0x01
+                             [kBiosDefInt0x02 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x02,  // hvtailcall 0x02
+                             [kBiosDefInt0x03 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x03,  // hvtailcall 0x03
+                             [kBiosDefInt0x04 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x04,  // hvtailcall 0x04
+                             [kBiosDefInt0x05 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x05,  // hvtailcall 0x05
+                             [kBiosDefInt0x06 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x06,  // hvtailcall 0x06
+                             [kBiosDefInt0x07 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x07,  // hvtailcall 0x07
+                             [kBiosDefInt0x08 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x08,  // hvtailcall 0x08
+                             [kBiosDefInt0x09 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x09,  // hvtailcall 0x09
+                             [kBiosDefInt0x0A - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x0A,  // hvtailcall 0x0A
+                             [kBiosDefInt0x0B - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x0B,  // hvtailcall 0x0B
+                             [kBiosDefInt0x0C - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x0C,  // hvtailcall 0x0C
+                             [kBiosDefInt0x0D - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x0D,  // hvtailcall 0x0D
+                             [kBiosDefInt0x0E - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x0E,  // hvtailcall 0x0E
+                             [kBiosDefInt0x0F - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x0F,  // hvtailcall 0x0F
+                             [kBiosDefInt0x10 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x10,  // hvtailcall 0x10
+                             [kBiosDefInt0x11 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x11,  // hvtailcall 0x11
+                             [kBiosDefInt0x12 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x12,  // hvtailcall 0x12
+                             [kBiosDefInt0x13 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x13,  // hvtailcall 0x13
+                             [kBiosDefInt0x14 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x14,  // hvtailcall 0x14
+                             [kBiosDefInt0x15 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x15,  // hvtailcall 0x15
+                             [kBiosDefInt0x16 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x16,  // hvtailcall 0x16
+                             [kBiosDefInt0x17 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x17,  // hvtailcall 0x17
+                             [kBiosDefInt0x18 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x18,  // hvtailcall 0x18
+                             [kBiosDefInt0x19 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x19,  // hvtailcall 0x19
+                             [kBiosDefInt0x1A - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x1A,  // hvtailcall 0x1A
+                             [kBiosDefInt0x1B - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x1B,  // hvtailcall 0x1B
+                             [kBiosDefInt0x1C - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x1C,  // hvtailcall 0x1C
+                             [kBiosDefInt0x70 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x70,  // hvtailcall 0x70
+                             [kBiosDefInt0x71 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x71,  // hvtailcall 0x71
+                             [kBiosDefInt0x72 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x72,  // hvtailcall 0x72
+                             [kBiosDefInt0x73 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x73,  // hvtailcall 0x73
+                             [kBiosDefInt0x74 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x74,  // hvtailcall 0x74
+                             [kBiosDefInt0x75 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x75,  // hvtailcall 0x75
+                             [kBiosDefInt0x76 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x76,  // hvtailcall 0x76
+                             [kBiosDefInt0x77 - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0167,
+                             0x77,  // hvtailcall 0x77
+                             [kBiosEntry - kBiosArrayBase] = 0x0F,
+                             0xFF,
+                             0177,
+                             0x19,  // hvcall 0x19
+                             0xEB,
+                             0xFA,  // jmp .-4
+                             [kBiosEnd - 1 - kBiosArrayBase] = 0x00};
 
 void LoadDefaultBios(struct Machine *m) {
   size_t kBiosSize = sizeof(defbios);
@@ -168,11 +281,11 @@ void SetDefaultBiosDataArea(struct Machine *m) {
   memset(m->system->real + 0x400, 0, 0x100);
   Write16(m->system->real + 0x400, 0x3F8);
   Write16(m->system->real + 0x40E, 0xb0000 >> 4);
-  Write16(m->system->real + 0x410, 1 << 0 |  // floppy drive
-                                   1 << 1 |  // math coprocessor
-                                   3 << 4 |  // initial video mode
-                                   0 << 6 |  // no. of floppy drives - 1
-                                   1 << 9);  // no. of serial devices
+  Write16(m->system->real + 0x410, 1 << 0 |      // floppy drive
+                                       1 << 1 |  // math coprocessor
+                                       3 << 4 |  // initial video mode
+                                       0 << 6 |  // no. of floppy drives - 1
+                                       1 << 9);  // no. of serial devices
   Write16(m->system->real + 0x413, 0xb0000 / 1024);
   Write16(m->system->real + 0x44A, 80);
 }

@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/map.h"
+
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -29,7 +31,6 @@
 #include "blink/debug.h"
 #include "blink/log.h"
 #include "blink/macros.h"
-#include "blink/map.h"
 #include "blink/tunables.h"
 #include "blink/types.h"
 #include "blink/util.h"

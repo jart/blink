@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/debug.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <setjmp.h>
@@ -29,7 +31,6 @@
 #include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/bus.h"
-#include "blink/debug.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
@@ -256,13 +257,12 @@ const char *GetBacktrace(struct Machine *m) {
          "FLG %s\n\t"
          "%s\n\t",
          m->cs.base + MaskAddress(m->mode.omode, m->ip),
-         DescribeOp(m, GetPc(m)),
-         Get64(m->ax), Get64(m->cx), Get64(m->dx), Get64(m->bx), Get64(m->sp),
-         Get64(m->bp), Get64(m->si), Get64(m->di), Get64(m->r8), Get64(m->r9),
-         Get64(m->r10), Get64(m->r11), Get64(m->r12), Get64(m->r13),
-         Get64(m->r14), Get64(m->r15), m->fs.base, m->gs.base,
-         GET_COUNTER(instructions_decoded), DescribeCpuFlags(m->flags),
-         g_progname);
+         DescribeOp(m, GetPc(m)), Get64(m->ax), Get64(m->cx), Get64(m->dx),
+         Get64(m->bx), Get64(m->sp), Get64(m->bp), Get64(m->si), Get64(m->di),
+         Get64(m->r8), Get64(m->r9), Get64(m->r10), Get64(m->r11),
+         Get64(m->r12), Get64(m->r13), Get64(m->r14), Get64(m->r15), m->fs.base,
+         m->gs.base, GET_COUNTER(instructions_decoded),
+         DescribeCpuFlags(m->flags), g_progname);
 
 #ifndef DISABLE_BACKTRACE
   rp = m->ip;

@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/fpu.h"
+
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,7 +27,6 @@
 #include "blink/case.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
-#include "blink/fpu.h"
 #include "blink/ldbl.h"
 #include "blink/machine.h"
 #include "blink/macros.h"

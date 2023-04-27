@@ -16,10 +16,11 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/cga.h"
+
 #include <stdio.h>
 
 #include "blink/buffer.h"
-#include "blink/cga.h"
 #include "blink/macros.h"
 #include "blink/util.h"
 

@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/watch.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -24,7 +26,6 @@
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/rde.h"
-#include "blink/watch.h"
 #include "blink/x86.h"
 
 void PopWatchpoint(struct Watchpoints *wps) {

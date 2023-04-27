@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/alu.h"
+
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/log.h"

@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/elf.h"
+
 #include <inttypes.h>
 #include <limits.h>
 #include <stdio.h>
@@ -24,7 +26,6 @@
 
 #include "blink/builtin.h"
 #include "blink/checked.h"
-#include "blink/elf.h"
 #include "blink/endian.h"
 #include "blink/log.h"
 #include "blink/macros.h"

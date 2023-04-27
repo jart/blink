@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/string.h"
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -29,7 +31,6 @@
 #include "blink/macros.h"
 #include "blink/modrm.h"
 #include "blink/rde.h"
-#include "blink/string.h"
 #include "blink/tsan.h"
 #include "blink/util.h"
 #include "blink/x86.h"

@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/signal.h"
+
 #include <signal.h>
 #include <stdlib.h>
 #include <string.h>
@@ -29,7 +31,6 @@
 #include "blink/linux.h"
 #include "blink/log.h"
 #include "blink/macros.h"
-#include "blink/signal.h"
 #include "blink/syscall.h"
 #include "blink/thread.h"
 #include "blink/util.h"

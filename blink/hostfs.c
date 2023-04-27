@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/hostfs.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -28,7 +30,6 @@
 
 #include "blink/assert.h"
 #include "blink/errno.h"
-#include "blink/hostfs.h"
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/syscall.h"

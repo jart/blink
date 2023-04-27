@@ -415,12 +415,12 @@ static char *DisImm(struct Dis *d, u64 rde, char *p) {
 
 static char *DisIw(struct Dis *d, u64 rde, char *p) {
   return DisSymLiteral(d, rde, p, d->xedd->op.uimm0 & 0xffff,
-                                  d->xedd->op.uimm0 & 0xffff);
+                       d->xedd->op.uimm0 & 0xffff);
 }
 
 static char *DisEnterIb(struct Dis *d, u64 rde, char *p) {
   return DisSymLiteral(d, rde, p, d->xedd->op.uimm0 >> 16 & 0xff,
-                                  d->xedd->op.uimm0 >> 16 & 0xff);
+                       d->xedd->op.uimm0 >> 16 & 0xff);
 }
 
 static char *DisRvds(struct Dis *d, u64 rde, char *p) {
@@ -612,98 +612,98 @@ static const struct DisArg {
   char s[8];
   char *(*f)(struct Dis *, u64, char *);
 } kDisArgs[] = /* <sorted> */ {
-    {"$1", DisOne},      //
-    {"%Bdqp", DisBdqp},  //
-    {"%Cd", DisCd},      //
-    {"%Gb", DisGb},      //
-    {"%Gdqp", DisGdqp},  //
-    {"%Gv", DisGv},      //
-    {"%Gvqp", DisGvqp},  //
-    {"%Hd", DisHd},      //
-    {"%Nq", DisNq},      //
-    {"%Ppi", DisPpi},    //
-    {"%Pq", DisPq},      //
-    {"%Rdqp", DisRdqp},  //
-    {"%Rvqp", DisRvqp},  //
-    {"%Sw", DisSw},      //
-    {"%Udq", DisUdq},    //
-    {"%Uq", DisUq},      //
-    {"%Vdq", DisVdq},    //
-    {"%Vpd", DisVpd},    //
-    {"%Vps", DisVps},    //
-    {"%Vq", DisVq},      //
-    {"%Vsd", DisVsd},    //
-    {"%Vss", DisVss},    //
-    {"%Zb", DisZb},      //
-    {"%Zv", DisZv},      //
-    {"%Zvq", DisZvq},    //
-    {"%Zvqp", DisZvqp},  //
-    {"%eAX", DisEax},    //
-    {"%rAX", DisRax},    //
-    {"%rDX", DisRdx},    //
-    {"*Eq", DisIndirEq}, //
-    {">Ib", DisEnterIb}, //
-    {"BBb", DisBBb},     //
-    {"DX", DisPort},     //
-    {"EST", DisEst},     //
-    {"EST1", DisEst1},   //
-    {"ESsr", DisEssr},   //
-    {"Eb", DisEb},       //
-    {"Ed", DisEd},       //
-    {"Edqp", DisEdqp},   //
-    {"Edr", DisEdr},     //
-    {"Eq", DisEq},       //
-    {"Eqp", DisEqp},     //
-    {"Esr", DisEsr},     //
-    {"Ev", DisEv},       //
-    {"Evq", DisEvq},     //
-    {"Evqp", DisEvqp},   //
-    {"Ew", DisEvqp},     //
-    {"Ib", DisIb},       //
-    {"Ibs", DisIbs},     //
-    {"Ibss", DisIbss},   //
-    {"Ivds", DisIvds},   //
-    {"Ivqp", DisIvqp},   //
-    {"Ivs", DisIvs},     //
-    {"Iw", DisIw},       //
-    {"Jb", DisJb},       //
-    {"Jbs", DisJbs},     //
-    {"Jvds", DisJvds},   //
-    {"Kvds", DisKvds},   //
-    {"M", DisM},         //
-    {"Mdi", DisMdi},     //
-    {"Mdq", DisMdq},     //
-    {"Mdqp", DisMdqp},   //
-    {"Mdr", DisMdr},     //
-    {"Me", DisMe},       //
-    {"Mer", DisMer},     //
-    {"Mp", DisMp},       //
-    {"Mps", DisMps},     //
-    {"Mq", DisMq},       //
-    {"Mqi", DisMqi},     //
-    {"Ms", DisMs},       //
-    {"Msr", DisMsr},     //
-    {"Mw", DisMw},       //
-    {"Mwi", DisMwi},     //
-    {"Ob", DisOb},       //
-    {"Ovqp", DisOvqp},   //
-    {"Pvds", DisPvds},   //
-    {"Qpi", DisQpi},     //
-    {"Qq", DisQq},       //
-    {"Rvds", DisRvds},   //
-    {"Wdq", DisWdq},     //
-    {"Wpd", DisWpd},     //
-    {"Wps", DisWps},     //
-    {"Wpsq", DisWpsq},   //
-    {"Wq", DisWq},       //
-    {"Wsd", DisWsd},     //
-    {"Wss", DisWss},     //
-    {"Xb", DisXb},       //
-    {"Xv", DisXv},       //
-    {"Xvqp", DisXvqp},   //
-    {"Yb", DisYb},       //
-    {"Yv", DisYv},       //
-    {"Yvqp", DisYvqp},   //
+    {"$1", DisOne},       //
+    {"%Bdqp", DisBdqp},   //
+    {"%Cd", DisCd},       //
+    {"%Gb", DisGb},       //
+    {"%Gdqp", DisGdqp},   //
+    {"%Gv", DisGv},       //
+    {"%Gvqp", DisGvqp},   //
+    {"%Hd", DisHd},       //
+    {"%Nq", DisNq},       //
+    {"%Ppi", DisPpi},     //
+    {"%Pq", DisPq},       //
+    {"%Rdqp", DisRdqp},   //
+    {"%Rvqp", DisRvqp},   //
+    {"%Sw", DisSw},       //
+    {"%Udq", DisUdq},     //
+    {"%Uq", DisUq},       //
+    {"%Vdq", DisVdq},     //
+    {"%Vpd", DisVpd},     //
+    {"%Vps", DisVps},     //
+    {"%Vq", DisVq},       //
+    {"%Vsd", DisVsd},     //
+    {"%Vss", DisVss},     //
+    {"%Zb", DisZb},       //
+    {"%Zv", DisZv},       //
+    {"%Zvq", DisZvq},     //
+    {"%Zvqp", DisZvqp},   //
+    {"%eAX", DisEax},     //
+    {"%rAX", DisRax},     //
+    {"%rDX", DisRdx},     //
+    {"*Eq", DisIndirEq},  //
+    {">Ib", DisEnterIb},  //
+    {"BBb", DisBBb},      //
+    {"DX", DisPort},      //
+    {"EST", DisEst},      //
+    {"EST1", DisEst1},    //
+    {"ESsr", DisEssr},    //
+    {"Eb", DisEb},        //
+    {"Ed", DisEd},        //
+    {"Edqp", DisEdqp},    //
+    {"Edr", DisEdr},      //
+    {"Eq", DisEq},        //
+    {"Eqp", DisEqp},      //
+    {"Esr", DisEsr},      //
+    {"Ev", DisEv},        //
+    {"Evq", DisEvq},      //
+    {"Evqp", DisEvqp},    //
+    {"Ew", DisEvqp},      //
+    {"Ib", DisIb},        //
+    {"Ibs", DisIbs},      //
+    {"Ibss", DisIbss},    //
+    {"Ivds", DisIvds},    //
+    {"Ivqp", DisIvqp},    //
+    {"Ivs", DisIvs},      //
+    {"Iw", DisIw},        //
+    {"Jb", DisJb},        //
+    {"Jbs", DisJbs},      //
+    {"Jvds", DisJvds},    //
+    {"Kvds", DisKvds},    //
+    {"M", DisM},          //
+    {"Mdi", DisMdi},      //
+    {"Mdq", DisMdq},      //
+    {"Mdqp", DisMdqp},    //
+    {"Mdr", DisMdr},      //
+    {"Me", DisMe},        //
+    {"Mer", DisMer},      //
+    {"Mp", DisMp},        //
+    {"Mps", DisMps},      //
+    {"Mq", DisMq},        //
+    {"Mqi", DisMqi},      //
+    {"Ms", DisMs},        //
+    {"Msr", DisMsr},      //
+    {"Mw", DisMw},        //
+    {"Mwi", DisMwi},      //
+    {"Ob", DisOb},        //
+    {"Ovqp", DisOvqp},    //
+    {"Pvds", DisPvds},    //
+    {"Qpi", DisQpi},      //
+    {"Qq", DisQq},        //
+    {"Rvds", DisRvds},    //
+    {"Wdq", DisWdq},      //
+    {"Wpd", DisWpd},      //
+    {"Wps", DisWps},      //
+    {"Wpsq", DisWpsq},    //
+    {"Wq", DisWq},        //
+    {"Wsd", DisWsd},      //
+    {"Wss", DisWss},      //
+    {"Xb", DisXb},        //
+    {"Xv", DisXv},        //
+    {"Xvqp", DisXvqp},    //
+    {"Yb", DisYb},        //
+    {"Yv", DisYv},        //
+    {"Yvqp", DisYvqp},    //
 };
 
 static int CompareString8(const char a[8], const char b[8]) {

@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/preadv.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -24,7 +26,6 @@
 #include "blink/iovs.h"
 #include "blink/limits.h"
 #include "blink/macros.h"
-#include "blink/preadv.h"
 
 // preadv() and pwritev() need MacOS 11+ c. 2020
 

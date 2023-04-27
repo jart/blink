@@ -16,9 +16,10 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/flags.h"
+
 #include "blink/builtin.h"
 #include "blink/debug.h"
-#include "blink/flags.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/rde.h"

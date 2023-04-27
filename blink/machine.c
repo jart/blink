@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/machine.h"
+
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
@@ -38,7 +40,6 @@
 #include "blink/jit.h"
 #include "blink/likely.h"
 #include "blink/log.h"
-#include "blink/machine.h"
 #include "blink/macros.h"
 #include "blink/map.h"
 #include "blink/modrm.h"
@@ -1456,8 +1457,8 @@ static void OpUd0GvqpEvqp(P) {
     //
     // `hvtailcall`, when run from within an interrupt service routine, will
     // return (`iret`) to the ISR's caller & then invoke the numbered trap
-    switch (Rep(rde) << 9 |
-            ModrmMod(rde) << 6 | ModrmReg(rde) << 3 | ModrmRm(rde)) {
+    switch (Rep(rde) << 9 | ModrmMod(rde) << 6 | ModrmReg(rde) << 3 |
+            ModrmRm(rde)) {
       case 00067:
       case 00167:
       case 00267:
@@ -1492,34 +1493,34 @@ static void OpEmms(P) {
 }
 
 #ifdef DISABLE_METAL
-#define OpCallf     OpUd
-#define OpDecZv     OpUd
-#define OpInAlDx    OpUd
-#define OpInAlImm   OpUd
-#define OpInAxDx    OpUd
-#define OpInAxImm   OpUd
-#define OpIncZv     OpUd
-#define OpJmpf      OpUd
-#define OpLds       OpUd
-#define OpLes       OpUd
-#define OpMovCqRq   OpUd
-#define OpMovEvqpSw OpUd
-#define OpMovRqCq   OpUd
-#define OpMovSwEvqp OpUd
-#define OpOutDxAl   OpUd
-#define OpOutDxAx   OpUd
-#define OpOutImmAl  OpUd
-#define OpOutImmAx  OpUd
-#define OpPopSeg    OpUd
-#define OpPopa      OpUd
-#define OpPushSeg   OpUd
-#define OpPusha     OpUd
-#define OpClts      OpUd
-#define OpRdmsr     OpUd
-#define OpRetf      OpUd
-#define OpInto      OpUd
-#define OpIret      OpUd
-#define OpWrmsr     OpUd
+#define OpCallf       OpUd
+#define OpDecZv       OpUd
+#define OpInAlDx      OpUd
+#define OpInAlImm     OpUd
+#define OpInAxDx      OpUd
+#define OpInAxImm     OpUd
+#define OpIncZv       OpUd
+#define OpJmpf        OpUd
+#define OpLds         OpUd
+#define OpLes         OpUd
+#define OpMovCqRq     OpUd
+#define OpMovEvqpSw   OpUd
+#define OpMovRqCq     OpUd
+#define OpMovSwEvqp   OpUd
+#define OpOutDxAl     OpUd
+#define OpOutDxAx     OpUd
+#define OpOutImmAl    OpUd
+#define OpOutImmAx    OpUd
+#define OpPopSeg      OpUd
+#define OpPopa        OpUd
+#define OpPushSeg     OpUd
+#define OpPusha       OpUd
+#define OpClts        OpUd
+#define OpRdmsr       OpUd
+#define OpRetf        OpUd
+#define OpInto        OpUd
+#define OpIret        OpUd
+#define OpWrmsr       OpUd
 #define OpUd0GvqpEvqp OpUd
 #endif
 
@@ -2245,7 +2246,6 @@ void Actor(struct Machine *mm) {
 #ifndef __CYGWIN__
     STATISTIC(++interps);
 #endif
-    JIX_LOGF("INTERPRETER");
     if (!atomic_load_explicit(&m->attention, memory_order_acquire)) {
       ExecuteInstruction(m);
     } else {

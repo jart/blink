@@ -16,10 +16,10 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/fspath.h"
+
 #include <stdlib.h>
 #include <string.h>
-
-#include "blink/fspath.h"
 
 char *JoinPath(const char *x, const char *y) {
   char *z, *p;

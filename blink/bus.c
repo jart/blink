@@ -16,12 +16,13 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/bus.h"
+
 #include <limits.h>
 
 #include "blink/assert.h"
 #include "blink/atomic.h"
 #include "blink/builtin.h"
-#include "blink/bus.h"
 #include "blink/dll.h"
 #include "blink/endian.h"
 #include "blink/machine.h"

@@ -16,9 +16,9 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include <stdbool.h>
-
 #include "blink/describeflags.h"
+
+#include <stdbool.h>
 
 const char *DescribeFlags(char *p, size_t n, const struct DescribeFlags *d,
                           size_t m, const char *prefix, unsigned x) {

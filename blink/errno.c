@@ -16,10 +16,11 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/errno.h"
+
 #include <errno.h>
 
 #include "blink/builtin.h"
-#include "blink/errno.h"
 
 static dontinline long ReturnErrno(int e) {
   errno = e;

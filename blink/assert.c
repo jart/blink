@@ -16,10 +16,11 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/assert.h"
+
 #include <errno.h>
 #include <stdio.h>
 
-#include "blink/assert.h"
 #include "blink/debug.h"
 #include "blink/flag.h"
 #include "blink/log.h"

@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/sse.h"
+
 #include <string.h>
 
 #include "blink/case.h"
@@ -24,7 +26,6 @@
 #include "blink/likely.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/sse.h"
 
 static void MmxPaddusb(u8 x[8], const u8 y[8]) {
   unsigned i;

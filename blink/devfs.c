@@ -16,10 +16,11 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/devfs.h"
+
 #include <stdlib.h>
 #include <string.h>
 
-#include "blink/devfs.h"
 #include "blink/errno.h"
 #include "blink/hostfs.h"
 #include "blink/log.h"

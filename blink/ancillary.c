@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/ancillary.h"
+
 #include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
@@ -23,7 +25,6 @@
 #include <sys/un.h>
 #include <unistd.h>
 
-#include "blink/ancillary.h"
 #include "blink/assert.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"

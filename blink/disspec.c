@@ -1174,9 +1174,8 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
       }
       break;
     case 0xFF:
-      switch (Rep(x->op.rde) << 9 |
-              ModrmMod(x->op.rde) << 6 | ModrmReg(x->op.rde) << 3 |
-              ModrmRm(x->op.rde)) {
+      switch (Rep(x->op.rde) << 9 | ModrmMod(x->op.rde) << 6 |
+              ModrmReg(x->op.rde) << 3 | ModrmRm(x->op.rde)) {
         case 00067:
         case 00167:
         case 00267:

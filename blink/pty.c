@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/pty.h"
+
 #include <ctype.h>
 #include <errno.h>
 #include <limits.h>
@@ -29,7 +31,6 @@
 #include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/macros.h"
-#include "blink/pty.h"
 #include "blink/thompike.h"
 #include "blink/util.h"
 

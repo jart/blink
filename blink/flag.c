@@ -16,8 +16,9 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/builtin.h"
 #include "blink/flag.h"
+
+#include "blink/builtin.h"
 
 bool FLAG_zero;
 bool FLAG_wantjit;

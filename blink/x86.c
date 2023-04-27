@@ -16,6 +16,8 @@
 │ See the License for the specific language governing permissions and          │
 │ limitations under the License.                                               │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/x86.h"
+
 #include <stdbool.h>
 #include <string.h>
 
@@ -27,7 +29,6 @@
 #include "blink/modrm.h"
 #include "blink/rde.h"
 #include "blink/types.h"
-#include "blink/x86.h"
 
 const char kXedCopyright[] = "\
 Xed (Apache 2.0)\n\

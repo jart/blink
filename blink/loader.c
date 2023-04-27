@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/loader.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -33,7 +35,6 @@
 #include "blink/end.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
-#include "blink/loader.h"
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/macros.h"

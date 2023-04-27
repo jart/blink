@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/vfs.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdarg.h>
@@ -34,7 +36,6 @@
 #include "blink/macros.h"
 #include "blink/procfs.h"
 #include "blink/tunables.h"
-#include "blink/vfs.h"
 
 #ifndef DISABLE_VFS
 

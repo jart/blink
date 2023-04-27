@@ -16,8 +16,9 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/log.h"
 #include "blink/stats.h"
+
+#include "blink/log.h"
 
 #define DEFINE_AVERAGE(S) struct Average S;
 #define DEFINE_COUNTER(S) long S;

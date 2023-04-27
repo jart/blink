@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/overlays.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
@@ -30,7 +32,6 @@
 #include "blink/fspath.h"
 #include "blink/likely.h"
 #include "blink/log.h"
-#include "blink/overlays.h"
 #include "blink/syscall.h"
 #include "blink/thompike.h"
 #include "blink/util.h"

@@ -16,9 +16,10 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/mda.h"
+
 #include "blink/buffer.h"
 #include "blink/macros.h"
-#include "blink/mda.h"
 #include "blink/util.h"
 
 #define kBlink     1

@@ -41,10 +41,9 @@ static relegated u64 GetDescriptorBase(u64 d) {
 }
 
 static struct XedMachineMode GetDescriptorMode(u64 d) {
-  static const struct XedMachineMode kMode[] = {XED_MACHINE_MODE_LEGACY_16,
-                                                XED_MACHINE_MODE_LONG,
-                                                XED_MACHINE_MODE_LEGACY_32,
-                                                XED_MACHINE_MODE_LONG};
+  static const struct XedMachineMode kMode[] = {
+      XED_MACHINE_MODE_LEGACY_16, XED_MACHINE_MODE_LONG,
+      XED_MACHINE_MODE_LEGACY_32, XED_MACHINE_MODE_LONG};
   return kMode[(d & 0x0060000000000000) >> 53];
 }
 

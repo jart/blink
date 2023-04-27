@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/time.h"
+
 #include <time.h>
 
 #include "blink/assert.h"
@@ -24,7 +26,6 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
-#include "blink/time.h"
 
 #ifdef HAVE_SCHED_H
 #include <sched.h>

@@ -34,24 +34,24 @@
 #define XED_GEN_MODE_V86       2  // unimplemented
 
 struct XedMachineMode {
-  uint8_t omode : 2,    // bitness of operands, for instruction decoding
-                        // - 16-bit if XED_MODE_REAL
-                        // - 32-bit if XED_MODE_LEGACY
-                        // - 64-bit if XED_MODE_LONG
-          genmode : 6;  // general machine mode
-                        // - real address mode if XED_GEN_MODE_REAL
-                        // - protected/long mode, with GDT & all that, if
-                        //   XED_GEN_MODE_PROTECTED
+  uint8_t omode : 2,  // bitness of operands, for instruction decoding
+                      // - 16-bit if XED_MODE_REAL
+                      // - 32-bit if XED_MODE_LEGACY
+                      // - 64-bit if XED_MODE_LONG
+      genmode : 6;    // general machine mode
+                      // - real address mode if XED_GEN_MODE_REAL
+                      // - protected/long mode, with GDT & all that, if
+                      //   XED_GEN_MODE_PROTECTED
 };
 
 #define XED_MACHINE_MODE_REAL \
-        ((struct XedMachineMode){XED_MODE_REAL, XED_GEN_MODE_REAL})
+  ((struct XedMachineMode){XED_MODE_REAL, XED_GEN_MODE_REAL})
 #define XED_MACHINE_MODE_LEGACY_16 \
-        ((struct XedMachineMode){XED_MODE_REAL, XED_GEN_MODE_PROTECTED})
+  ((struct XedMachineMode){XED_MODE_REAL, XED_GEN_MODE_PROTECTED})
 #define XED_MACHINE_MODE_LEGACY_32 \
-        ((struct XedMachineMode){XED_MODE_LEGACY, XED_GEN_MODE_PROTECTED})
+  ((struct XedMachineMode){XED_MODE_LEGACY, XED_GEN_MODE_PROTECTED})
 #define XED_MACHINE_MODE_LONG \
-        ((struct XedMachineMode){XED_MODE_LONG, XED_GEN_MODE_PROTECTED})
+  ((struct XedMachineMode){XED_MODE_LONG, XED_GEN_MODE_PROTECTED})
 
 #define XED_MAX_INSTRUCTION_BYTES 15
 

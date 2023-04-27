@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/strace.h"
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -34,7 +36,6 @@
 #include "blink/linux.h"
 #include "blink/machine.h"
 #include "blink/macros.h"
-#include "blink/strace.h"
 #include "blink/thread.h"
 #include "blink/util.h"
 

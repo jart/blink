@@ -8,7 +8,7 @@ ARCHITECTURES = x86_64 x86_64-gcc49 i486 aarch64 arm mips s390x mipsel mips64 mi
 .SUFFIXES:
 .DELETE_ON_ERROR:
 .FEATURES: output-sync
-.PHONY: o all clean check check2 test tags install
+.PHONY: o all clean check check2 test tags format install
 
 ifeq ($(MAKE_VERSION), 3.81)
 $(error please "brew install make" and use the "gmake" command)
@@ -65,6 +65,9 @@ o/ok:	o/$(MODE)/blink
 
 test:	o/$(MODE)/blink				\
 	o/$(MODE)/test
+
+format:
+	clang-format -i -style=file blink/*.c blink/*.h
 
 check:	test					\
 	o/$(MODE)/third_party/cosmo		\
