@@ -37,6 +37,12 @@
 #include <winternl.h>
 #endif
 
+#if defined(__APPLE__) || defined(__NetBSD__)
+#define st_atim st_atimespec
+#define st_ctim st_ctimespec
+#define st_mtim st_mtimespec
+#endif
+
 #ifndef DISABLE_VFS
 
 #define PROCFS_NAME_MAX 16

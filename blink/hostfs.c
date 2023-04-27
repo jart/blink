@@ -129,7 +129,8 @@ cleananddie:
   return -1;
 }
 
-int HostfsReadmountentry(struct VfsDevice *device, char **spec, char **type, char **mntops) {
+int HostfsReadmountentry(struct VfsDevice *device, char **spec, char **type,
+                         char **mntops) {
   struct HostfsDevice *hostfsdevice = (struct HostfsDevice *)device->data;
   *spec = strdup(hostfsdevice->source);
   if (*spec == NULL) {
@@ -1857,7 +1858,6 @@ cleananddie:
 }
 
 int HostfsFexecve(struct VfsInfo *info, char *const *argv, char *const *envp) {
-  struct HostfsInfo *hostinfo;
 #ifndef HAVE_FEXECVE
   char path[VFS_PATH_MAX];
 #endif
@@ -1866,6 +1866,7 @@ int HostfsFexecve(struct VfsInfo *info, char *const *argv, char *const *envp) {
   if (info == NULL) {
     return efault();
   }
+  struct HostfsInfo *hostinfo;
   hostinfo = (struct HostfsInfo *)info->data;
   return fexecve(hostinfo->filefd, argv, envp);
 #else
