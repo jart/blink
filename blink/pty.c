@@ -1458,7 +1458,8 @@ char *PtyEncodeStyle(char *p, u32 xr, u32 pr, u32 fg, u32 bg) {
 int PtyAppendLine(struct Pty *pty, struct Buffer *buf, unsigned y) {
   u64 u;
   char *p, *pb;
-  u32 i, j, n, w, wc, np, xp, pr, fg, bg, ci;
+  u32 i, j, n, wc, np, xp, pr, fg, bg, ci;
+  int w;
   if (y >= pty->yn) {
     errno = EINVAL;
     return -1;
