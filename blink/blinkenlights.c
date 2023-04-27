@@ -333,6 +333,7 @@ static bool alarmed;
 static bool natural;
 static bool mousemode;
 static bool wantmetal;
+static bool displayexec;        /* 'D' -> DrawDisplayOnly during Exec() */
 static bool showhighsse;
 static bool showprofile;
 static bool ptyisenabled;
@@ -608,8 +609,8 @@ static unsigned long TallyHits(i64 addr, int size) {
 static void GenerateProfile(void) {
   int sym;
   profsyms.i = 0;
-  profsyms.toto = TallyHits(m->system->codestart, m->system->codesize);
   if (!ophits) return;
+  profsyms.toto = TallyHits(m->system->codestart, m->system->codesize);
   for (sym = 0; sym < dis->syms.i; ++sym) {
     if (dis->syms.p[sym].addr >= m->system->codestart &&
         dis->syms.p[sym].addr + dis->syms.p[sym].size <
@@ -842,7 +843,6 @@ static void TuiCleanup(void) {
   LOGF("TuiCleanup");
   sigaction(SIGCONT, oldsig + 2, 0);
   TtyRestore();
-  tuimode = false;
 }
 
 static void OnSigTstp(int sig, siginfo_t *si, void *uc) {
@@ -988,7 +988,7 @@ static void ExecSetup(void) {
   it.it_interval.tv_usec = 1. / FPS * 1e6;
   it.it_value.tv_sec = 0;
   it.it_value.tv_usec = 1. / FPS * 1e6;
-  setitimer(ITIMER_REAL, &it, 0);
+  setitimer(ITIMER_REAL, &it, 0);   // possibly omit in displayexec mode
 }
 
 static void pcmpeqb(u8 x[16], const u8 y[16]) {
@@ -1078,6 +1078,7 @@ static int GetAddrHexWidth(void) {
 
 bool ShouldShowDisplay(void) {
   if (vidya) return true;  // in bios video mode
+  if (displayexec) return true;
   return ptyisenabled;
 }
 
@@ -1383,6 +1384,7 @@ static void DrawDisplay(struct Panel *p) {
       DrawHr(&pan.displayhr, "MONOCHROME DISPLAY ADAPTER");
       DrawMda(p, (u8(*)[80][2])(m->system->real + 0xb0000));
       break;
+    case 2:
     case 3:
       DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
       DrawCga(p, (u8(*)[80][2])(m->system->real + 0xb8000));
@@ -2122,7 +2124,7 @@ static void Redraw(bool force) {
   size_t size;
   double execsecs;
   struct timespec start_draw, end_draw;
-  if (!tuimode) return;
+  if (displayexec) return;
   if (g_history.viewing) {
     ShowHistory();
     return;
@@ -2135,6 +2137,7 @@ static void Redraw(bool force) {
   oldlen = m->xedd->length;
   ips = last_cycle ? (cycle - last_cycle) / execsecs : 0;
   SetupDraw();
+  ScrollOp(&pan.disassembly, GetDisIndex());
   for (i = 0; i < ARRAYLEN(pan.p); ++i) {
     for (j = 0; j < pan.p[i].bottom - pan.p[i].top; ++j) {
       pan.p[i].lines[j].i = 0;
@@ -2241,6 +2244,7 @@ static void HandleAlarm(void) {
 static void HandleTerminalResize(void) {
   GetTtySize(ttyout);
   ClearHistory();
+  dis->ops.i = 0;
 }
 
 static void HandleAppReadInterrupt(void) {
@@ -2435,9 +2439,11 @@ static void DrawDisplayOnly(struct Panel *p) {
   int i, y, yn, xn, tly, tlx;
   yn = MIN(tyn, p->bottom - p->top);
   xn = MIN(txn, p->right - p->left);
+  if (!p->lines) SetupDraw();
   for (i = 0; i < yn; ++i) {
     p->lines[i].i = 0;
   }
+  p->lines[yn].i = 0;
   DrawDisplay(p);
   memset(&b, 0, sizeof(b));
   tly = tyn / 2 - yn / 2;
@@ -2453,7 +2459,7 @@ static void DrawDisplayOnly(struct Panel *p) {
     }
     AppendStr(&b, "\033[0m\033[K");
   }
-  VfsWrite(ttyout, b.p, b.i);
+  UninterruptibleWrite(ttyout, b.p, b.i);
   free(b.p);
 }
 
@@ -2970,9 +2976,11 @@ static void OnVidyaService(void) {
       break;
     case 0x09:
       OnVidyaServiceWriteCharacter();
+      Redraw(true);
       break;
     case 0x0E:
       OnVidyaServiceTeletypeOutput();
+      Redraw(true);
       break;
     case 0x0F:
       OnVidyaServiceGetMode();
@@ -3014,10 +3022,6 @@ static void OnKeyboardServiceReadKeyPress(void) {
     ptyisenabled = true;
     ReactiveDraw();
   }
-  if (!tuimode) {
-    tuimode = true;
-    action |= CONTINUE;
-  }
   pty->conf |= kPtyBlinkcursor;
   if (!pending) {
     rc = ReadAnsi(ttyin, buf, sizeof(buf));
@@ -3043,10 +3047,22 @@ static void OnKeyboardServiceReadKeyPress(void) {
   m->ax[1] = 0;
 }
 
+static bool HasPendingKeyboard(void) {
+  return HasPendingInput(ttyin);
+}
+
+static void OnKeyboardServiceCheckKeyPress(void) {
+  bool b = HasPendingKeyboard();
+  m->flags = SetFlag(m->flags, FLAGS_ZF, !b);   /* ZF=0 if key pressed */
+}
+
 static void OnKeyboardService(void) {
   switch (m->ah) {
     case 0x00:
       OnKeyboardServiceReadKeyPress();
+      break;
+    case 0x01:
+      OnKeyboardServiceCheckKeyPress();
       break;
     default:
       break;
@@ -3360,6 +3376,7 @@ static void OnStep(void) {
   if (action & MODAL) return;
   action |= STEP;
   action &= ~NEXT;
+  action &= ~FINISH;
   action &= ~CONTINUE;
 }
 
@@ -3430,10 +3447,6 @@ static void OnXmmSize(void) {
 
 static void OnXmmDisp(void) {
   SetXmmDisp(CycleXmmDisp(xmmdisp));
-}
-
-static bool HasPendingKeyboard(void) {
-  return HasPendingInput(ttyin);
 }
 
 static void Sleep(int ms) {
@@ -3554,7 +3567,8 @@ static void HandleKeyboard(const char *k) {
     CASE('n', OnNext());
     CASE('f', OnFinish());
     CASE('c', OnContinueTui());
-    CASE('C', OnContinueExec());
+    CASE('C', displayexec = false; OnContinueExec());
+    CASE('D', displayexec = true;  OnContinueExec());
     CASE('R', OnRestart());
     CASE('x', OnXmmDisp());
     CASE('t', OnXmmType());
@@ -3778,6 +3792,8 @@ static void Exec(void) {
             LOGF("REACT");
             action &= ~(INT | STEP | FINISH | NEXT);
             tuimode = true;
+            displayexec = false;
+            break;
           } else {
             action &= ~INT;
             EnqueueSignal(m, SIGINT_LINUX);
@@ -3794,6 +3810,9 @@ static void Exec(void) {
     if (interrupt == 1) interrupt = m->trapno;
     if (OnHalt(interrupt)) {
       if (!tuimode) {
+        if (displayexec) {
+          DrawDisplayOnly(&pan.display);
+        }
         goto KeepGoing;
       }
     }
@@ -3899,12 +3918,14 @@ static void Tui(void) {
             action &= ~NEXT;
             if (IsCall()) {
               BreakAtNextInstruction();
+              tuimode = false;
               break;
             }
           }
           if (action & FINISH) {
             if (IsCall()) {
               BreakAtNextInstruction();
+              tuimode = false;
               break;
             } else if (IsRet()) {
               action &= ~FINISH;

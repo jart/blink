@@ -99,6 +99,8 @@ static int OpSerialIn(struct Machine *m, int r) {
       if (p & POLLIN) s |= UART_TTYDA;
       if (p & POLLOUT) s |= UART_TTYTXR;
       return s;
+    case UART_DLM:
+      return -1;
     default:
       return 0;
   }
