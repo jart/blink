@@ -109,6 +109,8 @@
  * after having called StartJit() to check.
  */
 
+#define kMaximumAnticipatedPageSize 65536
+
 const u8 kJitRes[2] = {kJitRes0, kJitRes1};
 const u8 kJitArg[4] = {kJitArg0, kJitArg1, kJitArg2, kJitArg3};
 const u8 kJitSav[5] = {kJitSav0, kJitSav1, kJitSav2, kJitSav3, kJitSav4};
@@ -1441,12 +1443,12 @@ static void FixupJitJumps(struct JitBlock *jb, struct Dll *list,
   dll_make_first(&jb->freejumps, list);
 }
 
-static bool UpdateJitHook(struct Jit *jit, struct JitBlock *jb,
+static bool UpdateJitHook(struct Jit *jit, struct JitBlock *jb, u64 virt,
                           uintptr_t funcaddr) {
   struct Dll *jumps;
   unassert(funcaddr);
-  jumps = GetJitJumps(jit, jb, jb->virt);
-  if (SetJitHook(jit, jb->virt, jit->staging, funcaddr)) {
+  jumps = GetJitJumps(jit, jb, virt);
+  if (SetJitHook(jit, virt, jit->staging, funcaddr)) {
     FixupJitJumps(jb, jumps, funcaddr);
     return true;
   } else {
@@ -1455,9 +1457,9 @@ static bool UpdateJitHook(struct Jit *jit, struct JitBlock *jb,
   }
 }
 
-static void AbandonJitHook(struct Jit *jit, struct JitBlock *jb) {
-  if (jb->virt && jit->staging) {
-    SetJitHook(jit, jb->virt, 0, 0);
+static void AbandonJitHook(struct Jit *jit, u64 virt) {
+  if (virt && jit->staging) {
+    SetJitHook(jit, virt, 0, 0);
   }
 }
 
@@ -1484,7 +1486,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
     for (rem = 0, e = dll_first(jit->jumps); e; e = e2) {
       e2 = dll_next(jit->jumps, e);
       jj = JITJUMP_CONTAINER(e);
-      if (jj->code + 5 > addr && jj->code < addr + size) {
+      if (MAX(jj->code, addr) < MIN(jj->code + 5, addr + size)) {
         dll_remove(&jit->jumps, e);
         dll_make_first(&rem, e);
       }
@@ -1499,11 +1501,12 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
     // update interpreter hooks so our new jit code goes live
     while ((e = dll_first(jb->staged))) {
       js = JITSTAGE_CONTAINER(e);
+      unassert(js->index >= jb->committed);
       if (js->index <= blockoff) {
         if (!ShallNotPass(js->pagegen, &jit->pagegen)) {
-          UpdateJitHook(jit, jb, (uintptr_t)jb->addr + js->start);
+          UpdateJitHook(jit, jb, js->virt, (uintptr_t)jb->addr + js->start);
         } else {
-          AbandonJitHook(jit, jb);
+          AbandonJitHook(jit, js->virt);
         }
         dll_remove(&jb->staged, e);
         FreeJitStage(js);
@@ -1522,10 +1525,16 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
 void ReinsertJitBlock_(struct Jit *jit, struct JitBlock *jb) {
   unassert(jb->start == jb->index);
   unassert(dll_is_empty(jb->jumps));
-  unassert(dll_is_empty(jb->staged));
   if (jb->index < kJitBlockSize) {
+    // there's still memory remaining; reinsert for immediate reuse.
     dll_make_first(&jit->blocks, &jb->elem);
   } else {
+    // block has been filled; relegate it to the end of the list.
+    // guarantee that staged hooks shall be committed on openbsd.
+    _Static_assert(kJitBlockSize % kMaximumAnticipatedPageSize == 0,
+                   "unassert(dll_is_empty(jb->staged)) can't pass "
+                   "unless kJitBlockSize is divisible by page size");
+    unassert(dll_is_empty(jb->staged));
     dll_make_last(&jit->blocks, &jb->elem);
   }
 }
@@ -1647,11 +1656,11 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb) {
     if (jb->virt) {
       // since we have a hash table key we must install the hook
       JIP_LOGF("finishing jit path in block %p at %#" PRIx64, jb, jb->virt);
-      addr = jb->addr + jb->start;
       if (CanJitForImmediateEffect()) {
         // operating system permits us to use rwx memory
+        addr = jb->addr + jb->start;
         sys_icache_invalidate(addr, jb->index - jb->start);
-        if (!UpdateJitHook(jit, jb, (uintptr_t)addr)) {
+        if (!UpdateJitHook(jit, jb, jb->virt, (uintptr_t)addr)) {
           // we lost race with another thread creating path at same addr
           return AbandonJit(jit, jb);
         }
@@ -1682,13 +1691,18 @@ bool FinishJit(struct Jit *jit, struct JitBlock *jb) {
     STATISTIC(++path_ooms);
     AbandonJitJumps(jb);
     if (jb->index - jb->start < (kJitBlockSize >> 1)) {
-      // oom was caused by there not being much room left in block
-      // in that case, it's not unreasonable to possibly try again
+      // we ran out of block space when trying to create a path that's
+      // shorter than half the maximum block size. in that case, abandon
+      // the path. this will reset the hook on the initial path address.
+      // hopefully the next time it's executed, there'll be enough room.
       JIT_LOGF("oom'd jit block %p at %#" PRIx64 " due to lack of room", jb,
                jb->virt);
-      AbandonJitHook(jit, jb);
+      AbandonJitHook(jit, jb->virt);
     } else {
-      // otherwise we *don't* call this, so a staging hook remains
+      // we ran out of block space trying to create a path that's very
+      // long. it's possibly longer than the maximum block size. in that
+      // case, just permanently leave the starting address in staging so
+      // that we won't try to create this path again.
       JIT_LOGF("oom'd jit block %p at %#" PRIx64 " because long code is long",
                jb, jb->virt);
     }
@@ -1720,7 +1734,7 @@ bool AbandonJit(struct Jit *jit, struct JitBlock *jb) {
   JIT_LOGF("abandoning jit path in block %p at %#" PRIx64, jb, jb->virt);
   STATISTIC(++path_abandoned);
   AbandonJitJumps(jb);
-  AbandonJitHook(jit, jb);
+  AbandonJitHook(jit, jb->virt);
   DiscardGeneratedJitCode(jb);
   LockJit(jit);
   ReinsertJitBlock_(jit, jb);

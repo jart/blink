@@ -171,7 +171,6 @@ struct JitPage {
 struct JitBlock {
   u8 *addr;
   i64 virt;
-  long cod;
   long start;
   long index;
   long committed;
