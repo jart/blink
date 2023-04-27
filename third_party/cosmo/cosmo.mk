@@ -181,7 +181,7 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/fgetln_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/getcontext_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/getenv_test.com.ok					\
-	o/$(MODE)/third_party/cosmo/3/ftruncate_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/8/ftruncate_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/tmpfile_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/select_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/7/utimensat_test.com.ok					\
