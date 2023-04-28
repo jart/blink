@@ -2898,13 +2898,14 @@ static void OnDiskService(void) {
 #define video_ram()     (m->system->real + ((vidya == 7)? 0xb0000: 0xb8000))
 #define ATTR_DEFAULT    0x07
 
-static void VidyaServiceClearScreen(void) {
+/* clear screen from x1,y1 up to but not including x2, y2 */
+static void VidyaServiceClearScreen(int x1, int y1, int x2, int y2, u8 attr) {
   int x, y;
   u16 *vram;
   vram = (u16 *)video_ram();
-  for (y = 0; y < pty->yn; y++) {
-    for (x = 0; x < pty->xn; x++) {
-        vram[page_offsetw() + y * pty->xn + x] = ' ' | (ATTR_DEFAULT << 8);
+  for (y = y1; y < y2; y++) {
+    for (x = x1; x < x2; x++) {
+        vram[page_offsetw() + y * pty->xn + x] = ' ' | (attr << 8);
     }
   }
 }
@@ -2920,12 +2921,48 @@ static void VidyaServiceClearLine(int x1, int x2, int y, u8 attr) {
 }
 
 /* scroll video ram up from line y1 up to and including line y2 */
-static void VidyaServiceScrollUp(int y1, int y2, unsigned char attr) {
+static void VidyaServiceScrollUp(int y1, int y2, u8 attr) {
   u8 *vid = (u8 *)(video_ram() + (page_offsetw() + y1 * pty->xn) * 2);
   int pitch = pty->xn * 2;
   memcpy(vid, vid + pitch, (pty->yn - y1) * pitch);
   VidyaServiceClearLine(0, pty->xn-1, y2, attr);
 }
+
+/* scroll adapter RAM down from line y1 up to and including line y2 */
+static void VidyaServiceScrollDown(int y1, int y2, u8 attr)
+{
+  u8 *vid = (u8 *)(video_ram() + (page_offsetw() + (pty->yn-1) * pty->xn) * 2);
+  int pitch = pty->xn * 2;
+  int y = y2;
+  while (--y >= y1) {
+    memcpy(vid, vid - pitch, pitch);
+    vid -= pitch;
+  }
+  VidyaServiceClearLine(0, pty->xn-1, y1, attr);
+}
+
+static void OnVidyaServiceScrollUp(void) {
+  unsigned i;
+  if (m->al == 0) {
+    VidyaServiceClearScreen(m->cl, m->ch, m->dl+1, m->dh+1, m->bh);
+    return;
+  }
+  for (i=m->al; i; i--) {
+    VidyaServiceScrollUp(m->ch, m->dh, m->bh);
+  }
+}
+
+static void OnVidyaServiceScrollDown(void) {
+  unsigned i;
+  if (m->al == 0) {
+    VidyaServiceClearScreen(m->cl, m->ch, m->dl+1, m->dh+1, m->bh);
+    return;
+  }
+  for (i=m->al; i; i--) {
+    VidyaServiceScrollDown(m->ch, m->dh, m->bh);
+  }
+}
+
 
 /* write char/attr to video adaptor ram */
 static void VidyaServiceWriteVideoRam(void) {
@@ -2961,7 +2998,7 @@ static void OnVidyaServiceSetMode(void) {
   if (LookupAddress(m, 0xB0000)) {
     vidya = m->al;
     ptyisenabled = true;
-    VidyaServiceClearScreen();
+    VidyaServiceClearScreen(0, 0, pty->xn, pty->yn, ATTR_DEFAULT);
     ReactiveDraw();
   } else {
     LOGF("maybe you forgot -r flag");
@@ -3073,7 +3110,10 @@ static void OnVidyaService(void) {
       OnVidyaServiceGetCursorPosition();
       break;
     case 0x06:
-      VidyaServiceScrollUp(m->ch, m->dh, ATTR_DEFAULT);
+      OnVidyaServiceScrollUp();
+      break;
+    case 0x07:
+      OnVidyaServiceScrollDown();
       break;
     case 0x09:
       OnVidyaServiceWriteCharacter();
@@ -4349,7 +4389,7 @@ int main(int argc, char *argv[]) {
   }
   vidya = m->metal? 3: kModePty;
   if (vidya != kModePty) {
-    VidyaServiceClearScreen();
+    VidyaServiceClearScreen(0, 0, pty->xn, pty->yn, ATTR_DEFAULT);
   }
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;
