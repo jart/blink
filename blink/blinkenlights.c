@@ -2271,8 +2271,8 @@ static void HandleAppReadInterrupt(void) {
     if (action & CONTINUE) {
       action &= ~CONTINUE;
     } else {
-      LeaveScreen();
-      exit(0);
+      tuimode = true;
+      displayexec = false;
     }
   }
 }
@@ -3131,6 +3131,7 @@ static void OnKeyboardServiceReadKeyPress(void) {
     if (rc > 0) {
       pending = rc;
     } else if (rc == -1 && errno == EINTR) {
+      HandleAppReadInterrupt();
       return;
     } else {
       exitcode = 0;
