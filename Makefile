@@ -157,7 +157,7 @@ MAKEFILES =				\
 
 $(OBJS): $(MAKEFILES)
 
-xDEPENDS =				\
+DEPENDS =				\
 	o/$(MODE)/depend.host		\
 	o/$(MODE)/depend.i486		\
 	o/$(MODE)/depend.m68k		\
