@@ -234,6 +234,8 @@ alt-t   slowmo"
 #define kAsanUnscoped           -12
 #define kAsanUnmapped           -13
 
+#define kModePty            255
+
 #define Ctrl(C) ((C) ^ 0100)
 
 #ifdef IUTF8
@@ -811,7 +813,7 @@ static void OnQ(void) {
 }
 
 static void OnV(void) {
-  vidya = !vidya;
+  vidya = vidya == kModePty? 3: kModePty;
 }
 
 static void OnSigSys(int sig) {
@@ -988,7 +990,7 @@ static void ExecSetup(void) {
   it.it_interval.tv_usec = 1. / FPS * 1e6;
   it.it_value.tv_sec = 0;
   it.it_value.tv_usec = 1. / FPS * 1e6;
-  setitimer(ITIMER_REAL, &it, 0);   // possibly omit in displayexec mode
+  if (!m->metal) setitimer(ITIMER_REAL, &it, 0);
 }
 
 static void pcmpeqb(u8 x[16], const u8 y[16]) {
@@ -1077,7 +1079,7 @@ static int GetAddrHexWidth(void) {
 }
 
 bool ShouldShowDisplay(void) {
-  if (vidya) return true;  // in bios video mode
+  if (vidya != kModePty) return true;  // in bios video mode
   if (displayexec) return true;
   return ptyisenabled;
 }
@@ -1380,15 +1382,21 @@ static void DrawTerminal(struct Panel *p) {
 
 static void DrawDisplay(struct Panel *p) {
   switch (vidya) {
-    case 7:
+    case 7:     // MDA 80x25 4-gray
       DrawHr(&pan.displayhr, "MONOCHROME DISPLAY ADAPTER");
       DrawMda(p, (u8(*)[80][2])(m->system->real + 0xb0000));
       break;
-    case 2:
-    case 3:
+    case 2:     // CGA 80x25 16-gray
       DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
-      DrawCga(p, (u8(*)[80][2])(m->system->real + 0xb8000));
+      DrawCga(p, (u8(*)[80][2])(m->system->real + 0xb8000), pty->x, pty->y);
       break;
+    case 3:     // EGA 80x25 16-color
+      DrawHr(&pan.displayhr, "EGA Console");
+      DrawCga(p, (u8(*)[80][2])(m->system->real + 0xb8000), pty->x, pty->y);
+      break;
+    case 0:     // CGA 40x25 16-gray
+    case 1:     // CGA 40x25 16-color
+    case kModePty:
     default:
       DrawTerminalHr(&pan.displayhr);
       DrawTerminal(p);
@@ -2437,6 +2445,7 @@ static int OnPtyFdPoll(struct pollfd *fds, nfds_t nfds, int ms) {
 static void DrawDisplayOnly(struct Panel *p) {
   struct Buffer b;
   int i, y, yn, xn, tly, tlx;
+  char buf[64];
   yn = MIN(tyn, p->bottom - p->top);
   xn = MIN(txn, p->right - p->left);
   if (!p->lines) SetupDraw();
@@ -2446,18 +2455,29 @@ static void DrawDisplayOnly(struct Panel *p) {
   p->lines[yn].i = 0;
   DrawDisplay(p);
   memset(&b, 0, sizeof(b));
-  tly = tyn / 2 - yn / 2;
-  tlx = txn / 2 - xn / 2;
+  if (displayexec) {
+    tly = tyn / 2 - yn / 2;
+    tlx = txn / 2 - xn / 2;
+  } else {
+    tly = p->top;
+    tlx = p->left;
+  }
   AppendStr(&b, "\033[0m\033[H");
   for (y = 0; y < tyn; ++y) {
-    if (y) AppendStr(&b, "\r\n");
+    if (displayexec && y) AppendStr(&b, "\r\n");
     if (tly <= y && y <= tly + yn) {
-      for (i = 0; i < tlx; ++i) {
-        AppendChar(&b, ' ');
+      if (!displayexec) {
+        sprintf(buf, "\033[%d;%dH", y+1, tlx+1);
+        AppendStr(&b, buf);
+      } else {
+        for (i = 0; i < tlx; ++i) {
+          AppendChar(&b, ' ');
+        }
       }
       AppendData(&b, p->lines[y - tly].p, p->lines[y - tly].i);
     }
-    AppendStr(&b, "\033[0m\033[K");
+    AppendStr(&b, "\033[0m");
+    if (displayexec) AppendStr(&b, "\033[K");
   }
   UninterruptibleWrite(ttyout, b.p, b.i);
   free(b.p);
@@ -2874,10 +2894,73 @@ static void OnDiskService(void) {
   }
 }
 
+#define page_offsetw()   0      // TODO(ghaerr): implement screen pages
+#define video_ram()     (m->system->real + ((vidya == 7)? 0xb0000: 0xb8000))
+#define ATTR_DEFAULT    0x07
+
+static void OnVidyaServiceClearScreen(void) {
+  int x, y;
+  u16 *vram;
+  vram = (u16 *)video_ram();
+  for (y = 0; y < pty->yn; y++) {
+    for (x = 0; x < pty->xn; x++) {
+        vram[page_offsetw() + y * pty->xn + x] = ' ' | (ATTR_DEFAULT << 8);
+    }
+  }
+}
+
+/* clear line y from x1 up to and including x2 to attribute attr */
+static void OnVidyaServiceClearLine(int x1, int x2, int y, u8 attr) {
+    int x;
+    u16 *vram;
+    vram = (u16 *)video_ram();
+    for (x = x1; x <= x2; x++) {
+        vram[page_offsetw() + y * pty->xn + x] = ' ' | (attr << 8);
+    }
+}
+
+/* scroll video ram up from line y1 up to and including line y2 */
+static void OnVidyaServiceScrollUp(int y1, int y2, unsigned char attr) {
+  u8 *vid = (u8 *)(video_ram() + (page_offsetw() + y1 * pty->xn) * 2);
+  int pitch = pty->xn * 2;
+  memcpy(vid, vid + pitch, (pty->yn - y1) * pitch);
+  OnVidyaServiceClearLine(0, pty->xn-1, y2, attr);
+}
+
+/* write char/attr to video adaptor ram */
+static void OnVidyaServiceWriteVideoRam(void) {
+  u16 *vram;
+  switch (m->al) {
+  case '\a':
+    return;
+  case '\b':
+    if (--pty->x <= 0) {
+      pty->x = 0;
+    }
+    return;
+  case '\r':
+    pty->x = 0;
+    return;
+  case '\n':
+    goto scroll;
+  }
+  vram = (u16 *)video_ram();
+  vram[page_offsetw() + pty->y * pty->xn + pty->x] = m->al | (m->bl << 8);
+  if (++pty->x >= pty->xn) {
+    pty->x = 0;
+scroll:
+    if (++pty->y >= pty->yn) {
+      OnVidyaServiceScrollUp(0, pty->yn - 1, ATTR_DEFAULT);
+      pty->y = pty->yn - 1;
+    }
+  }
+}
+
 static void OnVidyaServiceSetMode(void) {
   if (LookupAddress(m, 0xB0000)) {
     vidya = m->al;
     ptyisenabled = true;
+    OnVidyaServiceClearScreen();
     ReactiveDraw();
   } else {
     LOGF("maybe you forgot -r flag");
@@ -2921,6 +3004,16 @@ static void OnVidyaServiceWriteCharacter(void) {
   int i;
   u64 w;
   char *p, buf[32];
+  if (vidya != kModePty) {
+    int savex = pty->x;
+    int savey = pty->y;
+    for (i = Get16(m->cx); i--;) {
+      OnVidyaServiceWriteVideoRam();
+    }
+    pty->x = savex;
+    pty->y = savey;
+    return;
+  }
   p = buf;
   p += FormatCga(m->bl, p);
   p = stpcpy(p, "\0337");
@@ -2955,6 +3048,10 @@ static void OnVidyaServiceTeletypeOutput(void) {
     ptyisenabled = true;
     ReactiveDraw();
   }
+  if (vidya != kModePty) {
+    OnVidyaServiceWriteVideoRam();
+    return;
+  }
   n = 0 /* FormatCga(m->bl, buf) */;
   w = tpenc(VidyaServiceXlatTeletype(m->al));
   do {
@@ -2974,18 +3071,24 @@ static void OnVidyaService(void) {
     case 0x03:
       OnVidyaServiceGetCursorPosition();
       break;
+    case 0x06:
+      OnVidyaServiceScrollUp(m->ch, m->dh, ATTR_DEFAULT);
+      break;
     case 0x09:
       OnVidyaServiceWriteCharacter();
-      Redraw(true);
+      Redraw(false);
+      DrawDisplayOnly(&pan.display);
       break;
     case 0x0E:
       OnVidyaServiceTeletypeOutput();
-      Redraw(true);
+      Redraw(false);
+      DrawDisplayOnly(&pan.display);
       break;
     case 0x0F:
       OnVidyaServiceGetMode();
       break;
     default:
+      LOGF("Unimplemented vidya service 0x%x\n", m->ah);
       break;
   }
 }
@@ -4241,6 +4344,10 @@ int main(int argc, char *argv[]) {
 #endif
   if (wantmetal) {
     m->metal = true;
+  }
+  vidya = m->metal? 3: kModePty;
+  if (vidya != kModePty) {
+    OnVidyaServiceClearScreen();
   }
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;
