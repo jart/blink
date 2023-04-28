@@ -31,7 +31,7 @@
 #include "blink/endian.h"
 #include "blink/macros.h"
 
-#define kBiosArrayBase  ROUNDDOWN(kBiosEntry - (0x1D + 8) * 4, 0x10)
+#define kBiosArrayBase  ROUNDDOWN(kBiosEntry - (0x1D * 4 + 12 + 8 * 4), 0x10)
 #define kBiosDefInt0x00 kBiosArrayBase
 #define kBiosDefInt0x01 (kBiosDefInt0x00 + 4)
 #define kBiosDefInt0x02 (kBiosDefInt0x01 + 4)
@@ -61,7 +61,8 @@
 #define kBiosDefInt0x1A (kBiosDefInt0x19 + 4)
 #define kBiosDefInt0x1B (kBiosDefInt0x1A + 4)
 #define kBiosDefInt0x1C (kBiosDefInt0x1B + 4)
-#define kBiosDefInt0x70 (kBiosDefInt0x1C + 4)
+#define kBiosDefInt0x1E (kBiosDefInt0x1C + 4)
+#define kBiosDefInt0x70 (kBiosDefInt0x1E + 12)
 #define kBiosDefInt0x71 (kBiosDefInt0x70 + 4)
 #define kBiosDefInt0x72 (kBiosDefInt0x71 + 4)
 #define kBiosDefInt0x73 (kBiosDefInt0x72 + 4)
@@ -102,6 +103,11 @@ static const u8 defbios[] = {
     BIOS_BYTES_AT(kBiosDefInt0x1A, 0x0F, 0xFF, 0167, 0x1A),  // hvtailcall 0x1A
     BIOS_BYTES_AT(kBiosDefInt0x1B, 0x0F, 0xFF, 0167, 0x1B),  // hvtailcall 0x1B
     BIOS_BYTES_AT(kBiosDefInt0x1C, 0x0F, 0xFF, 0167, 0x1C),  // hvtailcall 0x1C
+    // default diskette parameter table per Jun 1985 PC AT BIOS; see p. 5-192 @
+    // https://archive.org/details/IBMPCATIBM5170TechnicalReference6280070SEP85
+    BIOS_BYTES_AT(kBiosDefInt0x1E,                           //
+                  0xDF, 2, 37, 2, 15,                        //
+                  0x1B, 0xFF, 0x54, 0xF6, 15, 8),            //
     BIOS_BYTES_AT(kBiosDefInt0x70, 0x0F, 0xFF, 0167, 0x70),  // hvtailcall 0x70
     BIOS_BYTES_AT(kBiosDefInt0x71, 0x0F, 0xFF, 0167, 0x71),  // hvtailcall 0x71
     BIOS_BYTES_AT(kBiosDefInt0x72, 0x0F, 0xFF, 0167, 0x72),  // hvtailcall 0x72
@@ -157,6 +163,7 @@ void SetDefaultBiosIntVectors(struct Machine *m) {
   Put32(s->real + 0x1A * 4, kBiosSeg << 16 | (kBiosDefInt0x1A - kBiosBase));
   Put32(s->real + 0x1B * 4, kBiosSeg << 16 | (kBiosDefInt0x1B - kBiosBase));
   Put32(s->real + 0x1C * 4, kBiosSeg << 16 | (kBiosDefInt0x1C - kBiosBase));
+  Put32(s->real + 0x1E * 4, kBiosSeg << 16 | (kBiosDefInt0x1E - kBiosBase));
   Put32(s->real + 0x70 * 4, kBiosSeg << 16 | (kBiosDefInt0x70 - kBiosBase));
   Put32(s->real + 0x71 * 4, kBiosSeg << 16 | (kBiosDefInt0x71 - kBiosBase));
   Put32(s->real + 0x72 * 4, kBiosSeg << 16 | (kBiosDefInt0x72 - kBiosBase));
