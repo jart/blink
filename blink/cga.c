@@ -42,25 +42,29 @@ size_t FormatCga(u8 bgfg, char buf[11]) {
 
 void DrawCga(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
   char buf[11];
-  unsigned y, x, n, a;
+  unsigned y, x, n, a, ch, attr;
   n = MIN(25, p->bottom - p->top);
   for (y = 0; y < n; ++y) {
     a = -1;
     for (x = 0; x < 80; ++x) {
+      ch = v[y][x][0];
+      attr = v[y][x][1];
       if (x == curx && y == cury) {
-        if (v[y][x][0] == ' ' || v[y][x][0] == '\0') {
-          AppendData(&p->lines[y], buf, FormatCga(a = 0x07, buf));
-          AppendWide(&p->lines[y], CURSOR);
+        if (ch == ' ' || ch == '\0') {
+          ch = CURSOR;
+          attr = 0x07;
         } else {
-          AppendData(&p->lines[y], buf, FormatCga(a = 0x70, buf));
-          AppendWide(&p->lines[y], kCp437[v[y][x][0]]);
+          ch = kCp437[ch];
+          attr = 0x70;
         }
+        a = -1;
       } else {
-        if (v[y][x][1] != a) {
-          AppendData(&p->lines[y], buf, FormatCga((a = v[y][x][1]), buf));
-        }
-        AppendWide(&p->lines[y], kCp437[v[y][x][0]]);
+        ch = kCp437[ch];
       }
+      if (attr != a) {
+        AppendData(&p->lines[y], buf, FormatCga((a = attr), buf));
+      }
+      AppendWide(&p->lines[y], ch);
     }
     AppendStr(&p->lines[y], "\033[0m");
   }

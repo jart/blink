@@ -62,6 +62,8 @@ void DrawMda(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
           attr = 0x70;
         }
         a = -1;
+      } else {
+        ch = kCp437[ch];
       }
       b = DecodeMdaAttributes(attr);
       if (a != b) {
@@ -73,11 +75,7 @@ void DrawMda(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
         if (a & kReverse) AppendStr(&p->lines[y], ";7");
         AppendChar(&p->lines[y], 'm');
       }
-      if (a) {
-        AppendWide(&p->lines[y], ch);
-      } else {
-        AppendChar(&p->lines[y], ' ');
-      }
+      AppendWide(&p->lines[y], ch);
     }
   }
 }
