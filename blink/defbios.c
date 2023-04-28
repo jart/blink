@@ -70,160 +70,50 @@
 #define kBiosDefInt0x76 (kBiosDefInt0x75 + 4)
 #define kBiosDefInt0x77 (kBiosDefInt0x76 + 4)
 
-static const u8 defbios[] = {[kBiosDefInt0x00 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0067,  // hvtailcall 0x00
-                             [kBiosDefInt0x01 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x01,  // hvtailcall 0x01
-                             [kBiosDefInt0x02 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x02,  // hvtailcall 0x02
-                             [kBiosDefInt0x03 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x03,  // hvtailcall 0x03
-                             [kBiosDefInt0x04 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x04,  // hvtailcall 0x04
-                             [kBiosDefInt0x05 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x05,  // hvtailcall 0x05
-                             [kBiosDefInt0x06 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x06,  // hvtailcall 0x06
-                             [kBiosDefInt0x07 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x07,  // hvtailcall 0x07
-                             [kBiosDefInt0x08 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x08,  // hvtailcall 0x08
-                             [kBiosDefInt0x09 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x09,  // hvtailcall 0x09
-                             [kBiosDefInt0x0A - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x0A,  // hvtailcall 0x0A
-                             [kBiosDefInt0x0B - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x0B,  // hvtailcall 0x0B
-                             [kBiosDefInt0x0C - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x0C,  // hvtailcall 0x0C
-                             [kBiosDefInt0x0D - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x0D,  // hvtailcall 0x0D
-                             [kBiosDefInt0x0E - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x0E,  // hvtailcall 0x0E
-                             [kBiosDefInt0x0F - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x0F,  // hvtailcall 0x0F
-                             [kBiosDefInt0x10 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x10,  // hvtailcall 0x10
-                             [kBiosDefInt0x11 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x11,  // hvtailcall 0x11
-                             [kBiosDefInt0x12 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x12,  // hvtailcall 0x12
-                             [kBiosDefInt0x13 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x13,  // hvtailcall 0x13
-                             [kBiosDefInt0x14 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x14,  // hvtailcall 0x14
-                             [kBiosDefInt0x15 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x15,  // hvtailcall 0x15
-                             [kBiosDefInt0x16 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x16,  // hvtailcall 0x16
-                             [kBiosDefInt0x17 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x17,  // hvtailcall 0x17
-                             [kBiosDefInt0x18 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x18,  // hvtailcall 0x18
-                             [kBiosDefInt0x19 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x19,  // hvtailcall 0x19
-                             [kBiosDefInt0x1A - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x1A,  // hvtailcall 0x1A
-                             [kBiosDefInt0x1B - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x1B,  // hvtailcall 0x1B
-                             [kBiosDefInt0x1C - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x1C,  // hvtailcall 0x1C
-                             [kBiosDefInt0x70 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x70,  // hvtailcall 0x70
-                             [kBiosDefInt0x71 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x71,  // hvtailcall 0x71
-                             [kBiosDefInt0x72 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x72,  // hvtailcall 0x72
-                             [kBiosDefInt0x73 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x73,  // hvtailcall 0x73
-                             [kBiosDefInt0x74 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x74,  // hvtailcall 0x74
-                             [kBiosDefInt0x75 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x75,  // hvtailcall 0x75
-                             [kBiosDefInt0x76 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x76,  // hvtailcall 0x76
-                             [kBiosDefInt0x77 - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0167,
-                             0x77,  // hvtailcall 0x77
-                             [kBiosEntry - kBiosArrayBase] = 0x0F,
-                             0xFF,
-                             0177,
-                             0x19,  // hvcall 0x19
-                             0xEB,
-                             0xFA,  // jmp .-4
-                             [kBiosEnd - 1 - kBiosArrayBase] = 0x00};
+#define BIOS_BYTES_AT(addr, ...) [((addr)) - kBiosArrayBase] = __VA_ARGS__
+
+static const u8 defbios[] = {
+    BIOS_BYTES_AT(kBiosDefInt0x00, 0x0F, 0xFF, 0067),        // hvtailcall 0x00
+    BIOS_BYTES_AT(kBiosDefInt0x01, 0x0F, 0xFF, 0167, 0x01),  // hvtailcall 0x01
+    BIOS_BYTES_AT(kBiosDefInt0x02, 0x0F, 0xFF, 0167, 0x02),  // hvtailcall 0x02
+    BIOS_BYTES_AT(kBiosDefInt0x03, 0x0F, 0xFF, 0167, 0x03),  // hvtailcall 0x03
+    BIOS_BYTES_AT(kBiosDefInt0x04, 0x0F, 0xFF, 0167, 0x04),  // hvtailcall 0x04
+    BIOS_BYTES_AT(kBiosDefInt0x05, 0x0F, 0xFF, 0167, 0x05),  // hvtailcall 0x05
+    BIOS_BYTES_AT(kBiosDefInt0x06, 0x0F, 0xFF, 0167, 0x06),  // hvtailcall 0x06
+    BIOS_BYTES_AT(kBiosDefInt0x07, 0x0F, 0xFF, 0167, 0x07),  // hvtailcall 0x07
+    BIOS_BYTES_AT(kBiosDefInt0x08, 0x0F, 0xFF, 0167, 0x08),  // hvtailcall 0x08
+    BIOS_BYTES_AT(kBiosDefInt0x09, 0x0F, 0xFF, 0167, 0x09),  // hvtailcall 0x09
+    BIOS_BYTES_AT(kBiosDefInt0x0A, 0x0F, 0xFF, 0167, 0x0A),  // hvtailcall 0x0A
+    BIOS_BYTES_AT(kBiosDefInt0x0B, 0x0F, 0xFF, 0167, 0x0B),  // hvtailcall 0x0B
+    BIOS_BYTES_AT(kBiosDefInt0x0C, 0x0F, 0xFF, 0167, 0x0C),  // hvtailcall 0x0C
+    BIOS_BYTES_AT(kBiosDefInt0x0D, 0x0F, 0xFF, 0167, 0x0D),  // hvtailcall 0x0D
+    BIOS_BYTES_AT(kBiosDefInt0x0E, 0x0F, 0xFF, 0167, 0x0E),  // hvtailcall 0x0E
+    BIOS_BYTES_AT(kBiosDefInt0x0F, 0x0F, 0xFF, 0167, 0x0F),  // hvtailcall 0x0F
+    BIOS_BYTES_AT(kBiosDefInt0x10, 0x0F, 0xFF, 0167, 0x10),  // hvtailcall 0x10
+    BIOS_BYTES_AT(kBiosDefInt0x11, 0x0F, 0xFF, 0167, 0x11),  // hvtailcall 0x11
+    BIOS_BYTES_AT(kBiosDefInt0x12, 0x0F, 0xFF, 0167, 0x12),  // hvtailcall 0x12
+    BIOS_BYTES_AT(kBiosDefInt0x13, 0x0F, 0xFF, 0167, 0x13),  // hvtailcall 0x13
+    BIOS_BYTES_AT(kBiosDefInt0x14, 0x0F, 0xFF, 0167, 0x14),  // hvtailcall 0x14
+    BIOS_BYTES_AT(kBiosDefInt0x15, 0x0F, 0xFF, 0167, 0x15),  // hvtailcall 0x15
+    BIOS_BYTES_AT(kBiosDefInt0x16, 0x0F, 0xFF, 0167, 0x16),  // hvtailcall 0x16
+    BIOS_BYTES_AT(kBiosDefInt0x17, 0x0F, 0xFF, 0167, 0x17),  // hvtailcall 0x17
+    BIOS_BYTES_AT(kBiosDefInt0x18, 0x0F, 0xFF, 0167, 0x18),  // hvtailcall 0x18
+    BIOS_BYTES_AT(kBiosDefInt0x19, 0x0F, 0xFF, 0167, 0x19),  // hvtailcall 0x19
+    BIOS_BYTES_AT(kBiosDefInt0x1A, 0x0F, 0xFF, 0167, 0x1A),  // hvtailcall 0x1A
+    BIOS_BYTES_AT(kBiosDefInt0x1B, 0x0F, 0xFF, 0167, 0x1B),  // hvtailcall 0x1B
+    BIOS_BYTES_AT(kBiosDefInt0x1C, 0x0F, 0xFF, 0167, 0x1C),  // hvtailcall 0x1C
+    BIOS_BYTES_AT(kBiosDefInt0x70, 0x0F, 0xFF, 0167, 0x70),  // hvtailcall 0x70
+    BIOS_BYTES_AT(kBiosDefInt0x71, 0x0F, 0xFF, 0167, 0x71),  // hvtailcall 0x71
+    BIOS_BYTES_AT(kBiosDefInt0x72, 0x0F, 0xFF, 0167, 0x72),  // hvtailcall 0x72
+    BIOS_BYTES_AT(kBiosDefInt0x73, 0x0F, 0xFF, 0167, 0x73),  // hvtailcall 0x73
+    BIOS_BYTES_AT(kBiosDefInt0x74, 0x0F, 0xFF, 0167, 0x74),  // hvtailcall 0x74
+    BIOS_BYTES_AT(kBiosDefInt0x75, 0x0F, 0xFF, 0167, 0x75),  // hvtailcall 0x75
+    BIOS_BYTES_AT(kBiosDefInt0x76, 0x0F, 0xFF, 0167, 0x76),  // hvtailcall 0x76
+    BIOS_BYTES_AT(kBiosDefInt0x77, 0x0F, 0xFF, 0167, 0x77),  // hvtailcall 0x77
+    BIOS_BYTES_AT(kBiosEntry,                                //
+                  0x0F, 0xFF, 0177, 0x19,                    // hvcall 0x19
+                  0xEB, 0xFA),                               // jmp .-4
+    BIOS_BYTES_AT(kBiosEnd - 1, 0x00)};
 
 void LoadDefaultBios(struct Machine *m) {
   size_t kBiosSize = sizeof(defbios);
