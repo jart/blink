@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <stdio.h>
+#include <termios.h>
 
 #include "blink/buffer.h"
 #include "blink/cga.h"
@@ -47,8 +48,13 @@ void DrawCga(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
     a = -1;
     for (x = 0; x < 80; ++x) {
       if (x == curx && y == cury) {
-        AppendData(&p->lines[y], buf, FormatCga(0x07, buf));
-        AppendWide(&p->lines[y], CURSOR);
+        if (v[y][x][0] == ' ' || v[y][x][0] == '\0') {
+          AppendData(&p->lines[y], buf, FormatCga(a = 0x07, buf));
+          AppendWide(&p->lines[y], CURSOR);
+        } else {
+          AppendData(&p->lines[y], buf, FormatCga(a = 0x70, buf));
+          AppendWide(&p->lines[y], kCp437[v[y][x][0]]);
+        }
       } else {
         if (v[y][x][1] != a) {
           AppendData(&p->lines[y], buf, FormatCga((a = v[y][x][1]), buf));
