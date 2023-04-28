@@ -430,22 +430,24 @@ unimplemented\0\
 
 static const struct Chs {
   ssize_t imagesize;
-  int c, h, s;
+  short c, h, s;
+  bool isfloppy;
 } kChs[] = {
-    {163840, 40, 1, 8},    //
-    {184320, 40, 1, 9},    //
-    {327680, 40, 2, 8},    //
-    {368640, 40, 2, 9},    //
-    {737280, 80, 2, 9},    //
-    {1228800, 80, 2, 15},  //
-    {1474560, 80, 2, 18},  //
-    {2949120, 80, 2, 36},  //
+    {163840, 40, 1, 8, true},    //
+    {184320, 40, 1, 9, true},    //
+    {327680, 40, 2, 8, true},    //
+    {368640, 40, 2, 9, true},    //
+    {737280, 80, 2, 9, true},    //
+    {1228800, 80, 2, 15, true},  //
+    {1474560, 80, 2, 18, true},  //
+    {2949120, 80, 2, 36, true},  //
 };
 
 static off_t diskimagesize = 0;
 static int diskcyls = 1023;
 static int diskheads = 16;  // default to 16 heads/cylinder, following QEMU
 static int disksects = 63;
+static bool diskisfloppy = false;
 
 static u64 prevday = 0;  // day number of last call to int 0x1A, ah = 0, for
                          // calculating elapsed midnight count
@@ -2714,14 +2716,35 @@ static void DetermineChs(void) {
       diskcyls = kChs[i].c;
       diskheads = kChs[i].h;
       disksects = kChs[i].s;
+      diskisfloppy = kChs[i].isfloppy;
       return;
     }
   }
 }
 
+static bool DetermineChsAndSanityCheck(u8 drive) {
+  DetermineChs();
+  if (diskisfloppy) {
+    if ((drive & 0x80) != 0) {
+      // reading from hard disk drive, but image is floppy image
+      m->ah = 0x80;  // drive not ready
+      SetCarry(true);
+      return false;
+    }
+  } else {
+    if ((drive & 0x80) == 0) {
+      // reading from floppy drive, but image is hard disk image
+      m->ah = 0x80;  // drive not ready
+      SetCarry(true);
+      return false;
+    }
+  }
+  return true;
+}
+
 static void OnDiskServiceGetParams(void) {
   size_t lastsector, lastcylinder, lasthead;
-  DetermineChs();
+  if (!DetermineChsAndSanityCheck(m->dl)) return;
   lastcylinder =
       GetLastIndex(diskimagesize, 512 * disksects * diskheads, 0, 1023);
   lasthead = GetLastIndex(diskimagesize, 512 * disksects, 0, diskheads - 1);
@@ -2741,16 +2764,18 @@ static void OnDiskServiceReadSectors(void) {
   int fd;
   i64 addr, size, rsize, ursize;
   i64 sectors, drive, head, cylinder, sector, offset;
-  DetermineChs();
   sectors = m->al;
   drive = m->dl;
+  if (!DetermineChsAndSanityCheck(drive)) {
+    m->al = 0x00;
+    return;
+  }
   head = m->dh;
   cylinder = (m->cl & 192) << 2 | m->ch;
   sector = (m->cl & 63) - 1;
   size = sectors * 512;
   offset = sector * 512 + head * 512 * disksects +
            cylinder * 512 * disksects * diskheads;
-  (void)drive;
   ELF_LOGF("bios read sectors %" PRId64 " "
            "@ sector %" PRId64 " cylinder %" PRId64 " head %" PRId64
            " drive %" PRId64 " offset %#" PRIx64 " from %s",
@@ -2810,7 +2835,6 @@ static void OnDiskServiceReadSectorsExtended(void) {
   i64 pkt_addr = m->ds.base + Get16(m->si), addr, sectors, size, lba, offset,
       rsize, ursize;
   u8 pkt_size, *pkt;
-  (void)drive;
   SetReadAddr(m, pkt_addr, 1);
   pkt = m->system->real + pkt_addr;
   pkt_size = Get8(pkt);
@@ -2834,6 +2858,10 @@ static void OnDiskServiceReadSectorsExtended(void) {
              "offset=%" PRIx64 " "
              "size=%" PRIx64,
              lba, offset, size);
+    if (!DetermineChsAndSanityCheck(drive)) {
+      Write16(pkt + 2, 0);
+      return;
+    }
     if (addr >= kRealSize || size > kRealSize || addr + size > kRealSize) {
       LOGF("bios disk read exceeded real memory");
       SetWriteAddr(m, pkt_addr + 2, 2);
@@ -3386,7 +3414,8 @@ static bool OnHalt(int interrupt) {
       OnPrinterService();
       return true;
     case 0x19:
-      BootProgram(m, &m->system->elf);
+      DetermineChs();
+      BootProgram(m, &m->system->elf, diskisfloppy ? 0x00 : 0x80);
       return true;
     case 0x1A:
       OnTimeService();

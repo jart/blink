@@ -4,7 +4,7 @@
 #include "blink/machine.h"
 
 bool CanEmulateExecutable(struct Machine *, char **, char ***);
-void BootProgram(struct Machine *, struct Elf *);
+void BootProgram(struct Machine *, struct Elf *, u8);
 void LoadProgram(struct Machine *, char *, char *, char **, char **);
 void LoadDebugSymbols(struct System *);
 void LoadFileSymbols(struct System *, const char *, i64);
