@@ -1390,7 +1390,7 @@ static void DrawDisplay(struct Panel *p) {
       DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
       DrawCga(p, (u8(*)[80][2])(m->system->real + 0xb8000), pty->x, pty->y);
       break;
-    case 3:     // EGA 80x25 16-color
+    case 3:     // CGA 80x25 16-color
       DrawHr(&pan.displayhr, "EGA Console");
       DrawCga(p, (u8(*)[80][2])(m->system->real + 0xb8000), pty->x, pty->y);
       break;
@@ -2898,7 +2898,7 @@ static void OnDiskService(void) {
 #define video_ram()     (m->system->real + ((vidya == 7)? 0xb0000: 0xb8000))
 #define ATTR_DEFAULT    0x07
 
-static void OnVidyaServiceClearScreen(void) {
+static void VidyaServiceClearScreen(void) {
   int x, y;
   u16 *vram;
   vram = (u16 *)video_ram();
@@ -2910,7 +2910,7 @@ static void OnVidyaServiceClearScreen(void) {
 }
 
 /* clear line y from x1 up to and including x2 to attribute attr */
-static void OnVidyaServiceClearLine(int x1, int x2, int y, u8 attr) {
+static void VidyaServiceClearLine(int x1, int x2, int y, u8 attr) {
     int x;
     u16 *vram;
     vram = (u16 *)video_ram();
@@ -2920,15 +2920,15 @@ static void OnVidyaServiceClearLine(int x1, int x2, int y, u8 attr) {
 }
 
 /* scroll video ram up from line y1 up to and including line y2 */
-static void OnVidyaServiceScrollUp(int y1, int y2, unsigned char attr) {
+static void VidyaServiceScrollUp(int y1, int y2, unsigned char attr) {
   u8 *vid = (u8 *)(video_ram() + (page_offsetw() + y1 * pty->xn) * 2);
   int pitch = pty->xn * 2;
   memcpy(vid, vid + pitch, (pty->yn - y1) * pitch);
-  OnVidyaServiceClearLine(0, pty->xn-1, y2, attr);
+  VidyaServiceClearLine(0, pty->xn-1, y2, attr);
 }
 
 /* write char/attr to video adaptor ram */
-static void OnVidyaServiceWriteVideoRam(void) {
+static void VidyaServiceWriteVideoRam(void) {
   u16 *vram;
   switch (m->al) {
   case '\a':
@@ -2950,7 +2950,7 @@ static void OnVidyaServiceWriteVideoRam(void) {
     pty->x = 0;
 scroll:
     if (++pty->y >= pty->yn) {
-      OnVidyaServiceScrollUp(0, pty->yn - 1, ATTR_DEFAULT);
+      VidyaServiceScrollUp(0, pty->yn - 1, ATTR_DEFAULT);
       pty->y = pty->yn - 1;
     }
   }
@@ -2960,7 +2960,7 @@ static void OnVidyaServiceSetMode(void) {
   if (LookupAddress(m, 0xB0000)) {
     vidya = m->al;
     ptyisenabled = true;
-    OnVidyaServiceClearScreen();
+    VidyaServiceClearScreen();
     ReactiveDraw();
   } else {
     LOGF("maybe you forgot -r flag");
@@ -3008,7 +3008,7 @@ static void OnVidyaServiceWriteCharacter(void) {
     int savex = pty->x;
     int savey = pty->y;
     for (i = Get16(m->cx); i--;) {
-      OnVidyaServiceWriteVideoRam();
+      VidyaServiceWriteVideoRam();
     }
     pty->x = savex;
     pty->y = savey;
@@ -3049,7 +3049,7 @@ static void OnVidyaServiceTeletypeOutput(void) {
     ReactiveDraw();
   }
   if (vidya != kModePty) {
-    OnVidyaServiceWriteVideoRam();
+    VidyaServiceWriteVideoRam();
     return;
   }
   n = 0 /* FormatCga(m->bl, buf) */;
@@ -3072,7 +3072,7 @@ static void OnVidyaService(void) {
       OnVidyaServiceGetCursorPosition();
       break;
     case 0x06:
-      OnVidyaServiceScrollUp(m->ch, m->dh, ATTR_DEFAULT);
+      VidyaServiceScrollUp(m->ch, m->dh, ATTR_DEFAULT);
       break;
     case 0x09:
       OnVidyaServiceWriteCharacter();
@@ -4348,7 +4348,7 @@ int main(int argc, char *argv[]) {
   }
   vidya = m->metal? 3: kModePty;
   if (vidya != kModePty) {
-    OnVidyaServiceClearScreen();
+    VidyaServiceClearScreen();
   }
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;
