@@ -27,6 +27,8 @@
 #define kBold      8
 #define kReverse   16
 
+#define CURSOR '_'
+
 /**
  * Decodes Monochrome Display Adapter attributes.
  * @see https://www.seasip.info/VintagePC/mda.html
@@ -43,13 +45,25 @@ static u8 DecodeMdaAttributes(i8 a) {
   return r;
 }
 
-void DrawMda(struct Panel *p, u8 v[25][80][2]) {
-  unsigned y, x, n, a, b;
+void DrawMda(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
+  unsigned y, x, n, a, b, ch, attr;
   n = MIN(25, p->bottom - p->top);
   for (y = 0; y < n; ++y) {
     a = -1;
     for (x = 0; x < 80; ++x) {
-      b = DecodeMdaAttributes(v[y][x][1]);
+      ch = v[y][x][0];
+      attr = v[y][x][1];
+      if (x == curx && y == cury) {
+        if (ch == ' ' || ch == '\0') {
+          ch = CURSOR;
+          attr = 0x07;
+        } else {
+          ch = kCp437[ch];
+          attr = 0x70;
+        }
+        a = -1;
+      }
+      b = DecodeMdaAttributes(attr);
       if (a != b) {
         a = b;
         AppendStr(&p->lines[y], "\033[0");
@@ -60,7 +74,7 @@ void DrawMda(struct Panel *p, u8 v[25][80][2]) {
         AppendChar(&p->lines[y], 'm');
       }
       if (a) {
-        AppendWide(&p->lines[y], kCp437[v[y][x][0]]);
+        AppendWide(&p->lines[y], ch);
       } else {
         AppendChar(&p->lines[y], ' ');
       }

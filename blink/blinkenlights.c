@@ -1384,7 +1384,7 @@ static void DrawDisplay(struct Panel *p) {
   switch (vidya) {
     case 7:     // MDA 80x25 4-gray
       DrawHr(&pan.displayhr, "MONOCHROME DISPLAY ADAPTER");
-      DrawMda(p, (u8(*)[80][2])(m->system->real + 0xb0000));
+      DrawMda(p, (u8(*)[80][2])(m->system->real + 0xb0000), pty->x, pty->y);
       break;
     case 2:     // CGA 80x25 16-gray
       DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
@@ -2931,8 +2931,6 @@ static void VidyaServiceScrollUp(int y1, int y2, unsigned char attr) {
 static void VidyaServiceWriteVideoRam(void) {
   u16 *vram;
   switch (m->al) {
-  case '\a':
-    return;
   case '\b':
     if (--pty->x <= 0) {
       pty->x = 0;
@@ -2943,6 +2941,9 @@ static void VidyaServiceWriteVideoRam(void) {
     return;
   case '\n':
     goto scroll;
+  case '\0':
+  case '\a':
+    return;
   }
   vram = (u16 *)video_ram();
   vram[page_offsetw() + pty->y * pty->xn + pty->x] = m->al | (m->bl << 8);
