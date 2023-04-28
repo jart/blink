@@ -234,6 +234,8 @@ alt-t   slowmo"
 #define kAsanUnscoped           -12
 #define kAsanUnmapped           -13
 
+#define kModePty            255
+
 #define Ctrl(C) ((C) ^ 0100)
 
 #ifdef IUTF8
@@ -333,6 +335,7 @@ static bool alarmed;
 static bool natural;
 static bool mousemode;
 static bool wantmetal;
+static bool displayexec;        /* 'D' -> DrawDisplayOnly during Exec() */
 static bool showhighsse;
 static bool showprofile;
 static bool ptyisenabled;
@@ -608,8 +611,8 @@ static unsigned long TallyHits(i64 addr, int size) {
 static void GenerateProfile(void) {
   int sym;
   profsyms.i = 0;
-  profsyms.toto = TallyHits(m->system->codestart, m->system->codesize);
   if (!ophits) return;
+  profsyms.toto = TallyHits(m->system->codestart, m->system->codesize);
   for (sym = 0; sym < dis->syms.i; ++sym) {
     if (dis->syms.p[sym].addr >= m->system->codestart &&
         dis->syms.p[sym].addr + dis->syms.p[sym].size <
@@ -810,7 +813,7 @@ static void OnQ(void) {
 }
 
 static void OnV(void) {
-  vidya = !vidya;
+  vidya = vidya == kModePty? 3: kModePty;
 }
 
 static void OnSigSys(int sig) {
@@ -842,7 +845,6 @@ static void TuiCleanup(void) {
   LOGF("TuiCleanup");
   sigaction(SIGCONT, oldsig + 2, 0);
   TtyRestore();
-  tuimode = false;
 }
 
 static void OnSigTstp(int sig, siginfo_t *si, void *uc) {
@@ -988,7 +990,7 @@ static void ExecSetup(void) {
   it.it_interval.tv_usec = 1. / FPS * 1e6;
   it.it_value.tv_sec = 0;
   it.it_value.tv_usec = 1. / FPS * 1e6;
-  setitimer(ITIMER_REAL, &it, 0);
+  if (!m->metal) setitimer(ITIMER_REAL, &it, 0);
 }
 
 static void pcmpeqb(u8 x[16], const u8 y[16]) {
@@ -1077,7 +1079,8 @@ static int GetAddrHexWidth(void) {
 }
 
 bool ShouldShowDisplay(void) {
-  if (vidya) return true;  // in bios video mode
+  if (vidya != kModePty) return true;  // in bios video mode
+  if (displayexec) return true;
   return ptyisenabled;
 }
 
@@ -1379,14 +1382,21 @@ static void DrawTerminal(struct Panel *p) {
 
 static void DrawDisplay(struct Panel *p) {
   switch (vidya) {
-    case 7:
+    case 7:     // MDA 80x25 4-gray
       DrawHr(&pan.displayhr, "MONOCHROME DISPLAY ADAPTER");
-      DrawMda(p, (u8(*)[80][2])(m->system->real + 0xb0000));
+      DrawMda(p, (u8(*)[80][2])(m->system->real + 0xb0000), pty->x, pty->y);
       break;
-    case 3:
+    case 2:     // CGA 80x25 16-gray
       DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
-      DrawCga(p, (u8(*)[80][2])(m->system->real + 0xb8000));
+      DrawCga(p, (u8(*)[80][2])(m->system->real + 0xb8000), pty->x, pty->y);
       break;
+    case 3:     // CGA 80x25 16-color
+      DrawHr(&pan.displayhr, "EGA Console");
+      DrawCga(p, (u8(*)[80][2])(m->system->real + 0xb8000), pty->x, pty->y);
+      break;
+    case 0:     // CGA 40x25 16-gray
+    case 1:     // CGA 40x25 16-color
+    case kModePty:
     default:
       DrawTerminalHr(&pan.displayhr);
       DrawTerminal(p);
@@ -2122,7 +2132,7 @@ static void Redraw(bool force) {
   size_t size;
   double execsecs;
   struct timespec start_draw, end_draw;
-  if (!tuimode) return;
+  if (displayexec) return;
   if (g_history.viewing) {
     ShowHistory();
     return;
@@ -2135,6 +2145,7 @@ static void Redraw(bool force) {
   oldlen = m->xedd->length;
   ips = last_cycle ? (cycle - last_cycle) / execsecs : 0;
   SetupDraw();
+  ScrollOp(&pan.disassembly, GetDisIndex());
   for (i = 0; i < ARRAYLEN(pan.p); ++i) {
     for (j = 0; j < pan.p[i].bottom - pan.p[i].top; ++j) {
       pan.p[i].lines[j].i = 0;
@@ -2241,6 +2252,7 @@ static void HandleAlarm(void) {
 static void HandleTerminalResize(void) {
   GetTtySize(ttyout);
   ClearHistory();
+  dis->ops.i = 0;
 }
 
 static void HandleAppReadInterrupt(void) {
@@ -2259,8 +2271,8 @@ static void HandleAppReadInterrupt(void) {
     if (action & CONTINUE) {
       action &= ~CONTINUE;
     } else {
-      LeaveScreen();
-      exit(0);
+      tuimode = true;
+      displayexec = false;
     }
   }
 }
@@ -2433,27 +2445,41 @@ static int OnPtyFdPoll(struct pollfd *fds, nfds_t nfds, int ms) {
 static void DrawDisplayOnly(struct Panel *p) {
   struct Buffer b;
   int i, y, yn, xn, tly, tlx;
+  char buf[64];
   yn = MIN(tyn, p->bottom - p->top);
   xn = MIN(txn, p->right - p->left);
+  if (!p->lines) SetupDraw();
   for (i = 0; i < yn; ++i) {
     p->lines[i].i = 0;
   }
+  p->lines[yn].i = 0;
   DrawDisplay(p);
   memset(&b, 0, sizeof(b));
-  tly = tyn / 2 - yn / 2;
-  tlx = txn / 2 - xn / 2;
+  if (displayexec) {
+    tly = tyn / 2 - yn / 2;
+    tlx = txn / 2 - xn / 2;
+  } else {
+    tly = p->top;
+    tlx = p->left;
+  }
   AppendStr(&b, "\033[0m\033[H");
   for (y = 0; y < tyn; ++y) {
-    if (y) AppendStr(&b, "\r\n");
+    if (displayexec && y) AppendStr(&b, "\r\n");
     if (tly <= y && y <= tly + yn) {
-      for (i = 0; i < tlx; ++i) {
-        AppendChar(&b, ' ');
+      if (!displayexec) {
+        sprintf(buf, "\033[%d;%dH", y+1, tlx+1);
+        AppendStr(&b, buf);
+      } else {
+        for (i = 0; i < tlx; ++i) {
+          AppendChar(&b, ' ');
+        }
       }
       AppendData(&b, p->lines[y - tly].p, p->lines[y - tly].i);
     }
-    AppendStr(&b, "\033[0m\033[K");
+    AppendStr(&b, "\033[0m");
+    if (displayexec) AppendStr(&b, "\033[K");
   }
-  VfsWrite(ttyout, b.p, b.i);
+  UninterruptibleWrite(ttyout, b.p, b.i);
   free(b.p);
 }
 
@@ -2868,10 +2894,111 @@ static void OnDiskService(void) {
   }
 }
 
+#define page_offsetw()   0      // TODO(ghaerr): implement screen pages
+#define video_ram()     (m->system->real + ((vidya == 7)? 0xb0000: 0xb8000))
+#define ATTR_DEFAULT    0x07
+
+/* clear screen from x1,y1 up to but not including x2, y2 */
+static void VidyaServiceClearScreen(int x1, int y1, int x2, int y2, u8 attr) {
+  int x, y;
+  u16 *vram;
+  vram = (u16 *)video_ram();
+  for (y = y1; y < y2; y++) {
+    for (x = x1; x < x2; x++) {
+        vram[page_offsetw() + y * pty->xn + x] = ' ' | (attr << 8);
+    }
+  }
+}
+
+/* clear line y from x1 up to and including x2 to attribute attr */
+static void VidyaServiceClearLine(int x1, int x2, int y, u8 attr) {
+    int x;
+    u16 *vram;
+    vram = (u16 *)video_ram();
+    for (x = x1; x <= x2; x++) {
+        vram[page_offsetw() + y * pty->xn + x] = ' ' | (attr << 8);
+    }
+}
+
+/* scroll video ram up from line y1 up to and including line y2 */
+static void VidyaServiceScrollUp(int y1, int y2, u8 attr) {
+  u8 *vid = (u8 *)(video_ram() + (page_offsetw() + y1 * pty->xn) * 2);
+  int pitch = pty->xn * 2;
+  memcpy(vid, vid + pitch, (pty->yn - y1) * pitch);
+  VidyaServiceClearLine(0, pty->xn-1, y2, attr);
+}
+
+/* scroll adapter RAM down from line y1 up to and including line y2 */
+static void VidyaServiceScrollDown(int y1, int y2, u8 attr)
+{
+  u8 *vid = (u8 *)(video_ram() + (page_offsetw() + (pty->yn-1) * pty->xn) * 2);
+  int pitch = pty->xn * 2;
+  int y = y2;
+  while (--y >= y1) {
+    memcpy(vid, vid - pitch, pitch);
+    vid -= pitch;
+  }
+  VidyaServiceClearLine(0, pty->xn-1, y1, attr);
+}
+
+static void OnVidyaServiceScrollUp(void) {
+  unsigned i;
+  if (m->al == 0) {
+    VidyaServiceClearScreen(m->cl, m->ch, m->dl+1, m->dh+1, m->bh);
+    return;
+  }
+  for (i=m->al; i; i--) {
+    VidyaServiceScrollUp(m->ch, m->dh, m->bh);
+  }
+}
+
+static void OnVidyaServiceScrollDown(void) {
+  unsigned i;
+  if (m->al == 0) {
+    VidyaServiceClearScreen(m->cl, m->ch, m->dl+1, m->dh+1, m->bh);
+    return;
+  }
+  for (i=m->al; i; i--) {
+    VidyaServiceScrollDown(m->ch, m->dh, m->bh);
+  }
+}
+
+
+/* write char/attr to video adaptor ram */
+static void VidyaServiceWriteVideoRam(void) {
+  u16 *vram;
+  switch (m->al) {
+  case '\b':
+    if (--pty->x <= 0) {
+      pty->x = 0;
+    }
+    return;
+  case '\r':
+    pty->x = 0;
+    return;
+  case '\n':
+    goto scroll;
+  case '\0':
+  case '\a':
+    return;
+  }
+  vram = (u16 *)video_ram();
+  vram[page_offsetw() + pty->y * pty->xn + pty->x] = m->al | (m->bl << 8);
+  if (++pty->x >= pty->xn) {
+    pty->x = 0;
+scroll:
+    if (++pty->y >= pty->yn) {
+      VidyaServiceScrollUp(0, pty->yn - 1, ATTR_DEFAULT);
+      pty->y = pty->yn - 1;
+    }
+  }
+}
+
 static void OnVidyaServiceSetMode(void) {
   if (LookupAddress(m, 0xB0000)) {
     vidya = m->al;
     ptyisenabled = true;
+    VidyaServiceClearScreen(0, 0, pty->xn, pty->yn, ATTR_DEFAULT);
     ReactiveDraw();
   } else {
     LOGF("maybe you forgot -r flag");
@@ -2915,6 +3042,16 @@ static void OnVidyaServiceWriteCharacter(void) {
   int i;
   u64 w;
   char *p, buf[32];
+  if (vidya != kModePty) {
+    int savex = pty->x;
+    int savey = pty->y;
+    for (i = Get16(m->cx); i--;) {
+      VidyaServiceWriteVideoRam();
+    }
+    pty->x = savex;
+    pty->y = savey;
+    return;
+  }
   p = buf;
   p += FormatCga(m->bl, p);
   p = stpcpy(p, "\0337");
@@ -2949,6 +3086,10 @@ static void OnVidyaServiceTeletypeOutput(void) {
     ptyisenabled = true;
     ReactiveDraw();
   }
+  if (vidya != kModePty) {
+    VidyaServiceWriteVideoRam();
+    return;
+  }
   n = 0 /* FormatCga(m->bl, buf) */;
   w = tpenc(VidyaServiceXlatTeletype(m->al));
   do {
@@ -2968,16 +3109,27 @@ static void OnVidyaService(void) {
     case 0x03:
       OnVidyaServiceGetCursorPosition();
       break;
+    case 0x06:
+      OnVidyaServiceScrollUp();
+      break;
+    case 0x07:
+      OnVidyaServiceScrollDown();
+      break;
     case 0x09:
       OnVidyaServiceWriteCharacter();
+      Redraw(false);
+      DrawDisplayOnly(&pan.display);
       break;
     case 0x0E:
       OnVidyaServiceTeletypeOutput();
+      Redraw(false);
+      DrawDisplayOnly(&pan.display);
       break;
     case 0x0F:
       OnVidyaServiceGetMode();
       break;
     default:
+      LOGF("Unimplemented vidya service 0x%x\n", m->ah);
       break;
   }
 }
@@ -3014,16 +3166,13 @@ static void OnKeyboardServiceReadKeyPress(void) {
     ptyisenabled = true;
     ReactiveDraw();
   }
-  if (!tuimode) {
-    tuimode = true;
-    action |= CONTINUE;
-  }
   pty->conf |= kPtyBlinkcursor;
   if (!pending) {
     rc = ReadAnsi(ttyin, buf, sizeof(buf));
     if (rc > 0) {
       pending = rc;
     } else if (rc == -1 && errno == EINTR) {
+      HandleAppReadInterrupt();
       return;
     } else {
       exitcode = 0;
@@ -3043,10 +3192,22 @@ static void OnKeyboardServiceReadKeyPress(void) {
   m->ax[1] = 0;
 }
 
+static bool HasPendingKeyboard(void) {
+  return HasPendingInput(ttyin);
+}
+
+static void OnKeyboardServiceCheckKeyPress(void) {
+  bool b = HasPendingKeyboard();
+  m->flags = SetFlag(m->flags, FLAGS_ZF, !b);   /* ZF=0 if key pressed */
+}
+
 static void OnKeyboardService(void) {
   switch (m->ah) {
     case 0x00:
       OnKeyboardServiceReadKeyPress();
+      break;
+    case 0x01:
+      OnKeyboardServiceCheckKeyPress();
       break;
     default:
       break;
@@ -3359,6 +3520,7 @@ static void OnStep(void) {
   if (action & MODAL) return;
   action |= STEP;
   action &= ~NEXT;
+  action &= ~FINISH;
   action &= ~CONTINUE;
 }
 
@@ -3429,10 +3591,6 @@ static void OnXmmSize(void) {
 
 static void OnXmmDisp(void) {
   SetXmmDisp(CycleXmmDisp(xmmdisp));
-}
-
-static bool HasPendingKeyboard(void) {
-  return HasPendingInput(ttyin);
 }
 
 static void Sleep(int ms) {
@@ -3553,7 +3711,8 @@ static void HandleKeyboard(const char *k) {
     CASE('n', OnNext());
     CASE('f', OnFinish());
     CASE('c', OnContinueTui());
-    CASE('C', OnContinueExec());
+    CASE('C', displayexec = false; OnContinueExec());
+    CASE('D', displayexec = true;  OnContinueExec());
     CASE('R', OnRestart());
     CASE('x', OnXmmDisp());
     CASE('t', OnXmmType());
@@ -3777,6 +3936,8 @@ static void Exec(void) {
             LOGF("REACT");
             action &= ~(INT | STEP | FINISH | NEXT);
             tuimode = true;
+            displayexec = false;
+            break;
           } else {
             action &= ~INT;
             EnqueueSignal(m, SIGINT_LINUX);
@@ -3793,6 +3954,9 @@ static void Exec(void) {
     if (interrupt == 1) interrupt = m->trapno;
     if (OnHalt(interrupt)) {
       if (!tuimode) {
+        if (displayexec) {
+          DrawDisplayOnly(&pan.display);
+        }
         goto KeepGoing;
       }
     }
@@ -3898,12 +4062,14 @@ static void Tui(void) {
             action &= ~NEXT;
             if (IsCall()) {
               BreakAtNextInstruction();
+              tuimode = false;
               break;
             }
           }
           if (action & FINISH) {
             if (IsCall()) {
               BreakAtNextInstruction();
+              tuimode = false;
               break;
             } else if (IsRet()) {
               action &= ~FINISH;
@@ -4219,6 +4385,10 @@ int main(int argc, char *argv[]) {
 #endif
   if (wantmetal) {
     m->metal = true;
+  }
+  vidya = m->metal? 3: kModePty;
+  if (vidya != kModePty) {
+    VidyaServiceClearScreen(0, 0, pty->xn, pty->yn, ATTR_DEFAULT);
   }
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;

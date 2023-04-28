@@ -26,7 +26,11 @@
 struct High g_high = {
     .enabled = true,
     .active = true,
+#ifdef __APPLE__
+    .keyword = 40,
+#else
     .keyword = 155,
+#endif
     .reg = 215,
     .literal = 182,
     .label = 221,

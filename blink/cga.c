@@ -19,10 +19,12 @@
 #include "blink/cga.h"
 
 #include <stdio.h>
+#include <termios.h>
 
 #include "blink/buffer.h"
 #include "blink/macros.h"
 #include "blink/util.h"
+#include "blink/pty.h"
 
 /*                                blk blu grn cyn red mag yel wht */
 static const u8 kCgaToAnsi[16] = {30, 34, 32, 36, 31, 35, 33, 37,
@@ -33,17 +35,37 @@ size_t FormatCga(u8 bgfg, char buf[11]) {
                  kCgaToAnsi[bgfg & 0x0F]);
 }
 
-void DrawCga(struct Panel *p, u8 v[25][80][2]) {
+#ifdef IUTF8
+#define CURSOR L'▂'
+#else
+#define CURSOR '_'
+#endif
+
+void DrawCga(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
   char buf[11];
-  unsigned y, x, n, a;
+  unsigned y, x, n, a, ch, attr;
   n = MIN(25, p->bottom - p->top);
   for (y = 0; y < n; ++y) {
     a = -1;
     for (x = 0; x < 80; ++x) {
-      if (v[y][x][1] != a) {
-        AppendData(&p->lines[y], buf, FormatCga((a = v[y][x][1]), buf));
+      ch = v[y][x][0];
+      attr = v[y][x][1];
+      if (x == curx && y == cury) {
+        if (ch == ' ' || ch == '\0') {
+          ch = CURSOR;
+          attr = 0x07;
+        } else {
+          ch = kCp437[ch];
+          attr = 0x70;
+        }
+        a = -1;
+      } else {
+        ch = kCp437[ch];
       }
-      AppendWide(&p->lines[y], kCp437[v[y][x][0]]);
+      if (attr != a) {
+        AppendData(&p->lines[y], buf, FormatCga((a = attr), buf));
+      }
+      AppendWide(&p->lines[y], ch);
     }
     AppendStr(&p->lines[y], "\033[0m");
   }
