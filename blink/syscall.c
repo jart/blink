@@ -1056,7 +1056,7 @@ static u64 Prot2Page(int prot) {
   u64 key = 0;
   if (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC)) return einval();
   if (prot & PROT_READ) key |= PAGE_U;
-  if (prot & PROT_WRITE) key |= PAGE_RW;
+  if (prot & PROT_WRITE) key |= PAGE_RW | PAGE_U;
   if (~prot & PROT_EXEC) key |= PAGE_XD;
   return key;
 }
