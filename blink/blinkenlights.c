@@ -46,6 +46,7 @@
 #include "blink/case.h"
 #include "blink/cga.h"
 #include "blink/debug.h"
+#include "blink/defbios.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
@@ -2744,7 +2745,8 @@ static bool DetermineChsAndSanityCheck(u8 drive) {
 
 static void OnDiskServiceGetParams(void) {
   size_t lastsector, lastcylinder, lasthead;
-  if (!DetermineChsAndSanityCheck(m->dl)) return;
+  u8 drive = m->dl;
+  if (!DetermineChsAndSanityCheck(drive)) return;
   lastcylinder =
       GetLastIndex(diskimagesize, 512 * disksects * diskheads, 0, 1023);
   lasthead = GetLastIndex(diskimagesize, 512 * disksects, 0, diskheads - 1);
@@ -2755,8 +2757,12 @@ static void OnDiskServiceGetParams(void) {
   m->ch = lastcylinder;
   m->bl = 4;  // CMOS drive type: 1.4M floppy
   m->ah = 0;
-  m->es.sel = m->es.base = 0;
-  Put16(m->di, 0);
+  if ((drive & 0x80) == 0) {
+    u32 ddpt = GetDefaultBiosDisketteParamTable();
+    m->es.sel = ddpt >> 16;
+    m->es.base = ddpt >> 16 << 4;
+    Put16(m->di, (u16)ddpt);
+  }
   SetCarry(false);
 }
 

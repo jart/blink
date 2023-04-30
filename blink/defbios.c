@@ -186,3 +186,7 @@ void SetDefaultBiosDataArea(struct Machine *m) {
   Write16(m->system->real + 0x413, 0xb0000 / 1024);
   Write16(m->system->real + 0x44A, 80);
 }
+
+u32 GetDefaultBiosDisketteParamTable(void) {
+  return kBiosSeg << 16 | (kBiosDefInt0x1E - kBiosBase);
+}
