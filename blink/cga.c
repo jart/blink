@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/cga.h"
+#include "blink/bda.h"
 
 #include <stdio.h>
 #include <termios.h>
@@ -24,7 +25,6 @@
 #include "blink/buffer.h"
 #include "blink/macros.h"
 #include "blink/util.h"
-#include "blink/pty.h"
 
 /*                                blk blu grn cyn red mag yel wht */
 static const u8 kCgaToAnsi[16] = {30, 34, 32, 36, 31, 35, 33, 37,
@@ -41,16 +41,21 @@ size_t FormatCga(u8 bgfg, char buf[11]) {
 #define CURSOR '_'
 #endif
 
-void DrawCga(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
+void DrawCga(struct Panel *p, u8 *vram) {
+  unsigned y, x, ny, nx, a, ch, attr, curx, cury;
+  u8 *v;
   char buf[11];
-  unsigned y, x, n, a, ch, attr;
-  n = MIN(25, p->bottom - p->top);
-  for (y = 0; y < n; ++y) {
+  ny = MIN(BdaLines, p->bottom - p->top);
+  nx = BdaCols;
+  curx = BdaCurx;
+  cury = BdaCury;
+  for (y = 0; y < ny; ++y) {
     a = -1;
-    for (x = 0; x < 80; ++x) {
-      ch = v[y][x][0];
-      attr = v[y][x][1];
-      if (x == curx && y == cury) {
+    v = vram + y * nx * 2;
+    for (x = 0; x < nx; ++x) {
+      ch = *v++;
+      attr = *v++;
+      if (!BdaCurhidden && x == curx && y == cury) {
         if (ch == ' ' || ch == '\0') {
           ch = CURSOR;
           attr = 0x07;
