@@ -2454,7 +2454,6 @@ static void DrawDisplayOnly(void) {
   p = &pan.display;
   yn = MIN(tyn, p->bottom - p->top);
   xn = MIN(txn, p->right - p->left);
-  unassert(xn > 0 && xn <= 80);
   unassert(yn == 25);
   for (i = 0; i < yn; ++i) {
     p->lines[i].i = 0;
