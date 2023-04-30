@@ -2823,6 +2823,14 @@ static int XlatFstatatFlags(int x) {
     res |= AT_SYMLINK_NOFOLLOW;
     x &= ~AT_SYMLINK_NOFOLLOW_LINUX;
   }
+#ifndef DISABLE_NONPOSIX
+  if (x & AT_NO_AUTOMOUNT_LINUX) {
+#if defined(AT_NO_AUTOMOUNT) && defined(DISABLE_VFS)
+    res |= AT_NO_AUTOMOUNT;
+#endif
+    x &= ~AT_NO_AUTOMOUNT_LINUX;
+  }
+#endif
   if (x) {
     LOGF("%s() flags %d not supported", "fstatat", x);
     return -1;
