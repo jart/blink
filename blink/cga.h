@@ -3,7 +3,7 @@
 #include "blink/panel.h"
 #include "blink/types.h"
 
-void DrawCga(struct Panel *, u8[25][80][2], int, int);
+void DrawCga(struct Panel *, u8 *);
 size_t FormatCga(u8, char[11]);
 
 #endif /* BLINK_CGA_H_ */

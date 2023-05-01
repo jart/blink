@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/mda.h"
+#include "blink/bda.h"
 
 #include "blink/buffer.h"
 #include "blink/macros.h"
@@ -54,7 +55,7 @@ void DrawMda(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
     for (x = 0; x < 80; ++x) {
       ch = v[y][x][0];
       attr = v[y][x][1];
-      if (x == curx && y == cury) {
+      if (!BdaCurhidden && x == curx && y == cury) {
         if (ch == ' ' || ch == '\0') {
           ch = CURSOR;
           attr = 0x07;
