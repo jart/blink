@@ -11,5 +11,6 @@
 void LoadDefaultBios(struct Machine *);
 void SetDefaultBiosIntVectors(struct Machine *);
 void SetDefaultBiosDataArea(struct Machine *);
+u32 GetDefaultBiosDisketteParamTable(void);
 
 #endif /* BLINK_DEFBIOS_H_ */

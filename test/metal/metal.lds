@@ -38,14 +38,24 @@ SECTIONS {
     _edata = .;
   }
 
+  PROVIDE(_sectors = ALIGN(_edata - _base, 512) / 512);
+
   .bss : {
     *(.bss .bss.*)
     *(COMMON)
   }
 
+  .pad : {
+    /*
+     * If the program defines both a _sectors value & a .pad section, then
+     * pad the image up to the requested sector count.  This allows us to
+     * fabricate disk images that follow particular disk geometries.
+     */
+    . = MAX(., _base + _sectors * 512 - SIZEOF(.pad));
+    *(.pad .pad.*)
+  } = 0xF6
+
   /DISCARD/ : {
     *(.*)
   }
-
-  _sectors = ALIGN(_edata - _base, 512) / 512;
 }

@@ -478,7 +478,8 @@ static bool LoadElf(struct Machine *m,  //
 }
 
 void BootProgram(struct Machine *m,  //
-                 struct Elf *elf) {
+                 struct Elf *elf,    //
+                 u8 bootdrive) {
   int fd;
   SetDefaultBiosIntVectors(m);
   memset(m->beg, 0, sizeof(m->beg));  // reinitialize registers
@@ -487,6 +488,7 @@ void BootProgram(struct Machine *m,  //
   m->ip = 0x7c00;
   elf->base = 0x7c00;
   Write64(m->sp, 0x6f00);  // following QEMU
+  m->dl = bootdrive;
   SetDefaultBiosDataArea(m);
   memset(m->system->real + 0x500, 0, kBiosBase - 0x500);
   memset(m->system->real + 0x00100000, 0, kRealSize - 0x00100000);
