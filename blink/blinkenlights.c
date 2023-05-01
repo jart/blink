@@ -485,13 +485,21 @@ static void SetCarry(bool cf) {
 }
 
 static bool IsCall(void) {
-  int dispatch = Mopcode(m->xedd->op.rde);
-  return (dispatch == 0x0E8 ||
-          (dispatch == 0x0FF && ModrmReg(m->xedd->op.rde) == 2));
+  switch (Mopcode(m->xedd->op.rde)) {
+    case 0x0CC:
+    case 0x0CD:
+    case 0x0CE:
+    case 0x0E8:
+      return true;
+    case 0x0FF:
+      return ModrmReg(m->xedd->op.rde) == 2;
+    default:
+      return false;
+  }
 }
 
 static bool IsDebugBreak(void) {
-  return Mopcode(m->xedd->op.rde) == 0x0CC;
+  return m->trapno == 3 && Mopcode(m->xedd->op.rde) == 0x0CC;
 }
 
 static bool IsRet(void) {
@@ -1208,8 +1216,10 @@ void SetupDraw(void) {
   pan.display.left = dx[0];
   pan.display.bottom = yn;
   pan.display.right = dx[1] - 1;
-  unassert(pan.display.right - pan.display.left <= 80);
-  unassert(pan.display.bottom - pan.display.top == 25);
+  if (wantmetal) {
+    unassert(pan.display.right - pan.display.left <= 80);
+    unassert(pan.display.bottom - pan.display.top == 25);
+  }
 
   /* COLUMN #3: REGISTERS, VECTORS, CODE, MEMORY READS, MEMORY WRITES, STACK */
 
@@ -1393,11 +1403,8 @@ static void DrawDisplay(struct Panel *p) {
     case 0:     // CGA 40x25 16-gray
     case 1:     // CGA 40x25 16-color
     case 2:     // CGA 80x25 16-gray
-      DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
-      DrawCga(p, m->system->real + 0xb8000);
-      break;
     case 3:     // CGA 80x25 16-color
-      DrawHr(&pan.displayhr, "EGA Console");
+      DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
       DrawCga(p, m->system->real + 0xb8000);
       break;
     case 7:     // MDA 80x25 4-gray
