@@ -185,6 +185,7 @@ void SetDefaultBiosDataArea(struct Machine *m) {
                                        1 << 9);  // no. of serial devices
   Write16(m->system->real + 0x413, 0xb0000 / 1024);
   Write16(m->system->real + 0x44A, 80);
+  Write16(m->system->real + 0x484, 24);
 }
 
 u32 GetDefaultBiosDisketteParamTable(void) {
