@@ -1,0 +1,11 @@
+DESCRIPTION
+
+  ELKS distribution images
+
+ORIGIN
+
+  fd1440.img
+    ELKS v0.6.0 floppy image
+    https://github.com/jbruchon/elks
+    Built using blink16.config
+    GPL v2 License
