@@ -1,0 +1,19 @@
+DESCRIPTION
+
+  Various boot sector games
+
+ORIGIN
+
+  basic.bin
+    BootBASIC
+    https://github.com/nanochess/bootBASIC/basic.img
+    BSD-2-Clause License
+
+  fbird.bin
+    F-Bird
+    https://github.com/nanochess/fbird
+
+  ntetros.bin
+    TetrOS
+    https://github.com/daniel-e/tetros/tree/master/tetros.img
+    MIT License
