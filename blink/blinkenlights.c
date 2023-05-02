@@ -3040,16 +3040,40 @@ static void OnVidyaServiceScrollDown(void) {
   }
 }
 
-
 /* write char/attr to video adapter ram */
-static void VidyaServiceWriteVideoRam(u8 ch, u8 attr) {
-  u16 *vram;
-  int x, y, xn;
+static void VidyaServiceWriteCharacter(u8 ch, u8 attr, int n, bool useattr) {
+  int x, y, xn, offset;
+  u8 *vram;
   x = BdaCurx;
   y = BdaCury;
   unassert(y < BdaLines);
   unassert(x < BdaCols);
   xn = BdaCols;
+  vram = video_ram();
+  while (n-- > 0) {
+    offset = page_offsetw() + (y * xn + x) * 2;
+    vram[offset] = ch;
+    if (useattr) {
+      vram[offset+1] = attr;
+    }
+    if (++x >= xn) {
+      x = 0;
+      y++;
+    }
+  }
+}
+
+/* write char only (no attribute) as teletype output */
+static void VidyaServiceWriteTeletype(u8 ch) {
+  int x, y, xn, idx;
+  u8 attr;
+  u8 *vram;
+  x = BdaCurx;
+  y = BdaCury;
+  unassert(y < BdaLines);
+  unassert(x < BdaCols);
+  xn = BdaCols;
+  vram = video_ram();
   switch (ch) {
   case '\r':
     x = 0;
@@ -3057,22 +3081,22 @@ static void VidyaServiceWriteVideoRam(u8 ch, u8 attr) {
   case '\n':
     goto scroll;
   case '\b':
-    if (--x <= 0) {
-      x = 0;
+    if (x > 0) {
+      x--;
     }
     goto update;
   case '\0':
   case '\a':
     return;
   }
-  vram = (u16 *)video_ram();
-  vram[page_offsetw() + y * xn + x] = ch | (attr << 8);
+  vram[page_offsetw() + (y * xn + x) * 2] = ch;
   if (++x >= xn) {
     x = 0;
 scroll:
-    if (++y >= BdaLines - 1) {
+    if (++y >= BdaLines) {
       y = BdaLines - 1;
-      VidyaServiceScrollUp(0, BdaLines - 1, ATTR_DEFAULT);
+      attr = vram[page_offsetw() + ((y * xn + BdaCols - 1) * 2) + 1];
+      VidyaServiceScrollUp(0, BdaLines - 1, attr);
     }
   }
 update:
@@ -3081,10 +3105,11 @@ update:
 }
 
 static void VidyaServiceSetMode(int mode) {
-  int cols;
+  int cols, lines;
   vidya = mode;
   if (LookupAddress(m, 0xB0000)) {
     ptyisenabled = true;
+    lines = 25;
     switch (mode) {
     case 0:     // CGA 40x25 16-gray
     case 1:     // CGA 40x25 16-color
@@ -3102,11 +3127,13 @@ static void VidyaServiceSetMode(int mode) {
     }
     if (mode == kModePty) return;
     SetBdaVmode(mode);
+    SetBdaLines(lines-1);   // EGA BIOS - max valid line #
     SetBdaCols(cols);
     SetBdaPagesz(cols * BdaLines * 2);
+    SetBdaCurpage(0);
     SetBdaCurx(0);
     SetBdaCury(0);
-    SetBdaCurstart(5);  // cursor ▂ scan lines 5..7 of 0..7
+    SetBdaCurstart(5);      // cursor ▂ scan lines 5..7 of 0..7
     SetBdaCurend(7);
     SetBdaCrtc(0x3D4);
     VidyaServiceClearScreen(0, 0, cols, BdaLines, ATTR_DEFAULT);
@@ -3138,10 +3165,6 @@ static void OnVidyaServiceSetCursorPosition(void) {
   int x, y;
   x = m->dl;
   y = m->dh;
-  if (x >= BdaCols) x = BdaCols - 1;
-  if (y >= BdaLines) y = BdaLines - 1;
-  unassert(x < BdaCols);
-  unassert(y < BdaLines);
   if (vidya == kModePty) {
     PtySetX(pty, x);
     PtySetY(pty, y);
@@ -3152,15 +3175,15 @@ static void OnVidyaServiceSetCursorPosition(void) {
 }
 
 static void OnVidyaServiceGetCursorPosition(void) {
-  m->dh = vidya == kModePty? pty->y: BdaCury;
-  m->dl = vidya == kModePty? pty->x: BdaCurx;
-  unassert(m->dl < BdaCols);
-  unassert(m->dh < BdaLines);
   if (vidya == kModePty) {
+    m->dh = pty->y;
+    m->dl = pty->x;
     // cursor ▂ scan lines 5..7 of 0..7 and hidden bit 0x20
     m->ch = 5 | !!(pty->conf & kPtyNocursor) << 5;
     m->cl = 7;
   } else {
+    m->dh = BdaCury;
+    m->dl = BdaCurx;
     m->ch = BdaCurstart;
     m->cl = BdaCurend;
   }
@@ -3188,30 +3211,21 @@ static void OnVidyaServiceReadCharacter(void) {
   x = BdaCurx;
   y = BdaCury;
   xn = BdaCols;
-  unassert(y < BdaLines);
-  unassert(x < BdaCols);
   vram = (u16 *)video_ram();
   chattr = vram[page_offsetw() + y * xn + x];
   Put16(m->ax, chattr);
 }
 
-/* write character and attribute, no cursor change */
-static void OnVidyaServiceWriteCharacter(void) {
-  int i, n, sx, sy;
+/* write character and possibly attribute, no cursor change */
+static void OnVidyaServiceWriteCharacter(bool useattr) {
+  int i, n;
   u64 w;
   char *p, buf[32];
   if (vidya != kModePty) {
     n = Get16(m->cx);
     unassert(n > 0 && n + BdaCurx <= BdaCols);
     unassert(BdaCury < BdaLines);
-    sx = BdaCurx;
-    sy = BdaCury;
-    for (i = n; i > 0; --i) {
-      SetBdaCury(sy);
-      VidyaServiceWriteVideoRam(m->al, m->bl);  // FIXME perhaps rewrite?
-    }
-    SetBdaCurx(sx);
-    SetBdaCury(sy);
+    VidyaServiceWriteCharacter(m->al, m->bl, n, useattr);
     return;
   }
   p = buf;
@@ -3240,7 +3254,7 @@ static wint_t VidyaServiceXlatTeletype(u8 c) {
   }
 }
 
-static void OnVidyaServiceTeletypeOutput(void) {
+static void OnVidyaServiceWriteTeletype(void) {
   int n;
   u64 w;
   char buf[12];
@@ -3249,10 +3263,10 @@ static void OnVidyaServiceTeletypeOutput(void) {
     ReactiveDraw();
   }
   if (vidya != kModePty) {
-    VidyaServiceWriteVideoRam(m->al, m->bl);
+    VidyaServiceWriteTeletype(m->al);
     return;
   }
-  n = 0 /* FormatCga(m->bl, buf) */;
+  n = 0 /* FormatCga(ATTR_DEFAULT, buf) */;
   w = tpenc(VidyaServiceXlatTeletype(m->al));
   do {
     buf[n++] = w;
@@ -3284,12 +3298,17 @@ static void OnVidyaService(void) {
       OnVidyaServiceReadCharacter();
       break;
     case 0x09:
-      OnVidyaServiceWriteCharacter();
+      OnVidyaServiceWriteCharacter(true);
+      Redraw(false);
+      DrawDisplayOnly();
+      break;
+    case 0x0A:
+      OnVidyaServiceWriteCharacter(false);
       Redraw(false);
       DrawDisplayOnly();
       break;
     case 0x0E:
-      OnVidyaServiceTeletypeOutput();
+      OnVidyaServiceWriteTeletype();
       Redraw(false);
       DrawDisplayOnly();
       break;
