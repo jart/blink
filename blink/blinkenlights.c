@@ -3063,15 +3063,17 @@ static void VidyaServiceWriteCharacter(u8 ch, u8 attr, int n, bool useattr) {
   }
 }
 
-/* write char/attr as teletype output */
-static void VidyaServiceWriteTeletype(u8 ch, u8 attr) {
-  int x, y, xn;
-  u16 *vram;
+/* write char only (no attribute) as teletype output */
+static void VidyaServiceWriteTeletype(u8 ch) {
+  int x, y, xn, idx;
+  u8 attr;
+  u8 *vram;
   x = BdaCurx;
   y = BdaCury;
   unassert(y < BdaLines);
   unassert(x < BdaCols);
   xn = BdaCols;
+  vram = video_ram();
   switch (ch) {
   case '\r':
     x = 0;
@@ -3087,14 +3089,14 @@ static void VidyaServiceWriteTeletype(u8 ch, u8 attr) {
   case '\a':
     return;
   }
-  vram = (u16 *)video_ram();
-  vram[page_offsetw() + y * xn + x] = ch | (attr << 8);
+  vram[page_offsetw() + (y * xn + x) * 2] = ch;
   if (++x >= xn) {
     x = 0;
 scroll:
-    if (++y >= BdaLines - 1) {
+    if (++y >= BdaLines) {
       y = BdaLines - 1;
-      VidyaServiceScrollUp(0, BdaLines - 1, ATTR_DEFAULT);
+      attr = vram[page_offsetw() + ((y * xn + BdaCols - 1) * 2) + 1];
+      VidyaServiceScrollUp(0, BdaLines - 1, attr);
     }
   }
 update:
@@ -3261,10 +3263,10 @@ static void OnVidyaServiceWriteTeletype(void) {
     ReactiveDraw();
   }
   if (vidya != kModePty) {
-    VidyaServiceWriteTeletype(m->al, m->bl);
+    VidyaServiceWriteTeletype(m->al);
     return;
   }
-  n = 0 /* FormatCga(m->bl, buf) */;
+  n = 0 /* FormatCga(ATTR_DEFAULT, buf) */;
   w = tpenc(VidyaServiceXlatTeletype(m->al));
   do {
     buf[n++] = w;
