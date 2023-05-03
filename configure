@@ -608,7 +608,7 @@ fi
 
 # attempt to polyfill c11 atomics if it's not available
 if ! config stdatomic "checking for stdatomic.h... "; then
-  CPPFLAGS="-isystem tool/stdatomic"
+  CPPFLAGS="-isystem tool/stdatomic ${CPPFLAGS}"
 fi
 
 if [ -z "${DISABLE_FORK}" ]; then
