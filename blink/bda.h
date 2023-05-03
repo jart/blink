@@ -1,39 +1,52 @@
 #ifndef BLINK_BDA_H_
 #define BLINK_BDA_H_
+#include "blink/blinkenlights.h"
 #include "blink/machine.h"
 #include "blink/endian.h"
 
-#define BDA(address)        (g_machine->system->real + address)
+#define GetBda8(o)     Read8(m->system->real + 0x400 + (o))
+#define SetBda8(o, v)  Write8(m->system->real + 0x400 + (o), (v))
+#define GetBda16(o)    Read16(m->system->real + 0x400 + (o))
+#define SetBda16(o, v) Write16(m->system->real + 0x400 + (o), (v))
+#define GetBda32(o)    Read32(m->system->real + 0x400 + (o))
+#define SetBda32(o, v) Write32(m->system->real + 0x400 + (o), (v))
 
-#define    BdaVmode         Read8(BDA(0x0449))
-#define SetBdaVmode(v)      Write8(BDA(0x0449),v)
-#define    BdaCols          Read16(BDA(0x044A))         // returns actual # columns
-#define SetBdaCols(v)       Write16(BDA(0x044A),v)      // BIOS stores # columns
-#define    BdaLines         (Read8(BDA(0x0484)) + 1)    // returns actual # lines
-#define SetBdaLines(v)      Write8(BDA(0x0484),v)       // BIOS stores # lines - 1
-#define    BdaPagesz        Read16(BDA(0x044C))
-#define SetBdaPagesz(v)     Write16(BDA(0x044C),v)
-#define    BdaCurx          Read8(BDA(0x0450))
-#define SetBdaCurx(v)       Write8(BDA(0x0450),v)
-#define    BdaCury          Read8(BDA(0x0451))
-#define SetBdaCury(v)       Write8(BDA(0x0451),v)
-#define    BdaCrtc          Read16(BDA(0x0464))
-#define SetBdaCrtc(v)       Write16(BDA(0x0464),v)
-#define    BdaCurend        Read8(BDA(0x0460))
-#define SetBdaCurend(v)     Write8(BDA(0x0460),v)
-#define    BdaCurstart      Read8(BDA(0x0461))
-#define SetBdaCurstart(v)   Write8(BDA(0x0461),v)
+#define    BdaCom1          GetBda16(0x00)
+#define SetBdaCom1(v)       SetBda16(0x00, (v))
+#define    BdaEbda          GetBda16(0x0E)
+#define SetBdaEbda(v)       SetBda16(0x0E, (v))
+
+#define    BdaEquip         GetBda16(0x10)
+#define SetBdaEquip(v)      SetBda16(0x10, (v))
+#define    BdaMemsz         GetBda16(0x13)
+#define SetBdaMemsz(v)      SetBda16(0x13, (v))
+
+#define    BdaVmode         GetBda8(0x49)
+#define SetBdaVmode(v)      SetBda8(0x49, (v))
+#define    BdaCols          GetBda16(0x4A)       // returns actual # columns
+#define SetBdaCols(v)       SetBda16(0x4A, (v))  // BIOS stores # columns
+#define    BdaPagesz        GetBda16(0x4C)
+#define SetBdaPagesz(v)     SetBda16(0x4C, (v))
+#define    BdaCurx          GetBda8(0x50)
+#define SetBdaCurx(v)       SetBda8(0x50, (v))
+#define    BdaCury          GetBda8(0x51)
+#define SetBdaCury(v)       SetBda8(0x51, (v))
+#define    BdaCurend        GetBda8(0x60)
+#define SetBdaCurend(v)     SetBda8(0x60, (v))
+#define    BdaCurstart      GetBda8(0x61)
+#define SetBdaCurstart(v)   SetBda8(0x61, (v))
 #define BdaCurhidden        ((BdaCurstart & 0x20) || (BdaCurstart > BdaCurend))
-#define    BdaCurpage       Read8(BDA(0x0462))
-#define SetBdaCurpage(v)    Write8(BDA(0x0462),v)
+#define    BdaCurpage       GetBda8(0x62)
+#define SetBdaCurpage(v)    SetBda8(0x62, (v))
+#define    BdaCrtc          GetBda16(0x64)
+#define SetBdaCrtc(v)       SetBda16(0x64, (v))
 
-#define    BdaEquip         Read16(BDA(0x0410))
-#define SetBdaEquip(v)      Write16(BDA(0x0410),v)
-#define    BdaMemsz         Read16(BDA(0x0413))
-#define SetBdaMemsz(v)      Write16(BDA(0x0413),v)
-#define    BdaTimer         Read32(BDA(0x046C))
-#define SetBdaTimer(v)      Write32(BDA(0x046C),v)
-#define    Bda24hr          Read8(BDA(0x0470))
-#define SetBda24hr(v)       Write8(BDA(0x0470),v)
+#define    BdaTimer         GetBda32(0x6C)
+#define SetBdaTimer(v)      SetBda32(0x6C, (v))
+#define    Bda24hr          GetBda8(0x70)
+#define SetBda24hr(v)       SetBda8(0x70, (v))
+
+#define    BdaLines         (GetBda8(0x84) + 1)     // returns actual # lines
+#define SetBdaLines(v)      SetBda8(0x84, (v) - 1) // BIOS stores # lines - 1
 
 #endif /* BLINK_BDA_H_ */

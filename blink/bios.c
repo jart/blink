@@ -495,7 +495,7 @@ void VidyaServiceSetMode(int mode) {
     }
     if (mode == kModePty) return;
     SetBdaVmode(mode);
-    SetBdaLines(lines-1);   // EGA BIOS - max valid line #
+    SetBdaLines(lines);   // EGA BIOS - max valid line #
     SetBdaCols(cols);
     SetBdaPagesz(cols * BdaLines * 2);
     SetBdaCurpage(0);
@@ -816,11 +816,11 @@ static void OnInt15h(void) {
 }
 
 static void OnEquipmentListService(void) {
-  Put16(m->ax, Get16(m->system->real + 0x410));
+  Put16(m->ax, BdaEquip);
 }
 
 static void OnBaseMemSizeService(void) {
-  Put16(m->ax, Get16(m->system->real + 0x413));
+  Put16(m->ax, BdaMemsz);
 }
 
 static void OnPrinterService(void) {
