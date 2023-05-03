@@ -15,6 +15,7 @@
 
 #include "blink/dll.h"
 #include "blink/macros.h"
+#include "blink/overlays.h"
 #include "blink/preadv.h"
 #include "blink/thread.h"
 #include "blink/tsan.h"
