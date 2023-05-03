@@ -883,7 +883,11 @@ int HostfsFdatasync(struct VfsInfo *info) {
     return efault();
   }
   hostinfo = (struct HostfsInfo *)info->data;
+#ifdef HAVE_FDATASYNC
   return fdatasync(hostinfo->filefd);
+#else
+  return fsync(hostinfo->filefd);
+#endif
 }
 
 int HostfsFlock(struct VfsInfo *info, int operation) {
