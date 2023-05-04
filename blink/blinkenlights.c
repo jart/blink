@@ -335,8 +335,6 @@ bool ptyisenabled;
 
 int vidya;
 int ttyin;
-int action;
-int exitcode;
 
 struct Pty *pty;
 struct Machine *m;
@@ -356,10 +354,12 @@ static int tyn;
 static int txn;
 static int tick;
 static int speed;
+static int action;
 static int ttyout;
 static int opline;
 static int xmmdisp;
 static int verbose;
+static int exitcode;
 
 static long ips;
 static u64 cycle;
@@ -2246,8 +2246,12 @@ static void HandleTerminalResize(void) {
   dis->ops.i = 0;
 }
 
-void HandleAppReadInterrupt(void) {
+void HandleAppReadInterrupt(bool errflag) {
   LOGF("HandleAppReadInterrupt");
+  if (errflag) {
+      exitcode = 0;
+      action |= EXIT;
+  }
   if (action & ALARM) {
     HandleAlarm();
   }
@@ -2342,7 +2346,7 @@ ssize_t ReadAnsi(int fd, char *p, size_t n) {
       return rc;
     } else {
       unassert(errno == EINTR);
-      HandleAppReadInterrupt();
+      HandleAppReadInterrupt(false);
       return eintr();
     }
   }
