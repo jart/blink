@@ -7,7 +7,7 @@
 int main(int argc, char *argv[]) {
   char path[128];
   snprintf(path, 128, "/tmp/blink.config.%d", getpid());
-  if (open(path, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC) != 3) return 1;
+  if (open(path, O_RDWR | O_CREAT | O_TRUNC | O_CLOEXEC, 0600) != 3) return 1;
   if (fcntl(3, F_GETFD) != FD_CLOEXEC) return 2;
   if (dup3(3, 4, 0) != 4) return 3;
   if (fcntl(4, F_GETFD) != 0) return 4;

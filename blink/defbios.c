@@ -28,6 +28,7 @@
 
 #include <string.h>
 
+#include "blink/bda.h"
 #include "blink/endian.h"
 #include "blink/macros.h"
 
@@ -176,16 +177,16 @@ void SetDefaultBiosIntVectors(struct Machine *m) {
 
 void SetDefaultBiosDataArea(struct Machine *m) {
   memset(m->system->real + 0x400, 0, 0x100);
-  Write16(m->system->real + 0x400, 0x3F8);
-  Write16(m->system->real + 0x40E, 0xb0000 >> 4);
-  Write16(m->system->real + 0x410, 1 << 0 |      // floppy drive
-                                       1 << 1 |  // math coprocessor
-                                       3 << 4 |  // initial video mode
-                                       0 << 6 |  // no. of floppy drives - 1
-                                       1 << 9);  // no. of serial devices
-  Write16(m->system->real + 0x413, 0xb0000 / 1024);
-  Write16(m->system->real + 0x44A, 80);
-  Write16(m->system->real + 0x484, 24);
+  SetBdaCom1(0x3F8);
+  SetBdaEbda(0xB0000 >> 4);
+  SetBdaEquip(1 << 0 |  // floppy drive
+              1 << 1 |  // math coprocessor
+              3 << 4 |  // initial video mode
+              0 << 6 |  // no. of floppy drives - 1
+              1 << 9);  // no. of serial devices
+  SetBdaMemsz(0xB0000 / 1024);
+  SetBdaCols(80);
+  SetBdaLines(25);
 }
 
 u32 GetDefaultBiosDisketteParamTable(void) {

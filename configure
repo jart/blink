@@ -608,7 +608,7 @@ fi
 
 # attempt to polyfill c11 atomics if it's not available
 if ! config stdatomic "checking for stdatomic.h... "; then
-  CPPFLAGS="-isystem tool/stdatomic"
+  CPPFLAGS="-isystem tool/stdatomic ${CPPFLAGS}"
 fi
 
 if [ -z "${DISABLE_FORK}" ]; then
@@ -655,6 +655,7 @@ fi
 ( config seekdir "checking for seekdir()... " uncomment "#define HAVE_SEEKDIR" ) &
 ( config realpath "checking for realpath()... " uncomment "#define HAVE_REALPATH" ) &
 ( config setreuid "checking for setreuid()... " uncomment "#define HAVE_SETREUID" ) &
+( config fdatasync "checking for fdatasync()... " uncomment "#define HAVE_FDATASYNC" ) &
 ( config sendto_zero "checking for sendto(0.0.0.0)... " uncomment "#define HAVE_SENDTO_ZERO" ) &
 wait
 ( config struct_timezone "checking for struct timezone... " uncomment "#define HAVE_STRUCT_TIMEZONE" ) &

@@ -852,6 +852,8 @@ static void GenInterrupt(P, u8 trapno) {
           HaltMachine(m, trapno);
         } else {
           m->flags = SetFlag(m->flags, FLAGS_IF, false);
+          m->flags = SetFlag(m->flags, FLAGS_TF, false);
+          m->flags = SetFlag(m->flags, FLAGS_AC, false);
           LongBranch(A, isrseg, isroff);
         }
       }

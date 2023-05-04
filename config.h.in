@@ -35,6 +35,7 @@
 // #define HAVE_MKFIFOAT
 // #define HAVE_REALPATH
 // #define HAVE_SETREUID
+// #define HAVE_FDATASYNC
 // #define HAVE_STRCHRNUL
 // #define HAVE_VASPRINTF
 // #define HAVE_SETRESUID

@@ -15,11 +15,13 @@
 
 #define atomic_store_explicit(ptr, val, order) (*(ptr) = (val))
 
-#define atomic_exchange_explicit(ptr, val, order)        \
+#define atomic_exchange(ptr, val)                        \
   (sizeof(*(ptr)) == 8   ? Exchange64((u64 *)(ptr), val) \
    : sizeof(*(ptr)) == 4 ? Exchange32((u32 *)(ptr), val) \
    : sizeof(*(ptr)) == 2 ? Exchange16((u16 *)(ptr), val) \
                          : Exchange8((u8 *)(ptr), val))
+
+#define atomic_exchange_explicit(ptr, val, order) atomic_exchange(ptr, val)
 
 #define atomic_compare_exchange_strong_explicit(                             \
     ifthing, isequaltome, replaceitwithme, success_order, failure_order)     \

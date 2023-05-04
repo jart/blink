@@ -35,6 +35,7 @@
 #include "blink/log.h"
 #include "blink/macros.h"
 #include "blink/procfs.h"
+#include "blink/thread.h"
 #include "blink/tunables.h"
 
 #ifndef DISABLE_VFS
@@ -353,10 +354,10 @@ int VfsFreeDevice(struct VfsDevice *device) {
   if ((rc = atomic_fetch_sub(&device->refcount, 1)) != 1) {
     return 0;
   }
-  unassert(!pthread_mutex_lock(&device->lock));
+  LOCK(&device->lock);
   if (device->ops && device->ops->Freedevice) {
     if (device->ops->Freedevice(device->data) == -1) {
-      unassert(!pthread_mutex_unlock(&device->lock));
+      UNLOCK(&device->lock);
       return -1;
     }
   }
@@ -370,7 +371,7 @@ int VfsFreeDevice(struct VfsDevice *device) {
     mount->root = NULL;
     free(mount);
   }
-  unassert(!pthread_mutex_unlock(&device->lock));
+  UNLOCK(&device->lock);
   unassert(!pthread_mutex_destroy(&device->lock));
   free(device);
   return 0;
