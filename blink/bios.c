@@ -1009,6 +1009,7 @@ bool OnCallBios(int interrupt) {
     case 0x19:
       DetermineChs();
       BootProgram(m, &m->system->elf, diskisfloppy ? 0x00 : 0x80);
+      VidyaServiceSetMode(vidya);
       return true;
     case 0x1A:
       OnTimeService();
