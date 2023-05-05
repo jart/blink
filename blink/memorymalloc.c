@@ -149,8 +149,9 @@ static void FreeHostPages(struct System *s) {
     unassert(!s->rss);
 #endif
     s->cr3 = 0;
+  } else if (s->real) {
+    Munmap(s->real, ROUNDUP(kRealSize, FLAG_pagesize));
   }
-  free(s->real);
   s->real = 0;
 }
 
@@ -204,11 +205,15 @@ struct System *NewSystem(struct XedMachineMode mode) {
   memset(s, 0, sizeof(*s));
   s->mode = mode;
   if (s->mode.omode == XED_MODE_REAL) {
-    if (posix_memalign((void **)&s->real, 4096, kRealSize)) {
+    u8 *real = Mmap(NULL, ROUNDUP(kRealSize, FLAG_pagesize),
+                    PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS_,
+                    -1, 0, "real");
+    if (!real) {
       free(s);
       enomem();
       return 0;
     }
+    s->real = real;
     s->gdt_limit = s->idt_limit = 0xFFFF;
     s->gdt_base = s->idt_base = 0;
   }

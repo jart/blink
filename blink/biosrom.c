@@ -34,6 +34,7 @@
 #include "blink/bda.h"
 #include "blink/endian.h"
 #include "blink/macros.h"
+#include "blink/map.h"
 #include "blink/overlays.h"
 #include "blink/util.h"
 #include "blink/vfs.h"
@@ -130,6 +131,7 @@ static const u8 kDefBios[] = {
 
 void LoadBios(struct Machine *m, const char *biosprog) {
   off_t size;
+  size_t protstart, protend;
   if (biosprog) {
     off_t kBiosMinSize = kBiosEnd - kBiosEntry,
           kBiosMaxSize = kBiosEnd - kBiosOptBase;
@@ -165,6 +167,15 @@ void LoadBios(struct Machine *m, const char *biosprog) {
     size = sizeof(kDefBios);
     memcpy(m->system->real + kBiosEnd - size, kDefBios, size);
   }
+  // try to protect the BIOS ROM area
+  // TODO: ideally writes will seem to succeed but have no effect
+  protstart = ROUNDUP(kBiosOptBase, FLAG_pagesize);
+  protend = ROUNDDOWN(kBiosEnd, FLAG_pagesize);
+  if (protstart < protend) {
+    Mprotect(m->system->real + protstart, protend - protstart, PROT_READ,
+             "bios");
+  }
+  // load %cs:%rip
   m->cs.sel = kBiosSeg;
   m->cs.base = kBiosBase;
   m->ip = kBiosEntry - kBiosBase;

@@ -490,7 +490,7 @@ void BootProgram(struct Machine *m,  //
   Write64(m->sp, 0x6f00);  // following QEMU
   m->dl = bootdrive;
   SetDefaultBiosDataArea(m);
-  memset(m->system->real + 0x500, 0, kBiosBase - 0x500);
+  memset(m->system->real + 0x500, 0, kBiosOptBase - 0x500);
   memset(m->system->real + 0x00100000, 0, kRealSize - 0x00100000);
   if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) == -1 ||
       VfsRead(fd, m->system->real + 0x7c00, 512) <= 0) {
