@@ -1013,6 +1013,7 @@ bool OnCallBios(int interrupt) {
       return true;
     case 0x1A:
       OnTimeService();
+      Redraw(false);
       return true;
   }
   return false;
