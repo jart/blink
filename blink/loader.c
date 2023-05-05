@@ -30,8 +30,8 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/biosrom.h"
 #include "blink/builtin.h"
-#include "blink/defbios.h"
 #include "blink/end.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
@@ -675,7 +675,7 @@ static int CanEmulateData(struct Machine *m, char **prog, char ***argv,
 }
 
 void LoadProgram(struct Machine *m, char *execfn, char *prog, char **args,
-                 char **vars) {
+                 char **vars, const char *biosprog) {
   int fd;
   i64 stack;
   void *map;
@@ -753,7 +753,7 @@ error: unsupported executable; we need:\n\
     m->system->automap ^= (Read64(elf->rng) & FLAG_aslrmask);
   }
   if (m->mode.genmode == XED_GEN_MODE_REAL) {
-    LoadDefaultBios(m);
+    LoadBios(m, biosprog);
     if (endswith(prog, ".com") ||  //
         endswith(prog, ".COM")) {
       // cosmo convention (see also binbase)
