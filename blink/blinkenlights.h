@@ -7,13 +7,10 @@
 #include <sys/types.h>
 
 #define kModePty 255
-#define EXIT     0x400
 
 /* blinkenlights.c */
 extern int ttyin;
 extern int vidya;
-extern int action;
-extern int exitcode;
 extern bool tuimode;
 extern struct Pty *pty;
 extern struct Machine *m;
@@ -24,7 +21,7 @@ void ReactiveDraw(void);
 void Redraw(bool force);
 void DrawDisplayOnly(void);
 bool HasPendingKeyboard(void);
-void HandleAppReadInterrupt(void);
+void HandleAppReadInterrupt(bool errflag);
 ssize_t ReadAnsi(int fd, char *p, size_t n);
 
 /* bios.c */

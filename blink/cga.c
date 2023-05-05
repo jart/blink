@@ -55,7 +55,6 @@ void DrawCga(struct Panel *p, u8 *vram) {
     for (x = 0; x < nx; ++x) {
       ch = *v++;
       attr = *v++;
-      if (attr == 0) attr = 0x07;
       if (!BdaCurhidden && x == curx && y == cury) {
         if (ch == ' ' || ch == '\0') {
           ch = CURSOR;

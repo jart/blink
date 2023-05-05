@@ -18,6 +18,7 @@
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
@@ -711,12 +712,73 @@ static void OnSerialService(void) {
   }
 }
 
+/* Convert from ANSI keyboard sequence to scancode */
+int AnsiToScancode(char *buf, int n)
+{
+    if (n >= 1 && buf[0] == 033) {
+        if (buf[1] == '[') {
+            if (n == 3) {                           /* xterm sequences */
+                switch (buf[2]) {                   /* ESC [ A etc */
+                case 'A':   return 0x48;    // kUpArrow
+                case 'B':   return 0x50;    // kDownArrow
+                case 'C':   return 0x4D;    // kRightArrow
+                case 'D':   return 0x4B;    // kLeftArrow
+                case 'F':   return 0x4F;    // kEnd
+                case 'H':   return 0x47;    // kHome
+                }
+            } else if (n == 4 && buf[2] == '1') {   /* ESC [ 1 P etc */
+                switch (buf[3]) {
+                case 'P':   return 0x3B;    // kF1
+                case 'Q':   return 0x3C;    // kF2
+                case 'R':   return 0x3D;    // kF3
+                case 'S':   return 0x3E;    // kF4
+                }
+            }
+            if (n > 3 && buf[n-1] == '~') {         /* vt sequences */
+                switch (atoi(buf+2)) {
+                case 1:     return 0x47;    // kHome
+                case 2:     return 0x52;    // kInsert
+                case 3:     return 0x53;    // kDelete
+                case 4:     return 0x4F;    // kEnd
+                case 5:     return 0x49;    // kPageUp
+                case 6:     return 0x51;    // kPageDown
+                case 7:     return 0x47;    // kHome
+                case 8:     return 0x4F;    // kEnd
+                case 11:    return 0x3B;    // kF1
+                case 12:    return 0x3C;    // kF2
+                case 13:    return 0x3D;    // kF3
+                case 14:    return 0x3E;    // kF4
+                case 15:    return 0x3F;    // kF5
+                case 17:    return 0x40;    // kF6
+                case 18:    return 0x41;    // kF7
+                case 19:    return 0x42;    // kF8
+                case 20:    return 0x43;    // kF9
+                case 21:    return 0x44;    // kF10
+                case 23:    return 0x85;    // kF11
+                case 24:    return 0x86;    // kF12
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+static bool savechar;   // TODO(ghaerr): implement kbd input queue
+static u8   saveah;
+static u8   saveal;
+
 static void OnKeyboardServiceReadKeyPress(void) {
   uint8_t b;
   ssize_t rc;
   static char buf[32];
   static size_t pending;
   LOGF("OnKeyboardServiceReadKeyPress");
+  if (savechar) {
+    savechar = false;
+    m->ah = saveah;
+    m->al = saveal;
+    return;
+  }
   if (!ptyisenabled) {
     ptyisenabled = true;
     ReactiveDraw();
@@ -726,31 +788,42 @@ static void OnKeyboardServiceReadKeyPress(void) {
     rc = ReadAnsi(ttyin, buf, sizeof(buf));
     if (rc > 0) {
       pending = rc;
-    } else if (rc == -1 && errno == EINTR) {
-      HandleAppReadInterrupt();
-      return;
     } else {
-      exitcode = 0;
-      action |= EXIT;
+      HandleAppReadInterrupt(rc != -1 || errno != EINTR);
       return;
     }
   }
+  pty->conf &= ~kPtyBlinkcursor;
   unassert((int)pending > 0 && pending < 32);
+  ReactiveDraw();
+  if (m->metal) {
+    int r = AnsiToScancode(buf, pending);
+    if (r) {
+        m->al = 0;
+        m->ah = r;
+        pending = 0;
+        return;
+    }
+  }
   b = buf[0];
   if (pending > 1) {
     memmove(buf, buf + 1, pending - 1);
   }
   --pending;
-  pty->conf &= ~kPtyBlinkcursor;
-  ReactiveDraw();
   if (b == 0177) b = '\b';
-  m->ax[0] = b;
-  m->ax[1] = 0;
+  m->al = b;
+  m->ah = 0;
 }
 
 static void OnKeyboardServiceCheckKeyPress(void) {
   bool b = HasPendingKeyboard();
   m->flags = SetFlag(m->flags, FLAGS_ZF, !b);   /* ZF=0 if key pressed */
+  if (b) {
+    OnKeyboardServiceReadKeyPress();
+    savechar = true;
+    saveah = m->ah;
+    saveal = m->al;
+  }
 }
 
 static void OnKeyboardService(void) {
@@ -806,10 +879,14 @@ static void OnE820(void) {
 }
 
 static void OnInt15h(void) {
+  int timeout;
   if (Get32(m->ax) == 0xE820) {
     OnE820();
   } else if (m->ah == 0x53) {
     OnApmService();
+  } else if (m->ah == 0x86) {   // microsecond delay
+    timeout = (((Get16(m->cx) << 16) | Get16(m->dx)) + 999) / 1000;
+    poll(0, 0, timeout);
   } else {
     SetCarry(true);
   }
@@ -932,9 +1009,11 @@ bool OnCallBios(int interrupt) {
     case 0x19:
       DetermineChs();
       BootProgram(m, &m->system->elf, diskisfloppy ? 0x00 : 0x80);
+      VidyaServiceSetMode(vidya);
       return true;
     case 0x1A:
       OnTimeService();
+      Redraw(false);
       return true;
   }
   return false;
