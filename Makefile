@@ -72,7 +72,8 @@ format:
 check:	test					\
 	o/$(MODE)/third_party/cosmo		\
 	o/$(MODE)/third_party/libc-test		\
-	o/$(MODE)/test/metal
+	o/$(MODE)/test/metal			\
+	o/$(MODE)/test/metalrom
 
 check2:	o/$(MODE)/test/sse			\
 	o/$(MODE)/test/lib			\
@@ -101,6 +102,7 @@ include test/func/func.mk
 include test/flat/flat.mk
 include test/blink/test.mk
 include test/metal/metal.mk
+include test/metalrom/metalrom.mk
 include tool/config/config.mk
 include third_party/gcc/gcc.mk
 include third_party/ltp/ltp.mk
