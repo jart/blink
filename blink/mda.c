@@ -54,6 +54,7 @@ void DrawMda(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
     a = -1;
     for (x = 0; x < 80; ++x) {
       ch = v[y][x][0];
+      if (ch == 0xFF) ch = 0x00;
       attr = v[y][x][1];
       if (!BdaCurhidden && x == curx && y == cury) {
         if (ch == ' ' || ch == '\0') {
