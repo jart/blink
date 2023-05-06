@@ -816,6 +816,11 @@ static void OnKeyboardServiceReadKeyPress(void) {
 }
 
 static void OnKeyboardServiceCheckKeyPress(void) {
+  if (savechar) {
+    m->ah = saveah;
+    m->al = saveal;
+    return;
+  }
   bool b = HasPendingKeyboard();
   m->flags = SetFlag(m->flags, FLAGS_ZF, !b);   /* ZF=0 if key pressed */
   if (b) {
@@ -823,6 +828,9 @@ static void OnKeyboardServiceCheckKeyPress(void) {
     savechar = true;
     saveah = m->ah;
     saveal = m->al;
+  } else {
+    m->ah = 0;
+    m->al = 0;
   }
 }
 
