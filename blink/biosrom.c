@@ -24,13 +24,20 @@
 │ ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR        │
 │ OTHER DEALINGS IN THE SOFTWARE.                                              │
 ╚─────────────────────────────────────────────────────────────────────────────*/
-#include "blink/defbios.h"
+#include "blink/biosrom.h"
 
+#include <errno.h>
+#include <fcntl.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "blink/bda.h"
 #include "blink/endian.h"
 #include "blink/macros.h"
+#include "blink/map.h"
+#include "blink/overlays.h"
+#include "blink/util.h"
+#include "blink/vfs.h"
 
 #define kBiosArrayBase  ROUNDDOWN(kBiosEntry - (0x1D * 4 + 12 + 8 * 4), 0x10)
 #define kBiosDefInt0x00 kBiosArrayBase
@@ -74,7 +81,7 @@
 
 #define BIOS_BYTES_AT(addr, ...) [((addr)) - kBiosArrayBase] = __VA_ARGS__
 
-static const u8 defbios[] = {
+static const u8 kDefBios[] = {
     BIOS_BYTES_AT(kBiosDefInt0x00, 0x0F, 0xFF, 0067),        // hvtailcall 0x00
     BIOS_BYTES_AT(kBiosDefInt0x01, 0x0F, 0xFF, 0167, 0x01),  // hvtailcall 0x01
     BIOS_BYTES_AT(kBiosDefInt0x02, 0x0F, 0xFF, 0167, 0x02),  // hvtailcall 0x02
@@ -122,9 +129,53 @@ static const u8 defbios[] = {
                   0xEB, 0xFA),                               // jmp .-4
     BIOS_BYTES_AT(kBiosEnd - 1, 0x00)};
 
-void LoadDefaultBios(struct Machine *m) {
-  size_t kBiosSize = sizeof(defbios);
-  memcpy(m->system->real + kBiosEnd - kBiosSize, defbios, kBiosSize);
+void LoadBios(struct Machine *m, const char *biosprog) {
+  off_t size;
+  size_t protstart, protend;
+  if (biosprog) {
+    off_t kBiosMinSize = kBiosEnd - kBiosEntry,
+          kBiosMaxSize = kBiosEnd - kBiosOptBase;
+    int fd;
+    struct stat st;
+    char tmp[64];
+    if ((fd = VfsOpen(AT_FDCWD, biosprog, O_RDONLY, 0)) == -1 ||
+        VfsFstat(fd, &st) == -1) {
+      WriteErrorString(biosprog);
+      WriteErrorString(": failed to load alternate BIOS (errno ");
+      FormatInt64(tmp, errno);
+      WriteErrorString(tmp);
+      WriteErrorString(")\n");
+      exit(127);
+    } else if ((size = st.st_size) < kBiosMinSize) {
+      WriteErrorString(biosprog);
+      WriteErrorString(": failed to load alternate BIOS (file too small)\n");
+      exit(127);
+    } else if (size > kBiosMaxSize) {
+      WriteErrorString(biosprog);
+      WriteErrorString(": failed to load alternate BIOS (file too large)\n");
+      exit(127);
+    } else if (VfsRead(fd, m->system->real + kBiosEnd - size, size) != size) {
+      WriteErrorString(biosprog);
+      WriteErrorString(": failed to load alternate BIOS (errno ");
+      FormatInt64(tmp, errno);
+      WriteErrorString(tmp);
+      WriteErrorString(")\n");
+      exit(127);
+    }
+  } else {
+    // if no BIOS image file name is given, then load a default BIOS image
+    size = sizeof(kDefBios);
+    memcpy(m->system->real + kBiosEnd - size, kDefBios, size);
+  }
+  // try to protect the BIOS ROM area
+  // TODO: ideally writes will seem to succeed but have no effect
+  protstart = ROUNDUP(kBiosOptBase, FLAG_pagesize);
+  protend = ROUNDDOWN(kBiosEnd, FLAG_pagesize);
+  if (protstart < protend) {
+    Mprotect(m->system->real + protstart, protend - protstart, PROT_READ,
+             "bios");
+  }
+  // load %cs:%rip
   m->cs.sel = kBiosSeg;
   m->cs.base = kBiosBase;
   m->ip = kBiosEntry - kBiosBase;

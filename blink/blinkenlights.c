@@ -39,6 +39,7 @@
 
 #include "blink/assert.h"
 #include "blink/atomic.h"
+#include "blink/biosrom.h"
 #include "blink/bitscan.h"
 #include "blink/blinkenlights.h"
 #include "blink/breakpoint.h"
@@ -47,7 +48,6 @@
 #include "blink/case.h"
 #include "blink/cga.h"
 #include "blink/debug.h"
-#include "blink/defbios.h"
 #include "blink/dis.h"
 #include "blink/endian.h"
 #include "blink/errno.h"
@@ -143,6 +143,7 @@ FLAGS\n\
   -b ADDR   push a breakpoint\n\
   -w ADDR   push a watchpoint\n\
   -L PATH   log file location\n\
+  -B PATH   alternate BIOS image\n\
   -Z        internal statistics\n\
 \n\
 ARGUMENTS\n\
@@ -177,8 +178,9 @@ t       sse type                  -m       disables memory safety\n\
 T       sse size                  -N       natural scroll wheel\n\
 B       pop breakpoint            -s       system call logging\n\
 p       profiling mode            -C PATH  chroot directory\n\
-ctrl-t  turbo                     -h       help\n\
-alt-t   slowmo"
+ctrl-t  turbo                     -B PATH  alternate BIOS image\n\
+alt-t   slowmo                    -z       zoom\n\
+                                  -h       help"
 
 #define FPS        60     // frames per second written to tty
 #define TURBO      true   // to keep executing between frames
@@ -3456,7 +3458,7 @@ static void GetOpts(int argc, char *argv[]) {
 #ifndef DISABLE_VFS
   FLAG_prefix = getenv("BLINK_PREFIX");
 #endif
-  while ((opt = GetOpt(argc, argv, "0hjmvVtrzRNsZb:Hw:L:C:")) != -1) {
+  while ((opt = GetOpt(argc, argv, "0hjmvVtrzRNsZb:Hw:L:C:B:")) != -1) {
     switch (opt) {
       case '0':
         FLAG_zero = true;
@@ -3519,6 +3521,9 @@ static void GetOpts(int argc, char *argv[]) {
         WriteErrorString("error: overlays support was disabled\n");
 #endif
         break;
+      case 'B':
+        FLAG_bios = optarg_;
+        break;
       case 'z':
         ++codeview.zoom;
         ++readview.zoom;
@@ -3562,7 +3567,8 @@ int VirtualMachine(int argc, char *argv[]) {
     if (vidya != kModePty) {
       VidyaServiceSetMode(vidya);
     }
-    LoadProgram(m, codepath, codepath, argv + optind_ - 1 + FLAG_zero, environ);
+    LoadProgram(m, codepath, codepath,
+                argv + optind_ - 1 + FLAG_zero, environ, FLAG_bios);
     if (m->system->codesize) {
       ophits = (unsigned long *)AllocateBig(
           m->system->codesize * sizeof(unsigned long), PROT_READ | PROT_WRITE,
@@ -3679,6 +3685,18 @@ int main(int argc, char *argv[]) {
   InitMap();
   GetOpts(argc, argv);
   InitBus();
+#ifndef DISABLE_OVERLAYS
+  if (SetOverlays(FLAG_overlays, true)) {
+    WriteErrorString("bad blink overlays spec; see log for details\n");
+    exit(1);
+  }
+#endif
+#ifndef DISABLE_VFS
+  if (VfsInit(FLAG_prefix)) {
+    WriteErrorString("error: vfs initialization failed\n");
+    exit(1);
+  }
+#endif
 #ifdef HAVE_JIT
   AddPath_StartOp_Hook = AddPath_StartOp_Tui;
 #endif
@@ -3700,18 +3718,6 @@ int main(int argc, char *argv[]) {
   speed = 1;
   SetXmmSize(2);
   SetXmmDisp(kXmmHex);
-#ifndef DISABLE_OVERLAYS
-  if (SetOverlays(FLAG_overlays, true)) {
-    WriteErrorString("bad blink overlays spec; see log for details\n");
-    exit(1);
-  }
-#endif
-#ifndef DISABLE_VFS
-  if (VfsInit(FLAG_prefix)) {
-    WriteErrorString("error: vfs initialization failed\n");
-    exit(1);
-  }
-#endif
   signal(SIGPIPE, SIG_IGN);
   sigfillset(&sa.sa_mask);
   sa.sa_flags = 0;

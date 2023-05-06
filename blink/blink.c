@@ -214,7 +214,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   m->system->exec = Exec;
   if (!old) {
     // this is the first time a program is being loaded
-    LoadProgram(m, execfn, prog, argv, envp);
+    LoadProgram(m, execfn, prog, argv, envp, NULL);
     SetupCod(m);
     for (i = 0; i < 10; ++i) {
       AddStdFd(&m->system->fds, i);
@@ -233,7 +233,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
       }
     }
     memcpy(m->system->rlim, old->system->rlim, sizeof(old->system->rlim));
-    LoadProgram(m, execfn, prog, argv, envp);
+    LoadProgram(m, execfn, prog, argv, envp, NULL);
     m->system->fds.list = old->system->fds.list;
     old->system->fds.list = 0;
     // releasing the execve() lock must come after unlocking fds

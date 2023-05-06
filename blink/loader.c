@@ -30,8 +30,8 @@
 #include <unistd.h>
 
 #include "blink/assert.h"
+#include "blink/biosrom.h"
 #include "blink/builtin.h"
-#include "blink/defbios.h"
 #include "blink/end.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
@@ -490,7 +490,7 @@ void BootProgram(struct Machine *m,  //
   Write64(m->sp, 0x6f00);  // following QEMU
   m->dl = bootdrive;
   SetDefaultBiosDataArea(m);
-  memset(m->system->real + 0x500, 0, kBiosBase - 0x500);
+  memset(m->system->real + 0x500, 0, kBiosOptBase - 0x500);
   memset(m->system->real + 0x00100000, 0, kRealSize - 0x00100000);
   if ((fd = VfsOpen(AT_FDCWD, m->system->elf.prog, O_RDONLY, 0)) == -1 ||
       VfsRead(fd, m->system->real + 0x7c00, 512) <= 0) {
@@ -675,7 +675,7 @@ static int CanEmulateData(struct Machine *m, char **prog, char ***argv,
 }
 
 void LoadProgram(struct Machine *m, char *execfn, char *prog, char **args,
-                 char **vars) {
+                 char **vars, const char *biosprog) {
   int fd;
   i64 stack;
   void *map;
@@ -753,7 +753,7 @@ error: unsupported executable; we need:\n\
     m->system->automap ^= (Read64(elf->rng) & FLAG_aslrmask);
   }
   if (m->mode.genmode == XED_GEN_MODE_REAL) {
-    LoadDefaultBios(m);
+    LoadBios(m, biosprog);
     if (endswith(prog, ".com") ||  //
         endswith(prog, ".COM")) {
       // cosmo convention (see also binbase)

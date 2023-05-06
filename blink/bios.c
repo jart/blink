@@ -26,10 +26,10 @@
 
 #include "blink/assert.h"
 #include "blink/bda.h"
+#include "blink/biosrom.h"
 #include "blink/blinkenlights.h"
 #include "blink/bus.h"
 #include "blink/cga.h"
-#include "blink/defbios.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
 #include "blink/loader.h"

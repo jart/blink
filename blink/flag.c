@@ -49,3 +49,4 @@ const char *FLAG_overlays;
 #ifndef DISABLE_VFS
 const char *FLAG_prefix;
 #endif
+const char *FLAG_bios;
