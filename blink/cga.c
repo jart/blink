@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <termios.h>
 
+#include "blink/blinkenlights.h"
 #include "blink/buffer.h"
 #include "blink/macros.h"
 #include "blink/util.h"
@@ -44,6 +45,7 @@ size_t FormatCga(u8 bgfg, char buf[11]) {
 void DrawCga(struct Panel *p, u8 *vram) {
   unsigned y, x, ny, nx, a, ch, attr, curx, cury;
   u8 *v;
+  wint_t wch;
   char buf[11];
   ny = MIN(BdaLines, p->bottom - p->top);
   nx = BdaCols;
@@ -54,24 +56,22 @@ void DrawCga(struct Panel *p, u8 *vram) {
     v = vram + y * nx * 2;
     for (x = 0; x < nx; ++x) {
       ch = *v++;
-      if (ch == 0xFF) ch = 0x00;
       attr = *v++;
       if (!BdaCurhidden && x == curx && y == cury) {
         if (ch == ' ' || ch == '\0') {
-          ch = CURSOR;
-          attr = 0x07;
+          wch = CURSOR;
         } else {
-          ch = kCp437[ch];
-          attr = 0x70;
+          wch = GetVidyaByte(ch);
+          attr = (attr & 0xF0) >> 4 | (attr & 0x0F) << 4;
         }
         a = -1;
       } else {
-        ch = kCp437[ch];
+        wch = GetVidyaByte(ch);
       }
       if (attr != a) {
         AppendData(&p->lines[y], buf, FormatCga((a = attr), buf));
       }
-      AppendWide(&p->lines[y], ch);
+      AppendWide(&p->lines[y], wch);
     }
     AppendStr(&p->lines[y], "\033[0m");
   }

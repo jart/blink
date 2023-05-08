@@ -558,21 +558,6 @@ static void OnVidyaServiceGetCursorPosition(void) {
   }
 }
 
-static int GetVidyaByte(unsigned char b) {
-  if (0x20 <= b && b <= 0x7F) return b;
-#if 0
-  /*
-   * The original hardware displayed 0x00, 0x20, and 0xff as space. It
-   * made sense for viewing sparse binary data that 0x00 be blank. But
-   * it doesn't make sense for dense data too, and we don't need three
-   * space characters. So we diverge in our implementation and display
-   * 0xff as lambda.
-   */
-  if (b == 0xFF) b = 0x00;
-#endif
-  return kCp437[b];
-}
-
 static void OnVidyaServiceReadCharacter(void) {
   u16 *vram;
   u16 chattr;

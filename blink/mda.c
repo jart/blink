@@ -19,6 +19,7 @@
 #include "blink/mda.h"
 #include "blink/bda.h"
 
+#include "blink/blinkenlights.h"
 #include "blink/buffer.h"
 #include "blink/macros.h"
 #include "blink/util.h"
@@ -49,24 +50,24 @@ static u8 DecodeMdaAttributes(i8 a) {
 
 void DrawMda(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
   unsigned y, x, n, a, b, ch, attr;
+  wint_t wch;
   n = MIN(25, p->bottom - p->top);
   for (y = 0; y < n; ++y) {
     a = -1;
     for (x = 0; x < 80; ++x) {
       ch = v[y][x][0];
-      if (ch == 0xFF) ch = 0x00;
       attr = v[y][x][1];
       if (!BdaCurhidden && x == curx && y == cury) {
         if (ch == ' ' || ch == '\0') {
           ch = CURSOR;
           attr = 0x07;
         } else {
-          ch = kCp437[ch];
+          wch = GetVidyaByte(ch);
           attr = 0x70;
         }
         a = -1;
       } else {
-        ch = kCp437[ch];
+        wch = GetVidyaByte(ch);
       }
       b = DecodeMdaAttributes(attr);
       if (a != b) {
@@ -78,7 +79,7 @@ void DrawMda(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
         if (a & kReverse) AppendStr(&p->lines[y], ";7");
         AppendChar(&p->lines[y], 'm');
       }
-      AppendWide(&p->lines[y], ch);
+      AppendWide(&p->lines[y], wch);
     }
   }
 }
