@@ -23,6 +23,7 @@
 #include <sys/mman.h>
 
 #include "blink/assert.h"
+#include "blink/biosrom.h"
 #include "blink/bus.h"
 #include "blink/checked.h"
 #include "blink/debug.h"
@@ -445,13 +446,16 @@ u8 *ReserveAddress(struct Machine *m, i64 v, size_t n, bool writable) {
   }
 }
 
-u8 *AccessRam(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
-              bool copy) {
+static u8 *AccessRam2(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
+                      bool copy, bool protect_rom) {
   u8 *a, *b;
   unsigned k;
   unassert(n <= 4096);
   if ((v & 4095) + n <= 4096) {
-    return ResolveAddress(m, v);
+    a = ResolveAddress(m, v);
+    if (!protect_rom || !IsRomAddress(m, a)) return a;
+    if (copy) memcpy(tmp, a, n);
+    return tmp;
   }
   STATISTIC(++page_overlaps);
   k = 4096;
@@ -463,9 +467,18 @@ u8 *AccessRam(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
     memcpy(tmp, a, k);
     memcpy(tmp + k, b, n - k);
   }
+  if (protect_rom) {
+    if (IsRomAddress(m, a)) a = NULL;
+    if (IsRomAddress(m, b)) b = NULL;
+  }
   p[0] = a;
   p[1] = b;
   return tmp;
+}
+
+u8 *AccessRam(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
+              bool d) {
+  return AccessRam2(m, v, n, p, tmp, d, !d);
 }
 
 u8 *Load(struct Machine *m, i64 v, size_t n, u8 *b) {
@@ -484,10 +497,12 @@ u8 *BeginStoreNp(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   return BeginStore(m, v, n, p, b);
 }
 
+#if 0
 u8 *BeginLoadStore(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   SetWriteAddr(m, v, n);
-  return AccessRam(m, v, n, p, b, true);
+  return AccessRam2(m, v, n, p, b, true, true);
 }
+#endif
 
 void EndStore(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   unsigned k;
@@ -496,10 +511,15 @@ void EndStore(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {
   k = 4096;
   k -= v & 4095;
   unassert(n > k);
+#ifdef DISABLE_ROM
   unassert(p[0]);
   unassert(p[1]);
   memcpy(p[0], b, k);
   memcpy(p[1], b + k, n - k);
+#else
+  if (p[0]) memcpy(p[0], b, k);
+  if (p[1]) memcpy(p[1], b + k, n - k);
+#endif
 }
 
 void EndStoreNp(struct Machine *m, i64 v, size_t n, void *p[2], u8 *b) {

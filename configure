@@ -104,6 +104,9 @@ if [ "$1" = "--help" ]; then
   echo "  --disable-bcd"
   echo "    disables i8086 binary coded decimal support (shaves ~1kb off MODE=tiny)"
   echo
+  echo "  --disable-rom"
+  echo "    disables write protection of metal bios (shaves ~256 bytes off MODE=tiny)"
+  echo
   echo "  --disable-all"
   echo "    disable all optional features (shaves ~81kb off MODE=tiny)"
   echo "    you may use --enable-FOO to turn features back on"
@@ -411,6 +414,11 @@ for x; do
     comment "#define DISABLE_BCD"
   elif [ x"$x" = x"--disable-bcd" ]; then
     uncomment "#define DISABLE_BCD"
+
+  elif [ x"$x" = x"--enable-rom" ]; then
+    comment "#define DISABLE_ROM"
+  elif [ x"$x" = x"--disable-rom" ]; then
+    uncomment "#define DISABLE_ROM"
 
   elif [ x"$x" = x"--posix" ]; then
     CPPFLAGS="-D_POSIX_C_SOURCE=200809L -D_XOPEN_SOURCE=700 -std=c11"

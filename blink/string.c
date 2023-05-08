@@ -23,6 +23,7 @@
 
 #include "blink/alu.h"
 #include "blink/atomic.h"
+#include "blink/biosrom.h"
 #include "blink/builtin.h"
 #include "blink/bus.h"
 #include "blink/endian.h"
@@ -274,7 +275,7 @@ static void RepStosbEnhanced(P) {
       diremain = 4096 - (diactual & 4095);
       diremain = MIN(diremain, 65536 - dilow);
       n = MIN(cx, diremain);
-      memset(direal, m->al, n);
+      if (!IsRomAddress(m, direal)) memset(direal, m->al, n);
       AddDi(A, n);
       cx = SubtractCx(A, n);
       if (cx) diactual = AddressDi(A);
