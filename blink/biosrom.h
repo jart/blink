@@ -9,7 +9,26 @@
                                        // BIOS image, including option ROMs
 
 #if !(__ASSEMBLER__ + __LINKER__ + 0)
+#include "blink/builtin.h"
+#include "blink/endian.h"
 #include "blink/machine.h"
+
+MICRO_OP_SAFE bool IsRomAddress(struct Machine *m, u8 *r) {
+#ifndef DISABLE_ROM
+  if (m->metal) {
+    u8 *real = m->system->real;
+#if CAN_ABUSE_POINTERS
+    ptrdiff_t d = r - real;
+    // gcc optimizes this conjunction into subtraction followed by comparison
+    // FIXME: find better way to figure out if we can abuse ptrdiff_t like so
+    if (kBiosOptBase <= d && d < kBiosEnd) return true;
+#else
+    if (&real[kBiosOptBase] <= r && r < &real[kBiosEnd]) return true;
+#endif
+  }
+#endif
+  return false;
+}
 
 void LoadBios(struct Machine *, const char *);
 void SetDefaultBiosIntVectors(struct Machine *);

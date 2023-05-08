@@ -32,6 +32,7 @@
 #include <string.h>
 
 #include "blink/bda.h"
+#include "blink/builtin.h"
 #include "blink/endian.h"
 #include "blink/macros.h"
 #include "blink/map.h"
@@ -167,14 +168,17 @@ void LoadBios(struct Machine *m, const char *biosprog) {
     size = sizeof(kDefBios);
     memcpy(m->system->real + kBiosEnd - size, kDefBios, size);
   }
+#ifndef DISABLE_ROM
   // try to protect the BIOS ROM area
-  // TODO: ideally writes will seem to succeed but have no effect
+  // BeginStore() & EndStore() will avoid scribbling in this area of
+  // memory: so writes to the guest ROM area are effectively ignored
   protstart = ROUNDUP(kBiosOptBase, FLAG_pagesize);
   protend = ROUNDDOWN(kBiosEnd, FLAG_pagesize);
   if (protstart < protend) {
     Mprotect(m->system->real + protstart, protend - protstart, PROT_READ,
              "bios");
   }
+#endif
   // load %cs:%rip
   m->cs.sel = kBiosSeg;
   m->cs.base = kBiosBase;
