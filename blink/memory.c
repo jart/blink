@@ -353,7 +353,7 @@ int VirtualCopy(struct Machine *m, i64 v, char *r, u64 n, bool d) {
     if (!(p = LookupAddress(m, v))) return -1;
     if (d) {
       memcpy(r, p, k);
-    } else {
+    } else if (!IsRomAddress(m, p)) {
       memcpy(p, r, k);
     }
     n -= k;
@@ -419,6 +419,15 @@ u8 *ReserveAddress(struct Machine *m, i64 v, size_t n, bool writable) {
   }
   if ((v & 4095) + n <= 4096) {
     if ((res = LookupAddress2(m, v, mask, need))) {
+      if (!IsRomAddress(m, res)) return res;
+      p1 = res;
+      m->stashaddr = v;
+      m->opcache->stashsize = n;
+      m->opcache->writable = writable;
+      res = m->opcache->stash;
+      IGNORE_RACES_START();
+      memcpy(res, p1, n);
+      IGNORE_RACES_END();
       return res;
     } else {
       ThrowSegmentationFault(m, v);
