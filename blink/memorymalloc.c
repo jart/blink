@@ -1392,7 +1392,8 @@ i64 ConvertHostToGuestAddress(struct System *s, void *ha, u64 *out_pte) {
   i64 g48;
   uintptr_t base;
   if (out_pte) *out_pte = 0;
-  if (s->mode.genmode == XED_GEN_MODE_REAL || !(s->cr0 & CR0_PG)) {
+  if (s->mode.omode != XED_MODE_LONG &&
+      (!(s->cr0 & CR0_PG) || s->mode.genmode == XED_GEN_MODE_REAL)) {
     return (uintptr_t)ha;
   }
   if ((uintptr_t)ha < kNullSize) return (uintptr_t)ha;
