@@ -2748,6 +2748,14 @@ static void OnLongBranch(struct Machine *m) {
   }
 }
 
+#ifndef DISABLE_ROM
+static void OnRomWriteAttempt(struct Machine *m, u8 *r) {
+  int w = GetAddrHexWidth();
+  LOGF("attempt to write to rom address %0*tx @ %0*" PRIx64,
+       w, r - m->system->real, w, GetPc(m));
+}
+#endif
+
 static void SetStatus(const char *fmt, ...) {
   char *s;
   va_list va;
@@ -3715,6 +3723,9 @@ int main(int argc, char *argv[]) {
   m->system->redraw = Redraw;
   m->system->onbinbase = OnBinbase;
   m->system->onlongbranch = OnLongBranch;
+#ifndef DISABLE_ROM
+  m->system->onromwriteattempt = OnRomWriteAttempt;
+#endif
   speed = 1;
   SetXmmSize(2);
   SetXmmDisp(kXmmHex);

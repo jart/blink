@@ -105,7 +105,7 @@ if [ "$1" = "--help" ]; then
   echo "    disables i8086 binary coded decimal support (shaves ~1kb off MODE=tiny)"
   echo
   echo "  --disable-rom"
-  echo "    disables write protection of metal bios (shaves ~256 bytes off MODE=tiny)"
+  echo "    disables write protection of metal bios (shaves ~600 bytes off MODE=tiny)"
   echo
   echo "  --disable-all"
   echo "    disable all optional features (shaves ~81kb off MODE=tiny)"

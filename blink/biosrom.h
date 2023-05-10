@@ -17,15 +17,20 @@
 MICRO_OP_SAFE bool IsRomAddress(struct Machine *m, u8 *r) {
 #ifndef DISABLE_ROM
   if (m->metal) {
-    u8 *real = m->system->real;
+    struct System *s = m->system;
+    u8 *real = s->real;
 #if CAN_ABUSE_POINTERS
     ptrdiff_t d = r - real;
     // gcc optimizes this conjunction into subtraction followed by comparison
     // FIXME: find better way to figure out if we can abuse ptrdiff_t like so
-    if (UNLIKELY(kBiosOptBase <= d && d < kBiosEnd)) return true;
+    if (UNLIKELY(kBiosOptBase <= d && d < kBiosEnd))
 #else
-    if (&real[kBiosOptBase] <= r && r < &real[kBiosEnd]) return true;
+    if (UNLIKELY(&real[kBiosOptBase] <= r && r < &real[kBiosEnd]))
 #endif
+    {
+      if (s->onromwriteattempt) s->onromwriteattempt(m, r);
+      return true;
+    }
   }
 #endif
   return false;
