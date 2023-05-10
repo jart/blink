@@ -592,7 +592,10 @@ const char *DisSpecMap1(struct XedDecodedInst *x, char *p) {
     RCASE(0xAF, "imul %Gvqp Evqp");
     RCASE(0xB0, "cmpxchg Eb %Gb");
     RCASE(0xB1, "cmpxchg Evqp %Gvqp");
+    RCASE(0xB2, "lss %Gv Mp");
     RCASE(0xB3, "btr Evqp %Gvqp");
+    RCASE(0xB4, "lfs %Gv Mp");
+    RCASE(0xB5, "lgs %Gv Mp");
     RCASE(0xB6, "movzbWLQ %Gvqp Eb");
     RCASE(0xB7, "movzwWLQ %Gvqp Ew");
     RCASE(0xB9, "ud %Gvqp Evqp");

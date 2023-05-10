@@ -25,6 +25,20 @@ _start:
 #define OFF4		(loc4-0x29f0)
 #define MAGIC4		0xb9fca8dc
 
+#define SEG5		0x1c7
+#define OFF5A		(-0x29ec8d34)
+#define OFF5B		(loc5-0x1c70-OFF5A)
+#define MAGIC5		0x9c948198
+
+#define SEG6		0x323
+#define OFF6A		(-0x03748378)
+#define OFF6B		(loc6-0x3230-OFF6A)
+#define MAGIC6		0x3f2c0b97
+
+#define SEG7		0x41e
+#define OFF7		(loc7-0x41e0)
+#define MAGIC7		0xf1cab448
+
 1:
 	or	$-1,%ecx
 	mov	%ecx,%ebx
@@ -69,6 +83,37 @@ _start:
 	cmpl	$MAGIC4,%es:(%ebp)
 	jnz	fail
 
+	lfs	%cs:fp5,%eax
+	cmp	$OFF5A,%eax
+	jnz	fail
+	mov	%fs,%bx
+	cmp	$SEG5,%bx
+	jnz	fail
+	cmpl	$MAGIC5,%fs:OFF5B(%eax)
+	jnz	fail
+
+	lgs	%cs:fp6,%ecx
+	cmp	$OFF6B,%ecx
+	jnz	fail
+	mov	%gs,%dx
+	cmp	$SEG6,%dx
+	jnz	fail
+	cli
+	mov	$OFF6A,%esp
+	cmpl	$MAGIC6,%gs:(%esp,%ecx)
+	jnz	fail
+
+	mov	$_start-SEG7*0x10,%esp
+	lss	%cs:fp7,%si
+	mov	%ss,%bp
+	cmp	$SEG7,%bp
+	jnz	fail
+	sti
+	cmp	$OFF7,%si
+	jnz	fail
+	cmpl	$MAGIC7,%ss:(%si)
+	jnz	fail
+
 //	Tests passed!  Try to "exit" emulator with success status
 
 	cli
@@ -88,11 +133,19 @@ fp3:	.long	OFF3
 	.hword	SEG3
 fp4:	.long	OFF4
 	.hword	SEG4
+fp5:	.long	OFF5A
+	.hword	SEG5
+fp6:	.long	OFF6B
+	.hword	SEG6
+fp7:	.hword	OFF7,SEG7
 
 loc1:	.long	MAGIC1
 loc2:	.long	MAGIC2
 loc3:	.long	MAGIC3
 loc4:	.long	MAGIC4
+loc5:	.long	MAGIC5
+loc6:	.long	MAGIC6
+loc7:	.long	MAGIC7
 
 	.balign	8
 bad_idt:
