@@ -134,16 +134,21 @@ static void Smsw(P, bool ismem) {
   if (ismem) {
     Store16(GetModrmRegisterWordPointerWrite2(A), m->system->cr0);
   } else if (Rexw(rde)) {
-    Put64(RegRexrReg(m, rde), m->system->cr0);
+    Put64(RegRexbRm(m, rde), m->system->cr0);
   } else if (!Osz(rde)) {
-    Put64(RegRexrReg(m, rde), m->system->cr0 & 0xffffffff);
+    Put64(RegRexbRm(m, rde), m->system->cr0 & 0xffffffff);
   } else {
-    Put16(RegRexrReg(m, rde), m->system->cr0);
+    Put16(RegRexbRm(m, rde), m->system->cr0);
   }
 }
 
 static void Lmsw(P) {
-  m->system->cr0 = Read16(GetModrmRegisterWordPointerRead2(A));
+  // Intel V2A § 3.2:  "Only the low-order 4 bits of the source operand
+  // (which contains the PE, MP, EM, and TS flags) are loaded into CR0.
+  // The PG, CD, NW, AM, WP, NE, and ET flags of CR0 are not affected.
+  // The operand-size attribute has no effect on this instruction."
+  m->system->cr0 = (m->system->cr0 & ~(u64)0xf) |
+                   (Read16(GetModrmRegisterWordPointerRead2(A)) & 0xf);
 }
 
 void Op101(P) {

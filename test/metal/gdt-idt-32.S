@@ -41,11 +41,16 @@ _start:
 
 //	Now load an actual GDT, switch to protected mode, & test that the
 //	LSL instruction reads the correct limits from it
+//	While at it, also check that for the `smsw` instruction (0f 01 /4)
+//	the reg/opcode field (/4) is not misinterpreted as an %sp operand
 
 	lgdtw	good_gdtr
-	mov	%cr0,%eax
-	or	$1,%al
-	mov	%eax,%cr0
+	mov	$-1,%dx
+	smsw	%dx			// %dx := %cr0[15:0]...
+	cmp	$_start,%sp		// ...not %sp := %cr0[15:0] !
+	jnz	fail
+	or	$1,%dl
+	lmsw	%dx
 	jmp	2f
 2:
 
