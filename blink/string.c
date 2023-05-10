@@ -231,8 +231,10 @@ static void RepMovsbEnhanced(P) {
           siremain = 4096 - (siactual & 4095);
           siremain = MIN(siremain, 65536 - silow);
           n = MIN(cx, MIN(diremain, siremain));
-          for (i = 0; i < n; ++i) {
-            direal[i] = sireal[i];
+          if (!IsRomAddress(m, direal)) {
+            for (i = 0; i < n; ++i) {
+              direal[i] = sireal[i];
+            }
           }
           AddDi(A, n);
           AddSi(A, n);
@@ -242,8 +244,10 @@ static void RepMovsbEnhanced(P) {
           siremain = (siactual & 4095) + 1;
           siremain = MIN(siremain, (long)silow + 1);
           n = MIN(cx, MIN(diremain, siremain));
-          for (i = 0; i < n; ++i) {
-            direal[-i] = sireal[-i];
+          if (!IsRomAddress(m, direal)) {
+            for (i = 0; i < n; ++i) {
+              direal[-i] = sireal[-i];
+            }
           }
           AddDi(A, -n);
           AddSi(A, -n);
