@@ -764,6 +764,7 @@ error: unsupported executable; we need:\n\
     }
   } else {
     m->flags = SetFlag(m->flags, FLAGS_IF, 1);
+    m->system->cr0 = CR0_PE | CR0_MP | CR0_ET | CR0_PG;
     m->system->cr3 = AllocatePageTable(m->system);
     if (IsBinFile(prog)) {
       elf->base = 0x400000;

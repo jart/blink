@@ -1,6 +1,6 @@
 // -*- mode: unix-assembly; indent-tabs-mode: t; tab-width: 8; coding: utf-8 -*-
 
-	.macro	.load32 entry:req
+	.macro	.load16
 	ljmp	$0,$101f
 101:	xor	%ax,%ax
 	mov	%ax,%ds
@@ -14,6 +14,10 @@
 	mov	$0,%dh
 	int	$0x13
 	jc	101b
+	.endm
+
+	.macro	.load32 entry:req
+	.load16
 	cli				// switch to protected mode
 	lgdtl	103f
 	mov	%cr0,%eax

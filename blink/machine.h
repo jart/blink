@@ -302,6 +302,7 @@ struct System {
   void (*onsymbols)(struct System *);
   void (*onbinbase)(struct Machine *);
   void (*onlongbranch)(struct Machine *);
+  void (*onromwriteattempt)(struct Machine *, u8 *);
   int (*exec)(char *, char *, char **, char **);
   void (*redraw)(bool);
 };
