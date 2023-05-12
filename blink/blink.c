@@ -152,7 +152,7 @@ void TerminateSignal(struct Machine *m, int sig, int code) {
   unassert(!IsSignalIgnoredByDefault(sig));
   KillOtherThreads(m->system);
 #ifdef HAVE_JIT
-  DisableJit(&m->system->jit);  // unmapping exec pages is slow
+  DownvoteJit(&m->system->jit);  // unmapping exec pages is slow
 #endif
   if (IsSignalSerious(sig)) {
     ERRF("terminating due to %s ("
@@ -209,7 +209,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   if ((old = g_machine)) KillOtherThreads(old->system);
   unassert((g_machine = m = NewMachine(NewSystem(XED_MACHINE_MODE_LONG), 0)));
 #ifdef HAVE_JIT
-  if (FLAG_nojit) DisableJit(&m->system->jit);
+  if (FLAG_nojit) DownvoteJit(&m->system->jit);
 #endif
   m->system->exec = Exec;
   if (!old) {
@@ -222,7 +222,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
     ProgramLimit(m->system, RLIMIT_NOFILE, RLIMIT_NOFILE_LINUX);
   } else {
 #ifdef HAVE_JIT
-    DisableJit(&old->system->jit);  // unmapping exec pages is slow
+    DownvoteJit(&old->system->jit);  // unmapping exec pages is slow
 #endif
     unassert(!m->sysdepth);
     unassert(!m->pagelocks.i);

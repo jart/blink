@@ -3713,9 +3713,8 @@ int main(int argc, char *argv[]) {
                                     : XED_MACHINE_MODE_LONG)));
   unassert((m = g_machine = NewMachine(s, 0)));
 #ifdef HAVE_JIT
-  if (!FLAG_wantjit || wantmetal) {
-    DisableJit(&m->system->jit);
-  }
+  if (!FLAG_wantjit) DownvoteJit(&m->system->jit);
+  if (wantmetal) DownvoteJit(&m->system->jit);
 #endif
   if (wantmetal) {
     m->metal = true;

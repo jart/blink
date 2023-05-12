@@ -195,7 +195,17 @@ struct JitHooks {
 struct Jit {
   int staging;
   bool threaded;
-  _Atomic(bool) disabled;
+  // number of "downvotes" against using the Just-In-Time threader; a caller
+  // may cast a downvote via DownvoteJit(jit) for any of several reasons:
+  // - the user asks to disable JIT
+  // - one or more threads is not in a correct machine mode, i.e. long mode
+  // - one or more threads has single-stepping enabled (via TF = 1)
+  // - the guest is about to terminate
+  // - etc.
+  // a caller may UpvoteJit(jit) if a particular reason for a downvote no
+  // longer applies
+  // the JIT threader is enabled if upvotes >= downvotes
+  _Atomic(i16) downvotes;
   struct JitHooks hooks;
   struct JitEdges edges;
   struct JitEdges redges;
@@ -215,8 +225,8 @@ extern const u8 kJitSav[5];
 extern const u8 kJitArg[4];
 
 int ShutdownJit(void);
-int EnableJit(struct Jit *);
-int DisableJit(struct Jit *);
+int DownvoteJit(struct Jit *);
+int UpvoteJit(struct Jit *);
 int DestroyJit(struct Jit *);
 int FixJitProtection(struct Jit *);
 int InitJit(struct Jit *, uintptr_t);
@@ -262,11 +272,11 @@ static inline uintptr_t GetJitPc(const struct JitBlock *jb) {
 }
 
 /**
- * Returns true if DisableJit() was called or AcquireJit() had failed.
+ * Returns true if JIT was downvoted or AcquireJit() had failed.
  */
 static inline bool IsJitDisabled(const struct Jit *jit) {
 #ifdef HAVE_JIT
-  return atomic_load_explicit(&jit->disabled, memory_order_acquire);
+  return atomic_load_explicit(&jit->downvotes, memory_order_acquire) > 0;
 #else
   return true;
 #endif
