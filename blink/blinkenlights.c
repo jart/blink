@@ -1479,6 +1479,7 @@ static void DrawCpu(struct Panel *p) {
   DrawFlag(p, 8, 'A', GetFlag(m->flags, FLAGS_AF));
   DrawFlag(p, 8, 'Z', GetFlag(m->flags, FLAGS_ZF));
   DrawFlag(p, 8, 'S', GetFlag(m->flags, FLAGS_SF));
+  DrawFlag(p, 8, 'T', GetFlag(m->flags, FLAGS_TF));
   DrawFlag(p, 8, 'I', GetFlag(m->flags, FLAGS_IF));
   DrawFlag(p, 8, 'D', GetFlag(m->flags, FLAGS_DF));
   DrawFlag(p, 8, 'O', GetFlag(m->flags, FLAGS_OF));
@@ -3266,6 +3267,7 @@ static void Exec(void) {
     // either 1 or 0; this should have been stored in m->trapno
     if (interrupt == 1) interrupt = m->trapno;
     if (OnHalt(interrupt)) {
+      CancelPendingSingleStep(m);
       if (!tuimode) {
         if (displayexec) {
           DrawDisplayOnly();
@@ -3437,6 +3439,7 @@ static void Tui(void) {
     }
     if (interrupt == 1) interrupt = m->trapno;
     if (OnHalt(interrupt)) {
+      CancelPendingSingleStep(m);
       ReactiveDraw();
       ScrollMemoryViews();
       goto KeepGoing;

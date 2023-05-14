@@ -436,7 +436,6 @@ int ClassifyOp(u64 rde) {
     case 0x0E9:  // OpJmp
     case 0x0EA:  // OpJmpf
     case 0x0EB:  // OpJmp
-    case 0x0CF:  // OpIret
     case 0x180:  // OpJo
     case 0x181:  // OpJno
     case 0x182:  // OpJb
@@ -464,9 +463,12 @@ int ClassifyOp(u64 rde) {
         default:
           return kOpNormal;
       }
+    case 0x09D:  // OpPopf
     case 0x0F1:  // OpInterrupt1
     case 0x0CC:  // OpInterrupt3
     case 0x0CD:  // OpInterruptImm
+    case 0x0CE:  // OpInto
+    case 0x0CF:  // OpIret
     case 0x105:  // OpSyscall
       // precious ops are excluded from jit pathmaking entirely. not
       // doing this would be inviting disaster, since system calls and
