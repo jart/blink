@@ -1505,6 +1505,9 @@ static void OpEmms(P) {
 #define OpJmpf        OpUd
 #define OpLds         OpUd
 #define OpLes         OpUd
+#define OpLfs         OpUd
+#define OpLgs         OpUd
+#define OpLss         OpUd
 #define OpMovCqRq     OpUd
 #define OpMovEvqpSw   OpUd
 #define OpMovRqCq     OpUd
@@ -1981,10 +1984,10 @@ static const nexgen32e_f kNexgen32e[] = {
     /*1AF*/ OpImulGvqpEvqp,          // #34   (0.299503%)
     /*1B0*/ OpCmpxchgEbAlGb,         //
     /*1B1*/ OpCmpxchgEvqpRaxGvqp,    // #87   (0.005376%)
-    /*1B2*/ OpUd,                    //
+    /*1B2*/ OpLss,                   //
     /*1B3*/ OpBit,                   // #199  (0.000035%)
-    /*1B4*/ OpUd,                    //
-    /*1B5*/ OpUd,                    //
+    /*1B4*/ OpLfs,                   //
+    /*1B5*/ OpLgs,                   //
     /*1B6*/ OpMovzbGvqpEb,           // #37   (0.296523%)
     /*1B7*/ OpMovzwGvqpEw,           // #137  (0.000433%)
     /*1B8*/ Op1b8,                   //

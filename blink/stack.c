@@ -109,12 +109,12 @@ static void PushN(P, u64 x, unsigned mode, unsigned osz) {
 }
 
 void Push(P, u64 x) {
-  PushN(A, x, Eamode(rde), kStackOsz[Osz(rde)][Mode(rde)]);
+  PushN(A, x, Mode(rde), kStackOsz[Osz(rde)][Mode(rde)]);
 }
 
 void OpPushZvq(P) {
   int osz = kStackOsz[Osz(rde)][Mode(rde)];
-  PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Eamode(rde), osz);
+  PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Mode(rde), osz);
   if (IsMakingPath(m) && HasLinearMapping() && !Osz(rde)) {
     Jitter(A,
            "a1i"
@@ -127,7 +127,7 @@ static u64 PopN(P, u16 extra, unsigned osz) {
   u64 v;
   u8 b[8];
   void *p[2];
-  switch (Eamode(rde)) {
+  switch (Mode(rde)) {
     case XED_MODE_LONG:
       v = Get64(m->sp);
       Put64(m->sp, v + osz + extra);

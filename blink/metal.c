@@ -225,6 +225,18 @@ relegated void OpLds(P) {
   LoadFarPointer(A, SREG_DS, false);
 }
 
+relegated void OpLss(P) {
+  LoadFarPointer(A, SREG_SS, false);
+}
+
+relegated void OpLfs(P) {
+  LoadFarPointer(A, SREG_FS, false);
+}
+
+relegated void OpLgs(P) {
+  LoadFarPointer(A, SREG_GS, false);
+}
+
 relegated void OpJmpfEq(P) {
   LoadFarPointer(A, SREG_CS, true);
 }

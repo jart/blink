@@ -15,9 +15,20 @@ _start:
 	cmp	$8,%rax
 	.e
 
+	.test   "asz does not affect stack pointer size for push"
+	mov	%rsp,%rax
+	orq	$-1,-8(%rsp)
+	addr32 push %rax
+	mov	%rsp,%rbx
+	cmp	%rax,(%rbx)
+	.e
+	sub	%rbx,%rax
+	cmp	$8,%rax
+	.e
+
 	.test	"osz push moves stack by 2"
 	mov	%rsp,%rax
-	push	%ax
+	pushw	$0x439d
 	mov	%rsp,%rbx
 	sub	%rbx,%rax
 	cmp	$2,%rax
@@ -35,6 +46,12 @@ _start:
 	or	$-1,%rax
 	pop	%ax
 	mov	$0xffffffffffff0000,%rbx
+	cmp	%rbx,%rax
+	.e
+
+	.test   "asz does not affect stack pointer size for pop"
+	addr32 pop %ax
+	mov	$0xffffffffffff439d,%rbx
 	cmp	%rbx,%rax
 	.e
 

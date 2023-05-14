@@ -456,10 +456,10 @@ const char *DescribeMopcode(int code) {
     XLAT(0x1AF, "OpImulGvqpEvqp");
     XLAT(0x1B0, "OpCmpxchgEbAlGb");
     XLAT(0x1B1, "OpCmpxchgEvqpRaxGvqp");
-    XLAT(0x1B2, "OpUd");
+    XLAT(0x1B2, "OpLss");
     XLAT(0x1B3, "OpBit");
-    XLAT(0x1B4, "OpUd");
-    XLAT(0x1B5, "OpUd");
+    XLAT(0x1B4, "OpLfs");
+    XLAT(0x1B5, "OpLgs");
     XLAT(0x1B6, "OpMovzbGvqpEb");
     XLAT(0x1B7, "OpMovzwGvqpEw");
     XLAT(0x1B8, "Op1b8");
