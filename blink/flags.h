@@ -2,6 +2,7 @@
 #define BLINK_FLAGS_H_
 #include "blink/builtin.h"
 #include "blink/machine.h"
+#include "blink/macros.h"
 
 #define FLAGS_CF   0   // carry flag
 #define FLAGS_VF   1   // always 1
@@ -36,6 +37,8 @@
 #define RF (1 << FLAGS_RF)
 #define AC (1 << FLAGS_AC)
 #define ID (1 << FLAGS_ID)
+
+#define SZAC (ROUNDUP(SF | ZF | AF | CF, SF) - CF)
 
 #define GetLazyParityBool(f)    GetParity((0xff000000 & (f)) >> FLAGS_LP)
 #define SetLazyParityByte(f, x) ((0x00ffffff & (f)) | (255 & (x)) << FLAGS_LP)

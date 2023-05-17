@@ -89,30 +89,30 @@ const nexgen32e_f kConvert[] = {Convert16, Convert32, Convert64};
 MICRO_OP i64 Adcx32(u64 x, u64 y, struct Machine *m) {
   u32 t = x + !!(m->flags & CF);
   u32 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~CF) | c << FLAGS_CF;
+  bool c = (t < x) | (z < y);
+  m->flags = (m->flags & ~CF) | (u32)c << FLAGS_CF;
   return z;
 }
 MICRO_OP i64 Adcx64(u64 x, u64 y, struct Machine *m) {
   u64 t = x + !!(m->flags & CF);
   u64 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~CF) | c << FLAGS_CF;
+  bool c = (t < x) | (z < y);
+  m->flags = (m->flags & ~CF) | (u32)c << FLAGS_CF;
   return z;
 }
 
 MICRO_OP i64 Adox32(u64 x, u64 y, struct Machine *m) {
   u32 t = x + !!(m->flags & OF);
   u32 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~OF) | c << FLAGS_OF;
+  bool c = (t < x) | (z < y);
+  m->flags = (m->flags & ~OF) | (u32)c << FLAGS_OF;
   return z;
 }
 MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
   u64 t = x + !!(m->flags & OF);
   u64 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~OF) | c << FLAGS_OF;
+  bool c = (t < x) | (z < y);
+  m->flags = (m->flags & ~OF) | (u32)c << FLAGS_OF;
   return z;
 }
 
@@ -908,171 +908,177 @@ const aluop_f kJustBsu32[8] = {
     (aluop_f)JustSar32,  //
 };
 
+MICRO_OP_SAFE void SetSzacZfCf(struct Machine *m, u64 z, bool c) {
+  // if an operation is supposed to set SF, ZF, AF, & CF, but we
+  // know we only need (at most) ZF & CF, then clobber the whole
+  // lower flags byte; gcc can turn this into a plain byte store
+  m->flags = (m->flags & ~SZAC) | (u32)!z << FLAGS_ZF | (u32)c << FLAGS_CF;
+}
+
 MICRO_OP static i64 FastXor64(struct Machine *m, u64 x, u64 y) {
   u64 z = x ^ y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
-  return z;
+  SetSzacZfCf(m, z, false);
 }
 MICRO_OP static i64 FastOr64(struct Machine *m, u64 x, u64 y) {
   u64 z = x | y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP static i64 FastAnd64(struct Machine *m, u64 x, u64 y) {
   u64 z = x & y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP static i64 FastSub64(struct Machine *m, u64 x, u64 y) {
   u64 z = x - y;
-  int c = x < z;
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = x < z;
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastAdd64(struct Machine *m, u64 x, u64 y) {
   u64 z = x + y;
-  int c = z < y;
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = z < y;
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastAdc64(struct Machine *m, u64 x, u64 y) {
   u64 t = x + !!(m->flags & CF);
   u64 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = (t < x) | (z < y);
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastSbb64(struct Machine *m, u64 x, u64 y) {
   u64 t = x - !!(m->flags & CF);
   u64 z = t - y;
-  int c = (x < t) | (t < z);
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = (x < t) | (t < z);
+  SetSzacZfCf(m, z, c);
   return z;
 }
 
 MICRO_OP static i64 FastXor32(struct Machine *m, u64 x, u64 y) {
   u32 z = x ^ y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP static i64 FastOr32(struct Machine *m, u64 x, u64 y) {
   u32 z = x | y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP static i64 FastAnd32(struct Machine *m, u64 x, u64 y) {
   u32 z = x & y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP static i64 FastSub32(struct Machine *m, u64 x, u64 y) {
   u32 z = x - y;
-  int c = x < z;
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = x < z;
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastAdd32(struct Machine *m, u64 x, u64 y) {
   u32 z = x + y;
-  int c = z < y;
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = z < y;
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastAdc32(struct Machine *m, u64 x, u64 y) {
   u32 t = x + !!(m->flags & CF);
   u32 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = (t < x) | (z < y);
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastSbb32(struct Machine *m, u64 x, u64 y) {
   u32 t = x - !!(m->flags & CF);
   u32 z = t - y;
-  int c = (x < t) | (t < z);
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = (x < t) | (t < z);
+  SetSzacZfCf(m, z, c);
   return z;
 }
 
 MICRO_OP static i64 FastXor16(struct Machine *m, u64 x, u64 y) {
   u16 z = x ^ y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP static i64 FastOr16(struct Machine *m, u64 x, u64 y) {
   u16 z = x | y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP static i64 FastAnd16(struct Machine *m, u64 x, u64 y) {
   u16 z = x & y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP static i64 FastSub16(struct Machine *m, u64 x, u64 y) {
   u16 z = x - y;
-  int c = x < z;
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = x < z;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP static i64 FastAdd16(struct Machine *m, u64 x, u64 y) {
   u16 z = x + y;
-  int c = z < y;
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = z < y;
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastAdc16(struct Machine *m, u64 x, u64 y) {
   u16 t = x + !!(m->flags & CF);
   u16 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = (t < x) | (z < y);
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastSbb16(struct Machine *m, u64 x, u64 y) {
   u16 t = x - !!(m->flags & CF);
   u16 z = t - y;
-  int c = (x < t) | (t < z);
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = (x < t) | (t < z);
+  SetSzacZfCf(m, z, c);
   return z;
 }
 
 MICRO_OP static i64 FastXor8(struct Machine *m, u64 x, u64 y) {
   u8 z = x ^ y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP static i64 FastOr8(struct Machine *m, u64 x, u64 y) {
   u8 z = x | y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP i64 FastAnd8(struct Machine *m, u64 x, u64 y) {
   u8 z = x & y;
-  m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
+  SetSzacZfCf(m, z, false);
   return z;
 }
 MICRO_OP i64 FastSub8(struct Machine *m, u64 x, u64 y) {
   u8 z = x - y;
-  int c = x < z;
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = x < z;
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastAdd8(struct Machine *m, u64 x, u64 y) {
   u8 z = x + y;
-  int c = z < y;
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = z < y;
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastAdc8(struct Machine *m, u64 x, u64 y) {
   u8 t = x + !!(m->flags & CF);
   u8 z = t + y;
-  int c = (t < x) | (z < y);
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = (t < x) | (z < y);
+  SetSzacZfCf(m, z, c);
   return z;
 }
 MICRO_OP static i64 FastSbb8(struct Machine *m, u64 x, u64 y) {
   u8 t = x - !!(m->flags & CF);
   u8 z = t - y;
-  int c = (x < t) | (t < z);
-  m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
+  bool c = (x < t) | (t < z);
+  SetSzacZfCf(m, z, c);
   return z;
 }
 
