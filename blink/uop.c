@@ -26,6 +26,7 @@
 #include "blink/bus.h"
 #include "blink/endian.h"
 #include "blink/flags.h"
+#include "blink/intrin.h"
 #include "blink/jit.h"
 #include "blink/log.h"
 #include "blink/machine.h"
@@ -86,6 +87,58 @@ const nexgen32e_f kConvert[] = {Convert16, Convert32, Convert64};
 
 #ifndef DISABLE_BMI2
 
+#if X86_INTRINSICS
+MICRO_OP i64 Adcx32(u64 x, u64 y, struct Machine *m) {
+  u32 z, t;
+  asm("btr\t%5,%1\n\t"
+      "adc\t%4,%0\n\t"
+      "sbb\t%2,%2\n\t"
+      "and\t%6,%2\n\t"
+      "or\t%2,%1"
+      : "=&r" (z), "+&g" (m->flags), "=&r" (t)
+      : "%0" ((u32)x), "g" ((u32)y), "i" (FLAGS_CF), "i" (CF)
+      : "cc");
+  return z;
+}
+MICRO_OP i64 Adcx64(u64 x, u64 y, struct Machine *m) {
+  u64 z;
+  u32 t;
+  asm("btr\t%5,%1\n\t"
+      "adc\t%4,%0\n\t"
+      "sbb\t%2,%2\n\t"
+      "and\t%6,%2\n\t"
+      "or\t%2,%1"
+      : "=&r" (z), "+&g" (m->flags), "=&r" (t)
+      : "%0" (x), "g" (y), "i" (FLAGS_CF), "i" (CF)
+      : "cc");
+  return z;
+}
+MICRO_OP i64 Adox32(u64 x, u64 y, struct Machine *m) {
+  u32 z, t;
+  asm("btr\t%5,%1\n\t"
+      "adc\t%4,%0\n\t"
+      "sbb\t%2,%2\n\t"
+      "and\t%6,%2\n\t"
+      "or\t%2,%1"
+      : "=&r" (z), "+&g" (m->flags), "=&r" (t)
+      : "%0" ((u32)x), "g" ((u32)y), "i" (FLAGS_OF), "i" (OF)
+      : "cc");
+  return z;
+}
+MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
+  u64 z;
+  u32 t;
+  asm("btr\t%5,%1\n\t"
+      "adc\t%4,%0\n\t"
+      "sbb\t%2,%2\n\t"
+      "and\t%6,%2\n\t"
+      "or\t%2,%1"
+      : "=&r" (z), "+&g" (m->flags), "=&r" (t)
+      : "%0" (x), "g" (y), "i" (FLAGS_OF), "i" (OF)
+      : "cc");
+  return z;
+}
+#else /* !X86_INTRINSICS */
 MICRO_OP i64 Adcx32(u64 x, u64 y, struct Machine *m) {
   u32 t = x + !!(m->flags & CF);
   u32 z = t + y;
@@ -115,8 +168,9 @@ MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
   m->flags = (m->flags & ~OF) | c << FLAGS_OF;
   return z;
 }
+#endif /* !X86_INTRINSICS */
 
-#endif /* DISABLE_BMI2 */
+#endif /* !DISABLE_BMI2 */
 
 ////////////////////////////////////////////////////////////////////////////////
 // BRANCHING
@@ -1136,7 +1190,7 @@ MICRO_OP void Mulx64(u64 x,              //
   Put64(m->weg[vreg], z);
   Put64(m->weg[rexrreg], z >> 64);
 }
-#endif /* DISABLE_BMI2 */
+#endif /* !DISABLE_BMI2 */
 #endif /* HAVE_INT128 */
 
 MICRO_OP i64 JustNeg(u64 x) {
