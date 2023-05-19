@@ -583,6 +583,16 @@ if [ -z "${MODE}" ] && [ -n "${JIT_POSSIBLE}" ] && [ -z "${DISABLE_JIT}" ]; then
   fi
 fi
 
+# the new intel cet instructions may interfere with jit, and only
+# offer improved security if the os and cpu both know about them;
+# we can revisit cet later when it becomes more mainstream
+if [ -n "${JIT_POSSIBLE}" ] && [ -z "${DISABLE_JIT}" ]; then
+  EXTRA_CFLAGS=-fcf-protection=none
+  if config noop "checking for -fcf-protection=none... "; then
+    CFLAGS="${CFLAGS} -fcf-protection=none"
+  fi
+fi
+
 # use the system zlib if available
 # otherwise, use our vendored copy
 ZLIB_CFLAGS="$(pkg-config --cflags zlib 2>/dev/null)"
