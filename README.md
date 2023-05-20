@@ -1005,6 +1005,9 @@ carry flag as a return value to indicate error. This should work fine
 when `STC` is used to set the carry flag, but if the code computes it
 cleverly using instructions like `SUB`, then EFLAGS might not change.
 
+As a special case, if a `RET` instruction sports a `REP` prefix, then
+Blink can return flags across the `RET`.
+
 ### Faults
 
 Blink may not report the precise program counter where a fault occurred
