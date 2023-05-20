@@ -2029,6 +2029,18 @@ bool AppendJitNop(struct JitBlock *jb) {
 }
 
 /**
+ * Appends pause instruction.
+ */
+bool AppendJitPause(struct JitBlock *jb) {
+#if defined(__x86_64__)
+  u8 buf[2] = {0xf3, 0x90};  // pause
+#elif defined(__aarch64__)
+  u32 buf[1] = {0xd503203f};  // yield
+#endif
+  return AppendJit(jb, buf, sizeof(buf));
+}
+
+/**
  * Appends debugger breakpoint.
  */
 bool AppendJitTrap(struct JitBlock *jb) {

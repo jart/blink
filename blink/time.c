@@ -24,6 +24,7 @@
 #include "blink/atomic.h"
 #include "blink/builtin.h"
 #include "blink/endian.h"
+#include "blink/jit.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 
@@ -39,6 +40,9 @@ void OpPause(P) {
 #elif defined(HAVE_SCHED_YIELD)
   sched_yield();
 #endif
+  if (IsMakingPath(m)) {
+    AppendJitPause(m->path.jb);
+  }
 }
 
 void OpRdtsc(P) {
