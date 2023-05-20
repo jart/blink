@@ -3,6 +3,7 @@
 #include <stdbool.h>
 
 #include "blink/builtin.h"
+#include "blink/intrin.h"
 #include "blink/machine.h"
 #include "blink/types.h"
 
@@ -138,6 +139,48 @@ i64 Adox64(u64, u64, struct Machine *);
 
 #ifndef HAVE_JIT
 #define kAluFast kAlu
+#endif
+
+// the combinations of needed flags for which we can use kAluFast[];
+// the no-flags case (0) which uses kJustAlu[] is handled separately
+#if defined(HAVE_JIT) && X86_INTRINSICS
+#define CASE_ALU_FAST         \
+  case CF:                    \
+  case ZF:                    \
+  case CF | ZF:               \
+  case SF:                    \
+  case SF | CF:               \
+  case SF | ZF:               \
+  case SF | CF | ZF:          \
+  case AF:                    \
+  case AF | CF:               \
+  case AF | ZF:               \
+  case AF | CF | ZF:          \
+  case SF | AF:               \
+  case SF | AF | CF:          \
+  case SF | AF | ZF:          \
+  case SF | AF | CF | ZF:     \
+  case OF:                    \
+  case OF | CF:               \
+  case OF | ZF:               \
+  case OF | CF | ZF:          \
+  case OF | SF:               \
+  case OF | SF | CF:          \
+  case OF | SF | ZF:          \
+  case OF | SF | CF | ZF:     \
+  case OF | AF:               \
+  case OF | AF | CF:          \
+  case OF | AF | ZF:          \
+  case OF | AF | CF | ZF:     \
+  case OF | SF | AF:          \
+  case OF | SF | AF | CF:     \
+  case OF | SF | AF | ZF:     \
+  case OF | SF | AF | CF | ZF
+#else
+#define CASE_ALU_FAST         \
+  case CF:                    \
+  case ZF:                    \
+  case CF | ZF
 #endif
 
 #endif /* BLINK_ALU_H_ */

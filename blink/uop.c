@@ -962,6 +962,122 @@ const aluop_f kJustBsu32[8] = {
     (aluop_f)JustSar32,  //
 };
 
+#if X86_INTRINSICS
+#define ALU_FAST(M, TYPE, X, Y, OP, COMMUT)                             \
+  ({                                                                    \
+    TYPE Res;                                                           \
+    u32 OldFlags = (M)->flags & ~(OF | SF | ZF | AF | CF);              \
+    u64 NewFlags;                                                       \
+    asm(OP "\t%3,%0\n\t"                                                \
+        "pushfq\n\t"                                                    \
+        "pop\t%1"                                                       \
+        : "=&r" (Res), "=r" (NewFlags)                                  \
+        : COMMUT "0" ((TYPE)(X)), "g" ((TYPE)(Y))                       \
+        : "cc");                                                        \
+    (M)->flags = OldFlags | ((u32)NewFlags & (OF | SF | ZF | AF | CF)); \
+    Res;                                                                \
+  })
+#define ALU_FAST_CF(M, TYPE, X, Y, OP, COMMUT)                          \
+  ({                                                                    \
+    TYPE Res;                                                           \
+    u32 OldFlags = (M)->flags & ~(OF | SF | ZF | AF);                   \
+    u64 NewFlags;                                                       \
+    asm("btr\t%5,%2\n\t"                                                \
+        OP "\t%4,%0\n\t"                                                \
+        "pushfq\n\t"                                                    \
+        "pop\t%1"                                                       \
+        : "=&r" (Res), "=r" (NewFlags), "+&r" (OldFlags)                \
+        : COMMUT "0" ((TYPE)(X)), "g" ((TYPE)(Y)),                      \
+          "i" (FLAGS_CF)                                                \
+        : "cc");                                                        \
+    (M)->flags = OldFlags | ((u32)NewFlags & (OF | SF | ZF | AF | CF)); \
+    Res;                                                                \
+  })
+MICRO_OP static i64 FastXor64(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u64, x, y, "xor", "%");
+}
+MICRO_OP static i64 FastOr64(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u64, x, y, "or", "%");
+}
+MICRO_OP static i64 FastAnd64(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u64, x, y, "and", "%");
+}
+MICRO_OP static i64 FastSub64(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u64, x, y, "sub", "");
+}
+MICRO_OP static i64 FastAdd64(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u64, x, y, "add", "%");
+}
+MICRO_OP static i64 FastAdc64(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST_CF(m, u64, x, y, "adc", "%");
+}
+MICRO_OP static i64 FastSbb64(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST_CF(m, u64, x, y, "sbb", "");
+}
+MICRO_OP static i64 FastXor32(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u32, x, y, "xor", "%");
+}
+MICRO_OP static i64 FastOr32(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u32, x, y, "or", "%");
+}
+MICRO_OP static i64 FastAnd32(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u32, x, y, "and", "%");
+}
+MICRO_OP static i64 FastSub32(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u32, x, y, "sub", "");
+}
+MICRO_OP static i64 FastAdd32(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u32, x, y, "add", "%");
+}
+MICRO_OP static i64 FastAdc32(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST_CF(m, u32, x, y, "adc", "%");
+}
+MICRO_OP static i64 FastSbb32(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST_CF(m, u32, x, y, "sbb", "");
+}
+MICRO_OP static i64 FastXor16(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u16, x, y, "xor", "%");
+}
+MICRO_OP static i64 FastOr16(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u16, x, y, "or", "%");
+}
+MICRO_OP static i64 FastAnd16(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u16, x, y, "and", "%");
+}
+MICRO_OP static i64 FastSub16(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u16, x, y, "sub", "");
+}
+MICRO_OP static i64 FastAdd16(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u16, x, y, "add", "%");
+}
+MICRO_OP static i64 FastAdc16(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST_CF(m, u16, x, y, "adc", "%");
+}
+MICRO_OP static i64 FastSbb16(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST_CF(m, u16, x, y, "sbb", "");
+}
+MICRO_OP static i64 FastXor8(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u8, x, y, "xor", "%");
+}
+MICRO_OP static i64 FastOr8(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u8, x, y, "or", "%");
+}
+MICRO_OP static i64 FastAnd8(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u8, x, y, "and", "%");
+}
+MICRO_OP static i64 FastSub8(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u8, x, y, "sub", "");
+}
+MICRO_OP static i64 FastAdd8(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST(m, u8, x, y, "add", "%");
+}
+MICRO_OP static i64 FastAdc8(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST_CF(m, u8, x, y, "adc", "%");
+}
+MICRO_OP static i64 FastSbb8(struct Machine *m, u64 x, u64 y) {
+  return ALU_FAST_CF(m, u8, x, y, "sbb", "");
+}
+#else /* !X86_INTRINSICS */
 MICRO_OP static i64 FastXor64(struct Machine *m, u64 x, u64 y) {
   u64 z = x ^ y;
   m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
@@ -1129,6 +1245,7 @@ MICRO_OP static i64 FastSbb8(struct Machine *m, u64 x, u64 y) {
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
   return z;
 }
+#endif /* !X86_INTRINSICS */
 
 const aluop_f kAluFast[8][4] = {
     {FastAdd8, FastAdd16, FastAdd32, FastAdd64},  //
