@@ -89,28 +89,21 @@ const nexgen32e_f kConvert[] = {Convert16, Convert32, Convert64};
 
 #if X86_INTRINSICS
 MICRO_OP i64 Adcx32(u64 x, u64 y, struct Machine *m) {
-  u32 z, t;
-  asm("btr\t%5,%1\n\t"
-      "adc\t%4,%0\n\t"
-      "sbb\t%2,%2\n\t"
-      "and\t%6,%2\n\t"
-      "or\t%2,%1"
-      : "=&r" (z), "+&g" (m->flags), "=&r" (t)
-      : "%0" ((u32)x), "g" ((u32)y), "i" (FLAGS_CF), "i" (CF)
-      : "cc");
+  u32 z;
+  _Static_assert(CF == 1, "");
+  asm("btr\t$0,%1\n\t"
+      "adc\t%3,%0\n\t"
+      "adc\t$0,%1"
+      : "=&r" (z), "+&g" (m->flags) : "%0" ((u32)x), "g" ((u32)y) : "cc");
   return z;
 }
 MICRO_OP i64 Adcx64(u64 x, u64 y, struct Machine *m) {
   u64 z;
-  u32 t;
-  asm("btr\t%5,%1\n\t"
-      "adc\t%4,%0\n\t"
-      "sbb\t%2,%2\n\t"
-      "and\t%6,%2\n\t"
-      "or\t%2,%1"
-      : "=&r" (z), "+&g" (m->flags), "=&r" (t)
-      : "%0" (x), "g" (y), "i" (FLAGS_CF), "i" (CF)
-      : "cc");
+  _Static_assert(CF == 1, "");
+  asm("btr\t$0,%1\n\t"
+      "adc\t%3,%0\n\t"
+      "adc\t$0,%1"
+      : "=&r" (z), "+&g" (m->flags) : "%0" (x), "g" (y) : "cc");
   return z;
 }
 MICRO_OP i64 Adox32(u64 x, u64 y, struct Machine *m) {
