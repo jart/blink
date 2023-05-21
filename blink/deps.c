@@ -85,6 +85,11 @@ int GetFlagClobbers(u64 rde) {
       return 0;
     case 0xE8:   // call
     case 0xC3:   // ret
+      if (Rep(rde)) {
+        return 0;
+      } else {
+        return -1;
+      }
     case 0x105:  // syscall
       return -1;
     case 0x000:  // add byte
