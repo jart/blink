@@ -5373,7 +5373,7 @@ static i32 EpollPwait(struct Machine *m, i32 epfd, i64 eventsaddr,
       } else {
         waitfor = GetZeroTime();
       }
-#ifdef HAVE_EPOLL_PWAIT2
+#if defined(HAVE_EPOLL_PWAIT2) && !defined(MUSL_CROSS_MAKE)
       rc = epoll_pwait2(epfd, events, maxevents, &waitfor, &oldmask);
 #else
       rc = epoll_pwait(epfd, events, maxevents,
