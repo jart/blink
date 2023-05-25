@@ -472,9 +472,7 @@ static void AluRo(P, const aluop_f ops[4], const aluop_f fops[4]) {
     LoadAluArgs(A);
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
-      case CF:
-      case ZF:
-      case CF | ZF:
+      CASE_ALU_FAST:
         STATISTIC(++alu_simplified);
         Jitter(A,
                "q"   // arg0 = sav0 (machine)
@@ -531,9 +529,7 @@ static void OpAluFlip(P) {
                "r0C",  // PutReg(RexrReg, res0)
                kJustAlu[(Opcode(rde) & 070) >> 3]);
         break;
-      case CF:
-      case ZF:
-      case CF | ZF:
+      CASE_ALU_FAST:
         STATISTIC(++alu_simplified);
         Jitter(A,
                "q"     // arg0 = sav0 (machine)
@@ -561,9 +557,7 @@ static void OpAluFlipCmp(P) {
     LoadAluFlipArgs(A);
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
-      case CF:
-      case ZF:
-      case CF | ZF:
+      CASE_ALU_FAST:
         STATISTIC(++alu_simplified);
         Jitter(A,
                "q"   // arg0 = sav0 (machine)
@@ -587,9 +581,7 @@ static void OpAluAxImm(P) {
   if (IsMakingPath(m)) {
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
-      case CF:
-      case ZF:
-      case CF | ZF:
+      CASE_ALU_FAST:
         STATISTIC(++alu_simplified);
         Jitter(A,
                "G"      // res0 = %ax
@@ -620,9 +612,7 @@ static void OpRoAxImm(P, const aluop_f ops[4], const aluop_f fops[4]) {
     STATISTIC(++alu_ops);
     switch (GetNeededFlags(m, m->ip, CF | ZF | SF | OF | AF | PF)) {
       case 0:
-      case CF:
-      case ZF:
-      case CF | ZF:
+      CASE_ALU_FAST:
         STATISTIC(++alu_simplified);
         Jitter(A,
                "G"      // r0 = GetReg(AX)

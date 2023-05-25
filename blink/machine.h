@@ -755,8 +755,6 @@ void OpTest(P);
 void OpAlui(P);
 void LoadAluArgs(P);
 void LoadAluFlipArgs(P);
-i64 FastAnd8(struct Machine *, u64, u64);
-i64 FastSub8(struct Machine *, u64, u64);
 void ZeroRegFlags(struct Machine *, long);
 
 i32 Imul32(i32, i32, struct Machine *);

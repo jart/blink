@@ -228,6 +228,7 @@ struct JitBlock *StartJit(struct Jit *, i64);
 bool AlignJit(struct JitBlock *, int, int);
 bool AppendJitRet(struct JitBlock *);
 bool AppendJitNop(struct JitBlock *);
+bool AppendJitPause(struct JitBlock *);
 bool AppendJitTrap(struct JitBlock *);
 bool AppendJitJump(struct JitBlock *, void *);
 bool AppendJitCall(struct JitBlock *, void *);

@@ -200,9 +200,7 @@ void OpAluw(P) {
                  "r0D",  // PutRegOrMem(RexbRm, res0)
                  kJustAlu[t]);
           break;
-        case CF:
-        case ZF:
-        case CF | ZF:
+        CASE_ALU_FAST:
           STATISTIC(++alu_simplified);
           Jitter(A,
                  "q"     // arg0 = machine
