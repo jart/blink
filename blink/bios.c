@@ -309,9 +309,9 @@ static void OnDiskService(void) {
   }
 }
 
-#define page_offsetw()   0      // TODO(ghaerr): implement screen pages
-#define video_ram()     (m->system->real + ((vidya == 7)? 0xb0000: 0xb8000))
-#define ATTR_DEFAULT    0x07
+#define page_offsetw() 0  // TODO(ghaerr): implement screen pages
+#define video_ram()    (m->system->real + ((vidya == 7) ? 0xb0000 : 0xb8000))
+#define ATTR_DEFAULT   0x07
 
 /* clear screen from x1,y1 up to but not including x2, y2 */
 static void VidyaServiceClearScreen(int x1, int y1, int x2, int y2, u8 attr) {
@@ -325,7 +325,7 @@ static void VidyaServiceClearScreen(int x1, int y1, int x2, int y2, u8 attr) {
   xn = BdaCols;
   for (y = y1; y < y2; y++) {
     for (x = x1; x < x2; x++) {
-        vram[page_offsetw() + y * xn + x] = ' ' | (attr << 8);
+      vram[page_offsetw() + y * xn + x] = ' ' | (attr << 8);
     }
   }
 }
@@ -354,25 +354,24 @@ static void VidyaServiceScrollUp(int y1, int y2, u8 attr) {
   vid = video_ram() + (page_offsetw() + y1 * xn) * 2;
   pitch = xn * 2;
   memcpy(vid, vid + pitch, (BdaLines - y1) * pitch);
-  VidyaServiceClearLine(0, xn-1, y2, attr);
+  VidyaServiceClearLine(0, xn - 1, y2, attr);
 }
 
 /* scroll adapter RAM down from line y1 up to and including line y2 */
-static void VidyaServiceScrollDown(int y1, int y2, u8 attr)
-{
+static void VidyaServiceScrollDown(int y1, int y2, u8 attr) {
   int y, xn, pitch;
   u8 *vid;
   unassert(y1 >= 0 && y1 < BdaLines);
   unassert(y2 >= 0 && y2 < BdaLines);
   xn = BdaCols;
-  vid = video_ram() + (page_offsetw() + (BdaLines-1) * xn) * 2;
+  vid = video_ram() + (page_offsetw() + (BdaLines - 1) * xn) * 2;
   pitch = xn * 2;
   y = y2;
   while (--y >= y1) {
     memcpy(vid, vid - pitch, pitch);
     vid -= pitch;
   }
-  VidyaServiceClearLine(0, xn-1, y1, attr);
+  VidyaServiceClearLine(0, xn - 1, y1, attr);
 }
 
 static void OnVidyaServiceScrollUp(void) {
@@ -384,9 +383,9 @@ static void OnVidyaServiceScrollUp(void) {
   n = m->al;
   if (n > BdaLines) n = BdaLines;
   if (n == 0) {
-    VidyaServiceClearScreen(m->cl, m->ch, m->dl+1, m->dh+1, m->bh);
+    VidyaServiceClearScreen(m->cl, m->ch, m->dl + 1, m->dh + 1, m->bh);
   } else {
-    for (i=n; i; i--) {
+    for (i = n; i; i--) {
       VidyaServiceScrollUp(m->ch, m->dh, m->bh);
     }
   }
@@ -401,9 +400,9 @@ static void OnVidyaServiceScrollDown(void) {
   n = m->al;
   if (n > BdaLines) n = BdaLines;
   if (n == 0) {
-    VidyaServiceClearScreen(m->cl, m->ch, m->dl+1, m->dh+1, m->bh);
+    VidyaServiceClearScreen(m->cl, m->ch, m->dl + 1, m->dh + 1, m->bh);
   } else {
-    for (i=n; i; i--) {
+    for (i = n; i; i--) {
       VidyaServiceScrollDown(m->ch, m->dh, m->bh);
     }
   }
@@ -423,7 +422,7 @@ static void VidyaServiceWriteCharacter(u8 ch, u8 attr, int n, bool useattr) {
     offset = page_offsetw() + (y * xn + x) * 2;
     vram[offset] = ch;
     if (useattr) {
-      vram[offset+1] = attr;
+      vram[offset + 1] = attr;
     }
     if (++x >= xn) {
       x = 0;
@@ -434,9 +433,9 @@ static void VidyaServiceWriteCharacter(u8 ch, u8 attr, int n, bool useattr) {
 
 /* write char only (no attribute) as teletype output */
 static void VidyaServiceWriteTeletype(u8 ch) {
-  int x, y, xn, idx;
   u8 attr;
   u8 *vram;
+  int x, y, xn;
   x = BdaCurx;
   y = BdaCury;
   unassert(y < BdaLines);
@@ -444,24 +443,24 @@ static void VidyaServiceWriteTeletype(u8 ch) {
   xn = BdaCols;
   vram = video_ram();
   switch (ch) {
-  case '\r':
-    x = 0;
-    goto update;
-  case '\n':
-    goto scroll;
-  case '\b':
-    if (x > 0) {
-      x--;
-    }
-    goto update;
-  case '\0':
-  case '\a':
-    return;
+    case '\r':
+      x = 0;
+      goto update;
+    case '\n':
+      goto scroll;
+    case '\b':
+      if (x > 0) {
+        x--;
+      }
+      goto update;
+    case '\0':
+    case '\a':
+      return;
   }
   vram[page_offsetw() + (y * xn + x) * 2] = ch;
   if (++x >= xn) {
     x = 0;
-scroll:
+  scroll:
     if (++y >= BdaLines) {
       y = BdaLines - 1;
       attr = vram[page_offsetw() + ((y * xn + BdaCols - 1) * 2) + 1];
@@ -480,29 +479,29 @@ void VidyaServiceSetMode(int mode) {
     ptyisenabled = true;
     lines = 25;
     switch (mode) {
-    case 0:     // CGA 40x25 16-gray
-    case 1:     // CGA 40x25 16-color
+      case 0:  // CGA 40x25 16-gray
+      case 1:  // CGA 40x25 16-color
         cols = 40;
         break;
-    case 2:     // CGA 80x25 16-gray
-    case 3:     // CGA 80x25 16-color
-    case 7:     // MDA 80x25 4-gray
+      case 2:  // CGA 80x25 16-gray
+      case 3:  // CGA 80x25 16-color
+      case 7:  // MDA 80x25 4-gray
         cols = 80;
         break;
-    default:
+      default:
         unassert(mode == kModePty);
         pty->conf &= ~kPtyNocursor;
         break;
     }
     if (mode == kModePty) return;
     SetBdaVmode(mode);
-    SetBdaLines(lines);   // EGA BIOS - max valid line #
+    SetBdaLines(lines);  // EGA BIOS - max valid line #
     SetBdaCols(cols);
     SetBdaPagesz(cols * BdaLines * 2);
     SetBdaCurpage(0);
     SetBdaCurx(0);
     SetBdaCury(0);
-    SetBdaCurstart(5);      // cursor ▂ scan lines 5..7 of 0..7
+    SetBdaCurstart(5);  // cursor ▂ scan lines 5..7 of 0..7
     SetBdaCurend(7);
     SetBdaCrtc(0x3D4);
     VidyaServiceClearScreen(0, 0, cols, BdaLines, ATTR_DEFAULT);
@@ -514,20 +513,20 @@ void VidyaServiceSetMode(int mode) {
 static void OnVidyaServiceGetMode(void) {
   m->al = vidya;
   m->ah = BdaCols;
-  m->bh = 0;   // page
+  m->bh = 0;  // page
 }
 
 static void OnVidyaServiceSetCursorType(void) {
-    if (vidya == kModePty) {
-      if (m->ch & 0x20) {
-        pty->conf |= kPtyNocursor;
-      } else {
-        pty->conf &= ~kPtyNocursor;
-      }
+  if (vidya == kModePty) {
+    if (m->ch & 0x20) {
+      pty->conf |= kPtyNocursor;
     } else {
-      SetBdaCurstart(m->ch);
-      SetBdaCurend(m->cl);
+      pty->conf &= ~kPtyNocursor;
     }
+  } else {
+    SetBdaCurstart(m->ch);
+    SetBdaCurend(m->cl);
+  }
 }
 
 static void OnVidyaServiceSetCursorPosition(void) {
@@ -698,59 +697,88 @@ static void OnSerialService(void) {
 }
 
 /* Convert from ANSI keyboard sequence to scancode */
-int AnsiToScancode(char *buf, int n)
-{
-    if (n >= 1 && buf[0] == 033) {
-        if (buf[1] == '[') {
-            if (n == 3) {                           /* xterm sequences */
-                switch (buf[2]) {                   /* ESC [ A etc */
-                case 'A':   return 0x48;    // kUpArrow
-                case 'B':   return 0x50;    // kDownArrow
-                case 'C':   return 0x4D;    // kRightArrow
-                case 'D':   return 0x4B;    // kLeftArrow
-                case 'F':   return 0x4F;    // kEnd
-                case 'H':   return 0x47;    // kHome
-                }
-            } else if (n == 4 && buf[2] == '1') {   /* ESC [ 1 P etc */
-                switch (buf[3]) {
-                case 'P':   return 0x3B;    // kF1
-                case 'Q':   return 0x3C;    // kF2
-                case 'R':   return 0x3D;    // kF3
-                case 'S':   return 0x3E;    // kF4
-                }
-            }
-            if (n > 3 && buf[n-1] == '~') {         /* vt sequences */
-                switch (atoi(buf+2)) {
-                case 1:     return 0x47;    // kHome
-                case 2:     return 0x52;    // kInsert
-                case 3:     return 0x53;    // kDelete
-                case 4:     return 0x4F;    // kEnd
-                case 5:     return 0x49;    // kPageUp
-                case 6:     return 0x51;    // kPageDown
-                case 7:     return 0x47;    // kHome
-                case 8:     return 0x4F;    // kEnd
-                case 11:    return 0x3B;    // kF1
-                case 12:    return 0x3C;    // kF2
-                case 13:    return 0x3D;    // kF3
-                case 14:    return 0x3E;    // kF4
-                case 15:    return 0x3F;    // kF5
-                case 17:    return 0x40;    // kF6
-                case 18:    return 0x41;    // kF7
-                case 19:    return 0x42;    // kF8
-                case 20:    return 0x43;    // kF9
-                case 21:    return 0x44;    // kF10
-                case 23:    return 0x85;    // kF11
-                case 24:    return 0x86;    // kF12
-                }
-            }
+int AnsiToScancode(char *buf, int n) {
+  if (n >= 1 && buf[0] == 033) {
+    if (buf[1] == '[') {
+      if (n == 3) {       /* xterm sequences */
+        switch (buf[2]) { /* ESC [ A etc */
+          case 'A':
+            return 0x48;  // kUpArrow
+          case 'B':
+            return 0x50;  // kDownArrow
+          case 'C':
+            return 0x4D;  // kRightArrow
+          case 'D':
+            return 0x4B;  // kLeftArrow
+          case 'F':
+            return 0x4F;  // kEnd
+          case 'H':
+            return 0x47;  // kHome
         }
+      } else if (n == 4 && buf[2] == '1') { /* ESC [ 1 P etc */
+        switch (buf[3]) {
+          case 'P':
+            return 0x3B;  // kF1
+          case 'Q':
+            return 0x3C;  // kF2
+          case 'R':
+            return 0x3D;  // kF3
+          case 'S':
+            return 0x3E;  // kF4
+        }
+      }
+      if (n > 3 && buf[n - 1] == '~') { /* vt sequences */
+        switch (atoi(buf + 2)) {
+          case 1:
+            return 0x47;  // kHome
+          case 2:
+            return 0x52;  // kInsert
+          case 3:
+            return 0x53;  // kDelete
+          case 4:
+            return 0x4F;  // kEnd
+          case 5:
+            return 0x49;  // kPageUp
+          case 6:
+            return 0x51;  // kPageDown
+          case 7:
+            return 0x47;  // kHome
+          case 8:
+            return 0x4F;  // kEnd
+          case 11:
+            return 0x3B;  // kF1
+          case 12:
+            return 0x3C;  // kF2
+          case 13:
+            return 0x3D;  // kF3
+          case 14:
+            return 0x3E;  // kF4
+          case 15:
+            return 0x3F;  // kF5
+          case 17:
+            return 0x40;  // kF6
+          case 18:
+            return 0x41;  // kF7
+          case 19:
+            return 0x42;  // kF8
+          case 20:
+            return 0x43;  // kF9
+          case 21:
+            return 0x44;  // kF10
+          case 23:
+            return 0x85;  // kF11
+          case 24:
+            return 0x86;  // kF12
+        }
+      }
     }
-    return 0;
+  }
+  return 0;
 }
 
-static bool savechar;   // TODO(ghaerr): implement kbd input queue
-static u8   saveah;
-static u8   saveal;
+static bool savechar;  // TODO(ghaerr): implement kbd input queue
+static u8 saveah;
+static u8 saveal;
 
 static void OnKeyboardServiceReadKeyPress(void) {
   uint8_t b;
@@ -784,10 +812,10 @@ static void OnKeyboardServiceReadKeyPress(void) {
   if (m->metal) {
     int r = AnsiToScancode(buf, pending);
     if (r) {
-        m->al = 0;
-        m->ah = r;
-        pending = 0;
-        return;
+      m->al = 0;
+      m->ah = r;
+      pending = 0;
+      return;
     }
   }
   b = buf[0];
@@ -807,7 +835,7 @@ static void OnKeyboardServiceCheckKeyPress(void) {
     return;
   }
   bool b = HasPendingKeyboard();
-  m->flags = SetFlag(m->flags, FLAGS_ZF, !b);   /* ZF=0 if key pressed */
+  m->flags = SetFlag(m->flags, FLAGS_ZF, !b); /* ZF=0 if key pressed */
   if (b) {
     OnKeyboardServiceReadKeyPress();
     savechar = true;
@@ -877,7 +905,7 @@ static void OnInt15h(void) {
     OnE820();
   } else if (m->ah == 0x53) {
     OnApmService();
-  } else if (m->ah == 0x86) {   // microsecond delay
+  } else if (m->ah == 0x86) {  // microsecond delay
     timeout = (((Get16(m->cx) << 16) | Get16(m->dx)) + 999) / 1000;
     poll(0, 0, timeout);
   } else {

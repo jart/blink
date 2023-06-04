@@ -18,7 +18,7 @@ extern bool g_exitdontabort;
 _Noreturn void Abort(void);
 char *GetStartDir(void);
 int GetOpt(int, char *const[], const char *);
-u64 tpenc(wint_t);
+u64 tpenc(uint32_t);
 const char *DescribeSignal(int);
 const char *DescribeHostErrno(int);
 bool endswith(const char *, const char *);

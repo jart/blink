@@ -17,8 +17,8 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/mda.h"
-#include "blink/bda.h"
 
+#include "blink/bda.h"
 #include "blink/blinkenlights.h"
 #include "blink/buffer.h"
 #include "blink/macros.h"
@@ -49,8 +49,8 @@ static u8 DecodeMdaAttributes(i8 a) {
 }
 
 void DrawMda(struct Panel *p, u8 v[25][80][2], int curx, int cury) {
+  wint_t wch = 0;
   unsigned y, x, n, a, b, ch, attr;
-  wint_t wch;
   n = MIN(25, p->bottom - p->top);
   for (y = 0; y < n; ++y) {
     a = -1;
