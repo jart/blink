@@ -132,7 +132,6 @@ static const u8 kDefBios[] = {
 
 void LoadBios(struct Machine *m, const char *biosprog) {
   off_t size;
-  size_t protstart, protend;
   if (biosprog) {
     off_t kBiosMinSize = kBiosEnd - kBiosEntry,
           kBiosMaxSize = kBiosEnd - kBiosOptBase;
@@ -172,6 +171,7 @@ void LoadBios(struct Machine *m, const char *biosprog) {
   // try to protect the BIOS ROM area
   // BeginStore() & EndStore() will avoid scribbling in this area of
   // memory: so writes to the guest ROM area are effectively ignored
+  size_t protstart, protend;
   protstart = ROUNDUP(kBiosOptBase, FLAG_pagesize);
   protend = ROUNDDOWN(kBiosEnd, FLAG_pagesize);
   if (protstart < protend) {

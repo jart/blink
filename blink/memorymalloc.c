@@ -205,9 +205,9 @@ struct System *NewSystem(struct XedMachineMode mode) {
   memset(s, 0, sizeof(*s));
   s->mode = mode;
   if (s->mode.omode == XED_MODE_REAL) {
-    u8 *real = Mmap(NULL, ROUNDUP(kRealSize, FLAG_pagesize),
-                    PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS_,
-                    -1, 0, "real");
+    u8 *real =
+        Mmap(NULL, ROUNDUP(kRealSize, FLAG_pagesize), PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS_, -1, 0, "real");
     if (!real) {
       free(s);
       enomem();
@@ -342,7 +342,7 @@ void FreeSystem(struct System *s) {
   unassert(!pthread_mutex_destroy(&s->exec_lock));
   unassert(!pthread_mutex_destroy(&s->mmap_lock));
   // TODO(jart): Figure out why sig_lock sometimes fails to destroy
-  pthread_mutex_destroy(&s->sig_lock);
+  (void)pthread_mutex_destroy(&s->sig_lock);
   free(s->elf.interpreter);
   DestroyFds(&s->fds);
   free(s->elf.execfn);
