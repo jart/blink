@@ -52,7 +52,7 @@ The instructions for compiling Blink are as follows:
 
 ```sh
 ./configure
-make -j4
+make -j4 # gmake if you are on macOS
 doas make install  # note: doas is modern sudo
 blink -v
 man blink
