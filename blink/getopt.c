@@ -74,7 +74,7 @@ static void getopt_print_badch(int argc, char *const argv[], int optopt,
   b[i + 3] = ' ';
   b[i + 4] = optopt;
   b[i + 5] = '\n';
-  write(2, b, i + 6);
+  (void)!write(2, b, i + 6);
 }
 
 /**
