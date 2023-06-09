@@ -101,6 +101,10 @@ static int GetBitsInAddressSpace(void) {
   for (i = 16; i < 40; ++i) {
     want = UINT64_C(0x8123000000000000) >> i;
     if (want > UINTPTR_MAX) continue;
+    if (Msync((void *)(uintptr_t)want, 1, MS_ASYNC, "vabits") == 0 ||
+        errno == EBUSY) {
+      return 64 - i;
+    }
     ptr = PortableMmap((void *)(uintptr_t)want, 1, PROT_READ,
                        MAP_PRIVATE | MAP_FIXED | MAP_ANONYMOUS_, -1, 0);
     if (ptr != MAP_FAILED) {
