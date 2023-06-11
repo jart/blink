@@ -743,7 +743,8 @@ MICRO_OP void MovsdWpsVpsOp(u8 *p, struct Machine *m, long reg) {
   Write64(p, Read64(m->xmm[reg]));
 }
 
-#if defined(__x86_64__) && defined(TRIVIALLY_RELOCATABLE)
+#if (defined(__x86_64__) || defined(__aarch64__)) && \
+    defined(TRIVIALLY_RELOCATABLE)
 #define LOADSTORE "m"
 
 MICRO_OP static i64 NativeLoad8(const u8 *p) {
@@ -1492,25 +1493,32 @@ static bool IsRet(u8 *p) {
 
 static long GetInstructionLength(u8 *p) {
 #if defined(__aarch64__)
-#ifndef NDEBUG
-  if ((Get32(p) & ~kArmDispMask) == kArmJmp) return -1;
-  if ((Get32(p) & ~kArmDispMask) == kArmCall) return -1;
-#endif
+  // on AArch64, do not recognize instructions which are known to be not
+  // trivially relocatable i.e. opcodes which do PC-relative addressing;
+  // but as exceptions, allow CBZ, CBNZ, TBZ, TBNZ, & B.cond
+  u32 ins = Get32(p);
+  if ((ins & ~kArmDispMask) == kArmJmp) return -1;
+  if ((ins & ~kArmDispMask) == kArmCall) return -1;
+  if ((ins & kArmAdrMask) == kArmAdr) return -1;
+  if ((ins & kArmAdrpMask) == kArmAdrp) return -1;
+  if ((ins & kArmLdrPcMask) == kArmLdrPc) return -1;
+  if ((ins & kArmLdrswPcMask) == kArmLdrswPc) return -1;
+  if ((ins & kArmPrfmPcMask) == kArmPrfmPc) return -1;
   return 4;
-#elif defined(__x86_64__)
+#elif defined(__x86_64__) /* !__aarch64__ */
   struct XedDecodedInst x;
   unassert(!DecodeInstruction(&x, p, 15, XED_MODE_LONG));
 #ifndef NDEBUG
   if (ClassifyOp(x.op.rde) == kOpBranching) return -1;
   if (UsesStaticMemory(x.op.rde)) return -1;
-#endif
+#endif /* NDEBUG */
   return x.length;
-#else
+#else /* !__x86_64__ */
   __builtin_unreachable();
-#endif
+#endif /* !__x86_64__ */
 }
 
-long GetMicroOpLengthImpl(void *uop) {
+static long GetMicroOpLengthImpl(void *uop) {
   long k, n = 0;
   for (;;) {
     if (IsRet((u8 *)uop + n)) return n;
@@ -1520,7 +1528,7 @@ long GetMicroOpLengthImpl(void *uop) {
   }
 }
 
-long GetMicroOpLength(void *uop) {
+static long GetMicroOpLength(void *uop) {
   _Static_assert(IS2POW(kMaxOps), "");
   static unsigned count;
   static void *ops[kMaxOps * 2];

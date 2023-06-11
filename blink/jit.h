@@ -84,22 +84,33 @@
 #endif
 
 #ifdef __aarch64__
-#define kArmJmp      0x14000000u  // B
-#define kArmCall     0x94000000u  // BL
-#define kArmRet      0xd65f03c0u  // RET
-#define kArmMovNex   0xf2800000u  // sets sub-word of register to immediate
-#define kArmMovZex   0xd2800000u  // load immediate into reg w/ zero-extend
-#define kArmMovSex   0x92800000u  // load 1's complement imm w/ sign-extend
-#define kArmDispMin  -33554432    // can jump -2**25 ints backward
-#define kArmDispMax  +33554431    // can jump +2**25-1 ints forward
-#define kArmDispMask 0x03ffffffu  // mask of branch displacement
-#define kArmRegOff   0            // bit offset of destination register
-#define kArmRegMask  0x0000001fu  // mask of destination register
-#define kArmImmOff   5            // bit offset of mov immediate value
-#define kArmImmMask  0x001fffe0u  // bit offset of mov immediate value
-#define kArmImmMax   0xffffu      // maximum immediate value per instruction
-#define kArmIdxOff   21           // bit offset of u16[4] sub-word index
-#define kArmIdxMask  0x00600000u  // mask of u16[4] sub-word index
+#define kArmJmp         0x14000000u  // B
+#define kArmCall        0x94000000u  // BL
+#define kArmRet         0xd65f03c0u  // RET
+#define kArmMovNex      0xf2800000u  // sets sub-word of register to immediate
+#define kArmMovZex      0xd2800000u  // load immediate into reg w/ zero-extend
+#define kArmMovSex      0x92800000u  // load 1's complement imm w/ sign-extend
+#define kArmAdr         0x10000000u  // form PC-relative byte address
+#define kArmAdrp        0x90000000u  // form PC-relative page address
+#define kArmLdrPc       0x18000000u  // load PC-relative memory into register
+                                     // (general or SIMD)
+#define kArmLdrswPc     0x98000000u  // load PC-relative short w/ sign-extend
+#define kArmPrfmPc      0xd8000000u  // prefetch PC-relative memory
+#define kArmDispMin     -33554432    // can jump -2**25 ints backward
+#define kArmDispMax     +33554431    // can jump +2**25-1 ints forward
+#define kArmDispMask    0x03ffffffu  // mask of branch displacement
+#define kArmRegOff      0            // bit offset of destination register
+#define kArmRegMask     0x0000001fu  // mask of destination register
+#define kArmImmOff      5            // bit offset of mov immediate value
+#define kArmImmMask     0x001fffe0u  // bit offset of mov immediate value
+#define kArmImmMax      0xffffu      // maximum immediate value per instruction
+#define kArmIdxOff      21           // bit offset of u16[4] sub-word index
+#define kArmIdxMask     0x00600000u  // mask of u16[4] sub-word index
+#define kArmAdrMask     0x9f000000u  // mask of ADR opcode
+#define kArmAdrpMask    0x9f000000u  // mask of ADRP opcode
+#define kArmLdrPcMask   0xbb000000u  // mask of PC-relative LDR opcodes
+#define kArmLdrswPcMask 0xff000000u  // mask of PC-relative LDRSW opcode
+#define kArmPrfmPcMask  0xff000000u  // mask of PC-relative PRFM opcode
 #endif
 
 #define JITJUMP_CONTAINER(e)   DLL_CONTAINER(struct JitJump, elem, e)
