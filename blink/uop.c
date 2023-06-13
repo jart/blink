@@ -131,7 +131,56 @@ MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
       : "cc");
   return z;
 }
-#else /* !X86_INTRINSICS */
+#elif ARM_INTRINSICS /* !X86_INTRINSICS */
+MICRO_OP i64 Adcx32(u64 x, u64 y, struct Machine *m) {
+  u64 f = m->flags, z;
+  _Static_assert(CF == 1, "");
+  asm("ror\t%1,%1,#1\n\t"
+      "adds\t%1,%1,%1\n\t"
+      "adcs\t%w0,%w2,%w3\n\t"
+      "adc\t%1,%1,xzr"
+      : "=&r" (z), "+&r" (f) : "%0" (x), "r" (y) : "cc");
+  m->flags = f;
+  return z;
+}
+MICRO_OP i64 Adcx64(u64 x, u64 y, struct Machine *m) {
+  u64 f = m->flags, z;
+  _Static_assert(CF == 1, "");
+  asm("ror\t%1,%1,#1\n\t"
+      "adds\t%1,%1,%1\n\t"
+      "adcs\t%0,%2,%3\n\t"
+      "adc\t%1,%1,xzr"
+      : "=&r" (z), "+&r" (f) : "%0" (x), "r" (y) : "cc");
+  m->flags = f;
+  return z;
+}
+MICRO_OP i64 Adox32(u64 x, u64 y, struct Machine *m) {
+  u64 f = m->flags, z;
+  asm("ror\t%1,%1,%4\n\t"
+      "adds\t%1,%1,%1\n\t"
+      "adcs\t%w0,%w2,%w3\n\t"
+      "adc\t%1,%1,xzr\n\t"
+      "ror\t%1,%1,%5"
+      : "=&r" (z), "+&r" (f)
+      : "%0" (x), "r" (y), "i" (FLAGS_OF + 1), "i" (64 - FLAGS_OF)
+      : "cc");
+  m->flags = f;
+  return z;
+}
+MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
+  u64 f = m->flags, z;
+  asm("ror\t%1,%1,%4\n\t"
+      "adds\t%1,%1,%1\n\t"
+      "adcs\t%0,%2,%3\n\t"
+      "adc\t%1,%1,xzr\n\t"
+      "ror\t%1,%1,%5"
+      : "=&r" (z), "+&r" (f)
+      : "%0" (x), "r" (y), "i" (FLAGS_OF + 1), "i" (64 - FLAGS_OF)
+      : "cc");
+  m->flags = f;
+  return z;
+}
+#else /* !ARM_INTRINSICS */
 MICRO_OP i64 Adcx32(u64 x, u64 y, struct Machine *m) {
   u32 t = x + !!(m->flags & CF);
   u32 z = t + y;
@@ -161,7 +210,7 @@ MICRO_OP i64 Adox64(u64 x, u64 y, struct Machine *m) {
   m->flags = (m->flags & ~OF) | c << FLAGS_OF;
   return z;
 }
-#endif /* !X86_INTRINSICS */
+#endif /* !ARM_INTRINSICS */
 
 #endif /* !DISABLE_BMI2 */
 

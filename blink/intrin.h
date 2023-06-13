@@ -9,5 +9,10 @@ typedef char char_xmma_t
 #else
 #define X86_INTRINSICS 0
 #endif
+#if defined(__aarch64__) && defined(__GNUC__)
+#define ARM_INTRINSICS 1
+#else
+#define ARM_INTRINSICS 0
+#endif
 
 #endif /* BLINK_INTRIN_H_ */
