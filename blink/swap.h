@@ -4,7 +4,7 @@
 
 #include "blink/builtin.h"
 
-#ifdef __GNUC__
+#if __has_builtin(__builtin_bswap64) || defined(__GNUC__)
 #define SWAP16(x) __builtin_bswap16(x)
 #define SWAP32(x) __builtin_bswap32(x)
 #define SWAP64(x) __builtin_bswap64(x)

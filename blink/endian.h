@@ -4,36 +4,6 @@
 #include "blink/swap.h"
 #include "blink/types.h"
 
-/**
- * @fileoverview Word Serialization Utilities.
- *
- * These macros interact with `u8[N]` memory storing words, which are
- * serialized in little endian byte order.
- *
- * 1. The ReadN() and WriteN() functions offer defined behavior under
- *    all circumstances, and are usually optimized into a single move
- *    operation by modern compilers.
- *
- * 2. The GetN() and PutN() functions may be used when it's known for
- *    certain that an address is aligned on its respective word size,
- *    otherwise UBSAN will complain. These functions are like atomics
- *    but they're more relaxed than memory_order_relaxed, and they're
- *    more reliable when it comes to producing tinier faster code.
- *
- * 3. The LittleN() macros should be used with C11 atomic helpers, to
- *    perform the necessary byte swap on big endian platforms.
- *
- * These functions can only be used safely on thread specific memory,
- * e.g. registers; otherwise LoadN() and StoreN() should be used.
- */
-
-#if !defined(__SANITIZE_UNDEFINED__) && \
-    (defined(__aarch64__) || defined(__x86_64__) || defined(__i386__))
-#define CAN_ABUSE_POINTERS 1
-#else
-#define CAN_ABUSE_POINTERS 0
-#endif
-
 MICRO_OP_SAFE u8 Little8(u8 x) {
   return x;
 }
@@ -63,46 +33,24 @@ MICRO_OP_SAFE u64 Little64(u64 x) {
 }
 
 MICRO_OP_SAFE u8 Get8(const u8 *p) {
-  return Little8(*(u8 *)p);
+  return *p;
 }
+
 MICRO_OP_SAFE u16 Get16(const u8 *p) {
-  return Little16(*(u16 *)p);
-}
-MICRO_OP_SAFE u32 Get32(const u8 *p) {
-  return Little32(*(u32 *)p);
-}
-MICRO_OP_SAFE u64 Get64(const u8 *p) {
-  return Little64(*(u64 *)p);
-}
-
-MICRO_OP_SAFE void Put8(u8 *p, u8 x) {
-  *(u8 *)p = Little8(x);
-}
-MICRO_OP_SAFE void Put16(u8 *p, u16 x) {
-  *(u16 *)p = Little16(x);
-}
-MICRO_OP_SAFE void Put32(u8 *p, u32 x) {
-  *(u32 *)p = Little32(x);
-}
-MICRO_OP_SAFE void Put64(u8 *p, u64 x) {
-  *(u64 *)p = Little64(x);
-}
-
-MICRO_OP_SAFE u8 Read8(const u8 *p) {
-  return p[0];
-}
-
-MICRO_OP_SAFE u16 Read16(const u8 *p) {
-#if CAN_ABUSE_POINTERS
-  return Get16(p);
+#ifdef __OPTIMIZE__
+  u16 x;
+  __builtin_memcpy(&x, p, 16 / 8);
+  return Little16(x);
 #else
   return p[1] << 8 | p[0];
 #endif
 }
 
-MICRO_OP_SAFE u32 Read32(const u8 *p) {
-#if CAN_ABUSE_POINTERS
-  return Get32(p);
+MICRO_OP_SAFE u32 Get32(const u8 *p) {
+#ifdef __OPTIMIZE__
+  u32 x;
+  __builtin_memcpy(&x, p, 32 / 8);
+  return Little32(x);
 #else
   return ((u32)p[0] << 000 |  //
           (u32)p[1] << 010 |  //
@@ -111,9 +59,11 @@ MICRO_OP_SAFE u32 Read32(const u8 *p) {
 #endif
 }
 
-MICRO_OP_SAFE u64 Read64(const u8 *p) {
-#if CAN_ABUSE_POINTERS
-  return Get64(p);
+MICRO_OP_SAFE u64 Get64(const u8 *p) {
+#ifdef __OPTIMIZE__
+  u64 x;
+  __builtin_memcpy(&x, p, 64 / 8);
+  return Little64(x);
 #else
   return ((u64)p[0] << 000 |  //
           (u64)p[1] << 010 |  //
@@ -126,43 +76,56 @@ MICRO_OP_SAFE u64 Read64(const u8 *p) {
 #endif
 }
 
-MICRO_OP_SAFE void Write8(u8 *p, u8 v) {
+MICRO_OP_SAFE void Put8(u8 *p, u8 v) {
   *p = v;
 }
 
-MICRO_OP_SAFE void Write16(u8 *p, u16 v) {
-#if CAN_ABUSE_POINTERS
-  Put16(p, v);
+MICRO_OP_SAFE void Put16(u8 *p, u16 v) {
+#ifdef __OPTIMIZE__
+  v = Little16(v);
+  __builtin_memcpy(p, &v, 16 / 8);
 #else
-  p[0] = (0x00FF & v) >> 000;
-  p[1] = (0xFF00 & v) >> 010;
+  p[0] = v >> 000;
+  p[1] = v >> 010;
 #endif
 }
 
-MICRO_OP_SAFE void Write32(u8 *p, u32 v) {
-#if CAN_ABUSE_POINTERS
-  Put32(p, v);
+MICRO_OP_SAFE void Put32(u8 *p, u32 v) {
+#ifdef __OPTIMIZE__
+  v = Little32(v);
+  __builtin_memcpy(p, &v, 32 / 8);
 #else
-  p[0] = (0x000000FF & v) >> 000;
-  p[1] = (0x0000FF00 & v) >> 010;
-  p[2] = (0x00FF0000 & v) >> 020;
-  p[3] = (0xFF000000 & v) >> 030;
+  p[0] = v >> 000;
+  p[1] = v >> 010;
+  p[2] = v >> 020;
+  p[3] = v >> 030;
 #endif
 }
 
-MICRO_OP_SAFE void Write64(u8 *p, u64 v) {
-#if CAN_ABUSE_POINTERS
-  Put64(p, v);
+MICRO_OP_SAFE void Put64(u8 *p, u64 v) {
+#ifdef __OPTIMIZE__
+  v = Little64(v);
+  __builtin_memcpy(p, &v, 64 / 8);
 #else
-  p[0] = (0x00000000000000FF & v) >> 000;
-  p[1] = (0x000000000000FF00 & v) >> 010;
-  p[2] = (0x0000000000FF0000 & v) >> 020;
-  p[3] = (0x00000000FF000000 & v) >> 030;
-  p[4] = (0x000000FF00000000 & v) >> 040;
-  p[5] = (0x0000FF0000000000 & v) >> 050;
-  p[6] = (0x00FF000000000000 & v) >> 060;
-  p[7] = (0xFF00000000000000 & v) >> 070;
+  p[0] = v >> 000;
+  p[1] = v >> 010;
+  p[2] = v >> 020;
+  p[3] = v >> 030;
+  p[4] = v >> 040;
+  p[5] = v >> 050;
+  p[6] = v >> 060;
+  p[7] = v >> 070;
 #endif
 }
+
+#define Read8  Get8
+#define Read16 Get16
+#define Read32 Get32
+#define Read64 Get64
+
+#define Write8  Put8
+#define Write16 Put16
+#define Write32 Put32
+#define Write64 Put64
 
 #endif /* BLINK_ENDIAN_H_ */
