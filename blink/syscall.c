@@ -4669,7 +4669,7 @@ static int Poll(struct Machine *m, i64 fdsaddr, u64 nfds,
   struct pollfd_linux *gfds;
   struct timespec now, wait, remain;
   int (*poll_impl)(struct pollfd *, nfds_t, int);
-  if (!CheckedMul(nfds, sizeof(struct pollfd_linux), &gfdssize) &&
+  if (!ckd_mul(&gfdssize, nfds, sizeof(struct pollfd_linux)) &&
       gfdssize <= 0x7ffff000) {
     if ((gfds = (struct pollfd_linux *)AddToFreeList(m, malloc(gfdssize)))) {
       rc = 0;

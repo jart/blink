@@ -130,7 +130,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
     ERRF("bad phdr filesz");
     exit(127);
   }
-  if (offset + filesz > imagesize) {
+  if (filesz && offset + filesz > imagesize) {
     ERRF("corrupt elf program header");
     exit(127);
   }

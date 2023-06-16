@@ -331,7 +331,10 @@ bool IsValidMemory(struct Machine *m, i64 virt, i64 size, int prot) {
   if (prot & PROT_EXEC) {
     mask |= PAGE_XD;
   }
-  if (CheckedAdd(virt, size, &pe) == -1) return false;
+  if (ckd_add(&pe, virt, size) == -1) {
+    eoverflow();
+    return false;
+  }
   for (p = virt; p < pe; p += 4096) {
     if (!(pte = FindPageTableEntry(m, p))) {
       return false;
@@ -485,8 +488,7 @@ static u8 *AccessRam2(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
   return tmp;
 }
 
-u8 *AccessRam(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp,
-              bool d) {
+u8 *AccessRam(struct Machine *m, i64 v, size_t n, void *p[2], u8 *tmp, bool d) {
   return AccessRam2(m, v, n, p, tmp, d, !d);
 }
 

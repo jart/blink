@@ -932,7 +932,7 @@ static void *GetJitHeap(struct Jit *jit, size_t count, size_t elsize) {
   void *res = 0;
   struct Dll *e;
   struct JitFreed *jf;
-  if (CheckedMul(count, elsize, &size)) return 0;
+  if (ckd_mul(&size, count, elsize)) return 0;
   if (jit->freeds.n > kJitRetireQueue) {
     for (e = dll_first(jit->freeds.p); e; e = dll_next(jit->freeds.p, e)) {
       dll_remove(&jit->freeds.p, e);
