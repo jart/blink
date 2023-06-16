@@ -66,6 +66,7 @@ COSMO_TESTS =											\
 	o/$(MODE)/third_party/cosmo/2/rngset_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/round_test.com.ok						\
 	o/$(MODE)/third_party/cosmo/2/roundup2log_test.com.ok					\
+	o/$(MODE)/third_party/cosmo/2/roundup2pow_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/sad16x8n_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/scalevolume_test.com.ok					\
 	o/$(MODE)/third_party/cosmo/2/secp384r1_test.com.ok					\

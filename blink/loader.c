@@ -244,7 +244,8 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
 static bool IsFreebsdExecutable(Elf64_Ehdr_ *ehdr, size_t size) {
   // APE uses the FreeBSD OS ABI too, but never with ET_DYN
   return Read16(ehdr->type) == ET_DYN_ &&
-         ehdr->ident[EI_OSABI_] == ELFOSABI_FREEBSD_;
+         ehdr->ident[EI_OSABI_] == ELFOSABI_FREEBSD_ &&
+         ehdr->ident[EI_VERSION_] == 1;
 }
 
 static bool IsOpenbsdExecutable(struct Elf64_Ehdr_ *ehdr, size_t size) {
@@ -317,8 +318,8 @@ bool IsSupportedExecutable(const char *path, void *image, size_t size) {
       ExplainWhyItCantBeEmulated(path, "ELF is neither ET_EXEC or ET_DYN");
       return false;
     }
-    if (ehdr->ident[EI_CLASS_] != ELFCLASS64_) {
-      ExplainWhyItCantBeEmulated(path, "ELF is not 64-bit");
+    if (ehdr->ident[EI_CLASS_] == ELFCLASS32_) {
+      ExplainWhyItCantBeEmulated(path, "32-bit ELF not supported");
       return false;
     }
     if (Read16(ehdr->machine) != EM_NEXGEN32E_) {
@@ -459,9 +460,6 @@ static bool LoadElf(struct Machine *m,  //
     m->ip = elf->at_base + Read64(ehdri->entry);
     for (prot = i = 0; i < Read16(ehdri->phnum); ++i) {
       phdr = GetElfSegmentHeaderAddress(ehdri, st.st_size, i);
-      CheckElfAddress(ehdri, st.st_size,
-                      (uintptr_t)ehdri + Read64(phdr->offset),
-                      Read64(phdr->filesz));
       switch (Read32(phdr->type)) {
         case PT_LOAD_:
           end = LoadElfLoadSegment(m, elf->interpreter, ehdri, st.st_size, phdr,

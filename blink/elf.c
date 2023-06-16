@@ -58,72 +58,85 @@ i64 GetElfMemorySize(const Elf64_Ehdr_ *ehdr, size_t size, i64 *base) {
   return res;
 }
 
-void CheckElfAddress(const Elf64_Ehdr_ *elf, size_t mapsize, uintptr_t addr,
-                     size_t addrsize) {
-  if (addr < (uintptr_t)elf || addr + addrsize > (uintptr_t)elf + mapsize) {
-    ERRF("CheckElfAddress failed: %#" PRIxPTR "..%#" PRIxPTR " %p..%#" PRIxPTR,
-         addr, addr + addrsize, (void *)elf, (uintptr_t)elf + mapsize);
-    exit(202);
+char *GetElfString(const Elf64_Ehdr_ *elf,  // validated
+                   size_t mapsize,          // validated
+                   const char *strtab,      // validated
+                   size_t rva) {            // foreign
+  int64_t addr;
+  if (!strtab) return 0;
+  if (CheckedAdd((uintptr_t)strtab, rva, &addr)) return 0;
+  if (addr >= (uintptr_t)elf + mapsize) return 0;
+  if (addr != (uintptr_t)addr) return 0;
+  if (!memchr((char *)(uintptr_t)addr, 0, (uintptr_t)elf + mapsize - addr)) {
+    return 0;
   }
+  return (char *)(uintptr_t)addr;
 }
 
-char *GetElfString(const Elf64_Ehdr_ *elf, size_t mapsize, const char *strtab,
-                   u32 rva) {
-  uintptr_t addr = (uintptr_t)strtab + rva;
-  CheckElfAddress(elf, mapsize, addr, 0);
-  CheckElfAddress(elf, mapsize, addr,
-                  strnlen((char *)addr, (uintptr_t)elf + mapsize - addr) + 1);
-  return (char *)addr;
+Elf64_Phdr_ *GetElfSegmentHeaderAddress(const Elf64_Ehdr_ *elf,  //
+                                        size_t mapsize,          //
+                                        u16 i) {                 //
+  int64_t last, addr;
+  if (i >= Read16(elf->phnum)) return 0;
+  if (CheckedAdd((uintptr_t)elf, Read64(elf->phoff), &addr)) return 0;
+  if (CheckedAdd(addr, (u32)i * Read16(elf->phentsize), &addr)) return 0;
+  if (CheckedAdd(addr, Read16(elf->phentsize), &last)) return 0;
+  if (last > (uintptr_t)elf + mapsize) return 0;
+  if (addr != (uintptr_t)addr) return 0;
+  return (Elf64_Phdr_ *)(uintptr_t)addr;
 }
 
-Elf64_Phdr_ *GetElfSegmentHeaderAddress(const Elf64_Ehdr_ *elf, size_t mapsize,
-                                        u64 i) {
-  uintptr_t addr = ((uintptr_t)elf + (uintptr_t)Read64(elf->phoff) +
-                    (uintptr_t)Read16(elf->phentsize) * i);
-  CheckElfAddress(elf, mapsize, addr, Read16(elf->phentsize));
-  return (Elf64_Phdr_ *)addr;
+// note: should not be used on bss section
+void *GetElfSectionAddress(const Elf64_Ehdr_ *elf,     // validated
+                           size_t mapsize,             // validated
+                           const Elf64_Shdr_ *shdr) {  // foreign
+  int64_t addr, last;
+  if (!shdr) return 0;
+  if (CheckedAdd((uintptr_t)elf, Read64(shdr->offset), &addr)) return 0;
+  if (CheckedAdd(addr, Read64(shdr->size), &last)) return 0;
+  if (last > (uintptr_t)elf + mapsize) return 0;
+  if (addr != (uintptr_t)addr) return 0;
+  return (void *)(uintptr_t)addr;
 }
 
-void *GetElfSectionAddress(const Elf64_Ehdr_ *elf, size_t mapsize,
-                           const Elf64_Shdr_ *shdr) {
-  uintptr_t addr, size;
-  addr = (uintptr_t)elf + (uintptr_t)Read64(shdr->offset);
-  size = (uintptr_t)Read64(shdr->size);
-  CheckElfAddress(elf, mapsize, addr, size);
-  return (void *)addr;
-}
-
-char *GetElfSectionNameStringTable(const Elf64_Ehdr_ *elf, size_t mapsize) {
-  if (!Read64(elf->shoff) || !Read16(elf->shentsize)) return NULL;
+char *GetElfSectionNameStringTable(const Elf64_Ehdr_ *elf,  //
+                                   size_t mapsize) {        //
+  if (!Read64(elf->shoff) || !Read16(elf->shentsize)) return 0;
   return (char *)GetElfSectionAddress(
       elf, mapsize,
       GetElfSectionHeaderAddress(elf, mapsize, Read16(elf->shstrndx)));
 }
 
-const char *GetElfSectionName(const Elf64_Ehdr_ *elf, size_t mapsize,
-                              Elf64_Shdr_ *shdr) {
-  if (!elf || !shdr) return NULL;
+const char *GetElfSectionName(const Elf64_Ehdr_ *elf,  //
+                              size_t mapsize,          //
+                              Elf64_Shdr_ *shdr) {     //
+  if (!shdr) return 0;
   return GetElfString(elf, mapsize, GetElfSectionNameStringTable(elf, mapsize),
                       Read32(shdr->name));
 }
 
-Elf64_Shdr_ *GetElfSectionHeaderAddress(const Elf64_Ehdr_ *elf, size_t mapsize,
-                                        u16 i) {
-  uintptr_t addr;
-  addr = ((uintptr_t)elf + (uintptr_t)Read64(elf->shoff) +
-          (uintptr_t)Read16(elf->shentsize) * i);
-  CheckElfAddress(elf, mapsize, addr, Read16(elf->shentsize));
-  return (Elf64_Shdr_ *)addr;
+Elf64_Shdr_ *GetElfSectionHeaderAddress(const Elf64_Ehdr_ *elf,  //
+                                        size_t mapsize,          //
+                                        u16 i) {                 //
+  int64_t addr, last;
+  if (i >= Read16(elf->shnum)) return 0;
+  if (CheckedAdd((uintptr_t)elf, Read64(elf->shoff), &addr)) return 0;
+  if (CheckedAdd(addr, (u32)i * Read16(elf->shentsize), &addr)) return 0;
+  if (CheckedAdd(addr, Read16(elf->shentsize), &last)) return 0;
+  if (last > (uintptr_t)elf + mapsize) return 0;
+  if (addr != (uintptr_t)addr) return 0;
+  return (Elf64_Shdr_ *)(uintptr_t)addr;
 }
 
-static char *GetElfStringTableImpl(const Elf64_Ehdr_ *elf, size_t mapsize,
-                                   const char *kind) {
+static char *GetElfStringTableImpl(const Elf64_Ehdr_ *elf,  //
+                                   size_t mapsize,          //
+                                   const char *kind) {      //
   int i;
   const char *name;
   Elf64_Shdr_ *shdr;
   for (i = 0; i < Read16(elf->shnum); ++i) {
-    shdr = GetElfSectionHeaderAddress(elf, mapsize, i);
-    if (Read32(shdr->type) == SHT_STRTAB_) {
+    if ((shdr = GetElfSectionHeaderAddress(elf, mapsize, i)) &&
+        Read32(shdr->type) == SHT_STRTAB_) {
       name = GetElfSectionName(elf, mapsize,
                                GetElfSectionHeaderAddress(elf, mapsize, i));
       if (name && !strcmp(name, kind)) {
@@ -142,13 +155,15 @@ char *GetElfStringTable(const Elf64_Ehdr_ *elf, size_t mapsize) {
   return res;
 }
 
-static Elf64_Sym_ *GetElfSymbolTableImpl(const Elf64_Ehdr_ *elf, size_t mapsize,
-                                         int *out_count, u32 kind) {
+static Elf64_Sym_ *GetElfSymbolTableImpl(const Elf64_Ehdr_ *elf,  //
+                                         size_t mapsize,          //
+                                         int *out_count,          //
+                                         u32 kind) {              //
   int i;
   Elf64_Shdr_ *shdr;
   for (i = Read16(elf->shnum); i > 0; --i) {
-    shdr = GetElfSectionHeaderAddress(elf, mapsize, i - 1);
-    if (Read32(shdr->type) == kind) {
+    if ((shdr = GetElfSectionHeaderAddress(elf, mapsize, i - 1)) &&
+        Read32(shdr->type) == kind) {
       if (Read64(shdr->entsize) != sizeof(Elf64_Sym_)) continue;
       if (out_count) {
         *out_count = Read64(shdr->size) / Read64(shdr->entsize);
@@ -159,8 +174,9 @@ static Elf64_Sym_ *GetElfSymbolTableImpl(const Elf64_Ehdr_ *elf, size_t mapsize,
   return 0;
 }
 
-Elf64_Sym_ *GetElfSymbolTable(const Elf64_Ehdr_ *elf, size_t mapsize,
-                              int *out_count) {
+Elf64_Sym_ *GetElfSymbolTable(const Elf64_Ehdr_ *elf,  //
+                              size_t mapsize,          //
+                              int *out_count) {        //
   Elf64_Sym_ *res;
   if (!(res = GetElfSymbolTableImpl(elf, mapsize, out_count, SHT_SYMTAB_))) {
     res = GetElfSymbolTableImpl(elf, mapsize, out_count, SHT_DYNSYM_);
