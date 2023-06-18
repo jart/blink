@@ -421,18 +421,18 @@
 #define DF_P1_LAZYLOAD_  0x00000001
 #define DF_P1_GROUPPERM_ 0x00000002
 
-#define ELF64_ST_BIND_(val)        (((unsigned char)(val)) >> 4)
+#define ELF64_ST_BIND_(val)        (((u8)(val)) >> 4)
 #define ELF64_ST_TYPE_(val)        ((val)&0xf)
 #define ELF64_ST_INFO_(bind, type) (((bind) << 4) + ((type)&0xf))
 #define ELF64_ST_VISIBILITY_(o)    ((o)&0x03)
 
 #define ELF64_R_SYM_(i)          ((i) >> 32)
 #define ELF64_R_TYPE_(i)         ((i)&0xffffffff)
-#define ELF64_R_INFO_(sym, type) ((((Elf64_Xword)(sym)) << 32) + (type))
+#define ELF64_R_INFO_(sym, type) ((((u64)(sym)) << 32) + (type))
 
 #define ELF64_M_SYM_(info)       ((info) >> 8)
-#define ELF64_M_SIZE_(info)      ((unsigned char)(info))
-#define ELF64_M_INFO_(sym, size) (((sym) << 8) + (unsigned char)(size))
+#define ELF64_M_SIZE_(info)      ((u8)(info))
+#define ELF64_M_INFO_(sym, size) (((sym) << 8) + (u8)(size))
 
 #define NT_PRSTATUS_         1
 #define NT_PRFPREG_          2
@@ -620,7 +620,7 @@ typedef struct Elf64_Nhdr_ {
   u8 type[4];    // u32
 } Elf64_Nhdr_;
 
-Elf64_Phdr_ *GetElfSegmentHeaderAddress(const Elf64_Ehdr_ *, size_t, u16);
+Elf64_Phdr_ *GetElfProgramHeaderAddress(const Elf64_Ehdr_ *, size_t, u16);
 char *GetElfStringTable(const Elf64_Ehdr_ *, size_t);
 Elf64_Shdr_ *GetElfSectionHeaderAddress(const Elf64_Ehdr_ *, size_t, u16);
 const char *GetElfSectionName(const Elf64_Ehdr_ *, size_t, Elf64_Shdr_ *);

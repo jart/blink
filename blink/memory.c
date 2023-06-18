@@ -332,7 +332,7 @@ bool IsValidMemory(struct Machine *m, i64 virt, i64 size, int prot) {
   if (prot & PROT_EXEC) {
     mask |= PAGE_XD;
   }
-  if (ckd_add(&pe, virt, size) == -1) {
+  if (ckd_add(&pe, virt, size)) {
     eoverflow();
     return false;
   }

@@ -49,7 +49,7 @@ static void DisLoadElfLoads(struct Dis *d, Elf64_Ehdr_ *ehdr, size_t esize,
   long i;
   Elf64_Phdr_ *phdr;
   for (i = 0; i < Read16(ehdr->phnum); ++i) {
-    phdr = GetElfSegmentHeaderAddress(ehdr, esize, i);
+    phdr = GetElfProgramHeaderAddress(ehdr, esize, i);
     if (Read32(phdr->type) != PT_LOAD_) continue;
     if (d->loads.i == d->loads.n) {
       d->loads.n += 2;

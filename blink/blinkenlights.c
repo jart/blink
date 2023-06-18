@@ -16,6 +16,8 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/blinkenlights.h"
+
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -39,9 +41,9 @@
 
 #include "blink/assert.h"
 #include "blink/atomic.h"
+#include "blink/bda.h"
 #include "blink/biosrom.h"
 #include "blink/bitscan.h"
-#include "blink/blinkenlights.h"
 #include "blink/breakpoint.h"
 #include "blink/builtin.h"
 #include "blink/bus.h"
@@ -67,7 +69,6 @@
 #include "blink/panel.h"
 #include "blink/pml4t.h"
 #include "blink/pty.h"
-#include "blink/bda.h"
 #include "blink/rde.h"
 #include "blink/signal.h"
 #include "blink/sigwinch.h"
@@ -347,7 +348,7 @@ static bool alarmed;
 static bool natural;
 static bool mousemode;
 static bool wantmetal;
-static bool displayexec;        /* 'D' -> DrawDisplayOnly during Exec() */
+static bool displayexec; /* 'D' -> DrawDisplayOnly during Exec() */
 static bool showhighsse;
 static bool showprofile;
 static bool readingteletype;
@@ -805,7 +806,7 @@ static void OnQ(void) {
 
 static void OnV(void) {
   int mode;
-  mode = vidya == kModePty? 3: kModePty;
+  mode = vidya == kModePty ? 3 : kModePty;
   VidyaServiceSetMode(mode);
 }
 
@@ -1379,14 +1380,14 @@ static void DrawTerminal(struct Panel *p) {
 
 static void DrawDisplay(struct Panel *p) {
   switch (vidya) {
-    case 0:     // CGA 40x25 16-gray
-    case 1:     // CGA 40x25 16-color
-    case 2:     // CGA 80x25 16-gray
-    case 3:     // CGA 80x25 16-color
+    case 0:  // CGA 40x25 16-gray
+    case 1:  // CGA 40x25 16-color
+    case 2:  // CGA 80x25 16-gray
+    case 3:  // CGA 80x25 16-color
       DrawHr(&pan.displayhr, "COLOR GRAPHICS ADAPTER");
       DrawCga(p, m->system->real + 0xb8000);
       break;
-    case 7:     // MDA 80x25 4-gray
+    case 7:  // MDA 80x25 4-gray
       DrawHr(&pan.displayhr, "MONOCHROME DISPLAY ADAPTER");
       DrawMda(p, (u8(*)[80][2])(m->system->real + 0xb0000), pty->x, pty->y);
       break;
@@ -2251,8 +2252,8 @@ static void HandleTerminalResize(void) {
 void HandleAppReadInterrupt(bool errflag) {
   LOGF("HandleAppReadInterrupt");
   if (errflag) {
-      exitcode = 0;
-      action |= EXIT;
+    exitcode = 0;
+    action |= EXIT;
   }
   if (action & ALARM) {
     HandleAlarm();
@@ -2464,7 +2465,7 @@ void DrawDisplayOnly(void) {
     if (displayexec && y) AppendStr(&b, "\r\n");
     if (tly <= y && y < tly + yn) {
       if (!displayexec) {
-        sprintf(buf, "\033[%d;%dH", y+1, tlx+1);
+        sprintf(buf, "\033[%d;%dH", y + 1, tlx + 1);
         AppendStr(&b, buf);
       } else {
         for (i = 0; i < tlx; ++i) {
@@ -2751,8 +2752,9 @@ static void OnLongBranch(struct Machine *m) {
 #ifndef DISABLE_ROM
 static void OnRomWriteAttempt(struct Machine *m, u8 *r) {
   int w = GetAddrHexWidth();
-  LOGF("attempt to write to rom address %0*tx @ %0*" PRIx64,
-       w, r - m->system->real, w, GetPc(m));
+  (void)w;
+  LOGF("attempt to write to rom address %0*tx @ %0*" PRIx64, w,
+       r - m->system->real, w, GetPc(m));
 }
 #endif
 
@@ -3025,7 +3027,7 @@ static void HandleKeyboard(const char *k) {
     CASE('f', OnFinish());
     CASE('c', OnContinueTui());
     CASE('C', displayexec = false; OnContinueExec());
-    CASE('D', displayexec = true;  OnContinueExec());
+    CASE('D', displayexec = true; OnContinueExec());
     CASE('R', OnRestart());
     CASE('x', OnXmmDisp());
     CASE('t', OnXmmType());
@@ -3571,12 +3573,12 @@ int VirtualMachine(int argc, char *argv[]) {
   do {
     action = 0;
     ptyisenabled = false;
-    vidya = m->metal? 3: kModePty;
+    vidya = m->metal ? 3 : kModePty;
     if (vidya != kModePty) {
       VidyaServiceSetMode(vidya);
     }
-    LoadProgram(m, codepath, codepath,
-                argv + optind_ - 1 + FLAG_zero, environ, FLAG_bios);
+    LoadProgram(m, codepath, codepath, argv + optind_ - 1 + FLAG_zero, environ,
+                FLAG_bios);
     if (m->system->codesize) {
       ophits = (unsigned long *)AllocateBig(
           m->system->codesize * sizeof(unsigned long), PROT_READ | PROT_WRITE,

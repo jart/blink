@@ -459,7 +459,7 @@ static bool LoadElf(struct Machine *m,  //
         &elf->at_base);
     m->ip = elf->at_base + Read64(ehdri->entry);
     for (prot = i = 0; i < Read16(ehdri->phnum); ++i) {
-      phdr = GetElfSegmentHeaderAddress(ehdri, st.st_size, i);
+      phdr = GetElfProgramHeaderAddress(ehdri, st.st_size, i);
       switch (Read32(phdr->type)) {
         case PT_LOAD_:
           end = LoadElfLoadSegment(m, elf->interpreter, ehdri, st.st_size, phdr,

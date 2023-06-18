@@ -46,7 +46,7 @@ i64 GetElfMemorySize(const Elf64_Ehdr_ *ehdr, size_t size, i64 *base) {
       phdr = (const Elf64_Phdr_ *)((const u8 *)ehdr + off);
       if (Read32(phdr->type) == PT_LOAD_) {
         x = Read64(phdr->vaddr);
-        if (ckd_add(&y, x, Read64(phdr->memsz))) return -1;
+        if (ckd_add(&y, x, (i64)Read64(phdr->memsz))) return -1;
         lo = MIN(x, lo);
         hi = MAX(y, hi);
       }
@@ -62,7 +62,7 @@ char *GetElfString(const Elf64_Ehdr_ *elf,  // validated
                    size_t mapsize,          // validated
                    const char *strtab,      // validated
                    size_t rva) {            // foreign
-  int64_t addr;
+  uint64_t addr;
   if (!strtab) return 0;
   if (ckd_add(&addr, (uintptr_t)strtab, rva)) return 0;
   if (addr >= (uintptr_t)elf + mapsize) return 0;
@@ -73,35 +73,46 @@ char *GetElfString(const Elf64_Ehdr_ *elf,  // validated
   return (char *)(uintptr_t)addr;
 }
 
-Elf64_Phdr_ *GetElfSegmentHeaderAddress(const Elf64_Ehdr_ *elf,  //
+Elf64_Phdr_ *GetElfProgramHeaderAddress(const Elf64_Ehdr_ *elf,  //
                                         size_t mapsize,          //
                                         u16 i) {                 //
-  int64_t last, addr;
+  uint64_t off;
   if (i >= Read16(elf->phnum)) return 0;
-  if (ckd_add(&addr, (uintptr_t)elf, Read64(elf->phoff))) return 0;
-  if (ckd_add(&addr, addr, (u32)i * Read16(elf->phentsize))) return 0;
-  if (ckd_add(&last, addr, Read16(elf->phentsize))) return 0;
-  if (last > (uintptr_t)elf + mapsize) return 0;
-  if (addr != (uintptr_t)addr) return 0;
-  return (Elf64_Phdr_ *)(uintptr_t)addr;
+  if (Read64(elf->phoff) <= 0) return 0;
+  if (Read64(elf->phoff) >= mapsize) return 0;
+  if (Read16(elf->phentsize) < sizeof(Elf64_Phdr_)) return 0;
+  off = Read64(elf->phoff) + (unsigned)i * Read16(elf->phentsize);
+  if (off > mapsize) return 0;
+  return (Elf64_Phdr_ *)((char *)elf + off);
+}
+
+Elf64_Shdr_ *GetElfSectionHeaderAddress(const Elf64_Ehdr_ *elf,  //
+                                        size_t mapsize,          //
+                                        u16 i) {                 //
+  uint64_t off;
+  if (i >= Read16(elf->shnum)) return 0;
+  if (Read64(elf->shoff) <= 0) return 0;
+  if (Read64(elf->shoff) >= mapsize) return 0;
+  if (Read16(elf->shentsize) < sizeof(Elf64_Shdr_)) return 0;
+  off = Read64(elf->shoff) + (unsigned)i * Read16(elf->shentsize);
+  if (off > mapsize) return 0;
+  return (Elf64_Shdr_ *)((char *)elf + off);
 }
 
 // note: should not be used on bss section
 void *GetElfSectionAddress(const Elf64_Ehdr_ *elf,     // validated
                            size_t mapsize,             // validated
                            const Elf64_Shdr_ *shdr) {  // foreign
-  int64_t addr, last;
+  uint64_t last;
   if (!shdr) return 0;
-  if (ckd_add(&addr, (uintptr_t)elf, Read64(shdr->offset))) return 0;
-  if (ckd_add(&last, addr, Read64(shdr->size))) return 0;
-  if (last > (uintptr_t)elf + mapsize) return 0;
-  if (addr != (uintptr_t)addr) return 0;
-  return (void *)(uintptr_t)addr;
+  if (!Read64(shdr->size)) return 0;
+  if (ckd_add(&last, Read64(shdr->offset), Read64(shdr->size))) return 0;
+  if (last > mapsize) return 0;
+  return (char *)elf + Read64(shdr->offset);
 }
 
 char *GetElfSectionNameStringTable(const Elf64_Ehdr_ *elf,  //
                                    size_t mapsize) {        //
-  if (!Read64(elf->shoff) || !Read16(elf->shentsize)) return 0;
   return (char *)GetElfSectionAddress(
       elf, mapsize,
       GetElfSectionHeaderAddress(elf, mapsize, Read16(elf->shstrndx)));
@@ -113,19 +124,6 @@ const char *GetElfSectionName(const Elf64_Ehdr_ *elf,  //
   if (!shdr) return 0;
   return GetElfString(elf, mapsize, GetElfSectionNameStringTable(elf, mapsize),
                       Read32(shdr->name));
-}
-
-Elf64_Shdr_ *GetElfSectionHeaderAddress(const Elf64_Ehdr_ *elf,  //
-                                        size_t mapsize,          //
-                                        u16 i) {                 //
-  int64_t addr, last;
-  if (i >= Read16(elf->shnum)) return 0;
-  if (ckd_add(&addr, (uintptr_t)elf, Read64(elf->shoff))) return 0;
-  if (ckd_add(&addr, addr, (u32)i * Read16(elf->shentsize))) return 0;
-  if (ckd_add(&last, addr, Read16(elf->shentsize))) return 0;
-  if (last > (uintptr_t)elf + mapsize) return 0;
-  if (addr != (uintptr_t)addr) return 0;
-  return (Elf64_Shdr_ *)(uintptr_t)addr;
 }
 
 static char *GetElfStringTableImpl(const Elf64_Ehdr_ *elf,  //
@@ -160,10 +158,10 @@ static Elf64_Sym_ *GetElfSymbolTableImpl(const Elf64_Ehdr_ *elf,  //
   Elf64_Shdr_ *shdr;
   for (i = Read16(elf->shnum); i > 0; --i) {
     if ((shdr = GetElfSectionHeaderAddress(elf, mapsize, i - 1)) &&
+        Read64(shdr->entsize) == sizeof(Elf64_Sym_) &&
         Read32(shdr->type) == kind) {
-      if (Read64(shdr->entsize) != sizeof(Elf64_Sym_)) continue;
       if (out_count) {
-        *out_count = Read64(shdr->size) / Read64(shdr->entsize);
+        *out_count = Read64(shdr->size) / sizeof(Elf64_Sym_);
       }
       return (Elf64_Sym_ *)GetElfSectionAddress(elf, mapsize, shdr);
     }

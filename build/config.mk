@@ -64,8 +64,12 @@ ifeq ($(USER), jart)
 CFLAGS := -Wall -Werror $(CFLAGS)
 endif
 
-ifeq ($(MODE), dbg)
+ifeq ($(MODE), zero)
 CFLAGS += -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
+endif
+
+ifeq ($(MODE), dbg)
+CFLAGS += -O0 -g -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
 CPPFLAGS += -DDEBUG
 endif
 
@@ -155,13 +159,13 @@ endif
 ifeq ($(MODE), llvm)
 CC = clang
 CPPFLAGS += -DDEBUG
-CFLAGS += -Werror -Wno-unused-parameter -Wno-missing-field-initializers
+CFLAGS += -Werror -Wno-unused-parameter -Wno-unused-function -Wno-missing-field-initializers
 LDFLAGS += --rtlib=compiler-rt
 endif
 
 ifeq ($(MODE), llvm++)
 CC = clang++
 CPPFLAGS += -DDEBUG
-CFLAGS += -xc++ -Werror -Wno-unused-parameter -Wno-missing-field-initializers
+CFLAGS += -xc++ -Werror -Wno-unused-function -Wno-unused-parameter -Wno-missing-field-initializers
 LDFLAGS += --rtlib=compiler-rt
 endif

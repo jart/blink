@@ -1756,7 +1756,7 @@ bool AlignJit(struct JitBlock *jb, int align, int misalign) {
   unassert(misalign >= 0 && misalign < align);
   while ((jb->index & (align - 1)) != misalign) {
 #ifdef __x86_64__
-    // Intel's Official Fat NOP Instructions
+    // Intel's Official Multibyte NOP Instructions
     //
     //     90                 nop
     //     6690               xchg %ax,%ax
