@@ -773,6 +773,9 @@ error: unsupported executable; we need:\n\
     } else if (READ64(map) == READ64("MZqFpD='") ||
                READ64(map) == READ64("jartsr='")) {
       m->system->iscosmo = true;
+      // Cosmopolitan programs pretty much require at least 47-bit virtual
+      // addresses; if the host lacks these, then emulate them w/ software
+      if (FLAG_vabits < 47) FLAG_nolinear = true;
       if (GetElfHeader(tmp, prog, (const char *)map) == -1) exit(127);
       memcpy(map, tmp, 64);
       execstack = LoadElf(m, elf, (Elf64_Ehdr_ *)map, mapsize, fd);
