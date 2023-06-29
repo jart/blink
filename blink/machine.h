@@ -806,7 +806,8 @@ void LogCodOp(struct Machine *, const char *);
 #endif
 
 MICRO_OP_SAFE u8 Cpl(struct Machine *m) {
-  return m->mode.genmode != XED_GEN_MODE_REAL ? (m->cs.sel & 3u) : 0u;
+  return !m->metal ? 3u :
+         m->mode.genmode != XED_GEN_MODE_REAL ? (m->cs.sel & 3u) : 0u;
 }
 
 #define BEGIN_NO_PAGE_FAULTS \

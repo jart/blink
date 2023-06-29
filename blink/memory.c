@@ -184,13 +184,13 @@ u64 FindPageTableEntry(struct Machine *m, u64 page) {
   u64 entry;
   long tlbkey;
   unsigned level, index;
-  if (atomic_load_explicit(&m->invalidated, memory_order_acquire)) {
+  if (UNLIKELY(atomic_load_explicit(&m->invalidated, memory_order_acquire))) {
     ResetTlb(m);
     atomic_store_explicit(&m->invalidated, false, memory_order_relaxed);
   }
   tlbkey = (page >> 12) & (ARRAYLEN(m->tlb) - 1);
-  if (m->tlb[tlbkey].page == page &&
-      ((entry = m->tlb[tlbkey].entry) & PAGE_V)) {
+  if (LIKELY(m->tlb[tlbkey].page == page &&
+             ((entry = m->tlb[tlbkey].entry) & PAGE_V))) {
     STATISTIC(++tlb_hits);
     return entry;
   }
@@ -263,7 +263,8 @@ MapError:
 u8 *LookupAddress2(struct Machine *m, i64 virt, u64 mask, u64 need) {
   u8 *host;
   u64 entry;
-  if (m->mode.omode == XED_MODE_LONG ||
+  if (!m->metal ||
+      m->mode.omode == XED_MODE_LONG ||
       (m->mode.genmode != XED_GEN_MODE_REAL && (m->system->cr0 & CR0_PG))) {
     if (!(entry = FindPageTableEntry(m, virt & -4096))) {
       return 0;
@@ -301,7 +302,7 @@ u8 *LookupAddress(struct Machine *m, i64 virt) {
   return LookupAddress2(m, virt, need, need);
 }
 
-u8 *GetAddress(struct Machine *m, i64 v) {
+flattencalls u8 *GetAddress(struct Machine *m, i64 v) {
   if (HasLinearMapping()) return ToHost(v);
   return LookupAddress(m, v);
 }
