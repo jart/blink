@@ -125,6 +125,10 @@
 #endif /* __cplusplus */
 #endif
 
+#ifndef flattencalls
+#define flattencalls __attribute__((__flatten__))
+#endif
+
 #ifndef relegated
 #if __has_attribute(__cold__) || \
     (__GNUC__ + 0) * 100 + (__GNUC_MINOR__ + 0) >= 403
