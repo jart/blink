@@ -136,14 +136,14 @@ int GetInstruction(struct Machine *m, i64 pc, struct XedDecodedInst *x) {
   int i, rc, err;
   u8 copy[15], *toil, *addr;
   BEGIN_NO_PAGE_FAULTS;
-  if ((addr = LookupAddress(m, pc))) {
+  if ((addr = SpyAddress(m, pc))) {
     if ((i = 4096 - (pc & 4095)) >= 15) {
       if (!DecodeInstruction(x, addr, 15, m->mode.omode)) {
         rc = 0;
       } else {
         rc = kMachineDecodeError;
       }
-    } else if ((toil = LookupAddress(m, pc + i))) {
+    } else if ((toil = SpyAddress(m, pc + i))) {
       memcpy(copy, addr, i);
       memcpy(copy + i, toil, 15 - i);
       if (!DecodeInstruction(x, copy, 15, m->mode.omode)) {
@@ -287,7 +287,7 @@ const char *GetBacktrace(struct Machine *m) {
     }
     ++i;
     if (((m->ss.base + bp) & 0xfff) > 0xff0) break;
-    if (!(r = LookupAddress(m, m->ss.base + bp))) {
+    if (!(r = SpyAddress(m, m->ss.base + bp))) {
       APPEND(" [CORRUPT FRAME POINTER]");
       break;
     }

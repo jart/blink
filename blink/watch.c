@@ -87,7 +87,7 @@ ssize_t IsAtWatchpoint(struct Watchpoints *wps, struct Machine *m) {
     m->ip = oldip;
     // TODO(jart): Handle case of overlapping page boundary.
     // TODO(jart): Possibly track munmap() type cases.
-    if ((r = LookupAddress(m, wps->p[i].addr))) {
+    if ((r = SpyAddress(m, wps->p[i].addr))) {
       w = Read64(r);
       if (!wps->p[i].initialized) {
         wps->p[i].oldvalue = w;

@@ -538,9 +538,11 @@ static int SysSpawn(struct Machine *m, u64 flags, u64 stack, u64 ptid, u64 ctid,
   }
   if (((flags & CLONE_PARENT_SETTID_LINUX) &&
        ((ptid & (sizeof(int) - 1)) ||
+        !IsValidMemory(m, ptid, 4, PROT_READ | PROT_WRITE) ||
         !(ptid_ptr = (_Atomic(int) *)LookupAddress(m, ptid)))) ||
       ((flags & CLONE_CHILD_SETTID_LINUX) &&
        ((ctid & (sizeof(int) - 1)) ||
+        !IsValidMemory(m, ctid, 4, PROT_READ | PROT_WRITE) ||
         !(ctid_ptr = (_Atomic(int) *)LookupAddress(m, ctid))))) {
     LOGF("bad clone() ptid / ctid pointers: %#" PRIx64, flags);
     return efault();

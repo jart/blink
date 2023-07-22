@@ -475,7 +475,7 @@ update:
 void VidyaServiceSetMode(int mode) {
   int cols, lines;
   vidya = mode;
-  if (LookupAddress(m, 0xB0000)) {
+  if (SpyAddress(m, 0xB0000)) {
     ptyisenabled = true;
     lines = 25;
     switch (mode) {

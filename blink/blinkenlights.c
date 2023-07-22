@@ -664,7 +664,7 @@ static int VirtualBing(i64 v) {
   int rc;
   jmp_buf busted;
   onbusted = &busted;
-  if ((p = (u8 *)LookupAddress(m, v))) {
+  if ((p = SpyAddress(m, v))) {
     if (!setjmp(busted)) {
       rc = kCp437[p[0] & 255];
     } else {
@@ -686,7 +686,7 @@ static int VirtualShadow(i64 v) {
   jmp_buf busted;
   if (IsShadow(v)) return -2;
   onbusted = &busted;
-  if ((p = (char *)LookupAddress(m, (v >> 3) + 0x7fff8000))) {
+  if ((p = (char *)SpyAddress(m, (v >> 3) + 0x7fff8000))) {
     if (!setjmp(busted)) {
       rc = p[0] & 0xff;
     } else {
@@ -954,6 +954,7 @@ void TuiSetup(void) {
     CommonSetup();
     VfsTcgetattr(ttyout, &oldterm);
     atexit(TtyRestore);
+    AtAbort(TtyRestore);
     once = true;
     report = true;
   }
@@ -1870,7 +1871,7 @@ static void DrawFrames(struct Panel *p) {
     }
     ++i;
     if (((m->ss.base + bp) & 0xfff) > 0xff0) break;
-    if (!(r = LookupAddress(m, m->ss.base + bp))) {
+    if (!(r = SpyAddress(m, m->ss.base + bp))) {
       AppendPanel(p, i - framesstart, "CORRUPT FRAME POINTER");
       break;
     }
@@ -1889,7 +1890,7 @@ static void CheckFramePointerImpl(void) {
   lastbp = bp;
   rp = m->ip;
   while (bp) {
-    if (!(r = LookupAddress(m, m->ss.base + bp))) {
+    if (!(r = SpyAddress(m, m->ss.base + bp))) {
       LOGF("corrupt frame: %0*" PRIx64 "", GetAddrHexWidth(), bp);
       ThrowProtectionFault(m);
     }
@@ -2132,8 +2133,8 @@ void Redraw(bool force) {
     ShowHistory();
     return;
   }
-  LookupAddress(m, m->ip);
-  LookupAddress(m, Get64(m->sp));
+  LookupAddress(m, m->ip);         // want page fault
+  LookupAddress(m, Get64(m->sp));  // want page fault
   BEGIN_NO_PAGE_FAULTS;
   start_draw = GetTime();
   execsecs = ToNanoseconds(SubtractTime(start_draw, last_draw)) * 1e-9;
@@ -3679,9 +3680,12 @@ int main(int argc, char *argv[]) {
   struct System *s;
   static struct sigaction sa;
   setlocale(LC_ALL, "");
-  g_exitdontabort = true;
   SetupWeb();
   GetStartDir();
+  AtAbort(PrintStats);
+#ifndef NDEBUG
+  AtAbort(PrintStats);
+#endif
   // Ensure utf-8 is printed correctly on windows, this method
   // has issues(http://stackoverflow.com/a/10884364/4279) but
   // should work for at least windows 7 and newer.

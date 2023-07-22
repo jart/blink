@@ -364,6 +364,9 @@ void exit(int status) {
 int main(int argc, char *argv[]) {
   SetupWeb();
   GetStartDir();
+#ifndef NDEBUG
+  AtAbort(PrintStats);
+#endif
 #ifndef DISABLE_STRACE
   setlocale(LC_ALL, "");
 #endif
