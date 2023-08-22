@@ -181,7 +181,8 @@ B       pop breakpoint            -s       system call logging\n\
 p       profiling mode            -C PATH  chroot directory\n\
 ctrl-t  turbo                     -B PATH  alternate BIOS image\n\
 alt-t   slowmo                    -z       zoom\n\
-                                  -h       help"
+2       toggle column 2           -h       help\n\
+3       toggle column 3"
 
 #define FPS        60     // frames per second written to tty
 #define TURBO      true   // to keep executing between frames
@@ -352,6 +353,8 @@ static bool displayexec; /* 'D' -> DrawDisplayOnly during Exec() */
 static bool showhighsse;
 static bool showprofile;
 static bool readingteletype;
+static bool showcolumn2 = true;
+static bool showcolumn3 = true;
 
 static int tyn;
 static int txn;
@@ -1092,6 +1095,8 @@ static void SetupDraw(void) {
       DISPWIDTH,
       GetAddrHexWidth() + 1 + DUMPWIDTH,
   };
+  if (!showcolumn2) column[1] = 0;
+  if (!showcolumn3) column[2] = 0;
   bool growable[3] = {
       true,
       false,
@@ -3041,6 +3046,8 @@ static void HandleKeyboard(const char *k) {
     CASE('M', ToggleMouseTracking());
     CASE('\r', OnEnter());
     CASE('\n', OnEnter());
+    CASE('2', showcolumn2 = !showcolumn2);
+    CASE('3', showcolumn3 = !showcolumn3);
     CASE(Ctrl('C'), OnInt());
     CASE(Ctrl('D'), action |= EXIT);
     CASE(Ctrl('\\'), raise(SIGQUIT));
