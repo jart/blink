@@ -1,5 +1,5 @@
 #-*-mode:makefile-gmake;indent-tabs-mode:t;tab-width:8;coding:utf-8-*-┐
-#───vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi───────────────────────┘
+#── vi: set et ft=make ts=8 tw=8 fenc=utf-8 :vi ──────────────────────┘
 
 TEST_FLAT_FILES := $(wildcard test/flat/*)
 TEST_FLAT_SRCS = $(filter %.S,$(TEST_FLAT_FILES))
