@@ -136,10 +136,10 @@ static void Log(const char *file, int line, const char *fmt, va_list va,
   APPEND(snprintf, "\n");
   if (n > PIPE_BUF - 1) {
     n = PIPE_BUF - 1;
-    b[--n] = '\n';
-    b[--n] = '.';
-    b[--n] = '.';
-    b[--n] = '.';
+    b[n-1] = '\n';
+    b[n-2] = '.';
+    b[n-3] = '.';
+    b[n-4] = '.';
   }
   if (g_log.fd != -1) {
     WriteError(g_log.fd, b, n);
