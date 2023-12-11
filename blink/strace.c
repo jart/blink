@@ -39,7 +39,7 @@
 #include "blink/thread.h"
 #include "blink/util.h"
 
-#define APPEND(...) bi += snprintf(bp + bi, bn - bi, __VA_ARGS__)
+#define APPEND(...) bi += snprintf(bp + bi, bi > bn ? 0 : bn - bi, __VA_ARGS__)
 
 struct thatispacked MagicNumber {
   int x;

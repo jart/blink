@@ -26,7 +26,7 @@
 #undef DEFINE_AVERAGE
 #undef DEFINE_COUNTER
 
-#define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
+#define APPEND(...) o += snprintf(b + o, o > n ? 0 : n - o, __VA_ARGS__)
 
 void PrintStats(void) {
 #ifndef NDEBUG

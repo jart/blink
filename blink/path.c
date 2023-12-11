@@ -37,7 +37,7 @@
 #include "blink/stats.h"
 #include "blink/vfs.h"
 
-#define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
+#define APPEND(...) o += snprintf(b + o, o > n ? 0 : n - o, __VA_ARGS__)
 
 #ifdef HAVE_JIT
 
