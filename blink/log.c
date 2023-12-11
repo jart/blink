@@ -42,7 +42,7 @@
 
 #define DEFAULT_LOG_PATH "blink.log"
 
-#define APPEND(F, ...) n += F(b + n, PIPE_BUF - n, __VA_ARGS__)
+#define APPEND(F, ...) n += F(b + n, n > PIPE_BUF ? 0 : PIPE_BUF - n, __VA_ARGS__)
 
 static struct Log {
   pthread_once_t_ once;

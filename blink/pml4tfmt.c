@@ -38,7 +38,7 @@
 #define INTERESTING_FLAGS (PAGE_U | PAGE_RW | PAGE_XD | PAGE_FILE)
 
 #define BYTES       16384
-#define APPEND(...) u->o += snprintf(u->b + u->o, BYTES - u->o, __VA_ARGS__)
+#define APPEND(...) u->o += snprintf(u->b + u->o, u->o > BYTES ? 0 : BYTES - u->o, __VA_ARGS__)
 
 struct MapMaker {
   bool t;

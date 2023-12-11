@@ -24,7 +24,7 @@
 #include "blink/log.h"
 #include "blink/tsan.h"
 
-#define APPEND(...) oi += snprintf(ob + oi, on - oi, __VA_ARGS__)
+#define APPEND(...) oi += snprintf(ob + oi, oi > on ? 0 : on - oi, __VA_ARGS__)
 
 void DumpHex(u8 *p, size_t n) {
   int oi = 0;

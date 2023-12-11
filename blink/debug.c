@@ -59,7 +59,7 @@
 
 #define MAX_BACKTRACE_LINES 64
 
-#define APPEND(...) o += snprintf(b + o, n - o, __VA_ARGS__)
+#define APPEND(...) o += snprintf(b + o, o > n ? 0 : n - o, __VA_ARGS__)
 
 _Thread_local static jmp_buf g_busted;
 
