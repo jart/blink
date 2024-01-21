@@ -70,7 +70,7 @@ void LoadArgv(struct Machine *m, char *execfn, char *prog, char **args,
               char **vars, u8 rng[16]) {
   u8 *bytes;
   struct Elf *elf;
-  i64 sp, *p, *bloc;
+  i64 sp, dx, *p, *bloc;
   size_t i, narg, nenv, naux, nall;
   elf = &m->system->elf;
   naux = 10;
@@ -85,6 +85,7 @@ void LoadArgv(struct Machine *m, char *execfn, char *prog, char **args,
   nall = 1 + narg + 1 + nenv + 1 + naux * 2;
   bloc = (i64 *)malloc(sizeof(i64) * nall);
   p = bloc + nall;
+  dx = PushString(m, prog);
   PUSH_AUXV(0, 0);
   PUSH_AUXV(AT_UID_LINUX, getuid());
   PUSH_AUXV(AT_EUID_LINUX, geteuid());
@@ -112,6 +113,7 @@ void LoadArgv(struct Machine *m, char *execfn, char *prog, char **args,
   while ((sp - nall * sizeof(i64)) & (STACKALIGN - 1)) --sp;
   sp -= nall * sizeof(i64);
   Write64(m->sp, sp);
+  Write64(m->dx, dx);
   Write64(m->di, 0); /* or ape detects freebsd */
   bytes = (u8 *)malloc(nall * 8);
   for (i = 0; i < nall; ++i) {
