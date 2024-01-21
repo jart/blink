@@ -2939,7 +2939,7 @@ static int SysMount(struct Machine *m, i64 source, i64 target, i64 fstype,
                     i64 mountflags, i64 data) {
   // No xlat, the VFS system will handle raw Linux options.
   return VfsMount(LoadStr(m, source), LoadStr(m, target), LoadStr(m, fstype),
-                  mountflags, (void *)data);
+                  mountflags, (void *)(uintptr_t)data);
 }
 #endif
 

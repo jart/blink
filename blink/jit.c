@@ -173,11 +173,11 @@ static void pthread_jit_write_protect_np_workaround(int enabled) {
 #if defined(__APPLE__) && defined(__aarch64__)
   int count_start = 8192;
   volatile int count = count_start;
-  uint64_t *addr, *other, val, val2, reread = -1;
+  uint64_t *addr, val, val2, reread = -1;
   addr = (uint64_t *)(!enabled ? _COMM_PAGE_APRR_WRITE_ENABLE
                                : _COMM_PAGE_APRR_WRITE_DISABLE);
-  other = (uint64_t *)(enabled ? _COMM_PAGE_APRR_WRITE_ENABLE
-                               : _COMM_PAGE_APRR_WRITE_DISABLE);
+  // other = (uint64_t *)(enabled ? _COMM_PAGE_APRR_WRITE_ENABLE
+  //                              : _COMM_PAGE_APRR_WRITE_DISABLE);
   switch (*(volatile uint8_t *)_COMM_PAGE_APRR_SUPPORT) {
     case 1:
       do {
