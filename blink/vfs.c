@@ -670,7 +670,7 @@ ssize_t VfsPathBuildFull(struct VfsInfo *info, struct VfsInfo *root,
 }
 
 ssize_t VfsPathBuild(struct VfsInfo *info, struct VfsInfo *root, bool absolute,
-                     char output[PATH_MAX]) {
+                     char output[VFS_PATH_MAX]) {
   struct VfsInfo *current;
   size_t len, currentlen;
   len = 0;

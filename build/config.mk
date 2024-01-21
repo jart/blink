@@ -60,9 +60,9 @@ TAGSFLAGS =				\
 # causes an explosive growth in object code size in files like sse.c
 CFLAGS += -U_FORTIFY_SOURCE
 
-ifeq ($(USER), jart)
-CFLAGS := -Wall -Werror $(CFLAGS)
-endif
+# ifeq ($(USER), jart)
+# CFLAGS := -Wall -Werror $(CFLAGS)
+# endif
 
 ifeq ($(MODE), zero)
 CFLAGS += -O0 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer
