@@ -795,14 +795,16 @@ static void OpPushImm(P) {
   Push(A, uimm0);
 }
 
-static void GenInterrupt(P, u8 trapno) {
+static void GenInterrupt(P, u8 trapno, bool software) {
 #ifdef DISABLE_METAL
+  if (software) m->oplen = 0;
   HaltMachine(m, trapno);
 #else
   u16 offset;
   struct System *s;
   switch (m->mode.genmode) {
     default:
+      if (software) m->oplen = 0;
       HaltMachine(m, trapno);
       break;
     case XED_GEN_MODE_REAL:
@@ -810,8 +812,6 @@ static void GenInterrupt(P, u8 trapno) {
       s = m->system;
       if (offset + 3 > s->idt_limit) {
         ThrowProtectionFault(m);
-      } else if (!Osz(rde) || Asz(rde)) {
-        OpUdImpl(m);
       } else {
         u8 *pfp = ReserveAddress(m, s->idt_base + offset, 4, false), *pisr;
         u32 fp, isrinsn;
@@ -820,9 +820,10 @@ static void GenInterrupt(P, u8 trapno) {
         fp = Load32(pfp);
         isrseg = (u16)(fp >> 16);
         isroff = (u16)fp;
-        Push(A, ExportFlags(m->flags));
-        Push(A, m->cs.sel);
-        Push(A, m->ip);
+        if (software) m->oplen = 0;
+        Pushw(A, ExportFlags(m->flags));
+        Pushw(A, m->cs.sel);
+        Pushw(A, m->ip - m->oplen);
         // optimize for cases where ISR is simply a `hvtailcall` & a few
         // other conditions are met; this bypasses the usual instruction
         // decoding so it should be done with care to preserve semantics
@@ -844,6 +845,7 @@ static void GenInterrupt(P, u8 trapno) {
           m->flags = SetFlag(m->flags, FLAGS_IF, false);
           m->flags = SetFlag(m->flags, FLAGS_TF, false);
           m->flags = SetFlag(m->flags, FLAGS_AC, false);
+          CancelPendingSingleStep(m);
           LongBranch(A, isrseg, isroff);
         }
       }
@@ -852,21 +854,24 @@ static void GenInterrupt(P, u8 trapno) {
 }
 
 static void OpInterruptImm(P) {
-  GenInterrupt(A, uimm0);
+  GenInterrupt(A, uimm0, true);
 }
 
 static void OpInterrupt1(P) {
-  GenInterrupt(A, 1);
+  GenInterrupt(A, 1, true);
 }
 
 static void OpInterrupt3(P) {
-  GenInterrupt(A, 3);
+  GenInterrupt(A, 3, true);
 }
 
 #ifndef DISABLE_METAL
 static void OpInto(P) {
   if (Mode(rde) != XED_MODE_LONG) {
-    if (GetFlag(m->flags, FLAGS_OF)) HaltMachine(m, 4);
+    if (GetFlag(m->flags, FLAGS_OF)) {
+      GenInterrupt(A, 4, true);
+      CancelPendingSingleStep(m);
+    }
   } else {
     OpUdImpl(m);
   }
@@ -2094,7 +2099,68 @@ static bool CanJit(struct Machine *m) {
   return !IsJitDisabled(&m->system->jit);
 }
 
+static inline unsigned ShouldInhibitSingleStep(u64 rde) {
+  switch (Mopcode(rde)) {
+    // for a pop %ss or mov a r/m,%ss, delay any pending int 1 to the
+    // next instruction
+    case 0x017:  // pop %ss
+      return 1;
+    case 0x08E:  // mov %Sw Evqp
+      return ModrmReg(rde) == SREG_SS ? 1 : 0;
+    // for instructions that invoke interrupts or syscalls, we either
+    // just entered the interrupt/syscall handler, or pretend that we
+    // have just returned from an imaginary int/syscall handler; this
+    // means we simply discard any pending int 1; one special case is
+    // the `into` opcode which is handled by OpInto() above
+    case 0x0CC:  // int3
+    case 0x0CD:  // int Ib
+    case 0x0F1:  // int1
+    case 0x105:  // syscall
+    case 0x134:  // sysenter
+      return 2;
+    case 0x1FF:  // hvcall Ovqp, hvtailcall Ovqp
+      switch (Rep(rde) << 9 | ModrmMod(rde) << 6 | ModrmReg(rde) << 3 |
+              Modrm(rde)) {
+        case 00067:
+        case 00167:
+        case 00267:
+        case 00077:
+        case 00177:
+        case 00277:
+          return 2;
+      }
+      return 0;
+    // for other opcodes, trigger any pending int 1 normally
+    default:
+      return 0;
+  }
+}
+
+static inline void CheckForSingleStepBeforeOp(struct Machine *m) {
+  if (VERY_UNLIKELY(GetFlag(m->flags, FLAGS_TF))) {
+    if (!GetFlag(m->flags, FLAGS_F0)) {
+      m->flags = SetFlag(m->flags, FLAGS_F0, true);
+      if (IsMakingPath(m)) AbandonPath(m);
+      DownvoteJit(&m->system->jit);
+    }
+  }
+}
+
+static inline void CheckForSingleStepAfterOp(P) {
+  if (VERY_UNLIKELY(GetFlag(m->flags, FLAGS_F0))) {
+    switch (ShouldInhibitSingleStep(rde)) {
+      case 0:
+        DonePendingSingleStep(m);
+        GenInterrupt(A, 1, false);
+        break;
+      case 2:
+        DonePendingSingleStep(m);
+    }
+  }
+}
+
 void JitlessDispatch(P) {
+  CheckForSingleStepBeforeOp(m);
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
            GetPc(m));
   COSTLY_STATISTIC(++instructions_dispatched);
@@ -2107,6 +2173,7 @@ void JitlessDispatch(P) {
   GetOp(Mopcode(rde))(A);
   if (m->stashaddr) CommitStash(m);
   m->oplen = 0;
+  CheckForSingleStepAfterOp(A);
 }
 
 static void GeneralDispatch(P) {
@@ -2115,6 +2182,7 @@ static void GeneralDispatch(P) {
   uintptr_t jitpc = 0;
   bool op_overlaps_page_boundary;
   bool path_would_overlap_page_boundary;
+  CheckForSingleStepBeforeOp(m);
   ASM_LOGF("decoding [%s] at address %" PRIx64, DescribeOp(m, GetPc(m)),
            GetPc(m));
   LoadInstruction(m, GetPc(m));
@@ -2178,6 +2246,7 @@ static void GeneralDispatch(P) {
     }
   }
   m->oplen = 0;
+  CheckForSingleStepAfterOp(A);
 #endif
 }
 

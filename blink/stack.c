@@ -112,6 +112,12 @@ void Push(P, u64 x) {
   PushN(A, x, Mode(rde), kStackOsz[Osz(rde)][Mode(rde)]);
 }
 
+#ifndef DISABLE_METAL
+void Pushw(P, u16 x) {
+  PushN(A, (u64)x, Mode(rde), 2);
+}
+#endif /* DISABLE_METAL */
+
 void OpPushZvq(P) {
   int osz = kStackOsz[Osz(rde)][Mode(rde)];
   PushN(A, ReadStackWord(RegRexbSrm(m, rde), osz), Mode(rde), osz);

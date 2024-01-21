@@ -832,19 +832,17 @@ int ShutdownJit(void) {
 }
 
 /**
- * Disables Just-In-Time threader.
+ * Add a downvote against using the Just-In-Time threader.
  */
-int DisableJit(struct Jit *jit) {
-  atomic_store_explicit(&jit->disabled, true, memory_order_release);
-  return 0;
+int DownvoteJit(struct Jit *jit) {
+  return atomic_fetch_add_explicit(&jit->downvotes, 1, memory_order_release);
 }
 
 /**
- * Enables Just-In-Time threader.
+ * Add an upvote in favor of using the Just-In-Time threader.
  */
-int EnableJit(struct Jit *jit) {
-  atomic_store_explicit(&jit->disabled, false, memory_order_release);
-  return 0;
+int UpvoteJit(struct Jit *jit) {
+  return atomic_fetch_sub_explicit(&jit->downvotes, 1, memory_order_release);
 }
 
 /**
@@ -1021,7 +1019,7 @@ static bool SetJitHookUnlocked(struct Jit *jit, u64 virt, int cas,
   unassert(jit->hooks.i <= jit->hooks.n / 2);
   n = atomic_load_explicit(&jit->hooks.n, memory_order_relaxed);
   if (jit->hooks.i == n / 2 && !(n = RehashJitHooks(jit))) {
-    DisableJit(jit);
+    DownvoteJit(jit);
     return false;
   }
   // probe for spot in hash table. this is guaranteed to halt since we
@@ -1335,7 +1333,7 @@ struct JitBlock *StartJit(struct Jit *jit, i64 opt_virt) {
         // this system isn't allowing us to use jit memory
         dll_remove(&jit->agedblocks, &jb->aged);
         ReleaseJitBlock(jb);
-        DisableJit(jit);
+        DownvoteJit(jit);
         jb = 0;
       }
     }

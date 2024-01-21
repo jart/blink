@@ -1,6 +1,8 @@
 #ifndef BLINK_FLAGS_H_
 #define BLINK_FLAGS_H_
 #include "blink/builtin.h"
+#include "blink/jit.h"
+#include "blink/likely.h"
 #include "blink/machine.h"
 
 #define FLAGS_CF   0   // carry flag
@@ -17,7 +19,7 @@
 #define FLAGS_OF   11  // overflow flag
 #define FLAGS_IOPL 12  // [12,13] i/o privilege level
 #define FLAGS_NT   14  // nested task
-#define FLAGS_F0   15  // always 0
+#define FLAGS_F0   15  // use internally for single stepping (supposed to be 0)
 #define FLAGS_RF   16  // resume flag
 #define FLAGS_VM   17  // virtual-8086 mode
 #define FLAGS_AC   18  // access control / alignment check
@@ -26,16 +28,16 @@
 #define FLAGS_ID   21  // id flag
 #define FLAGS_LP   24  // [24,31] low bits of last alu result (supposed to be 0)
 
-#define CF (1 << FLAGS_CF)
-#define PF (1 << FLAGS_PF)
-#define AF (1 << FLAGS_AF)
-#define ZF (1 << FLAGS_ZF)
-#define SF (1 << FLAGS_SF)
-#define OF (1 << FLAGS_OF)
-#define DF (1 << FLAGS_DF)
-#define RF (1 << FLAGS_RF)
-#define AC (1 << FLAGS_AC)
-#define ID (1 << FLAGS_ID)
+#define CF ((u32)1 << FLAGS_CF)
+#define PF ((u32)1 << FLAGS_PF)
+#define AF ((u32)1 << FLAGS_AF)
+#define ZF ((u32)1 << FLAGS_ZF)
+#define SF ((u32)1 << FLAGS_SF)
+#define DF ((u32)1 << FLAGS_DF)
+#define OF ((u32)1 << FLAGS_OF)
+#define RF ((u32)1 << FLAGS_RF)
+#define AC ((u32)1 << FLAGS_AC)
+#define ID ((u32)1 << FLAGS_ID)
 
 #define GetLazyParityBool(f)    GetParity((0xff000000 & (f)) >> FLAGS_LP)
 #define SetLazyParityByte(f, x) ((0x00ffffff & (f)) | (255 & (x)) << FLAGS_LP)
@@ -91,6 +93,18 @@ MICRO_OP_SAFE bool IsLessOrEqual(struct Machine *m) {  // ZF || SF != OF
 
 MICRO_OP_SAFE bool IsGreater(struct Machine *m) {  // !ZF && SF == OF
   return (i8)(~(m->flags ^ (m->flags >> 4)) & ~(m->flags << 1)) < 0;
+}
+
+MICRO_OP_SAFE void DonePendingSingleStep(struct Machine *m) {
+  // this should only be called if FLAGS_F0 is known to be set!
+  m->flags = SetFlag(m->flags, FLAGS_F0, false);
+  UpvoteJit(&m->system->jit);
+}
+
+MICRO_OP_SAFE void CancelPendingSingleStep(struct Machine *m) {
+  if (VERY_UNLIKELY(GetFlag(m->flags, FLAGS_F0))) {
+    DonePendingSingleStep(m);
+  }
 }
 
 #endif /* BLINK_FLAGS_H_ */

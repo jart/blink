@@ -57,12 +57,18 @@ static relegated bool IsNullSelector(u16 sel) {
 
 static relegated void ChangeMachineMode(struct Machine *m,
                                         struct XedMachineMode mode) {
-  if (memcmp(&mode, &m->mode, sizeof(mode)) == 0) return;
+  struct XedMachineMode prev_mode = m->mode;
+  if (memcmp(&mode, &prev_mode, sizeof(mode)) == 0) return;
+#ifdef HAVE_JIT
+  if (mode.omode != XED_MODE_LONG && prev_mode.omode == XED_MODE_LONG) {
+    DownvoteJit(&m->system->jit);
+  }
+#endif
   ResetInstructionCache(m);
   SetMachineMode(m, mode);
 #ifdef HAVE_JIT
-  if (mode.omode == XED_MODE_LONG && FLAG_wantjit) {
-    EnableJit(&m->system->jit);
+  if (mode.omode == XED_MODE_LONG && prev_mode.omode != XED_MODE_LONG) {
+    UpvoteJit(&m->system->jit);
   }
 #endif
 }

@@ -567,6 +567,7 @@ typedef u32 (*cc_f)(struct Machine *);
 extern const cc_f kConditionCode[16];
 
 void Push(P, u64);
+void Pushw(P, u16);
 u64 Pop(P, u16);
 void PopVq(P);
 void PushVq(P);

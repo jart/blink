@@ -364,7 +364,7 @@ _Noreturn void SysExitGroup(struct Machine *m, int rc) {
     THR_LOGF("calling exit(%d)", rc);
     KillOtherThreads(m->system);
 #ifdef HAVE_JIT
-    DisableJit(&m->system->jit);  // unmapping exec pages is slow
+    DownvoteJit(&m->system->jit);  // unmapping exec pages is slow
 #endif
     if (m->system->trapexit && !m->system->exited) {
       m->system->exited = true;
