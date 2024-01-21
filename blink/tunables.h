@@ -5,7 +5,7 @@
 #include "blink/builtin.h"
 
 #define BLINK_MAJOR 1
-#define BLINK_MINOR 0
+#define BLINK_MINOR 1
 #define BLINK_PATCH 0
 
 #define LINUX_MAJOR 4
