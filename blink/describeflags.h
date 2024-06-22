@@ -4,7 +4,7 @@
 
 #include "blink/builtin.h"
 
-struct thatispacked DescribeFlags {
+struct DescribeFlags {
   unsigned flag;
   const char *name;
 };

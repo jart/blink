@@ -50,6 +50,10 @@
 #define READ64(p) Read64((const u8 *)(p))
 #define READ32(p) Read32((const u8 *)(p))
 
+#ifndef __COSMOPOLITAN__
+#define IsWindows() 0
+#endif
+
 static bool CanEmulateImpl(struct Machine *, char **, char ***, bool);
 
 static void LoaderCopy(struct Machine *m, i64 vaddr, size_t amt, void *image,
@@ -553,7 +557,7 @@ static int CheckExecutableFile(const char *prog, const struct stat *st) {
     errno = EACCES;
     return -1;
   }
-  if (!(st->st_mode & 0111) && !IsBinFile(prog)) {
+  if (!IsWindows() && !(st->st_mode & 0111) && !IsBinFile(prog)) {
     LOGF("execve needs chmod +x");
     errno = EACCES;
     return -1;

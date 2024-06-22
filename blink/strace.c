@@ -41,7 +41,7 @@
 
 #define APPEND(...) bi += snprintf(bp + bi, bi > bn ? 0 : bn - bi, __VA_ARGS__)
 
-struct thatispacked MagicNumber {
+struct MagicNumber {
   int x;
   const char *s;
 };
