@@ -298,12 +298,12 @@ static void ExplainWhyItCantBeEmulated(const char *path, const char *reason) {
 }
 
 static bool IsBinFile(const char *prog) {
-  return endswith(prog, ".bin") ||  //
-         endswith(prog, ".BIN") ||  //
-         endswith(prog, ".img") ||  //
-         endswith(prog, ".IMG") ||  //
-         endswith(prog, ".raw") ||  //
-         endswith(prog, ".RAW");
+  return EndsWith(prog, ".bin") ||  //
+         EndsWith(prog, ".BIN") ||  //
+         EndsWith(prog, ".img") ||  //
+         EndsWith(prog, ".IMG") ||  //
+         EndsWith(prog, ".raw") ||  //
+         EndsWith(prog, ".RAW");
 }
 
 bool IsSupportedExecutable(const char *path, void *image, size_t size) {
@@ -752,8 +752,8 @@ error: unsupported executable; we need:\n\
   }
   if (m->mode.genmode == XED_GEN_MODE_REAL) {
     LoadBios(m, biosprog);
-    if (endswith(prog, ".com") ||  //
-        endswith(prog, ".COM")) {
+    if (EndsWith(prog, ".com") ||  //
+        EndsWith(prog, ".COM")) {
       // cosmo convention (see also binbase)
       AddFileMap(m->system, 4 * 1024 * 1024, 512, prog, 0);
     } else {

@@ -42,7 +42,8 @@
 
 #define DEFAULT_LOG_PATH "blink.log"
 
-#define APPEND(F, ...) n += F(b + n, n > PIPE_BUF ? 0 : PIPE_BUF - n, __VA_ARGS__)
+#define APPEND(F, ...) \
+  n += F(b + n, n > PIPE_BUF ? 0 : PIPE_BUF - n, __VA_ARGS__)
 
 static struct Log {
   pthread_once_t_ once;
@@ -126,8 +127,8 @@ static void OpenLog(void) {
 
 static void Log(const char *file, int line, const char *fmt, va_list va,
                 int level) {
+  char b[4096];
   int err, n = 0;
-  char b[PIPE_BUF];
   err = errno;
   unassert(!pthread_once_(&g_log.once, OpenLog));
   APPEND(snprintf, "%c%s:%s:%d:%d ", "EI"[level], GetTimestamp(), file, line,
@@ -136,10 +137,10 @@ static void Log(const char *file, int line, const char *fmt, va_list va,
   APPEND(snprintf, "\n");
   if (n > PIPE_BUF - 1) {
     n = PIPE_BUF - 1;
-    b[n-1] = '\n';
-    b[n-2] = '.';
-    b[n-3] = '.';
-    b[n-4] = '.';
+    b[n - 1] = '\n';
+    b[n - 2] = '.';
+    b[n - 3] = '.';
+    b[n - 4] = '.';
   }
   if (g_log.fd != -1) {
     WriteError(g_log.fd, b, n);

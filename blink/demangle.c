@@ -235,7 +235,7 @@ char *Demangle(char *p, const char *symbol, size_t n) {
   size_t sn;
   sigset_t ss, oldss;
   sn = strlen(symbol);
-  if (startswith(symbol, "_Z")) {
+  if (StartsWith(symbol, "_Z")) {
 #ifdef HAVE_PTHREAD_SETCANCELSTATE
     unassert(!pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &cs));
 #endif

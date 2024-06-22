@@ -76,6 +76,7 @@ bool CheckInterrupt(struct Machine *, bool);
 int SysStatfs(struct Machine *, i64, i64);
 int SysFstatfs(struct Machine *, i32, i64);
 int mkfifoat_(int, const char *, mode_t);
+int mkfifo_(const char *, mode_t);
 
 void Strace(struct Machine *, const char *, bool, const char *, ...);
 
@@ -84,6 +85,13 @@ void Strace(struct Machine *, const char *, bool, const char *, ...);
 #undef mkfifoat
 #endif
 #define mkfifoat mkfifoat_
+#endif
+
+#ifndef HAVE_MKFIFO
+#ifdef mkfifo
+#undef mkfifo
+#endif
+#define mkfifo mkfifo_
 #endif
 
 #endif /* BLINK_SYSCALL_H_ */

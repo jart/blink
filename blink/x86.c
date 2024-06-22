@@ -770,16 +770,14 @@ int DecodeInstruction(struct XedDecodedInst *x, const void *itext, size_t bytes,
   }
   rc = xed_decode_instruction_length(x);
   rde = x->op.rde;
-  rde |= (Opcode(rde) & 7) << 12;            // srm
+  rde |= (Opcode(rde) & 7) << 12;  // srm
   if (Mode(rde) == XED_MODE_REAL) {
     // in 16-bit mode, flip osz, except for SIMD instructions & cmpxchg8b;
     // for SIMD instructions, 0x66 always refers to instructions with larger
     // operands, & lack of 0x66 to instructions with smaller operands
     u16 mop = Mopcode(rde);
-    if ((mop >= 0x150 && mop <= 0x176) ||
-        (mop >= 0x17C && mop <= 0x17F) ||
-        mop == 0x1C2 ||
-        (mop >= 0x1C4 && mop <= 0x1C7) ||
+    if ((mop >= 0x150 && mop <= 0x176) || (mop >= 0x17C && mop <= 0x17F) ||
+        mop == 0x1C2 || (mop >= 0x1C4 && mop <= 0x1C7) ||
         (mop >= 0x1D0 && mop <= 0x1FE)) {
       (void)rde;
     } else {

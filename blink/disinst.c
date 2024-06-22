@@ -149,8 +149,8 @@ static char *DisName(struct Dis *d, char *bp, const char *name,
       } else {
         *p++ = 's';
       }
-    } else if (wantsuffix || (ambiguous && !startswith(name, "f") &&
-                              !startswith(name, "set"))) {
+    } else if (wantsuffix || (ambiguous && !StartsWith(name, "f") &&
+                              !StartsWith(name, "set"))) {
       if (Osz(rde)) {
         if (ambiguous || Mode(rde) != XED_MODE_REAL) {
           *p++ = 'w';

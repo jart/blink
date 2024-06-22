@@ -78,7 +78,7 @@ static void DisLoadElfSyms(struct Dis *d, Elf64_Ehdr_ *ehdr, size_t esize,
       for (i = 0; i < n; ++i) {
         if (ELF64_ST_TYPE_(st[i].info) == STT_SECTION_ ||
             ELF64_ST_TYPE_(st[i].info) == STT_FILE_ || !Read32(st[i].name) ||
-            startswith(stab + Read32(st[i].name), "v_") ||
+            StartsWith(stab + Read32(st[i].name), "v_") ||
             !(0 <= Read32(st[i].name) && Read32(st[i].name) < stablen) ||
             !Read64(st[i].value) ||
             !(-0x800000000000 <= (i64)Read64(st[i].value) &&

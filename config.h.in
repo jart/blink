@@ -27,6 +27,7 @@
 // #define HAVE_INT128
 // #define HAVE_SA_LEN
 // #define HAVE_PREADV
+// #define HAVE_MKFIFO
 // #define HAVE_WCWIDTH
 // #define HAVE_SYSINFO
 // #define HAVE_FEXECVE

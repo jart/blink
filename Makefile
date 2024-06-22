@@ -111,8 +111,8 @@ include third_party/qemu/qemu.mk
 include third_party/cosmo/cosmo.mk
 include third_party/libc-test/libc-test.mk
 
-BUILD_TOOLCHAIN := -DBUILD_TOOLCHAIN="\"$(shell $(CC) --version | head -n1)\""
-BUILD_TIMESTAMP := -DBUILD_TIMESTAMP="\"$(shell LC_ALL=C TZ=UTC date +"%a %b %e %T %Z %Y")\""
+BUILD_TOOLCHAIN := -DBUILD_TOOLCHAIN="\"$(shell $(CC) --version | head -n1 | sed s/\ / /g)\""
+BUILD_TIMESTAMP := -DBUILD_TIMESTAMP="\"$(shell LC_ALL=C TZ=UTC date +"%a %b %e %T %Z %Y" | sed s/\ / /g)\""
 BLINK_COMMITS := -DBLINK_COMMITS="\"$(shell git rev-list HEAD --count 2>/dev/null)\""
 BLINK_GITSHA := -DBLINK_GITSHA="\"$(shell git rev-parse --verify HEAD 2>/dev/null)\""
 

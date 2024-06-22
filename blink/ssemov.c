@@ -103,7 +103,9 @@ static void MovdqaWdqVdq(P) {
   u8 *dst;
   IGNORE_RACES_START();
   dst = GetXmmAddress(A);
-  if (!IsRomAddress(m, dst)) memcpy(dst, XmmRexrReg(m, rde), 16);
+  if (!IsRomAddress(m, dst)) {
+    memcpy(dst, XmmRexrReg(m, rde), 16);
+  }
   IGNORE_RACES_END();
   if (IsMakingPath(m)) {
     Jitter(A, "z4A"    // 128-bit GetReg

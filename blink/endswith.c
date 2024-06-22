@@ -20,7 +20,7 @@
 
 #include "blink/util.h"
 
-bool endswith(const char *s, const char *suffix) {
+bool EndsWith(const char *s, const char *suffix) {
   size_t n, m;
   n = strlen(s);
   m = strlen(suffix);

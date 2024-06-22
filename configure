@@ -657,6 +657,7 @@ if [ -z "${POSIX}" ]; then
   ( config setgroups "checking for setgroups()... " uncomment "#define HAVE_SETGROUPS" ) &
   ( config vasprintf "checking for vasprintf()... " uncomment "#define HAVE_VASPRINTF" ) &
   ( config strchrnul "checking for strchrnul()... " uncomment "#define HAVE_STRCHRNUL" ) &
+  ( config mkfifo "checking for mkfifo()... " uncomment "#define HAVE_MKFIFO" ) &
   ( config mkfifoat "checking for mkfifoat()... " uncomment "#define HAVE_MKFIFOAT" ) &
   ( config preadv "checking for preadv() and pwritev()... " uncomment "#define HAVE_PREADV" ) &
   ( config wait4 "checking for wait4()... " uncomment "#define HAVE_WAIT4" ) &
@@ -730,7 +731,7 @@ HOST_ARCH = ${HOST_ARCH}
 HOST_SYSTEM = ${HOST_SYSTEM}
 CONFIG_HOSTNAME = $(hostname)
 CONFIG_COMMAND = ${CONFIG_COMMAND}
-CONFIG_ARGUMENTS = -DCONFIG_ARGUMENTS="\"$*\""
+CONFIG_ARGUMENTS = -DCONFIG_ARGUMENTS="\"$(echo $* | sed s/\ / /g)\""
 BLINK_UNAME_V = -DBLINK_UNAME_V="\"$(echo ${BLINK_UNAME_V})\""
 ZLIB = ${ZLIB}
 EOF
