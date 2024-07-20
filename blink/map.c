@@ -43,7 +43,11 @@ static long GetSystemPageSize(void) {
   return 4096;
 #else
   long z;
+#ifdef _SC_GRANSIZE
+  unassert((z = sysconf(_SC_GRANSIZE)) > 0);
+#else
   unassert((z = sysconf(_SC_PAGESIZE)) > 0);
+#endif
   unassert(IS2POW(z));
   return MAX(4096, z);
 #endif
