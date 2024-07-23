@@ -20,7 +20,7 @@
 
 #include <stdbool.h>
 
-const char *DescribeFlags(char *p, size_t n, const struct DescribeFlags *d,
+const char *DescribeFlagz(char *p, size_t n, const struct DescribeFlagz *d,
                           size_t m, const char *prefix, unsigned x) {
   bool t;
   char b[21];

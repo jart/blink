@@ -17,7 +17,7 @@
 #define LINUX_VERSION       MKVERSION(LINUX_MAJOR, LINUX_MINOR, LINUX_PATCH)
 #define BLINK_VERSION       MKVERSION(BLINK_MAJOR, BLINK_MINOR, BLINK_PATCH)
 
-#if CAN_64BIT && (defined(__APPLE__) || defined(__COSMOPOLITAN__))
+#if CAN_64BIT && defined(__APPLE__)
 #define kSkew 0x088800000000
 #else
 #define kSkew 0x000000000000

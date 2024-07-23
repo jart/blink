@@ -548,6 +548,12 @@ if config noop "checking for -fno-stack-protector... "; then
   UOPFLAGS="-fno-stack-protector ${UOPFLAGS}"
 fi
 
+# avoid cosmo libc function call tracing messing up micro-ops
+EXTRA_CFLAGS=-fpatchable-function-entry=0,0
+if config noop "checking for -fpatchable-function-entry=0,0... "; then
+  UOPFLAGS="-fpatchable-function-entry=0,0 ${UOPFLAGS}"
+fi
+
 # avoid creating stack frames in micro-op functions
 if [ "${MODE}" != "prof" ]; then
   EXTRA_CFLAGS=-fomit-frame-pointer
