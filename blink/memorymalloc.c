@@ -484,7 +484,6 @@ bool IsValidAddrSize(i64 virt, i64 size) {
 }
 
 void InvalidateSystem(struct System *s, bool tlb, bool icache) {
-#ifdef HAVE_THREADS
   struct Dll *e;
   struct Machine *m;
   if (tlb || icache) {
@@ -501,7 +500,6 @@ void InvalidateSystem(struct System *s, bool tlb, bool icache) {
     }
     UNLOCK(&s->machines_lock);
   }
-#endif
 }
 
 struct FileMap *AddFileMap(struct System *s, i64 virt, i64 size,
