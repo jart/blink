@@ -276,12 +276,6 @@ static void GetOpts(int argc, char *argv[]) {
 #if LOG_ENABLED
   FLAG_logpath = getenv("BLINK_LOG_FILENAME");
 #endif
-#ifdef __COSMOPOLITAN__
-  if (IsWindows()) {
-    FLAG_nojit = true;
-    FLAG_nolinear = true;
-  }
-#endif
   while ((opt = GetOpt(argc, argv, OPTS)) != -1) {
     switch (opt) {
       case '0':
