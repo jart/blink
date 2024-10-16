@@ -99,6 +99,9 @@ static void *PortableMmap(void *addr,     //
 }
 
 static int GetBitsInAddressSpace(void) {
+#ifdef __EMSCRIPTEN__
+  return 32;
+#else
   int i;
   void *ptr;
   uint64_t want;
@@ -117,6 +120,7 @@ static int GetBitsInAddressSpace(void) {
     }
   }
   Abort();
+#endif
 }
 
 static u64 GetVirtualAddressSpace(int vabits, long pagesize) {
