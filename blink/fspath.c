@@ -44,8 +44,8 @@ char *JoinPath(const char *x, const char *y) {
 
 char *ExpandUser(const char *path) {
   const char *home;
-  if (*path == '~' && (home = getenv("HOME"))) {
-    return JoinPath(home, path);
+  if (path[0] == '~' && path[1] == '/' && (home = getenv("HOME"))) {
+    return JoinPath(home, &path[2]);
   } else {
     return strdup(path);
   }
