@@ -604,24 +604,24 @@ static int Cmps(int imm, float x, float y) {
   }
 }
 
-static i32 Cmpd(int imm, double x, double y) {
+static i64 Cmpd(int imm, double x, double y) {
   switch (imm) {
     case 0:
-      return x == y ? -1 : 0;
+      return x == y ? -1ll : 0;
     case 1:
-      return x < y ? -1 : 0;
+      return x < y ? -1ll : 0;
     case 2:
-      return x <= y ? -1 : 0;
+      return x <= y ? -1ll : 0;
     case 3:
-      return isnan(x) || isnan(y) ? -1 : 0;
+      return isnan(x) || isnan(y) ? -1ll : 0;
     case 4:
-      return x != y ? -1 : 0;
+      return x != y ? -1ll : 0;
     case 5:
-      return x >= y ? -1 : 0;
+      return x >= y ? -1ll : 0;
     case 6:
-      return x > y ? -1 : 0;
+      return x > y ? -1ll : 0;
     case 7:
-      return !(isnan(x) || isnan(y)) ? -1 : 0;
+      return !(isnan(x) || isnan(y)) ? -1ll : 0;
     default:
       return 0;
   }
