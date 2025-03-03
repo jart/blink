@@ -2092,7 +2092,7 @@ static void RewindHistory(int delta) {
 static ssize_t HandleEpipe(ssize_t rc) {
   if (rc == -1 && errno == EPIPE) {
     LOGF("got EPIPE, shutting down");
-    exit(128 + EPIPE);
+    exit(EXIT_FAILURE_WITH_SIGNAL(EPIPE));
   }
   return rc;
 }
@@ -2609,7 +2609,7 @@ static void LaunchDebuggerReactively(void) {
       action |= MODAL;
     } else {
       fprintf(stderr, "ERROR: %s\n", systemfailure);
-      exit(1);
+      exit(EXIT_FAILURE);
     }
   }
 }
@@ -3093,7 +3093,7 @@ static void ReadKeyboard(void) {
       return;
     }
     fprintf(stderr, "ReadKeyboard failed: %s\n", DescribeHostErrno(errno));
-    exit(1);
+    exit(EXIT_FAILURE);
   }
   HandleKeyboard(buf);
 }
@@ -3408,7 +3408,7 @@ static void Tui(void) {
           ScrollMemoryViews();
           if (m->signals & ~m->sigmask) {
             if ((sig = ConsumeSignal(m, 0, 0))) {
-              exit(128 + sig);
+              exit(EXIT_FAILURE_WITH_SIGNAL(sig));
             }
           }
           if (!(action & CONTINUE) || interactive) {
@@ -3453,7 +3453,7 @@ static void Tui(void) {
 
 _Noreturn static void PrintVersion(void) {
   fputs(VERSION, stdout);
-  exit(0);
+  exit(EXIT_SUCCESS);
 }
 
 static void GetOpts(int argc, char *argv[]) {
@@ -3488,7 +3488,7 @@ static void GetOpts(int argc, char *argv[]) {
                   "linearization not possible on this system"
                   " (word size is %d bits and page size is %ld)\n",
                   bsr(UINTPTR_MAX) + 1, sysconf(_SC_PAGESIZE));
-          exit(1);
+          exit(EXIT_FAILURE);
         }
         break;
       case 'R':
@@ -3566,7 +3566,7 @@ int VirtualMachine(int argc, char *argv[]) {
     codepath = pathbuf;
   } else {
     fprintf(stderr, "%s: command not found: %s\n", argv[0], argv[optind_]);
-    exit(127);
+    exit(EXIT_FAILURE_EXEC_FAILED);
   }
   optind_++;
   do {
@@ -3601,7 +3601,7 @@ int VirtualMachine(int argc, char *argv[]) {
       }
       if (tty == -1) {
         WriteErrorString("failed to open /dev/tty\n");
-        exit(1);
+        exit(EXIT_FAILURE);
       }
       ttyin = tty;
       ttyout = tty;
@@ -3647,7 +3647,7 @@ void TerminateSignal(struct Machine *m, int sig, int code) {
     LOGF("terminating due to signal %s code=%d", DescribeSignal(sig), code);
     WriteErrorString("\r\033[K\033[J"
                      "terminating due to signal; see log\n");
-    exit(128 + sig);
+    exit(EXIT_FAILURE_WITH_SIGNAL(sig));
   }
 }
 
@@ -3700,13 +3700,13 @@ int main(int argc, char *argv[]) {
 #ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 #endif
 #ifndef DISABLE_VFS
   if (VfsInit(FLAG_prefix)) {
     WriteErrorString("error: vfs initialization failed\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 #endif
 #ifdef HAVE_JIT

@@ -392,7 +392,7 @@ _Noreturn void SysExit(struct Machine *m, int rc) {
   } else {
     ClearChildTid(m);
     FreeMachine(m);
-    pthread_exit(0);
+    pthread_exit(EXIT_SUCCESS);
   }
 #else
   SysExitGroup(m, rc);
