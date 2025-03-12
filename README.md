@@ -709,6 +709,21 @@ number:
   - `Windows` for Windows under Cosmopolitan
   - `Unknown` if compiled on unrecognized platform
 
+- Leaf `0x40031338` reports the underlying hardware architecture name
+  in `EBX ‖ ECX ‖ EDX` with zero filling for strings shorter than 12:
+
+  - `x86_64` for x86_64
+  - `i386` for i386
+  - `aarch64` for aarch64
+  - `arm` for arm32
+  - `ppc64` for powerpc64
+  - `ppc64le` for powerpc64le
+  - `ppc` for powerpc
+  - `s390x` for s390x
+  - `riscv64` for riscv64
+  - `riscv32` for riscv32
+  - `Unknown` if compiled on unrecognized platform
+
 - Leaf `0x80000001` tells if Blink's JIT is enabled in bit `31` in `ECX`
 
 ### JIT
