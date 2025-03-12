@@ -59,6 +59,41 @@
 #define OS UNKNOWN_
 #endif
 
+#define X86_64_  "x86_64\0\0\0\0\0\0"
+#define I386_    "i386\0\0\0\0\0\0\0\0"
+#define AARCH64_ "aarch64\0\0\0\0\0"
+#define ARM_     "arm\0\0\0\0\0\0\0\0\0"
+#define PPC64_   "ppc64\0\0\0\0\0\0\0"
+#define PPC64LE_ "ppc64le\0\0\0\0\0"
+#define PPC_     "ppc\0\0\0\0\0\0\0\0\0"
+#define S390X_   "s390x\0\0\0\0\0\0\0"
+#define RISCV64_ "riscv64\0\0\0\0\0"
+#define RISCV32_ "riscv32\0\0\0\0\0"
+
+#if defined(__x86_64__)
+#define ARCH_NAME X86_64_
+#elif defined(__i386__)
+#define ARCH_NAME I386_
+#elif defined(__aarch64__)
+#define ARCH_NAME AARCH64_
+#elif defined(__ARMEL__)
+#define ARCH_NAME ARM_
+#elif defined(__powerpc64__) && defined(__LITTLE_ENDIAN__)
+#define ARCH_NAME PPC64LE_
+#elif defined(__powerpc64__)
+#define ARCH_NAME PPC64_
+#elif defined(__powerpc__)
+#define ARCH_NAME PPC_
+#elif defined(__s390x__)
+#define ARCH_NAME S390X_
+#elif defined(__riscv) && __riscv_xlen == 64
+#define ARCH_NAME RISCV64_
+#elif defined(__riscv) && __riscv_xlen == 32
+#define ARCH_NAME RISCV32_
+#else
+#define ARCH_NAME UNKNOWN_
+#endif
+
 void OpCpuid(P) {
   u32 ax, bx, cx, dx, jit;
   if (m->trapcpuid) {
@@ -87,6 +122,11 @@ void OpCpuid(P) {
       bx = Read32((const u8 *)OS + 0);
       cx = Read32((const u8 *)OS + 4);
       dx = Read32((const u8 *)OS + 8);
+      break;
+    case 0x40031338:
+      bx = Read32((const u8 *)ARCH_NAME + 0);
+      cx = Read32((const u8 *)ARCH_NAME + 4);
+      dx = Read32((const u8 *)ARCH_NAME + 8);
       break;
     case 1:
       cx |= 1 << 0;    // sse3
