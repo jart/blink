@@ -169,6 +169,11 @@ void *Mmap(void *addr,     //
 #if LOG_MEM
   char szbuf[16];
 #endif
+#if defined(__NetBSD__)
+  if (!(flags & MAP_SHARED)) {
+    prot |= PROT_MPROTECT(PROT_EXEC | PROT_WRITE | PROT_READ);
+  }
+#endif
   res = PortableMmap(addr, length, prot, flags, fd, offset);
 #if LOG_MEM
   FormatSize(szbuf, length, 1024);
