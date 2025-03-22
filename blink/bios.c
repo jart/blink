@@ -868,7 +868,7 @@ static void OnApmService(void) {
     SetCarry(false);
   } else if (Get16(m->ax) == 0x5307 && m->bl == 1 && m->cl == 3) {
     LOGF("APM SHUTDOWN");
-    exit(0);
+    exit(EXIT_SUCCESS);
   } else {
     SetCarry(true);
   }

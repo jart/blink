@@ -27,6 +27,8 @@
 #include "blink/thread.h"
 #include "blink/tunables.h"
 
+#define EXIT_FAILURE_ERRFD_INIT 200
+
 static int g_errfd;
 
 int WriteErrorString(const char *buf) {
@@ -49,5 +51,5 @@ int WriteError(int fd, const char *buf, int len) {
 void WriteErrorInit(void) {
   if (g_errfd) return;
   g_errfd = fcntl(2, F_DUPFD_CLOEXEC, kMinBlinkFd);
-  if (g_errfd == -1) exit(200);
+  if (g_errfd == -1) exit(EXIT_FAILURE_ERRFD_INIT);
 }

@@ -282,7 +282,7 @@ void KillOtherThreads(struct System *s) {
   struct timespec deadline;
   if (atomic_exchange(&s->killer, true)) {
     FreeMachine(g_machine);
-    pthread_exit(0);
+    pthread_exit(EXIT_SUCCESS);
   }
 StartOver:
   unassert(s == g_machine->system);
@@ -740,6 +740,8 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
   }
 }
 
+#define EXIT_FAILURE_MMAP_PANIC 250
+
 _Noreturn static void PanicDueToMmap(void) {
 #ifndef NDEBUG
   WriteErrorString(
@@ -748,7 +750,7 @@ _Noreturn static void PanicDueToMmap(void) {
   WriteErrorString(
       "unrecoverable mmap() crisis: Blink was built with NDEBUG\n");
 #endif
-  exit(250);
+  exit(EXIT_FAILURE_MMAP_PANIC);
 }
 
 static int FailDueToHostAlignment(i64 virt, long pagesize, const char *kind) {
@@ -937,7 +939,7 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
         if (!(pt & PAGE_V)) {
           if ((pt = AllocatePageTable(s)) == -1) {
             WriteErrorString("mmap() crisis: ran out of page table memory\n");
-            exit(250);
+            exit(EXIT_FAILURE_MMAP_PANIC);
           }
           StorePte(mi, pt);
         }
