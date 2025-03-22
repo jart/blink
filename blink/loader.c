@@ -128,20 +128,20 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
   }
   if (offset > imagesize) {
     ERRF("bad phdr offset");
-    exit(127);
+    exit(EXIT_FAILURE_EXEC_FAILED);
   }
   if (filesz > imagesize) {
     ERRF("bad phdr filesz");
-    exit(127);
+    exit(EXIT_FAILURE_EXEC_FAILED);
   }
   if (filesz && offset + filesz > imagesize) {
     ERRF("corrupt elf program header");
-    exit(127);
+    exit(EXIT_FAILURE_EXEC_FAILED);
   }
   if (end < last_end) {
     ERRF("program headers aren't ordered, expected %" PRIx64 " >= %" PRIx64,
          end, last_end);
-    exit(127);
+    exit(EXIT_FAILURE_EXEC_FAILED);
   }
   if (skew != (offset & (pagesize - 1))) {
     WriteErrorString(
@@ -149,7 +149,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
         "(1) rebuilding your program using the linker flags: -static "
         "-Wl,-z,common-page-size=65536,-z,max-page-size=65536 or (2) "
         "using `blink -m` to disable the linear memory optimization\n");
-    exit(127);
+    exit(EXIT_FAILURE_EXEC_FAILED);
   }
 
   // on systems with a page size greater than the elf executable (e.g.
@@ -210,7 +210,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
                start + bulk, offset, offset + bulk);
       if (ReserveVirtual(s, start, bulk, key, fd, offset, 0, 0) == -1) {
         ERRF("failed to map elf program header file data");
-        exit(127);
+        exit(EXIT_FAILURE_EXEC_FAILED);
       }
       if ((amt = bulk - filesz)) {
         ELF_LOGF("note: next copy is actually bzero() kludge");
@@ -225,7 +225,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
       ELF_LOGF("alloc %" PRIx64 "-%" PRIx64, start, end);
       if (ReserveVirtual(s, start, end - start, key, -1, 0, 0, 0) == -1) {
         ERRF("failed to allocate program header bss");
-        exit(127);
+        exit(EXIT_FAILURE_EXEC_FAILED);
       }
     }
   }
@@ -378,7 +378,7 @@ static i64 ChooseAslr(const Elf64_Ehdr_ *ehdr, size_t size, i64 dflt,
   i64 aslr;
   if (GetElfMemorySize(ehdr, size, base) <= 0) {
     ERRF("couldn't determine boundaries of loaded executable");
-    exit(127);
+    exit(EXIT_FAILURE_EXEC_FAILED);
   }
   if (Read16(ehdr->type) == ET_DYN_ && !*base) {
     aslr = dflt;
@@ -390,7 +390,7 @@ static i64 ChooseAslr(const Elf64_Ehdr_ *ehdr, size_t size, i64 dflt,
   *base += aslr;
   if (!(*base & ~(FLAG_pagesize - 1))) {
     ERRF("won't load program to null base address");
-    exit(127);
+    exit(EXIT_FAILURE_EXEC_FAILED);
   }
   return aslr;
 }
@@ -427,7 +427,7 @@ static bool LoadElf(struct Machine *m,  //
         elf->interpreter = (char *)ehdr + Read64(phdr->offset);
         if (elf->interpreter[Read64(phdr->filesz) - 1]) {
           ELF_LOGF("elf interpreter not nul terminated");
-          exit(127);
+          exit(EXIT_FAILURE_EXEC_FAILED);
         }
         break;
       default:
@@ -455,7 +455,7 @@ static bool LoadElf(struct Machine *m,  //
       FormatInt64(ibuf, errno);
       WriteErrorString(ibuf);
       WriteErrorString(")\n");
-      exit(127);
+      exit(EXIT_FAILURE_EXEC_FAILED);
     }
     aslr = ChooseAslr(
         ehdri, st.st_size,
@@ -717,7 +717,7 @@ void LoadProgram(struct Machine *m, char *execfn, char *prog, char **args,
       FormatInt64(tmp, errno);
       WriteErrorString(tmp);
       WriteErrorString(")\n");
-      exit(127);
+      exit(EXIT_FAILURE_EXEC_FAILED);
     }
     status = CanEmulateData(m, &prog, &args, isfirst, (char *)map, mapsize);
     if (!status) {
@@ -727,7 +727,7 @@ error: unsupported executable; we need:\n\
 - flat executables (.bin files)\n\
 - actually portable executables (MZqFpD/jartsr)\n\
 - scripts with #!shebang meeting above criteria\n");
-      exit(127);
+      exit(EXIT_FAILURE_EXEC_FAILED);
     } else if (status == 1) {
       break;  // file is a real executable
     } else if (status == 2) {
@@ -739,7 +739,7 @@ error: unsupported executable; we need:\n\
         isfirst = false;
       } else {
         LOGF("shell scripts can't interpret shell scripts");
-        exit(127);
+        exit(EXIT_FAILURE_EXEC_FAILED);
       }
     } else {
       __builtin_unreachable();
@@ -780,7 +780,7 @@ error: unsupported executable; we need:\n\
       // Cosmopolitan programs pretty much require at least 47-bit virtual
       // addresses; if the host lacks these, then emulate them w/ software
       if (FLAG_vabits < 47) FLAG_nolinear = true;
-      if (GetElfHeader(tmp, prog, (const char *)map) == -1) exit(127);
+      if (GetElfHeader(tmp, prog, (const char *)map) == -1) exit(EXIT_FAILURE_EXEC_FAILED);
       memcpy(map, tmp, 64);
       execstack = LoadElf(m, elf, (Elf64_Ehdr_ *)map, mapsize, fd);
     } else {
@@ -797,7 +797,7 @@ error: unsupported executable; we need:\n\
       Put64(m->sp, stack + kStackSize);
     } else {
       LOGF("failed to reserve stack memory");
-      exit(127);
+      exit(EXIT_FAILURE_EXEC_FAILED);
     }
     m->system->loaded = true;  // in case rwx stack is smc write-protected :'(
     LoadArgv(m, execfn, prog, args, vars, elf->rng);

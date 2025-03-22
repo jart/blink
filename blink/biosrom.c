@@ -145,22 +145,22 @@ void LoadBios(struct Machine *m, const char *biosprog) {
       FormatInt64(tmp, errno);
       WriteErrorString(tmp);
       WriteErrorString(")\n");
-      exit(127);
+      exit(EXIT_FAILURE_EXEC_FAILED);
     } else if ((size = st.st_size) < kBiosMinSize) {
       WriteErrorString(biosprog);
       WriteErrorString(": failed to load alternate BIOS (file too small)\n");
-      exit(127);
+      exit(EXIT_FAILURE_EXEC_FAILED);
     } else if (size > kBiosMaxSize) {
       WriteErrorString(biosprog);
       WriteErrorString(": failed to load alternate BIOS (file too large)\n");
-      exit(127);
+      exit(EXIT_FAILURE_EXEC_FAILED);
     } else if (VfsRead(fd, m->system->real + kBiosEnd - size, size) != size) {
       WriteErrorString(biosprog);
       WriteErrorString(": failed to load alternate BIOS (errno ");
       FormatInt64(tmp, errno);
       WriteErrorString(tmp);
       WriteErrorString(")\n");
-      exit(127);
+      exit(EXIT_FAILURE_EXEC_FAILED);
     }
   } else {
     // if no BIOS image file name is given, then load a default BIOS image

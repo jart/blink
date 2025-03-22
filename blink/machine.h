@@ -23,6 +23,9 @@
 #include "blink/tunables.h"
 #include "blink/x86.h"
 
+#define EXIT_FAILURE_EXEC_FAILED 127
+#define EXIT_FAILURE_WITH_SIGNAL(sig) 128 + sig
+
 #define kArgRde   1
 #define kArgDisp  2
 #define kArgUimm0 3

@@ -260,7 +260,7 @@ _Noreturn static void PrintUsage(int argc, char *argv[], int rc, int fd) {
 
 _Noreturn static void PrintVersion(void) {
   Print(1, VERSION);
-  exit(0);
+  exit(EXIT_SUCCESS);
 }
 
 static void GetOpts(int argc, char *argv[]) {
@@ -380,13 +380,13 @@ int main(int argc, char *argv[]) {
 #ifndef DISABLE_OVERLAYS
   if (SetOverlays(FLAG_overlays, true)) {
     WriteErrorString("bad blink overlays spec; see log for details\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 #endif
 #ifndef DISABLE_VFS
   if (VfsInit(FLAG_prefix)) {
     WriteErrorString("error: vfs initialization failed\n");
-    exit(1);
+    exit(EXIT_FAILURE);
   }
 #endif
   HandleSigs();
@@ -396,7 +396,7 @@ int main(int argc, char *argv[]) {
     WriteErrorString(": command not found: ");
     WriteErrorString(argv[optind_]);
     WriteErrorString("\n");
-    exit(127);
+    exit(EXIT_FAILURE_EXEC_FAILED);
   }
   argv[optind_] = g_pathbuf;
   return Exec(g_pathbuf, g_pathbuf, argv + optind_ + FLAG_zero, environ);

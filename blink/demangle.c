@@ -135,7 +135,7 @@ static void SpawnCxxFilt(void) {
     if (pipefds[1][0] > 1) unassert(!close(pipefds[1][0]));
     if (pipefds[1][1] > 1) unassert(!close(pipefds[1][1]));
     execv(executable, (char *const[]){(char *)cxxfilt, 0});
-    _exit(127);
+    _exit(EXIT_FAILURE_EXEC_FAILED);
   }
   unassert(!close(pipefds[0][1]));
   unassert(!close(pipefds[1][0]));
