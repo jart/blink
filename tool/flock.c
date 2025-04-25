@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/file.h>
+#include "../blink/flock.h"
 
 int main(int argc, char *argv[]) {
   if (argc != 3) return 1;
