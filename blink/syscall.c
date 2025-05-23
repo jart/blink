@@ -4422,8 +4422,25 @@ static i32 Select(struct Machine *m,          //
   int fildes, rc;
   i32 setsize;
   u64 oldmask_guest = 0;
-  fd_set readfds, writefds, exceptfds, readyreadfds, readywritefds,
-      readyexceptfds;
+  fd_set *readfds, *writefds, *exceptfds, *readyreadfds, *readywritefds,
+      *readyexceptfds;
+#if defined(sun) || defined(__sun)
+  readfds = (fd_set*)malloc(sizeof(fd_set));
+  writefds = (fd_set*)malloc(sizeof(fd_set));
+  exceptfds = (fd_set*)malloc(sizeof(fd_set));
+  readyreadfds = (fd_set*)malloc(sizeof(fd_set));
+  readywritefds = (fd_set*)malloc(sizeof(fd_set));
+  readyexceptfds = (fd_set*)malloc(sizeof(fd_set));
+#else
+  fd_set _readfds, _writefds, _exceptfds, _readyreadfds, _readywritefds,
+      _readyexceptfds;
+  readfds = &_readfds;
+  writefds = &_writefds;
+  exceptfds = &_exceptfds;
+  readyreadfds = &_readyreadfds;
+  readywritefds = &_readywritefds;
+  readyexceptfds = &_readyexceptfds;
+#endif
   struct pollfd hfds[1];
   struct timespec now, wait, remain, deadline = {0};
   struct Fd *fd;
@@ -4437,29 +4454,29 @@ static i32 Select(struct Machine *m,          //
     return einval();
   }
   if (readfds_addr) {
-    if (LoadFdSet(m, nfds, &readfds, readfds_addr) == -1) {
+    if (LoadFdSet(m, nfds, readfds, readfds_addr) == -1) {
       return -1;
     }
   } else {
-    FD_ZERO(&readfds);
+    FD_ZERO(readfds);
   }
   if (writefds_addr) {
-    if (LoadFdSet(m, nfds, &writefds, writefds_addr) == -1) {
+    if (LoadFdSet(m, nfds, writefds, writefds_addr) == -1) {
       return -1;
     }
   } else {
-    FD_ZERO(&writefds);
+    FD_ZERO(writefds);
   }
   if (exceptfds_addr) {
-    if (LoadFdSet(m, nfds, &exceptfds, exceptfds_addr) == -1) {
+    if (LoadFdSet(m, nfds, exceptfds, exceptfds_addr) == -1) {
       return -1;
     }
   } else {
-    FD_ZERO(&exceptfds);
+    FD_ZERO(exceptfds);
   }
-  FD_ZERO(&readyreadfds);
-  FD_ZERO(&readywritefds);
-  FD_ZERO(&readyexceptfds);
+  FD_ZERO(readyreadfds);
+  FD_ZERO(readywritefds);
+  FD_ZERO(readyexceptfds);
   if (sigmaskp_guest) {
     oldmask_guest = m->sigmask;
     m->sigmask = *sigmaskp_guest;
@@ -4472,8 +4489,8 @@ static i32 Select(struct Machine *m,          //
     }
     rc = 0;
     for (fildes = 0; fildes < nfds; ++fildes) {
-      if (!FD_ISSET(fildes, &readfds) && !FD_ISSET(fildes, &writefds) &&
-          !FD_ISSET(fildes, &exceptfds)) {
+      if (!FD_ISSET(fildes, readfds) && !FD_ISSET(fildes, writefds) &&
+          !FD_ISSET(fildes, exceptfds)) {
         continue;
       }
     TryAgain:
@@ -4491,27 +4508,27 @@ static i32 Select(struct Machine *m,          //
       UNLOCK(&m->system->fds.lock);
       if (fd) {
         hfds[0].fd = fildes;
-        hfds[0].events = ((FD_ISSET(fildes, &readfds) ? POLLIN : 0) |
-                          (FD_ISSET(fildes, &writefds) ? POLLOUT : 0) |
-                          (FD_ISSET(fildes, &exceptfds) ? POLLPRI : 0));
+        hfds[0].events = ((FD_ISSET(fildes, readfds) ? POLLIN : 0) |
+                          (FD_ISSET(fildes, writefds) ? POLLOUT : 0) |
+                          (FD_ISSET(fildes, exceptfds) ? POLLPRI : 0));
         switch (poll_impl(hfds, 1, 0)) {
           case 0:
             break;
           case 1:
-            if (FD_ISSET(fildes, &readfds) && (hfds[0].revents & POLLIN)) {
+            if (FD_ISSET(fildes, readfds) && (hfds[0].revents & POLLIN)) {
               ++rc;
-              FD_SET(fildes, &readyreadfds);
-              FD_CLR(fildes, &readfds);
+              FD_SET(fildes, readyreadfds);
+              FD_CLR(fildes, readfds);
             }
-            if (FD_ISSET(fildes, &writefds) && (hfds[0].revents & POLLOUT)) {
+            if (FD_ISSET(fildes, writefds) && (hfds[0].revents & POLLOUT)) {
               ++rc;
-              FD_SET(fildes, &readywritefds);
-              FD_CLR(fildes, &writefds);
+              FD_SET(fildes, readywritefds);
+              FD_CLR(fildes, writefds);
             }
-            if (FD_ISSET(fildes, &exceptfds) && (hfds[0].revents & POLLPRI)) {
+            if (FD_ISSET(fildes, exceptfds) && (hfds[0].revents & POLLPRI)) {
               ++rc;
-              FD_SET(fildes, &readyexceptfds);
-              FD_CLR(fildes, &exceptfds);
+              FD_SET(fildes, readyexceptfds);
+              FD_CLR(fildes, exceptfds);
             }
             break;
           case -1:
@@ -4547,11 +4564,11 @@ static i32 Select(struct Machine *m,          //
   }
   if (rc != -1) {
     if ((readfds_addr &&
-         SaveFdSet(m, nfds, &readyreadfds, readfds_addr) == -1) ||
+         SaveFdSet(m, nfds, readyreadfds, readfds_addr) == -1) ||
         (writefds_addr &&
-         SaveFdSet(m, nfds, &readywritefds, writefds_addr) == -1) ||
+         SaveFdSet(m, nfds, readywritefds, writefds_addr) == -1) ||
         (exceptfds_addr &&
-         SaveFdSet(m, nfds, &readyexceptfds, exceptfds_addr) == -1)) {
+         SaveFdSet(m, nfds, readyexceptfds, exceptfds_addr) == -1)) {
       return -1;
     }
   }
@@ -4564,6 +4581,14 @@ static i32 Select(struct Machine *m,          //
       *timeoutp = GetZeroTime();
     }
   }
+#endif
+#if defined(sun) || defined(__sun)
+  free(readfds);
+  free(writefds);
+  free(exceptfds);
+  free(readyreadfds);
+  free(readywritefds);
+  free(readyexceptfds);
 #endif
   return rc;
 }
