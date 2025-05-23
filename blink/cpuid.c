@@ -59,12 +59,14 @@
 #elif defined(__HAIKU__)
 #define OS HAIKU_
 #elif defined(sun) || defined(__sun)
-#if defined(__illumos__)
+# if defined(__illumos__)
 #define OS ILLUMOS_
-#elif defined(__SVR4) || defined(__svr4__)
+# elif defined(__SVR4) || defined(__svr4__)
 #define OS SOLARIS_
-#else
+# else
 #define OS SUNOS_
+# endif
+#else
 #define OS UNKNOWN_
 #endif
 
