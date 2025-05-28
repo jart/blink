@@ -178,3 +178,47 @@ Elf64_Sym_ *GetElfSymbolTable(const Elf64_Ehdr_ *elf,  //
   }
   return res;
 }
+
+const char *GetElfOsNameInNoteTag(const Elf64_Ehdr_ *elf, size_t mapsize) {
+  int i;
+  Elf64_Shdr_ *shdr;
+  const char *sect_name;
+  const char *note, *note_end;
+  uint32_t namesz, descsz, type;
+  const char *os_name;
+
+  for (i = 0; i < Read16(elf->shnum); ++i) {
+    shdr = GetElfSectionHeaderAddress(elf, mapsize, i);
+    if (!shdr) continue;
+    if (Read32(shdr->type) != SHT_NOTE_) continue;
+
+    sect_name = GetElfSectionName(elf, mapsize, shdr);
+    if (!sect_name) continue;
+    if (strcmp(sect_name, ".note.ABI-tag") != 0 &&
+        strcmp(sect_name, ".note.tag") != 0 &&
+        strcmp(sect_name, ".note.gnu") != 0)
+      continue;
+
+    note = (const char *)GetElfSectionAddress(elf, mapsize, shdr);
+    if (!note) continue;
+    note_end = note + Read64(shdr->size);
+
+    while (note + 12 <= note_end) {
+      namesz = *(const uint32_t *)(note + 0);
+      descsz = *(const uint32_t *)(note + 4);
+      type   = *(const uint32_t *)(note + 8);
+
+      const char *name_field = note + 12;
+      const char *desc_field = name_field + ((namesz + 3) & ~3);
+      if (desc_field + ((descsz + 3) & ~3) > note_end) break;
+
+      if (namesz && name_field[namesz-1] == '\0') {
+        return name_field;
+      }
+
+      // Advance to next note
+      note = desc_field + ((descsz + 3) & ~3);
+    }
+  }
+  return NULL;
+}

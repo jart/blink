@@ -20,17 +20,18 @@
 #include "blink/endian.h"
 #include "blink/machine.h"
 
-#define INTEL    "GenuineIntel"
-#define BLINK    "GenuineBlink"
-#define LINUX_   "Linux\0\0\0\0\0\0\0"
-#define FREEBSD_ "FreeBSD\0\0\0\0\0\0"
-#define NETBSD_  "NetBSD\0\0\0\0\0\0"
-#define OPENBSD_ "OpenBSD\0\0\0\0\0"
-#define XNU_     "XNU\0\0\0\0\0\0\0\0\0"
-#define WINDOWS_ "Windows\0\0\0\0\0"
-#define CYGWIN_  "Cygwin\0\0\0\0\0\0"
-#define HAIKU_   "Haiku\0\0\0\0\0\0\0"
-#define UNKNOWN_ "Unknown\0\0\0\0\0\0"
+#define INTEL         "GenuineIntel"
+#define BLINK         "GenuineBlink"
+#define LINUX_        "Linux\0\0\0\0\0\0\0"
+#define FREEBSD_      "FreeBSD\0\0\0\0\0\0"
+#define NETBSD_       "NetBSD\0\0\0\0\0\0"
+#define OPENBSD_      "OpenBSD\0\0\0\0\0"
+#define DRAGONFLYBSD_ "DragonFlyBSD"
+#define XNU_          "XNU\0\0\0\0\0\0\0\0\0"
+#define WINDOWS_      "Windows\0\0\0\0\0"
+#define CYGWIN_       "Cygwin\0\0\0\0\0\0"
+#define HAIKU_        "Haiku\0\0\0\0\0\0\0"
+#define UNKNOWN_      "Unknown\0\0\0\0\0\0"
 
 #ifdef __COSMOPOLITAN__
 #define OS                  \
@@ -49,6 +50,8 @@
 #define OS NETBSD_
 #elif defined(__OpenBSD__)
 #define OS OPENBSD_
+#elif defined(__DragonFly__)
+#define OS DRAGONFLYBSD_
 #elif defined(__APPLE__)
 #define OS XNU_
 #elif defined(__CYGWIN__)
