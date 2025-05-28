@@ -293,6 +293,16 @@ static bool IsHaikuExecutable(Elf64_Ehdr_ *ehdr, size_t size) {
 #endif
 }
 
+static bool IsDragonflybsdExecutable(Elf64_Ehdr_ *ehdr, size_t size) {
+#ifdef __DragonFly__
+  const char *name = GetElfOsNameInNoteTag(ehdr, size);
+  if (name && !strcmp(name, "DragonFly")) {
+    return true;
+  }
+#endif
+  return false;
+}
+
 static bool IsShebangExecutable(void *image, size_t size) {
   return size >= 2 && ((char *)image)[0] == '#' && ((char *)image)[1] == '!';
 }
@@ -340,6 +350,10 @@ bool IsSupportedExecutable(const char *path, void *image, size_t size) {
     }
     if (IsHaikuExecutable(ehdr, size)) {
       ExplainWhyItCantBeEmulated(path, "ELF is Haiku executable");
+      return false;
+    }
+    if (IsDragonflybsdExecutable(ehdr, size)) {
+      ExplainWhyItCantBeEmulated(path, "ELF is DragonFlyBSD executable");
       return false;
     }
 #if defined(__ELF__) && !defined(__linux)
