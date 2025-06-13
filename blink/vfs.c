@@ -1733,7 +1733,11 @@ int VfsFcntl(int fd, int cmd, ...) {
   }
   va_start(ap, cmd);
   // CLOEXEC is already handled by the syscall layer.
+#ifndef F_DUPFD_CLOEXEC
+  if (cmd == F_DUPFD) {
+#else
   if (cmd == F_DUPFD || cmd == F_DUPFD_CLOEXEC) {
+#endif
     if (info->device->ops->Dup) {
       ret = info->device->ops->Dup(info, &newinfo);
       if (ret != -1) {

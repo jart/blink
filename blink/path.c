@@ -156,7 +156,7 @@ void(SetupCod)(struct Machine *m) {
   DisLoadElf(&g_dis, &m->system->elf);
   g_cod = VfsOpen(AT_FDCWD_LINUX, "/tmp/blink.s",
                   O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-  g_cod = VfsFcntl(g_cod, F_DUPFD_CLOEXEC, kMinBlinkFd);
+  g_cod = VfsFcntl(g_cod, F_DUPFD, kMinBlinkFd);
 #endif
 }
 

@@ -82,7 +82,7 @@
 #define ARCH_NAME PPC64LE_
 #elif defined(__powerpc64__)
 #define ARCH_NAME PPC64_
-#elif defined(__powerpc__)
+#elif defined(__powerpc__) || defined(__ppc__)
 #define ARCH_NAME PPC_
 #elif defined(__s390x__)
 #define ARCH_NAME S390X_

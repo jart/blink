@@ -3550,9 +3550,11 @@ static void GetOpts(int argc, char *argv[]) {
   FLAG_nolinear = !wantunsafe;
 }
 
+#ifdef HAVE_JIT
 static void AddPath_StartOp_Tui(P) {
   Jitter(m, rde, 0, 0, "qc", StartOp_Tui);
 }
+#endif
 
 static bool FileExists(const char *path) {
   return !VfsAccess(AT_FDCWD, path, F_OK, 0);
@@ -3597,7 +3599,7 @@ int VirtualMachine(int argc, char *argv[]) {
         tty = VfsOpen(AT_FDCWD, "/dev/tty", O_RDWR | O_NOCTTY, 0);
       }
       if (tty != -1) {
-        tty = VfsFcntl(tty, F_DUPFD_CLOEXEC, kMinBlinkFd);
+        tty = VfsFcntl(tty, F_DUPFD, kMinBlinkFd);
       }
       if (tty == -1) {
         WriteErrorString("failed to open /dev/tty\n");

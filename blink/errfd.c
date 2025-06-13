@@ -50,6 +50,11 @@ int WriteError(int fd, const char *buf, int len) {
 
 void WriteErrorInit(void) {
   if (g_errfd) return;
+#ifndef F_DUPFD_CLOEXEC
+  g_errfd = fcntl(2, F_DUPFD, kMinBlinkFd);
+  fcntl(g_errfd, F_SETFD, FD_CLOEXEC);
+#else
   g_errfd = fcntl(2, F_DUPFD_CLOEXEC, kMinBlinkFd);
+#endif
   if (g_errfd == -1) exit(EXIT_FAILURE_ERRFD_INIT);
 }
