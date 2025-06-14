@@ -121,7 +121,12 @@ static void OpenLog(void) {
       return;
     }
   }
+#ifndef F_DUPFD_CLOEXEC
+  unassert((g_log.fd = fcntl(fd, F_DUPFD, kMinBlinkFd)) != -1);
+  unassert(fcntl(g_log.fd, F_SETFL, FD_CLOEXEC) != -1);
+#else
   unassert((g_log.fd = fcntl(fd, F_DUPFD_CLOEXEC, kMinBlinkFd)) != -1);
+#endif
   unassert(!close(fd));
 }
 
