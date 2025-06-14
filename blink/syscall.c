@@ -1413,12 +1413,13 @@ static int SysDupf(struct Machine *m, i32 fildes, i32 minfildes, int cmd) {
   if (minfildes >= (lim = GetFileDescriptorLimit(m->system))) return emfile();
   if (cmd == F_DUPFD_LINUX) {
     cmdnative = F_DUPFD;
-  }
+  } else if (cmd == F_DUPFD_CLOEXEC_LINUX) {
 #ifndef F_DUPFD_CLOEXEC
-  else if (cmd == F_DUPFD_CLOEXEC_LINUX) {
     cmdnative = F_DUPFD;
-  }
+#else
+    cmdnative = F_DUPFD_CLOEXEC;
 #endif
+  }
   if ((newfildes = VfsFcntl(fildes, cmdnative, minfildes)) != -1) {
     if (newfildes >= lim) {
       VfsClose(newfildes);
