@@ -62,15 +62,11 @@ char *GetElfString(const Elf64_Ehdr_ *elf,  // validated
                    size_t mapsize,          // validated
                    const char *strtab,      // validated
                    size_t rva) {            // foreign
-  uint64_t addr;
   if (!strtab) return 0;
-  if (ckd_add(&addr, (uintptr_t)strtab, rva)) return 0;
-  if (addr >= (uintptr_t)elf + mapsize) return 0;
-  if (addr != (uintptr_t)addr) return 0;
-  if (!memchr((char *)(uintptr_t)addr, 0, (uintptr_t)elf + mapsize - addr)) {
-    return 0;
-  }
-  return (char *)(uintptr_t)addr;
+  if (rva >= mapsize) return 0;
+  const char *addr = strtab + rva;
+  if (!memchr(addr, 0, mapsize - rva)) return 0;
+  return (char *)addr;
 }
 
 Elf64_Phdr_ *GetElfProgramHeaderAddress(const Elf64_Ehdr_ *elf,  //

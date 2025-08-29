@@ -34,11 +34,10 @@
 #define kStackSize (8 * 1024 * 1024)   // size of stack for user mode
 #define kNullSize  (2 * 1024 * 1024)   // minimum user mode image address
 
-#define kMinBlinkFd   123       // fds owned by the vm start here
-#define kPollingMs    50        // busy loop for futex(), poll(), etc.
-#define kSemSize      128       // number of bytes used for each semaphore
-#define kBusCount     256       // # load balanced semaphores in virtual bus
-#define kBusRegion    kSemSize  // 16 is sufficient for 8-byte loads/stores
+#define kMinBlinkFd   123  // fds owned by the vm start here
+#define kPollingMs    50   // busy loop for futex(), poll(), etc.
+#define kBusCount     256  // # load balanced semaphores in virtual bus
+#define kBusRegion    128  // 16 is sufficient for 8-byte loads/stores
 #define kFutexMax     100
 #define kRedzoneSize  128
 #define kSmcQueueSize 32

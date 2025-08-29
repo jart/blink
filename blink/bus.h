@@ -8,7 +8,6 @@
 #include "blink/builtin.h"
 #include "blink/dll.h"
 #include "blink/endian.h"
-#include "blink/spin.h"
 #include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/tunables.h"
@@ -32,16 +31,7 @@ struct Futexes {
 };
 
 struct Bus {
-  /* When software uses locks or semaphores to synchronize processes,
-     threads, or other code sections; Intel recommends that only one lock
-     or semaphore be present within a cache line (or 128 byte sector, if
-     128-byte sector is supported). In processors based on Intel NetBurst
-     microarchitecture (which support 128-byte sector consisting of two
-     cache lines), following this recommendation means that each lock or
-     semaphore should be contained in a 128-byte block of memory that
-     begins on a 128-byte boundary. The practice minimizes the bus traffic
-     required to service locks. ──Intel V.3 §8.10.6.7 */
-  _Alignas(kSemSize) _Atomic(u32) lock[kBusCount][kSemSize / sizeof(int)];
+  pthread_mutex_t_ lock[kBusCount];
   struct Futexes futexes;
 };
 

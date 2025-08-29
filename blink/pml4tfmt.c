@@ -37,8 +37,9 @@
 
 #define INTERESTING_FLAGS (PAGE_U | PAGE_RW | PAGE_XD | PAGE_FILE)
 
-#define BYTES       16384
-#define APPEND(...) u->o += snprintf(u->b + u->o, u->o > BYTES ? 0 : BYTES - u->o, __VA_ARGS__)
+#define BYTES 16384
+#define APPEND(...) \
+  u->o += snprintf(u->b + u->o, u->o > BYTES ? 0 : BYTES - u->o, __VA_ARGS__)
 
 struct MapMaker {
   bool t;
@@ -208,6 +209,9 @@ static u8 *GetPt(struct Machine *m, u64 entry, bool is_cr3) {
 
 char *FormatPml4t(struct Machine *m) {
   _Thread_local static char b[BYTES];
+  if (m->metal)
+    // TODO(jart): fix pml4t viz in metal mode
+    return b;
   u8 *pd[4];
   u64 entry;
   u16 i, a[4];

@@ -33,9 +33,10 @@
 #endif
 
 void OpPause(P) {
-#if defined(__GNUC__) && defined(__aarch64__)
+#if defined(__GNUC__) && defined(__aarch64__) && !defined(__FILC__)
   asm volatile("yield");
-#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__)) && \
+    !defined(__FILC__)
   asm volatile("pause");
 #elif defined(HAVE_SCHED_YIELD)
   sched_yield();
@@ -50,10 +51,11 @@ void OpRdtsc(P) {
   if (m->traprdtsc) {
     ThrowSegmentationFault(m, 0);
   }
-#if defined(__GNUC__) && defined(__aarch64__)
+#if defined(__GNUC__) && defined(__aarch64__) && !defined(__FILC__)
   asm volatile("mrs %0, cntvct_el0" : "=r"(c));
   c *= 48;  // the fudge factor
-#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__))
+#elif defined(__GNUC__) && (defined(__x86_64__) || defined(__i386__)) && \
+    !defined(__FILC__)
   u32 ax, dx;
   asm volatile("rdtsc" : "=a"(ax), "=d"(dx));
   c = (u64)dx << 32 | ax;

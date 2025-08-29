@@ -818,16 +818,16 @@ static void OnSigSys(int sig) {
   // do nothing
 }
 
-static void OnSigWinch(int sig, siginfo_t *si, void *uc) {
+static void OnSigWinch(int sig) {
   EnqueueSignal(m, SIGWINCH_LINUX);
   action |= WINCHED;
 }
 
-static void OnSigInt(int sig, siginfo_t *si, void *uc) {
+static void OnSigInt(int sig) {
   action |= INT;
 }
 
-static void OnSigAlrm(int sig, siginfo_t *si, void *uc) {
+static void OnSigAlrm(int sig) {
   action |= ALARM;
 }
 
@@ -845,12 +845,12 @@ static void TuiCleanup(void) {
   TtyRestore();
 }
 
-static void OnSigTstp(int sig, siginfo_t *si, void *uc) {
+static void OnSigTstp(int sig) {
   TtyRestore();
   raise(SIGSTOP);
 }
 
-static void OnSigCont(int sig, siginfo_t *si, void *uc) {
+static void OnSigCont(int sig) {
   if (tuimode) {
     TuiRejuvinate();
     Redraw(true);
@@ -970,10 +970,10 @@ void TuiSetup(void) {
   memset(&it, 0, sizeof(it));
   setitimer(ITIMER_REAL, &it, 0);
   memset(&sa, 0, sizeof(sa));
-  sa.sa_sigaction = OnSigCont;
-  sa.sa_flags = SA_RESTART | SA_NODEFER | SA_SIGINFO;
+  sa.sa_handler = OnSigCont;
+  sa.sa_flags = SA_RESTART | SA_NODEFER;
   sigaction(SIGCONT, &sa, oldsig + 2);
-  sa.sa_sigaction = OnSigTstp;
+  sa.sa_handler = OnSigTstp;
   sigaction(SIGTSTP, &sa, 0);
   CopyMachineState(&laststate);
   TuiRejuvinate();
@@ -3750,14 +3750,14 @@ int main(int argc, char *argv[]) {
   sa.sa_flags = 0;
   sa.sa_handler = OnSigSys;
   unassert(!sigaction(SIGSYS, &sa, 0));
-  sa.sa_flags = SA_SIGINFO;
-  sa.sa_sigaction = OnSigInt;
+  sa.sa_handler = OnSigInt;
   unassert(!sigaction(SIGINT, &sa, 0));
-  sa.sa_sigaction = OnSigWinch;
+  sa.sa_handler = OnSigWinch;
   unassert(!sigaction(SIGWINCH, &sa, 0));
-  sa.sa_sigaction = OnSigAlrm;
+  sa.sa_handler = OnSigAlrm;
   unassert(!sigaction(SIGALRM, &sa, 0));
-#ifndef __SANITIZE_THREAD__
+#if !defined(__SANITIZE_THREAD__) && !defined(__FILC__)
+  sa.sa_flags = SA_SIGINFO;
   sa.sa_sigaction = OnSigSegv;
   unassert(!sigaction(SIGBUS, &sa, 0));
   unassert(!sigaction(SIGSEGV, &sa, 0));

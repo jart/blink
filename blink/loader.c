@@ -676,6 +676,19 @@ static int CanEmulateData(struct Machine *m, char **prog, char ***argv,
   }
 }
 
+static bool IsApeBinary(const char *path) {
+  int fd;
+  ssize_t rc;
+  char buf[8];
+  fd = open(path, O_RDONLY | O_CLOEXEC | O_NOCTTY);
+  if (fd == -1) return false;
+  rc = pread(fd, buf, 8, 0);
+  close(fd);
+  if (rc != 8) return false;
+  return !memcmp(buf, "MZqFpD='", 8) ||  //
+         !memcmp(buf, "jartsr='", 8);
+}
+
 void LoadProgram(struct Machine *m, char *execfn, char *prog, char **args,
                  char **vars, const char *biosprog) {
   int fd;
@@ -756,8 +769,7 @@ error: unsupported executable; we need:\n\
   }
   if (m->mode.genmode == XED_GEN_MODE_REAL) {
     LoadBios(m, biosprog);
-    if (EndsWith(prog, ".com") ||  //
-        EndsWith(prog, ".COM")) {
+    if (IsApeBinary(prog)) {
       // cosmo convention (see also binbase)
       AddFileMap(m->system, 4 * 1024 * 1024, 512, prog, 0);
     } else {

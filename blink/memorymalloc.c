@@ -51,6 +51,7 @@ struct Allocator {
 };
 
 struct Machine g_bssmachine;
+struct HostPages g_hostpages;
 
 static void FillPage(void *p, int c) {
   memset(p, c, 4096);
@@ -66,6 +67,23 @@ static struct HostPage *NewHostPage(void) {
 
 static void FreeHostPage(struct HostPage *hp) {
   free(hp);
+}
+
+static u64 TrackHostPage(u8 *ptr) {
+  u64 entry;
+  if (HasLinearMapping()) {
+    return (uintptr_t)ptr;
+  } else {
+    if (g_hostpages.n == g_hostpages.c) {
+      g_hostpages.c += 1;
+      g_hostpages.c += g_hostpages.c >> 1;
+      g_hostpages.p =
+          realloc(g_hostpages.p, g_hostpages.c * sizeof(*g_hostpages.p));
+    }
+    entry = g_hostpages.n++;
+    g_hostpages.p[entry] = ptr;
+    return entry << 12;
+  }
 }
 
 void FreeAnonymousPage(struct System *s, u8 *page) {
@@ -433,7 +451,6 @@ void FreeMachine(struct Machine *m) {
 u64 AllocateAnonymousPage(struct System *s) {
   u8 *page;
   size_t i, n;
-  uintptr_t real;
   struct HostPage *h;
   LOCK(&g_allocator.lock);
   if ((h = g_allocator.pages)) {
@@ -459,9 +476,9 @@ u64 AllocateAnonymousPage(struct System *s) {
   UNLOCK(&g_allocator.lock);
 Finished:
   s->rss += 1;
-  real = (uintptr_t)page;
-  unassert(!(real & ~PAGE_TA));
-  return real | PAGE_HOST | PAGE_U | PAGE_RW | PAGE_V;
+  i = TrackHostPage(page);
+  unassert(!(i & ~PAGE_TA));
+  return i | PAGE_HOST | PAGE_U | PAGE_RW | PAGE_V;
 }
 
 u64 AllocatePageTable(struct System *s) {
@@ -609,7 +626,6 @@ static bool FreePage(struct System *s, i64 virt, u64 entry, u64 size,
                      long *rss_delta) {
   u8 *page;
   long pagesize;
-  uintptr_t real, mug;
   unassert(entry & PAGE_V);
   if (entry & PAGE_FILE) UnmarkFilePage(s, virt);
   if (!(entry & PAGE_XD) && !(entry & PAGE_RSRV)) {
@@ -623,16 +639,17 @@ static bool FreePage(struct System *s, i64 virt, u64 entry, u64 size,
   if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) == PAGE_HOST) {
     unassert(~entry & PAGE_RSRV);
     s->memstat.committed -= 1;
-    ClearPage((page = (u8 *)(uintptr_t)(entry & PAGE_TA)));
+    ClearPage((page = FindHostPage(entry)));
     FreeAnonymousPage(s, page);
     --*rss_delta;
     return false;
   } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
              (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
+    u8 *real, *mug;
     pagesize = FLAG_pagesize;
-    real = entry & PAGE_TA;
-    mug = ROUNDDOWN(real, pagesize);
-    unassert(!Munmap((void *)mug, real - mug + size));
+    real = mug = FindHostPage(entry);
+    while ((uintptr_t)mug & (pagesize - 1)) mug -= 4096;
+    unassert(!Munmap(mug, real - mug + size));
     if (entry & PAGE_RSRV) {
       s->memstat.reserved -= 1;
     } else {
@@ -946,10 +963,10 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
         continue;
       }
       for (;;) {
-        uintptr_t real;
+        u64 real;
         if (flags & PAGE_MAP) {
           if (flags & PAGE_MUG) {
-            void *mug;
+            u8 *mug;
             off_t mugoff;
             int mugflags;
             long mugsize;
@@ -974,7 +991,7 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                    DescribeHostErrno(errno));
               PanicDueToMmap();
             }
-            real = (uintptr_t)mug + mugskew;
+            real = TrackHostPage(mug + mugskew);
             offset += 4096;
           } else {
             real = (uintptr_t)ToHost(virt);
@@ -1145,9 +1162,9 @@ bool IsFullyUnmapped(struct System *s, i64 virt, i64 size) {
 
 int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot,
                    bool hostonly) {
+  u8 *mi;
   int rc;
   int sysprot;
-  u8 *mi, *real;
   u64 pt, pt2, key;
   long i, pagesize;
   i64 a, b, ti, end, level, orig_virt;
@@ -1201,7 +1218,8 @@ int ProtectVirtual(struct System *s, i64 virt, i64 size, int prot,
           AddPageToRanges(&ranges, virt, end);
         } else if ((pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                    (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
-          real = (u8 *)ROUNDDOWN((uintptr_t)(pt & PAGE_TA), pagesize);
+          u8 *real = FindHostPage(pt);
+          while ((uintptr_t)real & (pagesize - 1)) real -= 4096;
           if (Mprotect(real, pagesize, sysprot, "mug")) {
             LOGF("mprotect(pt=%#" PRIx64
                  ", real=%p, size=%#lx, prot=%d) failed: %s",
@@ -1318,13 +1336,14 @@ int SyncVirtual(struct System *s, i64 virt, i64 size, int sysflags) {
           AddPageToRanges(&ranges, virt, end);
         } else if ((pt & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
                    (PAGE_HOST | PAGE_MAP | PAGE_MUG)) {
-          uintptr_t real = pt & PAGE_TA;
-          uintptr_t page = ROUNDDOWN(real, pagesize);
+          u8 *page, *real;
+          page = real = FindHostPage(pt);
+          while ((uintptr_t)page & (pagesize - 1)) page -= 4096;
           long lilsize = (real - page) + MIN(4096, end - virt);
-          if (Msync((void *)page, lilsize, sysflags, "mug")) {
+          if (Msync(page, lilsize, sysflags, "mug")) {
             LOGF("msync(%p [pt=%#" PRIx64
                  "], size=%#lx, flags=%d) failed: %s\n%s",
-                 (void *)page, pt, pagesize, sysflags, DescribeHostErrno(errno),
+                 page, pt, pagesize, sysflags, DescribeHostErrno(errno),
                  FormatPml4t(g_machine));
             rc = -1;
           }
@@ -1370,7 +1389,7 @@ static i64 FindGuestAddr(struct System *s, uintptr_t hp, u64 pt, long lvl,
     for (i = 0; i < 512; ++i) {
       if ((pte = LoadPte(mi + i * 8)) & PAGE_V) {
         if (lvl == 4) {
-          if ((pte & PAGE_HOST) && (pte & PAGE_TA) == hp) {
+          if ((pte & PAGE_HOST) && (uintptr_t)FindHostPage(pte) == hp) {
             if (out_pte) {
               *out_pte = pte;
             }

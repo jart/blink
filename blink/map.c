@@ -232,6 +232,9 @@ int Msync(void *addr,     //
           size_t length,  //
           int flags,      //
           const char *owner) {
+#if defined(__FILC__)
+  if (1) return 0;
+#endif
   int res = VfsMsync(addr, length, flags);
 #if LOG_MEM
   char szbuf[16];

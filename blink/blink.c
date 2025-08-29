@@ -338,7 +338,8 @@ static void HandleSigs(void) {
   unassert(!sigaction(SIGTERM, &sa, 0));
   unassert(!sigaction(SIGXCPU, &sa, 0));
   unassert(!sigaction(SIGXFSZ, &sa, 0));
-#if !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_ADDRESS__)
+#if !defined(__SANITIZE_THREAD__) && !defined(__SANITIZE_ADDRESS__) && \
+    !defined(__FILC__)
   sa.sa_sigaction = OnFatalSystemSignal;
   sa.sa_flags = SA_SIGINFO;
   unassert(!sigaction(SIGBUS, &sa, 0));

@@ -84,15 +84,16 @@
 #endif
 
 #ifdef __aarch64__
-#define kArmJmp         0x14000000u  // B
-#define kArmCall        0x94000000u  // BL
-#define kArmRet         0xd65f03c0u  // RET
-#define kArmMovNex      0xf2800000u  // sets sub-word of register to immediate
-#define kArmMovZex      0xd2800000u  // load immediate into reg w/ zero-extend
-#define kArmMovSex      0x92800000u  // load 1's complement imm w/ sign-extend
-#define kArmAdr         0x10000000u  // form PC-relative byte address
-#define kArmAdrp        0x90000000u  // form PC-relative page address
-#define kArmLdrPc       0x18000000u  // load PC-relative memory into register
+#define kArmJmp    0x14000000u  // B
+#define kArmCall   0x94000000u  // BL
+#define kArmRet    0xd65f03c0u  // RET
+#define kArmMovNex 0xf2800000u  // sets sub-word of register to immediate
+#define kArmMovZex 0xd2800000u  // load immediate into reg w/ zero-extend
+#define kArmMovSex 0x92800000u  // load 1's complement imm w/ sign-extend
+#define kArmAdr    0x10000000u  // form PC-relative byte address
+#define kArmAdrp   0x90000000u  // form PC-relative page address
+#define kArmLdrPc \
+  0x18000000u                        // load PC-relative memory into register
                                      // (general or SIMD)
 #define kArmLdrswPc     0x98000000u  // load PC-relative short w/ sign-extend
 #define kArmPrfmPc      0xd8000000u  // prefetch PC-relative memory
@@ -217,8 +218,8 @@ struct Jit {
   struct Dll *freejumps;
   struct Dll *pages;
   pthread_mutex_t_ lock;
-  _Alignas(kSemSize) _Atomic(unsigned) keygen;
-  _Alignas(kSemSize) _Atomic(unsigned) pagegen;
+  _Atomic(unsigned) keygen;
+  _Atomic(unsigned) pagegen;
 };
 
 extern const u8 kJitRes[2];

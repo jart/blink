@@ -57,6 +57,10 @@ void InitBus(void) {
   unassert(!pthread_condattr_setpshared(&cattr, PTHREAD_PROCESS_SHARED));
   unassert(!pthread_mutexattr_setpshared(&mattr, PTHREAD_PROCESS_SHARED));
 #endif
+#ifdef HAVE_THREADS
+  for (i = 0; i < kBusCount; ++i)
+    unassert(!pthread_mutex_init(&g_bus->lock[i], 0));
+#endif
   unassert(!pthread_mutex_init(&g_bus->futexes.lock, &mattr));
   for (i = 0; i < kFutexMax; ++i) {
     unassert(!pthread_cond_init(&g_bus->futexes.mem[i].cond, &cattr));
@@ -69,21 +73,20 @@ void InitBus(void) {
 }
 
 void LockBus(const u8 *locality) {
+#ifdef HAVE_THREADS
   /* A locked instruction is guaranteed to lock only the area of memory
      defined by the destination operand, but may be interpreted by the
      system as a lock for a larger memory area. ──Intel V.3 §8.1.2.2 */
-  _Static_assert(IS2POW(kSemSize), "semaphore size must be two-power");
   _Static_assert(IS2POW(kBusCount), "virtual bus count must be two-power");
   _Static_assert(IS2POW(kBusRegion), "virtual bus region must be two-power");
   _Static_assert(kBusRegion >= 16, "virtual bus region must be at least 16");
-#ifdef HAVE_THREADS
-  SpinLock(g_bus->lock[(uintptr_t)locality / kBusRegion % kBusCount]);
+  LOCK(&g_bus->lock[(uintptr_t)locality / kBusRegion % kBusCount]);
 #endif
 }
 
 void UnlockBus(const u8 *locality) {
 #ifdef HAVE_THREADS
-  SpinUnlock(g_bus->lock[(uintptr_t)locality / kBusRegion % kBusCount]);
+  UNLOCK(&g_bus->lock[(uintptr_t)locality / kBusRegion % kBusCount]);
 #endif
 }
 
@@ -94,7 +97,7 @@ i64 Load8(const u8 p[1]) {
 i64 Load16(const u8 p[2]) {
   i64 z;
 #if (defined(__x86_64__) || defined(__i386__)) && \
-    !defined(__SANITIZE_UNDEFINED__)
+    !defined(__SANITIZE_UNDEFINED__) && !defined(__FILC__)
   z = atomic_load_explicit((_Atomic(u16) *)p, memory_order_relaxed);
 #else
   if (!((uintptr_t)p & 1)) {
@@ -109,7 +112,7 @@ i64 Load16(const u8 p[2]) {
 i64 Load32(const u8 p[4]) {
   i64 z;
 #if (defined(__x86_64__) || defined(__i386__)) && \
-    !defined(__SANITIZE_UNDEFINED__)
+    !defined(__SANITIZE_UNDEFINED__) && !defined(__FILC__)
   z = atomic_load_explicit((_Atomic(u32) *)p, memory_order_relaxed);
 #else
   if (!((uintptr_t)p & 3)) {
@@ -124,7 +127,8 @@ i64 Load32(const u8 p[4]) {
 i64 Load64(const u8 p[8]) {
   i64 z;
 #if CAN_64BIT
-#if defined(__x86_64__) && !defined(__SANITIZE_UNDEFINED__)
+#if defined(__x86_64__) && !defined(__SANITIZE_UNDEFINED__) && \
+    !defined(__FILC__)
   z = atomic_load_explicit((_Atomic(u64) *)p, memory_order_relaxed);
 #else
   if (!((uintptr_t)p & 7)) {
@@ -157,7 +161,7 @@ void Store8(u8 p[1], u64 x) {
 
 void Store16(u8 p[2], u64 x) {
 #if (defined(__x86_64__) || defined(__i386__)) && \
-    !defined(__SANITIZE_UNDEFINED__)
+    !defined(__SANITIZE_UNDEFINED__) && !defined(__FILC__)
   atomic_store_explicit((_Atomic(u16) *)p, x, memory_order_relaxed);
 #else
   if (!((uintptr_t)p & 1)) {
@@ -170,7 +174,7 @@ void Store16(u8 p[2], u64 x) {
 
 void Store32(u8 p[4], u64 x) {
 #if (defined(__x86_64__) || defined(__i386__)) && \
-    !defined(__SANITIZE_UNDEFINED__)
+    !defined(__SANITIZE_UNDEFINED__) && !defined(__FILC__)
   atomic_store_explicit((_Atomic(u32) *)p, x, memory_order_relaxed);
 #else
   if (!((uintptr_t)p & 3)) {
@@ -183,7 +187,8 @@ void Store32(u8 p[4], u64 x) {
 
 void Store64(u8 p[8], u64 x) {
 #if CAN_64BIT
-#if defined(__x86_64__) && !defined(__SANITIZE_UNDEFINED__)
+#if defined(__x86_64__) && !defined(__SANITIZE_UNDEFINED__) && \
+    !defined(__FILC__)
   atomic_store_explicit((_Atomic(u64) *)p, x, memory_order_relaxed);
 #else
   if (!((uintptr_t)p & 7)) {

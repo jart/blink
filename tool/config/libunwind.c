@@ -1,6 +1,10 @@
 // checks for libunwind backtrace support
 #define UNW_LOCAL_ONLY
+#ifdef __x86_64__
+#include <libunwind-x86_64.h>
+#else
 #include <libunwind.h>
+#endif
 #include <stdio.h>
 #include <string.h>
 

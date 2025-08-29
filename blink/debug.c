@@ -52,7 +52,11 @@
 
 #if defined(HAVE_LIBUNWIND) && !defined(MUSL_CROSS_MAKE)
 #define UNW_LOCAL_ONLY
+#ifdef __x86_64__
+#include <libunwind-x86_64.h>
+#else
 #include <libunwind.h>
+#endif
 #endif
 
 #define FAKE_WORD 0x6660666066660666

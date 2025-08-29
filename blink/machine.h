@@ -120,8 +120,9 @@
 #define FILEMAP_CONTAINER(e)  DLL_CONTAINER(struct FileMap, elem, e)
 #define HOSTPAGE_CONTAINER(e) DLL_CONTAINER(struct HostPage, elem, e)
 
-#if defined(NOLINEAR) || defined(__SANITIZE_THREAD__) || \
-    defined(__CYGWIN__) || defined(__NetBSD__) || defined(__COSMOPOLITAN__)
+#if defined(NOLINEAR) || defined(__SANITIZE_THREAD__) ||                       \
+    defined(__CYGWIN__) || defined(__NetBSD__) || defined(__COSMOPOLITAN__) || \
+    defined(__FILC__)
 #define CanHaveLinearMemory() false
 #else
 #define CanHaveLinearMemory() CAN_64BIT
@@ -162,6 +163,12 @@ struct FreeList {
 struct HostPage {
   u8 *page;
   struct HostPage *next;
+};
+
+struct HostPages {
+  size_t n;
+  size_t c;
+  u8 **p;
 };
 
 struct PageLock {
@@ -298,13 +305,13 @@ struct System {
   u64 blinksigs;  // signals blink itself handles
   struct rlimit_linux rlim[RLIM_NLIMITS_LINUX];
 #ifdef HAVE_THREADS
-  pthread_cond_t machines_cond;
-  pthread_mutex_t machines_lock;
-  pthread_cond_t pagelocks_cond;
-  pthread_mutex_t pagelocks_lock;
-  pthread_mutex_t exec_lock;
-  pthread_mutex_t sig_lock;
-  pthread_mutex_t mmap_lock;
+  pthread_cond_t_ machines_cond;
+  pthread_mutex_t_ machines_lock;
+  pthread_cond_t_ pagelocks_cond;
+  pthread_mutex_t_ pagelocks_lock;
+  pthread_mutex_t_ exec_lock;
+  pthread_mutex_t_ sig_lock;
+  pthread_mutex_t_ mmap_lock;
 #endif
   void (*onfilemap)(struct System *, struct FileMap *);
   void (*onsymbols)(struct System *);
@@ -445,6 +452,7 @@ struct Machine {               //
   struct OpCache opcache[1];             //
 };  //
 
+extern struct HostPages g_hostpages;
 extern _Thread_local siginfo_t g_siginfo;
 extern _Thread_local struct Machine *g_machine;
 extern const nexgen32e_f kConvert[3];
@@ -829,5 +837,13 @@ MICRO_OP_SAFE u8 Cpl(struct Machine *m) {
 #define END_NO_PAGE_FAULTS \
   m->nofault = nofault_;   \
   }
+
+static inline u8 *FindHostPage(u64 entry) {
+  if (HasLinearMapping()) {
+    return (u8 *)(uintptr_t)(entry & PAGE_TA);
+  } else {
+    return g_hostpages.p[(entry & PAGE_TA) >> 12];
+  }
+}
 
 #endif /* BLINK_MACHINE_H_ */

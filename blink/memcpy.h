@@ -6,7 +6,7 @@
 #include "blink/builtin.h"
 
 #if !defined(TINY) && defined(__x86_64__) && defined(__GNUC__) && \
-    !defined(__COSMOPOLITAN__) && !defined(__GLIBC__)
+    !defined(__COSMOPOLITAN__) && !defined(__GLIBC__) && !defined(__FILC__)
 
 #ifdef memcpy
 #undef memcpy
