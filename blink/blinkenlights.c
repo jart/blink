@@ -3010,7 +3010,7 @@ static void OnMouse(const char *p) {
 }
 
 static void OnHelp(void) {
-  dialog = HELP;
+  dialog = dialog == HELP ? NULL : HELP;
 }
 
 static void HandleKeyboard(const char *k) {
