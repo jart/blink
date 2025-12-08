@@ -177,7 +177,8 @@ R       restart                   -H       disable highlighting\n\
 x       sse radix                 -j       enables jit\n\
 t       sse type                  -m       disables memory safety\n\
 T       sse size                  -N       natural scroll wheel\n\
-B       pop breakpoint            -s       system call logging\n\
+b       push breakpoint           -s       system call logging\n\
+B       pop breakpoint\n\
 p       profiling mode            -C PATH  chroot directory\n\
 ctrl-t  turbo                     -B PATH  alternate BIOS image\n\
 alt-t   slowmo                    -z       zoom\n\
@@ -884,6 +885,13 @@ static void BreakAtNextInstruction(void) {
   memset(&b, 0, sizeof(b));
   b.addr = GetPc(m) + m->xedd->length;
   b.oneshot = true;
+  PushBreakpoint(&breakpoints, &b);
+}
+
+static void BreakAtCurrentInstruction(void) {
+  struct Breakpoint b;
+  memset(&b, 0, sizeof(b));
+  b.addr = m->ip;
   PushBreakpoint(&breakpoints, &b);
 }
 
@@ -3033,6 +3041,7 @@ static void HandleKeyboard(const char *k) {
     CASE('d', OnDown());
     CASE('V', ++verbose);
     CASE('p', showprofile = !showprofile);
+    CASE('b', BreakAtCurrentInstruction());
     CASE('B', PopBreakpoint(&breakpoints));
     CASE('M', ToggleMouseTracking());
     CASE('\r', OnEnter());
