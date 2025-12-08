@@ -890,6 +890,7 @@ static void BreakAtNextInstruction(void) {
 
 static void BreakAtCurrentInstruction(void) {
   struct Breakpoint b;
+  if (IsAtBreakpoint(&breakpoints, m->ip) != -1) return;
   memset(&b, 0, sizeof(b));
   b.addr = m->ip;
   PushBreakpoint(&breakpoints, &b);
