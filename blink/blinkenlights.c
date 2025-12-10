@@ -159,32 +159,6 @@ FEATURES\n\
   Type ? for keyboard shortcuts and CLI flags inside emulator.\n\
 \n"
 
-#define HELP \
-  "\033[1mBlinkenlights " BLINK_VERSION "\033[22m\
-                https://github.com/jart/blink/\n\
-\n\
-KEYBOARD SHORTCUTS                CLI FLAGS\n\
-\n\
-ctrl-c  interrupt                 -t       no tui\n\
-s       step                      -r       real mode\n\
-n       next                      -Z       statistics\n\
-c       continue                  -b ADDR  push breakpoint\n\
-C       continue harder           -w ADDR  push watchpoint\n\
-q       quit                      -L PATH  log file location\n\
-f       finish                    -R       deliver crash sigs\n\
-R       restart                   -H       disable highlighting\n\
-?       help                      -v       blinkenlights version\n\
-x       sse radix                 -j       enables jit\n\
-t       sse type                  -m       disables memory safety\n\
-T       sse size                  -N       natural scroll wheel\n\
-b       push breakpoint           -s       system call logging\n\
-B       pop breakpoint\n\
-p       profiling mode            -C PATH  chroot directory\n\
-ctrl-t  turbo                     -B PATH  alternate BIOS image\n\
-alt-t   slowmo                    -z       zoom\n\
-2       toggle column 2           -h       help\n\
-3       toggle column 3"
-
 #define FPS        60     // frames per second written to tty
 #define TURBO      true   // to keep executing between frames
 #define HISTORY    65536  // number of rewind renders to ring
@@ -322,6 +296,32 @@ struct ProfSyms {
   unsigned long toto;
   struct ProfSym *p;
 };
+
+static const char kHelp[] = "\
+\033[1mBlinkenlights " BLINK_VERSION "\033[22m\
+                https://github.com/jart/blink/\n\
+\n\
+KEYBOARD SHORTCUTS                CLI FLAGS\n\
+\n\
+ctrl-c  interrupt                 -t       no tui\n\
+s       step                      -r       real mode\n\
+n       next                      -Z       statistics\n\
+c       continue                  -b ADDR  push breakpoint\n\
+C       continue harder           -w ADDR  push watchpoint\n\
+q       quit                      -L PATH  log file location\n\
+f       finish                    -R       deliver crash sigs\n\
+R       restart                   -H       disable highlighting\n\
+?       help                      -v       blinkenlights version\n\
+x       sse radix                 -j       enables jit\n\
+t       sse type                  -m       disables memory safety\n\
+T       sse size                  -N       natural scroll wheel\n\
+b       push breakpoint           -s       system call logging\n\
+B       pop breakpoint\n\
+p       profiling mode            -C PATH  chroot directory\n\
+ctrl-t  turbo                     -B PATH  alternate BIOS image\n\
+alt-t   slowmo                    -z       zoom\n\
+2       toggle column 2           -h       help\n\
+3       toggle column 3";
 
 static const char kRipName[3][4] = {"IP", "EIP", "RIP"};
 
@@ -3021,7 +3021,7 @@ static void OnMouse(const char *p) {
 }
 
 static void OnHelp(void) {
-  dialog = dialog == HELP ? NULL : HELP;
+  dialog = dialog == kHelp ? NULL : kHelp;
 }
 
 static void HandleKeyboard(const char *k) {
