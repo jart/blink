@@ -1821,6 +1821,7 @@ static void DrawBreakpoints(struct Panel *p) {
       if (!(name = breakpoints.p[i].symbol)) {
         name = sym != -1 ? dis->syms.p[sym].name : "UNKNOWN";
       }
+      if (addr == m->ip) AppendPanel(p, line - breakpointsstart, "\033[7m");
       s = buf;
       s += sprintf(s, "%0*" PRIx64 " ", GetAddrHexWidth(), addr);
       strcpy(s, name);
@@ -1829,6 +1830,7 @@ static void DrawBreakpoints(struct Panel *p) {
         snprintf(buf, sizeof(buf), "+%#" PRIx64, addr - dis->syms.p[sym].addr);
         AppendPanel(p, line, buf);
       }
+      if (addr == m->ip) AppendPanel(p, line - breakpointsstart, "\033[27m");
     }
     ++line;
   }
