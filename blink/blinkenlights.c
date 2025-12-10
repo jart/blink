@@ -1828,7 +1828,7 @@ static void DrawBreakpoints(struct Panel *p) {
       AppendPanel(p, line - breakpointsstart, buf);
       if (sym != -1 && addr != dis->syms.p[sym].addr) {
         snprintf(buf, sizeof(buf), "+%#" PRIx64, addr - dis->syms.p[sym].addr);
-        AppendPanel(p, line, buf);
+        AppendPanel(p, line - breakpointsstart, buf);
       }
       if (addr == m->ip) AppendPanel(p, line - breakpointsstart, "\033[27m");
     }
