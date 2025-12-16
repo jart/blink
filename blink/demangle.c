@@ -139,10 +139,20 @@ static void SpawnCxxFilt(void) {
   }
   unassert(!close(pipefds[0][1]));
   unassert(!close(pipefds[1][0]));
+#ifndef F_DUPFD_CLOEXEC
+  g_cxxfilt.reader = fcntl(pipefds[0][0], F_DUPFD, kMinBlinkFd);
+  fcntl(g_cxxfilt.reader, F_SETFD, FD_CLOEXEC);
+#else
   g_cxxfilt.reader = fcntl(pipefds[0][0], F_DUPFD_CLOEXEC, kMinBlinkFd);
+#endif
   unassert(g_cxxfilt.reader != -1);
   unassert(!close(pipefds[0][0]));
+#ifndef F_DUPFD_CLOEXEC
+  g_cxxfilt.writer = fcntl(pipefds[1][1], F_DUPFD, kMinBlinkFd);
+  fcntl(g_cxxfilt.writer, F_SETFD, FD_CLOEXEC);
+#else
   g_cxxfilt.writer = fcntl(pipefds[1][1], F_DUPFD_CLOEXEC, kMinBlinkFd);
+#endif
   unassert(g_cxxfilt.writer != -1);
   unassert(!close(pipefds[1][1]));
   unassert(!atexit(CloseCxxFilt));

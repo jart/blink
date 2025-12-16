@@ -295,12 +295,12 @@ replace() {
 
 comment() {
   hassstr "$1"
-  replace "$1" "// $1"
+  replace "$1\$" "// $1"
 }
 
 uncomment() {
   hassstr "$1"
-  replace "// $1" "$1"
+  replace "// $1\$" "$1"
 }
 
 for x; do

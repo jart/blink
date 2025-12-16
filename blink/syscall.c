@@ -1409,8 +1409,18 @@ static int SysDup3(struct Machine *m, i32 fildes, i32 newfildes, i32 flags) {
 static int SysDupf(struct Machine *m, i32 fildes, i32 minfildes, int cmd) {
   struct Fd *fd;
   int lim, oflags, newfildes;
+  int cmdnative = cmd;
   if (minfildes >= (lim = GetFileDescriptorLimit(m->system))) return emfile();
-  if ((newfildes = VfsFcntl(fildes, cmd, minfildes)) != -1) {
+  if (cmd == F_DUPFD_LINUX) {
+    cmdnative = F_DUPFD;
+  } else if (cmd == F_DUPFD_CLOEXEC_LINUX) {
+#ifndef F_DUPFD_CLOEXEC
+    cmdnative = F_DUPFD;
+#else
+    cmdnative = F_DUPFD_CLOEXEC;
+#endif
+  }
+  if ((newfildes = VfsFcntl(fildes, cmdnative, minfildes)) != -1) {
     if (newfildes >= lim) {
       VfsClose(newfildes);
       return emfile();
@@ -1418,7 +1428,7 @@ static int SysDupf(struct Machine *m, i32 fildes, i32 minfildes, int cmd) {
     LOCK(&m->system->fds.lock);
     unassert(fd = GetFd(&m->system->fds, fildes));
     oflags = fd->oflags & ~O_CLOEXEC;
-    if (cmd == F_DUPFD_CLOEXEC) {
+    if (cmd == F_DUPFD_CLOEXEC_LINUX) {
       oflags |= O_CLOEXEC;
     }
     unassert(ForkFd(&m->system->fds, fd, newfildes, oflags));
@@ -3241,10 +3251,8 @@ static int SysFcntlGetownEx(struct Machine *m, i32 fildes, i64 addr) {
 static int SysFcntl(struct Machine *m, i32 fildes, i32 cmd, i64 arg) {
   int rc, fl;
   struct Fd *fd;
-  if (cmd == F_DUPFD_LINUX) {
-    return SysDupf(m, fildes, arg, F_DUPFD);
-  } else if (cmd == F_DUPFD_CLOEXEC_LINUX) {
-    return SysDupf(m, fildes, arg, F_DUPFD_CLOEXEC);
+  if (cmd == F_DUPFD_LINUX || cmd == F_DUPFD_CLOEXEC_LINUX) {
+    return SysDupf(m, fildes, arg, cmd);
   }
   if (!(fd = GetAndLockFd(m, fildes))) return -1;
   if (cmd == F_GETFD_LINUX) {
