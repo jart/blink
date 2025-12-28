@@ -456,7 +456,7 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
     m->tid = m->system->pid = newpid;
     m->system->isfork = true;
     RemoveOtherThreads(m->system);
-#ifdef __CYGWIN__
+#if defined(__CYGWIN__) && defined(HAVE_JIT)
     // Cygwin doesn't seem to properly set the PROT_EXEC
     // protection for JIT blocks after forking.
     FixJitProtection(&m->system->jit);
