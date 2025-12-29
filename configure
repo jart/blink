@@ -285,13 +285,22 @@ hassstr() {
   fi
 }
 
-replace() {
-  exec 7<>"${LOCK}"
-  "${FLOCK}" -x 7
-  sed "s@$1@$2@" <"${CONFIG}" >"${CONFIG}.tmp" &&
-  mv -f "${CONFIG}.tmp" "${CONFIG}"
-  exec 7<&-
-}
+if [ "${HOST_SYSTEM}" = "SunOS" ]; then
+  replace() {
+    "${FLOCK}" -x "${LOCK}.1"
+    sed "s@$1@$2@" <"${CONFIG}" >"${CONFIG}.tmp" &&
+    mv -f "${CONFIG}.tmp" "${CONFIG}"
+    "${FLOCK}" -u "${LOCK}.1"
+  }
+else
+  replace() {
+    exec 7<>"${LOCK}"
+    "${FLOCK}" -x 7
+    sed "s@$1@$2@" <"${CONFIG}" >"${CONFIG}.tmp" &&
+    mv -f "${CONFIG}.tmp" "${CONFIG}"
+    exec 7<&-
+  }
+fi
 
 comment() {
   hassstr "$1"

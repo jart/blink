@@ -293,6 +293,14 @@ static bool IsHaikuExecutable(Elf64_Ehdr_ *ehdr, size_t size) {
 #endif
 }
 
+static bool IsSunExecutable(Elf64_Ehdr_ *ehdr, size_t size) {
+#if defined(sun) || defined(__sun)
+  return ehdr->ident[EI_OSABI_] == ELFOSABI_SOLARIS_;
+#else
+  return false;
+#endif
+}
+
 static bool IsShebangExecutable(void *image, size_t size) {
   return size >= 2 && ((char *)image)[0] == '#' && ((char *)image)[1] == '!';
 }
@@ -340,6 +348,10 @@ bool IsSupportedExecutable(const char *path, void *image, size_t size) {
     }
     if (IsHaikuExecutable(ehdr, size)) {
       ExplainWhyItCantBeEmulated(path, "ELF is Haiku executable");
+      return false;
+    }
+    if (IsSunExecutable(ehdr, size)) {
+      ExplainWhyItCantBeEmulated(path, "ELF is SunOS executable");
       return false;
     }
 #if defined(__ELF__) && !defined(__linux)

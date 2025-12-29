@@ -30,6 +30,9 @@
 #define WINDOWS_ "Windows\0\0\0\0\0"
 #define CYGWIN_  "Cygwin\0\0\0\0\0\0"
 #define HAIKU_   "Haiku\0\0\0\0\0\0\0"
+#define ILLUMOS_ "illumos\0\0\0\0\0\0"
+#define SOLARIS_ "Solaris\0\0\0\0\0\0"
+#define SUNOS_   "SunOS\0\0\0\0\0\0\0"
 #define UNKNOWN_ "Unknown\0\0\0\0\0\0"
 
 #ifdef __COSMOPOLITAN__
@@ -55,6 +58,14 @@
 #define OS CYGWIN_
 #elif defined(__HAIKU__)
 #define OS HAIKU_
+#elif defined(sun) || defined(__sun)
+# if defined(__illumos__)
+#define OS ILLUMOS_
+# elif defined(__SVR4) || defined(__svr4__)
+#define OS SOLARIS_
+# else
+#define OS SUNOS_
+# endif
 #else
 #define OS UNKNOWN_
 #endif
