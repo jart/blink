@@ -69,6 +69,7 @@
 #define S390X_   "s390x\0\0\0\0\0\0\0"
 #define RISCV64_ "riscv64\0\0\0\0\0"
 #define RISCV32_ "riscv32\0\0\0\0\0"
+#define LOONG64_ "loong64\0\0\0\0\0"
 
 #if defined(__x86_64__)
 #define ARCH_NAME X86_64_
@@ -90,6 +91,8 @@
 #define ARCH_NAME RISCV64_
 #elif defined(__riscv) && __riscv_xlen == 32
 #define ARCH_NAME RISCV32_
+#elif defined(__loongarch__) && defined(__loongarch_lp64)
+#define ARCH_NAME LOONG64_
 #else
 #define ARCH_NAME UNKNOWN_
 #endif
