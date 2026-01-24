@@ -110,6 +110,7 @@ int SetOverlays(const char *config, bool cd_into_chroot) {
         path = path2;
         path2 = (char *)malloc(PATH_MAX + 1);
         if (!realpath(path, path2)) {
+          free(path2);
           free(path);
           continue;
         }
