@@ -36,6 +36,38 @@
 #define kOpCvt0f5b  16
 #define kOpCvt0fE6  20
 
+static float SseRoundSingle(struct Machine *m, float x) {
+  switch ((m->mxcsr & kMxcsrRc) >> 13) {
+    case 0:
+      return rint(x);
+    case 1:
+      return floor(x);
+    case 2:
+      return ceil(x);
+    case 3:
+      return trunc(x);
+    default:
+      __builtin_unreachable();
+  }
+}
+
+static float SseRoundSingleImm(struct Machine *m, float x, int imm) {
+  int roundmode = imm & 3;
+  if((imm >> 2) & 1) roundmode = (m->mxcsr & kMxcsrRc) >> 13;
+  switch (roundmode) {
+    case 0:
+      return rint(x);
+    case 1:
+      return floor(x);
+    case 2:
+      return ceil(x);
+    case 3:
+      return trunc(x);
+    default:
+      __builtin_unreachable();
+  }
+}
+
 static double SseRoundDouble(struct Machine *m, double x) {
   switch ((m->mxcsr & kMxcsrRc) >> 13) {
     case 0:
@@ -49,6 +81,73 @@ static double SseRoundDouble(struct Machine *m, double x) {
     default:
       __builtin_unreachable();
   }
+}
+
+static double SseRoundDoubleImm(struct Machine *m, double x, int imm) {
+  int roundmode = imm & 3;
+  if((imm >> 2) & 1) roundmode = (m->mxcsr & kMxcsrRc) >> 13;
+  switch (roundmode) {
+    case 0:
+      return rint(x);
+    case 1:
+      return floor(x);
+    case 2:
+      return ceil(x);
+    case 3:
+      return trunc(x);
+    default:
+      __builtin_unreachable();
+  }
+}
+
+static void OpPpiWpdRoundps(P) {
+  u8 *p;
+  unsigned i;
+  i32 n[4];
+  union FloatPun f[2];
+  p = GetModrmRegisterXmmPointerRead16(A);
+  f[0].i = Read32(p + 0);
+  f[1].i = Read32(p + 4);
+  f[2].i = Read32(p + 8);
+  f[3].i = Read32(p + 12);
+  for (i = 0; i < 4; ++i) n[i] = SseRoundSingleImm(m, f[i].f, uimm0);
+  Put32(XmmRexrReg(m, rde) + 0, n[0]);
+  Put32(XmmRexrReg(m, rde) + 4, n[1]);
+  Put32(XmmRexrReg(m, rde) + 8, n[2]);
+  Put32(XmmRexrReg(m, rde) + 12, n[3]);
+}
+
+static void OpPpiWpdRoundpd(P) {
+  u8 *p;
+  unsigned i;
+  i64 n[2];
+  union DoublePun d[2];
+  p = GetModrmRegisterXmmPointerRead16(A);
+  d[0].i = Read64(p + 0);
+  d[1].i = Read64(p + 8);
+  for (i = 0; i < 2; ++i) n[i] = SseRoundDoubleImm(m, d[i].f, uimm0);
+  Put64(XmmRexrReg(m, rde) + 0, n[0]);
+  Put64(XmmRexrReg(m, rde) + 8, n[1]);
+}
+
+static void OpPpiWpdRoundss(P) {
+  u8 *p;
+  i32 n;
+  union FloatPun f;
+  p = GetModrmRegisterXmmPointerRead16(A);
+  f.i = Read32(p);
+  n = SseRoundSingleImm(m, f.f, uimm0);
+  Put32(XmmRexrReg(m, rde), n);
+}
+
+static void OpPpiWpdRoundsd(P) {
+  u8 *p;
+  i32 n;
+  union DoublePun d;
+  p = GetModrmRegisterXmmPointerRead16(A);
+  d.i = Read64(p);
+  n = SseRoundDoubleImm(m, d.f, uimm0);
+  Put64(XmmRexrReg(m, rde), n);
 }
 
 static void OpGdqpWssCvttss2si(P) {
@@ -73,7 +172,7 @@ static void OpGdqpWssCvtss2si(P) {
   i64 n;
   union FloatPun f;
   f.i = Read32(GetModrmRegisterXmmPointerRead4(A));
-  n = rintf(f.f);
+  n = SseRoundSingle(m, f.f);
   if (!Rexw(rde)) n &= 0xffffffff;
   Put64(RegRexrReg(m, rde), n);
 }

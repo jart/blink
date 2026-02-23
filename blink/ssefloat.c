@@ -228,6 +228,54 @@ void OpShufpsd(P) {
   }
 }
 
+static void OpBlendps(P) {
+  u8 *p;
+  union FloatPun x[4], y[4], z[4];
+  p = GetModrmRegisterXmmPointerRead16(A);
+  IGNORE_RACES_START();
+  y[0].i = Read32(p + 0 * 4);
+  y[1].i = Read32(p + 1 * 4);
+  y[2].i = Read32(p + 2 * 4);
+  y[3].i = Read32(p + 3 * 4);
+  p = XmmRexrReg(m, rde);
+  x[0].i = Read32(p + 0 * 4);
+  x[1].i = Read32(p + 1 * 4);
+  x[2].i = Read32(p + 2 * 4);
+  x[3].i = Read32(p + 3 * 4);
+  if(uimm0 & 1) z[0].f = y[0].f;
+  else z[0].f = x[0].f;
+  if(uimm0 & 2) z[1].f = y[1].f;
+  else z[1].f = x[1].f;
+  if(uimm0 & 4) z[2].f = y[2].f;
+  else z[2].f = x[2].f;
+  if(uimm0 & 8) z[3].f = y[3].f;
+  else z[3].f = x[3].f;
+  Write32(p + 0 * 4, z[0].i);
+  Write32(p + 1 * 4, z[1].i);
+  Write32(p + 2 * 4, z[2].i);
+  Write32(p + 3 * 4, z[3].i);
+  IGNORE_RACES_END();
+}
+
+static void OpBlendpd(P) {
+  u8 *p;
+  union DoublePun x[2], y[2], z[2];
+  p = GetModrmRegisterXmmPointerRead16(A);
+  IGNORE_RACES_START();
+  y[0].i = Read64(p + 0 * 8);
+  y[1].i = Read64(p + 1 * 8);
+  p = XmmRexrReg(m, rde);
+  x[0].i = Read64(p + 0 * 8);
+  x[1].i = Read64(p + 1 * 8);
+  if(uimm0 & 1) z[0].f = y[0].f;
+  else z[0].f = x[0].f;
+  if(uimm0 & 2) z[1].f = y[1].f;
+  else z[1].f = x[1].f;
+  Write64(p + 0 * 8, z[0].i);
+  Write64(p + 1 * 8, z[1].i);
+  IGNORE_RACES_END();
+}
+
 static void Movmskps(P) {
   u8 *p = GetModrmRegisterXmmPointerRead16(A);
   IGNORE_RACES_START();

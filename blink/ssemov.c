@@ -89,6 +89,25 @@ void OpMovntiMdqpGdqp(P) {
   IGNORE_RACES_END();
 }
 
+void OpPBlendW(P) {
+  u8* p;
+  unsigned i;
+  u16 x[8], y[8], z[8];
+  
+  IGNORE_RACES_START();
+  for(i = 0; i < 8; i++)
+  {
+    p = GetModrmRegisterXmmPointerRead16(A);
+    y[i] = Read16(p + i * 2);
+    p = XmmRexrReg(m, rde);
+    x[i] = Read16(p + i * 2);
+    if(uimm0 & (1 << i)) z[i] = y[i];
+    else z[i] = x[i];
+    Write16(p + i * 2, z[i]);
+  }
+  IGNORE_RACES_END();
+}
+
 static void MovdqaVdqWdq(P) {
   IGNORE_RACES_START();
   memcpy(XmmRexrReg(m, rde), GetXmmAddress(A), 16);
