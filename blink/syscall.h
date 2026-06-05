@@ -66,6 +66,7 @@ int SysPipe2(struct Machine *, i64, i32);
 int SysIoctl(struct Machine *, int, u64, i64);
 _Noreturn void SysExitGroup(struct Machine *, int);
 _Noreturn void SysExit(struct Machine *, int);
+void WakeAllFutexes(void);
 
 int GetDirFildes(int);
 void AddStdFd(struct Fds *, int);

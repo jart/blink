@@ -103,7 +103,12 @@ u64 HandlePageFault(struct Machine *m, u8 *pslot, u64 entry) {
         m->system->memstat.reserved -= 1;
         entry = x;
       } else {
-        FreeAnonymousPage(m->system, (u8 *)(uintptr_t)(page & PAGE_TA));
+        // Lost a race: another thread committed this page first. Free the
+        // host page we just allocated. Must use FindHostPage(): in -m mode
+        // (page & PAGE_TA) is the g_hostpages *index*, not the host pointer,
+        // so freeing it directly poisons the allocator free list. This path
+        // only triggers when two threads fault the same page concurrently.
+        FreeAnonymousPage(m->system, FindHostPage(page), page & PAGE_TA);
         entry = LoadPte(pslot);
         m->system->rss -= 1;
       }
@@ -397,11 +402,11 @@ int CopyFromUserRead(struct Machine *m, void *dst, i64 addr, u64 n) {
   return 0;
 }
 
-int CopyToUser(struct Machine *m, i64 dst, void *src, u64 n) {
+int CopyToUser(struct Machine *m, i64 dst, const void *src, u64 n) {
   return VirtualCopy(m, dst, (char *)src, n, false);
 }
 
-int CopyToUserWrite(struct Machine *m, i64 addr, void *src, u64 n) {
+int CopyToUserWrite(struct Machine *m, i64 addr, const void *src, u64 n) {
   if (CopyToUser(m, addr, src, n) == -1) return -1;
   SetWriteAddr(m, addr, n);
   return 0;
@@ -411,6 +416,13 @@ void CommitStash(struct Machine *m) {
   unassert(m->stashaddr);
   if (m->opcache->writable) {
     CopyToUser(m, m->stashaddr, m->opcache->stash, m->opcache->stashsize);
+  }
+  if (m->crosslocked) {
+    // matches the LockBus() in ReserveAddress()'s page-overlap path; the
+    // write-back above is thus inside the lock, making the crossing
+    // read-modify-write atomic vs other threads.
+    UnlockBus((const u8 *)(uintptr_t)m->stashaddr);
+    m->crosslocked = false;
   }
   m->stashaddr = 0;
 }
@@ -458,13 +470,27 @@ u8 *ReserveAddress(struct Machine *m, i64 v, size_t n, bool writable) {
   }
   STATISTIC(++page_overlaps);
   unassert(n <= 4096);
-  m->stashaddr = v;
-  m->opcache->stashsize = n;
-  m->opcache->writable = writable;
-  res = m->opcache->stash;
   k = 4096 - (v & 4095);
   if ((p1 = LookupAddress2(m, v, mask, need))) {
     if ((p2 = LookupAddress2(m, v + k, mask, need))) {
+      // A page-crossing access can't be served by a single native locked
+      // instruction on the real memory: blink copies both pages into a private
+      // per-machine stash, the op does its read-modify-write there, and
+      // CommitStash() writes it back at end-of-op. For LOCKed/atomic ops that
+      // silently breaks atomicity (the op's own LockBus() keys on the stash
+      // buffer, not the real memory, and the write-back happens later, outside
+      // any lock), so concurrent crossing atomics to the same location lose
+      // updates -- e.g. a GObject refcount that straddles a page. Serialize the
+      // whole reserve->op->commit under a bus lock keyed by the (thread-shared)
+      // guest address; released in CommitStash(). Only crossing accesses pay
+      // this, and they are rare. Acquire AFTER both pages resolve so a faulting
+      // LookupAddress2 can't leak the lock.
+      LockBus((const u8 *)(uintptr_t)v);
+      m->crosslocked = true;
+      m->stashaddr = v;
+      m->opcache->stashsize = n;
+      m->opcache->writable = writable;
+      res = m->opcache->stash;
       IGNORE_RACES_START();
       memcpy(res, p1, k);
       memcpy(res + k, p2, n - k);

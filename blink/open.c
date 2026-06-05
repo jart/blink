@@ -104,13 +104,35 @@ static int SysTmpfile(struct Machine *m, i32 dirfildes, i64 pathaddr,
   return fildes;
 }
 
-int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
+static int GetOpenFlagsBSD(int flags) {
+  int res = 0;
+  if ((flags & 3) == 0) res |= O_RDONLY_LINUX;
+  if ((flags & 3) == 1) res |= O_WRONLY_LINUX;
+  if ((flags & 3) == 2) res |= O_RDWR_LINUX;
+  if (flags & 0x0004) res |= O_NDELAY_LINUX;
+  if (flags & 0x0008) res |= O_APPEND_LINUX;
+  if (flags & 0x0040) res |= O_ASYNC_LINUX;
+  if (flags & 0x0080) res |= O_SYNC_LINUX;
+  if (flags & 0x0100) res |= O_NOFOLLOW_LINUX;
+  if (flags & 0x0200) res |= O_CREAT_LINUX;
+  if (flags & 0x0400) res |= O_TRUNC_LINUX;
+  if (flags & 0x0800) res |= O_EXCL_LINUX;
+  if (flags & 0x8000) res |= O_NOCTTY_LINUX;
+  if (flags & 0x20000) res |= O_DIRECTORY_LINUX;
+  if (flags & 0x100000) res |= O_CLOEXEC_LINUX;
+  return res;
+}
+
+int SysOpenat(struct Machine* m, i32 dirfildes, i64 pathaddr, i32 oflags,
               i32 mode) {
   int lim;
   int fildes;
   int sysflags;
   struct Fd *fd;
   const char *path;
+  if (m->system->isfreebsd) {
+    oflags = GetOpenFlagsBSD(oflags);
+  }
 #ifndef O_TMPFILE
 #ifndef DISABLE_NONPOSIX
   if ((oflags & O_TMPFILE_LINUX) == O_TMPFILE_LINUX) {
@@ -118,10 +140,20 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
   }
 #endif
 #endif
-  if ((sysflags = XlatOpenFlags(oflags)) == -1) return -1;
+  if ((sysflags = XlatOpenFlags(oflags)) == -1) {
+    fprintf(stderr, "XlatOpenFlags failed oflags=%#x\n", oflags);
+    return -1;
+  }
   if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   if (!(path = LoadStr(m, pathaddr))) return -1;
+  // fprintf(stderr, "SysOpenat(dirfd=%d, path=%s, flags=%#x, mode=%#x)\n",
+  // GetDirFildes(dirfildes), path, sysflags, mode);
   RESTARTABLE(fildes = VfsOpen(GetDirFildes(dirfildes), path, sysflags, mode));
+  // if (fildes == -1) {
+  // fprintf(stderr, "SysOpenat failed: errno=%d\n", errno);
+  //} else {
+  // fprintf(stderr, "SysOpenat success: fd=%d\n", fildes);
+  //}
   if (fildes != -1) {
     if (fildes >= lim) {
       close(fildes);

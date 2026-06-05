@@ -33,6 +33,7 @@
 #include "blink/bus.h"
 #include "blink/case.h"
 #include "blink/debug.h"
+#include "blink/signal.h"
 #include "blink/endian.h"
 #include "blink/flag.h"
 #include "blink/flags.h"
@@ -2091,7 +2092,7 @@ nexgen32e_f GetOp(long op) {
 }
 
 static bool CanJit(struct Machine *m) {
-  return !IsJitDisabled(&m->system->jit);
+  return !m->nojit && !IsJitDisabled(&m->system->jit);
 }
 
 void JitlessDispatch(P) {
@@ -2185,6 +2186,15 @@ void ExecuteInstruction(struct Machine *m) {
 #if LOG_CPU
   LogCpu(m);
 #endif
+  // FreeBSD signal trampoline: when a signal handler returns, control
+  // jumps here. We never back this page with real bytes — it's purely an
+  // address that means "the guest is asking for sigreturn." Recognize it
+  // before any JIT/fetch logic so we don't try to compile or execute
+  // anything at this fake address.
+  if (m->system->sigtramp && m->ip == m->system->sigtramp) {
+    SigRestore(m);
+    return;
+  }
 #ifdef HAVE_JIT
   u8 *dst;
   nexgen32e_f func;
@@ -2241,6 +2251,18 @@ void Actor(struct Machine *mm) {
 #ifndef __CYGWIN__
     STATISTIC(++interps);
 #endif
+#ifdef HAVE_JIT
+    // Quiescent point for JIT block reclamation (QSBR): here, between dispatch
+    // iterations, this thread is provably not executing inside any JIT block
+    // (the previous func() has fully returned). Publish the current reclaim
+    // epoch so a thread retiring blocks knows we've left anything older.
+    // Release-ordered so our prior reads of JIT code happen-before a reclaimer
+    // observing this and reusing the storage.
+    atomic_store_explicit(
+        &m->jitqso,
+        atomic_load_explicit(&m->system->jit.reclaimepoch, memory_order_relaxed),
+        memory_order_release);
+#endif
     if (!atomic_load_explicit(&m->attention, memory_order_acquire)) {
       ExecuteInstruction(m);
     } else {
@@ -2261,6 +2283,13 @@ void Blink(struct Machine *m) {
     m->canhalt = false;
     m->nofault = false;
     m->insyscall = false;
+    if (m->crosslocked) {
+      // a fault unwound past CommitStash() while we held the page-crossing bus
+      // lock; release it (same thread) so the location doesn't deadlock.
+      UnlockBus((const u8 *)(uintptr_t)m->stashaddr);
+      m->crosslocked = false;
+    }
+    m->stashaddr = 0;
     CollectPageLocks(m);
     CollectGarbage(m, 0);
     if (IsMakingPath(m)) {

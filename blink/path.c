@@ -634,7 +634,126 @@ void FlushSkew(P) {
   }
 }
 
+// Decodes a single 3-byte `mov r/m64,r64` (REX.W + 89 /r, mod=11) and returns
+// its dst (r/m) and src (reg) host register numbers. Both blink's emitter and
+// gcc-compiled micro-op bodies use this encoding for reg<-reg moves.
+static bool IsMovRR(const u8 *p, int len, int *dst, int *src) {
+  u8 rex, modrm;
+  if (len != 3) return false;
+  rex = p[0];
+  if ((rex & 0xf8) != 0x48) return false;  // REX with W=1 (0x48/49/4c/4d)
+  if (p[1] != 0x89) return false;          // MOV r/m,r
+  modrm = p[2];
+  if ((modrm & 0xc0) != 0xc0) return false;  // register direct (mod=11)
+  *dst = ((rex & 1) << 3) | (modrm & 7);          // r/m + REX.B
+  *src = ((rex & 4) << 1) | ((modrm >> 3) & 7);   // reg + REX.R
+  return true;
+}
+
+// Returns true if the instruction transfers control (so we must not disturb
+// byte offsets around it). Skips legacy/REX prefixes to find the opcode.
+static bool IsBranchish(const u8 *p, int len) {
+  int i = 0;
+  while (i < len &&
+         (p[i] == 0x66 || p[i] == 0x67 || p[i] == 0xf0 || p[i] == 0xf2 ||
+          p[i] == 0xf3 || p[i] == 0x2e || p[i] == 0x36 || p[i] == 0x3e ||
+          p[i] == 0x26 || p[i] == 0x64 || p[i] == 0x65 ||
+          (p[i] >= 0x40 && p[i] <= 0x4f))) {
+    ++i;
+  }
+  if (i >= len) return false;
+  switch (p[i]) {
+    case 0xe8:  // call rel32
+    case 0xe9:  // jmp rel32
+    case 0xeb:  // jmp rel8
+    case 0xe3:  // jrcxz
+    case 0xc2:  // ret imm16
+    case 0xc3:  // ret
+    case 0xca:  // retf
+    case 0xcb:  // retf
+    case 0xcc:  // int3
+    case 0xcd:  // int
+      return true;
+    case 0xff:  // group5: /2 call /3 callf /4 jmp /5 jmpf
+      if (i + 1 < len) {
+        int reg = (p[i + 1] >> 3) & 7;
+        if (reg >= 2 && reg <= 5) return true;
+      }
+      return false;
+    case 0x0f:  // two-byte: Jcc rel32 (80..8f), syscall (05)
+      if (i + 1 < len && ((p[i + 1] & 0xf0) == 0x80 || p[i + 1] == 0x05)) {
+        return true;
+      }
+      return false;
+    default:
+      if (p[i] >= 0x70 && p[i] <= 0x7f) return true;  // Jcc rel8
+      return false;
+  }
+}
+
+// Peephole over the straight-line host code just emitted for one guest op,
+// in [m->path.opstart, jb->index). Removes provably-redundant register moves
+// that the micro-op stitching leaves behind:
+//   - `mov A,A`              (no-op)
+//   - `mov A,B ; mov B,A`    (second is a no-op given the first)
+// The inverse pair frequently straddles the Jitter glue / inlined micro-op
+// boundary, which is why it survives until the final byte stream. We bail out
+// entirely if the op emitted any control transfer, so relative branch
+// displacements and recorded jump fixups are never perturbed (the path's own
+// terminating jump is appended later, on post-peephole offsets).
+static void PeepholeOp(P) {
+  struct JitBlock *jb;
+  u8 *base;
+  long off, end, w;
+  int n, i, len;
+  struct XedDecodedInst xedd[1];
+  struct {
+    long off;
+    int len;
+    bool mov;
+    int dst, src;
+  } in[48];
+  bool rm[48];
+  if (!CanJitForImmediateEffect()) return;  // staging buffer not directly usable
+  jb = m->path.jb;
+  base = jb->addr;
+  end = jb->index;
+  off = m->path.opstart;
+  if (off < 0 || off >= end) return;
+  n = 0;
+  while (off < end) {
+    if (n == (int)ARRAYLEN(in)) return;  // too many ops to track; leave as-is
+    if (DecodeInstruction(xedd, base + off, end - off, XED_MODE_LONG)) return;
+    len = xedd->length;
+    if (len <= 0 || off + len > end) return;
+    if (IsBranchish(base + off, len)) return;  // never touch ops with branches
+    in[n].off = off;
+    in[n].len = len;
+    in[n].mov = IsMovRR(base + off, len, &in[n].dst, &in[n].src);
+    ++n;
+    off += len;
+  }
+  memset(rm, 0, sizeof(rm));
+  for (i = 0; i < n; ++i) {
+    if (rm[i] || !in[i].mov) continue;
+    if (in[i].dst == in[i].src) {
+      rm[i] = true;  // mov A,A
+    } else if (i + 1 < n && in[i + 1].mov && in[i + 1].dst == in[i].src &&
+               in[i + 1].src == in[i].dst) {
+      rm[i + 1] = true;  // mov A,B ; mov B,A  ->  drop the second
+    }
+  }
+  w = m->path.opstart;
+  for (i = 0; i < n; ++i) {
+    if (rm[i]) continue;
+    if (in[i].off != w) memmove(base + w, base + in[i].off, in[i].len);
+    w += in[i].len;
+  }
+  jb->index = w;
+}
+
 void AddPath_StartOp(P) {
+  m->path.opstart = m->path.jb->index;
 #if LOG_CPU
   Jitter(A, "qmq", LogCpu);
 #endif
@@ -700,18 +819,30 @@ void AddPath_EndOp(P) {
     AppendJitMovReg(m->path.jb, kJitArg0, kJitSav0);
     u8 sa = offsetof(struct Machine, stashaddr);
     u8 code[] = {
-        // cmpq $0x0,0x18(%rdi)
+        // cmpq $0x0,sa(%rdi)
         0x48 | (kJitArg0 > 7 ? kAmdRexb : 0),
         0x83,
         0170 | (kJitArg0 & 7),
         sa,
         0x00,
-        // jz +5
+        // jz <past the CommitStash call>; rel8 is backpatched below because
+        // AppendJitCall() emits a 5-byte `call rel32` when CommitStash is
+        // within +/-2GB but a ~12-byte `movabs $addr,%rax; call %rax` when
+        // it's farther. A hardcoded +5 lands mid-instruction for the far
+        // form and executes garbage. This only triggers under -m (the stash
+        // path) and only when ASLR places the JIT mmap >2GB from the blink
+        // binary, which is why it was an intermittent, -m-only SIGSEGV.
         0x74,
-        0x05,
+        0x00,
     };
-    AppendJit(m->path.jb, code, sizeof(code));
-    AppendJitCall(m->path.jb, (void *)(uintptr_t)CommitStash);
+    if (AppendJit(m->path.jb, code, sizeof(code))) {
+      long disp_at = m->path.jb->index - 1;  // the rel8 byte just written
+      if (AppendJitCall(m->path.jb, (void *)(uintptr_t)CommitStash)) {
+        long skip = m->path.jb->index - (disp_at + 1);  // actual call length
+        unassert(skip >= 0 && skip <= 127);
+        m->path.jb->addr[disp_at] = (u8)skip;
+      }
+    }
   }
 #elif !LOG_JIX && defined(__aarch64__)
   if (m->reserving) {
@@ -731,6 +862,7 @@ void AddPath_EndOp(P) {
          "c",   // call function (EndOp)
          m->ip, EndOp);
 #endif
+  PeepholeOp(A);
   FlushCod(m->path.jb);
 }
 

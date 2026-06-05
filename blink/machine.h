@@ -162,13 +162,17 @@ struct FreeList {
 
 struct HostPage {
   u8 *page;
+  u64 cookie;  // cached TrackHostPage() result (PAGE_TA bits) for index reuse
   struct HostPage *next;
 };
 
 struct HostPages {
-  size_t n;
-  size_t c;
-  u8 **p;
+  size_t n;                 // [guarded by g_hostpages_lock]
+  size_t c;                 // [guarded by g_hostpages_lock]
+  _Atomicish(u8 **) p;      // published w/ release; read lock-free by FindHostPage
+  size_t *freeidx;          // [g_hostpages_lock] stack of reusable slot indices
+  size_t nfree;             // [g_hostpages_lock]
+  size_t cfree;             // [g_hostpages_lock]
 };
 
 struct PageLock {
@@ -269,7 +273,12 @@ struct System {
   bool exited;
   bool loaded;
   bool iscosmo;
+  bool isfreebsd;
+  bool emulate_root;
   bool trapexit;
+  i64 thr_exit_thunk;
+  i64 sigtramp;
+  int vfork_done_fd;
   bool brkchanged;
   _Atomic(bool) killer;
   u16 gdt_limit;
@@ -331,6 +340,7 @@ struct JitPath {
   int elements;
   u64 skew;
   i64 start;
+  i64 opstart;  // host-code offset where the current op's codegen began (peephole)
   struct JitBlock *jb;
 };
 
@@ -345,8 +355,10 @@ struct Machine {               //
   struct XedMachineMode mode;  // [dup] XED_MACHINE_MODE_REAL etc.
   bool threaded;               // must use synchronization
   _Atomic(bool) attention;     // signals main interpreter loop
+  _Atomic(unsigned) jitqso;    // reclaimepoch last seen at Actor() quiescence
   u32 flags;                   // x86 eflags register
   i64 stashaddr;               // it's our page overlap buffer
+  bool crosslocked;            // [stashaddr] holding bus lock for crossing op
   union {                      // GENERAL REGISTER FILE
     u64 align8_;               //
     u8 beg[128];               //
@@ -438,6 +450,7 @@ struct Machine {               //
   bool traprdtsc;                        //
   bool trapcpuid;                        //
   bool boop;                             //
+  bool nojit;                            // per-machine jit disable
   i8 trapno;                             //
   i8 segvcode;                           //
   struct MachineTlb tlb[32];             //
@@ -482,7 +495,7 @@ int LoadInstruction2(struct Machine *, u64);
 void ExecuteInstruction(struct Machine *);
 u64 AllocatePageTable(struct System *);
 u64 AllocateAnonymousPage(struct System *);
-void FreeAnonymousPage(struct System *, u8 *);
+void FreeAnonymousPage(struct System *, u8 *, u64);
 u64 FindPageTableEntry(struct Machine *, u64);
 bool CheckMemoryInvariants(struct System *) nosideeffect dontdiscard;
 i64 ReserveVirtual(struct System *, i64, i64, u64, int, i64, bool, bool);
@@ -536,8 +549,8 @@ u8 *GetAddress(struct Machine *, i64);
 void CommitStash(struct Machine *);
 int CopyFromUser(struct Machine *, void *, i64, u64);
 int CopyFromUserRead(struct Machine *, void *, i64, u64);
-int CopyToUser(struct Machine *, i64, void *, u64);
-int CopyToUserWrite(struct Machine *, i64, void *, u64);
+int CopyToUser(struct Machine *, i64, const void *, u64);
+int CopyToUserWrite(struct Machine *, i64, const void *, u64);
 void EndStore(struct Machine *, i64, size_t, void *[2], u8 *);
 void EndStoreNp(struct Machine *, i64, size_t, void *[2], u8 *);
 int GetDescriptor(struct Machine *, int, u64 *);
@@ -842,7 +855,11 @@ static inline u8 *FindHostPage(u64 entry) {
   if (HasLinearMapping()) {
     return (u8 *)(uintptr_t)(entry & PAGE_TA);
   } else {
-    return g_hostpages.p[(entry & PAGE_TA) >> 12];
+    // Lock-free read of the g_hostpages array. TrackHostPage() publishes the
+    // (possibly grown) array pointer with release ordering and never frees old
+    // arrays, so this acquire load always yields an array containing our entry.
+    return atomic_load_explicit(&g_hostpages.p, memory_order_acquire)
+        [(entry & PAGE_TA) >> 12];
   }
 }
 

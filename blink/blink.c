@@ -90,7 +90,7 @@ Toolchain: " BUILD_TOOLCHAIN "\n\
 Revision: #" BLINK_COMMITS " " BLINK_GITSHA "\n\
 Config: ./configure MODE=" BUILD_MODE " " CONFIG_ARGUMENTS "\n"
 
-#define OPTS "hvjemZs0L:C:"
+#define OPTS "hvjemZs0RL:C:"
 
 _Alignas(1) static const char USAGE[] =
     " [-" OPTS "] PROG [ARGS...]\n"
@@ -105,6 +105,7 @@ _Alignas(1) static const char USAGE[] =
 #endif
     "  -0                   to specify argv[0]\n"
     "  -m                   enable memory safety\n"
+    "  -R                   emulate root user (uid/gid 0)\n"
 #if !defined(DISABLE_STRACE) && !defined(TINY)
     "  -s                   enable system call logging\n"
 #endif
@@ -132,6 +133,7 @@ _Alignas(1) static const char USAGE[] =
 
 extern char **environ;
 static bool FLAG_nojit;
+static bool FLAG_asroot;
 static char g_pathbuf[PATH_MAX];
 
 static void OnSigSys(int sig) {
@@ -149,6 +151,7 @@ static void PrintDiagnostics(struct Machine *m) {
 void TerminateSignal(struct Machine *m, int sig, int code) {
   int syssig;
   struct sigaction sa;
+  fprintf(stderr, "TerminateSignal(%d) pid=%d rip=%#" PRIx64 "\n", sig, m->system->pid, m->ip);
   unassert(!IsSignalIgnoredByDefault(sig));
   KillOtherThreads(m->system);
 #ifdef HAVE_JIT
@@ -189,6 +192,13 @@ static void OnFatalSystemSignal(int sig, siginfo_t *si, void *ptr) {
 #ifndef DISABLE_JIT
   if (IsSelfModifyingCodeSegfault(m, si)) return;
 #endif
+  fprintf(stderr, "FATAL SIG%d pid=%d addr=%p m=%p canhalt=%d rip=%#" PRIx64 "\n",
+          sig, getpid(), si->si_addr, (void*)m, m ? m->canhalt : -1,
+          m ? m->ip : 0);
+  if (m) {
+    m->faultaddr = (i64)(intptr_t)si->si_addr;
+    PrintDiagnostics(m);
+  }
   g_siginfo = *si;
   unassert(m);
   unassert(m->canhalt);
@@ -212,6 +222,7 @@ static int Exec(char *execfn, char *prog, char **argv, char **envp) {
   if (FLAG_nojit) DisableJit(&m->system->jit);
 #endif
   m->system->exec = Exec;
+  m->system->emulate_root = FLAG_asroot;
   if (!old) {
     // this is the first time a program is being loaded
     LoadProgram(m, execfn, prog, argv, envp, NULL);
@@ -290,6 +301,9 @@ static void GetOpts(int argc, char *argv[]) {
       case 'm':
         FLAG_nolinear = true;
         break;
+      case 'R':
+        FLAG_asroot = true;
+        break;
       case 'Z':
         FLAG_statistics = true;
         break;
@@ -300,11 +314,13 @@ static void GetOpts(int argc, char *argv[]) {
         FLAG_logpath = optarg_;
         break;
       case 'C':
-#if !defined(DISABLE_OVERLAYS)
+#ifndef DISABLE_OVERLAYS
         FLAG_overlays = optarg_;
-#elif !defined(DISABLE_VFS)
+#endif
+#ifndef DISABLE_VFS
         FLAG_prefix = optarg_;
-#else
+#endif
+#if defined(DISABLE_OVERLAYS) && defined(DISABLE_VFS)
         WriteErrorString(
             "error: overlays and vfs support were both disabled\n");
 #endif

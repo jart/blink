@@ -31,6 +31,7 @@
 #include "blink/log.h"
 #include "blink/machine.h"
 #include "blink/signal.h"
+#include "blink/syscall.h"
 
 void RestoreIp(struct Machine *m) {
   if (m) {
@@ -40,6 +41,13 @@ void RestoreIp(struct Machine *m) {
 }
 
 void DeliverSignalToUser(struct Machine *m, int sig, int code) {
+  // If a FreeBSD child thread crashes at rip=0 (e.g. _Unwind_ForcedUnwind
+  // failed during thread exit), just exit the thread cleanly instead of
+  // killing the entire process.
+  if (m->nojit && sig == SIGSEGV_LINUX && m->ip == 0) {
+    WakeAllFutexes();
+    SysExit(m, 0);
+  }
   if (m->sigmask & ((u64)1 << (sig - 1))) {
     TerminateSignal(m, sig, code);
   }

@@ -1,5 +1,6 @@
 #ifndef BLINK_XLAT_H_
 #define BLINK_XLAT_H_
+#include <stdbool.h>
 #include <netinet/in.h>
 #include <signal.h>
 #include <sys/ioctl.h>
@@ -20,12 +21,16 @@ int UnXlatItimer(int);
 int XlatAccess(int);
 int XlatClock(int, clock_t *);
 int XlatErrno(int);
+int XlatErrnoToFreeBSD(int);
 int XlatOpenFlags(int);
 int XlatAccMode(int);
 int XlatResource(int);
 int XlatRusage(int);
 int XlatShutdown(int);
 int XlatSignal(int);
+int XlatFreeBSDSignal(int);
+int XlatFreeBSDSocketLevel(int);
+int XlatFreeBSDSocketOptname(int);
 int XlatSocketFamily(int);
 int XlatSocketLevel(int, int *);
 int XlatSocketOptname(int, int);
@@ -35,9 +40,9 @@ int XlatWait(int);
 int XlatWhence(int);
 
 int XlatSockaddrToHost(struct sockaddr_storage *, const struct sockaddr_linux *,
-                       u32);
+                       u32, bool);
 int XlatSockaddrToLinux(struct sockaddr_storage_linux *,
-                        const struct sockaddr *, socklen_t);
+                        const struct sockaddr *, socklen_t, bool);
 void XlatStatToLinux(struct stat_linux *, const struct stat *);
 void XlatRusageToLinux(struct rusage_linux *, const struct rusage *);
 void XlatItimervalToLinux(struct itimerval_linux *, const struct itimerval *);

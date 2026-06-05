@@ -206,6 +206,118 @@ int XlatErrno(int x) {
   return x;
 }
 
+int XlatErrnoToFreeBSD(int x) {
+  if (x == EPERM) return 1;
+  if (x == ENOENT) return 2;
+  if (x == ESRCH) return 3;
+  if (x == EINTR) return 4;
+  if (x == EIO) return 5;
+  if (x == ENXIO) return 6;
+  if (x == E2BIG) return 7;
+  if (x == ENOEXEC) return 8;
+  if (x == EBADF) return 9;
+  if (x == ECHILD) return 10;
+  if (x == EDEADLK) return 11;
+  if (x == ENOMEM) return 12;
+  if (x == EACCES) return 13;
+  if (x == EFAULT) return 14;
+#ifdef ENOTBLK
+  if (x == ENOTBLK) return 15;
+#endif
+  if (x == EBUSY) return 16;
+  if (x == EEXIST) return 17;
+  if (x == EXDEV) return 18;
+  if (x == ENODEV) return 19;
+  if (x == ENOTDIR) return 20;
+  if (x == EISDIR) return 21;
+  if (x == EINVAL) return 22;
+  if (x == ENFILE) return 23;
+  if (x == EMFILE) return 24;
+  if (x == ENOTTY) return 25;
+  if (x == ETXTBSY) return 26;
+  if (x == EFBIG) return 27;
+  if (x == ENOSPC) return 28;
+  if (x == ESPIPE) return 29;
+  if (x == EROFS) return 30;
+  if (x == EMLINK) return 31;
+  if (x == EPIPE) return 32;
+  if (x == EDOM) return 33;
+  if (x == ERANGE) return 34;
+  if (x == EAGAIN) return 35;
+#if EWOULDBLOCK != EAGAIN
+  if (x == EWOULDBLOCK) return 35;
+#endif
+  if (x == EINPROGRESS) return 36;
+  if (x == EALREADY) return 37;
+  if (x == ENOTSOCK) return 38;
+  if (x == EDESTADDRREQ) return 39;
+  if (x == EMSGSIZE) return 40;
+  if (x == EPROTOTYPE) return 41;
+  if (x == ENOPROTOOPT) return 42;
+  if (x == EPROTONOSUPPORT) return 43;
+#ifdef ESOCKTNOSUPPORT
+  if (x == ESOCKTNOSUPPORT) return 44;
+#endif
+  if (x == ENOTSUP) return 45;
+#if EOPNOTSUPP != ENOTSUP
+  if (x == EOPNOTSUPP) return 45;
+#endif
+#ifdef EPFNOSUPPORT
+  if (x == EPFNOSUPPORT) return 46;
+#endif
+  if (x == EAFNOSUPPORT) return 47;
+  if (x == EADDRINUSE) return 48;
+  if (x == EADDRNOTAVAIL) return 49;
+  if (x == ENETDOWN) return 50;
+  if (x == ENETUNREACH) return 51;
+  if (x == ENETRESET) return 52;
+  if (x == ECONNABORTED) return 53;
+  if (x == ECONNRESET) return 54;
+  if (x == ENOBUFS) return 55;
+  if (x == EISCONN) return 56;
+  if (x == ENOTCONN) return 57;
+#ifdef ESHUTDOWN
+  if (x == ESHUTDOWN) return 58;
+#endif
+#ifdef ETOOMANYREFS
+  if (x == ETOOMANYREFS) return 59;
+#endif
+  if (x == ETIMEDOUT) return 60;
+  if (x == ECONNREFUSED) return 61;
+  if (x == ELOOP) return 62;
+  if (x == ENAMETOOLONG) return 63;
+#ifdef EHOSTDOWN
+  if (x == EHOSTDOWN) return 64;
+#endif
+  if (x == EHOSTUNREACH) return 65;
+  if (x == ENOTEMPTY) return 66;
+  if (x == ESTALE) return 70;
+  if (x == EDQUOT) return 69;
+  if (x == ENOSYS) return 78;
+  return XlatErrno(x);
+}
+
+// Translate FreeBSD signal number to Linux signal number.
+// FreeBSD and Linux agree on signals 1-6, 8-9, 11, 13-15, 21-22, 24-28.
+// The job-control signals and a few others differ.
+int XlatFreeBSDSignal(int x) {
+  switch (x) {
+    case 7:  return SIGEMT_LINUX;   // FreeBSD SIGEMT
+    case 10: return SIGBUS_LINUX;   // FreeBSD SIGBUS
+    case 12: return SIGSYS_LINUX;   // FreeBSD SIGSYS
+    case 16: return SIGURG_LINUX;   // FreeBSD SIGURG
+    case 17: return SIGSTOP_LINUX;  // FreeBSD SIGSTOP
+    case 18: return SIGTSTP_LINUX;  // FreeBSD SIGTSTP
+    case 19: return SIGCONT_LINUX;  // FreeBSD SIGCONT
+    case 20: return SIGCHLD_LINUX;  // FreeBSD SIGCHLD
+    case 23: return SIGIO_LINUX;    // FreeBSD SIGIO
+    case 29: return SIGINFO_LINUX;  // FreeBSD SIGINFO
+    case 30: return SIGUSR1_LINUX;  // FreeBSD SIGUSR1
+    case 31: return SIGUSR2_LINUX;  // FreeBSD SIGUSR2
+    default: return x;
+  }
+}
+
 int XlatSignal(int x) {
   switch (x) {
     XLAT(SIGHUP_LINUX, SIGHUP);
@@ -592,6 +704,35 @@ int XlatSocketLevel(int x, int *level) {
   return 0;
 }
 
+// FreeBSD uses 0xffff for SOL_SOCKET; other protocol levels are the same
+int XlatFreeBSDSocketLevel(int x) {
+  if ((unsigned)x == 0xffffu) return SOL_SOCKET_LINUX;
+  return x;
+}
+
+// Translate FreeBSD SO_* optname values for SOL_SOCKET to Linux equivalents.
+// FreeBSD encodes SO_* as 0x1001..0x1008 and 0x0001..0x0200 ranges.
+int XlatFreeBSDSocketOptname(int optname) {
+  switch ((unsigned)optname) {
+    case 0x0001u: return SO_DEBUG_LINUX;      // SO_DEBUG
+    case 0x0004u: return SO_REUSEADDR_LINUX;  // SO_REUSEADDR
+    case 0x0008u: return SO_KEEPALIVE_LINUX;  // SO_KEEPALIVE
+    case 0x0010u: return SO_DONTROUTE_LINUX;  // SO_DONTROUTE
+    case 0x0020u: return SO_BROADCAST_LINUX;  // SO_BROADCAST
+    case 0x0080u: return SO_LINGER_LINUX;     // SO_LINGER
+    case 0x0200u: return SO_REUSEPORT_LINUX;  // SO_REUSEPORT
+    case 0x1001u: return SO_SNDBUF_LINUX;     // SO_SNDBUF
+    case 0x1002u: return SO_RCVBUF_LINUX;     // SO_RCVBUF
+    case 0x1003u: return SO_SNDLOWAT_LINUX;   // SO_SNDLOWAT
+    case 0x1004u: return SO_RCVLOWAT_LINUX;   // SO_RCVLOWAT
+    case 0x1005u: return SO_SNDTIMEO_LINUX;   // SO_SNDTIMEO
+    case 0x1006u: return SO_RCVTIMEO_LINUX;   // SO_RCVTIMEO
+    case 0x1007u: return SO_ERROR_LINUX;      // SO_ERROR
+    case 0x1008u: return SO_TYPE_LINUX;       // SO_TYPE
+    default:      return optname;
+  }
+}
+
 int XlatSocketOptname(int level, int optname) {
   switch (level) {
     case SOL_SOCKET_LINUX:
@@ -778,8 +919,8 @@ int XlatClock(int x, clock_t *clock) {
 #ifdef CLOCK_BOOTTIME
     CASE(CLOCK_BOOTTIME_LINUX, res = CLOCK_BOOTTIME);
 #endif
-#ifdef CLOCK_TAI
-    CASE(CLOCK_TAI_LINUX, res = CLOCK_TAI);
+#ifdef CLOCK_MONOTONIC
+    CASE(12, res = CLOCK_MONOTONIC);
 #endif
 #endif /* DISABLE_NONPOSIX */
     default:
@@ -882,6 +1023,16 @@ int XlatOpenFlags(int x) {
 #ifdef O_NOATIME
   if (x & O_NOATIME_LINUX) res |= O_NOATIME, x &= ~O_NOATIME_LINUX;
 #endif
+#endif
+#ifdef O_RESOLVE
+  if (x & O_RESOLVE_LINUX) res |= O_RESOLVE, x &= ~O_RESOLVE_LINUX;
+#else
+  x &= ~O_RESOLVE_LINUX;
+#endif
+#ifdef O_RESOLVE
+  if (x & O_RESOLVE_LINUX) res |= O_RESOLVE, x &= ~O_RESOLVE_LINUX;
+#else
+  x &= ~O_RESOLVE_LINUX;
 #endif
   if (x) {
     LOGF("%s %#x not supported", "open flags", x);
@@ -1009,13 +1160,27 @@ int UnXlatItimer(int x) {
   }
 }
 
+// FreeBSD AF_INET6=28; Linux AF_INET6=10. AF_UNSPEC/UNIX/INET are the same.
+#define AF_INET6_FREEBSD 28
+
 int XlatSockaddrToHost(struct sockaddr_storage *dst,
-                       const struct sockaddr_linux *src, u32 srclen) {
+                       const struct sockaddr_linux *src, u32 srclen,
+                       bool isfreebsd) {
+  int family;
   if (srclen < 2) {
     LOGF("sockaddr size %d too small for %s", (int)srclen, "family");
     return einval();
   }
-  switch (Read16(src->family)) {
+  if (isfreebsd) {
+    // FreeBSD sockaddr: byte[0]=sa_len, byte[1]=sa_family.
+    // Linux sockaddr: bytes[0-1]=sa_family (16-bit LE).
+    // Data from byte[2] onwards has the same layout for inet/inet6.
+    family = src->family[1];
+    if (family == AF_INET6_FREEBSD) family = AF_INET6_LINUX;
+  } else {
+    family = Read16(src->family);
+  }
+  switch (family) {
     case AF_UNSPEC_LINUX:
       memset(dst, 0, sizeof(*dst));
       dst->ss_family = AF_UNSPEC;
@@ -1083,7 +1248,9 @@ int XlatSockaddrToHost(struct sockaddr_storage *dst,
 }
 
 int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
-                        const struct sockaddr *src, socklen_t srclen) {
+                        const struct sockaddr *src, socklen_t srclen,
+                        bool isfreebsd) {
+  int ret;
   if (srclen < 2) {
     LOGF("sockaddr size %d too small for %s", (int)srclen, "family");
     return einval();
@@ -1106,10 +1273,16 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
       return einval();
     }
     memset(dst_un, 0, sizeof(*dst_un));
-    Write16(dst_un->family, AF_UNIX_LINUX);
+    ret = offsetof(struct sockaddr_un, sun_path) + n + 1;
+    if (isfreebsd) {
+      dst_un->family[0] = (u8)ret;  // sa_len
+      dst_un->family[1] = AF_UNIX_LINUX;
+    } else {
+      Write16(dst_un->family, AF_UNIX_LINUX);
+    }
     if (n) memcpy(dst_un->path, src_un->sun_path, n);
     dst_un->path[n] = 0;
-    return offsetof(struct sockaddr_un, sun_path) + n + 1;
+    return ret;
   } else if (src->sa_family == AF_INET) {
     struct sockaddr_in_linux *dst_in;
     const struct sockaddr_in *src_in;
@@ -1120,7 +1293,12 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
     dst_in = (struct sockaddr_in_linux *)dst;
     src_in = (const struct sockaddr_in *)src;
     memset(dst_in, 0, sizeof(*dst_in));
-    Write16(dst_in->family, AF_INET_LINUX);
+    if (isfreebsd) {
+      dst_in->family[0] = sizeof(struct sockaddr_in_linux);  // sa_len=16
+      dst_in->family[1] = AF_INET_LINUX;                     // sa_family=2
+    } else {
+      Write16(dst_in->family, AF_INET_LINUX);
+    }
     dst_in->port = src_in->sin_port;
     dst_in->addr = src_in->sin_addr.s_addr;
     return sizeof(struct sockaddr_in_linux);
@@ -1134,7 +1312,12 @@ int XlatSockaddrToLinux(struct sockaddr_storage_linux *dst,
     dst_in = (struct sockaddr_in6_linux *)dst;
     src_in = (const struct sockaddr_in6 *)src;
     memset(dst_in, 0, sizeof(*dst_in));
-    Write16(dst_in->family, AF_INET6_LINUX);
+    if (isfreebsd) {
+      dst_in->family[0] = sizeof(struct sockaddr_in6_linux);  // sa_len=28
+      dst_in->family[1] = AF_INET6_FREEBSD;                   // sa_family=28
+    } else {
+      Write16(dst_in->family, AF_INET6_LINUX);
+    }
     dst_in->port = src_in->sin6_port;
     memcpy(dst_in->addr, &src_in->sin6_addr, 16);
     return sizeof(struct sockaddr_in6_linux);

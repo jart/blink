@@ -142,6 +142,14 @@ bool IsSelfModifyingCodeSegfault(struct Machine *m, const siginfo_t *si) {
     return false;
   }
   STATISTIC(++smc_segfaults);
+  {
+    static int smc_trace_count;
+    if (smc_trace_count < 5) {
+      ++smc_trace_count;
+      fprintf(stderr, "SMC SEGV: guest=%#" PRIx64 " pte=%#" PRIx64 "\n",
+              (u64)vaddr, (u64)pte);
+    }
+  }
   if (UnprotectSelfModifyingCode(m->system, vaddr, 1)) {
     ERRF("failed to unprotect self modifying code");
     return false;

@@ -38,6 +38,7 @@ struct Fd {
   pthread_mutex_t_ lock;
   const struct FdCb *cb;
   char *path;
+  i32 pdpid;       // pid associated with process descriptor (FBSD pdfork); 0 = none
   union {
     struct sockaddr sa;
     struct sockaddr_in sin;

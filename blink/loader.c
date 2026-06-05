@@ -56,6 +56,88 @@
 
 static bool CanEmulateImpl(struct Machine *, char **, char ***, bool);
 
+// If SHELL inherited from the host points to a binary that doesn't exist in
+// the FreeBSD chroot (e.g. SHELL=/bin/bash on a Linux host, but no bash in
+// the chroot), rewrite it. Without this mc's subshell mode silently
+// fails-open: blink can't find /bin/bash in the chroot so SysExecve falls
+// through to host execve(), and mc ends up "talking" to the host's Linux
+// bash through a pipe. The protocol desyncs and mc hangs in sigsuspend
+// after clearing the screen. Preferred replacement is the FreeBSD bash
+// installed via pkg; fall back to /bin/sh otherwise.
+static void FixupShellEnv(char **vars) {
+  size_t i;
+  if (!vars) return;
+  for (i = 0; vars[i]; ++i) {
+    if (strncmp(vars[i], "SHELL=", 6) != 0) continue;
+    {
+      const char *val = vars[i] + 6;
+      int fd;
+      // Already resolves inside the chroot? leave it.
+      if ((fd = VfsOpen(AT_FDCWD, val, O_RDONLY | O_CLOEXEC, 0)) != -1) {
+        close(fd);
+        return;
+      }
+      // Try /usr/local/bin/bash, then /bin/sh.
+      const char *candidates[] = {
+          "SHELL=/usr/local/bin/bash",
+          "SHELL=/bin/sh",
+          NULL,
+      };
+      int j;
+      for (j = 0; candidates[j]; ++j) {
+        if ((fd = VfsOpen(AT_FDCWD, candidates[j] + 6, O_RDONLY | O_CLOEXEC,
+                          0)) != -1) {
+          close(fd);
+          // vars[] was passed in from main() — these strings live in the
+          // process env. Don't mutate them; allocate a fresh string.
+          vars[i] = strdup(candidates[j]);
+          LOGF("FreeBSD chroot: rewriting SHELL=%s -> %s", val,
+               candidates[j] + 6);
+          return;
+        }
+      }
+      return;
+    }
+  }
+}
+
+// Pre-seed /var/run/ld-elf.so.hints inside the chroot if it's missing. On a
+// real FreeBSD system this file is created by `service ldconfig start` at
+// boot, which blink doesn't simulate; without it, ld-elf.so.1 doesn't know
+// about /usr/local/lib and pkg-installed binaries fail to find their shared
+// objects. We write the exact byte format that ldconfig(8) produces, listing
+// the standard library directories.
+static void EnsureFreebsdLdHints(void) {
+  static const char path[] = "/var/run/ld-elf.so.hints";
+  static const char dirs[] =
+      "/usr/local/lib:/usr/local/lib/compat/pkg:/usr/lib/compat";
+  unsigned char buf[128 + sizeof(dirs)];
+  size_t dirlen = sizeof(dirs) - 1;
+  int fd;
+  if ((fd = VfsOpen(AT_FDCWD, path, O_RDONLY | O_CLOEXEC, 0)) != -1) {
+    char m[4];
+    bool ok = read(fd, m, 4) == 4 && !memcmp(m, "Ehnt", 4);
+    close(fd);
+    if (ok) return;  // valid hints file already present
+  }
+  memset(buf, 0, sizeof(buf));
+  Write32(buf + 0, 0x746e6845);   // magic "Ehnt"
+  Write32(buf + 4, 1);            // version
+  Write32(buf + 8, 128);          // strtab offset
+  Write32(buf + 12, dirlen + 1);  // strsize (includes trailing NUL)
+  Write32(buf + 16, 0);           // dirlist offset within strtab
+  Write32(buf + 20, dirlen);      // dirlistlen (excludes NUL)
+  memcpy(buf + 128, dirs, dirlen + 1);
+  (void)VfsMkdir(AT_FDCWD, "/var", 0755);
+  (void)VfsMkdir(AT_FDCWD, "/var/run", 0755);
+  fd = VfsOpen(AT_FDCWD, path,
+               O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0444);
+  if (fd >= 0) {
+    (void)!write(fd, buf, 128 + dirlen + 1);
+    close(fd);
+  }
+}
+
 static void LoaderCopy(struct Machine *m, i64 vaddr, size_t amt, void *image,
                        i64 offset, int prot) {
   i64 base;
@@ -247,7 +329,7 @@ static i64 LoadElfLoadSegment(struct Machine *m, const char *path, void *image,
 
 static bool IsFreebsdExecutable(Elf64_Ehdr_ *ehdr, size_t size) {
   // APE uses the FreeBSD OS ABI too, but never with ET_DYN
-  return Read16(ehdr->type) == ET_DYN_ &&
+  return (Read16(ehdr->type) == ET_DYN_ || Read16(ehdr->type) == ET_EXEC_) &&
          ehdr->ident[EI_OSABI_] == ELFOSABI_FREEBSD_ &&
          ehdr->ident[EI_VERSION_] == 1;
 }
@@ -330,10 +412,11 @@ bool IsSupportedExecutable(const char *path, void *image, size_t size) {
       ExplainWhyItCantBeEmulated(path, "ELF is not AMD64");
       return false;
     }
-    if (IsFreebsdExecutable(ehdr, size)) {
-      ExplainWhyItCantBeEmulated(path, "ELF is FreeBSD executable");
-      return false;
-    }
+    // FreeBSD executables are now supported
+    // if (IsFreebsdExecutable(ehdr, size)) {
+    //   ExplainWhyItCantBeEmulated(path, "ELF is FreeBSD executable");
+    //   return false;
+    // }
     if (IsOpenbsdExecutable(ehdr, size)) {
       ExplainWhyItCantBeEmulated(path, "ELF is OpenBSD executable");
       return false;
@@ -406,6 +489,9 @@ static bool LoadElf(struct Machine *m,  //
   bool execstack = true;
   elf->aslr = ChooseAslr(ehdr, esize, m->system->brk, &elf->base);
   m->ip = elf->at_entry = elf->aslr + Read64(ehdr->entry);
+  /* fprintf(stderr, "LoadElf: type=%d base=%#" PRIx64 " aslr=%#" PRIx64 " entry=%#" PRIx64 " interp=%s\n",
+          Read16(ehdr->type), elf->base, elf->aslr, (u64)m->ip,
+          elf->interpreter ? "(pending)" : "(none)"); */
   m->cs.sel = USER_CS_LINUX;
   m->ss.sel = USER_DS_LINUX;
   elf->at_phdr = elf->base + Read64(ehdr->phoff);
@@ -462,6 +548,7 @@ static bool LoadElf(struct Machine *m,  //
         elf->aslr ? elf->aslr - (16 * 1024 * 1024) : FLAG_dyninterpaddr,
         &elf->at_base);
     m->ip = elf->at_base + Read64(ehdri->entry);
+    /* fprintf(stderr, "LoadInterp: at_base=%#" PRIx64 " ip=%#" PRIx64 "\n", elf->at_base, (u64)m->ip); */
     for (prot = i = 0; i < Read16(ehdri->phnum); ++i) {
       phdr = GetElfProgramHeaderAddress(ehdri, st.st_size, i);
       switch (Read32(phdr->type)) {
@@ -780,11 +867,10 @@ error: unsupported executable; we need:\n\
     m->flags = SetFlag(m->flags, FLAGS_IF, 1);
     m->system->cr0 = CR0_PE | CR0_MP | CR0_ET | CR0_PG;
     m->system->cr3 = AllocatePageTable(m->system);
-    if (IsBinFile(prog)) {
-      elf->base = 0x400000;
-      LoadFlatExecutable(m, elf->base, prog, map, mapsize, fd);
-      execstack = true;
-    } else if (READ32(map) == READ32("\177ELF")) {
+    if (READ32(map) == READ32("\177ELF")) {
+      if (IsFreebsdExecutable((Elf64_Ehdr_*)map, mapsize)) {
+        m->system->isfreebsd = true;
+      }
       execstack = LoadElf(m, elf, (Elf64_Ehdr_ *)map, mapsize, fd);
     } else if (READ64(map) == READ64("MZqFpD='") ||
                READ64(map) == READ64("jartsr='")) {
@@ -795,6 +881,10 @@ error: unsupported executable; we need:\n\
       if (GetElfHeader(tmp, prog, (const char *)map) == -1) exit(EXIT_FAILURE_EXEC_FAILED);
       memcpy(map, tmp, 64);
       execstack = LoadElf(m, elf, (Elf64_Ehdr_ *)map, mapsize, fd);
+    } else if (IsBinFile(prog)) {
+      elf->base = 0x400000;
+      LoadFlatExecutable(m, elf->base, prog, map, mapsize, fd);
+      execstack = true;
     } else {
       unassert(!"impossible condition");
     }
@@ -812,6 +902,20 @@ error: unsupported executable; we need:\n\
       exit(EXIT_FAILURE_EXEC_FAILED);
     }
     m->system->loaded = true;  // in case rwx stack is smc write-protected :'(
+    // FreeBSD doesn't use sa_restorer like Linux. The kernel provides a
+    // signal trampoline via PS_STRINGS. We don't allocate a real page for
+    // it — instead we pick a magic address that ExecuteInstruction()
+    // intercepts at fetch time and dispatches to SigRestore directly.
+    // sigaction() at syscall.c:7982 wires this address into hand.restorer
+    // for every FreeBSD signal handler; DeliverSignal pushes it as the
+    // handler's return address. When the handler ret's, control "jumps"
+    // here and the interpreter recognizes it. This avoids the JIT/SMC
+    // dance that fails for a real RWX guest page under -m mode.
+    if (m->system->isfreebsd && !m->system->sigtramp) {
+      m->system->sigtramp = 0x7fff0000;
+      EnsureFreebsdLdHints();
+    }
+    if (m->system->isfreebsd) FixupShellEnv(vars);
     LoadArgv(m, execfn, prog, args, vars, elf->rng);
   }
   pagesize = FLAG_pagesize;

@@ -452,10 +452,10 @@ static void OpCvt(P, unsigned long op) {
       OpVdqWpsCvttps2dq(A);
       break;
     case kOpCvt0fE6 + 1:
-      OpVdqWpdCvtpd2dq(A);
+      OpVdqWpdCvttpd2dq(A);
       break;
     case kOpCvt0fE6 + 2:
-      OpVdqWpdCvttpd2dq(A);
+      OpVdqWpdCvtpd2dq(A);
       break;
     case kOpCvt0fE6 + 3:
       OpVpdWdqCvtdq2pd(A);

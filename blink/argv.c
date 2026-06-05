@@ -112,10 +112,21 @@ void LoadArgv(struct Machine *m, char *execfn, char *prog, char **args,
   sp = Read64(m->sp);
   while ((sp - nall * sizeof(i64)) & (STACKALIGN - 1)) --sp;
   sp -= nall * sizeof(i64);
+  if (m->system->isfreebsd) {
+    sp -= 8;
+  }
   Write64(m->sp, sp);
-  Write64(m->dx, dx);
-  Write64(m->di, 0); /* or ape detects freebsd */
-  bytes = (u8 *)malloc(nall * 8);
+  if (m->system->iscosmo) {
+    Write64(m->dx, dx);
+  } else {
+    Write64(m->dx, 0);
+  }
+  if (m->system->isfreebsd) {
+    Write64(m->di, sp);
+  } else {
+    Write64(m->di, 0); /* or ape detects freebsd */
+  }
+  bytes = (u8*)malloc(nall * 8);
   for (i = 0; i < nall; ++i) {
     Write64(bytes + i * 8, bloc[i]);
   }

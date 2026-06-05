@@ -32,6 +32,9 @@
 #include "blink/stats.h"
 #include "blink/types.h"
 #include "blink/util.h"
+#ifndef DISABLE_JIT
+#include "blink/jit.h"
+#endif
 
 void InitIovs(struct Iovs *ib) {
   ib->p = ib->init;
@@ -105,6 +108,17 @@ int AppendIovsReal(struct Machine *m, struct Iovs *ib, i64 addr, u64 size,
   }
   while (size && ib->i < GetIovMax()) {
     if (!(real = LookupAddress2(m, addr, mask, need))) return efault();
+#ifndef DISABLE_JIT
+    if ((prot & PROT_WRITE) && HasLinearMapping() &&
+        !IsJitDisabled(&m->system->jit)) {
+      u64 entry = FindPageTableEntry(m, addr & -4096);
+      if (entry && (entry & PAGE_V) && !(entry & PAGE_XD) &&
+          (entry & PAGE_RW)) {
+        void *page = (void *)((uintptr_t)real & -FLAG_pagesize);
+        mprotect(page, FLAG_pagesize, PROT_READ | PROT_WRITE);
+      }
+    }
+#endif
     have = 4096 - (addr & 4095);
     got = MIN(size, have);
     if (AppendIovs(ib, real, got) == -1) return -1;

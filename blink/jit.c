@@ -130,7 +130,7 @@ static u8 g_code[kJitMemorySize];
 static struct JitGlobals {
   pthread_mutex_t_ lock;
   _Atomic(long) prot;
-  int freecount;
+  _Atomic(int) freecount;  // atomic so StartJit can peek it unlocked
   struct Dll *freeblocks;
 } g_jit = {
     PTHREAD_MUTEX_INITIALIZER_,
@@ -710,9 +710,35 @@ static void RetireJitBlock(struct Jit *jit, struct JitBlock *jb) {
   jb->index = 0;
   jb->committed = 0;
   jb->wasretired = true;
+  // Don't return the storage to the reusable pool yet: another thread may
+  // still be executing inside this block (or be blocked in a syscall called
+  // from inside it, with a return address pointing into it). Park it on the
+  // draining list stamped with the current reclaim epoch; DrainReclaimable_()
+  // will release it once every guest thread has been observed past the Actor()
+  // quiescent point, i.e. provably no longer inside any pre-epoch block.
+  jb->drainepoch = atomic_load_explicit(&jit->reclaimepoch, memory_order_relaxed);
+  dll_make_last(&jit->draining, &jb->elem);
+}
+
+// Releases draining blocks that every guest thread has quiesced past.
+// `floor` is the minimum reclaimepoch observed across all live threads at an
+// Actor() quiescent point (see GetJitQuiescenceFloor); a block stamped with
+// drainepoch <= floor cannot still be referenced by any thread.
+// @assume jit->lock
+static void DrainReclaimable_(struct Jit *jit, unsigned floor) {
+  struct Dll *e, *e2;
+  struct JitBlock *jb;
+  if (dll_is_empty(jit->draining)) return;
   LOCK(&g_jit.lock);
-  dll_make_last(&g_jit.freeblocks, &jb->elem);
-  ++g_jit.freecount;
+  for (e = dll_first(jit->draining); e; e = e2) {
+    e2 = dll_next(jit->draining, e);
+    jb = JITBLOCK_CONTAINER(e);
+    if ((int)(floor - jb->drainepoch) >= 0) {  // floor >= drainepoch (wrap-safe)
+      dll_remove(&jit->draining, e);
+      dll_make_last(&g_jit.freeblocks, &jb->elem);
+      ++g_jit.freecount;
+    }
+  }
   UNLOCK(&g_jit.lock);
 }
 
@@ -796,6 +822,10 @@ int DestroyJit(struct Jit *jit) {
   }
   while ((e = dll_first(jit->blocks))) {
     dll_remove(&jit->blocks, e);
+    ReleaseJitBlock(JITBLOCK_CONTAINER(e));
+  }
+  while ((e = dll_first(jit->draining))) {
+    dll_remove(&jit->draining, e);
     ReleaseJitBlock(JITBLOCK_CONTAINER(e));
   }
   dll_make_first(&jit->freejumps, jit->jumps);
@@ -1233,11 +1263,14 @@ static void ForceJitBlocksToRetire(struct Jit *jit) {
   JIT_LOGF("retiring jit blocks to avoid oom");
   dll_make_first(&jit->freejumps, jit->jumps);
   jit->jumps = 0;
+  // open a new reclaim epoch; blocks retired below are stamped with it and
+  // won't be reused until every thread has been seen past this epoch
+  atomic_fetch_add_explicit(&jit->reclaimepoch, 1, memory_order_relaxed);
   pgen = BeginUpdate(&jit->pagegen);
   for (e = dll_first(jit->agedblocks); e; e = e2) {
     e2 = dll_next(jit->agedblocks, e);
     jb = AGEDBLOCK_CONTAINER(e);
-    if (!jb->isprotected) {
+    if (!jb->isprotected && !jb->building) {
       JIT_LOGF("forcing jit block %p to retire", jb);
       RetireJitBlock(jit, jb);
     }
@@ -1318,8 +1351,20 @@ static bool PrepareJitMemory(void *addr, size_t size) {
 struct JitBlock *StartJit(struct Jit *jit, i64 opt_virt) {
   struct Dll *e;
   struct JitBlock *jb;
+  unsigned floor;
+  bool reclaim;
   if (!IsJitDisabled(jit)) {
+    // If the global free pool is running low we'll want to recycle blocks
+    // retired earlier, which sit on jit->draining until quiescent. Compute the
+    // quiescence floor HERE, before taking jit->lock: GetJitQuiescenceFloor()
+    // takes machines_lock, which is an OUTER lock (fork() takes machines_lock
+    // then jit.lock), so nesting it under jit->lock would deadlock. We take it
+    // first and fully release it before LockJit(), so there is no nesting.
+    reclaim = atomic_load_explicit(&g_jit.freecount, memory_order_relaxed) <=
+              kJitRetireQueue;
+    floor = reclaim ? GetJitQuiescenceFloor(jit) : 0;
     LockJit(jit);
+    if (reclaim) DrainReclaimable_(jit, floor);
     if ((e = dll_first(jit->blocks)) &&  //
         (jb = JITBLOCK_CONTAINER(e)) &&  //
         jb->index + kJitFit <= kJitBlockSize) {
@@ -1340,6 +1385,13 @@ struct JitBlock *StartJit(struct Jit *jit, i64 opt_virt) {
       }
     }
     if (jb) {
+      // mark the block as leased to this thread so that a concurrent
+      // ForceJitBlocksToRetire() (which runs under jit->lock when another
+      // thread starts a path) won't retire/reset a block we're about to
+      // append code into. retiring a leased block double-unlinks it from
+      // jit->blocks (it isn't on that list anymore) corrupting the dll, and
+      // lets a second thread reuse the same storage we're still writing.
+      jb->building = true;
       dll_make_first(&jb->freejumps, jit->freejumps);
       jit->freejumps = 0;
     }
@@ -1526,6 +1578,8 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
 void ReinsertJitBlock_(struct Jit *jit, struct JitBlock *jb) {
   unassert(jb->start == jb->index);
   unassert(dll_is_empty(jb->jumps));
+  // the building thread is done; the block is eligible for retirement again.
+  jb->building = false;
   if (jb->index < kJitBlockSize) {
     // there's still memory remaining; reinsert for immediate reuse.
     dll_make_first(&jit->blocks, &jb->elem);

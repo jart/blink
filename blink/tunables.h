@@ -44,11 +44,12 @@
 #define kMaxMapSize   (UINT64_C(8) * 1024 * 1024 * 1024)
 #define kMaxResident  (UINT64_C(8) * 1024 * 1024 * 1024)
 #define kMaxVirtual   (kMaxResident * 8)
-#define kMaxAncillary 1000
+// 253 fds × CMSG_SPACE(4) = 253 × 24 = 6072 bytes for FreeBSD 1-fd-per-cmsghdr style
+#define kMaxAncillary 8192
 #define kMaxShebang   512
 #define kMaxSigDepth  8
 
 #define kStraceArgMax 256
-#define kStraceBufMax 32
+#define kStraceBufMax 128
 
 #endif /* BLINK_TUNABLES_H_ */

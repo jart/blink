@@ -292,7 +292,12 @@
 #if __GNUC__ >= 8
 #pragma GCC diagnostic error "-Wmultistatement-macros"
 #pragma GCC diagnostic error "-Wpacked-not-aligned"
-#pragma GCC diagnostic error "-Wcast-align=strict"
+// blink deliberately reinterprets byte-addressed guest memory (u8 *) as wider
+// atomic/vector types; on the x86_64/aarch64 hosts we target these accesses are
+// safe. -Wcast-align=strict flags every such cast (~230 of them in the SSE and
+// atomic-op fast paths). Older GCC silently ignored this pragma form so the
+// tree always built clean; GCC 15 honors it, producing noise. Keep it off.
+#pragma GCC diagnostic ignored "-Wcast-align"
 #pragma GCC diagnostic error "-Wif-not-aligned"
 #endif /* GCC 8+ */
 #endif /* GCC 6+ */

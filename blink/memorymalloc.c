@@ -52,6 +52,7 @@ struct Allocator {
 
 struct Machine g_bssmachine;
 struct HostPages g_hostpages;
+static pthread_mutex_t_ g_hostpages_lock = PTHREAD_MUTEX_INITIALIZER_;
 
 static void FillPage(void *p, int c) {
   memset(p, c, 4096);
@@ -69,28 +70,79 @@ static void FreeHostPage(struct HostPage *hp) {
   free(hp);
 }
 
+// Records a host page pointer in the global g_hostpages table and returns the
+// (index << 12) cookie that gets stored in a PTE's PAGE_TA bits, so the page
+// can later be resolved by FindHostPage(). Thread-safe: page faults on
+// different guest threads call this concurrently (-m mode). The matching
+// reader, FindHostPage(), is lock-free, so on growth we publish the new array
+// with release ordering and intentionally do NOT free the old one (a reader
+// may still hold it); the old arrays are reclaimed at process exit. Growth is
+// rare (geometric), so the leaked arrays are negligible.
 static u64 TrackHostPage(u8 *ptr) {
   u64 entry;
+  u8 **p;
   if (HasLinearMapping()) {
     return (uintptr_t)ptr;
-  } else {
-    if (g_hostpages.n == g_hostpages.c) {
-      g_hostpages.c += 1;
-      g_hostpages.c += g_hostpages.c >> 1;
-      g_hostpages.p =
-          realloc(g_hostpages.p, g_hostpages.c * sizeof(*g_hostpages.p));
-    }
-    entry = g_hostpages.n++;
-    g_hostpages.p[entry] = ptr;
+  }
+  LOCK(&g_hostpages_lock);
+  p = atomic_load_explicit(&g_hostpages.p, memory_order_relaxed);
+  if (g_hostpages.nfree) {
+    // Reuse a slot freed by ReleaseHostPage() (e.g. an unmapped PAGE_MUG file
+    // page) instead of growing the table.
+    entry = g_hostpages.freeidx[--g_hostpages.nfree];
+    p[entry] = ptr;
+    UNLOCK(&g_hostpages_lock);
     return entry << 12;
   }
+  if (g_hostpages.n == g_hostpages.c) {
+    size_t nc = g_hostpages.c + (g_hostpages.c >> 1) + 16;
+    u8 **np = (u8 **)malloc(nc * sizeof(*np));
+    unassert(np);
+    if (g_hostpages.n) memcpy(np, p, g_hostpages.n * sizeof(*np));
+    atomic_store_explicit(&g_hostpages.p, np, memory_order_release);
+    g_hostpages.c = nc;
+    p = np;
+  }
+  entry = g_hostpages.n;
+  p[entry] = ptr;
+  g_hostpages.n = entry + 1;
+  UNLOCK(&g_hostpages_lock);
+  return entry << 12;
 }
 
-void FreeAnonymousPage(struct System *s, u8 *page) {
+// Returns a g_hostpages slot to the reusable-index stack. Called when a tracked
+// host page's backing memory is permanently released (PAGE_MUG file mappings
+// that get munmap'd) so its index can be reused rather than leaked. The PTE
+// referencing it has been cleared by the caller and the TLBs are invalidated at
+// the end of the enclosing FreeVirtual(), so no live PTE/TLB entry resolves to
+// this slot once it is handed out again. (Anonymous pages reuse their slot via
+// the allocator free list's cached cookie instead, so they don't come here.)
+static void ReleaseHostPage(u64 cookie) {
+  if (HasLinearMapping()) return;
+  LOCK(&g_hostpages_lock);
+  if (g_hostpages.nfree == g_hostpages.cfree) {
+    size_t nc = g_hostpages.cfree + (g_hostpages.cfree >> 1) + 16;
+    size_t *nf = (size_t *)realloc(g_hostpages.freeidx, nc * sizeof(*nf));
+    unassert(nf);
+    g_hostpages.freeidx = nf;
+    g_hostpages.cfree = nc;
+  }
+  g_hostpages.freeidx[g_hostpages.nfree++] = (size_t)(cookie >> 12);
+  UNLOCK(&g_hostpages_lock);
+}
+
+// Returns a host page to the free list. `cookie` is the page's PAGE_TA bits
+// (its TrackHostPage() result, i.e. the g_hostpages index in -m mode); caching
+// it lets AllocateAnonymousPage() reuse the same g_hostpages slot instead of
+// minting a fresh one on every reallocation, which otherwise grows the table
+// without bound. Callers derive both from the freed PTE: page=FindHostPage(e),
+// cookie=(e & PAGE_TA).
+void FreeAnonymousPage(struct System *s, u8 *page, u64 cookie) {
   struct HostPage *h;
   unassert((h = NewHostPage()));
   LOCK(&g_allocator.lock);
   h->page = page;
+  h->cookie = cookie;
   h->next = g_allocator.pages;
   g_allocator.pages = h;
   UNLOCK(&g_allocator.lock);
@@ -120,8 +172,8 @@ void *AllocateBig(size_t n, int prot, int flags, int fd, off_t off) {
   return p != MAP_FAILED ? p : 0;
 }
 
-static void FreePageTable(struct System *s, u8 *page) {
-  FreeAnonymousPage(s, page);
+static void FreePageTable(struct System *s, u8 *page, u64 cookie) {
+  FreeAnonymousPage(s, page, cookie);
   s->memstat.tables -= 1;
   s->rss -= 1;
 }
@@ -130,6 +182,7 @@ static bool FreeEmptyPageTables(struct System *s, u64 pt, long level) {
   u8 *mi;
   long i;
   bool isempty = true;
+  u64 selfta = pt & PAGE_TA;  // this table's own cookie (pt is reused below)
   mi = GetPageAddress(s, pt, level == 1);
   for (i = 0; i < 512; ++i) {
     if (level == 4) {
@@ -150,7 +203,7 @@ static bool FreeEmptyPageTables(struct System *s, u64 pt, long level) {
     }
   }
   if (isempty) {
-    FreePageTable(s, mi);
+    FreePageTable(s, mi, selfta);
   }
   return isempty;
 }
@@ -237,6 +290,7 @@ struct System *NewSystem(struct XedMachineMode mode) {
   }
 #ifdef HAVE_JIT
   InitJit(&s->jit, (uintptr_t)JitlessDispatch);
+  s->jit.system = s;  // back-pointer for QSBR quiescence scan
 #endif
   InitFds(&s->fds);
   unassert(!pthread_mutex_init(&s->sig_lock, 0));
@@ -291,6 +345,30 @@ bool IsOrphan(struct Machine *m) {
   UNLOCK(&m->system->machines_lock);
   return res;
 }
+
+#ifdef HAVE_JIT
+// Returns the minimum reclaim epoch observed across all live guest threads at
+// their Actor() quiescent point. A JIT block retired at epoch E becomes safe to
+// reuse once this floor reaches E (every thread has since left any pre-E block).
+// Takes machines_lock only; the caller MUST NOT hold jit->lock (machines_lock
+// is the outer lock — see the fork() handler in OpFork).
+unsigned GetJitQuiescenceFloor(struct Jit *jit) {
+  struct Dll *e;
+  struct Machine *m;
+  struct System *s = jit->system;
+  unsigned floor, q;
+  // no thread can have published beyond the current epoch, so start there
+  floor = atomic_load_explicit(&jit->reclaimepoch, memory_order_acquire);
+  LOCK(&s->machines_lock);
+  for (e = dll_first(s->machines); e; e = dll_next(s->machines, e)) {
+    m = MACHINE_CONTAINER(e);
+    q = atomic_load_explicit(&m->jitqso, memory_order_acquire);
+    if ((int)(q - floor) < 0) floor = q;  // floor = min(floor, q), wrap-safe
+  }
+  UNLOCK(&s->machines_lock);
+  return floor;
+}
+#endif
 
 void KillOtherThreads(struct System *s) {
 #ifdef HAVE_THREADS
@@ -411,6 +489,16 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
     m->tid = m->system->pid;
   }
   dll_init(&m->elem);
+#ifdef HAVE_JIT
+  // Start quiesced at the current reclaim epoch so this thread neither pegs the
+  // reclamation floor at 0 nor is wrongly treated as having passed a later
+  // epoch's retirement. It hasn't run any guest (let alone JIT) code yet, so
+  // any epoch value <= current is safe; it republishes at Actor() once running.
+  atomic_store_explicit(
+      &m->jitqso,
+      atomic_load_explicit(&system->jit.reclaimepoch, memory_order_relaxed),
+      memory_order_relaxed);
+#endif
   // TODO(jart): Child thread should add itself to system.
   dll_make_first(&system->machines, &m->elem);
   UNLOCK(&system->machines_lock);
@@ -450,6 +538,7 @@ void FreeMachine(struct Machine *m) {
 
 u64 AllocateAnonymousPage(struct System *s) {
   u8 *page;
+  u64 cookie;
   size_t i, n;
   struct HostPage *h;
   LOCK(&g_allocator.lock);
@@ -457,6 +546,7 @@ u64 AllocateAnonymousPage(struct System *s) {
     g_allocator.pages = h->next;
     UNLOCK(&g_allocator.lock);
     page = h->page;
+    cookie = h->cookie;  // reuse the page's existing g_hostpages slot
     FreeHostPage(h);
     goto Finished;
   } else {
@@ -466,19 +556,23 @@ u64 AllocateAnonymousPage(struct System *s) {
   page = (u8 *)AllocateBig(n * 4096, PROT_READ | PROT_WRITE,
                            MAP_ANONYMOUS_ | MAP_PRIVATE, -1, 0);
   if (!page) return -1;
+  // Track all n freshly-mapped pages exactly once. The returned page keeps its
+  // cookie; the rest carry theirs on the free list, so reallocation never
+  // re-tracks (TrackHostPage is only ever called for genuinely new memory).
   LOCK(&g_allocator.lock);
   for (i = n; i-- > 1;) {
     unassert((h = NewHostPage()));
     h->page = page + i * 4096;
+    h->cookie = TrackHostPage(page + i * 4096);
     h->next = g_allocator.pages;
     g_allocator.pages = h;
   }
+  cookie = TrackHostPage(page);
   UNLOCK(&g_allocator.lock);
 Finished:
   s->rss += 1;
-  i = TrackHostPage(page);
-  unassert(!(i & ~PAGE_TA));
-  return i | PAGE_HOST | PAGE_U | PAGE_RW | PAGE_V;
+  unassert(!(cookie & ~PAGE_TA));
+  return cookie | PAGE_HOST | PAGE_U | PAGE_RW | PAGE_V;
 }
 
 u64 AllocatePageTable(struct System *s) {
@@ -554,7 +648,10 @@ static void AddFileMapViaMap(struct System *s, i64 virt, i64 size, int fildes,
   struct Fd *fd;
   struct FileMap *fm;
   LOCK(&s->fds.lock);
-  path = (fd = GetFd(&s->fds, fildes)) ? strdup(fd->path) : 0;
+  fd = GetFd(&s->fds, fildes);
+  // fd->path is only set by SysOpenat; fds from socket/pipe/eventfd/posix_openpt
+  // leave it NULL. strdup(NULL) is undefined, so guard explicitly.
+  path = (fd && fd->path) ? strdup(fd->path) : 0;
   UNLOCK(&s->fds.lock);
   fm = AddFileMap(s, virt, size, path, offset);
   free(path);
@@ -640,7 +737,7 @@ static bool FreePage(struct System *s, i64 virt, u64 entry, u64 size,
     unassert(~entry & PAGE_RSRV);
     s->memstat.committed -= 1;
     ClearPage((page = FindHostPage(entry)));
-    FreeAnonymousPage(s, page);
+    FreeAnonymousPage(s, page, entry & PAGE_TA);
     --*rss_delta;
     return false;
   } else if ((entry & (PAGE_HOST | PAGE_MAP | PAGE_MUG)) ==
@@ -650,6 +747,7 @@ static bool FreePage(struct System *s, i64 virt, u64 entry, u64 size,
     real = mug = FindHostPage(entry);
     while ((uintptr_t)mug & (pagesize - 1)) mug -= 4096;
     unassert(!Munmap(mug, real - mug + size));
+    ReleaseHostPage(entry & PAGE_TA);  // reclaim the slot; backing is gone
     if (entry & PAGE_RSRV) {
       s->memstat.reserved -= 1;
     } else {
@@ -749,7 +847,10 @@ static void RemoveVirtual(struct System *s, i64 virt, i64 size,
         // crawl an old pointer to a free page table. free page
         // tables may be crawled because they always get zero'd
         // before being put into a freelist fifo that cools off
-        FreePageTable(s, GetPageAddress(s, LoadPte(pde), i == 39));
+        {
+          u64 e = LoadPte(pde);
+          FreePageTable(s, GetPageAddress(s, e, i == 39), e & PAGE_TA);
+        }
         StorePte(pde, 0);
       }
       break;
@@ -907,19 +1008,27 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
       if (got == MAP_FAILED && errno == ENOMEM && !mutated) {
         LOGF("host system returned ENOMEM");
         return -1;
-      } else if (got != MAP_FAILED && !want) {
+      }
+      if (got != MAP_FAILED && !want) {
         virt = ToGuest(got);
         unassert(IsValidAddrSize(virt, size));
       } else {
+        if (method == MAP_DEMAND && errno == MAP_DENIED) {
+          // requested memory overlapped blink image or system memory.
+          // instead of panicking, return ENOMEM so the guest can handle it
+          // or the program can be re-run with `blink -m`.
+          LOGF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ")"
+               " overlapped blink image (try `blink -m`)",
+               virt, want, size);
+          if (got != MAP_FAILED) {
+            Munmap(got, size);
+          }
+          return enomem();
+        }
         ERRF("mmap(%#" PRIx64 "[%p], %#" PRIx64 ")"
              " -> %#" PRIx64 "[%p] crisis: %s",
              virt, want, size, ToGuest(got), got,
-             (method == MAP_DEMAND && errno == MAP_DENIED)
-                 ? "requested memory overlapped blink image or system memory. "
-                   "try using `blink -m` to disable memory optimizations, or "
-                   "try compiling blink using -Wl,--image-base=0x23000000 or "
-                   "possibly -Wl,-Ttext-segment=0x23000000 in LDFLAGS"
-                 : DescribeHostErrno(errno));
+             DescribeHostErrno(errno));
         PanicDueToMmap();
       }
     }

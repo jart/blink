@@ -15,7 +15,13 @@
 #define kJitAlign        16
 #define kJitJumpTries    16
 #define kJitBlockSize    262144
-#define kJitMemorySize   32505856
+// 512 blocks (128 MiB). Raised from 124 blocks (~31 MiB): JIT memory is
+// reserved as a lazily-committed mmap region, so the larger cap costs only
+// virtual address space, not RSS, until blocks are actually used. The deeper
+// pool keeps thunar-class GUI apps (peak ~124 blocks) from ever reaching the
+// ForceJitBlocksToRetire() path, which is where the block-reuse race lives.
+// QSBR (below) makes that path safe; this just keeps normal apps out of it.
+#define kJitMemorySize   134217728
 #define kJitRetireQueue  (int)(kJitMemorySize / kJitBlockSize * .10)
 #define kJitSlabInts     (65536 / sizeof(struct JitInts))
 #define kJitInitialHooks 16384
@@ -114,6 +120,8 @@
 #define kArmPrfmPcMask  0xff000000u  // mask of PC-relative PRFM opcode
 #endif
 
+struct System;  // for struct Jit::system back-pointer (used by QSBR)
+
 #define JITJUMP_CONTAINER(e)   DLL_CONTAINER(struct JitJump, elem, e)
 #define JITPAGE_CONTAINER(e)   DLL_CONTAINER(struct JitPage, elem, e)
 #define JITSTAGE_CONTAINER(e)  DLL_CONTAINER(struct JitStage, elem, e)
@@ -189,7 +197,9 @@ struct JitBlock {
   long lastaction;
   bool wasretired;
   bool isprotected;
+  bool building;     // [jit->lock] leased to a thread that is appending code
   unsigned pagegen;
+  unsigned drainepoch;  // [jit->lock] reclaimepoch when retired (see draining)
   struct Dll elem;
   struct Dll aged;
   struct Dll *jumps;
@@ -214,12 +224,15 @@ struct Jit {
   struct JitFreeds freeds;
   struct Dll *agedblocks;
   struct Dll *blocks;
+  struct Dll *draining;  // [jit->lock] retired blocks awaiting QSBR reclamation
   struct Dll *jumps;
   struct Dll *freejumps;
   struct Dll *pages;
+  struct System *system;  // owner; set by NewSystem(), used for qso scan
   pthread_mutex_t_ lock;
   _Atomic(unsigned) keygen;
   _Atomic(unsigned) pagegen;
+  _Atomic(unsigned) reclaimepoch;  // bumped per ForceJitBlocksToRetire() batch
 };
 
 extern const u8 kJitRes[2];
@@ -251,6 +264,7 @@ bool RecordJitJump(struct JitBlock *, u64, int);
 bool RecordJitEdge(struct Jit *, i64, i64);
 uintptr_t GetJitHook(struct Jit *, u64);
 int ResetJitPage(struct Jit *, i64);
+unsigned GetJitQuiescenceFloor(struct Jit *);
 
 int CommitJit_(struct Jit *, struct JitBlock *);
 void ReinsertJitBlock_(struct Jit *, struct JitBlock *);
