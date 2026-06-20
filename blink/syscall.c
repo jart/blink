@@ -1165,7 +1165,9 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, i64 size, int prot,
   u64 key;
   int oflags;
   bool fixedmap;
+  bool can_relocate;
   i64 newautomap;
+  i64 requested;
   if (!IsValidAddrSize(virt, size)) return einval();
   if (flags & MAP_GROWSDOWN_LINUX) return enotsup();
   if ((key = Prot2Page(prot)) == (u64)-1) return einval();
@@ -1204,11 +1206,14 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, i64 size, int prot,
   }
   newautomap = -1;
   fixedmap = false;
+  can_relocate = true;
   if (flags & MAP_FIXED_LINUX) {
     fixedmap = true;
+    can_relocate = false;
     goto CreateTheMap;
   }
   if (flags & MAP_FIXED_NOREPLACE_LINUX) {
+    can_relocate = false;
     if (IsFullyUnmapped(m->system, virt, size)) {
       goto CreateTheMap;
     } else {
@@ -1234,8 +1239,16 @@ static i64 SysMmapImpl(struct Machine *m, i64 virt, i64 size, int prot,
     }
   }
 CreateTheMap:
+  requested = virt;
   virt = ReserveVirtual(m->system, virt, size, key, fildes, offset,
                         !!(flags & MAP_SHARED_LINUX), fixedmap);
+#if MAP_DEMAND
+  if (virt == -1 && can_relocate && requested && errno == MAP_DENIED) {
+    newautomap = -1;
+    virt = ReserveVirtual(m->system, 0, size, key, fildes, offset,
+                          !!(flags & MAP_SHARED_LINUX), false);
+  }
+#endif
   if (virt != -1 && newautomap != -1) {
     m->system->automap = newautomap;
   }
