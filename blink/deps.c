@@ -23,8 +23,7 @@
 static bool IsJump(u64 rde) {
   int op = Mopcode(rde);
   return op == 0x0E9 ||  // jmp  Jvds
-         op == 0x0EB ||  // jmp  Jbs
-         op == 0x0E8;    // call Jvds
+         op == 0x0EB;    // jmp  Jbs
 }
 
 static bool IsConditionalJump(u64 rde) {
@@ -85,11 +84,10 @@ int GetFlagClobbers(u64 rde) {
       return 0;
     case 0xE8:   // call
     case 0xC3:   // ret
-      if (Rep(rde)) {
-        return 0;
-      } else {
-        return -1;
-      }
+      // The ABI treats flags as caller-saved, but the instructions
+      // themselves preserve them. Some runtimes branch on flags across
+      // calls to flag-preserving assembly helpers, e.g. Go duffzero.
+      return 0;
     case 0x105:  // syscall
       return -1;
     case 0x000:  // add byte

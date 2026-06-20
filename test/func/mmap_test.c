@@ -116,3 +116,15 @@ TEST(mmap, suggestedAddressWithoutMapFixed_isUsedIfAvailable) {
   ASSERT_EQ(0, munmap(got1, pagesize));
   ASSERT_EQ(0, munmap(got2, pagesize));
 }
+
+TEST(mmap, suggestedAddressWithoutMapFixed_mayBeIgnored) {
+  volatile u8 *p;
+  const size_t size = pagesize * 1024;
+  void *want = (void *)(intptr_t)0x7fef08000000;
+  ASSERT_NE((intptr_t)MAP_FAILED,
+            (intptr_t)(p = mmap(want, size, PROT_READ | PROT_WRITE,
+                                MAP_PRIVATE | MAP_ANONYMOUS, -1, 0)));
+  p[0] = 1;
+  p[size - 1] = 2;
+  ASSERT_EQ(0, munmap((void *)p, size));
+}

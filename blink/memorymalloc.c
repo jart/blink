@@ -904,7 +904,10 @@ i64 ReserveVirtual(struct System *s, i64 virt, i64 size, u64 flags, int fd,
                      (fd == -1 ? MAP_ANONYMOUS_ : 0) |      //
                      (shared ? MAP_SHARED : MAP_PRIVATE)),  //
                     fd, offset, "linear")) != want) {
-      if (got == MAP_FAILED && errno == ENOMEM && !mutated) {
+      if (got == MAP_FAILED && method == MAP_DEMAND &&
+          errno == MAP_DENIED && !mutated) {
+        return -1;
+      } else if (got == MAP_FAILED && errno == ENOMEM && !mutated) {
         LOGF("host system returned ENOMEM");
         return -1;
       } else if (got != MAP_FAILED && !want) {
