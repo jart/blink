@@ -876,6 +876,11 @@ static void OpFucomp(struct Machine *m, u64 rde) {
   FpuPop(m);
 }
 
+static void OpFucompp(struct Machine *m, u64 rde) {
+  OpFucomp(m, rde);
+  FpuPop(m);
+}
+
 static void OpFcomip(struct Machine *m, u64 rde) {
   OpFcomi(m, rde);
   FpuPop(m);
@@ -1067,6 +1072,7 @@ void OpFpu(P) {
     CASE(DISP(0xDA, FPUREG, 1), OpFcmove(m, rde));
     CASE(DISP(0xDA, FPUREG, 2), OpFcmovbe(m, rde));
     CASE(DISP(0xDA, FPUREG, 3), OpFcmovu(m, rde));
+    CASE(DISP(0xDA, FPUREG, 5), OpFucompp(m, rde));
     CASE(DISP(0xDA, MEMORY, 0), OpFiaddl(m));
     CASE(DISP(0xDA, MEMORY, 1), OpFimull(m));
     CASE(DISP(0xDA, MEMORY, 2), OpFicoml(m));
