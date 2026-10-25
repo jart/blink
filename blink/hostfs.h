@@ -7,6 +7,7 @@
 #include "blink/vfs.h"
 
 struct HostfsInfo {
+  struct RootlessAnon *rootless_anon;
   int mode;
   int filefd;
   int socketfamily;

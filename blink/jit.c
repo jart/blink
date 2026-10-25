@@ -131,6 +131,7 @@ static struct JitGlobals {
   pthread_mutex_t_ lock;
   _Atomic(long) prot;
   int freecount;
+  long brk;  // global allocation cursor into g_code, guarded by lock
   struct Dll *freeblocks;
 } g_jit = {
     PTHREAD_MUTEX_INITIALIZER_,
@@ -687,6 +688,7 @@ static void ReleaseJitBlock(struct JitBlock *jb) {
   jb->committed = 0;
   jb->wasretired = false;
   jb->isprotected = false;
+  jb->isleased = false;
   dll_init(&jb->aged);
   LOCK(&g_jit.lock);
   dll_make_first(&g_jit.freeblocks, &jb->elem);
@@ -700,6 +702,7 @@ static void ReleaseJitBlock(struct JitBlock *jb) {
 // @assume jit->lock
 static void RetireJitBlock(struct Jit *jit, struct JitBlock *jb) {
   JIT_LOGF("retiring jit block %p", jb);
+  unassert(!jb->isleased);
   unassert(!jb->isprotected);
   unassert(dll_is_empty(jb->jumps));
   unassert(dll_is_empty(jb->staged));
@@ -750,7 +753,6 @@ static void UnlockJit(struct Jit *jit) {
  * @return 0 on success
  */
 int InitJit(struct Jit *jit, uintptr_t opt_staging_function) {
-  long brk;
   unsigned n;
   struct JitBlock *jb;
   _Atomic(int) *funcs;
@@ -771,10 +773,12 @@ int InitJit(struct Jit *jit, uintptr_t opt_staging_function) {
   unassert(funcs = (_Atomic(int) *)Calloc(n, sizeof(*funcs)));
   atomic_store_explicit(&jit->hooks.virts, virts, memory_order_relaxed);
   atomic_store_explicit(&jit->hooks.funcs, funcs, memory_order_relaxed);
-  for (brk = 0; (jb = InitJitBlock(jit, &brk));) {
+  LOCK(&g_jit.lock);
+  while ((jb = InitJitBlock(jit, &g_jit.brk))) {
     dll_make_last(&g_jit.freeblocks, &jb->elem);
     ++g_jit.freecount;
   }
+  UNLOCK(&g_jit.lock);
   JIT_LOGF("initialized jit %p", jit);
   return 0;
 }
@@ -822,12 +826,15 @@ int DestroyJit(struct Jit *jit) {
 int ShutdownJit(void) {
   struct Dll *e;
   JIT_LOGF("shutting down jit");
+  LOCK(&g_jit.lock);
   while ((e = dll_first(g_jit.freeblocks))) {
     dll_remove(&g_jit.freeblocks, e);
     FreeJitBlock(JITBLOCK_CONTAINER(e));
     --g_jit.freecount;
   }
   unassert(!g_jit.freecount);
+  g_jit.brk = 0;
+  UNLOCK(&g_jit.lock);
   return 0;
 }
 
@@ -851,6 +858,13 @@ int EnableJit(struct Jit *jit) {
  * Fixes the memory protection for existing Just-In-Time code blocks.
  */
 int FixJitProtection(struct Jit *jit) {
+#if defined(__APPLE__) && defined(__aarch64__)
+  // A fork child must enter executable mode before calling inherited JIT code.
+  if (pthread_jit_write_protect_supported_np()) {
+    pthread_jit_write_protect_np_workaround(true);
+  }
+  return 0;
+#else
   int prot;
   struct Dll *e;
   LockJit(jit);
@@ -861,6 +875,7 @@ int FixJitProtection(struct Jit *jit) {
   }
   UnlockJit(jit);
   return 0;
+#endif
 }
 
 // @assume jit->lock
@@ -1237,7 +1252,7 @@ static void ForceJitBlocksToRetire(struct Jit *jit) {
   for (e = dll_first(jit->agedblocks); e; e = e2) {
     e2 = dll_next(jit->agedblocks, e);
     jb = AGEDBLOCK_CONTAINER(e);
-    if (!jb->isprotected) {
+    if (!jb->isleased && !jb->isprotected) {
       JIT_LOGF("forcing jit block %p to retire", jb);
       RetireJitBlock(jit, jb);
     }
@@ -1340,6 +1355,7 @@ struct JitBlock *StartJit(struct Jit *jit, i64 opt_virt) {
       }
     }
     if (jb) {
+      jb->isleased = true;
       dll_make_first(&jb->freejumps, jit->freejumps);
       jit->freejumps = 0;
     }
@@ -1526,6 +1542,7 @@ int CommitJit_(struct Jit *jit, struct JitBlock *jb) {
 void ReinsertJitBlock_(struct Jit *jit, struct JitBlock *jb) {
   unassert(jb->start == jb->index);
   unassert(dll_is_empty(jb->jumps));
+  jb->isleased = false;
   if (jb->index < kJitBlockSize) {
     // there's still memory remaining; reinsert for immediate reuse.
     dll_make_first(&jit->blocks, &jb->elem);

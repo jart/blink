@@ -22,6 +22,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef __APPLE__
+#include <mach/mach.h>
+#include <mach/processor_info.h>
+#endif
+
 #include "blink/atomic.h"
 #include "blink/errno.h"
 #include "blink/log.h"
@@ -67,6 +72,7 @@ struct ProcfsInfo {
     ssize_t (*readlink)(struct VfsInfo *, char **);
     int (*read)(struct VfsInfo *, struct ProcfsOpenFile *);
   };
+  int fd;
 };
 
 struct ProcfsOpenFile {
@@ -97,6 +103,7 @@ enum {
   PROCFS_SELF_INO,
   PROCFS_SYS_INO,
   PROCFS_UPTIME_INO,
+  PROCFS_STAT_INO,
 
   PROCFS_FIRST_PID_INO
 };
@@ -109,6 +116,7 @@ enum {
   PROCFS_SELF_TYPE,
   PROCFS_SYS_TYPE,
   PROCFS_UPTIME_TYPE,
+  PROCFS_STAT_TYPE,
 
   PROCFS_PIDDIR_TYPE,
   PROCFS_PIDDIR_EXE_TYPE,
@@ -116,14 +124,18 @@ enum {
   PROCFS_PIDDIR_ROOT_TYPE,
   PROCFS_PIDDIR_MOUNTS_TYPE,
   PROCFS_PIDDIR_FDDIR_TYPE,
-  PROCFS_PIDDIR_LAST_TYPE = PROCFS_PIDDIR_FDDIR_TYPE
+  PROCFS_PIDDIR_LAST_TYPE = PROCFS_PIDDIR_FDDIR_TYPE,
+  PROCFS_FDLINK_TYPE
 };
 
+static ssize_t ProcfsFdReadlink(struct VfsInfo *, char **);
+static int ProcfsFdReaddir(struct VfsInfo *, struct dirent *);
 static int ProcfsRootReaddir(struct VfsInfo *, struct dirent *);
 static ssize_t ProcfsSelfReadlink(struct VfsInfo *, char **);
 static ssize_t ProcfsToSelfReadlink(struct VfsInfo *, char **);
 static int ProcfsMeminfoRead(struct VfsInfo *, struct ProcfsOpenFile *);
 static int ProcfsUptimeRead(struct VfsInfo *, struct ProcfsOpenFile *);
+static int ProcfsStatRead(struct VfsInfo *, struct ProcfsOpenFile *);
 static int ProcfsFilesystemsRead(struct VfsInfo *, struct ProcfsOpenFile *);
 
 static int ProcfsPiddirReaddir(struct VfsInfo *, struct dirent *);
@@ -149,6 +161,8 @@ static struct ProcfsInfo g_defaultinfos[] = {
                          .readlink = ProcfsSelfReadlink},
     [PROCFS_SYS_INO] = {PROCFS_SYS_INO, S_IFDIR | 0555, 0, 0, PROCFS_SYS_TYPE,
                         "sys"},
+    [PROCFS_STAT_INO] = {PROCFS_STAT_INO, S_IFREG | 0444, 0, 0,
+                          PROCFS_STAT_TYPE, "stat", .read = ProcfsStatRead},
     [PROCFS_UPTIME_INO] = {PROCFS_UPTIME_INO, S_IFREG | 0444, 0, 0,
                            PROCFS_UPTIME_TYPE, "uptime",
                            .read = ProcfsUptimeRead},
@@ -173,7 +187,7 @@ static struct ProcfsInfo g_piddirinfos[] = {
                                .read = ProcfsPiddirMountsRead},
     [PROCFS_PIDDIR_FDDIR_TYPE - PROCFS_PIDDIR_TYPE] = {0, S_IFDIR | 0555, 0, 0,
                                                        PROCFS_PIDDIR_FDDIR_TYPE,
-                                                       "fd"},
+                                                       "fd", .readdir = ProcfsFdReaddir},
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -367,6 +381,33 @@ static int ProcfsFinddir(struct VfsInfo *parent, const char *name,
         }
       }
       break;
+    case PROCFS_PIDDIR_FDDIR_TYPE: {
+      struct VfsInfo *target;
+      unsigned fd = 0;
+      const char *p;
+      if (!*name || (name[0] == '0' && name[1])) break;
+      for (p = name; *p; ++p) {
+        if (*p < '0' || *p > '9' || fd > (2147483647u - (*p - '0')) / 10)
+          break;
+        fd = fd * 10 + (*p - '0');
+      }
+      if (*p || VfsGetFd(fd, &target) == -1) break;
+      unassert(!VfsFreeInfo(target));
+      if (!(procoutput = calloc(1, sizeof(*procoutput)))) {
+        enomem();
+        goto cleananddie;
+      }
+      procoutput->ino = PROCFS_FIRST_PID_INO + 1024 + fd;
+      procoutput->mode = S_IFLNK | 0777;
+      procoutput->type = PROCFS_FDLINK_TYPE;
+      procoutput->uid = procparent->uid;
+      procoutput->gid = procparent->gid;
+      procoutput->time = GetTime();
+      procoutput->fd = fd;
+      snprintf(procoutput->name, sizeof(procoutput->name), "%u", fd);
+      procoutput->readlink = ProcfsFdReadlink;
+      break;
+    }
   }
   if (procoutput == NULL) {
     enoent();
@@ -1151,6 +1192,79 @@ static ssize_t ProcfsPiddirRootReadlink(struct VfsInfo *info, char **buf) {
 
 ////////////////////////////////////////////////////////////////////////////////
 
+// Expose host CPU accounting in Linux USER_HZ (100 ticks per second).
+// Darwin has no counterparts for Linux iowait, irq, softirq or steal time.
+static int ProcfsStatRead(struct VfsInfo *info,
+                          struct ProcfsOpenFile *openfile) {
+#ifdef __linux__
+  int fd, saved;
+  ssize_t n;
+  if ((fd = open("/proc/stat", O_RDONLY)) == -1) return -1;
+  n = pread(fd, openfile->readbuf, sizeof(openfile->readbuf), openfile->index);
+  saved = errno;
+  close(fd);
+  if (n == -1) {
+    errno = saved;
+    return -1;
+  }
+  if (n) {
+    openfile->index += n;
+    openfile->readbufstart = 0;
+    openfile->readbufend = n;
+    return 0;
+  }
+#elif defined(__APPLE__)
+  natural_t count;
+  processor_info_array_t data;
+  mach_msg_type_number_t size;
+  mach_port_t host;
+  kern_return_t rc;
+  unsigned long long ticks[CPU_STATE_MAX] = {0};
+  size_t first, last, i, j;
+  long hz;
+  char name[32];
+  hz = sysconf(_SC_CLK_TCK);
+  if (hz <= 0) return einval();
+  host = mach_host_self();
+  rc = host_processor_info(host, PROCESSOR_CPU_LOAD_INFO, &count, &data, &size);
+  mach_port_deallocate(mach_task_self(), host);
+  if (rc != KERN_SUCCESS) {
+    errno = EIO;
+    return -1;
+  }
+  if (openfile->index <= count) {
+    first = openfile->index ? openfile->index - 1 : 0;
+    last = openfile->index ? openfile->index : count;
+    for (i = first; i < last; ++i) {
+      for (j = 0; j < CPU_STATE_MAX; ++j) {
+        ticks[j] += (unsigned int)data[i * CPU_STATE_MAX + j];
+      }
+    }
+    if (openfile->index) {
+      snprintf(name, sizeof(name), "cpu%zu", openfile->index - 1);
+    } else {
+      strcpy(name, "cpu");
+    }
+    openfile->readbufstart = 0;
+    openfile->readbufend = snprintf(
+        openfile->readbuf, sizeof(openfile->readbuf),
+        "%s %llu %llu %llu %llu 0 0 0 0 0 0\n", name,
+        ticks[CPU_STATE_USER] * 100 / hz, ticks[CPU_STATE_NICE] * 100 / hz,
+        ticks[CPU_STATE_SYSTEM] * 100 / hz, ticks[CPU_STATE_IDLE] * 100 / hz);
+    ++openfile->index;
+    vm_deallocate(mach_task_self(), (vm_address_t)data,
+                  size * sizeof(*data));
+    return 0;
+  }
+  vm_deallocate(mach_task_self(), (vm_address_t)data, size * sizeof(*data));
+#else
+  return enosys();
+#endif
+  openfile->readbufstart = sizeof(openfile->readbuf) + 1;
+  openfile->readbufend = sizeof(openfile->readbuf) + 1;
+  return 0;
+}
+
 static int ProcfsMeminfoRead(struct VfsInfo *info,
                              struct ProcfsOpenFile *openfile) {
 #ifdef __linux__
@@ -1504,3 +1618,46 @@ struct VfsSystem g_procfs = {.name = "proc",
                              }};
 
 #endif /* DISABLE_VFS */
+
+#ifndef DISABLE_VFS
+static int ProcfsFdReaddir(struct VfsInfo *info, struct dirent *de) {
+  struct ProcfsInfo *proc = info->data;
+  struct ProcfsOpenDir *dir = proc->opendir;
+  int fd;
+  LOCK(&dir->lock);
+  if (dir->index < 2) {
+    de->d_ino = dir->index ? info->ino : info->parent->ino;
+#ifdef DT_DIR
+    de->d_type = DT_DIR;
+#endif
+    strcpy(de->d_name, dir->index++ ? "." : "..");
+  } else {
+    if ((fd = VfsNextFd(dir->index - 2)) == -1) {
+      UNLOCK(&dir->lock);
+      errno = 0;
+      return -1;
+    }
+    de->d_ino = PROCFS_FIRST_PID_INO + 1024 + fd;
+#ifdef DT_LNK
+    de->d_type = DT_LNK;
+#endif
+    snprintf(de->d_name, sizeof(de->d_name), "%d", fd);
+    dir->index = (u64)fd + 3;
+  }
+  UNLOCK(&dir->lock);
+  return 0;
+}
+
+/* Delegate current path resolution to the descriptor filesystem. */
+static ssize_t ProcfsFdReadlink(struct VfsInfo *info, char **buf) {
+  struct VfsInfo *target;
+  struct ProcfsInfo *proc = info->data;
+  ssize_t rc;
+  if (VfsGetFd(proc->fd, &target) == -1) return enoent();
+  rc = target->device->ops->Readfdlink
+           ? target->device->ops->Readfdlink(target, buf)
+           : VfsPathBuildFull(target, NULL, buf);
+  unassert(!VfsFreeInfo(target));
+  return rc;
+}
+#endif

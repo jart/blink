@@ -17,6 +17,7 @@
 #include "blink/macros.h"
 #include "blink/overlays.h"
 #include "blink/preadv.h"
+#include "blink/statfs.h"
 #include "blink/thread.h"
 #include "blink/tsan.h"
 #include "blink/types.h"
@@ -50,12 +51,16 @@ struct VfsOps {
   int (*Finddir)(struct VfsInfo *, const char *, struct VfsInfo **);
   int (*Traverse)(struct VfsInfo **, const char **, struct VfsInfo *);
   ssize_t (*Readlink)(struct VfsInfo *, char **);
+  ssize_t (*Readfdlink)(struct VfsInfo *, char **);
   int (*Mkdir)(struct VfsInfo *, const char *, mode_t);
   int (*Mkfifo)(struct VfsInfo *, const char *, mode_t);
   int (*Open)(struct VfsInfo *, const char *, int, int, struct VfsInfo **);
   int (*Access)(struct VfsInfo *, const char *, mode_t, int);
   int (*Stat)(struct VfsInfo *, const char *, struct stat *, int);
   int (*Fstat)(struct VfsInfo *, struct stat *);
+  int (*Gethostfd)(struct VfsInfo *);
+  int (*Statfs)(struct VfsInfo *, HostStatfs *);
+  int (*Fstatfs)(struct VfsInfo *, HostStatfs *);
   int (*Chmod)(struct VfsInfo *, const char *, mode_t, int);
   int (*Fchmod)(struct VfsInfo *, mode_t);
   int (*Chown)(struct VfsInfo *, const char *, uid_t, gid_t, int);
@@ -187,6 +192,20 @@ extern struct VfsInfo *g_actualrootinfo;
 #define VFS_MOUNT_CONTAINER(e)  DLL_CONTAINER(struct VfsMount, elem, (e))
 #define VFS_DEVICE_CONTAINER(e) DLL_CONTAINER(struct VfsDevice, elem, (e))
 
+/* Hold a VFS reference while passing a native descriptor to a host API. */
+#if !defined(DISABLE_VFS)
+int VfsImportHostFd(int);
+int VfsAcquireHostFd(int, struct VfsInfo **);
+void VfsReleaseHostFd(struct VfsInfo *);
+#else
+static inline int VfsImportHostFd(int fd) { return fd; }
+static inline int VfsAcquireHostFd(int fd, struct VfsInfo **lease) {
+  *lease = 0;
+  return fd;
+}
+static inline void VfsReleaseHostFd(struct VfsInfo *lease) { (void)lease; }
+#endif
+
 #if !defined(DISABLE_VFS)
 int VfsChdir(const char *);
 char *VfsGetcwd(char *, size_t);
@@ -208,6 +227,8 @@ int VfsUtime(int, const char *, const struct timespec[2], int);
 int VfsFutime(int, const struct timespec[2]);
 int VfsFchown(int, uid_t, gid_t);
 int VfsFstat(int, struct stat *);
+int VfsStatfs(const char *, HostStatfs *);
+int VfsFstatfs(int, HostStatfs *);
 int VfsFtruncate(int, off_t);
 int VfsClose(int);
 ssize_t VfsRead(int, void *, size_t);
@@ -286,6 +307,8 @@ int VfsAcquireDevice(struct VfsDevice *, struct VfsDevice **);
 int VfsFreeDevice(struct VfsDevice *);
 int VfsFreeInfo(struct VfsInfo *);
 int VfsAddFd(struct VfsInfo *);
+int VfsGetFd(int, struct VfsInfo **);
+int VfsNextFd(u64);
 int VfsFreeFd(int, struct VfsInfo **);
 int VfsSetFd(int, struct VfsInfo *);
 ssize_t VfsPathBuildFull(struct VfsInfo *, struct VfsInfo *, char **);
@@ -312,6 +335,8 @@ ssize_t VfsPathBuild(struct VfsInfo *, struct VfsInfo *, bool,
 #define VfsFchmod      fchmod
 #define VfsFutime      futimens
 #define VfsFstat       fstat
+#define VfsStatfs      HostStatfsPath
+#define VfsFstatfs     HostStatfsFd
 #define VfsFtruncate   ftruncate
 #define VfsClose       close
 #define VfsRead        read
@@ -390,6 +415,8 @@ ssize_t VfsPathBuild(struct VfsInfo *, struct VfsInfo *, bool,
 #define VfsFchmod      fchmod
 #define VfsFutime      futimens
 #define VfsFstat       fstat
+#define VfsStatfs      HostStatfsPath
+#define VfsFstatfs     HostStatfsFd
 #define VfsFtruncate   ftruncate
 #define VfsClose       close
 #define VfsRead        read

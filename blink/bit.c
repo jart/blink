@@ -16,11 +16,41 @@
 │ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR             │
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
+#include "blink/atomic.h"
 #include "blink/bus.h"
 #include "blink/flags.h"
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/rde.h"
+#include "blink/swap.h"
+
+/* Use the same host atomic domain as locked ALU and compare/exchange ops. */
+static u64 AtomicBit(u8* p, unsigned w, int op, u64 mask) {
+#define BIT_CASE(W, T, LE)                                      \
+  case W: {                                                     \
+    T old, bits = LE(mask);                                     \
+    if (op == 5)                                                \
+      old = atomic_fetch_or_explicit((_Atomic(T)*)p, bits,      \
+                                     memory_order_acq_rel);     \
+    else if (op == 6)                                           \
+      old = atomic_fetch_and_explicit((_Atomic(T)*)p, (T)~bits, \
+                                      memory_order_acq_rel);    \
+    else                                                        \
+      old = atomic_fetch_xor_explicit((_Atomic(T)*)p, bits,     \
+                                      memory_order_acq_rel);    \
+    return LE(old);                                             \
+  }
+  switch (w) {
+    BIT_CASE(1, u16, Little16)
+    BIT_CASE(2, u32, Little32)
+#if CAN_64BIT
+    BIT_CASE(3, u64, Little64)
+#endif
+    default:
+      __builtin_unreachable();
+  }
+#undef BIT_CASE
+}
 
 static u64 Bts(u64 x, u64 y) {
   return x | y;
@@ -35,7 +65,7 @@ static u64 Btc(u64 x, u64 y) {
 }
 
 void OpBit(P) {
-  u8 *p;
+  u8* p;
   int op;
   i64 bitdisp;
   unsigned bit;
@@ -59,9 +89,15 @@ void OpBit(P) {
     v = MaskAddress(Eamode(rde), ComputeAddress(A) + bitdisp);
     p = ReserveAddress(m, v, 1 << w, op != 4);
   }
-  if (Lock(rde)) LockBus(p);
   y = 1;
   y <<= bit;
+  if (Lock(rde) && !IsModrmRegister(rde) && op >= 5 && op <= 7 &&
+      !((uintptr_t)p & ((1 << w) - 1)) && (w != 3 || CAN_64BIT)) {
+    x = AtomicBit(p, w, op, y);
+    m->flags = SetFlag(m->flags, FLAGS_CF, !!(y & x));
+    return;
+  }
+  if (Lock(rde)) LockBus(p);
   if (Lock(rde)) {
     x = ReadMemoryUnlocked(rde, p);
   } else {

@@ -17,6 +17,7 @@
 │ PERFORMANCE OF THIS SOFTWARE.                                                │
 ╚─────────────────────────────────────────────────────────────────────────────*/
 #include "blink/syscall.h"
+#include "blink/rootless.h"
 
 #include <dirent.h>
 #include <errno.h>
@@ -98,6 +99,10 @@
 
 #ifdef HAVE_SCHED_H
 #include <sched.h>
+#endif
+
+#ifdef HAVE_EVENTFD
+#include <sys/eventfd.h>
 #endif
 
 #ifdef HAVE_EPOLL_PWAIT1
@@ -200,6 +205,61 @@ const struct FdCb kFdCbHost = {
     .tcsetwinsize = my_tcsetwinsize,
 };
 
+#ifdef HAVE_EVENTFD
+static bool EventfdHasEightBytes(const struct iovec *iov, int n) {
+  size_t left = 8;
+  int i;
+  for (i = 0; i < n; ++i) {
+    if (iov[i].iov_len >= left) return true;
+    left -= iov[i].iov_len;
+  }
+  return false;
+}
+
+static ssize_t EventfdReadv(int fd, const struct iovec *iov, int n) {
+  u64 value;
+  u8 bytes[8];
+  size_t off = 0, count;
+  ssize_t rc;
+  int i;
+  if (!EventfdHasEightBytes(iov, n)) return einval();
+  if ((rc = VfsRead(fd, &value, 8)) != 8) return rc;
+  Write64(bytes, value);
+  for (i = 0; i < n && off < 8; ++i) {
+    count = MIN(iov[i].iov_len, 8 - off);
+    memcpy(iov[i].iov_base, bytes + off, count);
+    off += count;
+  }
+  return 8;
+}
+
+static ssize_t EventfdWritev(int fd, const struct iovec *iov, int n) {
+  u64 value;
+  u8 bytes[8];
+  size_t off = 0, count;
+  int i;
+  if (!EventfdHasEightBytes(iov, n)) return einval();
+  for (i = 0; i < n && off < 8; ++i) {
+    count = MIN(iov[i].iov_len, 8 - off);
+    memcpy(bytes + off, iov[i].iov_base, count);
+    off += count;
+  }
+  value = Read64(bytes);
+  return VfsWrite(fd, &value, 8);
+}
+
+static const struct FdCb kFdCbEventfd = {
+    .close = VfsClose,
+    .readv = EventfdReadv,
+    .writev = EventfdWritev,
+    .poll = VfsPoll,
+    .tcgetattr = VfsTcgetattr,
+    .tcsetattr = VfsTcsetattr,
+    .tcgetwinsize = my_tcgetwinsize,
+    .tcsetwinsize = my_tcsetwinsize,
+};
+#endif
+
 struct Fd *GetAndLockFd(struct Machine *m, int fildes) {
   struct Fd *fd;
   LOCK(&m->system->fds.lock);
@@ -244,20 +304,19 @@ bool DeliverSignalRecursively(struct Machine *m, int sig) {
   // it's very important that no locks are currently held
   // garbage may exist on the freelist for calls like sendmsg
   ++m->sigdepth;
-  if ((issigsuspend = m->issigsuspend)) {
-    m->issigsuspend = false;
-    unassert(!sigemptyset(&unblock));
-    unassert(!pthread_sigmask(SIG_BLOCK, &unblock, &oldmask));
-  }
+  issigsuspend = m->issigsuspend;
+  m->issigsuspend = false;
+  // Atomic wait routines block host signals around their pending-signal
+  // check. Guest handlers must still receive wakeups if they wait in turn.
+  unassert(!sigemptyset(&unblock));
+  unassert(!pthread_sigmask(SIG_SETMASK, &unblock, &oldmask));
   m->restored = false;
   m->insyscall = false;
   SignalActor(m);
   m->insyscall = true;
   m->restored = false;
-  if (issigsuspend) {
-    unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
-    m->issigsuspend = true;
-  }
+  unassert(!pthread_sigmask(SIG_SETMASK, &oldmask, 0));
+  m->issigsuspend = issigsuspend;
   --m->sigdepth;
   return true;
 }
@@ -267,6 +326,13 @@ bool CheckInterrupt(struct Machine *m, bool restartable) {
   int sig, delivered;
   // an actual i/o call just received EINTR from the kernel
 HandleSomeMoreInterrupts:
+  // Let the syscall unwind its locks and leases before CheckForSignals exits
+  // this thread. SIGSYS wakes host I/O without queuing a guest signal.
+  if (atomic_load_explicit(&m->killed, memory_order_acquire)) {
+    m->interrupted = true;
+    errno = EINTR;
+    return true;
+  }
   // determine if there's any signals pending for our guest
   Put64(m->ax, -EINTR_LINUX);
   if ((sig = ConsumeSignal(m, &delivered, &restart))) {
@@ -422,6 +488,7 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
 #ifdef HAVE_JIT
     LOCK(&m->system->jit.lock);
 #endif
+    LockHostPageAllocator();
   }
   pid = fork();
 #ifdef __HAIKU__
@@ -430,6 +497,7 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
   if (!pid) g_machine = m;
 #endif
   if (m->threaded) {
+    UnlockHostPageAllocator();
 #ifdef HAVE_JIT
     UNLOCK(&m->system->jit.lock);
 #endif
@@ -456,9 +524,8 @@ static int Fork(struct Machine *m, u64 flags, u64 stack, u64 ctid) {
     m->tid = m->system->pid = newpid;
     m->system->isfork = true;
     RemoveOtherThreads(m->system);
-#ifdef __CYGWIN__
-    // Cygwin doesn't seem to properly set the PROT_EXEC
-    // protection for JIT blocks after forking.
+#if defined(__CYGWIN__) || (defined(__APPLE__) && defined(__aarch64__))
+    // Restore executable access to inherited JIT code in the fork child.
     FixJitProtection(&m->system->jit);
 #endif
     if ((flags & (CLONE_CHILD_SETTID_LINUX | CLONE_CHILD_CLEARTID_LINUX)) &&
@@ -671,10 +738,21 @@ static int SysFutexWait(struct Machine *m,  //
     }
     timeout.tv_sec = Read64(gtimeout->sec);
     timeout.tv_nsec = Read64(gtimeout->nsec);
-    if (!(0 <= timeout.tv_nsec && timeout.tv_nsec < 1000000000)) {
+    if (!(0 <= timeout.tv_sec && 0 <= timeout.tv_nsec &&
+          timeout.tv_nsec < 1000000000)) {
       return einval();
     }
-    deadline = AddTime(now, timeout);
+    if ((op & ~FUTEX_CLOCK_REALTIME_LINUX) == FUTEX_WAIT_BITSET_LINUX) {
+      if (op & FUTEX_CLOCK_REALTIME_LINUX) {
+        deadline = timeout;
+      } else {
+        struct timespec monotonic;
+        if (clock_gettime(CLOCK_MONOTONIC, &monotonic)) return -1;
+        deadline = AddTime(now, SubtractTime(timeout, monotonic));
+      }
+    } else {
+      deadline = AddTime(now, timeout);
+    }
   } else {
     deadline = GetMaxTime();
   }
@@ -762,12 +840,15 @@ static int SysFutex(struct Machine *m,  //
       return SysFutexWake(m, uaddr, val);
     case FUTEX_WAIT_BITSET_LINUX:
     case FUTEX_WAIT_BITSET_LINUX | FUTEX_CLOCK_REALTIME_LINUX:
-      // will be supported soon
-      // avoid logging when cosmo feature checks this
-      if (!m->system->iscosmo) goto DefaultCase;
-      return einval();
+      // Shared condition variables currently support the match-all mask.
+      if (!val3) return einval();
+      if (val3 != UINT32_MAX) return enotsup();
+      return SysFutexWait(m, uaddr, op, val, timeout_addr);
+    case FUTEX_WAKE_BITSET_LINUX:
+      if (!val3) return einval();
+      if (val3 != UINT32_MAX) return enotsup();
+      return SysFutexWake(m, uaddr, val);
     default:
-    DefaultCase:
       LOGF("unsupported %s op %#x", "futex", op);
       return einval();
   }
@@ -1085,6 +1166,20 @@ static int SysMprotect(struct Machine *m, i64 addr, u64 size, int prot) {
 }
 
 static int SysMadvise(struct Machine *m, i64 addr, u64 len, int advice) {
+  int rc;
+  if (advice == 4) {  // Linux MADV_DONTNEED changes observable memory contents.
+    if (addr & 4095) return einval();
+    if (!len) return 0;
+    if (len > INT64_MAX - 4095) return einval();
+    len = ROUNDUP(len, 4096);
+    if (!IsValidAddrSize(addr, len)) return einval();
+    BEGIN_NO_PAGE_FAULTS;
+    LOCK(&m->system->mmap_lock);
+    rc = DiscardAnonymousVirtual(m->system, addr, len);
+    UNLOCK(&m->system->mmap_lock);
+    END_NO_PAGE_FAULTS;
+    return rc;
+  }
   return 0;
 }
 
@@ -1094,7 +1189,9 @@ static i64 SysBrk(struct Machine *m, i64 addr) {
   BEGIN_NO_PAGE_FAULTS;
   LOCK(&m->system->mmap_lock);
   MEM_LOGF("brk(%#" PRIx64 ") currently %#" PRIx64, addr, m->system->brk);
-  pagesize = FLAG_pagesize;
+  // Match AT_PAGESZ: non-linear mappings use 4 KiB guest pages even when
+  // the host page size is larger. Host rounding breaks glibc heap accounting.
+  pagesize = HasLinearMapping() ? FLAG_pagesize : 4096;
   addr = ROUNDUP(addr, pagesize);
   if (addr >= kNullSize) {
     if (addr > m->system->brk) {
@@ -1257,11 +1354,20 @@ static i64 SysMmap(struct Machine *m, i64 virt, u64 size, int prot, int flags,
 
 static i64 SysMremap(struct Machine *m, i64 old_address, u64 old_size,
                      u64 new_size, int flags, i64 new_address) {
-  // would be nice to have
-  // avoid being noisy in the logs
-  // hope program has fallback for failure
-  LOG_ONCE(MEM_LOGF("mremap() not supported yet"));
-  return enomem();
+  i64 res;
+  if (flags & ~MREMAP_MAYMOVE_LINUX) return einval();
+  if (!IsValidAddrSize(old_address, old_size) || !new_size ||
+      new_size > 0x7ffffffff000) return einval();
+  old_size = ROUNDUP(old_size, 4096);
+  new_size = ROUNDUP(new_size, 4096);
+  BEGIN_NO_PAGE_FAULTS;
+  LOCK(&m->system->mmap_lock);
+  res = RemapAnonymousVirtual(m->system, old_address, old_size, new_size,
+                              flags & MREMAP_MAYMOVE_LINUX);
+  unassert(CheckMemoryInvariants(m->system));
+  UNLOCK(&m->system->mmap_lock);
+  END_NO_PAGE_FAULTS;
+  return res;
 }
 
 static int XlatMsyncFlags(int flags) {
@@ -2365,6 +2471,9 @@ static i64 SysRead(struct Machine *m, i32 fildes, i64 addr, u64 size) {
     FreeIovs(&iv);
   } else {
     rc = 0;
+#ifdef HAVE_EVENTFD
+    if (readv_impl == EventfdReadv) rc = einval();
+#endif
   }
   return rc;
 }
@@ -2397,6 +2506,9 @@ static i64 SysWrite(struct Machine *m, i32 fildes, i64 addr, u64 size) {
     FreeIovs(&iv);
   } else {
     rc = 0;
+#ifdef HAVE_EVENTFD
+    if (writev_impl == EventfdWritev) rc = einval();
+#endif
   }
   return HandleSigpipe(m, rc, 0);
 }
@@ -2652,9 +2764,10 @@ static i64 Getdents(struct Machine *m, i32 fildes, i64 addr, i64 size,
   struct dirent *ent;
   struct dirent_linux rec;
   if (size < sizeof(rec) - sizeof(rec.name)) return einval();
-  if ((fd->oflags & O_DIRECTORY) != O_DIRECTORY) return enotdir();
   if (!IsValidMemory(m, addr, size, PROT_WRITE)) return -1;
-  if (VfsFstat(fildes, &st) || !st.st_nlink) return enoent();
+  if (VfsFstat(fildes, &st)) return -1;
+  if (!S_ISDIR(st.st_mode)) return enotdir();
+  if (!st.st_nlink) return enoent();
   if (!fd->dirstream && !(fd->dirstream = VfsOpendir(fd->fildes))) {
     return -1;
   }
@@ -3090,6 +3203,30 @@ static int SysFchmodat(struct Machine *m, i32 dirfd, i64 path, u32 mode) {
   return VfsChmod(GetDirFildes(dirfd), LoadStr(m, path), mode, 0);
 }
 
+static int SysFchmodat2(struct Machine *m, i32 dirfd, i64 pathaddr, u32 mode,
+                       i32 flags) {
+  const char *path;
+  struct stat st;
+  int hostflags = 0;
+  if (flags & ~(AT_SYMLINK_NOFOLLOW_LINUX | AT_EMPTY_PATH_LINUX))
+    return einval();
+  if (!(path = LoadStr(m, pathaddr))) return -1;
+  if (!*path && (flags & AT_EMPTY_PATH_LINUX)) {
+    if (dirfd == AT_FDCWD_LINUX)
+      return VfsChmod(AT_FDCWD, ".", mode, 0);
+    if (VfsFstat(dirfd, &st) == -1) return -1;
+    if (S_ISLNK(st.st_mode)) return eopnotsupp();
+    return VfsFchmod(dirfd, mode);
+  }
+  if (flags & AT_SYMLINK_NOFOLLOW_LINUX) {
+    hostflags = AT_SYMLINK_NOFOLLOW;
+    if (VfsStat(GetDirFildes(dirfd), path, &st, hostflags) == -1) return -1;
+    // Linux symlink permissions are fixed, even on hosts that allow lchmod.
+    if (S_ISLNK(st.st_mode)) return eopnotsupp();
+  }
+  return VfsChmod(GetDirFildes(dirfd), path, mode, hostflags);
+}
+
 static int SysFcntlLock(struct Machine *m, int systemfd, int cmd, i64 arg) {
   int rc;
   int whence;
@@ -3420,7 +3557,8 @@ static int SysUnlinkat(struct Machine *m, i32 dirfd, i64 pathaddr, i32 flags) {
   // it always raises EISDIR, which is so much less ambiguous
   if (rc == -1 && !flags && errno == EPERM) {
     struct stat st;
-    if (!fstatat(dirfd, path, &st, 0) && S_ISDIR(st.st_mode)) {
+    if (!VfsStat(dirfd, path, &st, AT_SYMLINK_NOFOLLOW) &&
+        S_ISDIR(st.st_mode)) {
       errno = EISDIR;
     } else {
       errno = EPERM;
@@ -3773,8 +3911,24 @@ static ssize_t SysGetrandom(struct Machine *m, i64 a, size_t n, int f) {
 }
 
 void OnSignal(int sig, siginfo_t *si, void *uc) {
+  struct siginfo_linux info = {0};
+  int guest = UnXlatSignal(sig);
   SIG_LOGF("OnSignal(%s)", DescribeSignal(UnXlatSignal(sig)));
-  EnqueueSignal(g_machine, UnXlatSignal(sig));
+  Write32(info.signo, guest);
+  Write32(info.code, UnXlatSiCode(guest, si->si_code));
+  if (guest == SIGCHLD_LINUX || Read32(info.code) == SI_USER_LINUX ||
+      Read32(info.code) == (u32)SI_QUEUE_LINUX ||
+      Read32(info.code) == (u32)SI_TKILL_LINUX) {
+    Write32(info.pid, si->si_pid);
+    Write32(info.uid, si->si_uid);
+  }
+  if (guest == SIGCHLD_LINUX) {
+    Write32(info.status, Read32(info.code) == CLD_EXITED_LINUX
+                             ? si->si_status : UnXlatSignal(si->si_status));
+  } else if (Read32(info.code) == (u32)SI_QUEUE_LINUX) {
+    Write64(info.value, (uintptr_t)si->si_value.sival_ptr);
+  }
+  EnqueueSignalInfo(g_machine, guest, &info);
 }
 
 static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
@@ -3838,7 +3992,7 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
   if (act) {
     m->system->hands[sig - 1] = hand;
     if (isignored) {
-      m->signals &= ~((u64)1 << (sig - 1));
+      DequeueSignalInfo(m, sig, 0);
     }
     if ((syssig = XlatSignal(sig)) != -1 && !IsBlinkSig(m->system, sig)) {
       sigfillset(&syshand.sa_mask);
@@ -3849,7 +4003,11 @@ static int SysSigaction(struct Machine *m, int sig, i64 act, i64 old,
 #endif
       switch (handler) {
         case SIG_DFL_LINUX:
-          syshand.sa_handler = SIG_DFL;
+          if (m->sigmask & ((u64)1 << (sig - 1))) {
+            syshand.sa_sigaction = OnSignal;
+          } else {
+            syshand.sa_handler = SIG_DFL;
+          }
           break;
         case SIG_IGN_LINUX:
           syshand.sa_handler = SIG_IGN;
@@ -4060,6 +4218,66 @@ static int SysSigsuspend(struct Machine *m, i64 maskaddr, i64 sigsetsize) {
 #else
   return SigsuspendActual(m, Read64(word));
 #endif
+}
+
+/* Uses the existing pending-signal bitset; real-time queuing remains unsupported. */
+static int SysSigtimedwait(struct Machine *m, i64 setaddr, i64 infoaddr,
+                            i64 timeoutaddr, u64 sigsetsize) {
+  int rc, sig;
+  u8 word[8];
+  u64 wanted, pending, oldmask;
+  struct timespec_linux timeout;
+  struct siginfo_linux info;
+  struct timespec duration, now, deadline, delay;
+  if (sigsetsize != 8) return einval();
+  if (infoaddr && !IsValidMemory(m, infoaddr, sizeof(info), PROT_WRITE)) return -1;
+  if (CopyFromUserRead(m, word, setaddr, sizeof(word)) == -1) return -1;
+  wanted = Read64(word) & ~((u64)1 << (SIGKILL_LINUX - 1) |
+                             (u64)1 << (SIGSTOP_LINUX - 1));
+  deadline = GetMaxTime();
+  if (timeoutaddr) {
+    if (CopyFromUserRead(m, &timeout, timeoutaddr, sizeof(timeout)) == -1)
+      return -1;
+    duration.tv_sec = Read64(timeout.sec);
+    duration.tv_nsec = Read64(timeout.nsec);
+    if (duration.tv_sec < 0 || duration.tv_nsec < 0 ||
+        duration.tv_nsec >= 1000000000)
+      return einval();
+    deadline = AddTime(GetMonotonic(), duration);
+  }
+  oldmask = m->sigmask;
+  m->sigmask |= wanted;
+  for (;;) {
+    if ((pending = m->signals & wanted)) {
+      sig = bsf(pending) + 1;
+      unassert(DequeueSignalInfo(m, sig, &info));
+      rc = infoaddr && CopyToUserWrite(m, infoaddr, &info, sizeof(info)) == -1
+               ? -1 : sig;
+      break;
+    }
+    if (CheckInterrupt(m, false)) {
+      rc = -1;
+      break;
+    }
+    now = GetMonotonic();
+    if (CompareTime(now, deadline) >= 0) {
+      rc = eagain();
+      break;
+    }
+    // Host sigtimedwait is unavailable on macOS. A bounded sleep also observes
+    // guest signals queued by another emulated thread without a host signal.
+    delay = FromMilliseconds(10);
+    if (CompareTime(SubtractTime(deadline, now), delay) < 0)
+      delay = SubtractTime(deadline, now);
+    if (nanosleep(&delay, 0) == -1 && errno != EINTR) {
+      rc = -1;
+      break;
+    }
+  }
+  m->sigmask = oldmask;
+  if (m->signals & ~m->sigmask)
+    atomic_store_explicit(&m->attention, true, memory_order_release);
+  return rc;
 }
 
 static int SysSigaltstack(struct Machine *m, i64 newaddr, i64 oldaddr) {
@@ -4428,6 +4646,9 @@ static i32 Select(struct Machine *m,          //
   struct timespec now, wait, remain, deadline = {0};
   struct Fd *fd;
   int (*poll_impl)(struct pollfd *, nfds_t, int);
+  struct pollfd waitfds[FD_SETSIZE];
+  int nwait;
+  bool canwait;
   if (timeoutp) {
     deadline = AddTime(GetTime(), *timeoutp);
   }
@@ -4471,6 +4692,8 @@ static i32 Select(struct Machine *m,          //
       break;
     }
     rc = 0;
+    nwait = 0;
+    canwait = true;
     for (fildes = 0; fildes < nfds; ++fildes) {
       if (!FD_ISSET(fildes, &readfds) && !FD_ISSET(fildes, &writefds) &&
           !FD_ISSET(fildes, &exceptfds)) {
@@ -4498,12 +4721,18 @@ static i32 Select(struct Machine *m,          //
           case 0:
             break;
           case 1:
-            if (FD_ISSET(fildes, &readfds) && (hfds[0].revents & POLLIN)) {
+            if (hfds[0].revents & POLLNVAL) {
+              rc = ebadf();
+              goto BreakLoop;
+            }
+            if (FD_ISSET(fildes, &readfds) &&
+                (hfds[0].revents & (POLLIN | POLLHUP | POLLERR))) {
               ++rc;
               FD_SET(fildes, &readyreadfds);
               FD_CLR(fildes, &readfds);
             }
-            if (FD_ISSET(fildes, &writefds) && (hfds[0].revents & POLLOUT)) {
+            if (FD_ISSET(fildes, &writefds) &&
+                (hfds[0].revents & (POLLOUT | POLLERR))) {
               ++rc;
               FD_SET(fildes, &readywritefds);
               FD_CLR(fildes, &writefds);
@@ -4520,6 +4749,11 @@ static i32 Select(struct Machine *m,          //
             }
             rc = -1;
             goto BreakLoop;
+        }
+        if (poll_impl == VfsPoll) {
+          waitfds[nwait++] = hfds[0];
+        } else {
+          canwait = false;
         }
       } else {
         rc = ebadf();
@@ -4539,7 +4773,17 @@ static i32 Select(struct Machine *m,          //
     } else {
       wait = FromMilliseconds(kPollingMs);
     }
-    nanosleep(&wait, 0);
+    if (canwait && nwait) {
+      // Keep bounded waits for emulated thread signals, but wake immediately
+      // when any descriptor becomes ready instead of imposing 50ms per RPC.
+      if (VfsPoll(waitfds, nwait, ConvertTimeToInt(ToMilliseconds(wait))) == -1 &&
+          errno != EINTR) {
+        rc = -1;
+        break;
+      }
+    } else {
+      nanosleep(&wait, 0);
+    }
   }
   if (sigmaskp_guest) {
     m->sigmask = oldmask_guest;
@@ -4835,7 +5079,8 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
     }
   }
   if (setaddr) {
-    set = Read64(neu);
+    set = Read64(neu) & ~((u64)1 << (SIGKILL_LINUX - 1) |
+                             (u64)1 << (SIGSTOP_LINUX - 1));
     if (how == SIG_BLOCK_LINUX) {
       m->sigmask |= set;
     } else if (how == SIG_UNBLOCK_LINUX) {
@@ -4845,6 +5090,32 @@ static int SysSigprocmask(struct Machine *m, int how, i64 setaddr,
     } else {
       __builtin_unreachable();
     }
+    /* Guest masks normally don't block host delivery: OnSignal queues it for
+       the emulator. Default-disposition signals need that handler too, or a
+       masked SIGUSR1 kills the host before the guest can wait for it. */
+    LOCK(&m->system->sig_lock);
+    for (sig = 1; sig <= 64; ++sig) {
+      struct sigaction action;
+      int host;
+      if (!(m->sigmask & ((u64)1 << (sig - 1))) ||
+          Read64(m->system->hands[sig - 1].handler) != SIG_DFL_LINUX ||
+          IsBlinkSig(m->system, sig) ||
+          sig == SIGKILL_LINUX || sig == SIGSTOP_LINUX ||
+          sig == SIGTSTP_LINUX || sig == SIGTTIN_LINUX ||
+          sig == SIGTTOU_LINUX || sig == SIGCONT_LINUX ||
+          (host = XlatSignal(sig)) == -1) continue;
+      memset(&action, 0, sizeof(action));
+      sigfillset(&action.sa_mask);
+      action.sa_flags = SA_SIGINFO;
+      action.sa_sigaction = OnSignal;
+      if (sigaction(host, &action, 0)) {
+        int err = errno;
+        UNLOCK(&m->system->sig_lock);
+        errno = err;
+        return -1;
+      }
+    }
+    UNLOCK(&m->system->sig_lock);
     XlatLinuxToSigset(&ss, m->sigmask & ((u64)1 << (SIGTSTP_LINUX - 1) |
                                          (u64)1 << (SIGTTIN_LINUX - 1) |
                                          (u64)1 << (SIGTTOU_LINUX - 1)));
@@ -4878,11 +5149,16 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
 #if defined(HAVE_FORK) || defined(HAVE_THREADS)
   bool found;
   int rc, err;
+  struct siginfo_linux info = {0};
   if (tid < 0) return einval();
   if (!(0 <= sig && sig <= 64)) {
     LOGF("tkill(%d, %d) failed due to bogus signal", tid, sig);
     return einval();
   }
+  Write32(info.signo, sig);
+  Write32(info.code, SI_TKILL_LINUX);
+  Write32(info.pid, m->system->pid);
+  Write32(info.uid, getuid());
   // trigger signal immediately if possible
   if (tid == m->tid) {
     if (sig == SIGSTOP_LINUX || sig == SIGKILL_LINUX) {
@@ -4910,7 +5186,7 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
       UNLOCK(&m->system->sig_lock);
       return rc;
     } else {
-      m->signals |= (u64)1 << (sig - 1);
+      EnqueueSignalInfo(m, sig, &info);
       return 0;
     }
   }
@@ -4930,7 +5206,7 @@ static int SysTkill(struct Machine *m, int tid, int sig) {
       m2 = MACHINE_CONTAINER(e);
       if (m2->tid == tid) {
         if (sig) {
-          EnqueueSignal(m2, sig);
+          EnqueueSignalInfo(m2, sig, &info);
           err = pthread_kill(m2->thread, SIGSYS);
         } else {
           err = pthread_kill(m2->thread, 0);
@@ -4994,22 +5270,41 @@ static int SysGetppid(struct Machine *m) {
 }
 
 static int SysGetuid(struct Machine *m) {
+  if (RootlessEnabled()) return RootlessGetId(0, ROOTLESS_REAL);
   return getuid();
 }
 
 static int SysGetgid(struct Machine *m) {
+  if (RootlessEnabled()) return RootlessGetId(1, ROOTLESS_REAL);
   return getgid();
 }
 
 static int SysGeteuid(struct Machine *m) {
+  if (RootlessEnabled()) return RootlessGetId(0, ROOTLESS_EFFECTIVE);
   return geteuid();
 }
 
 static int SysGetegid(struct Machine *m) {
+  if (RootlessEnabled()) return RootlessGetId(1, ROOTLESS_EFFECTIVE);
   return getegid();
 }
 
 static i32 SysGetgroups(struct Machine *m, i32 size, i64 addr) {
+  if (RootlessEnabled()) {
+    unsigned *groups;
+    int count;
+    if (size < 0) return einval();
+    if (!size) return RootlessGetgroups(0, NULL);
+    if (!(groups = AddToFreeList(m, malloc(MIN(size, 65536) * sizeof(*groups))))) return -1;
+    if ((count = RootlessGetgroups(size, groups)) == -1) return -1;
+    if (count && !IsValidMemory(m, addr, (size_t)count * 4, PROT_WRITE)) return -1;
+    for (int i = 0; i < count; ++i) {
+      u8 word[4];
+      Write32(word, groups[i]);
+      CopyToUserWrite(m, addr + (size_t)i * 4, word, 4);
+    }
+    return count;
+  }
   gid_t *group;
   u8 i32buf[4];
   int i, ngroups;
@@ -5041,6 +5336,16 @@ static i32 SysGetgroups(struct Machine *m, i32 size, i64 addr) {
 }
 
 static i32 SysSetgroups(struct Machine *m, i32 size, i64 addr) {
+  if (RootlessEnabled()) {
+    unsigned *groups;
+    const u8 *source;
+    if (size < 0 || size > 65536) return einval();
+    if (!size) return RootlessSetgroups(0, NULL);
+    if (!(source = (const u8 *)SchlepR(m, addr, (size_t)size * 4))) return -1;
+    if (!(groups = AddToFreeList(m, malloc(size * sizeof(*groups))))) return -1;
+    for (int i = 0; i < size; ++i) groups[i] = Read32(source + (size_t)i * 4);
+    return RootlessSetgroups(size, groups);
+  }
 #ifdef HAVE_SETGROUPS
   int i;
   gid_t *group;
@@ -5062,6 +5367,7 @@ static i32 SysSetresuid(struct Machine *m,  //
                         u32 real,           //
                         u32 effective,      //
                         u32 saved) {
+  if (RootlessEnabled()) return RootlessSetResId(0, real, effective, saved);
 #ifdef HAVE_SETRESUID
   return setresuid(real, effective, saved);
 #elif defined(HAVE_SETREUID)
@@ -5081,6 +5387,7 @@ static i32 SysSetresgid(struct Machine *m,  //
                         u32 real,           //
                         u32 effective,      //
                         u32 saved) {
+  if (RootlessEnabled()) return RootlessSetResId(1, real, effective, saved);
 #ifdef HAVE_SETRESGID
   return setresgid(real, effective, saved);
 #elif defined(HAVE_SETREGID)
@@ -5097,6 +5404,7 @@ static i32 SysSetresgid(struct Machine *m,  //
 }
 
 static int SysSetreuid(struct Machine *m, u32 real, u32 effective) {
+  if (RootlessEnabled()) return RootlessSetReId(0, real, effective);
 #ifdef HAVE_SETRESUID
   // If the real user ID is set (i.e., ruid is not -1) or the effective
   // user ID is set to a value not equal to the previous real user ID,
@@ -5114,6 +5422,7 @@ static int SysSetreuid(struct Machine *m, u32 real, u32 effective) {
 }
 
 static int SysSetregid(struct Machine *m, u32 real, u32 effective) {
+  if (RootlessEnabled()) return RootlessSetReId(1, real, effective);
 #ifdef HAVE_SETRESUID
   if (real != -1 || (effective != -1 && effective != getgid())) {
     if (effective == -1) effective = getegid();
@@ -5138,6 +5447,15 @@ static i32 SysGetresuid(struct Machine *m,  //
       (savedaddr && !(saved = (u8 *)SchlepW(m, savedaddr, 4))) ||
       (effectiveaddr && !(effective = (u8 *)SchlepW(m, effectiveaddr, 4)))) {
     return -1;
+  }
+  if (RootlessEnabled()) {
+    unsigned ids[4];
+    if (!real || !effective || !saved) return efault();
+    RootlessGetIds(0, ids);
+    Write32(real, ids[ROOTLESS_REAL]);
+    Write32(effective, ids[ROOTLESS_EFFECTIVE]);
+    Write32(saved, ids[ROOTLESS_SAVED]);
+    return 0;
   }
 #ifdef HAVE_SETRESUID
   if (getresuid(&uid, &euid, &suid) == -1) return -1;
@@ -5165,6 +5483,15 @@ static i32 SysGetresgid(struct Machine *m,  //
       (effectiveaddr && !(effective = (u8 *)SchlepW(m, effectiveaddr, 4)))) {
     return -1;
   }
+  if (RootlessEnabled()) {
+    unsigned ids[4];
+    if (!real || !effective || !saved) return efault();
+    RootlessGetIds(1, ids);
+    Write32(real, ids[ROOTLESS_REAL]);
+    Write32(effective, ids[ROOTLESS_EFFECTIVE]);
+    Write32(saved, ids[ROOTLESS_SAVED]);
+    return 0;
+  }
 #ifdef HAVE_SETRESUID
   if (getresgid(&gid, &egid, &sgid) == -1) return -1;
 #else
@@ -5191,11 +5518,23 @@ static int SysUmask(struct Machine *m, int mask) {
 }
 
 static int SysSetuid(struct Machine *m, int uid) {
+  if (RootlessEnabled()) return RootlessSetId(0, uid);
   return setuid(uid);
 }
 
 static int SysSetgid(struct Machine *m, int gid) {
+  if (RootlessEnabled()) return RootlessSetId(1, gid);
   return setgid(gid);
+}
+
+static i64 SysSetfsuid(struct Machine *m, u32 uid) {
+  if (RootlessEnabled()) return RootlessSetFsId(0, uid);
+  return enosys();
+}
+
+static i64 SysSetfsgid(struct Machine *m, u32 gid) {
+  if (RootlessEnabled()) return RootlessSetFsId(1, gid);
+  return enosys();
 }
 
 static int SysGetpgid(struct Machine *m, int pid) {
@@ -5275,6 +5614,31 @@ static int SysPipe(struct Machine *m, i64 pipefds_addr) {
   return SysPipe2(m, pipefds_addr, 0);
 }
 
+#ifdef HAVE_EVENTFD
+static i32 SysEventfd2(struct Machine *m, u32 initial, i32 flags) {
+  int fd, lim, hostflags = 0, oflags = O_RDWR;
+  struct Fd *meta;
+  if (flags & ~(EFD_SEMAPHORE_LINUX | EFD_CLOEXEC_LINUX | EFD_NONBLOCK_LINUX))
+    return einval();
+  if (flags & EFD_SEMAPHORE_LINUX) hostflags |= EFD_SEMAPHORE;
+  if (flags & EFD_CLOEXEC_LINUX) { hostflags |= EFD_CLOEXEC; oflags |= O_CLOEXEC; }
+  if (flags & EFD_NONBLOCK_LINUX) { hostflags |= EFD_NONBLOCK; oflags |= O_NONBLOCK; }
+  if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
+  if ((fd = eventfd(initial, hostflags)) == -1) return -1;
+  if ((fd = VfsImportHostFd(fd)) == -1) return -1;
+  if (fd >= lim) { VfsClose(fd); return emfile(); }
+  LOCK(&m->system->fds.lock);
+  unassert((meta = AddFd(&m->system->fds, fd, oflags)));
+  meta->cb = &kFdCbEventfd;
+  UNLOCK(&m->system->fds.lock);
+  return fd;
+}
+
+static i32 SysEventfd(struct Machine *m, u32 initial) {
+  return SysEventfd2(m, initial, 0);
+}
+#endif
+
 #ifdef HAVE_EPOLL_PWAIT1
 
 static i32 SysEpollCreate1(struct Machine *m, i32 flags) {
@@ -5291,9 +5655,10 @@ static i32 SysEpollCreate1(struct Machine *m, i32 flags) {
     return einval();
   }
   if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
-  if ((fildes = epoll_create1(sysflags)) != -1) {
+  if ((fildes = epoll_create1(sysflags)) == -1) return -1;
+  if ((fildes = VfsImportHostFd(fildes)) != -1) {
     if (fildes >= lim) {
-      close(fildes);
+      VfsClose(fildes);
       fildes = emfile();
     } else {
       LOCK(&m->system->fds.lock);
@@ -5330,13 +5695,25 @@ static i32 SysEpollCtl(struct Machine *m, i32 epfd, i32 op, i32 fd,
     default:
       return einval();
   }
-  return epoll_ctl(epfd, op, fd, pepe);
+  struct VfsInfo *ep_lease, *fd_lease;
+  int hostep, hostfd, rc;
+  if ((hostep = VfsAcquireHostFd(epfd, &ep_lease)) == -1) return -1;
+  if ((hostfd = VfsAcquireHostFd(fd, &fd_lease)) == -1) {
+    VfsReleaseHostFd(ep_lease);
+    return -1;
+  }
+  rc = epoll_ctl(hostep, op, hostfd, pepe);
+  VfsReleaseHostFd(fd_lease);
+  VfsReleaseHostFd(ep_lease);
+  return rc;
 }
 
 static i32 EpollPwait(struct Machine *m, i32 epfd, i64 eventsaddr,
                       i32 maxevents, struct timespec deadline, i64 sigmaskaddr,
                       u64 sigsetsize) {
   i32 i, rc;
+  int hostep;
+  struct VfsInfo *ep_lease;
   u64 oldmask_guest = 0;
   sigset_t block, oldmask;
   struct epoll_event *events;
@@ -5360,6 +5737,7 @@ static i32 EpollPwait(struct Machine *m, i32 epfd, i64 eventsaddr,
             m, calloc(maxevents, sizeof(struct epoll_event_linux))))) {
     return -1;
   }
+  if ((hostep = VfsAcquireHostFd(epfd, &ep_lease)) == -1) return -1;
   unassert(!sigfillset(&block));
   unassert(!pthread_sigmask(SIG_BLOCK, &block, &oldmask));
   if (sigmaskp_guest) {
@@ -5376,9 +5754,9 @@ static i32 EpollPwait(struct Machine *m, i32 epfd, i64 eventsaddr,
         waitfor = GetZeroTime();
       }
 #if defined(HAVE_EPOLL_PWAIT2) && !defined(MUSL_CROSS_MAKE)
-      rc = epoll_pwait2(epfd, events, maxevents, &waitfor, &oldmask);
+      rc = epoll_pwait2(hostep, events, maxevents, &waitfor, &oldmask);
 #else
-      rc = epoll_pwait(epfd, events, maxevents,
+      rc = epoll_pwait(hostep, events, maxevents,
                        ConvertTimeToInt(ToMilliseconds(waitfor)), &oldmask);
 #endif
       if (rc == -1 && errno == EINTR) {
@@ -5405,6 +5783,7 @@ static i32 EpollPwait(struct Machine *m, i32 epfd, i64 eventsaddr,
     unassert(!CopyToUserWrite(m, eventsaddr, gevents,
                               rc * sizeof(struct epoll_event_linux)));
   }
+  VfsReleaseHostFd(ep_lease);
   return rc;
 }
 
@@ -5558,6 +5937,8 @@ void OpSyscall(P) {
     SYSCALL(0, 0x070, "setsid", SysSetsid, STRACE_SETSID);
     SYSCALL(2, 0x073, "getgroups", SysGetgroups, STRACE_2);
     SYSCALL(1, 0x079, "getpgid", SysGetpgid, STRACE_GETPGID);
+    SYSCALL(1, 0x07A, "setfsuid", SysSetfsuid, STRACE_SETUID);
+    SYSCALL(1, 0x07B, "setfsgid", SysSetfsgid, STRACE_SETGID);
     SYSCALL(1, 0x07C, "getsid", SysGetsid, STRACE_1);
     SYSCALL(1, 0x07F, "rt_sigpending", SysSigpending, STRACE_1);
     SYSCALL(2, 0x089, "statfs", SysStatfs, STRACE_2);
@@ -5573,6 +5954,7 @@ void OpSyscall(P) {
     SYSCALL(2, 0x071, "setreuid", SysSetreuid, STRACE_SETREUID);
     SYSCALL(2, 0x072, "setregid", SysSetregid, STRACE_SETREGID);
     SYSCALL(2, 0x082, "rt_sigsuspend", SysSigsuspend, STRACE_SIGSUSPEND);
+    SYSCALL(4, 0x080, "rt_sigtimedwait", SysSigtimedwait, STRACE_4);
     SYSCALL(2, 0x083, "sigaltstack", SysSigaltstack, STRACE_2);
     SYSCALL(3, 0x085, "mknod", SysMknod, STRACE_3);
     SYSCALL(2, 0x09E, "arch_prctl", SysArchPrctl, STRACE_2);
@@ -5599,6 +5981,7 @@ void OpSyscall(P) {
     SYSCALL(3, 0x10A, "symlinkat", SysSymlinkat, STRACE_SYMLINKAT);
     SYSCALL(4, 0x10B, "readlinkat", SysReadlinkat, STRACE_READLINKAT);
     SYSCALL(3, 0x10C, "fchmodat", SysFchmodat, STRACE_FCHMODAT);
+    SYSCALL(4, 0x1C4, "fchmodat2", SysFchmodat2, STRACE_4);
 #ifndef DISABLE_SOCKETS
     SYSCALL(3, 0x029, "socket", SysSocket, STRACE_SOCKET);
     SYSCALL(3, 0x02A, "connect", SysConnect, STRACE_CONNECT);
@@ -5685,6 +6068,10 @@ void OpSyscall(P) {
     SYSCALL(5, 0x147, "preadv2", SysPreadv2, STRACE_PREADV2);
     SYSCALL(5, 0x148, "pwritev2", SysPwritev2, STRACE_PWRITEV2);
     SYSCALL(3, 0x1B4, "close_range", SysCloseRange, STRACE_3);
+#ifdef HAVE_EVENTFD
+    SYSCALL(1, 0x11C, "eventfd", SysEventfd, STRACE_1);
+    SYSCALL(2, 0x122, "eventfd2", SysEventfd2, STRACE_2);
+#endif
 #ifdef HAVE_EPOLL_PWAIT1
     SYSCALL(1, 0x0D5, "epoll_create", SysEpollCreate, STRACE_1);
     SYSCALL(1, 0x123, "epoll_create1", SysEpollCreate1, STRACE_1);

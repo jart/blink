@@ -21,9 +21,11 @@
 #include "blink/machine.h"
 #include "blink/modrm.h"
 #include "blink/swap.h"
+#include "blink/thread.h"
 #include "blink/types.h"
 
 static u32 kCastagnoli[256];
+static pthread_once_t_ g_castagnoli_once = PTHREAD_ONCE_INIT_;
 
 static void InitializeCrc32(u32 table[256], u32 polynomial) {
   u32 d, i, r;
@@ -44,13 +46,13 @@ static u32 ReverseBits32(u32 x) {
   return x;
 }
 
+static void InitializeCastagnoli(void) {
+  InitializeCrc32(kCastagnoli, ReverseBits32(0x1edc6f41));
+}
+
 static u32 Castagnoli(u32 h, u64 w, long n) {
   long i;
-  static int once;
-  if (!once) {
-    InitializeCrc32(kCastagnoli, ReverseBits32(0x1edc6f41));
-    once = 1;
-  }
+  unassert(!pthread_once_(&g_castagnoli_once, InitializeCastagnoli));
   for (i = 0; i < n; ++i) {
     h = h >> 8 ^ kCastagnoli[(h & 255) ^ (w & 255)];
     w >>= 8;
@@ -68,7 +70,7 @@ static void OpCrc32(P) {
 void Op2f01(P) {
   if (!Rep(rde) && !Osz(rde)) {
     OpUdImpl(m);  // TODO: movbe
-  } else if (Rep(rde) == 2 && !Osz(rde)) {
+  } else if (Rep(rde) == 2) {
     OpCrc32(A);
   } else {
     OpUdImpl(m);

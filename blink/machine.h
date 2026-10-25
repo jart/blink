@@ -165,10 +165,15 @@ struct HostPage {
   struct HostPage *next;
 };
 
+struct HostPageTable {
+  struct HostPageTable *previous;
+  u8 *pages[];
+};
+
 struct HostPages {
   size_t n;
   size_t c;
-  u8 **p;
+  _Atomic(struct HostPageTable *) table;
 };
 
 struct PageLock {
@@ -418,6 +423,10 @@ struct Machine {               //
   struct PageLocks pagelocks;            // track page table entry locks
   struct JitPath path;                   // under construction jit route
   _Atomicish(u64) signals;               // [attention] pending delivery
+  struct {
+    _Atomic(int) state;  // 0 empty, 1 publishing, 2 pending
+    struct siginfo_linux info;
+  } pending_signals[64];
   _Atomicish(u64) sigmask;               // signals that've been blocked
   i64 bofram[2];                         // helps debug bootloading code
   i64 faultaddr;                         // used for tui error reporting
@@ -449,9 +458,15 @@ struct Machine {               //
   sigset_t spawn_sigmask;                //
   struct Dll elem;                       //
   struct SmcQueue smcqueue;              //
+  unsigned fault_trace_next;
+  unsigned fault_trace_count;
+  struct { u64 ip, sp, bp; } fault_trace[64];
   struct OpCache opcache[1];             //
 };  //
 
+extern bool g_trace_faults;
+extern _Thread_local u64 g_fault_host_pc;
+void DumpFaultTrace(struct Machine *, int, int);
 extern struct HostPages g_hostpages;
 extern _Thread_local siginfo_t g_siginfo;
 extern _Thread_local struct Machine *g_machine;
@@ -483,11 +498,15 @@ void ExecuteInstruction(struct Machine *);
 u64 AllocatePageTable(struct System *);
 u64 AllocateAnonymousPage(struct System *);
 void FreeAnonymousPage(struct System *, u8 *);
+void LockHostPageAllocator(void);
+void UnlockHostPageAllocator(void);
 u64 FindPageTableEntry(struct Machine *, u64);
 bool CheckMemoryInvariants(struct System *) nosideeffect dontdiscard;
 i64 ReserveVirtual(struct System *, i64, i64, u64, int, i64, bool, bool);
 char *FormatPml4t(struct Machine *);
 i64 FindVirtual(struct System *, i64, i64);
+i64 RemapAnonymousVirtual(struct System *, i64, i64, i64, bool);
+int DiscardAnonymousVirtual(struct System *, i64, i64);
 int FreeVirtual(struct System *, i64, i64);
 void CleanseMemory(struct System *, size_t);
 void LoadArgv(struct Machine *, char *, char *, char **, char **, u8[16]);
@@ -696,7 +715,26 @@ void OpPmovmskbGdqpNqUdq(P);
 void OpUnpcklpsd(P);
 void OpUnpckhpsd(P);
 void OpPextrwGdqpUdqIb(P);
+void OpPextrdEdqpVdqIb(P);
+void OpPextrbw(P);
+void OpExtractpsEdVpsIb(P);
+void OpPackusdw(P);
+void OpPcmpgtq(P);
+void OpPcmpeqq(P);
+void OpPmuldq(P);
+void OpInsertps(P);
+void OpPhminposuw(P);
+void OpMpsadbw(P);
+void OpDot(P);
 void OpPinsrwVdqEwIb(P);
+void OpPinsrbVdqEdIb(P);
+void OpPinsrdVdqEdqpIb(P);
+void OpPcmpstr(P);
+void OpPmovx(P);
+void OpRound(P);
+void OpPtest(P);
+void OpBlend(P);
+void OpPminmax(P);
 void OpShuffle(P);
 void OpShufpsd(P);
 void OpSqrtpsd(P);
@@ -842,7 +880,8 @@ static inline u8 *FindHostPage(u64 entry) {
   if (HasLinearMapping()) {
     return (u8 *)(uintptr_t)(entry & PAGE_TA);
   } else {
-    return g_hostpages.p[(entry & PAGE_TA) >> 12];
+    return atomic_load_explicit(&g_hostpages.table, memory_order_acquire)
+        ->pages[(entry & PAGE_TA) >> 12];
   }
 }
 

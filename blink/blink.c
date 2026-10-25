@@ -23,6 +23,9 @@
 #include <string.h>
 #include <sys/resource.h>
 #include <unistd.h>
+#if defined(__APPLE__) && defined(__aarch64__)
+#include <sys/ucontext.h>
+#endif
 
 #include "blink/assert.h"
 #include "blink/builtin.h"
@@ -189,6 +192,9 @@ static void OnFatalSystemSignal(int sig, siginfo_t *si, void *ptr) {
 #ifndef DISABLE_JIT
   if (IsSelfModifyingCodeSegfault(m, si)) return;
 #endif
+#if defined(__APPLE__) && defined(__aarch64__)
+  if (g_trace_faults) g_fault_host_pc = ((ucontext_t *)ptr)->uc_mcontext->__ss.__pc;
+#endif
   g_siginfo = *si;
   unassert(m);
   unassert(m->canhalt);
@@ -265,6 +271,8 @@ _Noreturn static void PrintVersion(void) {
 
 static void GetOpts(int argc, char *argv[]) {
   int opt;
+  g_trace_faults = getenv("BLINK_TRACE_FAULTS") &&
+                   !strcmp(getenv("BLINK_TRACE_FAULTS"), "1");
   FLAG_nolinear = !CanHaveLinearMemory();
 #ifndef DISABLE_OVERLAYS
   FLAG_overlays = getenv("BLINK_OVERLAYS");
@@ -332,6 +340,7 @@ static void HandleSigs(void) {
   unassert(!sigaction(SIGSYS, &sa, 0));
 #endif
   sa.sa_sigaction = OnSignal;
+  sa.sa_flags = SA_SIGINFO;
   unassert(!sigaction(SIGINT, &sa, 0));
   unassert(!sigaction(SIGQUIT, &sa, 0));
   unassert(!sigaction(SIGHUP, &sa, 0));

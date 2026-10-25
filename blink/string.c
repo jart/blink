@@ -210,57 +210,55 @@ static void RepMovsbEnhanced(P) {
   if ((cx = ReadCx(A))) {
     diactual = AddressDi(A);
     siactual = AddressSi(A);
-    if (diactual != siactual) {
-      if (!GetFlag(m->flags, FLAGS_DF)) {
-        SetWriteAddr(m, diactual, cx);
-        SetReadAddr(m, siactual, cx);
-      } else {
-        SetWriteAddr(m, diactual - cx + 1, cx);
-        SetReadAddr(m, siactual - cx + 1, cx);
-      }
-      IGNORE_RACES_START();
-      atomic_thread_fence(memory_order_acquire);
-      do {
-        direal = ResolveAddress(m, diactual);
-        sireal = ResolveAddress(m, siactual);
-        dilow = Get16(m->di);
-        silow = Get16(m->si);
-        if (!GetFlag(m->flags, FLAGS_DF)) {
-          diremain = 4096 - (diactual & 4095);
-          diremain = MIN(diremain, 65536 - dilow);
-          siremain = 4096 - (siactual & 4095);
-          siremain = MIN(siremain, 65536 - silow);
-          n = MIN(cx, MIN(diremain, siremain));
-          if (!IsRomAddress(m, direal)) {
-            for (i = 0; i < n; ++i) {
-              direal[i] = sireal[i];
-            }
-          }
-          AddDi(A, n);
-          AddSi(A, n);
-        } else {
-          diremain = (diactual & 4095) + 1;
-          diremain = MIN(diremain, (long)dilow + 1);
-          siremain = (siactual & 4095) + 1;
-          siremain = MIN(siremain, (long)silow + 1);
-          n = MIN(cx, MIN(diremain, siremain));
-          if (!IsRomAddress(m, direal)) {
-            for (i = 0; i < n; ++i) {
-              direal[-i] = sireal[-i];
-            }
-          }
-          AddDi(A, -n);
-          AddSi(A, -n);
-        }
-        cx = SubtractCx(A, n);
-        if (cx) {
-          diactual = AddressDi(A);
-          siactual = AddressSi(A);
-        }
-      } while (cx);
-      atomic_thread_fence(memory_order_release);
-      IGNORE_RACES_END();
+    if (!GetFlag(m->flags, FLAGS_DF)) {
+      SetWriteAddr(m, diactual, cx);
+      SetReadAddr(m, siactual, cx);
+    } else {
+      SetWriteAddr(m, diactual - cx + 1, cx);
+      SetReadAddr(m, siactual - cx + 1, cx);
     }
+    IGNORE_RACES_START();
+    atomic_thread_fence(memory_order_acquire);
+    do {
+      direal = ResolveAddress(m, diactual);
+      sireal = ResolveAddress(m, siactual);
+      dilow = Get16(m->di);
+      silow = Get16(m->si);
+      if (!GetFlag(m->flags, FLAGS_DF)) {
+        diremain = 4096 - (diactual & 4095);
+        diremain = MIN(diremain, 65536 - dilow);
+        siremain = 4096 - (siactual & 4095);
+        siremain = MIN(siremain, 65536 - silow);
+        n = MIN(cx, MIN(diremain, siremain));
+        if (!IsRomAddress(m, direal)) {
+          for (i = 0; i < n; ++i) {
+            direal[i] = sireal[i];
+          }
+        }
+        AddDi(A, n);
+        AddSi(A, n);
+      } else {
+        diremain = (diactual & 4095) + 1;
+        diremain = MIN(diremain, (long)dilow + 1);
+        siremain = (siactual & 4095) + 1;
+        siremain = MIN(siremain, (long)silow + 1);
+        n = MIN(cx, MIN(diremain, siremain));
+        if (!IsRomAddress(m, direal)) {
+          for (i = 0; i < n; ++i) {
+            direal[-i] = sireal[-i];
+          }
+        }
+        AddDi(A, -n);
+        AddSi(A, -n);
+      }
+      cx = SubtractCx(A, n);
+      if (cx) {
+        diactual = AddressDi(A);
+        siactual = AddressSi(A);
+      }
+    } while (cx);
+    atomic_thread_fence(memory_order_release);
+    IGNORE_RACES_END();
   }
 }
 

@@ -77,6 +77,7 @@ u8 *GetModrmRegisterWordPointerWrite4(P);
 u8 *GetModrmRegisterWordPointerWrite8(P);
 u8 *GetModrmRegisterWordPointerWriteOsz(P);
 u8 *GetModrmRegisterWordPointerWriteOszRexw(P);
+u8 *GetModrmRegisterXmmPointerRead(P, size_t);
 u8 *GetModrmRegisterXmmPointerRead16(P);
 u8 *GetModrmRegisterXmmPointerRead4(P);
 u8 *GetModrmRegisterXmmPointerRead8(P);

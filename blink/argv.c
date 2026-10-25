@@ -113,7 +113,9 @@ void LoadArgv(struct Machine *m, char *execfn, char *prog, char **args,
   while ((sp - nall * sizeof(i64)) & (STACKALIGN - 1)) --sp;
   sp -= nall * sizeof(i64);
   Write64(m->sp, sp);
-  Write64(m->dx, dx);
+  // Linux ELF entry expects a dynamic-linker finalizer, or NULL.
+  // Cosmopolitan uses this register for its executable pathname instead.
+  Write64(m->dx, m->system->iscosmo ? dx : 0);
   Write64(m->di, 0); /* or ape detects freebsd */
   bytes = (u8 *)malloc(nall * 8);
   for (i = 0; i < nall; ++i) {

@@ -121,6 +121,19 @@ int SysOpenat(struct Machine *m, i32 dirfildes, i64 pathaddr, i32 oflags,
   if ((sysflags = XlatOpenFlags(oflags)) == -1) return -1;
   if (!(lim = GetFileDescriptorLimit(m->system))) return emfile();
   if (!(path = LoadStr(m, pathaddr))) return -1;
+#if defined(O_SEARCH) && defined(O_EXEC) && !defined(O_PATH)
+  if (oflags & O_PATH_LINUX) {
+    struct stat st;
+    if (VfsStat(GetDirFildes(dirfildes), path, &st,
+                oflags & O_NOFOLLOW_LINUX ? AT_SYMLINK_NOFOLLOW : 0) == -1)
+      return -1;
+    // Darwin distinguishes execute-only files from search-only directories.
+    // O_EXEC alone rejects directories with EISDIR; O_SEARCH includes the
+    // directory bit. This doesn't implement every Linux O_PATH permission or
+    // symlink behavior on hosts without native O_PATH.
+    if (S_ISDIR(st.st_mode)) sysflags = (sysflags & ~O_EXEC) | O_SEARCH;
+  }
+#endif
   RESTARTABLE(fildes = VfsOpen(GetDirFildes(dirfildes), path, sysflags, mode));
   if (fildes != -1) {
     if (fildes >= lim) {

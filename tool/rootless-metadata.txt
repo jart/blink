@@ -1,0 +1,29 @@
+Rootless build metadata (experimental, Darwin only)
+
+BLINK_ROOTLESS=1 opts into bookkeeping for trusted Linux build commands.
+This is not a security boundary, permission enforcement, or Linux capability
+emulation. Do not use it to isolate untrusted programs. Without the environment
+variable, normal host credential/metadata handling remains in use.
+
+The host user keeps access to files; guest stat reports virtual UID/GID/modes.
+Persistent metadata uses org.image-forge.owner.v1 and org.image-forge.mode.v1
+extended attributes. Existing untagged files default to root ownership; a builder
+must seed original OCI ownership and modes before executing RUN instructions.
+Use a case-sensitive host filesystem to preserve distinct Linux paths.
+
+Anonymous descriptors use shared metadata across dup/fork. Credential changes
+are privileged bookkeeping; IDs/groups survive guest exec, supplementary group
+state is process-local after fork, and file creation uses filesystem UID/GID.
+This does not implement comprehensive per-thread Linux credentials, capabilities,
+named special-file semantics, or metadata transfer through SCM_RIGHTS.
+
+Regression suite (prepared idle Debian linux/amd64 rootfs with Python3 required):
+
+python3 tool/test-rootless-metadata.py --blink o/blink/blink \
+  --rootfs /absolute/path/to/idle-rootfs --output /tmp/rootless-results.json
+
+The suite runs JIT and interpreter modes without fakeroot, covering file creation
+(including mode 000), saved metadata across processes, rename/hardlink/unlink,
+pipe/dup/fork lifetime, chown/setid semantics, supplementary groups, and IDs.
+It writes fixtures under guest /tmp and cleans them up. It does not execute a
+finished editor/application or prove general Linux ABI compatibility.

@@ -307,5 +307,7 @@ void OpPushEvq(P) {
 
 void OpPopEvq(P) {
   unsigned osz = kStackOsz[Osz(rde)][Mode(rde)];
-  WriteMemWord(GetModrmRegisterWordPointerWrite(A, osz), rde, osz, Pop(A, 0));
+  u64 value = Pop(A, 0);
+  // RSP-based memory destinations use the stack pointer after the pop.
+  WriteMemWord(GetModrmRegisterWordPointerWrite(A, osz), rde, osz, value);
 }

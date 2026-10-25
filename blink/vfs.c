@@ -784,13 +784,26 @@ int VfsGetFd(int fd, struct VfsInfo **output) {
   LOCK(&g_vfs.lock);
   for (e = dll_first(g_vfs.fds); e; e = dll_next(g_vfs.fds, e)) {
     if (VFS_FD_CONTAINER(e)->fd == fd) {
-      UNLOCK(&g_vfs.lock);
       unassert(!VfsAcquireInfo(VFS_FD_CONTAINER(e)->data, output));
+      UNLOCK(&g_vfs.lock);
       return 0;
     }
   }
   UNLOCK(&g_vfs.lock);
   return ebadf();
+}
+
+/* Return the next descriptor number; callers retain no table pointers. */
+int VfsNextFd(u64 minimum) {
+  struct Dll *e;
+  int next = -1, fd;
+  LOCK(&g_vfs.lock);
+  for (e = dll_first(g_vfs.fds); e; e = dll_next(g_vfs.fds, e)) {
+    fd = VFS_FD_CONTAINER(e)->fd;
+    if ((u64)fd >= minimum && (next == -1 || fd < next)) next = fd;
+  }
+  UNLOCK(&g_vfs.lock);
+  return next;
 }
 
 int VfsSetFd(int fd, struct VfsInfo *data) {
@@ -1246,6 +1259,9 @@ int VfsStat(int dirfd, const char *name, struct stat *st, int flags) {
   if (name == NULL || st == NULL) {
     return efault();
   }
+  if (!*name) {
+    return enoent();
+  }
   if (VfsHandleDirfdName(dirfd, name, &dir, newname) == -1) {
     return -1;
   }
@@ -1423,7 +1439,7 @@ int VfsUtime(int dirfd, const char *name, const struct timespec times[2],
              int flags) {
   struct VfsInfo *dir;
   char newname[VFS_NAME_MAX];
-  int ret = -1;
+  int ret = 0;
   VFS_LOGF("VfsUtime(%d, \"%s\", %p, %d)", dirfd, name, times, flags);
   if (name == NULL) {
     return efault();
@@ -1464,6 +1480,64 @@ int VfsFutime(int fd, const struct timespec times[2]) {
   }
   unassert(!VfsFreeInfo(info));
   return ret;
+}
+
+int VfsStatfs(const char *path, HostStatfs *st) {
+  struct VfsInfo *info;
+  int rc;
+  if (!path || !st) return efault();
+  if (!*path) return enoent();
+  if (VfsTraverse(path, &info, true) == -1) return -1;
+  rc = info->device->ops->Statfs ? info->device->ops->Statfs(info, st) : enosys();
+  unassert(!VfsFreeInfo(info));
+  return rc;
+}
+
+int VfsFstatfs(int fd, HostStatfs *st) {
+  struct VfsInfo *info;
+  int rc;
+  if (!st) return efault();
+  if (VfsGetFd(fd, &info) == -1) return -1;
+  rc = info->device->ops->Fstatfs ? info->device->ops->Fstatfs(info, st) : enosys();
+  unassert(!VfsFreeInfo(info));
+  return rc;
+}
+
+/* Takes ownership of fd, including on failure. */
+int VfsImportHostFd(int fd) {
+  struct VfsInfo *info;
+  int res, err;
+  if (HostfsWrapFd(fd, false, &info) == -1) return -1;
+  if ((res = VfsAddFd(info)) == -1) {
+    err = errno;
+    unassert(!VfsFreeInfo(info));
+    errno = err;
+  }
+  return res;
+}
+
+int VfsAcquireHostFd(int fd, struct VfsInfo **lease) {
+  int res, err;
+  *lease = 0;
+  if (VfsGetFd(fd, lease) == -1) return -1;
+  if ((*lease)->device->ops->Gethostfd) {
+    res = (*lease)->device->ops->Gethostfd(*lease);
+  } else {
+    res = enotsup();
+  }
+  if (res == -1) {
+    err = errno;
+    unassert(!VfsFreeInfo(*lease));
+    *lease = 0;
+    errno = err;
+  }
+  return res;
+}
+
+void VfsReleaseHostFd(struct VfsInfo *lease) {
+  int err = errno;
+  if (lease) unassert(!VfsFreeInfo(lease));
+  errno = err;
 }
 
 int VfsFstat(int fd, struct stat *st) {
@@ -1850,21 +1924,28 @@ int VfsDup3(int fd, int newfd, int flags) {
 #endif
 
 int VfsPoll(struct pollfd *fds, nfds_t nfds, int timeout) {
-  struct VfsInfo *info;
-  int ret;
+  struct VfsInfo **infos;
+  nfds_t i;
+  int ret = -1, err;
   VFS_LOGF("VfsPoll(%p, %lld, %d)", fds, (long long)nfds, timeout);
-  // Currently, blink only uses poll with nfds = 1 and timeout = 0
-  unassert(nfds == 1);
-  unassert(timeout == 0);
-  if (VfsGetFd(fds[0].fd, &info) == -1) {
-    return -1;
+  if (!(infos = calloc(nfds ? nfds : 1, sizeof(*infos)))) return enomem();
+  for (i = 0; i < nfds; ++i) {
+    if (fds[i].fd < 0) continue;
+    if (VfsGetFd(fds[i].fd, &infos[i]) == -1) goto Done;
+    // All currently pollable VFS descriptors use HostfsPoll. Hold references
+    // until the native wait finishes so a concurrent close cannot reuse them.
+    if (infos[i]->device->ops->Poll != HostfsPoll) {
+      eperm();
+      goto Done;
+    }
   }
-  if (info->device->ops->Poll) {
-    ret = info->device->ops->Poll(&info, fds, 1, timeout);
-  } else {
-    ret = eperm();
-  }
-  unassert(!VfsFreeInfo(info));
+  ret = HostfsPoll(infos, fds, nfds, timeout);
+Done:
+  err = errno;
+  for (i = 0; i < nfds; ++i)
+    if (infos[i]) unassert(!VfsFreeInfo(infos[i]));
+  free(infos);
+  errno = err;
   return ret;
 }
 

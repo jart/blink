@@ -584,56 +584,24 @@ static int CheckExecutableFile(const char *prog, const struct stat *st) {
 static bool HasShebang(struct Machine *m, const char *p, size_t n, char **prog,
                        char **args) {
   char *b;
-  size_t i, j, t;
+  size_t start, end, split, arg;
   n = MIN(n, kMaxShebang);
-  if (n < 4) return false;
-  if (p[0] != '#') return false;
-  if (p[1] != '!') return false;
-  if (!(b = (char *)AddToFreeList(m, calloc(1, n + 1)))) return false;
-  for (t = 0, j = 0, i = 2; i < n; ++i) {
-    if (!(32 <= p[i] && p[i] < 0177) && p[i] != '\n') return false;
-    if (!t) {
-      // STATE 0: COPY INTERPRETER FILENAME
-      if (p[i] == ' ') {
-        *prog = b;
-        b = 0;
-        j = 0;
-        t = 1;
-      } else if (p[i] == '\n') {
-        *prog = b;
-        *args = 0;
-        return true;
-      } else {
-        b[j++] = p[i];
-        b[j] = 0;
-      }
-    } else if (t == 1) {
-      // STATE 1: HANDLE SPACES BETWEEN INTERPRETER AND ITS ARGS
-      if (p[i] == ' ') {
-        // do nothing
-      } else if (p[i] == '\n') {
-        *args = 0;
-        return true;
-      } else {
-        if (!(b = (char *)AddToFreeList(m, calloc(1, n + 1)))) return false;
-        b[j++] = p[i];
-        b[j] = 0;
-        t = 2;
-      }
-    } else if (t == 2) {
-      // STATE 2: COPY INTERPRETER ARGS AS A SINGLE ARGUMENT
-      if (p[i] == '\n') {
-        *args = b;
-        return true;
-      } else {
-        b[j++] = p[i];
-        b[j] = 0;
-      }
-    } else {
-      __builtin_unreachable();
-    }
+  if (n < 4 || p[0] != '#' || p[1] != '!') return false;
+  for (end = 2; end < n && p[end] != '\n'; ++end) {
+    if (!p[end]) return false;
   }
-  return false;
+  if (end == n) return false;
+  while (end > 2 && (p[end - 1] == ' ' || p[end - 1] == '\t')) --end;
+  for (start = 2; start < end && (p[start] == ' ' || p[start] == '\t'); ++start) {}
+  if (start == end) return false;
+  for (split = start; split < end && p[split] != ' ' && p[split] != '\t'; ++split) {}
+  for (arg = split; arg < end && (p[arg] == ' ' || p[arg] == '\t'); ++arg) {}
+  if (!(b = (char *)AddToFreeList(m, calloc(1, end + 1)))) return false;
+  memcpy(b, p, end);
+  b[split] = 0;
+  *prog = b + start;
+  *args = arg < end ? b + arg : 0;
+  return true;
 }
 
 static size_t CountStrList(char **a) {

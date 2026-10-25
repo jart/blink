@@ -56,6 +56,8 @@
 #include "blink/x86.h"
 #include "blink/xlat.h"
 
+bool g_trace_faults;
+_Thread_local u64 g_fault_host_pc;
 _Thread_local siginfo_t g_siginfo;
 _Thread_local struct Machine *g_machine;
 
@@ -2071,18 +2073,68 @@ nexgen32e_f GetOp(long op) {
     return kNexgen32e[op];
   } else {
     switch (op) {
+      XLAT(0x210, OpBlend);
+      XLAT(0x214, OpBlend);
+      XLAT(0x215, OpBlend);
+      XLAT(0x217, OpPtest);
       XLAT(0x21c, OpSsePabsb);
       XLAT(0x21d, OpSsePabsw);
       XLAT(0x21e, OpSsePabsd);
+      XLAT(0x220, OpPmovx);
+      XLAT(0x221, OpPmovx);
+      XLAT(0x222, OpPmovx);
+      XLAT(0x223, OpPmovx);
+      XLAT(0x224, OpPmovx);
+      XLAT(0x225, OpPmovx);
+      XLAT(0x230, OpPmovx);
+      XLAT(0x231, OpPmovx);
+      XLAT(0x232, OpPmovx);
+      XLAT(0x233, OpPmovx);
+      XLAT(0x234, OpPmovx);
+      XLAT(0x235, OpPmovx);
+      XLAT(0x237, OpPcmpgtq);
       XLAT(0x22a, OpMovntdqaVdqMdq);
+      XLAT(0x229, OpPcmpeqq);
+      XLAT(0x228, OpPmuldq);
+      XLAT(0x22b, OpPackusdw);
+      XLAT(0x238, OpPminmax);
+      XLAT(0x239, OpPminmax);
+      XLAT(0x23a, OpPminmax);
+      XLAT(0x23b, OpPminmax);
+      XLAT(0x23c, OpPminmax);
+      XLAT(0x23d, OpPminmax);
+      XLAT(0x23e, OpPminmax);
+      XLAT(0x23f, OpPminmax);
       XLAT(0x240, OpSsePmulld);
+      XLAT(0x241, OpPhminposuw);
       XLAT(0x2f0, Op2f01);
       XLAT(0x2f1, Op2f01);
       XLAT(0x2f5, Op2f5);
       XLAT(0x2f6, Op2f6);
       XLAT(0x2f7, OpShx);
+      XLAT(0x308, OpRound);
+      XLAT(0x309, OpRound);
+      XLAT(0x30a, OpRound);
+      XLAT(0x30b, OpRound);
+      XLAT(0x30c, OpBlend);
+      XLAT(0x30d, OpBlend);
+      XLAT(0x30e, OpBlend);
       XLAT(0x30f, OpSsePalignr);
+      XLAT(0x314, OpPextrbw);
+      XLAT(0x315, OpPextrbw);
+      XLAT(0x316, OpPextrdEdqpVdqIb);
+      XLAT(0x317, OpExtractpsEdVpsIb);
+      XLAT(0x320, OpPinsrbVdqEdIb);
+      XLAT(0x321, OpInsertps);
+      XLAT(0x322, OpPinsrdVdqEdqpIb);
       XLAT(0x344, OpSsePclmulqdq);
+      XLAT(0x340, OpDot);
+      XLAT(0x341, OpDot);
+      XLAT(0x342, OpMpsadbw);
+      XLAT(0x360, OpPcmpstr);
+      XLAT(0x361, OpPcmpstr);
+      XLAT(0x362, OpPcmpstr);
+      XLAT(0x363, OpPcmpstr);
       XLAT(0x3f0, OpRorx);
       default:
         return OpUd;
@@ -2181,7 +2233,16 @@ static void GeneralDispatch(P) {
 #endif
 }
 
+/* Dispatch boundaries: a compiled path can execute multiple guest instructions. */
 void ExecuteInstruction(struct Machine *m) {
+  if (g_trace_faults) {
+    unsigned n = m->fault_trace_next;
+    m->fault_trace[n].ip = m->ip;
+    m->fault_trace[n].sp = Read64(m->sp);
+    m->fault_trace[n].bp = Read64(m->bp);
+    m->fault_trace_next = (n + 1) % 64;
+    if (m->fault_trace_count < 64) ++m->fault_trace_count;
+  }
 #if LOG_CPU
   LogCpu(m);
 #endif
@@ -2278,4 +2339,22 @@ void HandleFatalSystemSignal(struct Machine *m, const siginfo_t *si) {
   m->faultaddr = ConvertHostToGuestAddress(m->system, si->si_addr, 0);
   sig = UnXlatSignal(si->si_signo);
   DeliverSignalToUser(m, sig, UnXlatSiCode(sig, si->si_code));
+}
+
+/* Called after unwinding the native signal handler, before guest crash handlers. */
+void DumpFaultTrace(struct Machine *m, int sig, int code) {
+  unsigned i, n;
+  if (!g_trace_faults) return;
+  LOGF("FAULTTRACE tid=%d signal=%d code=%d guest_ip=%#" PRIx64
+       " guest_fault=%#" PRIx64 " host_pc=%#" PRIx64 " flags=%#x",
+       m->tid, sig, code, m->ip, m->faultaddr, g_fault_host_pc, m->flags);
+  g_fault_host_pc = 0;
+  for (i = 0; i < 16; ++i)
+    LOGF("FAULTTRACE reg[%u]=%#" PRIx64, i, Read64(m->weg[i]));
+  for (i = 0; i < m->fault_trace_count; ++i) {
+    n = (m->fault_trace_next + 64 - m->fault_trace_count + i) % 64;
+    LOGF("FAULTTRACE dispatch[%u] ip=%#" PRIx64 " sp=%#" PRIx64
+         " bp=%#" PRIx64, i, m->fault_trace[n].ip,
+         m->fault_trace[n].sp, m->fault_trace[n].bp);
+  }
 }

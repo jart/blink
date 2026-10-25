@@ -157,7 +157,7 @@ void OpCmpxchgEvqpRaxGvqp(P) {
   Cmpxchg(m, rde, GetModrmRegisterWordPointerWriteOszRexw(A));
   if (IsMakingPath(m)) {
     Jitter(A,
-           "P"      // res0 = GetRegOrMemPointer(RexbRm)
+           "W"      // res0 = GetRegOrMemPointer(RexbRm), writable
            "r0a2="  // arg2 = res0
            "a1i"    // arg1 = rde
            "q"      // arg0 = m

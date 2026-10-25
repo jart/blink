@@ -82,9 +82,9 @@ void OpLddquVdqMdq(P) {
 void OpMovntiMdqpGdqp(P) {
   IGNORE_RACES_START();
   if (Rexw(rde)) {
-    memcpy(ComputeReserveAddressWrite8(A), XmmRexrReg(m, rde), 8);
+    memcpy(ComputeReserveAddressWrite8(A), RegRexrReg(m, rde), 8);
   } else {
-    memcpy(ComputeReserveAddressWrite4(A), XmmRexrReg(m, rde), 4);
+    memcpy(ComputeReserveAddressWrite4(A), RegRexrReg(m, rde), 4);
   }
   IGNORE_RACES_END();
 }
@@ -264,6 +264,12 @@ static void MovsdWpsVps(P) {
   memcpy(GetModrmRegisterXmmPointerWrite8(A), XmmRexrReg(m, rde), 8);
   IGNORE_RACES_END();
   if (IsMakingPath(m)) {
+    if (!IsModrmRegister(rde)) {
+      // Reserve exactly eight writable bytes, including across guest pages.
+      Jitter(A, "z4A"      // res0,res1 = source XMM register
+                "r0z3D");  // store low 64 bits to memory
+      return;
+    }
     Jitter(A,
            "z4P"    // res0 = GetXmmOrMemPointer(RexbRm)
            "a2i"    // arg2 = RexrReg(rde)

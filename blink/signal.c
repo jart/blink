@@ -61,19 +61,21 @@ bool IsSignalSerious(int sig) {
          sig == SIGKILL_LINUX;
 }
 
-void DeliverSignal(struct Machine *m, int sig, int code) {
+static void DeliverSignalImpl(struct Machine *m, int sig, int code,
+                              const struct siginfo_linux *info) {
   u64 sp;
   struct SignalFrame sf;
   if (IsMakingPath(g_machine)) AbandonPath(g_machine);
   memset(&sf, 0, sizeof(sf));
+  if (info) sf.si = *info;
   // capture the current state of the machine
   Write32(sf.si.signo, sig);
   Write32(sf.si.code, code);
-  if (sig == SIGILL_LINUX ||   //
+  if (!info && (sig == SIGILL_LINUX ||   //
       sig == SIGFPE_LINUX ||   //
       sig == SIGSEGV_LINUX ||  //
       sig == SIGBUS_LINUX ||   //
-      sig == SIGTRAP_LINUX) {
+      sig == SIGTRAP_LINUX)) {
     Write64(sf.si.addr, m->faultaddr);
     SYS_LOGF("delivering %s {.si_code = %d, .si_addr = %#" PRIx64 "}",
              DescribeSignal(sig), code, m->faultaddr);
@@ -166,6 +168,10 @@ void DeliverSignal(struct Machine *m, int sig, int code) {
   m->ip = Read64(m->system->hands[sig - 1].handler);
 }
 
+void DeliverSignal(struct Machine *m, int sig, int code) {
+  DeliverSignalImpl(m, sig, code, 0);
+}
+
 void SigRestore(struct Machine *m) {
   struct SignalFrame sf;
   // when the guest returns from the signal handler, it'll call a
@@ -220,6 +226,7 @@ void SigRestore(struct Machine *m) {
 
 static int ConsumeSignalImpl(struct Machine *m, int *delivered, bool *restart) {
   int sig;
+  struct siginfo_linux info;
   i64 handler;
   u64 signals;
   if (delivered) *delivered = 0;
@@ -227,7 +234,7 @@ static int ConsumeSignalImpl(struct Machine *m, int *delivered, bool *restart) {
   // look for a pending signal that isn't currently masked
   while ((signals = m->signals & ~m->sigmask)) {
     sig = bsr(signals) + 1;
-    m->signals &= ~((u64)1 << (sig - 1));
+    unassert(DequeueSignalInfo(m, sig, &info));
     handler = Read64(m->system->hands[sig - 1].handler);
     if (handler == SIG_DFL_LINUX) {
       if (IsSignalIgnoredByDefault(sig)) {
@@ -248,7 +255,7 @@ static int ConsumeSignalImpl(struct Machine *m, int *delivered, bool *restart) {
     if (restart) {
       *restart = !!(Read64(m->system->hands[sig - 1].flags) & SA_RESTART_LINUX);
     }
-    DeliverSignal(m, sig, SI_KERNEL_LINUX);
+    DeliverSignalImpl(m, sig, Read32(info.code), &info);
     return 0;
   }
   return 0;
@@ -264,12 +271,40 @@ int ConsumeSignal(struct Machine *m, int *delivered, bool *restart) {
 }
 
 void EnqueueSignal(struct Machine *m, int sig) {
+  struct siginfo_linux info = {0};
+  Write32(info.signo, sig);
+  Write32(info.code, SI_KERNEL_LINUX);
+  EnqueueSignalInfo(m, sig, &info);
+}
+
+void EnqueueSignalInfo(struct Machine *m, int sig,
+                         const struct siginfo_linux *info) {
+  int empty = 0;
   if (m && (1 <= sig && sig <= 64)) {
+    // Standard signals coalesce. Reserving the slot also prevents a signal
+    // handler from racing another publisher of the same signal's information.
+    if (!atomic_compare_exchange_strong_explicit(
+            &m->pending_signals[sig - 1].state, &empty, 1,
+            memory_order_acquire, memory_order_relaxed)) return;
+    m->pending_signals[sig - 1].info = *info;
+    atomic_store_explicit(&m->pending_signals[sig - 1].state, 2,
+                          memory_order_release);
     m->signals |= 1ul << (sig - 1);
     if ((m->signals & ~m->sigmask)) {
       atomic_store_explicit(&m->attention, true, memory_order_release);
     }
   }
+}
+
+bool DequeueSignalInfo(struct Machine *m, int sig, struct siginfo_linux *info) {
+  if (!(m->signals & ((u64)1 << (sig - 1)))) return false;
+  m->signals &= ~((u64)1 << (sig - 1));
+  unassert(atomic_load_explicit(&m->pending_signals[sig - 1].state,
+                                memory_order_acquire) == 2);
+  if (info) *info = m->pending_signals[sig - 1].info;
+  atomic_store_explicit(&m->pending_signals[sig - 1].state, 0,
+                        memory_order_release);
+  return true;
 }
 
 void CheckForSignals(struct Machine *m) {

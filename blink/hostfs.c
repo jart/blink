@@ -34,6 +34,17 @@
 #include "blink/macros.h"
 #include "blink/syscall.h"
 #include "blink/vfs.h"
+#include "blink/rootless.h"
+
+#ifdef BLINK_USE_EPOLL_SHIM
+#ifdef DISABLE_VFS
+#error "The epoll-shim backend currently requires --enable-vfs"
+#endif
+#include <epoll-shim/detail/common.h>
+#include <epoll-shim/detail/read.h>
+#include <epoll-shim/detail/write.h>
+#include <epoll-shim/detail/poll.h>
+#endif
 
 #ifndef DISABLE_VFS
 
@@ -152,6 +163,7 @@ int HostfsFreeInfo(void *info) {
     return 0;
   }
   VFS_LOGF("HostfsFreeInfo(%p)", info);
+  RootlessAnonFree(hostfsinfo->rootless_anon);
   if (S_ISDIR(hostfsinfo->mode)) {
     if (hostfsinfo->dirstream) {
       unassert(!closedir(hostfsinfo->dirstream));
@@ -187,9 +199,10 @@ int HostfsFreeDevice(void *device) {
 int HostfsCreateInfo(struct HostfsInfo **output) {
   *output = (struct HostfsInfo *)malloc(sizeof(struct HostfsInfo));
   if (!*output) {
-    return 0;
+    return enomem();
   }
   (*output)->mode = 0;
+  (*output)->rootless_anon = NULL;
   (*output)->socketfamily = 0;
   (*output)->filefd = -1;
   (*output)->dirstream = NULL;
@@ -559,12 +572,16 @@ cleananddie:
 
 int HostfsMkdir(struct VfsInfo *parent, const char *name, mode_t mode) {
   int hostfd;
+  struct RootlessOwner owner;
   char hostname[VFS_PATH_MAX];
   VFS_LOGF("HostfsMkdir(%p, \"%s\", %d)", parent, name, mode);
   if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  return mkdirat(hostfd, hostname, mode);
+  if (RootlessPrepare(hostfd, hostname, &owner)) return -1;
+  if (owner.setgid) mode |= S_ISGID;
+  if (mkdirat(hostfd, hostname, mode)) return -1;
+  return RootlessCreate(hostfd, hostname, AT_SYMLINK_NOFOLLOW, &owner, mode);
 }
 
 int HostfsMkfifo(struct VfsInfo *parent, const char *name, mode_t mode) {
@@ -599,7 +616,23 @@ int HostfsOpen(struct VfsInfo *parent, const char *name, int flags, int mode,
   if (HostfsCreateInfo(&outputinfo) == -1) {
     goto cleananddie;
   }
-  outputinfo->filefd = openat(hostfd, hostname, flags, mode);
+  if (RootlessEnabled() && (flags & O_CREAT)) {
+    struct RootlessOwner owner;
+    if (RootlessPrepare(hostfd, hostname, &owner)) goto cleananddie;
+    // Discover creation atomically, without overwriting existing ownership.
+    int attempts = 16;
+    do {
+      outputinfo->filefd = openat(hostfd, hostname, flags | O_EXCL, mode);
+      if (outputinfo->filefd != -1) {
+        if (RootlessCreate(outputinfo->filefd, NULL, 0, &owner, mode)) goto cleananddie;
+        break;
+      }
+      if (errno != EEXIST || (flags & O_EXCL)) break;
+      outputinfo->filefd = openat(hostfd, hostname, flags & ~O_CREAT, mode);
+    } while (outputinfo->filefd == -1 && errno == ENOENT && --attempts);
+  } else {
+    outputinfo->filefd = openat(hostfd, hostname, flags, mode);
+  }
   VFS_LOGF("HostfsOpen: openat(%d, \"%s\", %d, %d) -> %d, %s", hostfd, hostname,
            flags, mode, outputinfo->filefd, strerror(errno));
   if (outputinfo->filefd == -1) {
@@ -611,6 +644,15 @@ int HostfsOpen(struct VfsInfo *parent, const char *name, int flags, int mode,
     goto cleananddie;
   }
   (*output)->data = outputinfo;
+  // Opening "." creates a new descriptor for parent, not a child of it.
+  // Preserve the logical ancestry so successive openat(fd, "..") calls
+  // continue upwards, including after the previously visited child is removed.
+  if (!strcmp(name, ".")) {
+    name = parent->name;
+    unassert(!VfsAcquireInfo(parent->parent, &(*output)->parent));
+  } else {
+    unassert(!VfsAcquireInfo(parent, &(*output)->parent));
+  }
   (*output)->name = strdup(name);
   if ((*output)->name == NULL) {
     enomem();
@@ -623,7 +665,6 @@ int HostfsOpen(struct VfsInfo *parent, const char *name, int flags, int mode,
       HostfsHash(st.st_dev, (const char *)&st.st_ino, sizeof(st.st_ino));
   (*output)->mode = outputinfo->mode;
   (*output)->refcount = 1;
-  unassert(!VfsAcquireInfo(parent, &(*output)->parent));
   return 0;
 cleananddie:
   if (*output) {
@@ -654,12 +695,76 @@ int HostfsStat(struct VfsInfo *parent, const char *name, struct stat *st,
     return -1;
   }
   ret = fstatat(hostfd, hostname, st, flags);
+  if (!ret) ret = RootlessStat(hostfd, hostname, st, flags);
   if (ret != -1) {
     st->st_ino =
         HostfsHash(st->st_dev, (const char *)&st->st_ino, sizeof(st->st_ino));
     st->st_dev = parent->dev;
   }
   return ret;
+}
+
+static int HostfsGethostfd(struct VfsInfo *info) {
+  struct HostfsInfo *hostinfo = (struct HostfsInfo *)info->data;
+  if (hostinfo->filefd == -1) return ebadf();
+  return hostinfo->filefd;
+}
+
+/* Resolve current descriptor paths without relying on cached VFS names. */
+static ssize_t HostfsReadfdlink(struct VfsInfo *info, char **output) {
+#if defined(__APPLE__) && defined(F_GETPATH)
+  struct HostfsInfo *file = info->data;
+  struct HostfsDevice *device = info->device->data;
+  struct stat st, named;
+  bool removed;
+  char path[VFS_PATH_MAX], *root, *source;
+  const char *suffix, *deleted;
+  size_t len, rootlen, sourcelen;
+  if (file->filefd == -1) return ebadf();
+  if (fcntl(file->filefd, F_GETPATH, path) == -1 ||
+      fstat(file->filefd, &st) == -1) return -1;
+  removed = !st.st_nlink;
+  if (stat(path, &named) == -1) {
+    if (errno != ENOENT && errno != ENOTDIR) return -1;
+    removed = true;
+  } else if (named.st_dev != st.st_dev || named.st_ino != st.st_ino) {
+    removed = true;
+  }
+  if (!(source = realpath(device->source, NULL))) return -1;
+  sourcelen = strlen(source);
+  while (sourcelen > 1 && source[sourcelen - 1] == '/') --sourcelen;
+  if (strncmp(path, source, sourcelen) ||
+      (sourcelen > 1 && path[sourcelen] && path[sourcelen] != '/')) {
+    free(source);
+    return enotsup();
+  }
+  suffix = path + (sourcelen == 1 ? 0 : sourcelen);
+  free(source);
+  if (VfsPathBuildFull(info->device->root, NULL, &root) == -1) return -1;
+  rootlen = strlen(root);
+  if (rootlen == 1 && root[0] == '/' && *suffix == '/') rootlen = 0;
+  deleted = removed ? " (deleted)" : "";
+  len = rootlen + strlen(suffix) + strlen(deleted);
+  if (!(*output = malloc(len + 1))) { free(root); return enomem(); }
+  memcpy(*output, root, rootlen);
+  strcpy(*output + rootlen, suffix);
+  strcat(*output, deleted);
+  free(root);
+  return len;
+#else
+  return VfsPathBuildFull(info, NULL, output);
+#endif
+}
+
+static int HostfsStatfs(struct VfsInfo *info, HostStatfs *st) {
+  char path[VFS_PATH_MAX];
+  if (HostfsGetHostPath(info, path) == -1) return -1;
+  return HostStatfsPath(path, st);
+}
+
+static int HostfsFstatfs(struct VfsInfo *info, HostStatfs *st) {
+  struct HostfsInfo *hostinfo = (struct HostfsInfo *)info->data;
+  return HostStatfsFd(hostinfo->filefd, st);
 }
 
 int HostfsFstat(struct VfsInfo *info, struct stat *st) {
@@ -671,6 +776,13 @@ int HostfsFstat(struct VfsInfo *info, struct stat *st) {
   }
   hostinfo = (struct HostfsInfo *)info->data;
   ret = fstat(hostinfo->filefd, st);
+  if (!ret) {
+    if (hostinfo->rootless_anon) {
+      RootlessAnonStat(hostinfo->rootless_anon, st);
+    } else {
+      ret = RootlessStat(hostinfo->filefd, NULL, st, 0);
+    }
+  }
   if (ret != -1) {
     st->st_ino =
         HostfsHash(st->st_dev, (const char *)&st->st_ino, sizeof(st->st_ino));
@@ -687,6 +799,7 @@ int HostfsChmod(struct VfsInfo *parent, const char *name, mode_t mode,
   if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
+  if (RootlessEnabled()) return RootlessChmod(hostfd, hostname, mode, flags);
   return fchmodat(hostfd, hostname, mode, flags);
 }
 
@@ -697,6 +810,8 @@ int HostfsFchmod(struct VfsInfo *info, mode_t mode) {
     return efault();
   }
   hostinfo = (struct HostfsInfo *)info->data;
+  if (hostinfo->rootless_anon) return RootlessAnonChmod(hostinfo->rootless_anon, mode);
+  if (RootlessEnabled()) return RootlessChmod(hostinfo->filefd, NULL, mode, 0);
   return fchmod(hostinfo->filefd, mode);
 }
 
@@ -708,6 +823,7 @@ int HostfsChown(struct VfsInfo *parent, const char *name, uid_t uid, gid_t gid,
   if (HostfsGetOptimalDirFdName(parent, name, &hostfd, hostname) == -1) {
     return -1;
   }
+  if (RootlessEnabled()) return RootlessChown(hostfd, hostname, uid, gid, flags);
   return fchownat(hostfd, hostname, uid, gid, flags);
 }
 
@@ -718,6 +834,8 @@ int HostfsFchown(struct VfsInfo *info, uid_t uid, gid_t gid) {
     return efault();
   }
   hostinfo = (struct HostfsInfo *)info->data;
+  if (hostinfo->rootless_anon) return RootlessAnonChown(hostinfo->rootless_anon, uid, gid);
+  if (RootlessEnabled()) return RootlessChown(hostinfo->filefd, NULL, uid, gid, 0);
   return fchown(hostinfo->filefd, uid, gid);
 }
 
@@ -996,6 +1114,7 @@ int HostfsDup(struct VfsInfo *info, struct VfsInfo **newinfo) {
     goto cleananddie;
   }
   newhostinfo->mode = hostinfo->mode;
+  newhostinfo->rootless_anon = RootlessAnonAcquire(hostinfo->rootless_anon);
   if (S_ISSOCK(hostinfo->mode) && hostinfo->socketaddr != NULL) {
     newhostinfo->socketaddr =
         (struct sockaddr *)malloc(hostinfo->socketaddrlen);
@@ -1050,6 +1169,7 @@ int HostfsDup3(struct VfsInfo *info, struct VfsInfo **newinfo, int flags) {
   }
   newhostinfo->filefd =
       dup3(hostinfo->filefd, open("/dev/null", O_RDONLY), flags);
+  newhostinfo->rootless_anon = RootlessAnonAcquire(hostinfo->rootless_anon);
   if (newhostinfo->filefd == -1) {
     goto cleananddie;
   }
@@ -1083,18 +1203,25 @@ cleananddie:
 
 int HostfsPoll(struct VfsInfo **infos, struct pollfd *fds, nfds_t nfds,
                int timeout) {
-  int rc;
-  int oldfd;
+  int rc, err;
+  nfds_t i;
+  struct pollfd *hostfds;
   VFS_LOGF("HostfsPoll(%p, %lli, %i)", infos, (long long)nfds, timeout);
   if (infos == NULL) {
     return efault();
   }
-  // Same reason as in VfsPoll above
-  unassert(nfds == 1);
-  oldfd = fds->fd;
-  fds->fd = ((struct HostfsInfo *)infos[0]->data)->filefd;
-  rc = poll(fds, nfds, timeout);
-  fds->fd = oldfd;
+  if (!(hostfds = calloc(nfds ? nfds : 1, sizeof(*hostfds)))) return enomem();
+  for (i = 0; i < nfds; ++i) {
+    hostfds[i] = fds[i];
+    if (fds[i].fd >= 0)
+      hostfds[i].fd = ((struct HostfsInfo *)infos[i]->data)->filefd;
+  }
+  rc = poll(hostfds, nfds, timeout);
+  err = errno;
+  if (rc >= 0)
+    for (i = 0; i < nfds; ++i) fds[i].revents = hostfds[i].revents;
+  free(hostfds);
+  errno = err;
   return rc;
 }
 
@@ -1585,12 +1712,15 @@ int HostfsFutime(struct VfsInfo *info, const struct timespec times[2]) {
 
 int HostfsSymlink(const char *target, struct VfsInfo *info, const char *name) {
   int hostfd;
+  struct RootlessOwner owner;
   char hostname[VFS_PATH_MAX];
   VFS_LOGF("HostfsSymlink(%s, %p, %s)", target, info, name);
   if (HostfsGetOptimalDirFdName(info, name, &hostfd, hostname) == -1) {
     return -1;
   }
-  return symlinkat(target, hostfd, hostname);
+  if (RootlessPrepare(hostfd, hostname, &owner)) return -1;
+  if (symlinkat(target, hostfd, hostname)) return -1;
+  return RootlessCreate(hostfd, hostname, AT_SYMLINK_NOFOLLOW, &owner, 0777);
 }
 
 void *HostfsMmap(struct VfsInfo *info, void *addr, size_t len, int prot,
@@ -1761,6 +1891,11 @@ int HostfsPipe(struct VfsInfo *infos[2]) {
       goto cleananddie;
     }
   }
+  if (RootlessEnabled()) {
+    struct HostfsInfo *a = infos[0]->data, *b = infos[1]->data;
+    RootlessAnonFree(b->rootless_anon);
+    b->rootless_anon = RootlessAnonAcquire(a->rootless_anon);
+  }
   return 0;
 cleananddie:
   for (i = 0; i < 2; ++i) {
@@ -1791,6 +1926,11 @@ int HostfsPipe2(struct VfsInfo *infos[2], int flags) {
     if (HostfsWrapFd(fds[i], false, &infos[i]) == -1) {
       goto cleananddie;
     }
+  }
+  if (RootlessEnabled()) {
+    struct HostfsInfo *a = infos[0]->data, *b = infos[1]->data;
+    RootlessAnonFree(b->rootless_anon);
+    b->rootless_anon = RootlessAnonAcquire(a->rootless_anon);
   }
   return 0;
 cleananddie:
@@ -1913,6 +2053,9 @@ int HostfsWrapFd(int fd, bool dodup, struct VfsInfo **output) {
   }
   hostinfo->filefd = fd;
   hostinfo->mode = st.st_mode;
+  if (RootlessEnabled() && !S_ISREG(st.st_mode) && !S_ISDIR(st.st_mode)) {
+    if (!(hostinfo->rootless_anon = RootlessAnonNew(st.st_mode))) goto cleananddie;
+  }
   if (VfsCreateInfo(output) == -1) {
     goto cleananddie;
   }
@@ -1930,8 +2073,10 @@ cleananddie:
     unassert(!VfsFreeInfo(*output));
   } else if (hostinfo != NULL) {
     unassert(!HostfsFreeInfo(hostinfo));
-  } else if (dodup && fd != -1) {
-    unassert(!close(fd));
+  } else if (fd != -1) {
+    int err = errno;
+    close(fd);
+    errno = err;
   }
   return -1;
 }
@@ -1952,6 +2097,10 @@ struct VfsSystem g_hostfs = {.name = "hostfs",
                                  .Access = HostfsAccess,
                                  .Stat = HostfsStat,
                                  .Fstat = HostfsFstat,
+                                 .Gethostfd = HostfsGethostfd,
+                                 .Readfdlink = HostfsReadfdlink,
+                                 .Statfs = HostfsStatfs,
+                                 .Fstatfs = HostfsFstatfs,
                                  .Chmod = HostfsChmod,
                                  .Fchmod = HostfsFchmod,
                                  .Chown = HostfsChown,

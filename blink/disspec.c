@@ -1215,22 +1215,22 @@ const char *DisSpecMap2(struct XedDecodedInst *x, char *p) {
     RCASE(0x1C, DisOpPqQqVdqWdq(x, p, "pabsb"));
     RCASE(0x1D, DisOpPqQqVdqWdq(x, p, "pabsw"));
     RCASE(0x1E, DisOpPqQqVdqWdq(x, p, "pabsd"));
-    RCASE(0x20, "pmovsxbw %Vdq Mq");
-    RCASE(0x21, "pmovsxbd %Vdq Md");
-    RCASE(0x22, "pmovsxbq %Vdq Mw");
-    RCASE(0x23, "pmovsxwd %Vdq Mq");
-    RCASE(0x24, "pmovsxwq %Vdq Md");
-    RCASE(0x25, "pmovsxdq %Vdq Mq");
+    RCASE(0x20, "pmovsxbw %Vdq Wdq");
+    RCASE(0x21, "pmovsxbd %Vdq Wdq");
+    RCASE(0x22, "pmovsxbq %Vdq Wdq");
+    RCASE(0x23, "pmovsxwd %Vdq Wdq");
+    RCASE(0x24, "pmovsxwq %Vdq Wdq");
+    RCASE(0x25, "pmovsxdq %Vdq Wdq");
     RCASE(0x28, "pmuldq %Vdq Wdq");
     RCASE(0x29, "pcmpeqq %Vdq Wdq");
     RCASE(0x2A, "movntdqa %Vdq Mdq");
     RCASE(0x2B, "packusdw %Vdq Wdq");
-    RCASE(0x30, "pmovzxbw %Vdq Mq");
-    RCASE(0x31, "pmovzxbd %Vdq Md");
-    RCASE(0x32, "pmovzxbq %Vdq Mw");
-    RCASE(0x33, "pmovzxwd %Vdq Mq");
-    RCASE(0x34, "pmovzxwq %Vdq Md");
-    RCASE(0x35, "pmovzxdq %Vdq Mq");
+    RCASE(0x30, "pmovzxbw %Vdq Wdq");
+    RCASE(0x31, "pmovzxbd %Vdq Wdq");
+    RCASE(0x32, "pmovzxbq %Vdq Wdq");
+    RCASE(0x33, "pmovzxwd %Vdq Wdq");
+    RCASE(0x34, "pmovzxwq %Vdq Wdq");
+    RCASE(0x35, "pmovzxdq %Vdq Wdq");
     RCASE(0x37, "pcmpgtq %Vdq Wdq");
     RCASE(0x38, "pminsb %Vdq Wdq");
     RCASE(0x39, "pminsd %Vdq Wdq");
@@ -1297,6 +1297,45 @@ const char *DisSpecMap3(struct XedDecodedInst *x, char *p) {
   switch (Opcode(x->op.rde)) {
     RCASE(0x0F, DisOpPqQqIbVdqWdqIb(x, p, "palignr"));
     RCASE(0xF0, "rorx %Gdqp Edqp Ib");
+    case 0x08:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "roundps %Vdq Wdq Ib";
+    case 0x09:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "roundpd %Vdq Wdq Ib";
+    case 0x0a:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "roundss %Vdq Wss Ib";
+    case 0x0b:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "roundsd %Vdq Wsd Ib";
+    case 0x0c:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "blendps %Vdq Wdq Ib";
+    case 0x0d:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "blendpd %Vdq Wdq Ib";
+    case 0x0e:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "pblendw %Vdq Wdq Ib";
+    case 0x20:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "pinsrb %Vdq Ed Ib";
+    case 0x22:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return Rexw(x->op.rde) ? "pinsrq %Vdq Eq Ib" : "pinsrd %Vdq Ed Ib";
+    case 0x60:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "pcmpestrm Vdq Wdq Ib";
+    case 0x61:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "pcmpestri Vdq Wdq Ib";
+    case 0x62:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "pcmpistrm Vdq Wdq Ib";
+    case 0x63:
+      if (!Osz(x->op.rde) || Rep(x->op.rde)) return "wut";
+      return "pcmpistri Vdq Wdq Ib";
     case 0x44:  // pclmulqdq
       if (Osz(x->op.rde)) {
         switch (x->op.uimm0) {

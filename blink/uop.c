@@ -1178,26 +1178,30 @@ MICRO_OP static i64 FastAnd32(struct Machine *m, u64 x, u64 y) {
   m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastSub32(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastSub32(struct Machine *m, u64 x64, u64 y64) {
+  u32 x = x64, y = y64;
   u32 z = x - y;
   int c = x < z;
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastAdd32(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastAdd32(struct Machine *m, u64 x64, u64 y64) {
+  u32 x = x64, y = y64;
   u32 z = x + y;
   int c = z < y;
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastAdc32(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastAdc32(struct Machine *m, u64 x64, u64 y64) {
+  u32 x = x64, y = y64;
   u32 t = x + !!(m->flags & CF);
   u32 z = t + y;
   int c = (t < x) | (z < y);
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastSbb32(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastSbb32(struct Machine *m, u64 x64, u64 y64) {
+  u32 x = x64, y = y64;
   u32 t = x - !!(m->flags & CF);
   u32 z = t - y;
   int c = (x < t) | (t < z);
@@ -1220,26 +1224,30 @@ MICRO_OP static i64 FastAnd16(struct Machine *m, u64 x, u64 y) {
   m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastSub16(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastSub16(struct Machine *m, u64 x64, u64 y64) {
+  u16 x = x64, y = y64;
   u16 z = x - y;
   int c = x < z;
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastAdd16(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastAdd16(struct Machine *m, u64 x64, u64 y64) {
+  u16 x = x64, y = y64;
   u16 z = x + y;
   int c = z < y;
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastAdc16(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastAdc16(struct Machine *m, u64 x64, u64 y64) {
+  u16 x = x64, y = y64;
   u16 t = x + !!(m->flags & CF);
   u16 z = t + y;
   int c = (t < x) | (z < y);
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastSbb16(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastSbb16(struct Machine *m, u64 x64, u64 y64) {
+  u16 x = x64, y = y64;
   u16 t = x - !!(m->flags & CF);
   u16 z = t - y;
   int c = (x < t) | (t < z);
@@ -1262,26 +1270,30 @@ MICRO_OP i64 FastAnd8(struct Machine *m, u64 x, u64 y) {
   m->flags = (m->flags & ~(CF | ZF)) | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP i64 FastSub8(struct Machine *m, u64 x, u64 y) {
+MICRO_OP i64 FastSub8(struct Machine *m, u64 x64, u64 y64) {
+  u8 x = x64, y = y64;
   u8 z = x - y;
   int c = x < z;
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastAdd8(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastAdd8(struct Machine *m, u64 x64, u64 y64) {
+  u8 x = x64, y = y64;
   u8 z = x + y;
   int c = z < y;
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastAdc8(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastAdc8(struct Machine *m, u64 x64, u64 y64) {
+  u8 x = x64, y = y64;
   u8 t = x + !!(m->flags & CF);
   u8 z = t + y;
   int c = (t < x) | (z < y);
   m->flags = (m->flags & ~(CF | ZF)) | c << FLAGS_CF | !z << FLAGS_ZF;
   return z;
 }
-MICRO_OP static i64 FastSbb8(struct Machine *m, u64 x, u64 y) {
+MICRO_OP static i64 FastSbb8(struct Machine *m, u64 x64, u64 y64) {
+  u8 x = x64, y = y64;
   u8 t = x - !!(m->flags & CF);
   u8 z = t - y;
   int c = (x < t) | (t < z);
@@ -2006,6 +2018,7 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
                             : GetXmmPtr);
         break;
 
+      case 'W':  // res0 = GetRegOrMemPointer(RexbRm), writable
       case 'P':  // res0 = GetRegOrMemPointer(RexbRm)
         if (IsModrmRegister(rde)) {
           Jitter(A,
@@ -2029,12 +2042,12 @@ static unsigned JitterImpl(P, const char *fmt, va_list va, unsigned k,
         } else {
           Jitter(A,
                  "L"      // load effective address
-                 "a3i"    // arg3 = false
+                 "a3i"    // arg3 = writable
                  "a2i"    // arg2 = bytes to read
                  "r0a1="  // arg1 = virtual address
                  "q"      // arg0 = machine
                  "c",     // res0 = call function (turn virtual into pointer)
-                 (u64)0, (u64)(1 << log2sz), ReserveAddress);
+                 (u64)(c == 'W'), (u64)(1 << log2sz), ReserveAddress);
         }
         break;
 

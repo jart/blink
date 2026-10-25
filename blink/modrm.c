@@ -253,7 +253,7 @@ u8 *GetModrmRegisterWordPointerWriteOsz(P) {
   }
 }
 
-static u8 *GetModrmRegisterXmmPointerRead(P, size_t n) {
+u8 *GetModrmRegisterXmmPointerRead(P, size_t n) {
   if (IsModrmRegister(rde)) {
     return XmmRexbRm(m, rde);
   } else {

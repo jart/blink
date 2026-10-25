@@ -53,6 +53,14 @@ struct Allocator {
 struct Machine g_bssmachine;
 struct HostPages g_hostpages;
 
+void LockHostPageAllocator(void) {
+  LOCK(&g_allocator.lock);
+}
+
+void UnlockHostPageAllocator(void) {
+  UNLOCK(&g_allocator.lock);
+}
+
 static void FillPage(void *p, int c) {
   memset(p, c, 4096);
 }
@@ -71,17 +79,30 @@ static void FreeHostPage(struct HostPage *hp) {
 
 static u64 TrackHostPage(u8 *ptr) {
   u64 entry;
+  struct HostPageTable *table, *next;
   if (HasLinearMapping()) {
     return (uintptr_t)ptr;
   } else {
+    LOCK(&g_allocator.lock);
+    table = atomic_load_explicit(&g_hostpages.table, memory_order_relaxed);
     if (g_hostpages.n == g_hostpages.c) {
       g_hostpages.c += 1;
       g_hostpages.c += g_hostpages.c >> 1;
-      g_hostpages.p =
-          realloc(g_hostpages.p, g_hostpages.c * sizeof(*g_hostpages.p));
+      unassert((next = malloc(sizeof(*next) +
+                              g_hostpages.c * sizeof(*next->pages))));
+      next->previous = table;
+      if (table) {
+        memcpy(next->pages, table->pages,
+               g_hostpages.n * sizeof(*next->pages));
+      }
+      // Readers include signal handlers, so they cannot take this lock.
+      // Retain old tables: a reader may still be using a previous snapshot.
+      table = next;
+      atomic_store_explicit(&g_hostpages.table, table, memory_order_release);
     }
     entry = g_hostpages.n++;
-    g_hostpages.p[entry] = ptr;
+    table->pages[entry] = ptr;
+    UNLOCK(&g_allocator.lock);
     return entry << 12;
   }
 }
@@ -394,10 +415,13 @@ struct Machine *NewMachine(struct System *system, struct Machine *parent) {
     m->sysdepth = 0;
     m->sigdepth = 0;
     m->signals = 0;
+    memset(m->pending_signals, 0, sizeof(m->pending_signals));
   } else {
     memset(m, 0, sizeof(*m));
     ResetCpu(m);
   }
+  m->fault_trace_next = 0;
+  m->fault_trace_count = 0;
   m->ctid = 0;
   m->oplen = 0;
   m->system = system;
@@ -1095,6 +1119,107 @@ int FreeVirtual(struct System *s, i64 virt, i64 size) {
   s->memchurn -= vss_delta;
   InvalidateSystem(s, !!rss_delta, executable_code_was_made_non_executable);
   return rc;
+}
+
+/* Caller holds mmap_lock. Return an existing 4 KiB page-table slot. */
+static u8 *GetRemapSlot(struct System *s, i64 virt) {
+  u64 pt = s->cr3;
+  unsigned level;
+  u8 *slot;
+  for (level = 39;; level -= 9) {
+    slot = GetPageAddress(s, pt, level == 39) + ((virt >> level) & 511) * 8;
+    pt = LoadPte(slot);
+    if (!(pt & PAGE_V)) return 0;
+    if (level == 12) return slot;
+    if (pt & PAGE_PS) return 0;
+  }
+}
+
+/* Caller holds mmap_lock. Eagerly zero private anonymous pages while
+   retaining their mapping and protections. Other mapping kinds need separate
+   handling; in particular, shared mappings must never be cleared this way. */
+int DiscardAnonymousVirtual(struct System *s, i64 addr, i64 size) {
+  i64 i;
+  u64 entry;
+  u8 *slot;
+  bool executable = false;
+  if (HasLinearMapping()) return einval();
+  for (i = 0; i < size; i += 4096) {
+    if (!(slot = GetRemapSlot(s, addr + i))) return enomem();
+    entry = LoadPte(slot);
+    if (entry & (PAGE_MAP | PAGE_MUG | PAGE_FILE))
+      return einval();
+  }
+  for (i = 0; i < size; i += 4096) {
+    slot = GetRemapSlot(s, addr + i);
+    entry = LoadPte(slot);
+    if (!(entry & PAGE_RSRV)) {
+      memset(GetPageAddress(s, entry, false), 0, 4096);
+      if (!(entry & PAGE_XD)) {
+        executable = true;
+#ifdef HAVE_JIT
+        if (!IsJitDisabled(&s->jit)) ResetJitPage(&s->jit, addr + i);
+#endif
+      }
+    }
+  }
+  if (executable) InvalidateSystem(s, false, true);
+  return 0;
+}
+
+/* Resize non-linear private anonymous data without copying resident pages.
+   File-backed/shared, executable, and linear mappings remain unsupported. */
+i64 RemapAnonymousVirtual(struct System *s, i64 oldaddr, i64 oldsize,
+                            i64 newsize, bool maymove) {
+  i64 i, dest;
+  u64 key = 0, entry, replacement;
+  u8 *src, *dst;
+  if (HasLinearMapping()) return enomem();
+  for (i = 0; i < oldsize; i += 4096) {
+    if (!(src = GetRemapSlot(s, oldaddr + i))) return efault();
+    entry = LoadPte(src);
+    if ((entry & (PAGE_MAP | PAGE_MUG | PAGE_FILE)) || !(entry & PAGE_XD))
+      return enomem();
+    if (!i) key = entry & (PAGE_RW | PAGE_U | PAGE_XD);
+    if ((entry & (PAGE_RW | PAGE_U | PAGE_XD)) != key) return enomem();
+  }
+  if (newsize <= oldsize) {
+    if (newsize < oldsize && FreeVirtual(s, oldaddr + newsize, oldsize - newsize))
+      return -1;
+    return oldaddr;
+  }
+  if ((newsize - oldsize) / 4096 > GetMaxVss(s) - s->vss) return enomem();
+  if (IsValidAddrSize(oldaddr, newsize) &&
+      IsFullyUnmapped(s, oldaddr + oldsize, newsize - oldsize)) {
+    if (ReserveVirtual(s, oldaddr + oldsize, newsize - oldsize, key,
+                       -1, 0, false, false) == -1) return -1;
+    return oldaddr;
+  }
+  if (!maymove) return enomem();
+  if ((dest = FindVirtual(s, s->automap, newsize)) == -1) return -1;
+  if (ReserveVirtual(s, dest, newsize, key, -1, 0, false, false) == -1) return -1;
+  for (i = 0; i < oldsize; i += 4096) {
+    src = GetRemapSlot(s, oldaddr + i);
+    dst = GetRemapSlot(s, dest + i);
+    unassert(src && dst);
+    replacement = LoadPte(dst);
+    for (;;) {
+      entry = LoadPte(src);
+      if (entry & PAGE_LOCKS) {
+        WaitForPageToNotBeLocked(s, oldaddr + i, src);
+      } else if (CasPte(src, entry, replacement)) {
+        break;
+      }
+    }
+    StorePte(dst, entry);
+  }
+  /* The old range now owns the destination's unused reservations. Freeing it
+     balances vss/reserved counters without releasing the moved host pages. */
+  unassert(!FreeVirtual(s, oldaddr, oldsize));
+  InvalidateSystem(s, true, false);
+  s->automap = dest + newsize;
+  if (s->automap >= FLAG_automapend) s->automap = FLAG_automapstart;
+  return dest;
 }
 
 int GetProtection(u64 key) {

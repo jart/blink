@@ -40,6 +40,7 @@ void RestoreIp(struct Machine *m) {
 }
 
 void DeliverSignalToUser(struct Machine *m, int sig, int code) {
+  DumpFaultTrace(m, sig, code);
   if (m->sigmask & ((u64)1 << (sig - 1))) {
     TerminateSignal(m, sig, code);
   }

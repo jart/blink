@@ -189,6 +189,7 @@ struct JitBlock {
   long lastaction;
   bool wasretired;
   bool isprotected;
+  bool isleased;  // guarded by jit->lock; not available for retirement
   unsigned pagegen;
   struct Dll elem;
   struct Dll aged;

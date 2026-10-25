@@ -653,6 +653,7 @@ if [ -z "${POSIX}" ]; then
   ( config getdomainname "checking for getdomainname()... " uncomment "#define HAVE_GETDOMAINNAME" ) &
   ( config kern_arnd "checking for sysctl(KERN_ARND)... " uncomment "#define HAVE_KERN_ARND" ) &
   ( config siocgifconf "checking for SIOCGIFCONF... " uncomment "#define HAVE_SIOCGIFCONF" ) &
+  ( config eventfd "checking for eventfd()... " uncomment "#define HAVE_EVENTFD" ) &
   ( config epoll_pwait1 "checking for epoll_pwait()... " uncomment "#define HAVE_EPOLL_PWAIT1" ) &
   wait
   ( config epoll_pwait2 "checking for epoll_pwait2()... " uncomment "#define HAVE_EPOLL_PWAIT2" ) &
