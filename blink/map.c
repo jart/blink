@@ -137,6 +137,9 @@ static u64 ScaleAddress(u64 address) {
   vaspace = FLAG_vaspace;
   pagesize = FLAG_pagesize;
   result = address;
+  if (FLAG_vabits < 47) {
+    result >>= 47 - FLAG_vabits;
+  }
   do result &= ~(pagesize - 1);
   while ((result & ~vaspace) && (result >>= 1));
   return result;
